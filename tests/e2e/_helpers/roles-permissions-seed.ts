@@ -67,11 +67,11 @@ export async function seedRolesPermissions(prefix: string): Promise<RolesPermiss
   // `private` FIRST: going private auto-enrols the workspace members that exist
   // at that moment, and right now that is only the owner. Everyone below is
   // created after, so their membership is exactly the role we give them.
-  await projectMembersService.setAccessLevel({
+  await projectMembersService.setAccessMode({
     key: project.identifier,
     actorUserId: owner.id,
     ctx: ownerCtx,
-    level: 'private',
+    mode: 'members',
   });
 
   async function member(name: string, role: 'admin' | 'member' | 'viewer') {
@@ -96,7 +96,7 @@ export async function seedRolesPermissions(prefix: string): Promise<RolesPermiss
   }
 
   // ⚠️ GO-PRIVATE ENROLS THE OWNER AS A `member`, NOT AN `admin`
-  // (`projectMembersService.setAccessLevel` — *"seeds every current workspace
+  // (the retired level setter, removed by MOTIR-6692 — *"seeds every current workspace
   // member as a project `member`"*), so the owner is PROMOTED here explicitly.
   // Without this the counts are admin 0 / member 4, and the spec's headcount
   // assertions would be checking a fixture nobody meant to build. The promotion

@@ -85,11 +85,11 @@ async function buildScenario(): Promise<WatcherScenario> {
 
 /** Flip the scenario project private (the comments-suite pattern). */
 async function flipPrivate(s: WatcherScenario): Promise<void> {
-  await projectMembersService.setAccessLevel({
+  await projectMembersService.setAccessMode({
     key: s.fx.projectIdentifier,
     actorUserId: s.fx.ownerId,
     ctx: s.fx.ctx,
-    level: 'private',
+    mode: 'members',
   });
 }
 

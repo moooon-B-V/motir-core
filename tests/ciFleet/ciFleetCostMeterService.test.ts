@@ -584,6 +584,7 @@ describe('the WORKLOAD axis — three lines in one shared fleet org (MOTIR-1995)
       'agent',
       'ci',
       'index',
+      'instance',
     ]);
     for (const kind of FLEET_WORKLOAD_KINDS) {
       expect(containerWorkloadFor(kind)).toBeDefined();

@@ -233,11 +233,11 @@ describe('approvalGatesService.listAwaitingMe — access, enforced IN the query'
     await workspacesService.addMember({ userId: stranger.id, workspaceId: fx.workspaceId });
     await gateOn({ title: 'Routed to the stranger A', assigneeId: stranger.id });
     await gateOn({ title: 'Routed to the stranger B', assigneeId: stranger.id });
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     // ⚠️ AND THEIR PROJECT MEMBERSHIP IS REVOKED — joining a workspace enrols a
     // user in its projects, so a workspace member is a project member until
@@ -495,11 +495,11 @@ describe('homeService.tabCounts — the strip badge (MOTIR-4794)', () => {
     const stranger = await createTestUser({ email: 'badge-stranger@ex.com', name: 'Badge' });
     await workspacesService.addMember({ userId: stranger.id, workspaceId: fx.workspaceId });
     await gateOn({ title: 'Routed to the stranger', assigneeId: stranger.id });
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     await adminDb.projectMembership.deleteMany({
       where: { userId: stranger.id, projectId: fx.projectId },

@@ -294,11 +294,11 @@ describe('POST /api/ai/coding-convention/refresh', () => {
 
     // …and a NON-BROWSER gets the 404 instead: a workspace member never added to
     // the now-private project (going private adds nobody — Story MOTIR-6169).
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: { userId: owner.id, workspaceId: workspace.id },
-      level: 'private',
+      mode: 'members',
     });
     const outsider = await createTestUser();
     await workspacesService.addMember({ userId: outsider.id, workspaceId: workspace.id });

@@ -9,6 +9,7 @@ import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 import { projectAccessData } from './helpers/projectAccess';
 import type { ProjectAccessMode } from '@/generated/prisma/client';
+import { readLegacyAccessLevel } from './helpers/legacyProjectAccess';
 
 // Schema + repository proof for the project access STORAGE (Story MOTIR-6169 ·
 // Subtask MOTIR-6541) — the EXPAND step. It covers only what that card ships:
@@ -78,7 +79,8 @@ describe('the new columns, as the migration leaves them', () => {
     const p = await unsetProject(t.workspaceId);
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: p.id } });
     expect(row.accessMode).toBe('workspace');
-    expect(row.accessLevel).toBe('open');
+    // The retired column still fills from its default (MOTIR-6692 `@ignore`s it).
+    expect(await readLegacyAccessLevel(adminDb, p.id)).toBe('open');
   });
 
   it('reads access_scope `full` on a membership inserted without naming it', async () => {
@@ -104,18 +106,18 @@ describe('the new columns, as the migration leaves them', () => {
 });
 
 describe('projectRepository.setAccessMode', () => {
-  it.each([
-    ['members', 'private'],
-    ['public', 'public'],
-    ['workspace', 'open'],
-  ] as const)('writes access_mode = %s and access_level = %s together', async (mode, level) => {
-    const t = await tenant();
-    const p = await project(t.workspaceId, mode === 'workspace' ? 'members' : 'workspace');
-    await adminDb.$transaction((tx) => projectRepository.setAccessMode(p.id, mode, tx));
-    const row = await adminDb.project.findUniqueOrThrow({ where: { id: p.id } });
-    expect(row.accessMode).toBe(mode);
-    expect(row.accessLevel).toBe(level);
-  });
+  it.each(['members', 'public', 'workspace'] as const)(
+    'writes access_mode = %s and leaves the retired access_level alone (MOTIR-6692)',
+    async (mode) => {
+      const t = await tenant();
+      const p = await project(t.workspaceId, mode === 'workspace' ? 'members' : 'workspace');
+      const levelBefore = await readLegacyAccessLevel(adminDb, p.id);
+      await adminDb.$transaction((tx) => projectRepository.setAccessMode(p.id, mode, tx));
+      const row = await adminDb.project.findUniqueOrThrow({ where: { id: p.id } });
+      expect(row.accessMode).toBe(mode);
+      expect(await readLegacyAccessLevel(adminDb, p.id)).toBe(levelBefore);
+    },
+  );
 
   it('stamps madePublicAt only when asked', async () => {
     const t = await tenant();

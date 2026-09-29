@@ -591,3 +591,116 @@ export async function revokeRunGitCredentials(
   }
   return results;
 }
+
+// ── An agent instance's CLONE credential (MOTIR-6872) ─────────────────────
+
+/** The permissions an instance's clone token is narrowed to: READ, nothing else. */
+export const INSTANCE_CLONE_PERMISSIONS = { contents: 'read' } as const;
+
+/** One short-lived clone token and the repositories (`owner/name`) it reaches. */
+export interface InstanceCloneCredential {
+  repositories: string[];
+  /** The secret. Handed to one exec's argv; never logged, stored or echoed. */
+  token: string;
+  expiresAt: Date;
+}
+
+/**
+ * Mint the CLONE credentials for a new agent instance
+ * (`docs/decisions/agent-instances.md` §1): one uncached installation token per
+ * App installation the project's repositories span, narrowed to exactly those
+ * repositories and to {@link INSTANCE_CLONE_PERMISSIONS}. NOTHING is recorded —
+ * the caller revokes each token the moment its clone returns
+ * ({@link revokeInstanceCloneCredential}), and GitHub's one-hour expiry is the
+ * backstop.
+ *
+ * A project repository with no repository on GitHub yet is skipped (there is
+ * nothing to clone), and a project with none at all answers `[]`.
+ */
+export async function mintProjectReadCredentials(
+  projectId: string,
+  workspaceId: string,
+): Promise<InstanceCloneCredential[]> {
+  const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    projectRepoRepository.listByProject(projectId, workspaceId, tx),
+  );
+  const repos: RunRepository[] = rows.flatMap((row) =>
+    row.githubRepo
+      ? [
+          {
+            projectRepoId: row.id,
+            repository: `${row.githubRepo.owner}/${row.githubRepo.name}`,
+            providerRepoId: row.githubRepo.repoId,
+            app: runGitAppFor(row),
+          },
+        ]
+      : [],
+  );
+  if (repos.length === 0) return [];
+
+  const groups = new Map<
+    string,
+    { app: RunGitApp; installationId: string; repos: RunRepository[] }
+  >();
+  for (const repo of repos) {
+    const installation = await installationOn(repo.app, repo.repository);
+    if (installation === null || installation.suspended) {
+      throw new RunGitCredentialUnavailableError(
+        'github_unavailable',
+        `${APP_LABEL[repo.app]} can no longer reach ${repo.repository}`,
+      );
+    }
+    const key = `${repo.app}:${installation.id}`;
+    const group = groups.get(key) ?? { app: repo.app, installationId: installation.id, repos: [] };
+    group.repos.push(repo);
+    groups.set(key, group);
+  }
+
+  const out: InstanceCloneCredential[] = [];
+  for (const group of groups.values()) {
+    const res = await github(`/app/installations/${group.installationId}/access_tokens`, {
+      method: 'POST',
+      authorization: `Bearer ${appJwt(group.app)}`,
+      body: {
+        repository_ids: group.repos.map((r) => Number(r.providerRepoId)),
+        permissions: INSTANCE_CLONE_PERMISSIONS,
+      },
+    });
+    if (!res.ok) {
+      throw new RunGitCredentialUnavailableError(
+        'github_unavailable',
+        `GitHub answered ${res.status} when minting the clone token on ${group.repos
+          .map((r) => r.repository)
+          .join(', ')}`,
+      );
+    }
+    const body = (await res.json()) as { token?: string; expires_at?: string };
+    if (!body.token || !body.expires_at) {
+      throw new RunGitCredentialUnavailableError(
+        'github_unavailable',
+        'GitHub answered a token response with an unexpected shape',
+      );
+    }
+    out.push({
+      repositories: group.repos.map((r) => r.repository),
+      token: body.token,
+      expiresAt: new Date(body.expires_at),
+    });
+  }
+  return out;
+}
+
+/** Revoke one clone token (`DELETE /installation/token`). Best-effort — never throws;
+ *  a token GitHub already considers dead counts as revoked, and the one-hour expiry
+ *  is the backstop for a revoke that fails. */
+export async function revokeInstanceCloneCredential(token: string): Promise<boolean> {
+  try {
+    const res = await github('/installation/token', {
+      method: 'DELETE',
+      authorization: `token ${token}`,
+    });
+    return res.ok || res.status === 401 || res.status === 404;
+  } catch {
+    return false;
+  }
+}

@@ -208,6 +208,13 @@ process.env['MOTIR_HOSTED_RUN_JOURNAL_PATH'] ??= MOTIR_HOSTED_RUN_JOURNAL_PATH;
 process.env['MOTIR_FAKE_CONTAINER_STATE_PATH'] ??= path.resolve(
   'out/playwright-output-acceptance/.fake-containers.json',
 );
+// Story MOTIR-6860 · MOTIR-6877 — the agent instances' PERSISTENT fake fleet, on
+// the same terms: the webServer's route bundles each hold their own module copy,
+// so the machines and volumes must live in one file they all read, and the runner
+// arms a provider failure through that file's sidecar for the webServer to meet.
+process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-persistent.json',
+);
 // The stall watchdog's test-only config seam (`hostedRunStallWindowMs`,
 // `lib/hostedRuns/limits.ts`) — shortened from the real 15 minutes so the
 // "stalled" case can run in this lane at all. Read directly by whichever
@@ -429,6 +436,7 @@ export default defineConfig({
         MOTIR_HOSTED_RUN_FIXTURE_PATH,
         MOTIR_HOSTED_RUN_JOURNAL_PATH,
         MOTIR_FAKE_CONTAINER_STATE_PATH: process.env['MOTIR_FAKE_CONTAINER_STATE_PATH']!,
+        MOTIR_FAKE_PERSISTENT_STATE_PATH: process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH']!,
         E2E_HOSTED_RUN_STALL_WINDOW_MS: process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS']!,
         // Story MOTIR-4928 · MOTIR-5264 — the MONITORING room's connect walk.
         // ⚠️ THE FAKE IS SELECTED HERE OR NOWHERE. This server is spawned, so a

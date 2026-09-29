@@ -89,11 +89,11 @@ async function tenant(): Promise<Tenant> {
     actorUserId: owner.id,
     name: `Private ${seq}`,
   });
-  await projectMembersService.setAccessLevel({
+  await projectMembersService.setAccessMode({
     key: priv.identifier,
     actorUserId: owner.id,
     ctx: ownerCtx,
-    level: 'private',
+    mode: 'members',
   });
   const { organizationId } = await adminDb.workspace.findUniqueOrThrow({
     where: { id: workspace.id },

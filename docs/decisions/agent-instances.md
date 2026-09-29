@@ -380,3 +380,100 @@ dialog says so beside those profiles.
 - **Running a card in an instance** — MOTIR-6864's.
 - **Offering Cursor.** Cursor stays off until Cursor confirms it in writing; this record does not
   decide that confirmation.
+
+## AMENDMENT 1 — the sweep's cadence (MOTIR-6873, 2026-09-28)
+
+**§2's "every 5 minutes" could not be built as written.** The job substrate refuses a cron off the
+clustered minutes `0` and `30` (`SCHEDULE_CLUSTER_MINUTES`, pinned by
+`tests/jobs/schedule-cluster.test.ts`): the database suspends when idle, every scheduled tick is a
+guaranteed wake, and a finer cadence is a decision for `application-hosting.md` §21, not a minute to
+pick. So the sweep is split by what each part needs:
+
+- **The idle window rides a per-instance timer**, not the sweep. `agent-instance/idle-check` is a
+  debounced job keyed on the instance, armed when it starts running and re-armed on every activity
+  bump, with `period: 30m` and `timeout: 12h`. It fires once the instance has been quiet for the
+  window, so an idle instance hibernates at 30 minutes rather than at up to 35. It wakes nothing
+  while no instance exists.
+- **`system.agent-instance-sweep` runs at `0,30 * * * *`** for everything else: settling a
+  transition left in motion, the reconcile, the 12-hour backstop, the credit refusal, orphans, the
+  charge backstop, and an idle instance whose timer was lost.
+- **The fleet slot's TTL grows to 12 h + 45 minutes**, the backstop plus one 30-minute sweep and a
+  quarter hour, in place of §6's 12 h + 15 minutes.
+- **The orphan cleanup** destroys a volume only once its machine is gone from the inventory it
+  read, so an orphan volume is removed one pass after its machine.
+
+The 12-hour backstop is unchanged. Worst case it now lands at 12 h + 30 minutes, since both the
+timer's debounce cap and the sweep enforce it.
+
+## AMENDMENT 2 — no organisation cap, an own pool, and a charge that runs while the machine runs (2026-09-29)
+
+Asked by the product owner, after reading §6's numbers: _"3 for a whole org? If I have 100 users in the
+org how does the number work? And why do we need the limits?"_ Each limit was re-examined against what
+it actually protects. This amendment **replaces §6's two running caps** and **extends §5's charge**.
+
+### 1 · §5 charged too late: the credit pre-flight could not stop a running machine
+
+The pre-flight asks one question, _"is the balance above zero?"_. It holds nothing and reserves nothing
+(motir-ai `agent-run-check`: _"No threshold and no hold"_), and machine time was debited only when an
+interval **closed**, up to the 12-hour backstop later. The sweep's credit check could not help, because
+a running agent's own minutes never lowered the balance it read. An organisation with one credit could
+run a machine for twelve hours. A hosted run is protected by the gateway's 429. An instance's model
+usage is on the user's own sign-in, so nothing in the middle stopped it.
+
+**Now the machine is charged while it runs.** Each sweep pass first **rolls** every running
+instance's open interval:
+
+- it closes the interval `rolled` at its last whole-minute boundary;
+- it opens the next interval of the same run there, in one transaction;
+- it charges the closed interval like any other: once, under its own `agent-instance-interval:<id>`
+  key.
+
+Only after every running instance has been charged does the pass ask each organisation for credits,
+and it hibernates (`credits`) where the answer is no.
+
+- **Overdraft** is bounded by the sweep's 30 minutes instead of the backstop's 12 hours.
+- **Rounding** stays exact: a rolled interval is whole minutes, so only a run's final interval rounds.
+- **motir-ai** is unchanged. It still debits one interval per key.
+
+**A run is now one or more intervals.** Each interval carries `runId`, the id of the run's first
+interval, and `runStartedAt`. The **fleet slot is keyed on the run** (`ownerRef = runId`), and the
+**12-hour backstop counts from `runStartedAt`**, so rolling changes neither.
+
+### 2 · Instances have their own pool, not a share of CI's
+
+§6 counted instances under `MOTIR_FLEET_MAX_IN_FLIGHT`, the ceiling CI, indexing and hosted runs
+share. It then capped them at 8, a third of that ceiling's default 24, so they could not starve CI.
+Instances already run in their own per-organisation Fly apps (§7), are paid for by the minute, and
+live for hours. They do not belong in CI's ceiling. `agent_instance` is now an **`own`-pool
+workload** (`FleetPool` in `lib/ciFleet/workloads.ts`):
+
+- It still takes and releases a slot under the fleet admission lock.
+- It is **neither counted in, nor refused by, the shared ceiling**.
+
+### 3 · No organisation cap; the pool's cap is a safety valve, not a product limit
+
+`MOTIR_INSTANCE_MAX_RUNNING_PER_ORG` (default 3) is **removed**. It was a fairness split of the 8
+slots. It was never a statement of what an organisation should be allowed, and it made no sense for
+a 100-person organisation. With the charge running (1), **credits decide how many agents an
+organisation runs**.
+
+`MOTIR_INSTANCE_MAX_RUNNING` stays, as the **agent pool's safety valve**: the most machines Motir will
+have running for instances at once, across everyone. Fly has no spending cap of its own, so
+something in the product must bound the worst case.
+
+- Its default rises from 8 to **50**, well above ordinary use.
+- An operator raises it as usage grows.
+- Reaching it reads as _"Motir is busy, try again in a few minutes"_, not as a limit a person owns.
+
+**The per-person cap stays: at most 10 live instances per user.** Every instance, hibernated or not,
+keeps a 10 GB volume Motir pays for and does not charge (§3). The cap bounds that cost. It can go if
+volume storage is ever charged.
+
+### What a person sees
+
+| Refusal            | Before                                       | After                                                 |
+| ------------------ | -------------------------------------------- | ----------------------------------------------------- |
+| Organization limit | _"Your organization already has 3 running…"_ | **removed**                                           |
+| Your limit         | _"You already have 10 agents…"_              | unchanged                                             |
+| Motir is busy      | the fleet-wide 8, or CI's ceiling            | the agent pool's safety valve only                    |
+| Not enough credits | at create / wake only                        | at create / wake, **and within a pass while running** |

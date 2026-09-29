@@ -220,11 +220,11 @@ describe('list_projects — the access checks are the UI switcher’s', () => {
       name: 'Secret Project',
       identifier: 'SEC',
     });
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: secret.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level: 'private',
+      mode: 'members',
     });
 
     // A plain workspace member never added to the private project (going private
@@ -279,11 +279,11 @@ describe('list_projects — the access checks are the UI switcher’s', () => {
         identifier,
       });
     }
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: 'THR',
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level: 'private',
+      mode: 'members',
     });
     const viewer = await makeUser('viewer-parity@ex.com', 'Viewer');
     await workspacesService.addMember({ userId: viewer.id, workspaceId: workspace.id });

@@ -127,7 +127,7 @@ describe('proxy config.matcher', () => {
     expect(source).toContain('404-not-403');
   });
 
-  it('the twenty-one (authed) segments are the ones measured, not a copied list', async () => {
+  it('the twenty-two (authed) segments are the ones measured, not a copied list', async () => {
     // A regression guard on the ENUMERATION, not on the matcher: if this number
     // moves, a segment was added or removed and the first test above is the one
     // that should have failed. Kept because the card's own measurement is the
@@ -148,6 +148,8 @@ describe('proxy config.matcher', () => {
       'filters',
       'invite',
       'items',
+      // MOTIR-6874 — My agents, and the TWENTY-SECOND segment.
+      'my-agents',
       // MOTIR-6548 — the no-project landing, and the TWENTY-FIRST segment.
       'no-project',
       // MOTIR-4732 — the FORWARD for old `/planning` links, and the eighteenth

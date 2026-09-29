@@ -169,11 +169,11 @@ describe('watcherNotificationsService.fanOut — comment events', () => {
     // view is ADDED explicitly; a user added to the workspace AFTER the flip has
     // no project membership. Their watcher row is inserted directly — exactly
     // "was watching, lost view access between write and send".
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,
       ctx: s.fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     await adminDb.projectMembership.create({
       data: {

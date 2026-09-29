@@ -146,6 +146,11 @@ export const PERMISSION_DOMAINS = [
   // configuration keys, and "may see every plan" is a read a Viewer holds.
   'plan',
   'run',
+  // MOTIR-6872 — a user's own AGENT INSTANCES (`docs/decisions/agent-instances.md`
+  // §8). Its own domain beside `run`: running a billed machine of your own is not
+  // an act on anybody's run, and folding it into `ai` or `work_item` would let a
+  // workspace grant one without the other only by accident.
+  'instance',
   'public_request',
   'member',
   'board',
@@ -255,6 +260,10 @@ export const PERMISSIONS = [
   // their own domains, contiguously, for the picker-order reason above.
   'plan:view_any',
   'run:view_any',
+  // MOTIR-6872 — create, wake, hibernate and delete YOUR OWN agent instances on
+  // this project (§8). It never grants another user's instance: every read and
+  // operation is also owner-scoped, whatever keys the reader holds.
+  'instance:use',
   'public_request:comment',
   'public_request:submit',
   'public_request:upvote',
@@ -377,6 +386,9 @@ const PERMISSION_META: Record<
   // `run:view_any` is consulted by the run reads' served scope and their
   // record-level admit (`dispatchRunService`, MOTIR-6331).
   'run:view_any': { domain: 'run', enforcement: 'enforced' }, // MOTIR-6328 · MOTIR-6331
+  // `enforced` on arrival — the gate lands in the same change as the key:
+  // `agentInstanceLifecycleService` asserts it on every instance operation.
+  'instance:use': { domain: 'instance', enforcement: 'enforced' }, // MOTIR-6872
   'public_request:comment': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:submit': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:upvote': { domain: 'public_request', enforcement: 'enforced' },
