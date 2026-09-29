@@ -356,7 +356,7 @@
       "approval": "Approvals",
       "plan": "Plans",
       "run": "Agent runs",
-      "instance": "Agent instances",
+      "instance": "Personal agents",
       "public_request": "Public requests",
       "member": "Members & access",
       "board": "Boards",
@@ -431,8 +431,8 @@
       "description": "See all of the project's agent runs, including other people's. Without it you see the runs you started."
     },
     "instance_use": {
-      "label": "Use your own agent instances",
-      "description": "Create, wake, hibernate and delete your own agent instances on this project — machines charged per running minute. It never opens anyone else's."
+      "label": "Use your own agents",
+      "description": "Create, wake, hibernate and delete your own agents on this project — machines charged per running minute. It never opens anyone else's."
     },
     "public_request_comment": {
       "label": "Comment on requests",

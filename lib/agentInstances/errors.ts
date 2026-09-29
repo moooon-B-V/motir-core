@@ -1,13 +1,13 @@
 // Typed errors for the agent-instance lane (Story MOTIR-6860 · MOTIR-6872).
 // Every refusal a person can meet is one of these, with the words the Instances
-// page shows (`design/instances/design-notes.md` panel 5) — never a 500. The
+// page shows (the MOTIR-6868 design's panel 5) — never a 500. The
 // route maps each `code` to a status in `lib/agentInstances/errorResponse.ts`.
 
 /** An instance that does not exist, is deleted, or is not the caller's (§8) — one answer for all three. */
 export class AgentInstanceNotFoundError extends Error {
   readonly code = 'agent_instance_not_found' as const;
   constructor(readonly instanceId: string) {
-    super('That instance does not exist.');
+    super('That agent does not exist.');
     this.name = 'AgentInstanceNotFoundError';
   }
 }
@@ -25,7 +25,7 @@ export class AgentInstanceNameInvalidError extends Error {
 export class AgentInstanceNameTakenError extends Error {
   readonly code = 'agent_instance_name_taken' as const;
   constructor(readonly instanceName: string) {
-    super(`You already have an instance called ${instanceName} on this project.`);
+    super(`You already have an agent called ${instanceName} on this project.`);
     this.name = 'AgentInstanceNameTakenError';
   }
 }
@@ -72,7 +72,7 @@ export class AgentInstanceStateConflictError extends Error {
     readonly state: string,
     action: string,
   ) {
-    super(`This instance is ${state}, so it can't be ${action} right now.`);
+    super(`This agent is ${state}, so it can't be ${action} right now.`);
     this.name = 'AgentInstanceStateConflictError';
   }
 }
@@ -81,7 +81,7 @@ export class AgentInstanceStateConflictError extends Error {
 export class AgentInstancesUnavailableError extends Error {
   readonly code = 'agent_instances_unavailable' as const;
   constructor(detail: string) {
-    super(`Agent instances are not available on this deployment: ${detail}`);
+    super(`Personal agents are not available on this deployment: ${detail}`);
     this.name = 'AgentInstancesUnavailableError';
   }
 }

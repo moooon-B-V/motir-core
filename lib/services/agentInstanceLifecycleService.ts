@@ -198,7 +198,7 @@ async function assertCredits(organizationId: string): Promise<void> {
   if (!verdict.mayRun) {
     throw new AgentInstanceStartRefusedError(
       'credits',
-      'Your organization’s credits can’t start a machine right now. Add credits to create or wake an instance.',
+      'Your organization’s credits can’t start a machine right now. Add credits to create or wake an agent.',
     );
   }
 }
@@ -239,7 +239,7 @@ async function reserveSlot(input: {
   if (verdict.reason === 'workload_cap' && verdict.detail === 'org_instances') {
     throw new AgentInstanceStartRefusedError(
       'org_cap',
-      `Your organization already has ${maxPerOrg} instances running. Hibernate one to start another.`,
+      `Your organization already has ${maxPerOrg} agents running. Hibernate one to start another.`,
     );
   }
   throw new AgentInstanceStartRefusedError(
@@ -433,7 +433,7 @@ export const agentInstanceLifecycleService = {
     if (mine >= INSTANCE_MAX_PER_USER) {
       throw new AgentInstanceStartRefusedError(
         'user_cap',
-        `You already have ${INSTANCE_MAX_PER_USER} instances. Delete one to create another.`,
+        `You already have ${INSTANCE_MAX_PER_USER} agents. Delete one to create another.`,
       );
     }
     const clash = await inProject(project, ctx, async (tx) => {
