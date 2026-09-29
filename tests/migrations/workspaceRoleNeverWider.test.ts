@@ -18,6 +18,7 @@ import {
   runMigrationFile,
   type Tenant,
 } from './_workspaceRoleTenant';
+import { writeLegacyAccessLevel } from '../helpers/legacyProjectAccess';
 
 // The never-wider CHECK (Story MOTIR-6168 · Subtask MOTIR-6461) — the second
 // migration, run over the mapping's fixture tenant exactly as `migrate deploy`
@@ -62,6 +63,23 @@ const PUBLIC_SET_AT_MIGRATION = [
   'run:view_any',
 ];
 
+/**
+ * Keys the role sets gained AFTER this migration was written. The migration is a
+ * point in time and is not rewritten, so its role literals lack them; the live
+ * constants are asserted to be exactly the literal plus these, and the SQL copy
+ * of the resolver is compared with the TypeScript one minus these.
+ * MOTIR-6872 — `instance:use` (agent instances), granted to member and above.
+ */
+const KEYS_ADDED_AFTER_MIGRATION = {
+  gated: ['instance:use'],
+  member: ['instance:use'],
+  viewer: [] as string[],
+};
+const ADDED_AFTER = new Set([
+  ...KEYS_ADDED_AFTER_MIGRATION.gated,
+  ...KEYS_ADDED_AFTER_MIGRATION.member,
+]);
+
 const implicitSnapshot = JSON.parse(
   readFileSync(
     path.join(__dirname, 'fixtures/implicit-workspace-member-permissions.at-7717433af.json'),
@@ -88,9 +106,15 @@ afterAll(async () => {
 
 describe('the literal sets', () => {
   it('the built-ins equal BUILTIN_ROLE_PERMISSIONS (gated = admin = Manager)', () => {
-    expect(literal('gated')).toEqual(sorted(BUILTIN_ROLE_PERMISSIONS.admin));
-    expect(literal('member')).toEqual(sorted(BUILTIN_ROLE_PERMISSIONS.member));
-    expect(literal('viewer')).toEqual(sorted(BUILTIN_ROLE_PERMISSIONS.viewer));
+    expect(sorted([...literal('gated'), ...KEYS_ADDED_AFTER_MIGRATION.gated])).toEqual(
+      sorted(BUILTIN_ROLE_PERMISSIONS.admin),
+    );
+    expect(sorted([...literal('member'), ...KEYS_ADDED_AFTER_MIGRATION.member])).toEqual(
+      sorted(BUILTIN_ROLE_PERMISSIONS.member),
+    );
+    expect(sorted([...literal('viewer'), ...KEYS_ADDED_AFTER_MIGRATION.viewer])).toEqual(
+      sorted(BUILTIN_ROLE_PERMISSIONS.viewer),
+    );
     // ⚠️ The public literal is a POINT IN TIME, like the implicit one below. The
     // migration ran with the public set as it stood before the Visitor role
     // (MOTIR-6642) added `approval:view_any` and `report:view`; the migration is
@@ -110,12 +134,10 @@ describe('the literal sets', () => {
 /** The fixture tenant with a limited and a private project beside the two open ones. */
 async function tenantWithLevels(): Promise<Tenant & { p3: { id: string; identifier: string } }> {
   const t = await makeTenant();
-  await adminDb.project.update({
-    where: { id: t.p2.id },
-    // The mode beside the level is the one the mapping migration gives it (MOTIR-6686).
-    // legacy-access-level: the role migration under test reads `limited` and `private` apart.
-    data: { accessLevel: 'limited', accessMode: 'members' },
-  });
+  // The mode beside the level is the one the mapping migration gives it (MOTIR-6686).
+  await adminDb.project.update({ where: { id: t.p2.id }, data: { accessMode: 'members' } });
+  // legacy-access-level: the role migration under test reads `limited` and `private` apart.
+  await writeLegacyAccessLevel(adminDb, t.p2.id, 'limited');
   const p3 = await adminDb.project.create({
     data: {
       name: 'P3',
@@ -123,11 +145,11 @@ async function tenantWithLevels(): Promise<Tenant & { p3: { id: string; identifi
       identifier: `${t.p1.identifier}P`,
       workspaceId: t.wsId,
       // The mode beside the level is the one the mapping migration gives it (MOTIR-6686).
-      // legacy-access-level: the role migration under test reads `limited` and `private` apart.
-      accessLevel: 'private',
       accessMode: 'members',
     },
   });
+  // legacy-access-level: the role migration under test reads `limited` and `private` apart.
+  await writeLegacyAccessLevel(adminDb, p3.id, 'private');
   // Only the plain member is added to the private project.
   await adminDb.projectMembership.create({
     data: { workspaceId: t.wsId, projectId: p3.id, userId: t.people.member! },
@@ -181,7 +203,9 @@ describe('the check, over the mapping fixture', () => {
             userId,
             workspaceId: t.wsId,
           });
-          expect(sorted(rows[0]!.keys), `${label} in ${projectId}`).toEqual(sorted(ts));
+          expect(sorted(rows[0]!.keys), `${label} in ${projectId}`).toEqual(
+            sorted([...ts].filter((key) => !ADDED_AFTER.has(key))),
+          );
         }
       }
     } finally {

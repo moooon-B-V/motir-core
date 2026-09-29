@@ -356,6 +356,7 @@
       "approval": "Approvals",
       "plan": "Plans",
       "run": "Agent runs",
+      "instance": "Personal agents",
       "public_request": "Public requests",
       "member": "Members & access",
       "board": "Boards",
@@ -428,6 +429,10 @@
     "run_view_any": {
       "label": "See every agent run",
       "description": "See all of the project's agent runs, including other people's. Without it you see the runs you started."
+    },
+    "instance_use": {
+      "label": "Use your own agents",
+      "description": "Create, wake, hibernate and delete your own agents on this project — machines charged per running minute. It never opens anyone else's."
     },
     "public_request_comment": {
       "label": "Comment on requests",
@@ -1093,6 +1098,7 @@
       "issues": "Work Items",
       "ready": "Ready",
       "runs": "Runs",
+      "myAgents": "My agents",
       "boards": "Boards",
       "reports": "Reports",
       "approvalRecords": "Approval records",
@@ -8724,6 +8730,95 @@
       "notesTooLong": "Instructions are capped at {limit} characters. A step needing more than that is a work item.",
       "reorderConflict": "The list changed while you were moving that step. Reload and try again.",
       "generic": "Something went wrong. Please try again."
+    }
+  },
+  "myAgents": {
+    "title": "My agents",
+    "subtitle": "Your own agents, on your own sign-in, in Motir’s cloud — {project}",
+    "subtitleNarrow": "Your own agents, on your own sign-in — {project}",
+    "newAgent": "New agent",
+    "emptyTitle": "No agents yet",
+    "emptyBody": "Each is your own coding agent — Claude Code, Codex and others — on its own machine in Motir’s cloud, with this project’s code and signed in with your own account. Motir charges only its machine time, and it sleeps when you stop using it.",
+    "loadFailed": "We couldn’t load your agents. Refresh to try again — nothing about them has changed.",
+    "col": {
+      "name": "Name",
+      "codingAgent": "Coding agent",
+      "project": "Project",
+      "state": "State",
+      "machineTime": "Machine time this month",
+      "credits": "Credits",
+      "actions": "Actions"
+    },
+    "rowActions": "Actions for {name}",
+    "thisMonth": "{time} this month",
+    "creditsCount": "{count, plural, one {# credit} other {# credits}}",
+    "state": {
+      "starting": "Starting",
+      "running": "Running",
+      "hibernating": "Hibernating",
+      "hibernated": "Hibernated",
+      "waking": "Waking",
+      "failed": "Failed",
+      "deleting": "Deleting"
+    },
+    "progress": {
+      "starting": "Booting — cloning the project’s repositories into the home",
+      "hibernating": "Stopping the machine — your home stays",
+      "waking": "Starting a fresh machine on your home",
+      "deleting": "Destroying the machine and its home"
+    },
+    "failedWayOut": "Wake to try again, or delete it.",
+    "stop": {
+      "credits": "Stopped: your organization ran out of credits. Add credits, then wake it.",
+      "idle": "Hibernated after 30 minutes without use",
+      "backstop": "Stopped after 12 hours running. Wake it to carry on."
+    },
+    "menu": {
+      "wake": "Wake",
+      "hibernate": "Hibernate",
+      "delete": "Delete…"
+    },
+    "create": {
+      "title": "New agent",
+      "name": "Name",
+      "nameHint": "Only you see it. Letters, numbers and dashes.",
+      "project": "Project",
+      "projectHint": "Its connected repositories are cloned into the agent’s home.",
+      "codingAgent": "Coding agent",
+      "vendorHint": "The coding agent’s model usage is billed to you by its vendor, not by Motir. Motir never sees your sign-in.",
+      "price": "<b>1 credit per minute</b> while it runs. It hibernates after 30 minutes without use and costs nothing while hibernated.",
+      "cancel": "Cancel",
+      "submit": "Create agent"
+    },
+    "profileLine": {
+      "claude": "Asks you to sign in with your Claude account, or an Anthropic API key, in its own terminal.",
+      "codex": "Asks you to sign in with your ChatGPT account, or an OpenAI API key.",
+      "opencode": "Uses your own model provider key. For Claude models, your Anthropic API key.",
+      "kimi": "Asks you to sign in with your Kimi account.",
+      "aider": "Uses your own model provider key. For Claude models, your Anthropic API key.",
+      "goose": "Uses your own model provider key. For Claude models, your Anthropic API key."
+    },
+    "refusal": {
+      "credits": "Your organization’s credits can’t start a machine right now. <link>Add credits</link> to create or wake an agent.",
+      "creditsUnknown": "Motir could not check your organization’s credits just now. Try again in a moment.",
+      "userCap": "You already have {count} agents. Delete one to create another.",
+      "busy": "Motir is running as many machines as it can right now. Try again in a few minutes.",
+      "notOffered": "That coding agent isn’t offered: its terms don’t yet allow a platform to host it. Choose another coding agent.",
+      "nameTaken": "You already have an agent called {name} on this project.",
+      "nameInvalid": "Use lower-case letters, numbers and dashes, starting with a letter or number — up to 40 characters.",
+      "unavailable": "My agents aren’t available on this deployment.",
+      "conflict": "That agent changed while you were looking. The list is up to date now.",
+      "generic": "Something went wrong. Try again."
+    },
+    "delete": {
+      "title": "Delete {name}?",
+      "intro": "This destroys the agent’s machine <b>and its home</b>. You lose:",
+      "lose1": "its coding agent’s sign-in — you would sign in again on a new agent;",
+      "lose2": "every file in the home, including the cloned repositories;",
+      "lose3": "any work you have not committed and pushed.",
+      "irreversible": "This can’t be undone. Machine time already used is still charged.",
+      "keep": "Keep it",
+      "confirm": "Delete agent"
     }
   },
   "runs": {

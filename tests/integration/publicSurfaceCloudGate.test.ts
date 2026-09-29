@@ -126,33 +126,31 @@ describe('the publish path, end to end, in both builds', () => {
     selfHostedBuild();
 
     await expect(
-      projectMembersService.setAccessLevel({
+      projectMembersService.setAccessMode({
         key: fx.projectIdentifier,
         actorUserId: fx.ctx.userId,
         ctx: fx.ctx,
-        level: 'public',
+        mode: 'public',
       }),
     ).rejects.toBeInstanceOf(PublicAccessUnavailableError);
 
     const row = await adminDb.project.findUnique({ where: { id: fx.projectId } });
-    expect(row?.accessLevel).not.toBe('public');
+    expect(row?.accessMode).not.toBe('public');
     expect(row?.madePublicAt).toBeNull();
   });
 
-  it('accepts every level a self-hosted team shares within its own workspace', async () => {
+  it('accepts every mode a self-hosted team shares within its own workspace', async () => {
     const fx = await makeWorkItemFixture({ name: 'Shares' });
     selfHostedBuild();
 
-    for (const level of ['open', 'limited', 'private'] as const) {
-      const res = await projectMembersService.setAccessLevel({
+    for (const mode of ['members', 'workspace'] as const) {
+      const res = await projectMembersService.setAccessMode({
         key: fx.projectIdentifier,
         actorUserId: fx.ctx.userId,
         ctx: fx.ctx,
-        level,
+        mode,
       });
-      // The level adapter lands `limited` and `private` at Members only (Story
-      // MOTIR-6169), so the mode is what the call answers for.
-      expect(res.accessMode).toBe(level === 'open' ? 'workspace' : 'members');
+      expect(res.accessMode).toBe(mode);
     }
   });
 
@@ -163,11 +161,11 @@ describe('the publish path, end to end, in both builds', () => {
     const fx = await makeWorkItemFixture({ name: 'Loop' });
     cloudBuild();
 
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: fx.projectIdentifier,
       actorUserId: fx.ctx.userId,
       ctx: fx.ctx,
-      level: 'public',
+      mode: 'public',
     });
 
     const res = await publicProject(anonymous(`/api/public/p/${fx.projectIdentifier}`), {

@@ -19,7 +19,7 @@ import type { ProjectAccessLevel, ProjectAccessMode } from '@/generated/prisma/c
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
-import { setProjectAccess } from '@/tests/helpers/projectAccess';
+import { modeForLegacyLevel, setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Service-layer tests for the Story 6.4 · Subtask 6.4.3 access gate — the
 // projectAccess browse/edit policy + its enforcement. Real Postgres, no DB
@@ -108,18 +108,18 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   });
   const ownerCtx = ctxFor(owner.id, workspace.id);
 
-  // Set the access level before adding the rest of the actors. `public` is not
-  // yet settable through the service setter (its make-public toggle is Subtask
-  // 6.12.8, and `asAccessLevel` deliberately still rejects it), so seed it
-  // directly at the data layer; the 3 settable levels go through the real setter.
+  // Set the access before adding the rest of the actors. `public` is refused by
+  // the service setter on a self-hosted build (which a Vitest run is), so seed it
+  // directly at the data layer; the 3 other levels go through the real setter, as
+  // the mode each maps to.
   if (level === 'public') {
     await setProjectAccess(adminDb, project.id, 'public');
   } else {
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level,
+      mode: modeForLegacyLevel(level),
     });
   }
 

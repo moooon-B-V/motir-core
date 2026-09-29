@@ -5,11 +5,13 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { readLegacyAccessLevel, writeLegacyAccessLevel } from './helpers/legacyProjectAccess';
 
 // Schema + tenancy proof for Story 6.4 · Subtask 6.4.2 — the project-access
 // data model. This is the schema-level companion to the future enforcement
 // suite (6.4.8); it covers ONLY what 6.4.2 ships:
-//   * `project.accessLevel` defaults to `open` (the no-lockout backfill);
+//   * `project.accessLevel` defaults to `open` (the no-lockout backfill) — the
+//     retired column, `@ignore`d since MOTIR-6692, so read through raw SQL;
 //   * the founder's membership carries the Manager workspace role (the legacy
 //     `member_role` column this once proved was dropped by MOTIR-6569);
 //   * `project_membership` round-trips + is RLS-isolated by workspace
@@ -131,7 +133,7 @@ describe('project.accessLevel — default', () => {
     const project = await adminDb.project.create({
       data: { workspaceId: ws.workspace.id, name: 'Defaulted', slug: 'def', identifier: 'DEF' },
     });
-    expect(project.accessLevel).toBe('open');
+    expect(await readLegacyAccessLevel(adminDb, project.id)).toBe('open');
   });
 
   it('accessLevel accepts the full Jira-mirrored set (open / limited / private)', async () => {
@@ -150,17 +152,14 @@ describe('project.accessLevel — default', () => {
         name: 'Private',
         slug: 'priv',
         identifier: 'PRV',
-        // legacy-access-level: this case pins the legacy column's own value set.
-        accessLevel: 'private',
       },
     });
-    expect(priv.accessLevel).toBe('private');
-    const updated = await adminDb.project.update({
-      where: { id: priv.id },
-      // legacy-access-level: this case pins the legacy column's own value set.
-      data: { accessLevel: 'limited' },
-    });
-    expect(updated.accessLevel).toBe('limited');
+    // legacy-access-level: this case pins the legacy column's own value set.
+    await writeLegacyAccessLevel(adminDb, priv.id, 'private');
+    expect(await readLegacyAccessLevel(adminDb, priv.id)).toBe('private');
+    // legacy-access-level: this case pins the legacy column's own value set.
+    await writeLegacyAccessLevel(adminDb, priv.id, 'limited');
+    expect(await readLegacyAccessLevel(adminDb, priv.id)).toBe('limited');
   });
 });
 

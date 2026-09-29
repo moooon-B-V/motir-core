@@ -80,6 +80,8 @@ describe('every built-in role that browses holds the three view-any keys', () =>
         'ai:plan',
         'ai:view_plan',
         'ai:decide_plan',
+        // MOTIR-6872 — a member runs their own agent instances.
+        'instance:use',
         ...ROOM_VIEW_KEYS,
       ].sort(),
     );

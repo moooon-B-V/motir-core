@@ -7,7 +7,6 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import {
   AlreadyProjectMemberError,
-  InvalidAccessLevelError,
   InvalidAccessModeError,
   NotAProjectMemberError,
   PermissionDeniedError,
@@ -193,11 +192,11 @@ describe('authorization — who may manage', () => {
     // still cannot change how open it is — refused `project:manage_access`, not
     // `member:manage`: who is IN the project and how open it is are separate.
     const refusedAccess = await projectMembersService
-      .setAccessLevel({
+      .setAccessMode({
         key,
         actorUserId: target.id,
         ctx: ctxFor(target.id, workspace.id),
-        level: 'private',
+        mode: 'members',
       })
       .catch((e: unknown) => e);
     expect(refusedAccess).toBeInstanceOf(PermissionDeniedError);
@@ -226,23 +225,23 @@ describe('authorization — who may manage', () => {
     expect((err as PermissionDeniedError).permission).toBe('member:manage');
   });
 
-  it('the workspace owner still passes on EVERY access level — the always-pass rail survives', async () => {
-    for (const level of ['open', 'limited', 'private'] as const) {
-      const { workspace, key, owner, ownerCtx } = await makeFixture(`rail-${level}`);
-      await projectMembersService.setAccessLevel({
+  it('the workspace owner still passes on EVERY access mode — the always-pass rail survives', async () => {
+    for (const mode of ['workspace', 'members'] as const) {
+      const { workspace, key, owner, ownerCtx } = await makeFixture(`rail-${mode}`);
+      await projectMembersService.setAccessMode({
         key,
         actorUserId: owner.id,
         ctx: ownerCtx,
-        level,
+        mode,
       });
-      const someone = await addWorkspaceMember(workspace.id, `rail-${level}@example.com`, 'Rail');
+      const someone = await addWorkspaceMember(workspace.id, `rail-${mode}@example.com`, 'Rail');
       const added = await projectMembersService.addMember({
         key,
         actorUserId: owner.id,
         ctx: ownerCtx,
         targetUserId: someone.id,
       });
-      expect(added.userId, `owner blocked on a ${level} project`).toBe(someone.id);
+      expect(added.userId, `owner blocked on a ${mode} project`).toBe(someone.id);
       // …and the reads, which this card gated on `project:browse`.
       expect(
         (await projectMembersService.listMembers({ key, actorUserId: owner.id, ctx: ownerCtx }))
@@ -251,17 +250,17 @@ describe('authorization — who may manage', () => {
       expect(
         (await projectMembersService.getAccess({ key, actorUserId: owner.id, ctx: ownerCtx }))
           .accessMode,
-      ).toBe(level === 'open' ? 'workspace' : 'members');
+      ).toBe(mode);
     }
   });
 
   it('a NON-BROWSER gets 404, not 403 — a private project stays invisible', async () => {
     const { workspace, key, owner, ownerCtx } = await makeFixture('authz-404');
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level: 'private',
+      mode: 'members',
     });
     // Added AFTER the project went private, so no auto-seeded project membership.
     const outsider = await addWorkspaceMember(workspace.id, 'outsider-404@example.com', 'Out');
@@ -346,17 +345,16 @@ describe('removeMember', () => {
   });
 });
 
-describe('setAccessLevel — the legacy adapter onto setAccessMode', () => {
-  it('maps `limited` to Members only without seeding members', async () => {
+describe('setAccessMode — Members only, and `public` on a self-hosted build', () => {
+  it('switching to Members only seeds no members', async () => {
     const { key, owner, ownerCtx, project } = await makeFixture('access-open');
-    const res = await projectMembersService.setAccessLevel({
+    const res = await projectMembersService.setAccessMode({
       key,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level: 'limited',
+      mode: 'members',
     });
-    // `limited` and `private` both land at Members only (`role-model.md` Q1),
-    // and the legacy column is written beside the mode as `private`.
+    // The DTO's `accessLevel` is DERIVED from the mode (`levelForMode`).
     expect(res).toEqual({ key, accessMode: 'members', accessLevel: 'private' });
     const count = await adminDb.projectMembership.count({ where: { projectId: project.id } });
     expect(count).toBe(0);
@@ -371,44 +369,44 @@ describe('setAccessLevel — the legacy adapter onto setAccessMode', () => {
   it('refuses `public` on a self-hosted build — the ENFORCEMENT point, not the UI', async () => {
     const { key, owner, ownerCtx } = await makeFixture('access-public-selfhost');
     await expect(
-      projectMembersService.setAccessLevel({
+      projectMembersService.setAccessMode({
         key,
         actorUserId: owner.id,
         ctx: ownerCtx,
-        level: 'public',
+        mode: 'public',
       }),
     ).rejects.toBeInstanceOf(PublicAccessUnavailableError);
   });
 
-  it('…and writes NOTHING — no level change, no madePublicAt stamp', async () => {
+  it('…and writes NOTHING — no mode change, no madePublicAt stamp', async () => {
     // A refusal that had already stamped `madePublicAt` would leave the project
     // dated into the square's "Recent" rank for a publish that never happened.
     const { key, owner, ownerCtx, project } = await makeFixture('access-public-nowrite');
     await expect(
-      projectMembersService.setAccessLevel({
+      projectMembersService.setAccessMode({
         key,
         actorUserId: owner.id,
         ctx: ownerCtx,
-        level: 'public',
+        mode: 'public',
       }),
     ).rejects.toBeInstanceOf(PublicAccessUnavailableError);
     const row = await adminDb.project.findUnique({ where: { id: project.id } });
-    expect(row?.accessLevel).not.toBe('public');
+    expect(row?.accessMode).not.toBe('public');
     expect(row?.madePublicAt).toBeNull();
   });
 
-  it('leaves open / limited / private alone — the gate is ONE level wide', async () => {
-    // `open` / `limited` / `private` are how a self-hosted team shares work
-    // inside its own workspace, which is what self-hosting is for.
+  it('leaves workspace / members alone — the gate is ONE mode wide', async () => {
+    // `workspace` / `members` are how a self-hosted team shares work inside its
+    // own workspace, which is what self-hosting is for.
     const { key, owner, ownerCtx } = await makeFixture('access-selfhost-others');
-    for (const level of ['open', 'limited', 'private'] as const) {
-      const res = await projectMembersService.setAccessLevel({
+    for (const mode of ['members', 'workspace'] as const) {
+      const res = await projectMembersService.setAccessMode({
         key,
         actorUserId: owner.id,
         ctx: ownerCtx,
-        level,
+        mode,
       });
-      expect(res.accessMode).toBe(level === 'open' ? 'workspace' : 'members');
+      expect(res.accessMode).toBe(mode);
     }
   });
 
@@ -423,18 +421,6 @@ describe('setAccessLevel — the legacy adapter onto setAccessMode', () => {
     expect(((await res?.json()) as { code: string }).code).toBe('PUBLIC_ACCESS_UNAVAILABLE');
   });
 
-  it('rejects an invalid access level', async () => {
-    const { key, owner, ownerCtx } = await makeFixture('access-bad');
-    await expect(
-      projectMembersService.setAccessLevel({
-        key,
-        actorUserId: owner.id,
-        ctx: ownerCtx,
-        level: 'secret',
-      }),
-    ).rejects.toBeInstanceOf(InvalidAccessLevelError);
-  });
-
   it('going private adds NOBODY — Members only means the people deliberately added', async () => {
     const { workspace, key, owner, ownerCtx, project } = await makeFixture('access-private');
     const m1 = await addWorkspaceMember(workspace.id, 'm1-private@example.com');
@@ -446,11 +432,11 @@ describe('setAccessLevel — the legacy adapter onto setAccessMode', () => {
       targetUserId: m1.id,
     });
 
-    const res = await projectMembersService.setAccessLevel({
+    const res = await projectMembersService.setAccessMode({
       key,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level: 'private',
+      mode: 'members',
     });
     expect(res).toEqual({ key, accessMode: 'members', accessLevel: 'private' });
 
@@ -461,7 +447,7 @@ describe('setAccessLevel — the legacy adapter onto setAccessMode', () => {
 });
 
 describe('setAccessMode (Story MOTIR-6169 · MOTIR-6544)', () => {
-  it('switching to `members` writes both columns and leaves the project_membership rows exactly as they were', async () => {
+  it('switching to `members` writes the mode and leaves the project_membership rows exactly as they were', async () => {
     const { workspace, key, owner, ownerCtx, project } = await makeFixture('mode-members');
     const m1 = await addWorkspaceMember(workspace.id, 'm1-mode@example.com');
     await addWorkspaceMember(workspace.id, 'm2-mode@example.com');
@@ -485,7 +471,6 @@ describe('setAccessMode (Story MOTIR-6169 · MOTIR-6544)', () => {
     expect(res).toEqual({ key, accessMode: 'members', accessLevel: 'private' });
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: project.id } });
     expect(row.accessMode).toBe('members');
-    expect(row.accessLevel).toBe('private');
     expect(
       await adminDb.projectMembership.findMany({
         where: { projectId: project.id },
@@ -494,7 +479,7 @@ describe('setAccessMode (Story MOTIR-6169 · MOTIR-6544)', () => {
     ).toEqual(before);
   });
 
-  it('switching back to `workspace` writes workspace / open', async () => {
+  it('switching back to `workspace` writes workspace, answered as workspace / open', async () => {
     const { key, owner, ownerCtx, project } = await makeFixture('mode-workspace');
     await projectMembersService.setAccessMode({
       key,
@@ -510,7 +495,7 @@ describe('setAccessMode (Story MOTIR-6169 · MOTIR-6544)', () => {
     });
     expect(res).toEqual({ key, accessMode: 'workspace', accessLevel: 'open' });
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: project.id } });
-    expect([row.accessMode, row.accessLevel]).toEqual(['workspace', 'open']);
+    expect(row.accessMode).toBe('workspace');
   });
 
   it('rejects an invalid mode before touching anything', async () => {
@@ -642,13 +627,13 @@ describe('getAccess', () => {
     expect(access).toEqual({ key, accessMode: 'workspace', accessLevel: 'open' });
   });
 
-  it('reflects a level set via setAccessLevel', async () => {
+  it('reflects a mode set via setAccessMode, with its derived level', async () => {
     const { key, owner, ownerCtx } = await makeFixture('get-access-private');
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level: 'private',
+      mode: 'members',
     });
     const access = await projectMembersService.getAccess({
       key,
@@ -666,20 +651,20 @@ describe('getAccess', () => {
   });
 });
 
-describe('setAccessLevel on a CLOUD build (MOTIR-4035)', () => {
+describe('setAccessMode on a CLOUD build (MOTIR-4035)', () => {
   runAsCloudBuild();
 
   it('accepts `public` and stamps madePublicAt on the transition INTO it', async () => {
     const { key, owner, ownerCtx, project } = await makeFixture('access-public-cloud');
-    const res = await projectMembersService.setAccessLevel({
+    const res = await projectMembersService.setAccessMode({
       key,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level: 'public',
+      mode: 'public',
     });
     expect(res.accessLevel).toBe('public');
     const row = await adminDb.project.findUnique({ where: { id: project.id } });
-    expect(row?.accessLevel).toBe('public');
+    expect(row?.accessMode).toBe('public');
     expect(row?.madePublicAt).toBeInstanceOf(Date);
   });
 

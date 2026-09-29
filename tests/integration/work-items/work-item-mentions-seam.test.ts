@@ -203,11 +203,11 @@ describe('5.8.7 seam · render-resolver state machine the chip discriminates on'
       identifier: 'SEC',
     });
     const hidden = await makeItem(secretProject.id, fx.ctx, 'Hidden plan');
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: 'SEC',
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
 
     // A non-owner member: edits the OPEN project, cannot browse the PRIVATE one.

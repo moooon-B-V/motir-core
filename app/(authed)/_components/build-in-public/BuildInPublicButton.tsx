@@ -21,7 +21,7 @@ import { useGoPublic } from './useGoPublic';
  * stateful, never duplicated.
  *
  * One click opens the reusable explainer/confirm dialog (6.17.2); confirming
- * runs the `setAccessLevel('public')` write via `useGoPublic`.
+ * runs the `setAccessMode('public')` write via `useGoPublic`.
  *
  * `placement` is WHERE the slot renders (MOTIR-2373 · design/shell
  * design-notes.md § *Every control's disposition below `md`*). The whole

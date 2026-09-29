@@ -77,11 +77,11 @@ export async function seedLessonLibrary(prefix: string): Promise<LessonLibrarySe
   // `private` FIRST — going private auto-enrols the workspace members that exist
   // at that moment, and right now that is only the owner. Both actors below are
   // created after, so each one's membership is exactly the role we give it.
-  await projectMembersService.setAccessLevel({
+  await projectMembersService.setAccessMode({
     key: project.identifier,
     actorUserId: owner.id,
     ctx: ownerCtx,
-    level: 'private',
+    mode: 'members',
   });
 
   // The read-without-change role (MOTIR-3336's whole justification), authored

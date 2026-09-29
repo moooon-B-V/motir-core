@@ -107,6 +107,15 @@ export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
       'opens on exactly those keys.',
   },
   {
+    // My agents (Story MOTIR-6860 · MOTIR-6874): the reader's own agent instances.
+    href: '/my-agents',
+    requires: 'instance:use',
+    evidence:
+      'MOTIR-6872: every `agentInstanceLifecycleService` method asserts `instance:use` ' +
+      '(`resolveProject`), and `app/(authed)/my-agents/page.tsx` answers `notFound()` to a ' +
+      'reader without it (agent-instances.md §8). Only the reader’s own agents are listed.',
+  },
+  {
     href: '/boards',
     requires: 'browse-only',
     evidence: 'The page gates on `canBrowse`; the board WRITES are gated in `boardsService`.',

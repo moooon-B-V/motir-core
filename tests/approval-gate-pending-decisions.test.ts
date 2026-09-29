@@ -228,11 +228,11 @@ describe('approvalGatesService.pendingDecisionsFor — access, enforced IN the q
     await workspacesService.addMember({ userId: stranger.id, workspaceId: fx.workspaceId });
     const item = await card({ title: 'Routed to the stranger', assigneeId: stranger.id });
     await gate(item.id);
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     await adminDb.projectMembership.deleteMany({
       where: { userId: stranger.id, projectId: fx.projectId },

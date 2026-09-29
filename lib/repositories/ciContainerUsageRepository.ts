@@ -21,7 +21,10 @@ import { Prisma, type CiContainerUsage } from '@/generated/prisma/client';
  *  three margins collapse into one number. Required (not defaulted) on the way
  *  in: a writer that will not name its workload is a writer that will be
  *  mis-attributed silently. */
-export type CiContainerWorkload = 'ci' | 'index' | 'agent';
+export type CiContainerWorkload = 'ci' | 'index' | 'agent' | 'instance';
+// `instance` (MOTIR-6872): a user AGENT INSTANCE's running intervals
+// (`docs/decisions/agent-instances.md` §5) — its own line, not `agent`, because an
+// instance is not a hosted run and the two margins must not merge into one number.
 
 export interface CiContainerUsageCreateInput {
   containerProvider: string;

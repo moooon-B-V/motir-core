@@ -23,7 +23,14 @@ export type FleetWorkloadKind =
   /** MOTIR-1981/1990: one container per code-graph index run. */
   | 'code_graph_index'
   /** Epic 9: one container per hosted agent run. */
-  | 'hosted_agent';
+  | 'hosted_agent'
+  /**
+   * MOTIR-6860: one user AGENT INSTANCE while it RUNS (`docs/decisions/agent-instances.md`
+   * §6). Slot-backed like `hosted_agent`; a hibernated instance holds no slot.
+   * Its machines live in per-organisation instance apps, never the fleet app,
+   * so the fleet reaper never sees one — the tag below names it in the console.
+   */
+  | 'agent_instance';
 
 // The CONTAINER-ORCHESTRATOR PORT (Story MOTIR-1916 · MOTIR-1921) —
 // `docs/decisions/ci-runner-fleet.md` §4 and §5, transcribed into the codebase
@@ -469,3 +476,162 @@ export interface UsageAttribution {
 export type UsageAttributionResolver = (
   handle: ContainerHandle,
 ) => Promise<UsageAttribution | null>;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PERSISTENT CONTAINERS — a user agent instance (Story MOTIR-6860 · MOTIR-6869)
+// ═══════════════════════════════════════════════════════════════════════════
+// `docs/decisions/agent-instances.md` §1–§3 and §7. Everything above describes
+// a SINGLE-USE container: booted for one job, `auto_destroy`, metered by its
+// teardown, swept by `reap`. An instance is the opposite on every axis — a
+// machine that outlives its process, a volume that outlives the machine, a
+// `stopped` that is a resting state rather than an ending — so it gets its OWN
+// half of the port rather than flags on the first half. The ephemeral half is
+// unchanged: CI, indexing and the hosted agent keep `provision · teardown ·
+// describe · reap` and `auto_destroy: true`.
+//
+// ⚠️ NO PROVIDER TYPE CROSSES THIS BOUNDARY EITHER. The handle carries opaque
+// strings the caller persists (§4's record stores them) and passes back; only
+// the adapter knows they are a Fly app, machine and volume.
+
+/** What to boot for one instance (§1). */
+export interface PersistentContainerSpec {
+  /** The Motir organisation — the adapter derives the instance APP from it (§7). */
+  readonly orgId: string;
+  readonly workspaceId: string;
+  readonly projectId: string;
+  /** The instance record's id — names the machine and the volume. */
+  readonly instanceId: string;
+  /** OCI image ref, DIGEST-pinned (§1). */
+  readonly image: string;
+  readonly size: ContainerSize;
+  /** Injected at boot; never baked into the image. */
+  readonly env: Readonly<Record<string, string>>;
+  readonly region: string;
+  /** The home volume's size (§3: 10 GB, fixed). */
+  readonly volumeSizeGb: number;
+  /** Where the volume is mounted — the image's `HOME` (§1: `/home/node`). */
+  readonly mountPath: string;
+}
+
+/** The persistent handle (§1's table) — persisted on the instance record. */
+export interface PersistentContainerHandle {
+  readonly provider: OrchestratorProvider;
+  /** The organisation's instance app. */
+  readonly app: string;
+  readonly machineId: string;
+  readonly volumeId: string;
+  readonly region: string;
+  readonly createdAt: Date;
+}
+
+/**
+ * A persistent machine's state in the INSTANCE vocabulary (§1). `stopped` is NOT
+ * terminal here — it is where a hibernated instance rests — which is why this
+ * does not reuse `ContainerStatus.terminal` / `isTerminalState`. `gone` means the
+ * machine no longer exists (destroyed, or never found).
+ */
+export type PersistentContainerState =
+  | 'starting'
+  | 'running'
+  | 'stopping'
+  | 'stopped'
+  | 'gone'
+  | 'failed';
+
+/** Provider-truth status of one persistent machine. */
+export interface PersistentContainerStatus {
+  readonly machineId: string;
+  readonly state: PersistentContainerState;
+  /** The provider's own state string, for diagnostics; empty when gone. */
+  readonly providerState: string;
+  /**
+   * The start instant of the CURRENT run — the latest `start` event, never the
+   * first. A machine woken three times has three runs, and an interval is
+   * measured from ITS run's start (§5), never across the hibernated hours.
+   */
+  readonly startedAt: Date | null;
+  /** The stop instant of the current run, when it has stopped since `startedAt`. */
+  readonly stoppedAt: Date | null;
+}
+
+/** Everything in one organisation's instance app — the reconcile's read (§5). */
+export interface PersistentAppInventory {
+  readonly app: string;
+  readonly machines: ReadonlyArray<{
+    readonly machineId: string;
+    readonly state: PersistentContainerState;
+    /** From the machine's own metadata; null when the machine carries none. */
+    readonly instanceId: string | null;
+    readonly createdAt: Date | null;
+  }>;
+  readonly volumes: ReadonlyArray<{
+    readonly volumeId: string;
+    readonly name: string;
+    readonly attachedMachineId: string | null;
+    readonly createdAt: Date | null;
+  }>;
+}
+
+/**
+ * The persistent half of the port (§1's table). Every operation is IDEMPOTENT on
+ * its end state, because a click, a retry and the sweep can all reach the same
+ * instance: stopping a stopped machine, destroying a destroyed one and reading a
+ * gone one are answers, never throws.
+ */
+export interface PersistentContainerOrchestrator {
+  readonly provider: OrchestratorProvider;
+
+  /** The instance app an organisation's instances boot in (§7) — deterministic. */
+  appNameFor(orgId: string): string;
+
+  /** The region a new instance's machine and volume are created in (§3) — the
+   *  adapter's own configuration, so no caller reads a provider variable. */
+  defaultRegion(): string;
+
+  /**
+   * Ensure the organisation's app (with its own private network), create the
+   * volume, then create the machine mounting it. NEVER leaves an untracked
+   * volume: a machine create that fails destroys the volume it just made before
+   * throwing.
+   */
+  provisionPersistent(spec: PersistentContainerSpec): Promise<PersistentContainerHandle>;
+
+  /** Hibernate: stop the machine; the volume stays. Idempotent on a stopped machine. */
+  stop(handle: PersistentContainerHandle): Promise<void>;
+
+  /** Wake: start the machine — always a cold boot of the rootfs, the volume intact. */
+  start(handle: PersistentContainerHandle): Promise<void>;
+
+  describePersistent(handle: PersistentContainerHandle): Promise<PersistentContainerStatus>;
+
+  /** Destroy the machine, THEN the volume. Idempotent; never the volume while the machine exists. */
+  destroyPersistent(handle: PersistentContainerHandle): Promise<void>;
+
+  /** Every machine and volume in one instance app. An app that does not exist is empty. */
+  listPersistent(app: string): Promise<PersistentAppInventory>;
+
+  /** Destroy one volume by id — the reconcile's orphan cleanup. Idempotent. */
+  destroyVolume(app: string, volumeId: string): Promise<void>;
+
+  /** Destroy one machine by id — the reconcile's orphan cleanup. Idempotent. */
+  destroyMachine(app: string, machineId: string): Promise<void>;
+
+  /**
+   * Run ONE command inside a running machine and return its result — how the
+   * lifecycle clones a project's repositories into the home (MOTIR-6872) without
+   * a credential ever entering the machine's config, env or volume: the command's
+   * argv is the only place it travels, for the length of one process.
+   */
+  exec(
+    handle: PersistentContainerHandle,
+    command: readonly string[],
+    options?: { timeoutSeconds?: number },
+  ): Promise<PersistentExecResult>;
+}
+
+/** What one {@link PersistentContainerOrchestrator.exec} returned. */
+export interface PersistentExecResult {
+  readonly exitCode: number;
+  readonly stdout: string;
+  readonly stderr: string;
+}

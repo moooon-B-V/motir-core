@@ -5,7 +5,9 @@ import { db } from '@/lib/db';
 import {
   _resetRunGitBotAuthors,
   hostedRunWriteAccess,
+  mintProjectReadCredentials,
   mintRunGitCredentials,
+  revokeInstanceCloneCredential,
   revokeRunGitCredentials,
   runGitAppFor,
   runRepositories,
@@ -829,5 +831,121 @@ describe('coverage top-up — the operational edges', () => {
     const { dispatchRunRepository } = await import('@/lib/repositories/dispatchRunRepository');
     vi.spyOn(dispatchRunRepository, 'findById').mockRejectedValueOnce(new Error('db is down'));
     await expect(revokeRunGitCredentials(runId)).resolves.toEqual([]);
+  });
+});
+
+// Story MOTIR-6860 · MOTIR-6872 — an agent instance's CLONE credentials: read-only,
+// one per installation the project's repositories span, recorded nowhere.
+describe('mintProjectReadCredentials — an agent instance’s clone tokens', () => {
+  /** Installations answer as usual; the token mint answers `status` with `body`. */
+  function stubMint(status: number, body: unknown): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const method = init?.method ?? 'GET';
+        if (/\/repos\/[^/]+\/[^/]+\/installation$/.test(url)) {
+          return new Response(
+            JSON.stringify({ id: 42, account: { login: 'acme' }, suspended_at: null }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        if (/\/app\/installations\/\d+\/access_tokens$/.test(url) && method === 'POST') {
+          return new Response(JSON.stringify(body), {
+            status,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        throw new Error(`unexpected fetch in test: ${method} ${url}`);
+      }),
+    );
+  }
+
+  it('mints ONE read-only token per installation over exactly its repositories, skipping one not on GitHub yet', async () => {
+    const web = await seedRepo({ state: 'connected', owner: 'acme', name: 'web' });
+    const api = await seedRepo({ state: 'connected', owner: 'acme', name: 'api' });
+    const studio = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    await seedRepo({ state: 'connected', owner: 'acme', name: 'pending', realized: false });
+    const calls = stubGithub();
+
+    const creds = await mintProjectReadCredentials(fixture.projectId, fixture.workspaceId);
+
+    expect(creds.map((c) => c.repositories)).toEqual([
+      ['acme/web', 'acme/api'],
+      ['motir-projects/site'],
+    ]);
+    for (const c of creds) {
+      expect(c.token).toMatch(/^ghs_run_\d+$/);
+      expect(c.expiresAt).toBeInstanceOf(Date);
+    }
+    const mints = calls.filter((c) => c.url.endsWith('/access_tokens'));
+    expect(mints.map((m) => m.body)).toEqual([
+      {
+        repository_ids: [web.providerRepoId, api.providerRepoId],
+        permissions: { contents: 'read' },
+      },
+      { repository_ids: [studio.providerRepoId], permissions: { contents: 'read' } },
+    ]);
+    // The Studio-created repository's token comes from motir-studio, the rest from Integration.
+    expect(mints.map((m) => appIdOf(m.authorization))).toEqual([INTEGRATION_APP_ID, STUDIO_APP_ID]);
+    // Nothing is recorded: an instance's clone credential is revoked, not stored.
+    expect(await adminDb.dispatchRunGitCredential.count()).toBe(0);
+  });
+
+  it('a project with no repository on GitHub answers no credentials and asks GitHub nothing', async () => {
+    await seedRepo({ state: 'connected', owner: 'acme', name: 'pending', realized: false });
+    const calls = stubGithub();
+    expect(await mintProjectReadCredentials(fixture.projectId, fixture.workspaceId)).toEqual([]);
+    expect(calls).toEqual([]);
+  });
+
+  it('an installation that is gone or suspended refuses, naming the repository', async () => {
+    await seedRepo({ state: 'connected', owner: 'acme', name: 'web' });
+    stubGithub({ installation: { 'acme/web': { status: 404 } } });
+    await expect(
+      mintProjectReadCredentials(fixture.projectId, fixture.workspaceId),
+    ).rejects.toMatchObject({
+      reason: 'github_unavailable',
+      message: expect.stringContaining('acme/web'),
+    });
+
+    stubGithub({ installation: { 'acme/web': { suspended: true } } });
+    await expect(
+      mintProjectReadCredentials(fixture.projectId, fixture.workspaceId),
+    ).rejects.toBeInstanceOf(RunGitCredentialUnavailableError);
+  });
+
+  it('a mint GitHub refuses, or answers with an unusable body, is github_unavailable', async () => {
+    await seedRepo({ state: 'connected', owner: 'acme', name: 'web' });
+    stubMint(502, {});
+    await expect(
+      mintProjectReadCredentials(fixture.projectId, fixture.workspaceId),
+    ).rejects.toMatchObject({
+      reason: 'github_unavailable',
+      message: expect.stringContaining('502'),
+    });
+
+    stubMint(201, { token: 'ghs_x' });
+    await expect(
+      mintProjectReadCredentials(fixture.projectId, fixture.workspaceId),
+    ).rejects.toMatchObject({ reason: 'github_unavailable' });
+  });
+});
+
+describe('revokeInstanceCloneCredential — best-effort, never throws', () => {
+  it('counts 204, 401 and 404 as revoked, and a 5xx or a network failure as not', async () => {
+    for (const [revokeStatus, revoked] of [
+      [204, true],
+      [401, true],
+      [404, true],
+      [500, false],
+    ] as const) {
+      const calls = stubGithub({ revokeStatus });
+      expect(await revokeInstanceCloneCredential('ghs_clone')).toBe(revoked);
+      expect(calls[0]).toMatchObject({ method: 'DELETE', authorization: 'token ghs_clone' });
+    }
+    stubGithub({ revokeThrows: true });
+    expect(await revokeInstanceCloneCredential('ghs_clone')).toBe(false);
   });
 });

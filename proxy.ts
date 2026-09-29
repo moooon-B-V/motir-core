@@ -408,6 +408,8 @@ export const config = {
     '/filters/:path*',
     '/invite/:path*',
     '/items/:path*',
+    // My agents (MOTIR-6874).
+    '/my-agents/:path*',
     // The no-project landing (MOTIR-6548).
     '/no-project/:path*',
     '/onboarding/:path*',

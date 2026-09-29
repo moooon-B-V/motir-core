@@ -1,4 +1,4 @@
-import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
+import type { WorkspaceRole } from '@/generated/prisma/client';
 
 // Project + workspace role helpers for the Story 6.4 access model.
 //
@@ -25,16 +25,6 @@ export const PROJECT_ASSIGNABLE_ROLES = ['admin', 'member', 'viewer'] as const;
 export type ProjectRole = (typeof PROJECT_ASSIGNABLE_ROLES)[number];
 
 /**
- * The valid `project.accessLevel` values (mirrors the Prisma enum). `public`
- * (Story 6.12) is the openness-ladder top — `public > open > limited > private`
- * — and the only settable level that opens the project for anonymous, cross-org
- * READ. Setting it routes through the SAME `setAccessLevel` service as the other
- * levels (6.12.8 — extend, don't fork); the cross-org browse exception lives in
- * `lib/projects/access.ts` (6.12.3), not here.
- */
-export const PROJECT_ACCESS_LEVELS = ['public', 'open', 'limited', 'private'] as const;
-
-/**
  * True when `role` is a workspace MANAGER — the tier that always passes the
  * project-management gate regardless of project membership.
  *
@@ -52,12 +42,5 @@ export function asProjectRole(value: unknown): ProjectRole | null {
   return typeof value === 'string' &&
     (PROJECT_ASSIGNABLE_ROLES as readonly string[]).includes(value)
     ? (value as ProjectRole)
-    : null;
-}
-
-/** Narrow an arbitrary string to a `ProjectAccessLevel`, or null. */
-export function asAccessLevel(value: unknown): ProjectAccessLevel | null {
-  return typeof value === 'string' && (PROJECT_ACCESS_LEVELS as readonly string[]).includes(value)
-    ? (value as ProjectAccessLevel)
     : null;
 }

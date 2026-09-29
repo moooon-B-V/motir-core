@@ -159,6 +159,11 @@ export function hostedRunSeamEnv(): Record<string, string> {
     ...(process.env['MOTIR_FAKE_CONTAINER_STATE_PATH']
       ? { MOTIR_FAKE_CONTAINER_STATE_PATH: process.env['MOTIR_FAKE_CONTAINER_STATE_PATH'] }
       : {}),
+    // The agent instances' persistent fake fleet (MOTIR-6877): the idle and sweep
+    // jobs run here, so this process must read the same machines the webServer made.
+    ...(process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH']
+      ? { MOTIR_FAKE_PERSISTENT_STATE_PATH: process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH'] }
+      : {}),
     // The stall watchdog's test-only config seam (`hostedRunStallWindowMs`,
     // `lib/hostedRuns/limits.ts`) — the stall READ itself runs in this process
     // (`hostedRunService.stallDetail`, called from `supervise`), so without this
