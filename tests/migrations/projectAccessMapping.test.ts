@@ -87,19 +87,18 @@ async function tenant() {
     member: (await user('pam-member')).id,
     viewer: (await user('pam-viewer')).id,
   };
-  const wsMember = (
-    userId: string,
-    role: 'admin' | 'member' | 'viewer',
-    workspaceRole: 'manager' | 'member' | 'viewer',
-  ) =>
+  // The legacy `role` is not seeded: the mapping reads it only as the fallback of
+  // `COALESCE(workspace_role, role)`, and `workspace_role` is always set (NOT NULL
+  // since MOTIR-6561; the column is `@ignore`d since MOTIR-6567).
+  const wsMember = (userId: string, workspaceRole: 'manager' | 'member' | 'viewer') =>
     adminDb.workspaceMembership.create({
-      data: { userId, workspaceId: ws.id, role, workspaceRole },
+      data: { userId, workspaceId: ws.id, workspaceRole },
     });
-  await wsMember(people.manager, 'admin', 'manager');
-  await wsMember(people.orgAdminWs, 'member', 'member');
-  await wsMember(people.addedMember, 'member', 'member');
-  await wsMember(people.member, 'member', 'member');
-  await wsMember(people.viewer, 'viewer', 'viewer');
+  await wsMember(people.manager, 'manager');
+  await wsMember(people.orgAdminWs, 'member');
+  await wsMember(people.addedMember, 'member');
+  await wsMember(people.member, 'member');
+  await wsMember(people.viewer, 'viewer');
   for (const userId of [people.orgAdmin, people.orgAdminWs]) {
     await adminDb.organizationMembership.create({
       data: { organizationId: org.id, userId, role: 'admin' },
@@ -107,7 +106,7 @@ async function tenant() {
   }
   for (const userId of [people.addedMember, people.viewer]) {
     await adminDb.projectMembership.create({
-      data: { workspaceId: ws.id, projectId: projects.limited.id, userId, role: 'member' },
+      data: { workspaceId: ws.id, projectId: projects.limited.id, userId },
     });
   }
   return { wsId: ws.id, projects, people };

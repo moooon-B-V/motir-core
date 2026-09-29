@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Client } from 'pg';
 import { adminDb } from '../helpers/adminDb';
+import { insertLegacyProjectRole } from '../helpers/legacyProjectRoles';
 import { currentWorkerAdminUrl } from '../helpers/parallelDb';
 
 // The fixture tenant the workspace-role migrations are proven over (Story
@@ -133,9 +134,7 @@ export async function makeTenant(): Promise<Tenant> {
   }
 
   const def = (projectId: string, name: string, permissions: string[]) =>
-    adminDb.projectRoleDefinition.create({
-      data: { workspaceId: ws.id, projectId, name, permissions },
-    });
+    insertLegacyProjectRole(adminDb, { workspaceId: ws.id, projectId, name, permissions });
   const contractorP1 = await def(p1.id, 'Contractor', [
     'project:browse',
     'comment:add',

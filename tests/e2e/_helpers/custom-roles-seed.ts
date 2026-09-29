@@ -1,3 +1,4 @@
+import { adminDb } from '@/tests/helpers/adminDb';
 import { db } from './db-reset';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -100,10 +101,13 @@ export async function seedCustomRoles(prefix: string): Promise<CustomRolesSeed> 
 
   // Assert the fixture is what the spec assumes, HERE — a mis-seeded role would
   // turn chapter 3's "change a teammate to Contributor" into a test of the seed.
-  const memberships = await db.projectMembership.findMany({
-    where: { projectId: project.id },
-    select: { userId: true, roleDefinitionId: true },
-  });
+  // Raw: `role_definition_id` is `@ignore`d on the client (MOTIR-6567). On
+  // `adminDb`, never the singleton (`tests/rls/test-singleton-statement-guard.test.ts`).
+  const memberships = await adminDb.$queryRaw<
+    { userId: string; roleDefinitionId: string | null }[]
+  >`
+    SELECT "user_id" AS "userId", "role_definition_id" AS "roleDefinitionId"
+      FROM "project_membership" WHERE "project_id" = ${project.id}`;
   if (memberships.length !== 1 || memberships[0]!.userId !== teammate.id) {
     throw new Error(
       `custom-roles-seed: expected exactly the teammate's membership, got ${memberships.length}`,

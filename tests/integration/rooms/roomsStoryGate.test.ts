@@ -19,6 +19,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { findLegacyProjectRole, insertLegacyProjectRole } from '../../helpers/legacyProjectRoles';
 import { truncateAuthTables } from '../../helpers/db';
 import { addToProjectAs, setProjectRoleDefinitionFor } from '../../helpers/workspaceRoleFixtures';
 
@@ -331,20 +332,17 @@ describe('the MIGRATION keeps every persisted grant’s reach (before = after)',
     // (20260926100100) re-creates each one on the workspace from the keys this
     // migration wrote. So what is asserted here is the WRITE: the persisted
     // project role gains both room keys, which is what the mapping then carries.
-    const legacyRole = await adminDb.projectRoleDefinition.create({
-      data: {
-        workspaceId: fx.workspaceId,
-        projectId: fx.projectId,
-        name: `Pre-story role ${seq++}`,
-        permissions: ['project:browse'],
-      },
+    const legacyRole = await insertLegacyProjectRole(adminDb, {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      name: `Pre-story role ${seq++}`,
+      permissions: ['project:browse'],
     });
 
     await runMigration();
 
-    const migrated = await adminDb.projectRoleDefinition.findUniqueOrThrow({
-      where: { id: legacyRole.id },
-    });
+    const migrated = await findLegacyProjectRole(adminDb, legacyRole.id);
+    if (!migrated) throw new Error('the pre-story role vanished');
     expect(migrated.permissions).toEqual(
       expect.arrayContaining(['project:browse', 'plan:view_any', 'run:view_any']),
     );

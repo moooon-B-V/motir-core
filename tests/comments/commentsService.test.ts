@@ -227,7 +227,6 @@ describe('commentsService.addComment', () => {
         workspaceId: s.fx.workspaceId,
         projectId: s.fx.projectId,
         userId: s.mentionee.id,
-        role: 'member',
       },
     });
     const outsider = await usersService.createUser({

@@ -58,7 +58,7 @@ describe('assignableMembersService.list — a private project', () => {
     // Going private adds nobody (Story MOTIR-6169): the viewer is ADDED to the
     // project explicitly.
     await adminDb.projectMembership.create({
-      data: { workspaceId: workspace.id, projectId: project.id, userId: viewer.id, role: 'member' },
+      data: { workspaceId: workspace.id, projectId: project.id, userId: viewer.id },
     });
     // A workspace member never added to the project.
     await workspacesService.addMember({ userId: outsider.id, workspaceId: workspace.id });

@@ -521,7 +521,6 @@ export const workspaceInvitesService = {
             workspaceId: payload.workspaceId,
             projectId: p.id,
             userId: sessionUser.id,
-            role: 'member' as const,
           })),
           tx,
         );

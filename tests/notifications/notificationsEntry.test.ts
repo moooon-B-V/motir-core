@@ -97,7 +97,6 @@ describe('the notification feed honours entry at read time', () => {
         workspaceId: s.fx.workspaceId,
         projectId: s.secret.id,
         userId: s.reader.id,
-        role: 'member',
       },
     });
     const after = await notificationsService.listNotifications({}, ctx);

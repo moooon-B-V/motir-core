@@ -75,7 +75,7 @@ async function fixture() {
   });
   for (const u of [ada, nameless]) {
     await adminDb.workspaceMembership.create({
-      data: { userId: u.id, workspaceId: fx.workspaceId, role: 'member', workspaceRole: 'member' },
+      data: { userId: u.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
     });
   }
   const byAda = await createTestWorkItem(fx, { kind: 'task', title: 'Assigned to Ada' });

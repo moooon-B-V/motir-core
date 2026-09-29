@@ -64,26 +64,25 @@ async function tenant() {
   const full = await user('full');
   const orgAdmin = await user('orgadmin');
   await adminDb.workspaceMembership.create({
-    data: { userId: manager.id, workspaceId: ws.id, role: 'admin', workspaceRole: 'manager' },
+    data: { userId: manager.id, workspaceId: ws.id, workspaceRole: 'manager' },
   });
   await adminDb.workspaceMembership.create({
     data: {
       userId: contractor.id,
       workspaceId: ws.id,
-      role: 'member',
       workspaceRole: 'member',
       accessScope: 'limited',
     },
   });
   await adminDb.workspaceMembership.create({
-    data: { userId: full.id, workspaceId: ws.id, role: 'member', workspaceRole: 'member' },
+    data: { userId: full.id, workspaceId: ws.id, workspaceRole: 'member' },
   });
   // An org Admin who is NOT a member of the workspace — composed in as a Manager.
   await adminDb.organizationMembership.create({
     data: { organizationId: org.id, userId: orgAdmin.id, role: 'admin' },
   });
   await adminDb.projectMembership.create({
-    data: { workspaceId: ws.id, projectId: A.id, userId: contractor.id, role: 'member' },
+    data: { workspaceId: ws.id, projectId: A.id, userId: contractor.id },
   });
   const ctx = (userId: string) => ({ userId, workspaceId: ws.id });
   return { wsId: ws.id, A, B, C, D, manager, contractor, full, orgAdmin, ctx };
