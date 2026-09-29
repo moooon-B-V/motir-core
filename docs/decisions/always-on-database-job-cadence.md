@@ -174,7 +174,20 @@ legal as written.
 - The Neon line for motir-core is ≈ $19.50/mo as a standing, accepted cost, not a defect to engineer
   away. §21's ~$5.85/mo projection is retired with the prediction behind it.
 - Eleven jobs fire 12× an hour instead of 2×. Each tick writes a `job_run` row (`defineJob`). That is
-  132 extra rows an hour, well inside what the job engine's retention (`job-run-reap`) is for.
+  132 extra rows an hour: 3,168 a day from those eleven jobs, up from 528.
+  - **Corrected by MOTIR-6935.** This line first said the extra rows were _"well inside what the
+    job engine's retention (`job-run-reap`) is for"_. That was false: `job-run-reap` is not
+    retention. It flips stale `running` rows to `abandoned` and deletes nothing, and the untenanted
+    `system.*` rows are never reached by a workspace deletion's cascade. Nothing deleted a `job_run`
+    row, so the ledger grew without bound.
+  - **The bound now.** The same daily `system.job-run-reap` tick runs a retention pass after the
+    reap (`jobRunsService.purgeExpired`). It deletes terminal (`succeeded` / `failed` /
+    `abandoned`) rows older than **30 days**, at most 1,000 per transaction and 50,000 per day. So
+    the ledger holds about 30 days of rows (roughly 100,000 from the eleven jobs, plus the hourly
+    and daily jobs and fan-out children) plus a small keep-set that is never deleted: the newest
+    row of each event name, the newest succeeded code-graph run per repository, and any row a
+    repository's `indexing_run_id` points at. `running` rows and rows with a live queue run are
+    never deleted.
 - Latency bounds shrink as listed in §2. The fleet decisions can take their timings from what the
   money needs.
 - A future job that picks a sub-hourly cadence other than `*/5` fails a test until it names its

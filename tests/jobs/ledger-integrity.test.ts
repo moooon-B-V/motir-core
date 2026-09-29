@@ -391,22 +391,34 @@ describe('the reap job is registered and scheduled', () => {
     expect(registered!.cron).toBe(JOB_RUN_REAP_CRON);
   });
 
-  it('its handler calls the sweep and returns what the sweep counted', async () => {
+  it('its handler runs the reap, then the retention pass, and returns what each counted', async () => {
     // Driven through the ENGINE registry's own `handler` — the raw function, which
     // is what the worker actually invokes. Driving it through the ledger instead
     // would re-enter the whole bookkeeping path and test that, not this.
-    const spy = vi
-      .spyOn(jobServices.jobRuns, 'reapAbandoned')
-      .mockResolvedValue({ scanned: 3, abandoned: 2, stillLive: 1 });
+    const order: string[] = [];
+    const reap = vi.spyOn(jobServices.jobRuns, 'reapAbandoned').mockImplementation(async () => {
+      order.push('reap');
+      return { scanned: 3, abandoned: 2, stillLive: 1 };
+    });
+    // The retention pass (Bug MOTIR-6935) runs AFTER the reap, so a row the reap
+    // just closed is judged as the terminal row it now is.
+    const purge = vi.spyOn(jobServices.jobRuns, 'purgeExpired').mockImplementation(async () => {
+      order.push('purge');
+      return { deleted: 7, batches: 1, kept: 4, drained: true };
+    });
     try {
       const handler = engineJob('system.job-run-reap')!.handler;
       const result = await handler({ step: silentStep } as never, jobServices as never);
-      expect(spy).toHaveBeenCalledTimes(1);
+      expect(order).toEqual(['reap', 'purge']);
       // The counts land on the ledger row's `output`, which is what makes a
       // sweep's result readable on the dashboard rather than only in a log.
-      expect(result).toEqual({ scanned: 3, abandoned: 2, stillLive: 1 });
+      expect(result).toEqual({
+        reap: { scanned: 3, abandoned: 2, stillLive: 1 },
+        purge: { deleted: 7, batches: 1, kept: 4, drained: true },
+      });
     } finally {
-      spy.mockRestore();
+      reap.mockRestore();
+      purge.mockRestore();
     }
   });
 });

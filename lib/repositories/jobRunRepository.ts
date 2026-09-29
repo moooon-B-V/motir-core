@@ -102,6 +102,102 @@ export const jobRunRepository = {
     return res.count;
   },
 
+  /**
+   * THE RETENTION KEEP-SET, part 1 (Bug MOTIR-6935) — the newest row of every
+   * event name, across ALL workspaces.
+   *
+   * The schedule-health check (`findLatestStartedAtByEventNames`) and the
+   * operator console's last-health-check card (`findLatestByEventName`) both
+   * read "the latest run of X", however old it is. A job whose cadence is longer
+   * than the retention window — or one that simply stopped firing, which is the
+   * exact fact the health check exists to report — must keep that row, or the
+   * purge would turn "last ran 40 days ago" into "never ran".
+   *
+   * One row per distinct event name, so the set is as small as the job
+   * registry. Caller MUST supply a `withSystemContext` tx (untenanted rows).
+   */
+  async findLatestIdPerEventName(tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT DISTINCT ON ("event_name") "id" FROM "job_run"
+      ORDER BY "event_name", "started_at" DESC, "id" DESC
+    `;
+    return rows.map((row) => row.id);
+  },
+
+  /**
+   * THE RETENTION KEEP-SET, part 2 (Bug MOTIR-6935) — the newest SUCCEEDED
+   * code-graph run per (function, workspace, repository).
+   *
+   * `listSucceededCodeGraphIndexRepoRefs` answers "has this repository EVER been
+   * indexed?" from these rows, and `findSucceededCodeGraphIndex` is the
+   * migrate wizard's readiness signal. A repository indexed once and never
+   * pushed to again has exactly one such row; purging it on age would make the
+   * gate re-index the repository and the wizard wait for an index that already
+   * exists. Keyed on `output.repoRef`, the only attribution a succeeded run has
+   * (a `{ indexed: false }` success carries none and is not an index).
+   */
+  async findLatestSucceededCodeGraphRunIds(tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT DISTINCT ON ("function_id", "workspace_id", "output"->>'repoRef') "id"
+      FROM "job_run"
+      WHERE "function_id" IN ('system.code-graph-index', 'system.code-graph-refresh')
+        AND "status" = 'succeeded'
+        AND "output"->>'repoRef' IS NOT NULL
+      ORDER BY "function_id", "workspace_id", "output"->>'repoRef', "started_at" DESC, "id" DESC
+    `;
+    return rows.map((row) => row.id);
+  },
+
+  /**
+   * THE RETENTION CANDIDATES (Bug MOTIR-6935) — terminal rows that started
+   * before `startedBefore`, oldest first, bounded by `limit`.
+   *
+   * Excluded here, because each is a join to another table and is only true at
+   * the moment of the delete:
+   *   - a row whose QUEUE RUN is still live — the same `(job_id, event ref)`
+   *     correlation the abandoned-run reap uses (`countLiveForEventRef`), so a
+   *     retried run's earlier attempt is never removed from under it;
+   *   - a row a repository's `indexing_run_id` POINTS AT — `deriveRefreshFailing`
+   *     reads a terminal row there as "this repository's refresh is dead", and
+   *     deleting it would silently clear that warning.
+   * `keepIds` carries the two keep-sets above, computed once per pass.
+   */
+  async findExpiredTerminalIds(
+    startedBefore: Date,
+    keepIds: string[],
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT r."id" FROM "job_run" r
+      WHERE r."status" IN ('succeeded', 'failed', 'abandoned')
+        AND r."started_at" < ${startedBefore}
+        AND r."id" <> ALL(${keepIds}::text[])
+        AND NOT EXISTS (
+          SELECT 1 FROM "job_queue" q
+          WHERE q."job_id" = r."function_id"
+            AND q."state" IN ('pending', 'running')
+            AND (q."event_id" = r."event_id" OR q."id" = r."event_id")
+        )
+        AND NOT EXISTS (SELECT 1 FROM "github_repo" g WHERE g."indexing_run_id" = r."id")
+      ORDER BY r."started_at" ASC
+      LIMIT ${limit}
+    `;
+    return rows.map((row) => row.id);
+  },
+
+  /**
+   * Delete the given rows — GUARDED ON THEM STILL BEING TERMINAL, so a row that
+   * somehow left a terminal state between the read and this write survives.
+   */
+  async deleteTerminalByIds(ids: string[], tx: Prisma.TransactionClient): Promise<number> {
+    if (ids.length === 0) return 0;
+    const res = await tx.jobRun.deleteMany({
+      where: { id: { in: ids }, status: { in: ['succeeded', 'failed', 'abandoned'] } },
+    });
+    return res.count;
+  },
+
   /** Patch a run on completion (status / finishedAt / durationMs / failure). */
   async update(
     id: string,
