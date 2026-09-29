@@ -24,6 +24,7 @@ import type {
   MergeChangeRequestResult,
   NormalizedDeploymentStatus,
   NormalizedMergeGroupAttempt,
+  NormalizedMergeQueueEntry,
   NormalizedMergeQueueExit,
   NormalizedUnlinkedCheckFailure,
 } from './types';
@@ -549,6 +550,13 @@ export interface GitProvider {
    * asked.
    */
   parseMergeQueueExitEvent?(rawPayload: unknown): NormalizedMergeQueueExit | null;
+
+  /**
+   * Normalize a raw webhook payload announcing that a change request was put INTO a
+   * merge queue, or `null` when it is not one (MOTIR-6903). PURE. Optional for the
+   * reason the exit's parse is.
+   */
+  parseMergeQueueEntryEvent?(rawPayload: unknown): NormalizedMergeQueueEntry | null;
 
   /**
    * Normalize a raw payload announcing that a merge queue started testing a group,

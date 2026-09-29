@@ -318,6 +318,17 @@ export interface NormalizedMergeQueueExit {
   rawReason: string | null;
 }
 
+/** A pull request put INTO a merge queue, normalized (MOTIR-6903). GitHub's
+ *  `pull_request` action `enqueued` — from Motir's own enqueue or from anywhere else
+ *  (GitHub's *Merge when ready*, `gh pr merge --auto`, another integration). `headSha`
+ *  is the head the delivery states, the commit the queue will test. The payload names
+ *  no queue entry and no actor Motir reads. */
+export interface NormalizedMergeQueueEntry {
+  providerRepoId: string;
+  number: number;
+  headSha: string;
+}
+
 /** One MERGE GROUP the queue started testing, normalized (Story MOTIR-5461 ·
  *  MOTIR-5633; `approval-gates.md` §4 THIRD AMENDMENT, decision 8). GitHub's
  *  `merge_group` action `checks_requested`: every check the queue runs for the group

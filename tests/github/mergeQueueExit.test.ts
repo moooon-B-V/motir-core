@@ -1158,3 +1158,158 @@ describe('a CAN’T-LAND exit is never re-queued, whatever anyone approved', () 
     expect((await exits(11))[0]!.requeuedAt).toBeNull();
   });
 });
+
+// A RE-QUEUE MADE OUTSIDE MOTIR (MOTIR-6903; §4 SEVENTH AMENDMENT). GitHub sends
+// `enqueued` for every enqueue, so a pull request put back by *Merge when ready*,
+// `gh pr merge --auto` or another integration answers the exit still standing at its
+// head: the red, the hold and the repair claim lift. No status moves and no gate is
+// decided — the merge moves the card. The body is the captured `dequeued` delivery
+// with its action swapped, which is the shape GitHub gives the pair.
+describe('a re-queue made on GitHub (MOTIR-6903)', () => {
+  const github = getGitProvider('github') as Required<GitProvider>;
+  const cardOf = (id: string) => adminDb.workItem.findUniqueOrThrow({ where: { id } });
+
+  function enqueued(opts: { number: number; headSha: string }): Record<string, unknown> {
+    const body = dequeued('dequeued-ci-failure', opts);
+    delete body['reason'];
+    return { ...body, action: 'enqueued' };
+  }
+  const requeue = (opts: { number: number; headSha: string }) =>
+    githubWebhookService.handleEvent('pull_request', enqueued(opts), 'guid-enqueued');
+
+  it('a CI_FAILURE held at Implemented: the exit is stamped, the red and the fix reason lift, and the card stays put with nothing asked', async () => {
+    const { item, approved } = await approvedAndQueued('gh-requeue-fail@example.com');
+    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'g-fail');
+    expect(await cardOf(item.id)).toMatchObject({
+      status: 'implemented',
+      ciState: 'failing',
+      fixReason: expect.anything(),
+    });
+    sent.length = 0;
+
+    const result = await requeue({ number: 11, headSha: 'sha-a' });
+
+    expect(result).toEqual({ event: 'pull_request_enqueued', outcome: 'requeued' });
+    expect((await exits(11))[0]!.requeuedAt).not.toBeNull();
+    const after = await cardOf(item.id);
+    expect(after.ciState).not.toBe('failing');
+    expect(after.fixReason).toBeNull();
+    // ⚠️ NOTHING ELSE: no move, no question, the decided gate a record as it was.
+    expect(after.status).toBe('implemented');
+    expect(await awaitingGates(item.id)).toEqual([]);
+    expect(await adminDb.approvalGate.findUniqueOrThrow({ where: { id: approved.id } })).toEqual(
+      approved,
+    );
+    expect(sent.filter((e) => e.name === 'work-item/transitioned')).toEqual([]);
+    // Motir's merge record stays Motir's: a GitHub-side enqueue does not write it.
+    expect((await pr(11)).mergeOutcomeRef).toBeNull();
+  });
+
+  it('a NEUTRAL removal re-asked at In Review: the exit is stamped and the re-asked gate stays awaiting, undecided', async () => {
+    const { item } = await approvedAndQueued('gh-requeue-neutral@example.com');
+    await eject(dequeued('dequeued-manual', { number: 11, headSha: 'sha-a' }), 'g-manual');
+    const [reasked] = await awaitingGates(item.id);
+    expect(reasked).toBeDefined();
+
+    expect(await requeue({ number: 11, headSha: 'sha-a' })).toMatchObject({
+      outcome: 'requeued',
+    });
+
+    expect((await exits(11))[0]!.requeuedAt).not.toBeNull();
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingGates(item.id)).toEqual([reasked]);
+  });
+
+  it('an enqueue at a head the exit does not name changes nothing', async () => {
+    const { item } = await approvedAndQueued('gh-requeue-other-head@example.com');
+    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'g-head');
+
+    expect(await requeue({ number: 11, headSha: 'sha-a2' })).toMatchObject({
+      outcome: 'no_standing_exit',
+    });
+    expect((await exits(11))[0]!.requeuedAt).toBeNull();
+    expect(await cardOf(item.id)).toMatchObject({ status: 'implemented', ciState: 'failing' });
+  });
+
+  it('a redelivered enqueue changes nothing twice', async () => {
+    await approvedAndQueued('gh-requeue-twice@example.com');
+    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'g-twice');
+    await requeue({ number: 11, headSha: 'sha-a' });
+    const [stamped] = await exits(11);
+
+    expect(await requeue({ number: 11, headSha: 'sha-a' })).toMatchObject({
+      outcome: 'no_standing_exit',
+    });
+    const [again, ...more] = await exits(11);
+    expect(more).toEqual([]);
+    expect(again!.requeuedAt).toEqual(stamped!.requeuedAt);
+  });
+
+  it('Motir’s own first enqueue has no exit to answer', async () => {
+    await approvedAndQueued('gh-requeue-first@example.com');
+    expect(await requeue({ number: 11, headSha: 'sha-a' })).toMatchObject({
+      outcome: 'no_standing_exit',
+    });
+    expect(await exits(11)).toEqual([]);
+  });
+
+  it('the enqueue that follows a Queue-again press finds the exit already claimed — ONE stamp, ONE host enqueue', async () => {
+    const { s, item } = await approvedAndQueued('gh-requeue-after-press@example.com');
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: REASK }),
+      'g-press-first',
+    );
+    const [reasked] = await awaitingGates(item.id);
+    const host = vi
+      .spyOn(github, 'mergeChangeRequest')
+      .mockResolvedValue({ outcome: 'enqueued', entryId: 'MQE_press' });
+    await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: reasked!.id, source: 'ui' },
+      s.ctx,
+    );
+    const [pressed] = await exits(11);
+    expect(pressed!.requeuedAt).not.toBeNull();
+
+    expect(await requeue({ number: 11, headSha: 'sha-a' })).toMatchObject({
+      outcome: 'no_standing_exit',
+    });
+    expect((await exits(11))[0]!.requeuedAt).toEqual(pressed!.requeuedAt);
+    expect(host.mock.calls.filter(([args]) => args.number === 11)).toHaveLength(1);
+  });
+
+  it('a press after the GitHub re-queue claims nothing again — the exit keeps the webhook’s stamp and the host is asked once', async () => {
+    const { s, item } = await approvedAndQueued('gh-requeue-then-press@example.com');
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: REASK }),
+      'g-webhook-first',
+    );
+    const [reasked] = await awaitingGates(item.id);
+    await requeue({ number: 11, headSha: 'sha-a' });
+    const [stamped] = await exits(11);
+    // GitHub answers an enqueue of a queued pull request with its existing entry.
+    const host = vi
+      .spyOn(github, 'mergeChangeRequest')
+      .mockResolvedValue({ outcome: 'enqueued', entryId: 'MQE_existing' });
+
+    await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: reasked!.id, source: 'ui' },
+      s.ctx,
+    );
+
+    expect((await exits(11))[0]!.requeuedAt).toEqual(stamped!.requeuedAt);
+    expect(host.mock.calls.filter(([args]) => args.number === 11)).toHaveLength(1);
+  });
+
+  it('a body with no head is malformed, and a pull request Motir never mirrored is unknown', async () => {
+    await approvedAndQueued('gh-requeue-malformed@example.com');
+    const body = enqueued({ number: 11, headSha: 'sha-a' });
+    body['pull_request'] = { number: 11, head: {} };
+    expect(await githubWebhookService.handleEvent('pull_request', body, 'g-bad')).toEqual({
+      event: 'pull_request',
+      outcome: 'malformed',
+    });
+    expect(await requeue({ number: 404, headSha: 'sha-a' })).toMatchObject({
+      outcome: 'unknown_pull_request',
+    });
+  });
+});
