@@ -6758,7 +6758,25 @@
         "sentBackByAgent": "The review agent sent these commits back. An agent fixes them on {count, plural, one {the same pull request} other {the same pull requests}}, with its findings in the prompt.",
         "personSentBack": "<b>{name}</b> sent these commits back. An agent fixes them on {count, plural, one {the same pull request} other {the same pull requests}}, with their reason in the prompt.",
         "personSentBackAnon": "These commits were sent back. An agent fixes them on {count, plural, one {the same pull request} other {the same pull requests}}, with the reason in the prompt.",
-        "reviewedAgain": "The next green version is reviewed again."
+        "reviewedAgain": "The next green version is reviewed again.",
+        "hosted": {
+          "lead": "Fix it here, on the hosted agent — no terminal needed:",
+          "button": "Fix on the hosted agent",
+          "orTerminal": "Or hand the repair to an agent from your terminal:",
+          "eitherWay": "Either way, an agent works on each pull request's own branch, pushes, and the checks run again.",
+          "fixing": {
+            "byYou": "Being fixed by <b>you</b> on the hosted agent · started <when></when> · <run>{label}</run>",
+            "by": "Being fixed by <b>{name}</b> on the hosted agent · started <when></when> · <run>{label}</run>",
+            "why": "Only one repair runs at a time. When it pushes, the checks run again, and the next green version is reviewed again."
+          },
+          "refused": {
+            "taken": "Not started — a repair is already running, started by <b>{name}</b> <when></when>.",
+            "takenByYou": "Not started — you already have a repair running, started <when></when>.",
+            "outOfCredits": {
+              "body": "Nothing was booted and nothing was charged. Fix on the hosted agent works again once the organization has credits — or repair it from your terminal."
+            }
+          }
+        }
       },
       "continue": {
         "title": "Continue the work",
@@ -8161,7 +8179,9 @@
       "toast": {
         "title": "Copied",
         "body": "Paste {command} into your terminal."
-      }
+      },
+      "fixingHosted": "Being fixed on the hosted agent by <b>{name}</b> · <run>{label}</run>",
+      "fixingHostedByYou": "Being fixed on the hosted agent by <b>you</b> · <run>{label}</run>"
     }
   },
   "approvalRecords": {
@@ -10325,7 +10345,11 @@
       "toStartOver": "See how to start over",
       "openingDevelopment": "Opening Development…",
       "sentBackByAgent": "This needs a fix: the review agent sent it back — “{note}”",
-      "sentBackByAgentNoNote": "This needs a fix: the review agent sent it back."
+      "sentBackByAgentNoNote": "This needs a fix: the review agent sent it back.",
+      "hostedLead": "Fix it on the hosted agent — no terminal needed:",
+      "orTerminal": "Or repair it from your terminal:",
+      "fixingHosted": "A hosted repair is running — started by <b>{name}</b> <when></when> · <run>{label}</run>",
+      "fixingHostedByYou": "A hosted repair is running — started by <b>you</b> <when></when> · <run>{label}</run>"
     }
   },
   "workItems": {

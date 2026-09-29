@@ -3,11 +3,13 @@
 import { useCallback, useState, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { ArrowDown, LoaderCircle, Wrench } from 'lucide-react';
-import { relativeLabel } from '@/components/github/RepairFixPart';
+import { relativeLabel, RepairRunLink } from '@/components/github/RepairFixPart';
 import { CopyableCodeBlock } from '@/components/markdown/CopyableCodeBlock';
 import { toFixTagState } from '@/components/workItems/ToFixTag';
 import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
+import { isReviewSentBack } from '@/lib/workItems/reviewSentBack';
 import { formatRunInstant } from '@/lib/runs/runClock';
 import { DEVELOPMENT_SECTION_ID } from './decisionAnchor';
 import { useLandOnLateSection } from './useLandOnLateSection';
@@ -64,10 +66,16 @@ export interface ToFixBannerProps {
   /** The item's status CATEGORY — a `done` card draws nothing (`toFixTagState`). */
   statusCategory: StatusCategoryDto | null;
   /**
-   * The hosted repair door (MOTIR-6930's seam; `design/workbench` § 32 Panel 4) — drawn
-   * beside the command for a card a review sent back. Absent, the command alone.
+   * *FIX ON THE HOSTED AGENT* (MOTIR-6930; `design/workbench` § 32 Panel 4) — the door the
+   * page passes for a viewer who may run the card hosted. Drawn only for a card a REVIEW
+   * sent back, and only while no repair is open: it LEADS, under `hostedLead`, and the
+   * command follows under `orTerminal`. Absent, `leadFix` and the command alone.
    */
   hostedDoor?: ReactNode;
+  /** The card's OPEN repair (MOTIR-6930) — the one-repair lock. A hosted one replaces the
+   *  lead, the door and the command with *A hosted repair is running*; a local one keeps
+   *  the command alone. Null when none is open. */
+  repairRun?: OpenRepairRunDto | null;
 }
 
 export function ToFixBanner({
@@ -76,6 +84,7 @@ export function ToFixBanner({
   fixDetail,
   statusCategory,
   hostedDoor = null,
+  repairRun = null,
 }: ToFixBannerProps) {
   const t = useTranslations('toFix.banner');
   const tw = useTranslations('workbench.toFix');
@@ -99,6 +108,11 @@ export function ToFixBanner({
     };
   const isDeadRun = reason === 'run_died';
   const nothingPushed = isDeadRun && fixDetail.pushed === false;
+  // FIX ON THE HOSTED AGENT (MOTIR-6930): a review's refusal only; a hosted repair already
+  // running replaces both repairs, and ANY open repair withdraws the door.
+  const reviewSentBack = isReviewSentBack(fixReason, fixDetail);
+  const hostedRepair = reviewSentBack && repairRun?.hosted ? repairRun : null;
+  const door = reviewSentBack && !repairRun ? hostedDoor : null;
 
   const sentence = ((): ReactNode => {
     switch (reason) {
@@ -186,13 +200,34 @@ export function ToFixBanner({
             {meta.join(' · ')}
           </p>
         ) : null}
-        {isDeadRun ? null : (
+        {isDeadRun ? null : hostedRepair ? (
+          // § 32 Panel 4, running: the lead, the door and the command give way to one line
+          // — the open repair IS the lock (`hosted-agent-run.md` §8.6).
+          <p
+            className="m-0 mt-1 font-sans text-[13px] text-(--el-danger-surface-text)"
+            data-testid="to-fix-banner-hosted-fixing"
+          >
+            {t.rich(hostedRepair.byViewer ? 'fixingHostedByYou' : 'fixingHosted', {
+              name: hostedRepair.holder?.name ?? '—',
+              label: hostedRepair.label,
+              b: bold,
+              when: when(hostedRepair.startedAt),
+              run: (chunks) => <RepairRunLink runId={hostedRepair.id}>{chunks}</RepairRunLink>,
+            })}
+          </p>
+        ) : (
           <>
-            {/* THE SEAM FOR *FIX ON THE HOSTED AGENT* (MOTIR-6930; § 32 Panel 4): the door
-                leads the command for a card a review sent back. Nothing passes it yet. */}
-            {hostedDoor}
+            {door ? (
+              <>
+                {/* § 32 Panel 4: the Continue hosted part's order — the door leads. */}
+                <p className="m-0 mt-1 font-sans text-[13px] text-(--el-danger-surface-text)">
+                  {t('hostedLead')}
+                </p>
+                {door}
+              </>
+            ) : null}
             <p className="m-0 mt-1 font-sans text-[13px] text-(--el-danger-surface-text)">
-              {t('leadFix')}
+              {t(door ? 'orTerminal' : 'leadFix')}
             </p>
             <CopyableCodeBlock language="shell" code={`motir ${fixDetail.repair} ${identifier}`} />
           </>

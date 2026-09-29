@@ -3,12 +3,19 @@
 import { useCallback, useState, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { CircleX, Copy, TriangleAlert, Undo2 } from 'lucide-react';
-import { relativeLabel } from '@/components/github/RepairFixPart';
+import { relativeLabel, RepairRunLink } from '@/components/github/RepairFixPart';
 import {
   ContinueHostedAnswer,
   ContinueHostedButtonRow,
 } from '@/components/hosted/ContinueHostedControl';
 import { useContinueHosted } from '@/components/hosted/useContinueHosted';
+import {
+  FixHostedAnswer,
+  FixHostedButtonRow,
+  useFixHosted,
+} from '@/components/hosted/FixHostedControl';
+import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
+import { isReviewSentBack } from '@/lib/workItems/reviewSentBack';
 import { Pill } from '@/components/ui/Pill';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useToast } from '@/components/ui/Toast';
@@ -235,14 +242,19 @@ export function WorkbenchFixLine({
   viewerId = null,
   onStarted,
   onStateMoved,
-  repairDoor = null,
+  canFixHosted = false,
+  repairRun = null,
 }: {
   /**
-   * THE SEAM FOR *FIX ON THE HOSTED AGENT* (MOTIR-6930; `design/workbench` § 32 Panel 2):
-   * the door that LEADS the command on a row a review sent back, in § 31's repairs slot.
-   * Nothing passes it yet — the row draws the command alone.
+   * *FIX ON THE HOSTED AGENT* (MOTIR-6930; `design/workbench` § 32 Panel 2): a row a REVIEW
+   * sent back whose viewer may run the card hosted (`homeService.listToFix` decided it).
+   * The door LEADS the command in § 31's repairs slot; its answer takes the notice slot.
    */
-  repairDoor?: ReactNode;
+  canFixHosted?: boolean;
+  /** The row's OPEN repair (MOTIR-6930) — the lock. A hosted one replaces the door and the
+   *  command with *Being fixed on the hosted agent by …*; a local one withdraws the door
+   *  and keeps the command. */
+  repairRun?: OpenRepairRunDto | null;
   itemKey: string;
   reason: WorkItemFixReasonDto;
   detail: FixDetailDto;
@@ -283,6 +295,12 @@ export function WorkbenchFixLine({
   // THE PRESS LIVES ON THE ROW, not in a child that unmounts when the row goes HELD:
   // a C5a refusal (the state moved) holds the row AND must stay on it (§ 31 state 6).
   const press = useContinueHosted(hostedTarget, { onStarted, onStateMoved });
+  // § 32: the hosted repair on a sent-back row — a review's refusal only, and never while
+  // a repair is open. Its press lives on the row too, so its answer survives a re-read.
+  const reviewSentBack = isReviewSentBack(reason, detail);
+  const hostedRepair = reviewSentBack && repairRun?.hosted ? repairRun : null;
+  const fixTarget = reviewSentBack && canFixHosted && !repairRun ? itemKey : null;
+  const fixPress = useFixHosted(fixTarget, { onStarted, onStateMoved });
 
   let repairs: ReactNode = null;
   if (held) {
@@ -311,12 +329,30 @@ export function WorkbenchFixLine({
         {t('toFix.reason.runDiedCannotEdit')}
       </p>
     );
+  } else if (hostedRepair) {
+    // § 32, running: the door and the command give way to one sentence naming who pressed
+    // and the hosted run's link (§ 31's sentence-in-the-command's-place grammar).
+    repairs = (
+      <p
+        data-testid={`workbench-fix-hosted-fixing-${itemKey}`}
+        className="relative z-10 text-xs text-(--el-text-secondary)"
+      >
+        {t.rich(hostedRepair.byViewer ? 'toFix.fixingHostedByYou' : 'toFix.fixingHosted', {
+          name: hostedRepair.holder?.name ?? '—',
+          label: hostedRepair.label,
+          b: keyBold,
+          run: (chunks) => <RepairRunLink runId={hostedRepair.id}>{chunks}</RepairRunLink>,
+        })}
+      </p>
+    );
   } else if (command !== null) {
     repairs = (
       <span className="relative z-10 flex flex-wrap items-center justify-end gap-2">
-        {/* § 31: Continue hosted leads; the command keeps the right edge. § 32: so does the
-            hosted repair door on a sent-back row (MOTIR-6930's seam). */}
-        {reason === 'changes_requested' ? repairDoor : null}
+        {/* § 31: Continue hosted leads; the command keeps the right edge. § 32: so does
+         *Fix on the hosted agent* on a row a review sent back (MOTIR-6930). */}
+        {fixTarget ? (
+          <FixHostedButtonRow starting={fixPress.starting} onPress={() => void fixPress.start()} />
+        ) : null}
         {hostedTarget ? (
           <ContinueHostedButtonRow
             continueTarget={hostedTarget}
@@ -362,6 +398,17 @@ export function WorkbenchFixLine({
           <ContinueHostedAnswer
             continueTarget={held ? null : hostedTarget}
             refusal={press.refusal}
+            viewerId={viewerId}
+          />
+        </div>
+      ) : null}
+      {/* § 32: the hosted repair's answer in the same notice slot — a refusal stays on a
+          HELD row, because it answers the press; the model notices need a live door. */}
+      {fixTarget || fixPress.refusal ? (
+        <div className="relative z-10 basis-full empty:hidden">
+          <FixHostedAnswer
+            live={!held && fixTarget !== null}
+            refusal={fixPress.refusal}
             viewerId={viewerId}
           />
         </div>

@@ -231,8 +231,34 @@ export type WorkItemRepairViewDto =
       /** The viewer started it — the copy says *you*. */
       byViewer: boolean;
       startedAt: string;
+      /** The open `fix` run itself — a HOSTED one is drawn with its run link (MOTIR-6930;
+       *  design `design/github` § 30 Panel 3b). Absent on a view built before it existed. */
+      run?: RepairRunRefDto | null;
     }
   | { state: 'pointer'; failing: RepairPullRequestRefDto[]; runTargetKey: string };
+
+/** The open `fix` run a repair view names (Story MOTIR-1626 · MOTIR-6930). */
+export interface RepairRunRefDto {
+  id: string;
+  /** The run's own label, as the runs surface prints it (`dispatchRunLabel`). */
+  label: string;
+  /** Opened by *Fix on the hosted agent* — `origin: hosted` — rather than a local `motir fix`. */
+  hosted: boolean;
+}
+
+/**
+ * THE OPEN REPAIR on a card, as the To fix banner and the Workbench To fix row read it
+ * (Story MOTIR-1626 · MOTIR-6930; `design/workbench` § 32): the open `fix` run IS the
+ * one-repair-at-a-time lock (`hosted-agent-run.md` §8.6), so while it is open neither
+ * repair is offered, and a hosted one is named with its run.
+ */
+export interface OpenRepairRunDto extends RepairRunRefDto {
+  holder: ClaimActorDto | null;
+  /** The viewer started it — the copy says *you*. */
+  byViewer: boolean;
+  /** ISO-8601. */
+  startedAt: string;
+}
 
 /**
  * How an agent says its repair ENDED (Story MOTIR-6804 · MOTIR-6807) — the

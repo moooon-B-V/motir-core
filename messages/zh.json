@@ -6754,7 +6754,25 @@
         "sentBackByAgent": "审查代理退回了这些提交。智能体会在同一个拉取请求上修复它们，并把审查发现写进提示词。",
         "personSentBack": "<b>{name}</b> 退回了这些提交。智能体会在同一个拉取请求上修复它们，并把退回原因写进提示词。",
         "personSentBackAnon": "这些提交被退回了。智能体会在同一个拉取请求上修复它们，并把退回原因写进提示词。",
-        "reviewedAgain": "下一个检查通过的版本会再次接受审查。"
+        "reviewedAgain": "下一个检查通过的版本会再次接受审查。",
+        "hosted": {
+          "lead": "在这里用托管代理修复——无需终端：",
+          "button": "用托管代理修复",
+          "orTerminal": "或者在终端中将修复交给智能体：",
+          "eitherWay": "无论哪种方式，智能体都会在每个拉取请求自己的分支上工作并推送，然后检查会重新运行。",
+          "fixing": {
+            "byYou": "<b>你</b>正在用托管代理修复 · <when></when>开始 · <run>{label}</run>",
+            "by": "<b>{name}</b> 正在用托管代理修复 · <when></when>开始 · <run>{label}</run>",
+            "why": "同一时间只运行一个修复。它推送后，检查会重新运行，下一个检查通过的版本会再次接受审查。"
+          },
+          "refused": {
+            "taken": "未启动——已有一个修复在运行，由 <b>{name}</b> 于<when></when>开始。",
+            "takenByYou": "未启动——你已有一个修复在运行（<when></when>开始）。",
+            "outOfCredits": {
+              "body": "没有启动任何机器，也没有产生任何费用。组织有积分后即可再次用托管代理修复——或者在终端中修复。"
+            }
+          }
+        }
       },
       "continue": {
         "title": "继续这项工作",
@@ -8157,7 +8175,9 @@
       "toast": {
         "title": "已复制",
         "body": "请将 {command} 粘贴到终端。"
-      }
+      },
+      "fixingHosted": "<b>{name}</b> 正在用托管代理修复 · <run>{label}</run>",
+      "fixingHostedByYou": "<b>你</b>正在用托管代理修复 · <run>{label}</run>"
     }
   },
   "approvalRecords": {
@@ -10321,7 +10341,11 @@
       "toStartOver": "查看如何重新开始",
       "openingDevelopment": "正在打开“开发”…",
       "sentBackByAgent": "需要修复：审查代理已将它退回——“{note}”",
-      "sentBackByAgentNoNote": "需要修复：审查代理已将它退回。"
+      "sentBackByAgentNoNote": "需要修复：审查代理已将它退回。",
+      "hostedLead": "在这里用托管代理修复——无需终端：",
+      "orTerminal": "或者在终端中修复：",
+      "fixingHosted": "托管修复正在运行——由 <b>{name}</b> 于<when></when>开始 · <run>{label}</run>",
+      "fixingHostedByYou": "托管修复正在运行——由<b>你</b>于<when></when>开始 · <run>{label}</run>"
     }
   },
   "workItems": {

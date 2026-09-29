@@ -622,9 +622,10 @@ export function DevelopmentSectionBody({
    */
   agentReview?: AgentReviewViewDto | null;
   /**
-   * THE HOSTED REPAIR DOOR'S SLOT (MOTIR-6930's seam; design § 30 Panels 3–3e): *Fix on the
-   * hosted agent*, drawn in the fix part beside the copyable `motir fix <KEY>` for a card a
-   * review sent back. Nothing passes it yet — the part draws the command alone.
+   * THE HOSTED REPAIR DOOR (MOTIR-6930; design § 30 Panels 3–3e): *Fix on the hosted
+   * agent*, drawn in the fix part beside the copyable `motir fix <KEY>` for a card a review
+   * sent back. The item page passes it for a viewer who may run the card hosted; every other
+   * host omits it, and the part draws the command alone.
    */
   repairHostedDoor?: ReactNode;
 }) {

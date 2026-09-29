@@ -348,26 +348,73 @@ describe('the repair’s push clears it', () => {
   });
 });
 
-describe('the Development block’s fix part — the sent-back surface is MOTIR-6825’s', () => {
-  it('a GREEN review claim draws nothing here, as before the class existed', async () => {
+describe('the Development block’s fix part — the sent-back part (MOTIR-6930)', () => {
+  it('a GREEN review claim is offered as the sent-back part, every open member handed over', async () => {
     const fx = await makeWorkItemFixture();
     const { card, repo, pr } = await cardWith(fx, 'in_review');
     await sentBack(fx, card.id, versionOf(repo.name, pr.number), 'agent_review');
 
-    expect(await workItemRepairService.getRepairView(card.id, fx.ctx)).toEqual({
-      state: 'hidden',
+    // Where *Fix on the hosted agent* and `motir fix` sit — never `hidden` (§ 30 Panel 3).
+    expect(await workItemRepairService.getRepairView(card.id, fx.ctx)).toMatchObject({
+      state: 'offer',
+      repairClass: 'review',
+      failing: [{ number: pr.number, ci: 'passing' }],
+      lastGaveUp: null,
     });
   });
 
-  it('a review claim with a red member draws that member as the ci part', async () => {
+  it('a person’s Request changes is the same part (§12.7, Panel 3e)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, repo, pr } = await cardWith(fx, 'in_review');
+    await sentBack(fx, card.id, versionOf(repo.name, pr.number), 'pull_request_approval');
+
+    expect(await workItemRepairService.getRepairView(card.id, fx.ctx)).toMatchObject({
+      state: 'offer',
+      repairClass: 'review',
+    });
+  });
+
+  it('a review claim with a red member keeps the review class; the part names the red one', async () => {
     const fx = await makeWorkItemFixture();
     const { card, repo, pr } = await cardWith(fx, 'implemented', { Vitest: 'failure' });
     await sentBack(fx, card.id, versionOf(repo.name, pr.number), 'agent_review');
 
     expect(await workItemRepairService.getRepairView(card.id, fx.ctx)).toMatchObject({
       state: 'offer',
-      repairClass: 'ci',
+      repairClass: 'review',
       failing: [{ number: pr.number, ci: 'failing' }],
+    });
+  });
+
+  it('a repair held names its run — local, then hosted (Panel 3b) — and the open-repair read agrees', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, repo, pr } = await cardWith(fx, 'in_review');
+    await sentBack(fx, card.id, versionOf(repo.name, pr.number), 'agent_review');
+    const claim = await claimOf(fx, card.identifier);
+    expect(claim.outcome).toBe('claimed');
+    const run = await adminDb.dispatchRun.findFirstOrThrow({ where: { command: 'fix' } });
+
+    const local = await workItemRepairService.getRepairView(card.id, fx.ctx);
+    expect(local).toMatchObject({
+      state: 'in_progress',
+      repairClass: 'review',
+      byViewer: true,
+      run: { id: run.id, hosted: false },
+    });
+    expect(local.state === 'in_progress' && local.run?.label).toMatch(/^motir fix · .+ UTC$/);
+
+    await adminDb.dispatchRun.update({ where: { id: run.id }, data: { origin: 'hosted' } });
+    expect(await workItemRepairService.getRepairView(card.id, fx.ctx)).toMatchObject({
+      state: 'in_progress',
+      run: { id: run.id, hosted: true },
+    });
+    const open = await workItemRepairService.findOpenRepairRuns([card.id, 'wi_none'], fx.ctx);
+    expect([...open.keys()]).toEqual([card.id]);
+    expect(open.get(card.id)).toMatchObject({
+      id: run.id,
+      hosted: true,
+      byViewer: true,
+      holder: { id: fx.ctx.userId },
     });
   });
 });

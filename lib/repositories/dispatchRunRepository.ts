@@ -105,8 +105,16 @@ export interface RunningDispatchRunHolder {
   createdBy: { id: string; name: string } | null;
 }
 
+/** An open run and the legs it holds among the cards asked about (MOTIR-6930). */
+export interface RunningDispatchRunForItems extends RunningDispatchRunHolder {
+  origin: DispatchRun['origin'];
+  cards: { workItemId: string | null }[];
+}
+
 /** A run's terminal facts and its starter — the repair view's read. */
 export interface LatestDispatchRun extends RunningDispatchRunHolder {
+  /** Where it runs — a `hosted` repair is drawn with its run link (MOTIR-6930). */
+  origin: DispatchRun['origin'];
   status: DispatchRunStatus;
   stopReason: DispatchRun['stopReason'];
   endedAt: Date | null;
@@ -213,6 +221,39 @@ export const dispatchRunRepository = {
   },
 
   /**
+   * The OPEN runs of one command holding a leg for ANY of these work items, newest
+   * first, each with the legs it holds among them (Story MOTIR-1626 · MOTIR-6930) —
+   * the Workbench To fix page and the item page's banner read which sent-back card is
+   * being repaired, and whether on the hosted agent, in ONE query for a page of rows.
+   */
+  async findRunningByCommandForWorkItems(
+    workItemIds: readonly string[],
+    command: DispatchCommand,
+    tx: Prisma.TransactionClient,
+  ): Promise<RunningDispatchRunForItems[]> {
+    if (workItemIds.length === 0) return [];
+    return tx.dispatchRun.findMany({
+      where: {
+        status: 'running',
+        command,
+        cards: { some: { workItemId: { in: [...workItemIds] } } },
+      },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        origin: true,
+        startedAt: true,
+        createdById: true,
+        createdBy: { select: { id: true, name: true } },
+        cards: {
+          where: { workItemId: { in: [...workItemIds] } },
+          select: { workItemId: true },
+        },
+      },
+    });
+  },
+
+  /**
    * The NEWEST run of one command that held a leg for this work item, in ANY
    * status, with its starter, or null — what the Development block reads to say
    * whether a repair is running, gave up, or never happened (MOTIR-5466).
@@ -227,6 +268,7 @@ export const dispatchRunRepository = {
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       select: {
         id: true,
+        origin: true,
         status: true,
         stopReason: true,
         startedAt: true,

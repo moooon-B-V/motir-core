@@ -102,6 +102,8 @@ function stuck(
     viewerIsAssignee: true,
     viewerIsReporter: false,
     canContinueHosted: false,
+    canFixHosted: false,
+    repairRun: null,
   };
 }
 

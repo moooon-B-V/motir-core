@@ -1,5 +1,6 @@
 import type {
   AcceptanceRefusalDto,
+  OpenRepairRunDto,
   RepairCloseOutcome,
   RepairPullRequestDto,
   ReviewRefusalDto,
@@ -13,6 +14,8 @@ import type { ClaimActorDto } from '@/lib/dto/claim';
 import type { DispatchRun, DispatchStopReason, Prisma } from '@/generated/prisma/client';
 import { readStandingReviewRefusal } from '@/lib/approvalGates/reviewRefusal';
 import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { dispatchRunLabel } from '@/lib/howToTest/author';
+import { toOpenRepairRuns } from '@/lib/mappers/repairRunMappers';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { DispatchRunTerminalError, RepairRunRefusedError } from '@/lib/dispatchRuns/errors';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
@@ -621,22 +624,16 @@ export const workItemRepairService = {
               }
             : { state: 'hidden' };
         }
-        // ⚠️ A `review` CLAIM IS NOT DRAWN AS ITS OWN PART HERE (MOTIR-6822). The
-        // sent-back surface — the findings, the reviewer, `motir fix` — is the review
-        // frame's (MOTIR-6825), and this part's only sent-back copy is the acceptance
-        // video's. So the part reads the class as the red work it hands over: the
-        // members that are failing, as the `ci` class names them, and nothing at all —
-        // as before this class existed — when every member is green.
-        const asReview = verdict.repairClass === 'review';
-        const handed = asReview
-          ? verdict.pullRequests.filter(
-              (pr) => pr.ci === 'failing' || pr.queueExit !== null || pr.conflicted,
-            )
-          : verdict.pullRequests;
-        if (handed.length === 0) return { state: 'hidden' };
-        const failing = handed.map(refOf);
-        const repairClass = asReview ? 'ci' : verdict.repairClass;
-        const { acceptanceRefusal } = verdict;
+        // ⚠️ A `review` CLAIM IS DRAWN AS THE SENT-BACK PART (MOTIR-6930; design
+        // `design/github` § 30 Panels 3–3e). Its checks are usually green, so — as for
+        // an acceptance Re-run — EVERY open member is handed over and the part names the
+        // review, never failing checks; the part's own filter keeps only the red members
+        // for its failing lines. It is where *Fix on the hosted agent* and `motir fix`
+        // sit, so a green sent-back card must not read `hidden` (MOTIR-6822 drew it so
+        // only while no frame could say who sent it back).
+        const failing = verdict.pullRequests.map(refOf);
+        if (failing.length === 0) return { state: 'hidden' };
+        const { repairClass, acceptanceRefusal } = verdict;
 
         const latest = await dispatchRunRepository.findLatestByCommandForWorkItem(
           item.id,
@@ -652,6 +649,11 @@ export const workItemRepairService = {
             holder: latest.createdBy,
             byViewer: latest.createdById === ctx.userId,
             startedAt: latest.startedAt.toISOString(),
+            run: {
+              id: latest.id,
+              label: dispatchRunLabel('fix', latest.startedAt),
+              hosted: latest.origin === 'hosted',
+            },
           };
         }
         // Only a run that FAILED gave up. A stopped (cancelled) or reaped repair
@@ -676,6 +678,27 @@ export const workItemRepairService = {
         return { state: 'offer', repairClass, acceptanceRefusal, failing, lastGaveUp: null };
       },
     );
+  },
+
+  /**
+   * THE OPEN REPAIR on each of these cards (Story MOTIR-1626 · MOTIR-6930) — what the
+   * To fix banner and the Workbench To fix row draw in place of *Fix on the hosted
+   * agent* and `motir fix` while a repair holds the lock (`design/workbench` § 32).
+   * ONE read for a page of rows. The caller has already resolved the cards under the
+   * reader's own access (the Workbench's membership read, the item page's gate), so
+   * this names only runs on cards it was handed. Keyed by work item id; a card with no
+   * open `fix` run is absent.
+   */
+  async findOpenRepairRuns(
+    workItemIds: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<Map<string, OpenRepairRunDto>> {
+    if (workItemIds.length === 0) return new Map();
+    const runs = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => dispatchRunRepository.findRunningByCommandForWorkItems(workItemIds, 'fix', tx),
+    );
+    return toOpenRepairRuns(runs, ctx.userId);
   },
 };
 

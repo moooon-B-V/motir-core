@@ -19,6 +19,7 @@ import { DesignResultPanel } from './DesignResultPanel';
 import { RunSection } from './RunSection';
 import { HostedRunProvider } from './HostedRunProvider';
 import { ContinueHostedDoor, ContinueHostedNotice } from './ContinueHostedDoor';
+import { FixHostedDoor } from './FixHostedDoor';
 import { RunHostedButton } from './RunHostedButton';
 import { ContinuePart } from '@/components/github/ContinuePart';
 import { formatRunTimes } from './runTimes';
@@ -525,6 +526,10 @@ export async function LateUpperSections({
                   // THE FIX PART (MOTIR-5466, design § 21): below the rows, above How to
                   // test — the copyable `motir fix`, a repair in progress, or a give-up.
                   repair={r.repair}
+                  // FIX ON THE HOSTED AGENT (MOTIR-6930, design § 30 Panels 3–3e): the door
+                  // for whoever may run the card hosted — the Run hosted door's own rule. The
+                  // fix part draws it only for a card a REVIEW sent back, in the offer state.
+                  repairHostedDoor={hostedDoor ? <FixHostedDoor /> : undefined}
                   // THE CONTINUE PART (MOTIR-6534, design `design/runs` § Run died): a
                   // run that died, the copyable `motir continue`, or who is continuing.
                   continuePart={
