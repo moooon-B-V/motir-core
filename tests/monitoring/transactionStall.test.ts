@@ -193,6 +193,22 @@ describe('a transaction that could not START (the `maxWait` half)', () => {
     } finally {
       release();
       await Promise.allSettled(holders);
+      // ⚠️ THE REJECTED TRANSACTION IS STILL RUNNING HERE (MOTIR-6886). Prisma
+      // throws P2028 when `maxWait` fires but does not cancel the pending
+      // `pool.connect()`: it chains a fire-and-forget `BEGIN` → `ROLLBACK` →
+      // release onto it, which runs once a holder hands its connection over.
+      // Nobody awaits that chain, so the in-flight probe could catch its
+      // backend `idle in transaction` on `BEGIN`. The adapter releases the
+      // connection only after `ROLLBACK` returns, so a pool with no waiter and
+      // every connection idle means that backend has finished.
+      const pool = dbPool()!;
+      await vi.waitFor(
+        () => {
+          expect(pool.waitingCount).toBe(0);
+          expect(pool.idleCount).toBe(pool.totalCount);
+        },
+        { timeout: 10_000 },
+      );
     }
   }, 60_000);
 });
