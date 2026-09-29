@@ -30,6 +30,15 @@ import { PR_MERGE_MODE_VALUES, type PrMergeModeValue } from '@/lib/dto/projects'
 // the design notes (§ Approvals §7) always said it would be. The two hints are the
 // whole account — do not add a caveat back without a design.
 //
+// THE EXCLUSION (`docs/decisions/approval-gates.md` §12.2a · MOTIR-6823, design
+// `approvals--review-agent.mock.html` panel 2b). While the review agent is on,
+// *Merge automatically* is disabled (dimmed, `aria-disabled`), keeps its label and
+// hint, and adds one line saying to turn the review agent off first. The server
+// refuses the same write (409 `MERGE_MODE_REVIEW_AGENT_ON`), which a stale page
+// meets as the refused state. `reviewAgentEnabled` is the page's CURRENT value,
+// lifted by `MergeModeAndReviewAgentCards`, so flipping the switch below
+// re-renders this card.
+//
 // MANAGE-ONLY. There is no read-only state (Yue, 2026-09-13): the room admits only
 // `workflow:manage`, so every actor who renders this card may change it.
 
@@ -45,12 +54,21 @@ export interface PrMergeModeCardProps {
   /** The project's `MOTIR`-style identifier — the key the route is addressed by. */
   projectKey: string;
   initialMode: PrMergeModeValue;
+  /** The review agent's CURRENT value on this page — on disables *Merge automatically*. */
+  reviewAgentEnabled?: boolean;
+  /** Told every value the card shows (optimistic, reconciled, put back). */
+  onModeChange?: (mode: PrMergeModeValue) => void;
 }
 
-export function PrMergeModeCard({ projectKey, initialMode }: PrMergeModeCardProps) {
+export function PrMergeModeCard({
+  projectKey,
+  initialMode,
+  reviewAgentEnabled = false,
+  onModeChange,
+}: PrMergeModeCardProps) {
   const t = useTranslations('approvals.mergeMode');
   const { toast } = useToast();
-  const [mode, setMode] = useState<PrMergeModeValue>(initialMode);
+  const [mode, setModeState] = useState<PrMergeModeValue>(initialMode);
   const [isPending, startTransition] = useTransition();
   const [arrived, setArrived] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -67,8 +85,17 @@ export function PrMergeModeCard({ projectKey, initialMode }: PrMergeModeCardProp
     setArrived(true);
   }, []);
 
+  function setMode(next: PrMergeModeValue) {
+    setModeState(next);
+    onModeChange?.(next);
+  }
+
+  function isBlocked(value: PrMergeModeValue) {
+    return value === 'auto' && reviewAgentEnabled;
+  }
+
   function choose(next: PrMergeModeValue) {
-    if (next === mode) return;
+    if (next === mode || isBlocked(next)) return;
     const previous = mode;
     setMode(next);
     startTransition(async () => {
@@ -119,15 +146,17 @@ export function PrMergeModeCard({ projectKey, initialMode }: PrMergeModeCardProp
             {PR_MERGE_MODE_VALUES.map((value) => {
               const Icon = OPTION_ICON[value];
               const selected = mode === value;
+              const blocked = isBlocked(value);
               return (
                 <button
                   key={value}
                   type="button"
                   role="radio"
                   aria-checked={selected}
-                  disabled={isPending}
+                  aria-disabled={blocked || undefined}
+                  disabled={isPending || blocked}
                   onClick={() => choose(value)}
-                  className={`focus-visible:ring-(--focus-ring-color) enabled:hover:border-(--el-border-strong) flex items-center gap-3 rounded-(--radius-card) border p-(--spacing-card-padding) text-left focus-visible:outline-none focus-visible:ring-2 disabled:cursor-default ${
+                  className={`focus-visible:ring-(--focus-ring-color) enabled:hover:border-(--el-border-strong) flex items-center gap-3 rounded-(--radius-card) border p-(--spacing-card-padding) text-left focus-visible:outline-none focus-visible:ring-2 disabled:cursor-default ${blocked ? 'opacity-60' : ''} ${
                     selected ? 'border-(--el-accent)' : 'border-(--el-border)'
                   }`}
                 >
@@ -144,6 +173,11 @@ export function PrMergeModeCard({ projectKey, initialMode }: PrMergeModeCardProp
                     <span className="text-(--el-text-secondary) font-sans text-xs">
                       {t(`${value}.hint`)}
                     </span>
+                    {blocked ? (
+                      <span className="text-(--el-text-secondary) font-sans text-xs font-semibold">
+                        {t('auto.blockedByReviewAgent')}
+                      </span>
+                    ) : null}
                   </span>
                   <span
                     className={`inline-flex size-4 shrink-0 items-center justify-center rounded-full border ${
