@@ -9551,7 +9551,8 @@
         "pull_request_merge": "合并审批",
         "acceptance_result": "验收审批",
         "decision_choice": "选择",
-        "decision_confirmation": "决策"
+        "decision_confirmation": "决策",
+        "agent_review": "代理审查"
       },
       "reviewAndApprove": "审阅并批准",
       "needsApproval": "需要审批",

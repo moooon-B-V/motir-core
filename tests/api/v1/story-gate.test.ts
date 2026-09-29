@@ -522,8 +522,25 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
       '/api/v1/work-items/[key]/approval-gate': 'kind=decision_approval',
     };
 
+    /**
+     * GET routes whose ONLY caller is a hosted run's own token, which refuse the PAT this
+     * sweep reads as. They are still swept — the PAT's answer must be the named refusal,
+     * carrying nothing foreign — and their owning-tenant read (and the other-card refusal)
+     * is driven with a real run token in the suite named beside each.
+     */
+    const RUN_TOKEN_ONLY: Record<string, { code: string; suite: string }> = {
+      // MOTIR-6821 — the hosted REVIEW run's brief; a PAT is `REVIEW_RUN_TOKEN_REQUIRED`.
+      '/api/v1/work-items/[key]/review-prompt': {
+        code: 'REVIEW_RUN_TOKEN_REQUIRED',
+        suite: 'tests/api/v1/agent-review-routes.test.ts',
+      },
+    };
+
     const modules = await loadV1RouteModules();
     expect(modules.size, 'the tree really was discovered').toBeGreaterThanOrEqual(3);
+    for (const pathname of Object.keys(RUN_TOKEN_ONLY)) {
+      expect(modules.get(pathname)?.GET, `${pathname} is a GET route in the tree`).toBeDefined();
+    }
 
     for (const [pathname, mod] of modules) {
       if (!mod.GET) continue;
@@ -541,9 +558,18 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
         new Request(`http://localhost:3000${url}${query}`, { headers: mine.headers }),
         { params: Promise.resolve(params) },
       );
-      expect(res.status, `${pathname} answers the owning tenant`).toBe(200);
+      const runTokenOnly = RUN_TOKEN_ONLY[pathname];
+      if (runTokenOnly) {
+        expect(res.status, `${pathname} refuses a PAT (see ${runTokenOnly.suite})`).toBe(403);
+      } else {
+        expect(res.status, `${pathname} answers the owning tenant`).toBe(200);
+      }
 
-      const serialised = JSON.stringify(await res.json());
+      const body = (await res.json()) as unknown;
+      if (runTokenOnly) {
+        expect(body, `${pathname} names its refusal`).toMatchObject({ code: runTokenOnly.code });
+      }
+      const serialised = JSON.stringify(body);
       for (const id of foreign) {
         expect(serialised, `${pathname} must not leak ${id}`).not.toContain(id);
       }

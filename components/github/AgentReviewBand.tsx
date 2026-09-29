@@ -9,6 +9,7 @@ import { Pill } from '@/components/ui/Pill';
 import type { AgentReviewRunRefDto } from '@/lib/dto/agentReview';
 import { formatRunInstant } from '@/lib/runs/runClock';
 import { runsHref } from '@/lib/runs/runsAddress';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import { relativeLabel } from './RepairFixPart';
 
 // THE REVIEW BAND of the Development frame (Story MOTIR-1626 · MOTIR-6825), built to
@@ -85,18 +86,27 @@ const TITLE = 'm-0 inline-flex items-center gap-1.5 text-[13px] font-semibold te
 const META = 'text-[12.5px] text-(--el-text-secondary)';
 const GLYPH = 'h-4 w-4 shrink-0 text-(--el-text-secondary)';
 
+/**
+ * The review run's label, linked to the run (`ar-run`). The address is the READER's
+ * (`useReaderRoutes`, MOTIR-6888): this body renders on the Visitor tree too.
+ */
+function ReviewRunLink({ runId, children }: { runId: string; children: ReactNode }) {
+  const routes = useReaderRoutes();
+  return (
+    <Link
+      href={routes.view(runsHref({ run: runId }))}
+      className="font-semibold text-(--el-link) underline hover:text-(--el-link-pressed)"
+      data-testid="agent-review-run-link"
+    >
+      {children}
+    </Link>
+  );
+}
+
 /** `<run>` in a rich message — the run's label, linked to the run (`ar-run`). */
 function runLink(run: AgentReviewRunRefDto) {
   return function RunLink(chunks: ReactNode) {
-    return (
-      <Link
-        href={runsHref({ run: run.id })}
-        className="font-semibold text-(--el-link) underline hover:text-(--el-link-pressed)"
-        data-testid="agent-review-run-link"
-      >
-        {chunks}
-      </Link>
-    );
+    return <ReviewRunLink runId={run.id}>{chunks}</ReviewRunLink>;
   };
 }
 

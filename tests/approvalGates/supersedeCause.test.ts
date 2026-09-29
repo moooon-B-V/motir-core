@@ -101,6 +101,21 @@ async function publish(label: string) {
 const gateFor = (evidenceId: string) =>
   adminDb.approvalGate.findFirstOrThrow({ where: { subjectId: evidenceId } });
 
+/**
+ * Helpers that take the supersede cause as a TYPED parameter (`LiveSupersedeCause`) and
+ * forward it to the repository — the compiler holds the parameter, and the helper's own
+ * callers are held to the literal form by the rule below. Each entry names why the
+ * forwarding exists; nothing else may forward.
+ */
+const FORWARDERS: { file: string; fn: string; param: string; why: string }[] = [
+  {
+    file: 'lib/services/pullRequestApprovalGates.ts',
+    fn: 'withdrawAgentReview',
+    param: 'cause',
+    why: "the review agent's question is withdrawn under the SAME cause as the approve-and-merge gate at every one of its six withdrawal points, and also cancels the review run in flight (MOTIR-6819 / MOTIR-6820)",
+  },
+];
+
 describe('the DESIGN paths record which of the two happened', () => {
   it('a REPUBLISH marks the old version `republished` — the one sentence that was ever true', async () => {
     const v1 = await publish('v1');
@@ -303,8 +318,29 @@ describe('the COLUMN itself', () => {
           .split(',')
           .map((a) => a.trim())
           .filter(Boolean);
-        // The cause sits immediately before `tx` in both signatures.
-        expect(`${file} → ${args.join(' | ')}`).toMatch(/'[a-z_]+' \| tx$/);
+        // The cause sits immediately before `tx` in both signatures — a literal, or a
+        // FORWARDER's own typed `cause` parameter (below), whose callers are held to the
+        // literal instead.
+        const forwarder = FORWARDERS.find((f) => f.file === file);
+        const shape = forwarder
+          ? new RegExp(`('[a-z_]+'|${forwarder.param}) \\| tx$`)
+          : /'[a-z_]+' \| tx$/;
+        expect(`${file} → ${args.join(' | ')}`).toMatch(shape);
+      }
+    }
+
+    // A forwarder's own callers name the cause as a literal, immediately before `tx`.
+    for (const { file, fn } of FORWARDERS) {
+      const src = readFileSync(join(process.cwd(), file), 'utf8');
+      const calls = [...src.matchAll(new RegExp(`await ${fn}\\(([\\s\\S]*?)\\)`, 'g'))];
+      expect(calls.length, `${file}: ${fn} has no caller`).toBeGreaterThan(0);
+      for (const call of calls) {
+        const args = call[1]!
+          .replace(/\/\/[^\n]*/g, '')
+          .split(',')
+          .map((a) => a.trim())
+          .filter(Boolean);
+        expect(`${file} → ${fn}(${args.join(' | ')})`).toMatch(/'[a-z_]+' \| tx\)$/);
       }
     }
   });

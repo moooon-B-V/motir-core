@@ -29,7 +29,7 @@ import zh from '@/messages/zh.json';
 // repair?"*. Four of their cards are stuck, each for a different reason, and none is waiting
 // on a decision — so a bare `/workbench` lands on **To fix**, whose count reads 4. Each row
 // says WHY in words (the merge queue failed it · it conflicts with main · its CI failed · a
-// reviewer sent it back) and WHAT REPAIRS IT (`motir fix <KEY>`, or `motir run <KEY>` for the
+// reviewer sent it back) and WHAT REPAIRS IT (`motir fix <KEY>`, or — before §12.7 (MOTIR-6822) — `motir run <KEY>` for the
 // card sent back). In progress holds none of the four. Then a fix lands on the red card: the
 // count drops to 3 without a reload, the row stays where it was, marked Cleared, and the next
 // load omits it. The whole tab reads in Chinese, down to its empty state.
@@ -364,7 +364,12 @@ test.describe('To fix on the Workbench', () => {
         `${plain(reasons.changesRequested, { name: seed.ownerName, note: '' }).split(' — ')[0]}`,
       );
       await expect(rowOf(page, toFix, sentBack)).toContainText(`“${REVIEW_NOTE}”`);
-      await expect(rowOf(page, toFix, sentBack)).toContainText(`motir run ${sentBack.identifier}`);
+      // ⚠️ AMENDED BY A RECORDED DECISION, not edited to match today (MOTIR-1626 · MOTIR-6822,
+      // `docs/decisions/approval-gates.md` §12.7): a card a person sent back was repaired by
+      // `motir run`, which could never claim it — the card sits in the review band and `run`
+      // claims only To do. §12.7 corrects the repair to `motir fix`; this receipt's video is
+      // still the record of what MOTIR-6588 shipped.
+      await expect(rowOf(page, toFix, sentBack)).toContainText(`motir fix ${sentBack.identifier}`);
     });
     await beat();
 
@@ -442,8 +447,9 @@ test.describe('To fix on the Workbench', () => {
         plain(zr.changesRequested, { name: '', note: REVIEW_NOTE }).trim(),
       );
       // The commands are commands — they stay untranslated.
+      // `motir fix` since §12.7 (MOTIR-6822) — see the English assertion above.
       await expect(rowOf(page, zhToFix, sentBack)).toContainText(
-        `motir run ${sentBack.identifier}`,
+        `motir fix ${sentBack.identifier}`,
       );
     });
     await beat();

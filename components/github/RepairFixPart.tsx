@@ -316,9 +316,11 @@ function HostedFixing({
 
 /** A repair run's label, linked to the run — the review band's `ar-run` (§ 30 Panel 3b). */
 export function RepairRunLink({ runId, children }: { runId: string; children: ReactNode }) {
+  // The READER's address (MOTIR-6888): this body renders on the Visitor tree too.
+  const routes = useReaderRoutes();
   return (
     <Link
-      href={runsHref({ run: runId })}
+      href={routes.view(runsHref({ run: runId }))}
       className="font-semibold text-(--el-link) underline hover:text-(--el-link-pressed)"
       data-testid="repair-hosted-run-link"
     >

@@ -9555,7 +9555,8 @@
         "pull_request_merge": "merge approval",
         "acceptance_result": "acceptance approval",
         "decision_choice": "choice",
-        "decision_confirmation": "decision"
+        "decision_confirmation": "decision",
+        "agent_review": "agent review"
       },
       "reviewAndApprove": "Review & approve",
       "needsApproval": "needs approval",

@@ -13,9 +13,11 @@ import { useEffect, useRef } from 'react';
 
 const EVENT = 'motir:hosted-runs-changed';
 
-/** A hosted run started (or ended) on `itemKey` from outside its Run section. */
+/**
+ * A hosted run started (or ended) on `itemKey` from outside its Run section. Called only
+ * from a press's answer (`ToFixHostedDoor`), so it always runs in the browser.
+ */
 export function announceRunsChanged(itemKey: string): void {
-  if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent<{ itemKey: string }>(EVENT, { detail: { itemKey } }));
 }
 

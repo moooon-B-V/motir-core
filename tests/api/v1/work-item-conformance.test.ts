@@ -572,8 +572,14 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
     // (`…/continue` joined them in MOTIR-6532 — the CONTINUE claim `motir continue`
     // makes, dispatch exactly as `…/repair` is. Its journey is
     // `work-item-continue-route.test.ts`, and the drift guard drives it.)
+    // (`…/review-prompt` and `…/agent-review` joined them in MOTIR-6821 — the hosted
+    // REVIEW run's brief and its one verdict, the review-run siblings of
+    // `…/dispatch-prompt` and `…/implementation`. Their only caller is a review
+    // RUN's own token, never an external client's PAT (which they refuse with
+    // `REVIEW_RUN_TOKEN_REQUIRED`), so this PAT journey has no step to give them.
+    // Their journey is `tests/api/v1/agent-review-routes.test.ts`.)
     const WORK_LOOP_SUBRESOURCES =
-      /\/(dispatch-prompt|integration|implementation|expansions|activity|claim|plan-approval|pull-requests|how-to-test|repair|continue)\//;
+      /\/(dispatch-prompt|integration|implementation|expansions|activity|claim|plan-approval|pull-requests|how-to-test|repair|continue|review-prompt|agent-review)\//;
     // ⚠️ Story MOTIR-3000's attachment door is excluded for the SAME reason as
     // the two groups above, and the reason is worth stating rather than
     // inheriting: `…/attachments` hangs off a work item because that is what the
