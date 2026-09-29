@@ -151,7 +151,6 @@ describe('mentionNotificationsService.fanOut — comment mentions', () => {
         workspaceId: s.fx.workspaceId,
         projectId: s.fx.projectId,
         userId: s.member.id,
-        role: 'member',
       },
     });
     const lateMember = await usersService.createUser({

@@ -11,6 +11,7 @@ import {
   type Tenant,
 } from './_workspaceRoleTenant';
 import { truncateAuthTables } from '../helpers/db';
+import { listLegacyProjectRoles } from '../helpers/legacyProjectRoles';
 
 // The role migration's MAPPING (Story MOTIR-6168 · Subtask MOTIR-6458) — run
 // against the real database over a fixture tenant holding every case the card
@@ -112,7 +113,7 @@ async function legacy(): Promise<string> {
     adminDb.$queryRaw`
       SELECT "id", "role"::text AS "role", "role_definition_id" AS "roleDefinitionId"
         FROM "project_membership" ORDER BY "id"`,
-    adminDb.projectRoleDefinition.findMany({ orderBy: { id: 'asc' } }),
+    listLegacyProjectRoles(adminDb),
     adminDb.$queryRaw`SELECT "id", "role"::text AS "role" FROM "workspace_membership" ORDER BY "id"`,
   ]);
   return JSON.stringify({ pm, prd, wm });

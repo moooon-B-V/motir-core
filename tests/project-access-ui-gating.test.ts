@@ -148,7 +148,7 @@ describe('assignableMembersService.list — access-scoped pickers (6.4.6)', () =
     });
     for (const userId of [owner.id, onProject.id]) {
       await adminDb.projectMembership.create({
-        data: { workspaceId: workspace.id, projectId: privateProject.id, userId, role: 'member' },
+        data: { workspaceId: workspace.id, projectId: privateProject.id, userId },
       });
     }
 

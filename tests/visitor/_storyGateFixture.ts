@@ -53,7 +53,6 @@ export async function storyGateFixture() {
       data: {
         userId: u.id,
         workspaceId: fx.workspaceId,
-        role: 'member',
         workspaceRole: 'member',
         accessScope,
       },
@@ -72,7 +71,6 @@ export async function storyGateFixture() {
       data: {
         userId: u.id,
         workspaceId: other.workspaceId,
-        role: 'member',
         workspaceRole: 'member',
         accessScope: 'full',
       },

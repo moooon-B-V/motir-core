@@ -3,6 +3,7 @@ import path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from './helpers/adminDb';
+import { findLegacyProjectRole, insertLegacyProjectRole } from './helpers/legacyProjectRoles';
 import { truncateAuthTables } from './helpers/db';
 
 // MOTIR-6329 (Story MOTIR-6179) — nobody loses a room they have today. Every
@@ -60,16 +61,17 @@ async function role(
   name: string,
   permissions: string[],
 ) {
-  return adminDb.projectRoleDefinition.create({
-    data: { workspaceId: project.workspaceId, projectId: project.id, name, permissions },
+  return insertLegacyProjectRole(adminDb, {
+    workspaceId: project.workspaceId,
+    projectId: project.id,
+    name,
+    permissions,
   });
 }
 
 async function permissionsOf(id: string): Promise<string[]> {
-  const row = await adminDb.projectRoleDefinition.findUniqueOrThrow({
-    where: { id },
-    select: { permissions: true },
-  });
+  const row = await findLegacyProjectRole(adminDb, id);
+  if (!row) throw new Error(`no project_role_definition ${id}`);
   return row.permissions;
 }
 

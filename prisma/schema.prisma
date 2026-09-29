@@ -1136,7 +1136,8 @@ model Workspace {
   // Back-relation for ProjectRoleDefinition (Story MOTIR-2257 · MOTIR-2467). A
   // workspace holds the custom roles of all its projects; Cascade with the
   // workspace, matching projectMemberships.
-  projectRoleDefinitions      ProjectRoleDefinition[]
+  // ⚠️ `@ignore`d with the model it points at, pending the phase-3 drop (MOTIR-6567 → MOTIR-6569).
+  projectRoleDefinitions      ProjectRoleDefinition[]      @ignore
   workspaceRoleDefinitions    WorkspaceRoleDefinition[]
   roleMigrationReports        RoleMigrationReport[]
   // Retired project keys (Story 6.8) — workspace-scoped reservation rows.
@@ -1615,7 +1616,8 @@ model Project {
   // that a membership points at is REFUSED (the Restrict FK on
   // ProjectMembership.roleDefinitionId), but a project delete removes both
   // sides, so the cascade never trips it.
-  roleDefinitions             ProjectRoleDefinition[]
+  // ⚠️ `@ignore`d with the model it points at, pending the phase-3 drop (MOTIR-6567 → MOTIR-6569).
+  roleDefinitions             ProjectRoleDefinition[]      @ignore
   // Label folksonomy + component taxonomy (Subtask 5.4.1). Both cascade with
   // the project (project-scoped rows; projects are soft-archived in practice,
   // so this is the rare hard-delete path).
@@ -1790,7 +1792,9 @@ model WorkspaceMembership {
   id               String               @id @default(cuid())
   userId           String
   workspaceId      String
-  role             MemberRole           @default(member)
+  /// ⚠️ RETIRED (Release A, MOTIR-6469): nothing reads or writes it. `@ignore`d so the generated client
+  /// stops selecting it, pending the phase-3 drop (MOTIR-6567 → MOTIR-6569); the database default keeps inserts valid.
+  role             MemberRole           @default(member) @ignore
   /// The member's currently-active project within this workspace. Clears
   /// to NULL (onDelete: SetNull) — not cascades — when that project is
   /// archived/deleted, so losing a project never removes the membership.
@@ -1949,7 +1953,9 @@ model ProjectMembership {
   workspaceId      String     @map("workspace_id")
   projectId        String     @map("project_id")
   userId           String     @map("user_id")
-  role             MemberRole @default(member)
+  /// ⚠️ RETIRED (Release A, MOTIR-6469): nothing reads or writes it. `@ignore`d so the generated client
+  /// stops selecting it, pending the phase-3 drop (MOTIR-6567 → MOTIR-6569); the database default keeps inserts valid.
+  role             MemberRole @default(member) @ignore
   /// The CUSTOM role this membership holds, or NULL (Story MOTIR-2257 ·
   /// MOTIR-2467). NULL keeps meaning exactly what it meant before this column
   /// existed — "this membership names a BUILT-IN role through `role`" — so every
@@ -1970,14 +1976,17 @@ model ProjectMembership {
   /// (`levelGrants`) takes nothing away from it, and A CUSTOM ROLE GRANTS
   /// EXACTLY WHAT IT LISTS. `role` still has to be written, because `private`
   /// gates on having a membership at all and the whole model reads that column.
-  roleDefinitionId String?    @map("role_definition_id")
+  /// ⚠️ RETIRED (Release A, MOTIR-6469): nothing reads or writes it. `@ignore`d so the generated client
+  /// stops selecting it, pending the phase-3 drop (MOTIR-6567 → MOTIR-6569). The text above is its history.
+  roleDefinitionId String?    @map("role_definition_id") @ignore
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
 
   workspace      Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project        Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  roleDefinition ProjectRoleDefinition? @relation(fields: [roleDefinitionId], references: [id], onDelete: Restrict)
+  // ⚠️ `@ignore`d: Prisma requires a relation into an `@@ignore`d model to be ignored itself (MOTIR-6567 → MOTIR-6569).
+  roleDefinition ProjectRoleDefinition? @relation(fields: [roleDefinitionId], references: [id], onDelete: Restrict) @ignore
 
   @@unique([userId, projectId])
   @@index([workspaceId])
@@ -2033,6 +2042,9 @@ model ProjectRoleDefinition {
   @@index([workspaceId])
   @@index([projectId])
   @@map("project_role_definition")
+  // ⚠️ RETIRED (Release A, MOTIR-6469): no code uses this model. `@@ignore`d so the generated client
+  // has no accessor for it, pending the phase-3 drop of the table (MOTIR-6567 → MOTIR-6569).
+  @@ignore
 }
 
 /// Where a user dragged each node on a project's planning canvas (Subtask 7.3.77

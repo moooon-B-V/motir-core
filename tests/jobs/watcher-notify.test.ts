@@ -180,7 +180,6 @@ describe('watcherNotificationsService.fanOut — comment events', () => {
         workspaceId: s.fx.workspaceId,
         projectId: s.fx.projectId,
         userId: s.watcher.id,
-        role: 'member',
       },
     });
     const { user: late } = await addWsMember(s.fx, 'late@example.com', 'Late Member');

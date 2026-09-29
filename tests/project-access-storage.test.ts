@@ -140,7 +140,6 @@ describe('workspaceMembershipRepository.setAccessScope', () => {
       data: {
         userId: t.member,
         workspaceId: t.workspaceId,
-        role: 'member',
         workspaceRole: 'member',
       },
     });
@@ -166,11 +165,11 @@ describe('projectMembershipRepository — who was added', () => {
     const p2 = await project(t.workspaceId, 'members');
     for (const userId of [t.owner, t.member]) {
       await adminDb.projectMembership.create({
-        data: { workspaceId: t.workspaceId, projectId: p1.id, userId, role: 'member' },
+        data: { workspaceId: t.workspaceId, projectId: p1.id, userId },
       });
     }
     await adminDb.projectMembership.create({
-      data: { workspaceId: t.workspaceId, projectId: p2.id, userId: t.owner, role: 'member' },
+      data: { workspaceId: t.workspaceId, projectId: p2.id, userId: t.owner },
     });
     const [count1, ids1, count2, ids2] = await adminDb.$transaction(async (tx) => [
       await projectMembershipRepository.countByProject(p1.id, tx),

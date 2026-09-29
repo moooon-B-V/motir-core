@@ -58,7 +58,6 @@ async function publicProject(n: number, { nameless = -1 } = {}) {
     data: {
       userId: member.id,
       workspaceId: fx.workspaceId,
-      role: 'member',
       workspaceRole: 'member',
     },
   });

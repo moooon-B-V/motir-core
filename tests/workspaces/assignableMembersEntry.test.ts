@@ -59,7 +59,6 @@ async function setup(mode: ProjectAccessMode) {
           workspaceId: fx.workspaceId,
           projectId: fx.projectId,
           userId: u.id,
-          role: 'member',
         },
       });
     }

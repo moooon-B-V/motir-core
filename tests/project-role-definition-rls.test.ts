@@ -1,9 +1,17 @@
-import { Prisma } from '@/generated/prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from './helpers/adminDb';
+import {
+  deleteLegacyProjectRole,
+  findLegacyProjectRole,
+  insertLegacyProjectRole,
+  legacyRoleDefinitionOf,
+  listLegacyProjectRoles,
+  setLegacyRoleDefinition,
+} from './helpers/legacyProjectRoles';
 import { truncateAuthTables } from './helpers/db';
 
 // Schema + tenancy + repository proof for Story MOTIR-2257 · Subtask MOTIR-2467
@@ -36,6 +44,12 @@ import { truncateAuthTables } from './helpers/db';
 // optional `tx`, it is handed the admin transaction rather than being replaced by
 // a raw query: the repository stays the code under test, it is only the
 // connection its statement rides that changes.
+//
+// ⚠️ PHASE 2 (MOTIR-6567): the model is `@@ignore`d and
+// `project_membership.role_definition_id` is `@ignore`d, so the generated client
+// has no accessor for either. The table, its constraints and its RLS stay until
+// the phase-3 drop (MOTIR-6569), so every assertion below is unchanged and reaches
+// them through the raw-SQL helper `./helpers/legacyProjectRoles`.
 
 beforeEach(async () => {
   // truncateAuthTables truncates `workspace` RESTART IDENTITY CASCADE, which
@@ -83,21 +97,17 @@ async function makeRoleTenants(): Promise<RoleTenantFixture> {
   const p2 = await adminDb.project.create({
     data: { workspaceId: w2.workspace.id, name: 'PRD P2', slug: 'prd-rls', identifier: 'PRB' },
   });
-  const r1 = await adminDb.projectRoleDefinition.create({
-    data: {
-      workspaceId: w1.workspace.id,
-      projectId: p1.id,
-      name: 'Contractor',
-      permissions: ['project:browse', 'comment:add'],
-    },
+  const r1 = await insertLegacyProjectRole(adminDb, {
+    workspaceId: w1.workspace.id,
+    projectId: p1.id,
+    name: 'Contractor',
+    permissions: ['project:browse', 'comment:add'],
   });
-  const r2 = await adminDb.projectRoleDefinition.create({
-    data: {
-      workspaceId: w2.workspace.id,
-      projectId: p2.id,
-      name: 'Contractor',
-      permissions: ['project:browse'],
-    },
+  const r2 = await insertLegacyProjectRole(adminDb, {
+    workspaceId: w2.workspace.id,
+    projectId: p2.id,
+    name: 'Contractor',
+    permissions: ['project:browse'],
   });
 
   return {
@@ -133,34 +143,25 @@ async function asAppRole<T>(
 describe('project_role_definition — round-trip + constraints', () => {
   it('a role definition round-trips with its base, its permission array and its timestamps', async () => {
     const fx = await makeRoleTenants();
-    const read = await adminDb.projectRoleDefinition.findUnique({ where: { id: fx.roleW1Id } });
+    const read = await findLegacyProjectRole(adminDb, fx.roleW1Id);
     expect(read?.name).toBe('Contractor');
     expect(read?.permissions).toEqual(['project:browse', 'comment:add']);
     expect(read?.workspaceId).toBe(fx.workspaceW1Id);
     expect(read?.projectId).toBe(fx.projectP1Id);
   });
 
-  it('a duplicate (projectId, name) raises P2002 — and the repository lets it through UNTRANSLATED', async () => {
-    // The service is what turns this into RoleNameTakenError (MOTIR-2472); a
-    // repository that translated it would be a second policy implementation.
+  it('a duplicate (projectId, name) is refused by the unique index', async () => {
+    // The repository and the service that translated this are gone (MOTIR-6466);
+    // what stays until the drop is the index itself.
     const fx = await makeRoleTenants();
-    let caught: unknown;
-    try {
-      await adminDb.$transaction((tx) =>
-        tx.projectRoleDefinition.create({
-          data: {
-            workspaceId: fx.workspaceW1Id,
-            projectId: fx.projectP1Id,
-            name: 'Contractor',
-            permissions: [],
-          },
-        }),
-      );
-    } catch (err) {
-      caught = err;
-    }
-    expect(caught).toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
-    expect((caught as Prisma.PrismaClientKnownRequestError).code).toBe('P2002');
+    await expect(
+      insertLegacyProjectRole(adminDb, {
+        workspaceId: fx.workspaceW1Id,
+        projectId: fx.projectP1Id,
+        name: 'Contractor',
+        permissions: [],
+      }),
+    ).rejects.toThrow(/23505|unique constraint/i);
   });
 
   it('the SAME name in a DIFFERENT project is fine — a project’s roles are its own', async () => {
@@ -176,13 +177,11 @@ describe('project_role_definition — round-trip + constraints', () => {
         identifier: 'PRC',
       },
     });
-    const created = await adminDb.projectRoleDefinition.create({
-      data: {
-        workspaceId: fx.workspaceW1Id,
-        projectId: sibling.id,
-        name: 'Contractor',
-        permissions: [],
-      },
+    const created = await insertLegacyProjectRole(adminDb, {
+      workspaceId: fx.workspaceW1Id,
+      projectId: sibling.id,
+      name: 'Contractor',
+      permissions: [],
     });
     expect(created.name).toBe('Contractor');
     expect(created.id).not.toBe(fx.roleW1Id);
@@ -191,13 +190,9 @@ describe('project_role_definition — round-trip + constraints', () => {
   it('deleting a project cascades away its role definitions; a sibling tenant’s survive', async () => {
     const fx = await makeRoleTenants();
     await adminDb.project.delete({ where: { id: fx.projectP1Id } });
-    const cascaded = await adminDb.projectRoleDefinition.findUnique({
-      where: { id: fx.roleW1Id },
-    });
+    const cascaded = await findLegacyProjectRole(adminDb, fx.roleW1Id);
     expect(cascaded).toBeNull();
-    const siblingTenantRole = await adminDb.projectRoleDefinition.findUnique({
-      where: { id: fx.roleW2Id },
-    });
+    const siblingTenantRole = await findLegacyProjectRole(adminDb, fx.roleW2Id);
     expect(siblingTenantRole).not.toBeNull();
   });
 });
@@ -205,14 +200,14 @@ describe('project_role_definition — round-trip + constraints', () => {
 describe('project_role_definition — RLS isolation', () => {
   it('with NO workspace context, motir_app sees zero role definitions', async () => {
     await makeRoleTenants();
-    const rows = await asAppRole({}, (tx) => tx.projectRoleDefinition.findMany());
+    const rows = await asAppRole({}, (tx) => listLegacyProjectRoles(tx));
     expect(rows).toEqual([]);
   });
 
   it("with the W1 context bound, only W1's role definitions are visible — never W2's", async () => {
     const fx = await makeRoleTenants();
     const rows = await asAppRole({ workspaceId: fx.workspaceW1Id }, (tx) =>
-      tx.projectRoleDefinition.findMany(),
+      listLegacyProjectRoles(tx),
     );
     expect(rows.map((r) => r.id)).toEqual([fx.roleW1Id]);
   });
@@ -220,7 +215,7 @@ describe('project_role_definition — RLS isolation', () => {
   it('a tenant cannot SELECT a foreign-workspace role definition by id (0 rows, not a leak)', async () => {
     const fx = await makeRoleTenants();
     const rows = await asAppRole({ workspaceId: fx.workspaceW1Id }, (tx) =>
-      tx.projectRoleDefinition.findMany({ where: { id: fx.roleW2Id } }),
+      listLegacyProjectRoles(tx, { id: fx.roleW2Id }),
     );
     expect(rows).toEqual([]);
   });
@@ -228,13 +223,11 @@ describe('project_role_definition — RLS isolation', () => {
   it('a tenant CAN insert a role definition for its OWN workspace', async () => {
     const fx = await makeRoleTenants();
     const created = await asAppRole({ workspaceId: fx.workspaceW1Id }, (tx) =>
-      tx.projectRoleDefinition.create({
-        data: {
-          workspaceId: fx.workspaceW1Id,
-          projectId: fx.projectP1Id,
-          name: 'Reporter',
-          permissions: ['project:browse'],
-        },
+      insertLegacyProjectRole(tx, {
+        workspaceId: fx.workspaceW1Id,
+        projectId: fx.projectP1Id,
+        name: 'Reporter',
+        permissions: ['project:browse'],
       }),
     );
     expect(created.workspaceId).toBe(fx.workspaceW1Id);
@@ -244,13 +237,11 @@ describe('project_role_definition — RLS isolation', () => {
     const fx = await makeRoleTenants();
     await expect(
       asAppRole({ workspaceId: fx.workspaceW1Id }, (tx) =>
-        tx.projectRoleDefinition.create({
-          data: {
-            workspaceId: fx.workspaceW2Id,
-            projectId: fx.projectP2Id,
-            name: 'Smuggled',
-            permissions: [],
-          },
+        insertLegacyProjectRole(tx, {
+          workspaceId: fx.workspaceW2Id,
+          projectId: fx.projectP2Id,
+          name: 'Smuggled',
+          permissions: [],
         }),
       ),
     ).rejects.toThrow();
@@ -264,56 +255,46 @@ describe('project_membership.role_definition_id — the deploy backfill and the 
     // pre-migration row is. Asserted, not assumed: nobody's access changes on
     // deploy because NULL means what a membership meant before the column.
     const fx = await makeRoleTenants();
-    const membership = await adminDb.projectMembership.create({
-      data: {
-        workspaceId: fx.workspaceW1Id,
-        projectId: fx.projectP1Id,
-        userId: fx.userA1Id,
-      },
-    });
-    expect(membership.roleDefinitionId).toBeNull();
-
-    // And across the whole table: no row anywhere carries a pointer yet.
-    const withPointer = await adminDb.projectMembership.count({
-      where: { roleDefinitionId: { not: null } },
-    });
-    expect(withPointer).toBe(0);
-  });
-
-  it('deleting a role definition a membership POINTS AT is refused by the database, and the membership survives', async () => {
-    const fx = await makeRoleTenants();
     await adminDb.projectMembership.create({
       data: {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
         userId: fx.userA1Id,
-        roleDefinitionId: fx.roleW1Id,
       },
     });
+    expect(
+      await legacyRoleDefinitionOf(adminDb, { userId: fx.userA1Id, projectId: fx.projectP1Id }),
+    ).toBeNull();
 
-    const heldRoleDelete = adminDb.$transaction((tx) =>
-      tx.projectRoleDefinition.delete({ where: { id: fx.roleW1Id } }),
-    );
+    // And across the whole table: no row anywhere carries a pointer yet.
+    const [{ withPointer }] = await adminDb.$queryRaw<[{ withPointer: number }]>`
+      SELECT count(*)::int AS "withPointer" FROM "project_membership"
+       WHERE "role_definition_id" IS NOT NULL`;
+    expect(withPointer).toBe(0);
+  });
+
+  it('deleting a role definition a membership POINTS AT is refused by the database, and the membership survives', async () => {
+    const fx = await makeRoleTenants();
+    const holder = { userId: fx.userA1Id, projectId: fx.projectP1Id };
+    await adminDb.projectMembership.create({
+      data: { workspaceId: fx.workspaceW1Id, ...holder },
+    });
+    await setLegacyRoleDefinition(adminDb, holder, fx.roleW1Id);
+
+    const heldRoleDelete = adminDb.$transaction((tx) => deleteLegacyProjectRole(tx, fx.roleW1Id));
     await expect(heldRoleDelete).rejects.toThrow();
 
     // Both sides intact — Restrict refuses rather than cascading the membership
     // away or silently nulling the pointer.
-    const heldRole = await adminDb.projectRoleDefinition.findUnique({
-      where: { id: fx.roleW1Id },
-    });
+    const heldRole = await findLegacyProjectRole(adminDb, fx.roleW1Id);
     expect(heldRole).not.toBeNull();
-    const survivor = await adminDb.projectMembership.findUnique({
-      where: { userId_projectId: { userId: fx.userA1Id, projectId: fx.projectP1Id } },
-    });
-    expect(survivor?.roleDefinitionId).toBe(fx.roleW1Id);
+    expect(await legacyRoleDefinitionOf(adminDb, holder)).toBe(fx.roleW1Id);
   });
 
   it('a role definition nobody holds deletes cleanly', async () => {
     const fx = await makeRoleTenants();
-    await adminDb.$transaction((tx) =>
-      tx.projectRoleDefinition.delete({ where: { id: fx.roleW1Id } }),
-    );
-    const deleted = await adminDb.projectRoleDefinition.findUnique({ where: { id: fx.roleW1Id } });
+    await adminDb.$transaction((tx) => deleteLegacyProjectRole(tx, fx.roleW1Id));
+    const deleted = await findLegacyProjectRole(adminDb, fx.roleW1Id);
     expect(deleted).toBeNull();
   });
 });

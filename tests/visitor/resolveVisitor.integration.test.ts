@@ -67,7 +67,6 @@ async function tenant(mode: ProjectAccessMode = 'public') {
       data: {
         userId: u.id,
         workspaceId: fx.workspaceId,
-        role: 'member',
         workspaceRole: 'member',
         accessScope,
       },
@@ -78,7 +77,6 @@ async function tenant(mode: ProjectAccessMode = 'public') {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
       userId: limitedAdded.id,
-      role: 'member',
     },
   });
   return { fx, identifier, full, limited, limitedAdded };
