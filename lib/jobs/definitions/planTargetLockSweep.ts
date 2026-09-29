@@ -66,7 +66,7 @@ import { defineJob } from '../defineJob';
  * revisited, revisit it as a §21 decision — a shorter cadence HERE re-prices the
  * whole schedule, which is the thing this comment exists to say.
  */
-export const PLAN_TARGET_LOCK_SWEEP_CRON = '0,30 * * * *';
+export const PLAN_TARGET_LOCK_SWEEP_CRON = '*/5 * * * *';
 
 export const planTargetLockSweep = defineJob(
   {
