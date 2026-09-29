@@ -477,20 +477,30 @@ export async function withdrawPullRequestApprovalGatesOnCiRerun(
     pullRequestId,
     tx,
   )) {
-    const gate = (await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx)).find(
-      (row) => row.kind === KIND,
-    );
-    if (gate) {
+    const awaiting = await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx);
+    const gate = awaiting.find((row) => row.kind === KIND);
+    // The REVIEW stands where the merge question would (Story MOTIR-1626; `approval-gates.md`
+    // §12.2), so a set that leaves green retires it the same way — only at its own version,
+    // cancelling its run — and the next green asks it again (§12.5: a WITHDRAWN review is
+    // owed again at the same head).
+    const review = awaiting.find((row) => row.kind === REVIEW_KIND);
+    if (gate || review) {
       const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
       const current = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
-      if (!current || current !== gate.subjectVersion) continue;
-      const retired = await approvalGateRepository.supersedeAwaitingByWorkItem(
-        workItemId,
-        KIND,
-        'ci_rerunning',
-        tx,
-      );
-      if (retired > 0) withdrawn.push(workItemId);
+      let retired = 0;
+      if (gate && current && current === gate.subjectVersion) {
+        retired += await approvalGateRepository.supersedeAwaitingByWorkItem(
+          workItemId,
+          KIND,
+          'ci_rerunning',
+          tx,
+        );
+      }
+      if (review && current && current === review.subjectVersion) {
+        retired += await withdrawAgentReview(workItemId, 'ci_rerunning', tx);
+      }
+      if (retired === 0) continue;
+      withdrawn.push(workItemId);
     }
     // The acceptance question rides on the same green set (MOTIR-5903) — and an `auto`
     // project raises no merge gate, so it can be the only question standing. Asked

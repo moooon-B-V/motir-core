@@ -367,6 +367,39 @@ describe('§12.2 — one review per version', () => {
     expect(again!.subjectVersion).toBe(version(68, 'sha-a'));
     expect(reviewRequests().map((e) => e.data['gateId'])).toEqual([again!.id]);
   });
+
+  it('a check PENDING again at the same head withdraws the review as `ci_rerunning`; the next green asks it again (MOTIR-6946)', async () => {
+    const { item, review } = await reviewing('rerun-green', 69);
+    const checkRun = (status: string, conclusion: string | null = null) =>
+      githubWebhookService.handleEvent('check_run', {
+        action: status === 'completed' ? 'completed' : 'created',
+        installation: INSTALLATION,
+        repository: { id: Number(REPO_PROVIDER_ID) },
+        check_run: {
+          name: 'Vitest (1/12)',
+          head_sha: 'sha-a',
+          status,
+          conclusion,
+          pull_requests: [{ number: 69 }],
+          check_suite: { id: 36613621931, head_branch: null },
+        },
+      });
+
+    await checkRun('queued');
+    const withdrawn = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: review.id } });
+    expect([withdrawn.state, withdrawn.supersededCause]).toEqual(['superseded', 'ci_rerunning']);
+    expect(await gatesOf(item.id, MERGE)).toHaveLength(0);
+    expect(await statusOf(item.id)).toBe('implemented');
+    sent.length = 0;
+
+    await checkRun('completed', 'success');
+    const [again] = await awaitingOf(item.id, REVIEW);
+    expect(again!.id).not.toBe(review.id);
+    expect(again!.subjectVersion).toBe(version(69, 'sha-a'));
+    expect(await gatesOf(item.id, MERGE)).toHaveLength(0);
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(reviewRequests().map((e) => e.data['gateId'])).toEqual([again!.id]);
+  });
 });
 
 describe('§12.5 — withdrawal', () => {
