@@ -41,6 +41,11 @@ import type { PmTier } from '@/lib/billing/entitlements';
 // should re-tune it: the number did not change, the set it counts did. Which
 // workloads exist and where each is counted from is `workloads.ts`; the summing
 // and the lock are `fleetCeilingService`.
+//
+// ⚠️ AGENT INSTANCES ARE NOT IN IT (`docs/decisions/agent-instances.md` AMENDMENT
+// 2). They are an `own`-pool workload: slotted under the same lock, bounded by
+// their own `MOTIR_INSTANCE_MAX_RUNNING`, and never summed into this ceiling — a
+// long-lived per-minute machine must not take CI's capacity.
 
 /** The env var an operator raises or lowers the fleet ceiling with. */
 const FLEET_CEILING_ENV = 'MOTIR_FLEET_MAX_IN_FLIGHT';

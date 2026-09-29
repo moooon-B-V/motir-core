@@ -212,6 +212,8 @@ describe('the ways this card can lie (AC 3)', () => {
       { workload: 'ci', containerCount: null, containerSeconds: null, costUsd: null },
       { workload: 'index', containerCount: 1, containerSeconds: 1840, costUsd: expect.any(String) },
       { workload: 'agent', containerCount: null, containerSeconds: null, costUsd: null },
+      // Agent instances (MOTIR-6872) meter under their own line.
+      { workload: 'instance', containerCount: null, containerSeconds: null, costUsd: null },
     ]);
     const index = dto.workloads.find((w) => w.workload === 'index')!;
     expect(new Prisma.Decimal(index.costUsd!).equals(new Prisma.Decimal('0.058210330160'))).toBe(

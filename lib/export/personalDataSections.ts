@@ -101,6 +101,7 @@ export type PersonalDataDelegate =
   | 'commentMention'
   | 'publicFollow'
   | 'dispatchRun'
+  | 'agentInstance'
   | 'comment'
   | 'workItem'
   | 'workItemRevision'
@@ -346,6 +347,16 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     tier: 'tenant',
     basis: 'Agent runs this person started.',
     where: (userId) => ({ createdById: userId }),
+  },
+  {
+    // Story MOTIR-6860 — the person's own agent instances: what they named, which
+    // profile, its state and when it last saw activity. Its running INTERVALS are
+    // not a section: they carry no User foreign key and belong to the instance.
+    table: 'agent_instance',
+    model: 'agentInstance',
+    tier: 'tenant',
+    basis: 'Agent instances this person created.',
+    where: (userId) => ({ ownerId: userId }),
   },
   {
     table: 'saved_filter_star',

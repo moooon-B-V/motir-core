@@ -29,6 +29,16 @@
 # entrypoint banner on stdout would corrupt a pipe that is expected to be clean.
 set -euo pipefail
 
+# ── Seed a PERSISTENT home before anything reads it (MOTIR-6887) ─────────────
+# A user agent instance mounts a volume over $HOME, and an empty one hides the
+# agent config home that `env.sh` below is sourced from. The seed adds back only
+# what is MISSING and never overwrites; with no volume it is a no-op. It runs
+# FIRST because every later step reads $HOME. Its own failure never fails the
+# boot — a half-seeded home still gives the user a shell to repair it from.
+if command -v motir-sandbox-seed-home >/dev/null 2>&1; then
+    motir-sandbox-seed-home || true
+fi
+
 WORKSPACE=/workspace
 CONFIG_DIR="${MOTIR_CONFIG_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}}/motir"
 

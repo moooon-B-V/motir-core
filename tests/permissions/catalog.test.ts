@@ -316,6 +316,8 @@ const APPROVAL_ENFORCED: PermissionKey[] = ['approval:decide_any', 'approval:vie
 const SAVED_FILTER_ANY_ENFORCED: PermissionKey[] = ['saved_filter:manage_any'];
 /** MOTIR-6330 · MOTIR-6331 — the Plans and Runs rooms' view keys, consulted by their reads' scope. */
 const ROOM_VIEW_ENFORCED: PermissionKey[] = ['plan:view_any', 'run:view_any'];
+/** MOTIR-6872 — agent instances, enforced on arrival: `agentInstanceLifecycleService` asserts it. */
+const INSTANCE_ENFORCED: PermissionKey[] = ['instance:use'];
 
 // ⚠️ `MERGE_GATE_ENFORCED` WAS HERE — MOTIR-4793's `work_item:merge_pull_request`,
 // the floor the `pull_request_merge` handler named. Bug MOTIR-5603 · MOTIR-5616
@@ -409,6 +411,10 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS.filter((k) => ROOM_VIEW_ENFORCED.includes(k)).sort()).toEqual(
       [...ROOM_VIEW_ENFORCED].sort(),
     );
+    // …and MOTIR-6872's agent-instance key.
+    expect(ENFORCED_PERMISSIONS.filter((k) => INSTANCE_ENFORCED.includes(k))).toEqual(
+      INSTANCE_ENFORCED,
+    );
     expect(ENFORCED_PERMISSIONS).toHaveLength(
       shipped.length +
         ADMINISTRATIVE_ENFORCED.length +
@@ -419,7 +425,8 @@ describe('enforcement — the seam that lets naming and wiring land separately',
         INTEGRATION_ENFORCED.length +
         APPROVAL_ENFORCED.length +
         SAVED_FILTER_ANY_ENFORCED.length +
-        ROOM_VIEW_ENFORCED.length,
+        ROOM_VIEW_ENFORCED.length +
+        INSTANCE_ENFORCED.length,
     );
   });
 

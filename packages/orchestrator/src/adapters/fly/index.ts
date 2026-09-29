@@ -57,6 +57,7 @@ export const FLEET_METADATA_VALUES: Record<FleetWorkloadKind, string> = {
   ci_runner: 'ci-runner',
   code_graph_index: 'code-graph-index',
   hosted_agent: 'hosted-agent',
+  agent_instance: 'agent-instance',
 };
 
 /** Every tag value the fleet answers to — what makes a machine one of OURS,
@@ -79,6 +80,7 @@ const FLEET_MACHINE_NAME_PREFIXES: Record<FleetWorkloadKind, string> = {
   ci_runner: 'motir-runner',
   code_graph_index: 'motir-index',
   hosted_agent: 'motir-agent',
+  agent_instance: 'motir-instance',
 };
 
 /** Fly machine names are lower-case alphanumerics and hyphens. */
