@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Client } from 'pg';
 import { adminDb } from '../helpers/adminDb';
+import { dropLegacyAccessLevel, ensureLegacyAccessLevel } from '../helpers/legacyProjectAccess';
 import { insertLegacyProjectRole } from '../helpers/legacyProjectRoles';
 import { currentWorkerAdminUrl } from '../helpers/parallelDb';
 
@@ -35,6 +36,10 @@ export async function runMigrationFile(dir: string, transform: (sql: string) => 
 // `restoreWorkspaceRoleNotNull`, which runs MOTIR-6561's own migration (backfill
 // then SET NOT NULL) — so the next file on this worker gets the real schema back
 // even when a test fails, and that migration is exercised on every restore.
+//
+// The never-wider check also reads `project."accessLevel"`, which MOTIR-6694 has
+// since dropped, so `makeTenant` rebuilds it (`ensureLegacyAccessLevel`) and the
+// restore drops it again (`dropLegacyAccessLevel`).
 const NOT_NULL_MIGRATION = '20260927090000_workspace_role_not_null';
 
 /** Drop MOTIR-6561's NOT NULL on this worker's database, so pre-migration rows can be written. */
@@ -44,9 +49,13 @@ export async function relaxWorkspaceRoleNotNull(): Promise<void> {
   );
 }
 
-/** Put MOTIR-6561's NOT NULL back — call it from an `afterEach` in every file using `makeTenant`. */
+/**
+ * Put MOTIR-6561's NOT NULL back, and MOTIR-6694's drop of the legacy access
+ * level after it — call it from an `afterEach` in every file using `makeTenant`.
+ */
 export async function restoreWorkspaceRoleNotNull(): Promise<void> {
   await runMigrationFile(NOT_NULL_MIGRATION);
+  await dropLegacyAccessLevel();
 }
 
 // ── The fixture tenant ─────────────────────────────────────────────────────────
@@ -118,6 +127,7 @@ export async function makeTenant(): Promise<Tenant> {
     admin: 'admin',
     viewer: 'viewer',
   };
+  await ensureLegacyAccessLevel();
   await relaxWorkspaceRoleNotNull();
   for (const [label, id] of Object.entries(people)) {
     // The legacy column ONLY — `workspace_role` NULL, the row the migrations map.

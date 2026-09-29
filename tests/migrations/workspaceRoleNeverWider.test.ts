@@ -132,7 +132,7 @@ async function tenantWithLevels(): Promise<Tenant & { p3: { id: string; identifi
   const t = await makeTenant();
   // The mode beside the level is the one the mapping migration gives it (MOTIR-6686).
   await adminDb.project.update({ where: { id: t.p2.id }, data: { accessMode: 'members' } });
-  // legacy-access-level: the role migration under test reads `limited` and `private` apart.
+  // The rebuilt legacy level (legacyProjectAccess.ts): the role migration under test reads `limited` and `private` apart.
   await writeLegacyAccessLevel(adminDb, t.p2.id, 'limited');
   const p3 = await adminDb.project.create({
     data: {
@@ -144,7 +144,7 @@ async function tenantWithLevels(): Promise<Tenant & { p3: { id: string; identifi
       accessMode: 'members',
     },
   });
-  // legacy-access-level: the role migration under test reads `limited` and `private` apart.
+  // The rebuilt legacy level (legacyProjectAccess.ts): the role migration under test reads `limited` and `private` apart.
   await writeLegacyAccessLevel(adminDb, p3.id, 'private');
   // Only the plain member is added to the private project.
   await adminDb.projectMembership.create({

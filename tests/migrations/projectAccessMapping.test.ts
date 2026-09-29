@@ -68,7 +68,7 @@ async function tenant() {
         workspaceId: ws.id,
       },
     });
-    // legacy-access-level: the mapping migration of each legacy level is what this file tests.
+    // The rebuilt legacy level (legacyProjectAccess.ts): the mapping migration of each legacy level is what this file tests.
     await writeLegacyAccessLevel(adminDb, p.id, level);
     // The mapping ran over NULL-mode rows (`_projectAccessModeNotNull.ts`).
     await nullAccessMode(p.id);

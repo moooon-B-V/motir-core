@@ -20,36 +20,30 @@ import { describe, expect, it } from 'vitest';
 // that its own body writes. And it must NOT flag the reads that stay: an assertion
 // on the DERIVED `accessLevel` a DTO, API v1 or MCP payload still carries, or an
 // in-memory `ProjectContext` literal that never reaches the database.
+//
+// Since MOTIR-6694 dropped the column there is no legitimate write left outside
+// the one helper that REBUILDS it for the migration replays
+// (`tests/helpers/legacyProjectAccess.ts`). So the guard is tight: the per-line
+// `// legacy-access-level:` exemption and the raw-SQL "writes the mode beside
+// it" exemption are both gone, and any other `accessLevel` write in `tests/`
+// fails — including one against a Prisma client that could no longer compile it,
+// because the raw-SQL shapes compile whatever the schema says.
 
 /** The files allowed to write `accessLevel`. */
 const ALLOWED = new Set([
-  // The raw-SQL door onto the `@ignore`d column (MOTIR-6692): the one place a
-  // test may write a legacy level, for the tests that own the column itself or a
-  // migration that read it — each call site says so with the marker below.
-  // (`tests/helpers/projectAccess.ts` and the legacy-mapping test left this list
-  // with phase 2: the first writes the mode alone, the second seeds through here.)
+  // The rebuild of the DROPPED column (MOTIR-6694): the one place a test may
+  // write a legacy level, for the migration replays that read it — and only
+  // between `ensureLegacyAccessLevel()` and `dropLegacyAccessLevel()`.
   'tests/helpers/legacyProjectAccess.ts',
   // This file: its self-check below carries direct writes as SOURCE TEXT.
   'tests/projects/accessFixtureGuard.test.ts',
 ]);
 
-/**
- * A single write that seeds a LEGACY level on purpose, in a file that is otherwise
- * held to the rule, says so on the line above it: `// legacy-access-level: <why>`.
- * The reason is required — a bare marker is not an exemption.
- */
-const LEGACY_MARKER = /\/\/\s*legacy-access-level:\s*\S/;
-
 /** A Prisma write's payload keys: `create({ data })`, `update({ data })`, `upsert({ create, update })`. */
 const WRITE_KEYS = new Set(['data', 'create', 'update']);
 
-/**
- * A raw SQL statement that writes the column (`INSERT … "accessLevel"`, `UPDATE … "accessLevel" =`).
- * SQL cannot spread the helper, so a raw write passes only when it writes the MODE
- * in the same statement — the helper's contract, stated in SQL.
- */
+/** A raw SQL statement that writes the column (`INSERT … "accessLevel"`, `UPDATE … "accessLevel" =`). */
 const RAW_WRITE = /\b(INSERT|UPDATE)\b[\s\S]*"accessLevel"/i;
-const RAW_WRITES_MODE = /"accessMode"|\baccess_mode\b/;
 
 type Hit = { line: number; text: string };
 
@@ -105,7 +99,6 @@ function directAccessLevelWrites(fileName: string, source: string): Hit[] {
   const hits: Hit[] = [];
   const at = (node: ts.Node) => {
     const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
-    if (line > 0 && LEGACY_MARKER.test(lines[line - 1]!)) return;
     hits.push({ line: line + 1, text: lines[line]!.trim() });
   };
   const visit = (node: ts.Node) => {
@@ -114,8 +107,7 @@ function directAccessLevelWrites(fileName: string, source: string): Hit[] {
       (ts.isNoSubstitutionTemplateLiteral(node) ||
         ts.isTemplateExpression(node) ||
         ts.isStringLiteral(node)) &&
-      RAW_WRITE.test(node.getText(sf)) &&
-      !RAW_WRITES_MODE.test(node.getText(sf))
+      RAW_WRITE.test(node.getText(sf))
     ) {
       at(node);
     }
@@ -189,6 +181,14 @@ describe('the access fixture guard — no test writes `accessLevel` directly', (
         'a raw UPDATE',
         'await tx.$executeRawUnsafe(\'UPDATE "project" SET "accessLevel" = \\\'public\\\'\');',
       ],
+      [
+        'a raw INSERT writing the mode beside the level (exempt until MOTIR-6694)',
+        'await tx.$executeRaw`INSERT INTO "project" ("id", "access_mode", "accessLevel") VALUES (1, \'public\', \'public\')`;',
+      ],
+      [
+        'a write marked as a legacy seed (the marker exempted it until MOTIR-6694)',
+        `await db.project.update({\n  where: { id },\n  // legacy-access-level: the fallback is what this tests.\n  data: { accessLevel: 'limited' },\n});`,
+      ],
     ])('flags %s', (_label, src) => {
       expect(scan(src).length).toBeGreaterThan(0);
     });
@@ -210,27 +210,11 @@ describe('the access fixture guard — no test writes `accessLevel` directly', (
         "await page.request.patch(`/api/projects/${KEY}/access`, { data: { accessLevel: 'limited' } });",
       ],
       [
-        'a raw INSERT writing the mode beside the level',
-        'await tx.$executeRaw`INSERT INTO "project" ("id", "access_mode", "accessLevel") VALUES (1, \'public\', \'public\')`;',
-      ],
-      [
         'the helper',
         `await db.project.update({ where: { id }, data: projectAccessData('public') });`,
       ],
-      [
-        'a write marked as a legacy seed',
-        `await db.project.update({\n  where: { id },\n  // legacy-access-level: the fallback is what this tests.\n  data: { accessLevel: 'limited' },\n});`,
-      ],
     ])('does not flag %s', (_label, src) => {
       expect(scan(src)).toEqual([]);
-    });
-
-    it('flags a marker with no reason', () => {
-      expect(
-        scan(
-          `await db.project.update({\n  // legacy-access-level:\n  data: { accessLevel: 'limited' },\n});`,
-        ),
-      ).toEqual([3]);
     });
   });
 });

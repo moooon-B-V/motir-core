@@ -118,8 +118,8 @@ describe('the policies', () => {
         { workspaceId: host.workspaceId },
         (tx) =>
           tx.$executeRaw`
-          INSERT INTO "project" ("id", "workspaceId", "name", "slug", "identifier", "access_mode", "accessLevel", "createdAt", "updatedAt")
-          VALUES (${'ins-' + neighbour.projectId}, ${neighbour.workspaceId}, 'Smuggled', 'smuggled', 'SMG', 'public', 'public', now(), now())
+          INSERT INTO "project" ("id", "workspaceId", "name", "slug", "identifier", "access_mode", "createdAt", "updatedAt")
+          VALUES (${'ins-' + neighbour.projectId}, ${neighbour.workspaceId}, 'Smuggled', 'smuggled', 'SMG', 'public', now(), now())
         `,
       ),
     ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);

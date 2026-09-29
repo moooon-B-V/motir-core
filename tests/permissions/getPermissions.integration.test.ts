@@ -1,5 +1,4 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { ProjectAccessLevel } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
@@ -22,7 +21,11 @@ import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { grantablePermissionKeys } from '@/lib/permissions/grantable';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { modeForLegacyLevel, setProjectAccess } from '@/tests/helpers/projectAccess';
+import {
+  type LegacyAccessLevel,
+  modeForLegacyLevel,
+  setProjectAccess,
+} from '@/tests/helpers/projectAccess';
 
 // `projectAccessService.getPermissions` / `getRoleCatalog` (Story MOTIR-2255 ·
 // Subtask MOTIR-2262) against REAL Postgres — real membership rows, resolved
@@ -66,7 +69,7 @@ interface Scenario {
  * is set FIRST (going `private` auto-seeds the then-current workspace members as
  * project members — at that point only the owner exists), everyone else after.
  */
-async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<Scenario> {
+async function buildScenario(level: LegacyAccessLevel, slug: string): Promise<Scenario> {
   const owner = await usersService.createUser({
     email: `owner-${slug}@ex.com`,
     password: PASSWORD,
@@ -208,7 +211,7 @@ function VIEWER_SET(): PermissionKey[] {
  * `viewer` a workspace Viewer who was; `member` and `admin` workspace Members who
  * were (the `admin` actor's project admin row grants nothing).
  */
-const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], PermissionKey[]>> = {
+const EXPECTED: Record<LegacyAccessLevel, Record<keyof Scenario['ctxs'], PermissionKey[]>> = {
   open: {
     owner: [...ROLE_GATED_PERMISSIONS],
     wsAdmin: [...ROLE_GATED_PERMISSIONS],

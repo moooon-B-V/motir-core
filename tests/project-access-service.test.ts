@@ -15,11 +15,15 @@ import {
   canUpvotePublicRequest,
 } from '@/lib/projects/access';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
-import type { ProjectAccessLevel, ProjectAccessMode } from '@/generated/prisma/client';
+import type { ProjectAccessMode } from '@/generated/prisma/client';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
-import { modeForLegacyLevel, setProjectAccess } from '@/tests/helpers/projectAccess';
+import {
+  type LegacyAccessLevel,
+  modeForLegacyLevel,
+  setProjectAccess,
+} from '@/tests/helpers/projectAccess';
 
 // Service-layer tests for the Story 6.4 · Subtask 6.4.3 access gate — the
 // projectAccess browse/edit policy + its enforcement. Real Postgres, no DB
@@ -95,7 +99,7 @@ interface Scenario {
  * the owner exists), and every other actor is added AFTER, so each role is set
  * up cleanly (the workspace-admin + plain-member carry NO project membership).
  */
-async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<Scenario> {
+async function buildScenario(level: LegacyAccessLevel, slug: string): Promise<Scenario> {
   const owner = await makeUser(`owner-${slug}@ex.com`, 'Owner');
   const { workspace } = await workspacesService.createWorkspace({
     name: `WS ${slug}`,
@@ -180,7 +184,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
 
 // The expected (browse, edit) verdict per role for each access level.
 const EXPECTED: Record<
-  ProjectAccessLevel,
+  LegacyAccessLevel,
   Record<keyof Scenario['ctxs'], { browse: boolean; edit: boolean }>
 > = {
   open: {
@@ -237,7 +241,7 @@ const EXPECTED: Record<
 // The org-bounded levels drive the existing matrix + the non-member-denied pure
 // test. `public` is deliberately EXCLUDED here — its read semantics invert the
 // non-member rule — and is covered by its own describe block below + 6.12.9.
-const LEVELS: ProjectAccessLevel[] = ['open', 'limited', 'private'];
+const LEVELS: LegacyAccessLevel[] = ['open', 'limited', 'private'];
 const ROLES = [
   'owner',
   'wsAdmin',

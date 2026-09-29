@@ -620,7 +620,7 @@ describe('release and how the rest of the system then ADDRESSES the projects', (
     // Through `publicAddressesService`, never by reading rows: the point is that
     // the RESOLUTION agrees, and a row read would pass while the service did not.
     //
-    // ⚠️ `accessLevel: 'public'` is load-bearing. `addressesForProject` reads the
+    // ⚠️ `projectAccessData('public')` is load-bearing. `addressesForProject` reads the
     // address rows through the `db` SINGLETON, which is gated by the
     // `public_address_public_read` policy — so on a private project the read
     // returns EMPTY and the service answers the `motir.co` fallback. That is the

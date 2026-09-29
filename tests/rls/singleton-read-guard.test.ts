@@ -151,7 +151,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   ],
   'projectRepository.ts#findPublicByIdInternal': [
     'public',
-    'project_public_read (20260811230000) · publicHostResolution.test "a customer domain whose project is not public" — the policy supplies the accessLevel filter this read deliberately omits',
+    'project_public_read (20260811230000) · publicHostResolution.test "a customer domain whose project is not public" — the policy supplies the access-mode filter this read deliberately omits',
   ],
   'projectRepository.ts#findWorkspaceNameForPublic': [
     'public',
@@ -244,7 +244,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   // public, which is the OTHER half of what was wrong (MOTIR-2857).
 
   // -- reads admitted by a single-table arm ----------------------------------
-  // `project_public_read` is an UNGATED `"accessLevel" = 'public'` SELECT arm — no
+  // `project_public_read` is an UNGATED `"access_mode" = 'public'` SELECT arm — no
   // `app.workspace_id` test — so an unbound cross-tenant list of public projects is
   // admitted, which is exactly what these two need and why neither ever needed a fix.
   'projectRepository.ts#findPublicByIdentifier': [

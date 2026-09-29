@@ -70,7 +70,7 @@ beforeEach(async () => {
   process.env['MOTIR_CLOUD'] = 'true';
   process.env['MOTIR_PUBLIC_TENANT_DOMAIN'] = BASE;
   const { workspace, owner } = await createTestWorkspace({ name: 'Acme' });
-  // ⚠️ `accessLevel: 'public'`. `addressesForProject` reads the address rows
+  // ⚠️ `projectAccessData('public')`. `addressesForProject` reads the address rows
   // through the `db` SINGLETON, gated by `public_address_public_read` — on a
   // private project that read returns EMPTY and the service answers the
   // `motir.co` fallback, which is the same value a correct release produces. A

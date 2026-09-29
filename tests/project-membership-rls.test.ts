@@ -5,13 +5,12 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
-import { readLegacyAccessLevel, writeLegacyAccessLevel } from './helpers/legacyProjectAccess';
 
 // Schema + tenancy proof for Story 6.4 · Subtask 6.4.2 — the project-access
 // data model. This is the schema-level companion to the future enforcement
 // suite (6.4.8); it covers ONLY what 6.4.2 ships:
-//   * `project.accessLevel` defaults to `open` (the no-lockout backfill) — the
-//     retired column, `@ignore`d since MOTIR-6692, so read through raw SQL;
+//   * `project.accessLevel` — the retired level this once proved defaulted to
+//     `open` — is gone from the catalog (dropped by MOTIR-6694);
 //   * the founder's membership carries the Manager workspace role (the legacy
 //     `member_role` column this once proved is no longer written, MOTIR-6562);
 //   * `project_membership` round-trips + is RLS-isolated by workspace
@@ -119,47 +118,20 @@ async function asAppRole<T>(
   });
 }
 
-describe('project.accessLevel — default', () => {
-  it('a project created without an explicit accessLevel defaults to `open` (no-lockout backfill)', async () => {
-    const user = await usersService.createUser({
-      email: 'pm-default@example.com',
-      password: 'hunter2hunter2',
-      name: 'PM Default',
-    });
-    const ws = await workspacesService.createWorkspace({
-      name: 'PM Default WS',
-      ownerUserId: user.id,
-    });
-    const project = await adminDb.project.create({
-      data: { workspaceId: ws.workspace.id, name: 'Defaulted', slug: 'def', identifier: 'DEF' },
-    });
-    expect(await readLegacyAccessLevel(adminDb, project.id)).toBe('open');
-  });
-
-  it('accessLevel accepts the full Jira-mirrored set (open / limited / private)', async () => {
-    const user = await usersService.createUser({
-      email: 'pm-levels@example.com',
-      password: 'hunter2hunter2',
-      name: 'PM Levels',
-    });
-    const ws = await workspacesService.createWorkspace({
-      name: 'PM Levels WS',
-      ownerUserId: user.id,
-    });
-    const priv = await adminDb.project.create({
-      data: {
-        workspaceId: ws.workspace.id,
-        name: 'Private',
-        slug: 'priv',
-        identifier: 'PRV',
-      },
-    });
-    // legacy-access-level: this case pins the legacy column's own value set.
-    await writeLegacyAccessLevel(adminDb, priv.id, 'private');
-    expect(await readLegacyAccessLevel(adminDb, priv.id)).toBe('private');
-    // legacy-access-level: this case pins the legacy column's own value set.
-    await writeLegacyAccessLevel(adminDb, priv.id, 'limited');
-    expect(await readLegacyAccessLevel(adminDb, priv.id)).toBe('limited');
+describe('project.accessLevel — dropped (MOTIR-6694)', () => {
+  // The retired browse-access level (Story 6.4) this block once proved defaulted
+  // to `open` is gone: the column and its type were dropped in phase 3, so a
+  // project's access lives in `access_mode` alone. What is left to prove is the
+  // absence, read from the catalog of the database the suite replays.
+  it('the project table has no accessLevel column and no project_access_level type exists', async () => {
+    const columns = await adminDb.$queryRaw<{ column_name: string }[]>`
+      SELECT column_name FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'project'`;
+    expect(columns.map((c) => c.column_name)).toContain('access_mode');
+    expect(columns.map((c) => c.column_name)).not.toContain('accessLevel');
+    const types = await adminDb.$queryRaw<{ n: bigint }[]>`
+      SELECT count(*) AS n FROM pg_type WHERE typname = 'project_access_level'`;
+    expect(Number(types[0]!.n)).toBe(0);
   });
 });
 
