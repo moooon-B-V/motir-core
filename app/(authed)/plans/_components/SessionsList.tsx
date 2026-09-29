@@ -53,7 +53,9 @@ export function SessionsList({
   const ts = useTranslations('aiPlanning.sessions');
   const [views, setViews] = useState<SessionRowView[]>(initialViews);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
-  const [failed, setFailed] = useState(false);
+  // `limited` — the Visitor's read budget is spent (MOTIR-6890): the same Retry,
+  // but the copy says why rather than calling it a failure.
+  const [failed, setFailed] = useState<false | 'error' | 'limited'>(false);
   const [isPending, startTransition] = useTransition();
   // Guards re-entrancy: one load is in flight at a time.
   const loadingRef = useRef(false);
@@ -71,6 +73,11 @@ export function SessionsList({
     startTransition(async () => {
       try {
         const next = await loadMoreSessionsAction(cursor, planState, view);
+        if ('error' in next) {
+          // The cursor is kept, so Retry re-runs the same page.
+          setFailed('limited');
+          return;
+        }
         // A landed-on row may have been pinned to the top of the first page
         // from further down the list; when its own page arrives it is not
         // listed twice.
@@ -81,7 +88,7 @@ export function SessionsList({
         setCursor(next.nextCursor);
       } catch {
         // The cursor is kept, so Retry re-runs the same page.
-        setFailed(true);
+        setFailed('error');
       } finally {
         loadingRef.current = false;
       }
@@ -168,7 +175,7 @@ export function SessionsList({
           className="flex items-center justify-center gap-2 text-xs text-(--el-text-secondary)"
           role="alert"
         >
-          {ts('loadMoreError')}
+          {failed === 'limited' ? ts('loadMoreLimited') : ts('loadMoreError')}
           <button
             type="button"
             onClick={loadMore}
