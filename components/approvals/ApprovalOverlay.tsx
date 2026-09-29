@@ -59,6 +59,7 @@ import type {
   GateDecision,
 } from '@/lib/dto/approvalGate';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // THE APPROVAL OVERLAY (Story MOTIR-5214 · Subtask MOTIR-5224) — an approval
 // decided FULL SCREEN over whatever authed page is open, built to
@@ -172,6 +173,7 @@ function ExitRow({
     category: ApprovalOverlayStatusDTO['category'] | null;
   } | null;
 }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('approvalOverlay');
   const tc = useTranslations('common');
   return (
@@ -190,7 +192,7 @@ function ExitRow({
               new tab, which is why the `href` is real. No fill and no ring of its own:
               it is text in a bar, and a fill would read as a third exit. */}
           <a
-            href={`/items/${workItem.identifier}`}
+            href={routes.item(workItem.identifier)}
             aria-haspopup="dialog"
             onClick={(e) => {
               if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
@@ -217,7 +219,7 @@ function ExitRow({
             />
           ) : null}
           <a
-            href={`/items/${workItem.identifier}`}
+            href={routes.item(workItem.identifier)}
             target="_blank"
             rel="noopener noreferrer"
             aria-label={t('openWorkItemNewTab')}
@@ -420,6 +422,7 @@ function listFormat(items: readonly string[], and: string): string {
 }
 
 export function ApprovalOverlay() {
+  const routes = useReaderRoutes();
   const t = useTranslations('approvalOverlay');
   const tc = useTranslations('common');
   const tRow = useTranslations('workbench.approvals');
@@ -736,7 +739,7 @@ export function ApprovalOverlay() {
     // which navigated the whole tab away from the approval the reader was on.
     const openWorkItem = (
       <a
-        href={`/items/${read.workItem.identifier}`}
+        href={routes.item(read.workItem.identifier)}
         target="_blank"
         rel="noopener noreferrer"
         aria-label={t('openWorkItemNewTab')}

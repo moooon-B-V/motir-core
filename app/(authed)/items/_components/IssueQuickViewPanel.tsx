@@ -84,6 +84,7 @@ import {
   QuickViewRail,
   QuickViewRailField,
 } from '@/components/workItems/QuickViewSurface';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 /** The peek's own anchor for the header badge — distinct from the item page's,
  *  because the peek can open over an item page that has its own field. */
@@ -250,10 +251,11 @@ function ProposalOpChip({
  * about the plan is MOTIR-4197; the honest label is what this card owes.
  */
 function OpenTargetLink({ identifier }: { identifier: string }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('planReview');
   return (
     <Link
-      href={`/items/${identifier}`}
+      href={routes.item(identifier)}
       target="_blank"
       rel="noopener noreferrer"
       data-testid="quick-view-open-full"
@@ -267,10 +269,11 @@ function OpenTargetLink({ identifier }: { identifier: string }) {
 
 /** "Open full page →" — a Next Link styled as the primary Button (size sm). */
 function OpenFullPageLink({ identifier }: { identifier: string }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('issueViews');
   return (
     <Link
-      href={`/items/${identifier}`}
+      href={routes.item(identifier)}
       target="_blank"
       rel="noopener noreferrer"
       data-testid="quick-view-open-full"
@@ -341,6 +344,7 @@ function Sk({ className }: { className?: string }) {
 }
 
 export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
+  const routes = useReaderRoutes();
   const t = useTranslations('issueViews');
   const tl = useTranslations('labels');
   const tob = useTranslations('workItems.obsolescence');
@@ -658,7 +662,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           </span>
         ) : (
           <Link
-            href={`/items/${data.identifier}`}
+            href={routes.item(data.identifier)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex shrink-0 items-center gap-1.5 font-mono text-[13px] font-medium text-(--el-link) hover:underline focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
@@ -822,14 +826,14 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               ready={data.readiness.ready}
               blockers={data.readiness.blockers.map((identifier) => ({
                 identifier,
-                href: `/items/${identifier}`,
+                href: routes.item(identifier),
               }))}
               blockedByAncestor={
                 data.readiness.blockedByAncestor
                   ? {
                       identifier: data.readiness.blockedByAncestor.identifier,
                       title: data.readiness.blockedByAncestor.title,
-                      href: `/items/${data.readiness.blockedByAncestor.identifier}`,
+                      href: routes.item(data.readiness.blockedByAncestor.identifier),
                     }
                   : null
               }
@@ -976,7 +980,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               {t.rich('quickViewMore', {
                 link: (chunks) => (
                   <Link
-                    href={`/items/${data.identifier}`}
+                    href={routes.item(data.identifier)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-medium text-(--el-link) hover:underline"
@@ -1310,7 +1314,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                 the peek never performs. */}
             {view.parent ? (
               <Link
-                href={`/items/${view.parent.identifier}`}
+                href={routes.item(view.parent.identifier)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex min-w-0 items-center gap-1.5 text-(--el-link) hover:underline"

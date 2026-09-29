@@ -33,6 +33,7 @@ import {
   rowIsReachable,
   setHasEstablishWork,
 } from '@/lib/projectRepos/establishStep';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The plan-detail island (Subtask 7.4.5 / MOTIR-847) — the generation-review MODE
 // of the canvas+chat workspace shell (MOTIR-1193). It composes the proposed-plan
@@ -110,6 +111,7 @@ export function PlanDetail({
   repositorySet,
   projectKey,
 }: PlanDetailProps) {
+  const routes = useReaderRoutes();
   const t = useTranslations('planReview');
   const router = useRouter();
   const pathname = usePathname();
@@ -482,7 +484,7 @@ export function PlanDetail({
                   <RepositorySetStep
                     projectKey={repositorySet.projectKey}
                     initialView={repositorySet.view}
-                    backlogHref="/items"
+                    backlogHref={routes.view('/items')}
                     connectHref="/settings/account/git"
                     onOutcomeChange={setReportedCodeOutcome}
                   />

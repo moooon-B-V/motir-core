@@ -26,6 +26,7 @@ import {
   type CreateLinkActionResult,
   type RemoveLinkActionResult,
 } from '../actions';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The relationships panel on the issue detail page (Story 2.4 · Subtasks 2.4.5
 // + 2.4.9), per `design/work-items/relationships.mock.html` + `links.mock.html`:
@@ -222,6 +223,7 @@ export function RelationshipsPanel({
   currentItemId,
   identifier,
 }: RelationshipsPanelProps) {
+  const routes = useReaderRoutes();
   const t = useTranslations('issueViews');
   const tl = useTranslations('labels');
   const router = useRouter();
@@ -433,14 +435,14 @@ export function RelationshipsPanel({
             ready={effectiveReadiness.ready}
             blockers={effectiveReadiness.openBlockers.map((b) => ({
               identifier: b.identifier,
-              href: `/items/${b.identifier}`,
+              href: routes.item(b.identifier),
             }))}
             blockedByAncestor={
               effectiveReadiness.blockedByAncestor
                 ? {
                     identifier: effectiveReadiness.blockedByAncestor.identifier,
                     title: effectiveReadiness.blockedByAncestor.title,
-                    href: `/items/${effectiveReadiness.blockedByAncestor.identifier}`,
+                    href: routes.item(effectiveReadiness.blockedByAncestor.identifier),
                   }
                 : null
             }

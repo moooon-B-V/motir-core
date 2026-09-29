@@ -14,6 +14,7 @@ import {
   unarchiveWorkItem,
   WorkItemActionError,
 } from './workItemActionsClient';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The shared work-item ⋯ actions menu (Story 2.8 · Subtask 2.8.4), per
 // design/work-items/delete-confirm.mock.html panels 0–1 — IDENTICAL on the
@@ -166,6 +167,7 @@ export function WorkItemActionsMenu({
    */
   hostAction?: { label: string; icon: ReactNode; onSelect: () => void } | null;
 }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('workItemActions');
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -174,7 +176,9 @@ export function WorkItemActionsMenu({
   const [restoring, setRestoring] = useState(false);
   const [addingToSprint, setAddingToSprint] = useState(false);
 
-  const href = editHref ?? `/items/${identifier}/edit`;
+  // A Visitor holds no edit key, so `canEdit` is false and the item never draws;
+  // `#` only satisfies the type.
+  const href = editHref ?? routes.path(`/items/${identifier}/edit`) ?? `#`;
   const menuLabel = t('menuLabel', { key: identifier });
 
   async function copyLink() {

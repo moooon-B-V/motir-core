@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { usePeekRowClick } from '../../_components/IssueQuickView';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // A relationships-panel row link (8.8.31). It keeps the real anchor to the
 // linked item's detail page — so the href stays shareable/accessible and
@@ -25,10 +26,11 @@ export function RelationshipPeekLink({
   className?: string;
   children: ReactNode;
 }) {
+  const routes = useReaderRoutes();
   const onPeekClick = usePeekRowClick();
   return (
     <Link
-      href={`/items/${identifier}`}
+      href={routes.item(identifier)}
       onClick={(e) => onPeekClick(e, identifier)}
       className={className}
     >

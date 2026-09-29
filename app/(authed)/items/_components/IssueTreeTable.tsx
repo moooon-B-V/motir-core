@@ -69,6 +69,7 @@ import { FolderNameField } from './FolderNameField';
 import { FolderPickerPanel, FolderPickerPopover } from './FolderPicker';
 import { FolderRowMenu, type FolderMenuEntry } from './FolderRowMenu';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The /items TREE table (Subtask 2.5.3, made LAZY + SORTABLE in 2.5.14 for
 // finding #57). The Server Component (IssueTreeSection) loads the FIRST page of
@@ -241,6 +242,7 @@ export function IssueTreeTable({
   canEdit = false,
   emptyState,
 }: IssueTreeTableProps) {
+  const routes = useReaderRoutes();
   const t = useTranslations();
   const tv = useTranslations('issueViews');
   const { toast } = useToast();
@@ -1320,7 +1322,9 @@ export function IssueTreeTable({
         expandedIds={expanded}
         onExpandedChange={onExpandedChange}
         onRowActivate={onRowActivate}
-        getRowHref={(node) => (node.kind === 'issue' ? `/items/${node.row.identifier}` : undefined)}
+        getRowHref={(node) =>
+          node.kind === 'issue' ? routes.item(node.row.identifier) : undefined
+        }
         getRowLabel={(node) =>
           node.kind === 'issue' ? `${node.row.identifier} ${node.row.title}` : ''
         }

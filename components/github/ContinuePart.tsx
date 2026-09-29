@@ -21,6 +21,7 @@ import { CopyableCodeBlock } from '@/components/markdown/CopyableCodeBlock';
 import type { WorkItemContinueViewDto } from '@/lib/dto/workItemContinue';
 import { formatRunInstant } from '@/lib/runs/runClock';
 import { relativeLabel } from './RepairFixPart';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // THE CONTINUE PART of the Development block (Story MOTIR-6526 · MOTIR-6534), built
 // to `design/runs/design-notes.md` § Run died · Panels D1–D8
@@ -173,6 +174,7 @@ export function ContinuePart({
   /** The clock the relative times read. Injected by tests; `Date.now()` otherwise. */
   now?: number;
 }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('github.development.continue');
   const tHosted = useTranslations('github.development.continue.hosted');
   const router = useRouter();
@@ -285,7 +287,7 @@ export function ContinuePart({
             key: parentKey,
             link: (chunks) => (
               <Link
-                href={`/items/${encodeURIComponent(parentKey)}`}
+                href={routes.item(parentKey)}
                 className="font-medium text-(--el-link) underline-offset-2 hover:underline"
               >
                 {chunks}

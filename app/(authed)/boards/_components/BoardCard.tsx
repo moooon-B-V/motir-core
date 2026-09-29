@@ -30,6 +30,7 @@ import {
   PlanHoldMarker,
   useBoardHeldRefusal,
 } from './BoardHeldRefusal';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // BoardCard (Subtask 3.2.3 · drag wired in 3.2.4) — the compact issue card per
 // `design/boards/board.mock.html` (`.bcard`). It REUSES the shipped issue
@@ -278,6 +279,7 @@ function shellStateClass(args: { refused: boolean; outlined: boolean; dragging: 
  * every item of the plan; the card body's own hover does not.
  */
 function PlanFooterDoor({ plan }: { plan: PlanHoldDTO }) {
+  const routes = useReaderRoutes();
   const tHeld = useTranslations('approvalGate.statusHeld');
   const { onPlanFooterHover } = useBoardHeldRefusal();
   const pathname = usePathname();
@@ -289,6 +291,7 @@ function PlanFooterDoor({ plan }: { plan: PlanHoldDTO }) {
     sessionId: plan.sessionId,
     host: `${pathname}${qs ? `?${qs}` : ''}`,
     anchorKey: plan.anchorKey,
+    routes,
   });
   const highlight = () => onPlanFooterHover?.(plan.planId);
   const clear = () => onPlanFooterHover?.(null);

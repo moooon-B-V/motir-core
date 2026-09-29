@@ -13,6 +13,7 @@ import type { CarryOverDestination, SprintDto, SprintReportDto } from '@/lib/dto
 import type { StatusByKey } from './backlogShared';
 import { SprintReport } from './SprintReport';
 import { useProjectAccess } from '../../_components/ProjectAccessProvider';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // Complete-sprint flow (Story 4.4 · Subtask 4.4.6). The complete modal + carry-over
 // chooser the design (design/sprints/sprint-lifecycle.mock.html panels 4–6)
@@ -66,6 +67,7 @@ export function CompleteSprintDialog({
   statusByKey,
   onCompleted,
 }: CompleteSprintDialogProps) {
+  const routes = useReaderRoutes();
   const t = useTranslations('backlog');
   const tc = useTranslations('common');
   const { toast } = useToast();
@@ -183,6 +185,9 @@ export function CompleteSprintDialog({
 
   // ── Success state — the sprint report ──────────────────────────────────────
   if (phase === 'done' && report && completedSprint) {
+    // The full report has no Visitor view (MOTIR-6888); a Visitor never completes a
+    // sprint, and the door hides where the route does not exist for the reader.
+    const reportHref = routes.path(`/sprints/${completedSprint.id}/report`);
     return (
       <Modal
         open={open}
@@ -213,11 +218,8 @@ export function CompleteSprintDialog({
           {/* MOTIR-6175 — the report room asks for `report:view`, and reaching this
               dialog takes `sprint:manage`: two different keys, which a custom
               role can hold one of. The door shows only when the room opens. */}
-          {canViewReports ? (
-            <Link
-              href={`/sprints/${completedSprint.id}/report`}
-              className={buttonVariants({ variant: 'ghost', size: 'md' })}
-            >
+          {canViewReports && reportHref !== null ? (
+            <Link href={reportHref} className={buttonVariants({ variant: 'ghost', size: 'md' })}>
               <ExternalLink className="h-4 w-4" aria-hidden />
               {t('completeSprintFlow.viewFullReport')}
             </Link>

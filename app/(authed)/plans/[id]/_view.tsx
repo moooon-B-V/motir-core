@@ -13,6 +13,7 @@ import type { PlanReviewDto } from '@/lib/dto/planReview';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { PlanDetail } from '@/components/planning/PlanDetail';
 import type { ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
+import { readerRoutes } from '@/lib/visitor/routes';
 
 // The PLAN DETAIL route (Story 7.21 · Subtask 7.4.5 / MOTIR-847) — `/plans/[id]`,
 // the generation-review MODE of the canvas+chat workspace (MOTIR-1193). It MOUNTS
@@ -92,7 +93,7 @@ export default async function PlanDetailView({
     <div className="flex flex-col gap-4">
       <header className="flex items-center gap-2">
         <Link
-          href="/plans"
+          href={readerRoutes(isVisitorContext(ctx) ? ctx.project.identifier : null).view('/plans')}
           aria-label={t('backToPlans')}
           className="inline-flex size-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >

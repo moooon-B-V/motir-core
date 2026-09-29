@@ -16,6 +16,7 @@ import { useRunEvents } from '@/app/(authed)/runs/_components/useRunEvents';
 import type { DispatchRunDetailDto, DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
 import { formatRunDuration, formatRunInstant } from '@/lib/runs/runClock';
 import { RUN_STATUS_TONE, isLiveRun } from '@/lib/runs/timeline';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // THE RUN MODAL (MOTIR-3895 · `design/runs/design-notes.md` § The run MODAL) —
 // full screen OVER `/runs`, never a route.
@@ -285,6 +286,7 @@ function HostedPhaseChip({
 }
 
 function RunHeader({ run, onCancelled }: { run: DispatchRunDetailDto; onCancelled: () => void }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('runs');
   const tHosted = useTranslations('runs.hosted');
   const commandKey =
@@ -305,7 +307,7 @@ function RunHeader({ run, onCancelled }: { run: DispatchRunDetailDto; onCancelle
       ) : null}
       {run.scopeWorkItemId !== null && run.scopeLabel !== null ? (
         <Link
-          href={`/items/${encodeURIComponent(run.scopeLabel)}`}
+          href={routes.item(run.scopeLabel)}
           className="text-xs text-(--el-accent-on-surface) underline-offset-2 hover:underline"
         >
           {run.scopeLabel}

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { Activity } from 'lucide-react';
 import { WorkItemActionsMenu } from '@/components/issues/actions/WorkItemActionsMenu';
 import { useMonitorErrorsDoor } from './MonitorErrorsLinkControl';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The detail-header ⋯ actions menu (Story 2.8 · Subtask 2.8.4) — the client
 // wrapper that gives the shared menu its detail-surface page-state: after a
@@ -50,6 +51,7 @@ export function WorkItemDetailActions({
   /** Whether this item is already in the active sprint (disables the row). */
   inActiveSprint?: boolean;
 }) {
+  const routes = useReaderRoutes();
   const router = useRouter();
   const t = useTranslations('workItemActions');
   // THE NO-LINK ERRORS DOOR (MOTIR-5744, design `design/monitoring` §14 Decision 1):
@@ -67,7 +69,7 @@ export function WorkItemDetailActions({
         }
       : null;
   const leave = () => {
-    router.push('/items');
+    router.push(routes.view('/items'));
     router.refresh();
   };
   // Archived detail: the menu's only canEdit action is Restore, which keeps the

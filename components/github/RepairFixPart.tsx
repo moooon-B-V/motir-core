@@ -15,6 +15,7 @@ import { Pill } from '@/components/ui/Pill';
 import { CopyableCodeBlock } from '@/components/markdown/CopyableCodeBlock';
 import type { RepairPullRequestRefDto, WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
 import { formatRunInstant } from '@/lib/runs/runClock';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // THE FIX PART of the Development block (Story MOTIR-5460 · MOTIR-5466), built to
 // `design/github/design-notes.md` § 21 · Panels F1–F4, and § 26 · Panels X1–X5 for an
@@ -239,6 +240,7 @@ export function RepairFixPart({
   /** The clock the relative times read. Injected by tests; `Date.now()` otherwise. */
   now?: number;
 }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('github.development.fix');
   // Read ONCE per mount: a clock read during render is impure, and a relative
   // label that moved between renders would be a hydration mismatch waiting to happen.
@@ -353,7 +355,7 @@ export function RepairFixPart({
               key: repair.runTargetKey,
               link: (chunks) => (
                 <Link
-                  href={`/items/${encodeURIComponent(repair.runTargetKey)}`}
+                  href={routes.item(repair.runTargetKey)}
                   className="font-medium text-(--el-link) underline-offset-2 hover:underline"
                 >
                   {chunks}
