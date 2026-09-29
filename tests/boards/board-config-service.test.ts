@@ -20,7 +20,6 @@ import { truncateAuthTables } from '../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
-import { legacyToWorkspaceRole } from '@/lib/workspaces/roles';
 
 // boardsService.setSwimlaneGroupBy / setColumnWipLimit (Story 3.3 · Subtask
 // 3.3.3) — the board-config write path. Real Postgres (no mocks), per CLAUDE.md.
@@ -239,7 +238,7 @@ describe('the MOTIR-2296 WIDENING — who may configure a board, before and afte
       data: {
         userId: user.id,
         workspaceId: fx.workspaceId,
-        workspaceRole: legacyToWorkspaceRole(roles.workspaceRole ?? 'member'),
+        workspaceRole: roles.workspaceRole === 'admin' ? 'manager' : 'member',
       },
     });
     if (roles.projectRole) {

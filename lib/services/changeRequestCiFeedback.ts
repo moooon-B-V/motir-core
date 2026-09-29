@@ -16,7 +16,11 @@ import type { ReportedCheckRun } from '@/lib/github/checkRuns';
 import { reconcileRecordedCheckSet, shaSetClaimsComplete } from './checkSetReconcile';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { commentsService } from './commentsService';
-import { promoteDeliveredCardsOnGreen, withdrawDeliveredCardsOnRed } from './ciPromotion';
+import {
+  promoteDeliveredCardsOnGreen,
+  withdrawDeliveredCardsOnRed,
+  withdrawDeliveredCardsOnRerun,
+} from './ciPromotion';
 import { recomputeWorkItemCiState } from './deliveryVerdict';
 import { recomputeWorkItemFixReason } from './fixReasonService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
@@ -352,6 +356,23 @@ export async function applyCiStatusFeedback(
         await recomputeWorkItemFixReason(workItemId, tx);
       }
     }, CI_FEEDBACK_SYSTEM_TX);
+    // …and a pending row at the SAME head is a set leaving green without going red
+    // (MOTIR-6946): the question asked over it is retired until the next green. After the
+    // durable write and best-effort, like both verdict arms below; it re-derives
+    // `running` and compares the gate's own version, so the head-move case just handled
+    // above finds nothing left to do here.
+    if (resolved.actorUserId) {
+      await withdrawDeliveredCardsOnRerun({
+        changeRequestId: resolved.prId,
+        workspaceId: resolved.workspaceId,
+        actorUserId: resolved.actorUserId,
+      }).catch((err: unknown) => {
+        console.error('[changeRequestCiFeedback] withdrawal failed; the row still stands', {
+          changeRequestId: resolved.prId,
+          error: err instanceof Error ? err.message : 'unknown',
+        });
+      });
+    }
     return {
       event: 'ci',
       outcome: 'pending_recorded',
@@ -551,6 +572,25 @@ export async function applyCiStatusFeedback(
   // throws must not turn a recorded verdict into a delivery the host retries for ever.
   if (ciState === 'failing') {
     await withdrawDeliveredCardsOnRed({
+      changeRequestId: resolved.prId,
+      workspaceId: resolved.workspaceId,
+      actorUserId: resolved.actorUserId,
+    }).catch((err: unknown) => {
+      console.error('[changeRequestCiFeedback] withdrawal failed; the verdict still stands', {
+        changeRequestId: resolved.prId,
+        error: err instanceof Error ? err.message : 'unknown',
+      });
+    });
+  }
+
+  // ── AND SO DOES A SET THAT LEFT GREEN WITHOUT GOING RED (MOTIR-6946) ────
+  // A `pending` row at the head the question was asked about — a workflow the raise could
+  // not see, a re-run, an App reporting late. `ciState` cannot say so: it is terminal-only
+  // and reads `passing` while ANY check succeeded, pending ones beside it included. So the
+  // withdrawal re-derives `running` itself, exactly as the promotion re-derives `passing`,
+  // and every non-red delivery asks. Same terms as the red arm directly above.
+  if (ciState !== 'failing') {
+    await withdrawDeliveredCardsOnRerun({
       changeRequestId: resolved.prId,
       workspaceId: resolved.workspaceId,
       actorUserId: resolved.actorUserId,

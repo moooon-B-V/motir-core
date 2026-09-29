@@ -62,15 +62,16 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
  *
  * ⚠️ LEGACY SINCE MOTIR-6459. The resolver no longer reads a project role at all;
  * its successor is `CUSTOM_WORKSPACE_ROLE_TIER` (`lib/workspaces/roles.ts`), which
- * a workspace custom role sits at for the same reason. This constant survives only
- * for the project-role writers MOTIR-6464 retires, and the follow-up contract
- * story drops the columns it describes.
+ * a workspace custom role sits at for the same reason. The columns it described —
+ * `project_membership.role` / `role_definition_id` — were dropped by MOTIR-6569;
+ * the constant survives only as the `role` test fixtures pass beside a custom
+ * role (`tests/helpers/workspaceRoleFixtures.ts`).
  *
- * `ProjectMembership.role` and `.roleDefinitionId` move together, and this is
- * the value the first takes whenever the second is set. It exists because the
- * model still needs a tier for two things a permission set cannot answer:
- * a Members-only project gates on holding a membership at all, and entry
- * (`canEnter`) reads the column.
+ * `ProjectMembership.role` and `.roleDefinitionId` moved together, and this was
+ * the value the first took whenever the second was set. It existed because the
+ * model then needed a tier for two things a permission set cannot answer:
+ * a Members-only project gated on holding a membership at all, and entry
+ * (`canEnter`) read the column.
  *
  * ⚠️ IT IS `member`, AND THAT MEANS THE ACCESS LEVEL SUBTRACTS NOTHING FROM A
  * CUSTOM ROLE — a custom role grants EXACTLY WHAT IT LISTS, on every access

@@ -187,6 +187,12 @@ export function withdrawnMergeCopy({
         // raises a fresh gate on its next green, which is the whole point of withdrawing
         // rather than leaving the question standing over a commit that failed.
         return { ...unrecorded('ci_failed'), cite: reask };
+      case 'ci_rerunning':
+        // A CHECK AT THE ASKED-ABOUT COMMITS IS RUNNING AGAIN (MOTIR-6946) — the set left
+        // green without going red. Same shape as `ci_failed`: the cause says what happened
+        // and names nobody, and the re-ask promise is exact — the next green at these same
+        // commits raises a fresh gate, with no push needed.
+        return { ...unrecorded('ci_rerunning'), cite: reask };
       case 'queue_failed': {
         // A GATE THE OLD RULE RE-ASKED FROM A QUEUE FAILURE, withdrawn by the convergence
         // (MOTIR-6595 · MOTIR-6596; design § 31 panel 5). The member is the one whose row

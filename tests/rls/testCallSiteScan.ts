@@ -109,7 +109,7 @@ export const ADJUDICATED_UNBOUND_FILES: Record<string, string> = {
   // no-tx read path (the `?? db` branch)". Binding it does not improve the test,
   // it DELETES it -- and drops the branch's coverage with it. The durable fix is
   // to retire the fallback, as MOTIR-2755 did for projectRoleDefinitionRepository
-  // once every caller bound; that is a lib/ change and belongs to MOTIR-2796.
+  // (deleted since, with its table, by MOTIR-6569) once every caller bound; that is a lib/ change and belongs to MOTIR-2796.
   //
   // ⚠️ MOTIR-2952: this adjudication was right about the SCANNER and silent about
   // the ASSERTION, and the assertion was the half that was wrong. The read stayed

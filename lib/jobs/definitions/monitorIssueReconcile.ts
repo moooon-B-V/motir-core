@@ -47,7 +47,7 @@ import type { MonitorConnectionPollRequestedData } from '../types';
  * production error into PLANNED work that is not a paging SLA, and alerting is
  * MOTIR-3765's, not this story's.
  */
-export const MONITOR_ISSUE_RECONCILE_CRON = '0,30 * * * *';
+export const MONITOR_ISSUE_RECONCILE_CRON = '*/5 * * * *';
 
 /**
  * When a binding's last poll is older than this, the scheduler has stopped

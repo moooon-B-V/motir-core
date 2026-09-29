@@ -13,7 +13,7 @@ import { readLegacyAccessLevel, writeLegacyAccessLevel } from './helpers/legacyP
 //   * `project.accessLevel` defaults to `open` (the no-lockout backfill) — the
 //     retired column, `@ignore`d since MOTIR-6692, so read through raw SQL;
 //   * the founder's membership carries the Manager workspace role (the legacy
-//     `member_role` column this once proved is no longer written, MOTIR-6562);
+//     `member_role` column this once proved was dropped by MOTIR-6569);
 //   * `project_membership` round-trips + is RLS-isolated by workspace
 //     (the same pure workspace gate `workflow_status` / `project` use);
 //   * the `[userId, projectId]` uniqueness + the FK cascade on project delete.

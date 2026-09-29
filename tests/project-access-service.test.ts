@@ -137,9 +137,9 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
 
   // Three project-role actors — workspace members with an explicit project role.
   // Roles live on the WORKSPACE (MOTIR-6459): the Viewer actor is a workspace
-  // Viewer, and the other two are workspace Members whose PROJECT role is left
-  // on the legacy column — which grants nothing any more, so the `admin` actor
-  // is the proof that a project admin role no longer manages the project.
+  // Viewer, and the other two are workspace Members. The `admin` actor once held
+  // a legacy project `admin` role (dropped by MOTIR-6569): it is the proof that a
+  // project membership alone does not manage the project.
   async function projectActor(name: string, role: 'viewer' | 'member' | 'admin') {
     const u = await makeUser(`${role}-${slug}@ex.com`, name);
     await workspacesService.addMember({
@@ -147,11 +147,10 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
       workspaceId: workspace.id,
       workspaceRole: role === 'viewer' ? 'viewer' : 'member',
     });
-    // The LEGACY project row, written raw: `role` is only what a project admin
-    // used to be, and nothing reads it now (MOTIR-6464 retired the writer).
-    await adminDb.$executeRaw`
-      INSERT INTO "project_membership" ("id", "workspace_id", "project_id", "user_id", "role", "updated_at")
-      VALUES (gen_random_uuid()::text, ${workspace.id}, ${project.id}, ${u.id}, ${role}::"member_role", now())`;
+    // The project row carries no role (the legacy one is dropped, MOTIR-6569).
+    await adminDb.projectMembership.create({
+      data: { workspaceId: workspace.id, projectId: project.id, userId: u.id },
+    });
     return u;
   }
   const viewer = await projectActor('Viewer', 'viewer');

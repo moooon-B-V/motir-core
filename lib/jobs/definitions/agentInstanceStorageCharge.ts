@@ -6,8 +6,8 @@ import { defineJob } from '../defineJob';
 // instance and the day (`docs/decisions/agent-instance-storage.md` §2).
 
 /**
- * Hourly at :30, ON the cluster (`SCHEDULE_CLUSTER_MINUTES`, `[0, 30]`), so it
- * opens no new wake-minute. The charge is per DAY, but the pass runs hourly: a
+ * Hourly at :30 — once an hour, so outside the sub-hourly cadence invariant
+ * (MOTIR-6932). The charge is per DAY, but the pass runs hourly: a
  * day already written is skipped by its unique key, so the extra passes cost a
  * read and charge nothing, and a failed debit is retried within the hour rather
  * than the next day. It also means an outage has to swallow a whole day before

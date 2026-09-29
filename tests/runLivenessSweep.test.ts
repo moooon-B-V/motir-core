@@ -173,10 +173,10 @@ describe('heartbeat — only the run’s own operator may beat for it', () => {
 });
 
 describe('system.run-liveness-sweep', () => {
-  it('is registered on the 30-minute cluster, catch-up `latest`, idempotent', () => {
-    expect(RUN_LIVENESS_SWEEP_CRON).toBe('0,30 * * * *');
+  it('is registered every 5 minutes, catch-up `latest`, idempotent', () => {
+    expect(RUN_LIVENESS_SWEEP_CRON).toBe('*/5 * * * *');
     expect(runLivenessSweep.id).toBe('system.run-liveness-sweep');
-    expect(runLivenessSweep.cron).toBe('0,30 * * * *');
+    expect(runLivenessSweep.cron).toBe('*/5 * * * *');
     expect(runLivenessSweep.catchUp).toBe('latest');
     expect(runLivenessSweep.retryPolicy).toBe('idempotent');
   });
