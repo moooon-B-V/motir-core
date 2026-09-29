@@ -341,7 +341,8 @@ export function PlanChangeCanvas({
     return {
       isEligible: (id) => itemsRef.current.has(id),
       isTarget: (id) => targetIdSet.has(id),
-      keyFor: (id) => itemsRef.current.get(id)?.identifier ?? id,
+      // Asked only for an id `isEligible` passed, which is exactly a key in the map.
+      keyFor: (id) => itemsRef.current.get(id)!.identifier,
       canAdd: canAddTarget,
       disabledReason: tTargets('limitReached', { max: MAX_PLANNING_TARGETS }),
       onToggle: (id) => {

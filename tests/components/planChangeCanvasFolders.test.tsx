@@ -321,6 +321,43 @@ describe('PlanChangeCanvas — the target action over the wire (MOTIR-6898)', ()
     );
   });
 
+  it('a DRILLED work-item level registers its items too — its cards are targets', async () => {
+    serve({
+      ...tree,
+      E1: {
+        nodes: [wireNode('S1', 'A story')],
+        edges: [],
+        offLevelBlockers: [],
+      },
+    });
+    const onToggleTarget = vi.fn();
+    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k1" onToggleTarget={onToggleTarget} />);
+    await screen.findByText('Road epic');
+    await drill('E1');
+    await screen.findByText('A story');
+    fireEvent.keyDown(el('S1')!, { key: 'Enter' });
+
+    fireEvent.click(await screen.findByTestId('target-toggle-button'));
+    expect(onToggleTarget).toHaveBeenCalledWith(
+      { id: 'S1', identifier: 'MOTIR-S1', title: 'A story', kind: 'story' },
+      false,
+    );
+  });
+
+  it('a NEW diffKey (an approve) drops the cached levels and re-reads the one on screen', async () => {
+    const spy = serve(tree);
+    const { rerender } = render(
+      <PlanChangeCanvas projectKey="MOTIR" diffKey="k1" onToggleTarget={vi.fn()} />,
+    );
+    await screen.findByText('Road epic');
+    const before = spy.mock.calls.length;
+
+    rerender(<PlanChangeCanvas projectKey="MOTIR" diffKey="k2" onToggleTarget={vi.fn()} />);
+
+    await waitFor(() => expect(spy.mock.calls.length).toBeGreaterThan(before));
+    expect(await screen.findByText('Road epic')).toBeTruthy();
+  });
+
   it('a FOLDER tile is never a target', async () => {
     serve(tree);
     render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k1" onToggleTarget={vi.fn()} />);
