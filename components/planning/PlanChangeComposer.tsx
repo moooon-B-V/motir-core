@@ -425,7 +425,7 @@ export function PlanChangeComposer({
                   aria-haspopup="dialog"
                   aria-expanded={open}
                   data-testid="planning-target-trigger"
-                  className={`inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) hover:bg-(--el-card) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 ${open ? 'bg-(--el-accent-wash) text-(--el-accent-on-surface)' : 'text-(--el-text-secondary)'}`}
+                  className={`inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) hover:bg-(--el-card) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 ${open ? 'bg-(--el-tint-lavender) text-(--el-accent-on-surface)' : 'text-(--el-text-secondary)'}`}
                 >
                   <Search className="size-4" aria-hidden="true" />
                 </button>
