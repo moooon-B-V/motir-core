@@ -9112,3 +9112,110 @@ The planning surface the yes starts is redrawn in `design/ai-chat/planning-works
 - _None of these_ — MOTIR-6206's panels, unchanged.
 - The planning surface the yes opens — `design/ai-chat/planning-workspace--pick-seed.mock.html`.
 - The options port itself — choice panels 1 and 2, unchanged.
+
+## ⭐ The TO FIX tag and banner: RUN DIED — the fifth reason on the tag, the banner and the filter (MOTIR-6878 — `to-fix--tag-and-banner--run-died.mock.html`, DATED 2026-09-28)
+
+**The asset:** `design/work-items/to-fix--tag-and-banner--run-died.mock.html`, a new delta mock. It
+edits no existing mock.
+
+**It AMENDS § _The TO FIX tag and banner — a stuck work item looks stuck wherever it is listed_**
+(MOTIR-6608), whose mock is `to-fix--tag-and-banner.mock.html` in this area (`design/work-items/`). **That base section and
+that mock live in MOTIR-6608's PUBLISHED design result; neither is committed in this file or in this
+repository.** The published result is the design of record (`docs/decisions/design-result.md`
+AMENDMENT 5), and this delta's stylesheet is that published mock's style blocks, verbatim, plus a small
+delta block (a three-up grid, the story-kind hue, and the Tree row's focus offset and chevron). Every row, card, header and
+banner frame is a fragment of that mock's rendered markup, re-keyed.
+
+**It POINTS AT, and redraws neither:** the run-died marker in the Development block (MOTIR-6529,
+`design/runs/run-section--run-died.mock.html`, `design/runs/design-notes.md` § _Run died_) and the
+Continue hosted control (MOTIR-6789, `design/runs/development--continue-hosted.mock.html`, § _Continue
+hosted_). The Workbench row for the same reason is `design/workbench/design-notes.md` **§ 31** (the same
+card), which carries the strings table for every key named below.
+
+**Panels:** 1 the List row · 2 the Tree row · 3 the board card · 4 the quick-view header · 5 the item-page
+banner, pushed / nothing pushed / parent run · 6 the _To fix_ filter · 7 中文.
+
+### The tag — unchanged in form, a fifth accessible name
+
+`ToFixTag` draws `run_died` exactly as it draws the other four: the solid `--el-danger` disc (List and
+Tree, the Status cell) or the `Pill` label (board card, quick-view header), lucide `Wrench`, the words
+_To fix_. The reason is only in the accessible name and `title`: **_To fix · run died_**
+(`toFix.tagName.run_died`; zh _待修复 · 运行已中断_). The label form's `sr-only` tail is _· run died_. None
+of the six `RunDiedReason` endings is named on the tag — they share one repair, and the ending is the
+marker's reason line.
+
+**Beside the CI badge, never confused with it (panels 1–3).** A dead run's pull request may well be
+green, and on these surfaces a green CI state draws NOTHING (`ciBadgeState`: passing and done draw
+nothing, the shipped rule). So each surface is drawn twice:
+
+- **CI green** — no CI glyph at all; the tag is the only signal that the card is stuck. This is the case
+  the tag exists for.
+- **CI red** — the CI badge (`CircleX` in the rose tint; in the TITLE cell on a row, after the tag in the
+  card's pill row) and the tag (the solid fill, in the STATUS cell on a row) both draw, as two different
+  kinds of mark in two different places.
+
+The quick-view header shows no CI state, so there is nothing to sit beside; the tag follows the status
+pill as for every reason. The card's status is **In Progress** throughout: a dead run never moves it.
+
+**The Tree (panel 2)** is `TreeTable`'s row over the same `buildIssueColumns`, so the leg wears the same
+glyph under its expanded parent. The parent carries its own stored reason, never a roll-up of its legs.
+
+### The banner — one sentence, pointing at `#development`, no command
+
+`ToFixBanner` keeps its frame (`--el-danger-surface`, `--el-border-soft`, `--radius-card`), its danger
+disc and its `#development` link, and for `run_died` **drops its lead line and its `CopyableCodeBlock`**.
+The run-died marker in the Development block already carries `motir continue` and Continue hosted, and
+one page must not hold two copies of one control (the rule § _Run died_ applies to the run section).
+
+| variant                                       | sentence (en)                                                                                     | link                     |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------ |
+| pushed (`refusal === null`)                   | This needs a fix: its run died, last heard from _12 min ago_, and its work is kept on its branch. | See how to continue it ↓ |
+| nothing pushed (`no_branch`)                  | This needs a fix: its run died, last heard from _12 min ago_, before it pushed anything.          | See how to start over ↓  |
+| a leg of a parent run (`continue_the_parent`) | This needs a fix: the run of **ACME-12** it was part of died, last heard from _2 hr ago_.         | See how to continue it ↓ |
+
+- **One sentence, naming when the run was last heard from** — `deadRun.lastHeardAt`, relative
+  (`relativeLabel`), on a `<time>` whose `title` is the instant. It is `text-sm font-semibold` in
+  `--el-danger-surface-text`, as for the four reasons.
+- **It points, it does not act.** The link is a real `href="#development"`, with the shipped
+  scroll-and-focus that waits for the late stack; only its words change. With nothing pushed it says
+  _See how to start over_, because what is below is the marker's start-over line, not a command.
+- No meta line: the `affected` clause and _Sent back from the acceptance video_ are pull-request facts.
+
+### The filter — _Run died_ first
+
+The _To fix_ value editor maps over `FIX_REASON_PRIORITY`, and `run_died` is first in it (§ 31 says why),
+so **_Run died_ is the first value**. Its label is the Workbench row's bare word through
+`FIX_REASON_VALUE_KEYS` (`run_died: 'runDiedBare'` → _Run died_ / _运行已中断_): no new filter string.
+Picking it alone, the shipped `AdvancedFilterSummary` chip reads **To fix** _is any of Run died_ — the
+card's _To fix is run died_, in the chip's shipped operator words (`advancedOpIsAnyOf`); no operator is
+added. _To fix is any_ now includes dead-run cards.
+
+### Strings
+
+Every new key, `en` and `zh`, is in `design/workbench/design-notes.md` § 31's strings table: this section
+uses `toFix.tagName.run_died`, `toFix.banner.runDied`, `toFix.banner.runDiedNothingPushed`,
+`toFix.banner.runDiedParent`, `toFix.banner.toContinue`, `toFix.banner.toStartOver`,
+`toFix.banner.openingDevelopment` (the link's `sr-only` pending line), and reuses
+`workbench.toFix.reason.runDiedBare` for the filter.
+
+### Tokens
+
+Unchanged from the base section: the tag's `--el-danger` fill with `--el-danger-text` ink (the one legal
+use of that ink, on its own fill); the banner's `--el-danger-surface` with `--el-danger-surface-text`; the
+link in `--el-text-strong` with an `--el-border-strong` underline; the CI badge's rose tint and
+`--el-text-strong`. The Tree parent's glyph takes `--el-type-story`. No raw hue, no raw shape utility.
+
+### GIVES / TAKES
+
+| card                                        | GIVES                                                                                                                                                                                                                 | TAKES                                                                                  |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **MOTIR-6880** (the stored reason)          | ELEMENT: the words — `toFix.tagName.run_died`, the three banner sentences and two link labels, the filter's reuse of `runDiedBare`. PREMISE: `run_died` first in `FIX_REASON_PRIORITY`, so the filter lists it first. | Nothing.                                                                               |
+| **MOTIR-6882** (the Workbench row)          | Nothing here — its row is § 31's.                                                                                                                                                                                     | Nothing.                                                                               |
+| **MOTIR-6879** (Continue hosted, placeable) | Nothing — the banner places no control.                                                                                                                                                                               | Nothing.                                                                               |
+| **the four shipped reasons** (MOTIR-6608)   | Nothing.                                                                                                                                                                                                              | Nothing — their tag names, banner sentences, commands and filter values are unchanged. |
+
+### What this does NOT decide
+
+- **The review-agent variant** of a dead run (MOTIR-6817).
+- **The run-died marker and Continue hosted** — pointed at, not redrawn.
+- **The tag's form or placement, the Status track's width, the banner's slot** — MOTIR-6608's, unchanged.

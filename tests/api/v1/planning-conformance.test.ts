@@ -187,6 +187,19 @@ describe('/api/v1 planning conformance — an external client with a real PAT', 
     // Both arrays are always present, even with no edges.
     expect(ready.items[0]?.dependencies).toEqual({ blockedBy: [], blocks: [] });
 
+    // The same set, in its three LANES (Story MOTIR-6829 · MOTIR-6832): the two
+    // standalone tasks are leaves with no container, there is no bug and no
+    // runnable container — and leaves ∪ bugs is exactly the ready set.
+    const lane = async (name: string) =>
+      json<{ items: Array<{ key: string; container?: unknown }> }>(
+        await http(`/api/v1/projects/${projectKey}/ready/${name}`, caller),
+      );
+    const laneLeaves = await lane('leaves');
+    expect(laneLeaves.items.map((i) => i.key)).toEqual([first, second]);
+    expect(laneLeaves.items.every((i) => i.container === null)).toBe(true);
+    expect((await lane('bugs')).items).toEqual([]);
+    expect((await lane('containers')).items).toEqual([]);
+
     // ── 7. COMPLETE. The unfinished work returns to the backlog in rank order.
     const completeRes = await http(`/api/v1/sprints/${created.id}/complete`, caller, {
       method: 'POST',
@@ -341,6 +354,9 @@ describe('/api/v1 planning conformance — an external client with a real PAT', 
       'app/api/v1/projects/[projectKey]/backlog/route.ts',
       'app/api/v1/projects/[projectKey]/backlog/work-items/route.ts',
       'app/api/v1/projects/[projectKey]/ready/route.ts',
+      'app/api/v1/projects/[projectKey]/ready/leaves/route.ts',
+      'app/api/v1/projects/[projectKey]/ready/containers/route.ts',
+      'app/api/v1/projects/[projectKey]/ready/bugs/route.ts',
       'app/api/v1/sprints/[sprintId]/route.ts',
       'app/api/v1/sprints/[sprintId]/start/route.ts',
       'app/api/v1/sprints/[sprintId]/complete/route.ts',

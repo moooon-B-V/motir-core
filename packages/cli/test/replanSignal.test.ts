@@ -164,7 +164,7 @@ function tenant(mode: 'per_item_pr' | 'session_lineage', keys: string[] = ['PROD
   });
 
   const v1: V1Script = {
-    'GET /api/v1/projects/{projectKey}/ready': () => ({
+    'GET /api/v1/projects/{projectKey}/ready/leaves': () => ({
       body: v1Page(
         keys
           .filter((k) => (statuses.get(k) ?? 'todo') === 'todo')
@@ -535,7 +535,7 @@ describe('motir auto --auto-approve-replan', () => {
     let dispatched = 0;
     // The server keeps offering the card — the loop's own hold-out is the only
     // thing that can stop this, which is exactly what is under test.
-    t.v1['GET /api/v1/projects/{projectKey}/ready'] = () => ({
+    t.v1['GET /api/v1/projects/{projectKey}/ready/leaves'] = () => ({
       body: v1Page([v1ReadyRow('PROD-7', { title: 'refuses itself forever' })]),
     });
     t.v1['GET /api/v1/work-items/{key}/dispatch-prompt'] = (req) => {

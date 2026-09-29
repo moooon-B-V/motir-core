@@ -4175,6 +4175,24 @@
       "declineLabel": "Decline",
       "approved": "{count, plural, one {# child created} other {# children created}}",
       "error": "Something went wrong ({code})."
+    },
+    "lanes": {
+      "switchAria": "Ready lanes",
+      "main": {
+        "heading": "Ready to run",
+        "empty": "Nothing ready to run."
+      },
+      "bugs": {
+        "heading": "Bugs",
+        "empty": "No ready bugs.",
+        "listAria": "Ready bugs"
+      }
+    },
+    "container": {
+      "hint": "{ready} of {total} ready",
+      "expand": "Expand {key}",
+      "collapse": "Collapse {key}",
+      "copyAria": "Copy parent-run command for {key}"
     }
   },
   "backlog": {
@@ -8036,7 +8054,7 @@
       },
       "toFix": {
         "title": "Nothing to fix",
-        "body": "When a merge queue, a conflict, a failing check or a reviewer stops one of your work items, it shows up here with the command that repairs it."
+        "body": "When a run that died, a merge queue, a conflict, a failing check or a reviewer stops one of your work items, it shows up here with what repairs it."
       },
       "recentlyFinished": {
         "title": "Nothing finished this week",
@@ -8123,7 +8141,15 @@
         "ciFailedBare": "CI failed",
         "changesRequested": "Changes requested by <b>{name}</b> — “{note}”",
         "changesRequestedNoNote": "Changes requested by <b>{name}</b>",
-        "changesRequestedAnon": "Changes requested"
+        "changesRequestedAnon": "Changes requested",
+        "runDied": "Run died · last heard from <when></when> · {name} · branch <d>{branch}</d>",
+        "runDiedNoName": "Run died · last heard from <when></when> · branch <d>{branch}</d>",
+        "runDiedNothingPushed": "Run died · last heard from <when></when> · {name} · nothing was pushed",
+        "runDiedNothingPushedNoName": "Run died · last heard from <when></when> · nothing was pushed",
+        "runDiedBare": "Run died",
+        "runDiedMoreRepositories": "+ {count, plural, one {# more repository} other {# more repositories}}",
+        "runDiedParent": "Part of <b>{parent}</b>’s run — both repairs continue the whole run",
+        "runDiedCannotEdit": "You can’t edit this work item, so someone who can has to continue it."
       },
       "queueReason": {
         "CI_FAILURE": "checks failed",
@@ -10194,6 +10220,7 @@
   },
   "toFix": {
     "tagName": {
+      "run_died": "To fix · run died",
       "queue_failed": "To fix · failed in the merge queue",
       "conflicted": "To fix · conflicts with its base branch",
       "ci_failed": "To fix · CI failed",
@@ -10214,7 +10241,13 @@
       "leadFix": "Repair it with this command:",
       "leadRun": "Re-run the work item. The new run’s prompt carries the reviewer’s note:",
       "toDevelopment": "See its pull requests",
-      "opening": "Opening its pull requests…"
+      "opening": "Opening its pull requests…",
+      "runDied": "This needs a fix: its run died, last heard from <when></when>, and its work is kept on its branch.",
+      "runDiedNothingPushed": "This needs a fix: its run died, last heard from <when></when>, before it pushed anything.",
+      "runDiedParent": "This needs a fix: the run of <b>{parent}</b> it was part of died, last heard from <when></when>.",
+      "toContinue": "See how to continue it",
+      "toStartOver": "See how to start over",
+      "openingDevelopment": "Opening Development…"
     }
   },
   "workItems": {

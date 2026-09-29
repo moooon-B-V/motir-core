@@ -4175,6 +4175,24 @@
       "declineLabel": "拒绝",
       "approved": "已创建 {count} 个子项",
       "error": "出了点问题（{code}）。"
+    },
+    "lanes": {
+      "switchAria": "就绪通道",
+      "main": {
+        "heading": "可运行",
+        "empty": "暂无可运行的工作。"
+      },
+      "bugs": {
+        "heading": "缺陷",
+        "empty": "暂无就绪的缺陷。",
+        "listAria": "就绪的缺陷"
+      }
+    },
+    "container": {
+      "hint": "{ready} / {total} 已就绪",
+      "expand": "展开 {key}",
+      "collapse": "收起 {key}",
+      "copyAria": "复制 {key} 的父级运行命令"
     }
   },
   "backlog": {
@@ -8032,7 +8050,7 @@
       },
       "toFix": {
         "title": "没有需要修复的工作",
-        "body": "当合并队列、冲突、未通过的检查或审阅者卡住你的某个工作项时，它会带着修复命令显示在这里。"
+        "body": "当中断的运行、合并队列、冲突、未通过的检查或审阅者卡住你的某个工作项时，它会带着修复方法显示在这里。"
       },
       "recentlyFinished": {
         "title": "本周还没有完成的工作",
@@ -8119,7 +8137,15 @@
         "ciFailedBare": "CI 未通过",
         "changesRequested": "<b>{name}</b> 要求修改 ——“{note}”",
         "changesRequestedNoNote": "<b>{name}</b> 要求修改",
-        "changesRequestedAnon": "已要求修改"
+        "changesRequestedAnon": "已要求修改",
+        "runDied": "运行已中断 · 最后一次联系在<when></when> · {name} · 分支 <d>{branch}</d>",
+        "runDiedNoName": "运行已中断 · 最后一次联系在<when></when> · 分支 <d>{branch}</d>",
+        "runDiedNothingPushed": "运行已中断 · 最后一次联系在<when></when> · {name} · 未推送任何内容",
+        "runDiedNothingPushedNoName": "运行已中断 · 最后一次联系在<when></when> · 未推送任何内容",
+        "runDiedBare": "运行已中断",
+        "runDiedMoreRepositories": "另有 {count} 个代码仓库",
+        "runDiedParent": "属于 <b>{parent}</b> 的运行——两种方式都会继续整个运行",
+        "runDiedCannotEdit": "你无法编辑此工作项，因此需要由有编辑权限的人来继续。"
       },
       "queueReason": {
         "CI_FAILURE": "检查未通过",
@@ -10190,6 +10216,7 @@
   },
   "toFix": {
     "tagName": {
+      "run_died": "待修复 · 运行已中断",
       "queue_failed": "待修复 · 在合并队列中失败",
       "conflicted": "待修复 · 与其目标分支冲突",
       "ci_failed": "待修复 · CI 未通过",
@@ -10210,7 +10237,13 @@
       "leadFix": "用以下命令修复：",
       "leadRun": "重新运行该工作项。新一次运行的提示词会带上审阅者的说明：",
       "toDevelopment": "查看它的拉取请求",
-      "opening": "正在打开它的拉取请求…"
+      "opening": "正在打开它的拉取请求…",
+      "runDied": "需要修复：它的运行已中断，最后一次联系在<when></when>，其工作保留在分支上。",
+      "runDiedNothingPushed": "需要修复：它的运行已中断，最后一次联系在<when></when>，且未推送任何内容。",
+      "runDiedParent": "需要修复：它所属的 <b>{parent}</b> 运行已中断，最后一次联系在<when></when>。",
+      "toContinue": "查看如何继续",
+      "toStartOver": "查看如何重新开始",
+      "openingDevelopment": "正在打开“开发”…"
     }
   },
   "workItems": {

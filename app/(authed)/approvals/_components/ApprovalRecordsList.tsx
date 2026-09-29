@@ -9,7 +9,9 @@ import {
   APPROVALS_FULL_VIEW_GRID_TEMPLATE,
   APPROVALS_GRID_TEMPLATE,
 } from '@/components/approvals/ApprovalRow';
+import { approvalRecordsHref } from '@/lib/approvals/recordsAddress';
 import type { ApprovalRecordsPageDto } from '@/lib/dto/approvalGate';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // THE APPROVAL RECORDS ROOM's LIST (Story MOTIR-5299 · MOTIR-5302), built to
 // `design/approvals/approvals-room.mock.html` and `design/approvals/design-notes.md`.
@@ -28,19 +30,6 @@ import type { ApprovalRecordsPageDto } from '@/lib/dto/approvalGate';
 // tables (`design/approvals` § The grid), and ONE pager windows the concatenation.
 // A page holding rows of only one section still draws both headings once there is a
 // row anywhere, with `0` in the empty section's chip and its one-line empty state.
-
-/**
- * The room's page address — the only query this list writes besides the overlay's.
- * It carries the SERVED view (MOTIR-6333) when the reader has the switch, so a
- * page turn stays in the view it was on; each view has its own pager and clamp.
- */
-export function approvalRecordsHref(page: number, view?: 'mine' | 'project'): string {
-  const params = new URLSearchParams();
-  if (view) params.set('view', view);
-  if (page > 1) params.set('page', String(page));
-  const query = params.toString();
-  return query ? `/approvals?${query}` : '/approvals';
-}
 
 function SectionHeader({
   title,
@@ -99,6 +88,9 @@ function SectionEmptyLine({ children }: { children: ReactNode }) {
 export function ApprovalRecordsList({ records }: { records: ApprovalRecordsPageDto }) {
   const t = useTranslations('approvalRecords');
   const router = useRouter();
+  // The list is shared with the Visitor tree (MOTIR-6648): a page turn there must
+  // stay on `/p/<identifier>/approvals`, not the member route (MOTIR-6891).
+  const routes = useReaderRoutes();
   const { fullView, sections } = records;
   const gridTemplate = fullView ? APPROVALS_FULL_VIEW_GRID_TEMPLATE : APPROVALS_GRID_TEMPLATE;
 
@@ -205,14 +197,18 @@ export function ApprovalRecordsList({ records }: { records: ApprovalRecordsPageD
         )}
       </div>
       {/* The shipped pager, composed unchanged. Its denominator is the read's
-          `total` — both section totals — so it cannot disagree with the rows. */}
+          `total` — both section totals — so it cannot disagree with the rows. The
+          address goes through the reader's routes, so a Visitor's page turn does
+          not depend on `proxy.ts`'s cookie-bound rescue (MOTIR-6891). */}
       <IssueListPager
         total={records.total}
         page={records.page}
         pageSize={records.pageSize}
         onPage={(page) =>
           router.push(
-            approvalRecordsHref(page, records.views.length > 1 ? records.scope : undefined),
+            routes.view(
+              approvalRecordsHref(page, records.views.length > 1 ? records.scope : undefined),
+            ),
           )
         }
       />

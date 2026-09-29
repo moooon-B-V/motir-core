@@ -313,6 +313,17 @@ describe('a hosted run credential reaches its run’s legs and scope, and nothin
       run,
     );
     expect(ready.status).toBe(200);
+    // The three ready LANES (MOTIR-6832) answer the same project-bound token.
+    for (const lane of ['leaves', 'containers', 'bugs'] as const) {
+      const res = await call(
+        () => import(`@/app/api/v1/projects/[projectKey]/ready/${lane}/route`),
+        'GET',
+        `/projects/${caller.projectKey}/ready/${lane}`,
+        params,
+        run,
+      );
+      expect(res.status, lane).toBe(200);
+    }
     const list = await call(
       () => import('@/app/api/v1/projects/[projectKey]/work-items/route'),
       'GET',

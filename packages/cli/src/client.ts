@@ -25,6 +25,7 @@ import {
   toActivityHistoryPage,
   toCommentsPage,
   toProjectList,
+  toReadyContainerPage,
   toReadyPage,
   toProjectRepositoryList,
   toSprintList,
@@ -98,12 +99,39 @@ export interface ReadyItemSummary {
   priority: string;
   assignee?: { id: string; name: string } | null;
   dependencies?: WorkItemDependencyEdges;
+  /** The runnable container this row groups under in its lane, or `null` when it
+   *  stands alone (Story MOTIR-6829). Absent only from a pre-lane server. */
+  container?: ReadyContainerSummary | null;
 }
 
 export interface ReadyPage {
   items: ReadyItemSummary[];
   nextCursor: string | null;
 }
+
+/**
+ * A RUNNABLE CONTAINER (Story MOTIR-6829) — a `story`, `task` or `bug` whose
+ * every child is childless: the unit `motir run <KEY>` runs as a parent run.
+ * `readyLeafCount` of `childCount` is how much of it is ready now.
+ */
+export interface ReadyContainerSummary {
+  key: string;
+  kind: string;
+  title: string;
+  priority: string;
+  assignee: { id: string; name: string } | null;
+  readyLeafCount: number;
+  childCount: number;
+}
+
+export interface ReadyContainerPage {
+  items: ReadyContainerSummary[];
+  nextCursor: string | null;
+}
+
+/** The two ready ROW lanes the server serves — the leaves (never bug work) and the
+ *  bugs. The third lane, containers, is a different row and has its own reads. */
+export type ReadyRowLane = 'leaf' | 'bug';
 
 /** A sprint row (the `list_sprints` `SprintDto`, the fields `motir status` and
  * `motir sprints` render). `sequence` is the sprint's authored order — the
@@ -310,6 +338,13 @@ export interface DispatchItem {
    * `main`, and a lineage item's base has not merged.
    */
   inheritedSessionBranch: string | null;
+  /**
+   * The RUNNABLE CONTAINER this row groups under in its lane, or `null`
+   * (MOTIR-6837) — how `motir next --bug` knows a bug's subtask belongs to a
+   * bug it should run whole, as a parent run. Absent on an item not read off a
+   * lane (a hosted run's adopted legs, a continue's resumed card).
+   */
+  containerKey?: string | null;
 }
 
 /** WHICH `GIT WORKFLOW` variant the server-assembled prompt carries — chosen
@@ -1576,6 +1611,8 @@ export class MotirClient {
 
   listReady(args: {
     projectKey: string;
+    /** Which ready row lane — the leaves (default) or the bugs (MOTIR-6835). */
+    lane?: ReadyRowLane;
     kinds?: string[];
     priority?: string[];
     assigneeId?: string | null;
@@ -1586,11 +1623,55 @@ export class MotirClient {
     // literal `none` means the unassigned bucket. `null` here IS that bucket, so
     // it must become the literal rather than being dropped as "no value" — which
     // would silently widen the filter to every assignee.
+    return this.requestReadyLane(args.lane ?? 'leaf', args.projectKey, {
+      ...(args.kinds ? { kind: args.kinds } : {}),
+      ...(args.priority ? { priority: args.priority } : {}),
+      ...(args.assigneeId === undefined
+        ? {}
+        : { assigneeId: args.assigneeId === null ? UNASSIGNED : args.assigneeId }),
+      ...(args.cursor ? { cursor: args.cursor } : {}),
+      ...(args.limit === undefined ? {} : { limit: args.limit }),
+    }).then(toReadyPage);
+  }
+
+  /**
+   * ONE page of a ready ROW lane. Both operations are named as LITERALS, one per
+   * lane, rather than looked up: the typed transport infers each call's query and
+   * body from its operation id, and the run-token table's scan
+   * (`tests/hostedRuns/runTokenRouteTable.test.ts`) finds a call by its literal.
+   */
+  private requestReadyLane(
+    lane: ReadyRowLane,
+    projectKey: string,
+    query: {
+      kind?: string[];
+      priority?: string[];
+      assigneeId?: string;
+      ancestor?: string[];
+      sprintId?: string;
+      allowSoftBlock?: 'true';
+      cursor?: string;
+      limit?: number;
+    },
+  ) {
+    return lane === 'bug'
+      ? this.v1.request('getProjectReadyBugs', { path: { projectKey }, query })
+      : this.v1.request('getProjectReadyLeaves', { path: { projectKey }, query });
+  }
+
+  /** One page of the CONTAINERS lane (MOTIR-6835) — the runnable containers, in
+   *  the server's group order. Its facets apply to the container. */
+  listReadyContainers(args: {
+    projectKey: string;
+    priority?: string[];
+    assigneeId?: string | null;
+    cursor?: string;
+    limit?: number;
+  }): Promise<ReadyContainerPage> {
     return this.v1
-      .request('getProjectReadySet', {
+      .request('getProjectReadyContainers', {
         path: { projectKey: args.projectKey },
         query: {
-          ...(args.kinds ? { kind: args.kinds } : {}),
           ...(args.priority ? { priority: args.priority } : {}),
           ...(args.assigneeId === undefined
             ? {}
@@ -1599,7 +1680,27 @@ export class MotirClient {
           ...(args.limit === undefined ? {} : { limit: args.limit }),
         },
       })
-      .then(toReadyPage);
+      .then(toReadyContainerPage);
+  }
+
+  /** The next runnable container not held out by KEY — what `motir next
+   *  --parent` runs. FOLLOWS the cursor, as {@link nextReady} does. */
+  async nextReadyContainer(args: {
+    projectKey: string;
+    excludeKeys?: readonly string[];
+  }): Promise<{ container: ReadyContainerSummary | null }> {
+    const excluded = new Set((args.excludeKeys ?? []).map((key) => key.toUpperCase()));
+    let cursor: string | undefined;
+    do {
+      const page = await this.listReadyContainers({
+        projectKey: args.projectKey,
+        ...(cursor ? { cursor } : {}),
+      });
+      const found = page.items.find((c) => !excluded.has(c.key.toUpperCase()));
+      if (found) return { container: found };
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+    return { container: null };
   }
 
   /**
@@ -1626,12 +1727,20 @@ export class MotirClient {
     kinds?: string[];
     excludeKeys?: readonly string[];
     ownerId?: string;
+    /**
+     * Which ready LANES to take from, in order (MOTIR-6835) — default the leaves
+     * alone, so `motir next` never hands out a bug. `motir auto` passes
+     * `['leaf', 'bug']`: every leaf, then the bugs.
+     */
+    lanes?: readonly ReadyRowLane[];
   }): Promise<{ item: DispatchItem | null }> {
     const excluded = new Set((args.excludeKeys ?? []).map((key) => key.toUpperCase()));
-    for await (const item of this.walkReady(args)) {
-      if (excluded.has(item.key.toUpperCase())) continue;
-      if (args.ownerId !== undefined && !isPickable(item, args.ownerId)) continue;
-      return { item };
+    for (const lane of args.lanes ?? ['leaf']) {
+      for await (const item of this.walkReady({ ...args, lane })) {
+        if (excluded.has(item.key.toUpperCase())) continue;
+        if (args.ownerId !== undefined && !isPickable(item, args.ownerId)) continue;
+        return { item };
+      }
     }
     return { item: null };
   }
@@ -1658,10 +1767,19 @@ export class MotirClient {
      *  listed. Sent as the string `"true"`; omitted when not set. */
     allowSoftBlock?: boolean;
   }): Promise<DispatchItem[]> {
+    // BOTH row lanes, the leaves first (MOTIR-6835): a scoped run and a batch
+    // snapshot must hold every row they held when they read the unlaned set —
+    // a story's edged bug included — so this is `leaves ∪ bugs`, de-duplicated
+    // by key (the lanes are disjoint; the check is a seatbelt), never re-sorted.
     const items: DispatchItem[] = [];
-    for await (const item of this.walkReady(args)) {
-      if (args.ownerId !== undefined && !isPickable(item, args.ownerId)) continue;
-      items.push(item);
+    const seen = new Set<string>();
+    for (const lane of ['leaf', 'bug'] as const) {
+      for await (const item of this.walkReady({ ...args, lane })) {
+        if (seen.has(item.key)) continue;
+        seen.add(item.key);
+        if (args.ownerId !== undefined && !isPickable(item, args.ownerId)) continue;
+        items.push(item);
+      }
     }
     return items;
   }
@@ -1670,7 +1788,7 @@ export class MotirClient {
    * The ready collection, page by page, in the server's rank — ADAPTED.
    *
    * ⚠️ It yields the VIEW MODEL, not the wire row, and that is the Q4 boundary
-   * rather than a preference. Yielding `SuccessBody<'getProjectReadySet'>
+   * rather than a preference. Yielding `SuccessBody<'getProjectReadyLeaves'>
    * ['items'][number]` would put a generated type on a signature in this file,
    * where the ADR allows one only inside `src/transport.ts` and `src/adapters/`
    * — and a derived type reads as innocuous precisely because it does not look
@@ -1678,6 +1796,7 @@ export class MotirClient {
    */
   private async *walkReady(args: {
     projectKey: string;
+    lane: ReadyRowLane;
     kinds?: string[];
     ancestor?: string[];
     sprintId?: string;
@@ -1685,21 +1804,18 @@ export class MotirClient {
   }): AsyncGenerator<DispatchItem> {
     let cursor: string | undefined;
     do {
-      const body = await this.v1.request('getProjectReadySet', {
-        path: { projectKey: args.projectKey },
-        query: {
-          ...(args.kinds ? { kind: args.kinds } : {}),
-          // The two SCOPE facets (MOTIR-3196). Sent through the SAME page walk
-          // as `kind`, so a scoped read follows the cursor to exhaustion exactly
-          // as an unscoped one does — a scoped run that silently took only the
-          // first page would claim a set it never enumerated.
-          ...(args.ancestor ? { ancestor: args.ancestor } : {}),
-          ...(args.sprintId !== undefined ? { sprintId: args.sprintId } : {}),
-          ...(args.allowSoftBlock ? { allowSoftBlock: 'true' as const } : {}),
-          ...(cursor ? { cursor } : {}),
-        },
+      const body = await this.requestReadyLane(args.lane, args.projectKey, {
+        ...(args.kinds ? { kind: args.kinds } : {}),
+        // The two SCOPE facets (MOTIR-3196). Sent through the SAME page walk
+        // as `kind`, so a scoped read follows the cursor to exhaustion exactly
+        // as an unscoped one does — a scoped run that silently took only the
+        // first page would claim a set it never enumerated.
+        ...(args.ancestor ? { ancestor: args.ancestor } : {}),
+        ...(args.sprintId !== undefined ? { sprintId: args.sprintId } : {}),
+        ...(args.allowSoftBlock ? { allowSoftBlock: 'true' as const } : {}),
+        ...(cursor ? { cursor } : {}),
       });
-      for (const row of body.items) yield toDispatchItem(row);
+      for (const row of body.items ?? []) yield toDispatchItem(row);
       cursor = body.nextCursor ?? undefined;
     } while (cursor);
   }

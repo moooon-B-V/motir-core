@@ -1,5 +1,6 @@
 import type { ApprovalGate } from '@/generated/prisma/client';
-import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
+import type { FixBranchDto, FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
+import type { RunDiedReason, WorkItemContinueRefusal } from '@/lib/dto/workItemContinue';
 import type { RepairPullRequestDto } from '@/lib/dto/workItemRepair';
 import { routedToDisplayName } from '@/lib/approvalGates/routing';
 
@@ -8,16 +9,19 @@ import { routedToDisplayName } from '@/lib/approvalGates/routing';
 // the priority and the detail can be pinned without a database.
 
 /**
- * The four reasons in PRIORITY order — the first that holds is the one to repair first
+ * The five reasons in PRIORITY order — the first that holds is the one to repair first
  * and the one stored. It is also the enum's declaration order (`WorkItemFixReason`),
  * and a test asserts the two are the same list.
  *
- * Why this order: a queue failure and a conflict both mean the members cannot land AS
+ * Why this order: a dead run comes first because nothing else on the card can be
+ * repaired until somebody owns its branch again — a red check or a conflict on that
+ * branch is fixed BY the continue (`design/workbench/design-notes.md` § 31). A queue failure and a conflict both mean the members cannot land AS
  * THEY ARE, and a green re-run fixes neither; a red build usually shares a cause with
  * them and is re-judged by the same push; a reviewer's refusal is last because a push
  * that answers any of the first three also withdraws what they were refusing.
  */
 export const FIX_REASON_PRIORITY: readonly WorkItemFixReasonDto[] = [
+  'run_died',
   'queue_failed',
   'conflicted',
   'ci_failed',
@@ -42,6 +46,13 @@ const EMPTY_DETAIL: Omit<FixDetailDto, 'repair' | 'affected' | 'total'> = {
   reviewerName: null,
   notePreview: null,
   gate: null,
+  lastHeardAt: null,
+  ranByName: null,
+  branch: null,
+  branches: null,
+  pushed: null,
+  continueKey: null,
+  diedReason: null,
 };
 
 /**
@@ -55,6 +66,67 @@ export function notePreviewOf(noteMd: string | null): string | null {
     .find((l) => l.length > 0);
   if (!line) return null;
   return line.length > FIX_NOTE_PREVIEW_MAX ? `${line.slice(0, FIX_NOTE_PREVIEW_MAX - 1)}…` : line;
+}
+
+/**
+ * What `deadRunReasonOf` reads — the continue service's `died` verdict
+ * (`evaluateContinueWithin`), with the dead run's facts as the continue VIEW states them
+ * (`describeDeadRunWithin`), so the row and the marker cannot name two different runs.
+ */
+export interface DeadRunVerdict {
+  /** The card's own key. */
+  key: string;
+  /** What the continue claim would answer — null when it would take the card. */
+  refusal: Exclude<WorkItemContinueRefusal, 'run_alive' | 'no_dead_run'> | null;
+  /** Set with `continue_the_parent`: the parent run's scope. */
+  parentKey: string | null;
+  branch: string | null;
+  branches: readonly FixBranchDto[];
+  /** ISO-8601 — the view's `deadRun.lastHeardAt`. */
+  lastHeardAt: string;
+  /** The view's `deadRun.dispatcher.name`; null for a deleted account. */
+  ranByName: string | null;
+  diedReason: RunDiedReason;
+}
+
+/**
+ * A DEAD RUN's reason, or null when the verdict is one `motir continue` does not own.
+ *
+ * Exactly three refusals are `run_died` (§ 31's premise): none — the claim would take
+ * the card, so `continue` on its own key; `continue_the_parent` — `continue` on the
+ * PARENT's key, the whole run resumes; `no_branch` — nothing was pushed, so there is no
+ * command at all (`none`) and the card has to start over. `use_fix` falls to the
+ * pull-request reasons (`motir fix` owns a card at Implemented and later), and
+ * `not_in_progress` has nothing to repair.
+ *
+ * `affected` / `total` are 0: a dead run is not a pull-request fact, and no surface
+ * draws the *N of M* clause for it.
+ */
+export function deadRunReasonOf(verdict: DeadRunVerdict): FixReasonValue | null {
+  const { refusal } = verdict;
+  if (refusal === 'use_fix' || refusal === 'not_in_progress') return null;
+  if (refusal === 'continue_the_parent' && verdict.parentKey === null) return null;
+  const nothingPushed = refusal === 'no_branch';
+  return {
+    fixReason: 'run_died',
+    fixDetail: {
+      ...EMPTY_DETAIL,
+      repair: nothingPushed ? 'none' : 'continue',
+      lastHeardAt: verdict.lastHeardAt,
+      ranByName: verdict.ranByName,
+      branch: verdict.branch,
+      branches: verdict.branches.map((b) => ({ repository: b.repository, branch: b.branch })),
+      pushed: !nothingPushed,
+      continueKey: nothingPushed
+        ? null
+        : refusal === 'continue_the_parent'
+          ? verdict.parentKey
+          : verdict.key,
+      diedReason: verdict.diedReason,
+      affected: 0,
+      total: 0,
+    },
+  };
 }
 
 /**
@@ -195,9 +267,26 @@ const FIX_DETAIL_FIELDS = [
   'reviewerName',
   'notePreview',
   'gate',
+  'lastHeardAt',
+  'ranByName',
+  'branch',
+  'pushed',
+  'continueKey',
+  'diedReason',
   'affected',
   'total',
 ] as const satisfies readonly (keyof FixDetailDto)[];
+
+/** Two stored branch lists are the same — compared entry by entry, for the reason
+ *  {@link sameFixReason} gives (a `jsonb` object never stringifies as written). */
+function sameBranches(stored: unknown, next: readonly FixBranchDto[] | null): boolean {
+  if (next === null) return (stored ?? null) === null;
+  if (!Array.isArray(stored) || stored.length !== next.length) return false;
+  return next.every((b, i) => {
+    const s = stored[i] as { repository?: unknown; branch?: unknown } | null;
+    return s !== null && (s.repository ?? null) === b.repository && s.branch === b.branch;
+  });
+}
 
 /**
  * Two stored answers are the same — the recompute writes only when this is false.
@@ -215,5 +304,8 @@ export function sameFixReason(
     return (a.fixDetail ?? null) === b.fixDetail;
   }
   const stored = a.fixDetail as Record<string, unknown>;
-  return FIX_DETAIL_FIELDS.every((field) => (stored[field] ?? null) === b.fixDetail![field]);
+  return (
+    FIX_DETAIL_FIELDS.every((field) => (stored[field] ?? null) === b.fixDetail![field]) &&
+    sameBranches(stored.branches, b.fixDetail.branches)
+  );
 }

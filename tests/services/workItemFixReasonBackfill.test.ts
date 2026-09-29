@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
+import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import {
   workItemFixReasonBackfillService,
   type FixReasonBackfillProgress,
@@ -40,6 +41,35 @@ async function card(
 
 /** One card per reason, plus a green one, a done one, and an archived stuck one. */
 async function scenario(fx: WorkItemFixture) {
+  // A card whose run DIED before `run_died` existed (MOTIR-6880): In Progress, its
+  // local run silent for ten minutes, nothing but the backfill left to notice it.
+  const died = await createTestWorkItem(fx, { kind: 'task', title: 'a card whose run died' });
+  await setStatus(died.id, 'in_progress');
+  const { run } = await dispatchRunService.open(
+    {
+      projectKey: fx.projectIdentifier,
+      command: 'run',
+      cards: [{ key: died.identifier, disposition: 'queued' }],
+    },
+    fx.ctx,
+  );
+  await dispatchRunService.appendEvents(
+    run.id,
+    [
+      {
+        kind: 'checkout_ready',
+        workItemKey: died.identifier,
+        disposition: 'running',
+        data: { branch: `subtask/${died.identifier}-work` },
+      },
+    ],
+    fx.ctx,
+  );
+  await adminDb.dispatchRun.update({
+    where: { id: run.id },
+    data: { lastHeartbeatAt: new Date(Date.now() - 10 * 60_000) },
+  });
+
   const red = await card(fx, 'implemented', { Vitest: 'failure' });
 
   const queued = await card(fx, 'implemented');
@@ -88,7 +118,7 @@ async function scenario(fx: WorkItemFixture) {
     data: { archivedAt: new Date() },
   });
 
-  return { red, queued, conflicted, sentBack, green, done, archived };
+  return { died, red, queued, conflicted, sentBack, green, done, archived };
 }
 
 async function reasonOf(id: string) {
@@ -105,13 +135,14 @@ describe('backfillFixReason', () => {
 
     expect(report.dryRun).toBe(true);
     expect(report.byReason).toEqual({
+      run_died: 1,
       queue_failed: 1,
       conflicted: 1,
       ci_failed: 1,
       changes_requested: 1,
       none: 1,
     });
-    expect(report.changed).toHaveLength(4);
+    expect(report.changed).toHaveLength(5);
     expect(report.skippedArchived).toBe(1);
     expect(report.failed).toEqual([]);
     expect(await adminDb.workItem.findMany({ orderBy: { id: 'asc' } })).toEqual(before);
@@ -125,11 +156,12 @@ describe('backfillFixReason', () => {
     const first = await workItemFixReasonBackfillService.backfillFixReason({ dryRun: false });
 
     expect(first.failed).toEqual([]);
-    expect(first.total).toBe(6); // five in-progress-category cards + the archived one
-    expect(first.scanned).toBe(6);
+    expect(first.total).toBe(7); // six in-progress-category cards + the archived one
+    expect(first.scanned).toBe(7);
     expect(first.skippedArchived).toBe(1);
     expect(new Map(first.changed.map((c) => [c.workItemId, [c.from, c.to]]))).toEqual(
       new Map([
+        [s.died.id, [null, 'run_died']],
         [s.red.item.id, [null, 'ci_failed']],
         [s.queued.item.id, [null, 'queue_failed']],
         [s.conflicted.item.id, [null, 'conflicted']],
@@ -137,6 +169,7 @@ describe('backfillFixReason', () => {
       ]),
     );
     expect(first.unchanged).toBe(1); // the green card
+    expect(await reasonOf(s.died.id)).toBe('run_died');
     expect(await reasonOf(s.red.item.id)).toBe('ci_failed');
     expect(await reasonOf(s.queued.item.id)).toBe('queue_failed');
     expect(await reasonOf(s.conflicted.item.id)).toBe('conflicted');
@@ -146,7 +179,7 @@ describe('backfillFixReason', () => {
 
     const second = await workItemFixReasonBackfillService.backfillFixReason({ dryRun: false });
     expect(second.changed).toEqual([]);
-    expect(second.unchanged).toBe(5);
+    expect(second.unchanged).toBe(6);
     expect(second.byReason).toEqual(first.byReason);
   });
 

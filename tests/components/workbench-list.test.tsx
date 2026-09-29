@@ -96,6 +96,7 @@ function dto(over: Partial<HomeWorkItemRowDto> & { identifier: string }): HomeWo
     project: { id: 'p1', identifier: 'MOTIR', name: 'Motir' },
     viewerIsAssignee: true,
     viewerIsReporter: true,
+    canContinueHosted: false,
     ...over,
   };
 }

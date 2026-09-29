@@ -433,6 +433,10 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     ['listProjects', 'list_projects'],
     ['listProjectSprints', 'list_sprints'],
     ['getProjectReadySet', 'list_ready'],
+    // MOTIR-6832 — the lanes serve the same set the tool's `lane` argument reads.
+    ['getProjectReadyLeaves', 'list_ready'],
+    ['getProjectReadyContainers', 'list_ready'],
+    ['getProjectReadyBugs', 'list_ready'],
     ['getWorkItemDispatchPrompt', 'dispatch_prompt'],
     ['recordWorkItemIntegration', 'mark_integrated'],
     ['completeSession', 'complete_session'],
@@ -483,8 +487,10 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     // 65 with MOTIR-6528's `POST …/dispatch-runs/{id}/heartbeat`
     // (`heartbeatDispatchRun`) and 66 with MOTIR-6532's
     // `POST …/work-items/{key}/continue` (`claimWorkItemContinue`), both
-    // `work_item:edit`.
-    expect(V1_OPERATIONS.length).toBe(66);
+    // `work_item:edit`. 69 with MOTIR-6832's THREE ready lanes
+    // (`getProjectReadyLeaves`, `getProjectReadyContainers`,
+    // `getProjectReadyBugs`), all `project:browse` like `getProjectReadySet`.
+    expect(V1_OPERATIONS.length).toBe(69);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

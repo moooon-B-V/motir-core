@@ -68,6 +68,8 @@ export interface WorkbenchRowView {
    * whose stored detail did not survive the mapper (the pair is null together).
    */
   fix: { reason: WorkItemFixReasonDto; detail: FixDetailDto } | null;
+  /** The row may offer Continue hosted (MOTIR-6882) — see `HomeWorkItemRowDto`. */
+  canContinueHosted: boolean;
 }
 
 /**
@@ -119,6 +121,7 @@ export function toWorkbenchRowViews(
         row.fixReason !== null && row.fixDetail !== null
           ? { reason: row.fixReason, detail: row.fixDetail }
           : null,
+      canContinueHosted: row.canContinueHosted,
     };
   });
 }

@@ -29,18 +29,20 @@ const { push, shallowPush, nav } = vi.hoisted(() => ({
   push: vi.fn(),
   shallowPush: vi.fn(),
   // The room's own query, settable per test — the title door must keep it (MOTIR-6001).
-  nav: { params: new URLSearchParams('') },
+  nav: { params: new URLSearchParams(''), pathname: '/approvals' },
 }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push }),
-  usePathname: () => '/approvals',
+  usePathname: () => nav.pathname,
   useSearchParams: () => nav.params,
 }));
 vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace: vi.fn() }));
 
-const { ApprovalRecordsList, approvalRecordsHref } =
+const { ApprovalRecordsList } =
   await import('../../app/(authed)/approvals/_components/ApprovalRecordsList');
+const { approvalRecordsHref } = await import('@/lib/approvals/recordsAddress');
+const { ReaderRoutesProvider } = await import('@/lib/visitor/useReaderRoutes');
 
 const SUBJECT = {
   kind: 'design_result' as const,
@@ -261,6 +263,39 @@ describe('every row is the ONE approvals row, and its door is the overlay', () =
     // MOTIR-6333 — a page turn keeps the served view when the reader has the switch.
     expect(approvalRecordsHref(3, 'mine')).toBe('/approvals?view=mine&page=3');
     expect(approvalRecordsHref(1, 'project')).toBe('/approvals?view=project');
+  });
+
+  // MOTIR-6891 — the room's list is shared with the Visitor tree
+  // (`app/(visitor)/p/[identifier]/approvals`). A page turn there must stay on the
+  // public project's Visitor path; the member `/approvals?page=N` renders the
+  // READER's own project whenever the `motir_visitor` cookie that `proxy.ts`'s
+  // rescue needs is gone. The Visitor layout provides the identifier, so the test
+  // does too, with the pathname the Visitor tree serves.
+  it('on a Visitor view the pager pushes the Visitor path, with no cookie to rescue it (MOTIR-6891)', () => {
+    nav.pathname = '/p/X/approvals';
+    try {
+      renderWithIntl(
+        <ReaderRoutesProvider identifier="X">
+          <ApprovalRecordsList records={page({ total: 80, page: 2, pageSize: 25 })} />
+        </ReaderRoutesProvider>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+      expect(push).toHaveBeenLastCalledWith('/p/X/approvals?page=3');
+      fireEvent.click(screen.getByRole('button', { name: /previous page/i }));
+      expect(push).toHaveBeenLastCalledWith('/p/X/approvals');
+      fireEvent.click(screen.getByRole('button', { name: 'Page 4' }));
+      expect(push).toHaveBeenLastCalledWith('/p/X/approvals?page=4');
+    } finally {
+      nav.pathname = '/approvals';
+    }
+  });
+
+  it('on the member room the pager pushes the member address, unchanged (MOTIR-6891)', () => {
+    renderWithIntl(<ApprovalRecordsList records={page({ total: 80, page: 2, pageSize: 25 })} />);
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(push).toHaveBeenLastCalledWith('/approvals?page=3');
+    fireEvent.click(screen.getByRole('button', { name: /previous page/i }));
+    expect(push).toHaveBeenLastCalledWith('/approvals');
   });
 
   it('`git grep` finds ONE approvals row component in the repo', () => {

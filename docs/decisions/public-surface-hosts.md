@@ -1722,6 +1722,16 @@ other page:
   `resolveVisitor`, to a consented Visitor of exactly the project it names
   (MOTIR-6647).
 
+> **Amended by MOTIR-6892 — the data doors no longer read this cookie.** A cookie
+> is one value per browser, and a reader keeps a Visitor tab open beside their own
+> member tabs: the member tab's next page cleared it, and the Visitor tab's next
+> read answered from the reader's own project. The Visitor tab now names its
+> project on every same-origin request as the `x-motir-visitor` header
+> (`lib/visitor/address.ts`), which the data doors read instead; the cookie is
+> the proxy's redirect hint alone. The header is the same kind of thing the
+> cookie was — an address, never a credential — and the resolution above is
+> unchanged.
+
 It is not a session cookie in §4's sense and changes nothing §4 accepted.
 
 ### §C — §6: `app.motir.co` does not index `/p/`

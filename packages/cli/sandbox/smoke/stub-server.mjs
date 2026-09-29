@@ -222,6 +222,20 @@ function readySet() {
   return { items: readyRows(), nextCursor: null };
 }
 
+/**
+ * The ready LANES (Story MOTIR-6829 · MOTIR-6835) — what the CLI reads now. The
+ * smoke fixture's subtasks stand alone (no runnable container) and none is bug
+ * work, so the leaves lane is the ready set with `container: null` on every row,
+ * and the containers and bugs lanes are empty.
+ */
+function readyLeaves() {
+  return { items: readyRows().map((row) => ({ ...row, container: null })), nextCursor: null };
+}
+
+function emptyLane() {
+  return { items: [], nextCursor: null };
+}
+
 // The SEED contract (MOTIR-1802): a `sessionBranch` argument is a fallback an
 // item with no lineage of its own adopts. The stub mirrors that rather than
 // inventing a branch, because the whole point of the smoke run is that the
@@ -434,6 +448,9 @@ const ROUTES = [
   ['GET', '/api/v1/workspaces', () => workspaces()],
   ['GET', '/api/v1/projects', () => projects()],
   ['GET', '/api/v1/projects/{projectKey}/ready', () => readySet()],
+  ['GET', '/api/v1/projects/{projectKey}/ready/leaves', () => readyLeaves()],
+  ['GET', '/api/v1/projects/{projectKey}/ready/containers', () => emptyLane()],
+  ['GET', '/api/v1/projects/{projectKey}/ready/bugs', () => emptyLane()],
   ['GET', '/api/v1/work-items/{key}', (params) => workItemDetail(params.key)],
   [
     'GET',

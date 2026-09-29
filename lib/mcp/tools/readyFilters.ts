@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
+import { READY_LANES } from '@/lib/workItems/readyFilter';
 
 // Shared zod fields for the ready-set tools (`list_ready`, `next_ready`) — the
 // MCP-side mirror of the `ReadyListFilter` facets the `/api/ready` routes parse
@@ -42,3 +43,16 @@ export function normalizeAssigneeId(raw: string | null | undefined): string | nu
   if (raw === null || raw === 'unassigned') return null;
   return raw;
 }
+
+/**
+ * WHICH ready LANE to read (Story MOTIR-6829 · MOTIR-6833) — `leaf` (default),
+ * `container` or `bug`, the same three `/ready` and the `/api/v1/…/ready/*`
+ * operations serve. An unknown value is refused by the schema, naming the three;
+ * it never falls back to a default.
+ */
+export const laneField = z
+  .enum(READY_LANES)
+  .optional()
+  .describe(
+    'Which ready lane: "leaf" (default) — ready leaves that are not bug work, each naming its runnable container; "container" — runnable containers (a story, task or bug whose children are all leaves) holding a ready leaf, i.e. what a parent run takes; "bug" — a ready bug or a ready subtask of one. Rows come grouped by container, a group ranked by its best member.',
+  );

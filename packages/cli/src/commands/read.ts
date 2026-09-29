@@ -1,13 +1,19 @@
 import { CliError } from '../errors.js';
 import { info, json, out } from '../output.js';
 import { requireLink } from '../config/linkConfig.js';
-import { collectReady, collectSprintItems, withProjectSession } from '../session.js';
+import {
+  collectReady,
+  collectReadyContainers,
+  collectSprintItems,
+  withProjectSession,
+} from '../session.js';
 import { openUrl } from '../browser.js';
 import {
   assignChildWaves,
   inFlightFilter,
   issueUrl,
   renderActivityStream,
+  renderReadyContainers,
   renderReadyTable,
   renderSprintHeader,
   renderSprintItems,
@@ -71,19 +77,62 @@ export interface ReadyOptions {
   kinds?: string;
   assignee?: string;
   json?: boolean;
+  /** `--parent` — list the runnable CONTAINERS lane (MOTIR-6837). */
+  parent?: boolean;
+  /** `--bug` — list the BUGS lane (MOTIR-6837). */
+  bug?: boolean;
 }
 
+/**
+ * `motir ready` — one ready LANE (Story MOTIR-6829 · MOTIR-6837). By default the
+ * leaves, grouped under their runnable containers; `--parent` the containers
+ * themselves; `--bug` the bugs. The two lane flags are mutually exclusive, and a
+ * container has no leaf kind, so `--parent` refuses `--kinds`.
+ */
 export async function readyCommand(opts: ReadyOptions): Promise<void> {
+  refuseLaneFlagConflicts(opts);
   const kinds = parseKinds(opts.kinds);
   await withProjectSession(async ({ client, projectKey }) => {
     const assigneeId = await resolveAssignee(client, opts.assignee);
-    const items = await collectReady(client, projectKey, { kinds, assigneeId });
+    if (opts.parent) {
+      const containers = await collectReadyContainers(client, projectKey, { assigneeId });
+      if (opts.json) {
+        json(containers);
+        return;
+      }
+      out(renderReadyContainers(containers));
+      return;
+    }
+    const lane = opts.bug ? 'bug' : 'leaf';
+    const items = await collectReady(client, projectKey, { kinds, assigneeId, lane });
     if (opts.json) {
       json(items);
       return;
     }
-    out(renderReadyTable(items));
+    out(renderReadyTable(items, undefined, lane));
   });
+}
+
+/**
+ * The lane flags' refusals, shared by `motir ready` and `motir next`
+ * (MOTIR-6837): `--parent` and `--bug` name two different lanes, and a
+ * container has no leaf kind to narrow by. Refused before anything is read.
+ */
+export function refuseLaneFlagConflicts(opts: {
+  parent?: boolean;
+  bug?: boolean;
+  kinds?: string;
+}): void {
+  if (opts.parent && opts.bug) {
+    throw new CliError('`--parent` and `--bug` name two different lanes.', {
+      hint: 'Pass one of them: `--parent` for the next runnable container, `--bug` for the next bug.',
+    });
+  }
+  if (opts.parent && opts.kinds !== undefined) {
+    throw new CliError('`--parent` does not take `--kinds`: a container has no leaf kind.', {
+      hint: 'Drop `--kinds`, or drop `--parent` to narrow the leaves lane by kind.',
+    });
+  }
 }
 
 export interface StatusOptions {

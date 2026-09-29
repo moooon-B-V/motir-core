@@ -269,7 +269,7 @@ async function diedReason(
   return 'lapsed';
 }
 
-type Evaluation =
+export type ContinueEvaluation =
   | { kind: 'none' }
   | { kind: 'alive'; run: LatestRunForWorkItem }
   | { kind: 'continuing'; run: LatestRunForWorkItem }
@@ -285,6 +285,8 @@ type Evaluation =
       refusal: Exclude<WorkItemContinueRefusal, 'run_alive' | 'no_dead_run'> | null;
       parentKey: string | null;
     };
+
+type Evaluation = ContinueEvaluation;
 
 /**
  * THE PREDICATE — ONE function, read by the claim (under its row lock) and by the
@@ -352,6 +354,37 @@ async function evaluate(
     refusal,
     parentKey,
   };
+}
+
+/**
+ * THE PREDICATE, for a reader OUTSIDE this service — the stored To fix reason
+ * (`fixReasonService.deriveFixReason`, MOTIR-6880), which reads it inside the
+ * recompute's own row lock and transaction.
+ *
+ * ⚠️ A WRAPPER, NEVER A SECOND RULE. It is `evaluate` itself, so the claim, the item
+ * page's marker and the To fix reason cannot disagree about whether a run died or
+ * what the claim would answer. It writes nothing: a lapsed run the rule reads as
+ * dead is closed by the CLAIM, never by a reader.
+ */
+export function evaluateContinueWithin(
+  item: { id: string; status: string; archivedAt: Date | null; targetRepos: readonly string[] },
+  statuses: readonly WorkflowStatusDto[],
+  now: Date,
+  tx: Prisma.TransactionClient,
+): Promise<ContinueEvaluation> {
+  return evaluate(item, statuses, now, tx);
+}
+
+/**
+ * A dead run as the continue VIEW states it — the run (who, last heard from) and how
+ * it ended. Shared by `getContinueView` and the To fix reason, so the row's *last heard
+ * from* and the marker's are one read.
+ */
+export async function describeDeadRunWithin(
+  run: LatestRunForWorkItem,
+  tx: Prisma.TransactionClient,
+): Promise<{ deadRun: DeadRunDto; reason: RunDiedReason }> {
+  return { deadRun: toDeadRun(run), reason: await diedReason(run, tx) };
 }
 
 /**
@@ -856,10 +889,11 @@ export const workItemContinueService = {
               : null,
           };
         }
+        const { deadRun, reason } = await describeDeadRunWithin(verdict.run, tx);
         return {
           state: 'died',
-          deadRun: toDeadRun(verdict.run),
-          reason: await diedReason(verdict.run, tx),
+          deadRun,
+          reason,
           branch: verdict.branch,
           branches: verdict.branches,
           pullRequest: verdict.pullRequest,

@@ -175,6 +175,10 @@ export function buildProgram(): Command {
   // ── read ───────────────────────────────────────────────────────────────────
   register(program, 'ready')
     .option('--kinds <list>', 'Comma-separated kinds: epic,story,task,bug,subtask.')
+    // The ready LANES (MOTIR-6837): the leaves by default, grouped under their
+    // runnable containers; these two list the other two lanes.
+    .option('--parent', 'List the runnable containers — what `motir next --parent` runs.')
+    .option('--bug', 'List the ready bugs instead of the leaves.')
     .option('--assignee <id>', 'Filter by assignee: a user id, "me", or "unassigned".')
     .option('--json', 'Emit the ready items as JSON.')
     .action(readyCommand);
@@ -227,6 +231,13 @@ export function buildProgram(): Command {
   // first members of the reserved WORK LOOP group (`auto` / `batch` join them).
   register(program, 'next')
     .option('--kinds <list>', 'Comma-separated kinds: epic,story,task,bug,subtask.')
+    // The ready LANES (MOTIR-6837): `motir next` takes the next LEAF and never a
+    // bug; these two take the other lanes.
+    .option(
+      '--parent',
+      'Run the next runnable container (a story, task or bug whose children are all leaves) as a parent run — as `motir run <KEY>` would.',
+    )
+    .option('--bug', 'Take the next ready bug instead of the next leaf.')
     .option(
       '--print',
       'Print the prompt to stdout INSTEAD of launching an agent (default). Not --print-prompt.',

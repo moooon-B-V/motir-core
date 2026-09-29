@@ -193,6 +193,7 @@ import type {
   WorkItemTreeRow,
   RepoIssueFilter,
   ReadyCandidateRow,
+  ReadyContainerShapeRow,
   ReadyLayerRow,
 } from '@/lib/repositories/workItemRepository';
 import { DEFAULT_SORT, ISSUE_LIST_PAGE_SIZE } from '@/lib/issues/issueListView';
@@ -200,7 +201,13 @@ import { DEFAULT_SORT, ISSUE_LIST_PAGE_SIZE } from '@/lib/issues/issueListView';
 // number a client is promised and the number the service enforces cannot drift.
 import { MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
 import type { IssueSort } from '@/lib/issues/issueListView';
-import type { ExpansionNudge, ReadyItemDto, ReadyItemDispatchDto } from '@/lib/dto/ready';
+import type {
+  ExpansionNudge,
+  ReadyContainerDto,
+  ReadyItemDto,
+  ReadyItemDispatchDto,
+  ReadyLaneCountsDto,
+} from '@/lib/dto/ready';
 import type { ClaimActorDto, WorkItemClaimDto } from '@/lib/dto/claim';
 import {
   IN_PROGRESS_STATUS_CATEGORY,
@@ -209,6 +216,7 @@ import {
   refusedClaimOutcome,
 } from '@/lib/workItems/claimOutcome';
 import {
+  toReadyContainerDto,
   toReadyItemDto,
   toReadyItemDispatchDto,
   type ReadyItemContext,
@@ -216,14 +224,22 @@ import {
 } from '@/lib/mappers/readyMappers';
 import {
   type ReadyListFilter,
+  type ReadyContainersFilter,
   type ReadyCursor,
   clampReadyLimit,
   decodeReadyCursor,
   encodeReadyCursor,
   InvalidReadyFilterError,
-  READY_KIND_RANK,
-  READY_PRIORITY_ASC,
   SPRINT_ACTIVE,
+  compareReadyPosition,
+  decodeReadyLaneCursor,
+  encodeReadyLaneCursor,
+  groupRank,
+  isBugWork,
+  isRunnableContainer,
+  type ReadyGroupPosition,
+  type ReadyLane,
+  type ReadyLaneCursor,
 } from '@/lib/workItems/readyFilter';
 import { extractContextRefs } from '@/lib/markdown/contextRefs';
 import type {
@@ -7757,6 +7773,143 @@ export const workItemsService = {
   },
 
   /**
+   * The LEAVES lane (Story MOTIR-6829 · MOTIR-6830) — the ready set minus BUG
+   * WORK, grouped by RUNNABLE CONTAINER, each row naming its `container` (or
+   * `null` for a leaf standing alone). The lane `motir next` runs from.
+   *
+   * It PARTITIONS the same walk `listReady` reads — same cascade, same facets,
+   * same `allowSoftBlock`, same Visitor scoping — so a row is in this lane only
+   * if it was already ready, and `listReadyLeaves ∪ listReadyBugs` is exactly
+   * `listReady`'s id set. Only the ORDER differs: groups rank by their best
+   * member ({@link groupRank}), members keep the flat comparator inside a
+   * group. A cursor from another lane, or a flat-set cursor, throws
+   * `InvalidReadyCursorError`.
+   */
+  async listReadyLeaves(
+    projectId: string,
+    filter: ReadyListFilter,
+    ctx: ServiceContext | VisitorReadContext,
+  ): Promise<{ items: ReadyItemDto[]; nextCursor: string | null }> {
+    return listReadyLaneRows(projectId, 'leaf', filter, ctx);
+  },
+
+  /**
+   * The BUGS lane (MOTIR-6830) — the ready BUG WORK: a ready `bug` leaf (its own
+   * group, `container: null`), and the ready subtasks of a bug (grouped under
+   * that bug, `container` = the bug). Same walk, facets, order and cursor rules
+   * as {@link workItemsService.listReadyLeaves}.
+   */
+  async listReadyBugs(
+    projectId: string,
+    filter: ReadyListFilter,
+    ctx: ServiceContext | VisitorReadContext,
+  ): Promise<{ items: ReadyItemDto[]; nextCursor: string | null }> {
+    return listReadyLaneRows(projectId, 'bug', filter, ctx);
+  },
+
+  /**
+   * The CONTAINERS lane (MOTIR-6830) — one row per non-bug RUNNABLE CONTAINER
+   * holding at least one leaves-lane row, in the leaves lane's group order: the
+   * unit `motir run <KEY>` runs as a parent run.
+   *
+   * `readyLeafCount` is counted over the UNFACETED leaves lane, so a container's
+   * count never depends on which facet the caller used. The facets here apply
+   * to the CONTAINER itself — its priority, its assignee, its own sprint —
+   * because a container is what this lane hands out.
+   */
+  async listReadyContainers(
+    projectId: string,
+    filter: ReadyContainersFilter,
+    ctx: ServiceContext | VisitorReadContext,
+  ): Promise<{ items: ReadyContainerDto[]; nextCursor: string | null }> {
+    const { workspaceId, hidden } = await openReadyRead(projectId, ctx);
+    const limit = clampReadyLimit(filter.limit);
+    const cursor = filter.cursor ? decodeReadyLaneCursor(filter.cursor, 'container') : undefined;
+    const groups = await readyContainerGroups(projectId, workspaceId, hidden, filter);
+    const start = cursor ? groups.findIndex((g) => groupRank(g.position, cursor.group) > 0) : 0;
+    const begin = start === -1 ? groups.length : start;
+    const window = groups.slice(begin, begin + limit);
+    const last = window.at(-1);
+    const nextCursor =
+      begin + window.length < groups.length && last
+        ? encodeReadyLaneCursor({ lane: 'container', group: last.position, member: null })
+        : null;
+    return {
+      items: window.map((g) => presentContainerGroup(g, hidden)),
+      nextCursor,
+    };
+  },
+
+  /**
+   * How many rows each ready LANE holds (MOTIR-6830) — the `/ready` header's
+   * chips. One walk, partitioned once, so the three numbers can never disagree
+   * with the lanes they count.
+   */
+  async countReadyLanes(
+    projectId: string,
+    ctx: ServiceContext | VisitorReadContext,
+  ): Promise<ReadyLaneCountsDto> {
+    const { workspaceId, hidden } = await openReadyRead(projectId, ctx);
+    const { leaves, bugs } = await partitionReadyLanes(projectId, workspaceId, hidden, {}, false);
+    const containers = new Set(leaves.flatMap((r) => (r.container ? [r.container.id] : [])));
+    return {
+      leaves: leaves.length,
+      containers: containers.size,
+      bugs: bugs.length,
+      hasMore: false,
+    };
+  },
+
+  /**
+   * DISPATCH one row of a LANE (MOTIR-6833) — the first `leaf`- or `bug`-lane
+   * row, in lane order, not in `excludeIds`, as the full dispatch payload
+   * `getNextReady` returns (plus its `container`), or `null` when the lane is
+   * exhausted. The lane-aware twin of {@link workItemsService.getNextReady},
+   * behind the same CI-credit gate; `next_ready` routes its `lane` here so an
+   * agent and `/ready` never disagree about what comes next.
+   */
+  async getNextReadyInLane(
+    projectId: string,
+    lane: 'leaf' | 'bug',
+    filter: Omit<ReadyListFilter, 'limit' | 'cursor' | 'allowSoftBlock'> & {
+      excludeIds?: string[];
+    },
+    ctx: ServiceContext,
+  ): Promise<ReadyItemDispatchDto | null> {
+    const { workspaceId } = await openReadyRead(projectId, ctx);
+    await ciAllowanceService.assertDispatchAllowed(ctx);
+    const { excludeIds, ...facets } = filter;
+    const exclude = new Set(excludeIds ?? []);
+    const partition = await partitionReadyLanes(projectId, workspaceId, null, facets, false);
+    const groups = groupLaneRows(lane === 'leaf' ? partition.leaves : partition.bugs);
+    const group = groups.find((g) => g.members.some((r) => !exclude.has(r.row.id)));
+    const chosen = group?.members.find((r) => !exclude.has(r.row.id));
+    if (!group || !chosen) return null;
+    return {
+      ...(await buildReadyDispatchDto(chosen.row, ctx)),
+      container: group.container ? presentContainerGroup(group, null) : null,
+    };
+  },
+
+  /**
+   * The next runnable CONTAINER (MOTIR-6833) — the first containers-lane row not
+   * in `excludeIds`, or `null`. What `next_ready { lane: 'container' }` and
+   * `motir next --parent` hand out: the unit a parent run takes.
+   */
+  async getNextReadyContainer(
+    projectId: string,
+    filter: Omit<ReadyContainersFilter, 'limit' | 'cursor'> & { excludeIds?: string[] },
+    ctx: ServiceContext | VisitorReadContext,
+  ): Promise<ReadyContainerDto | null> {
+    const { workspaceId, hidden } = await openReadyRead(projectId, ctx);
+    const { excludeIds, ...facets } = filter;
+    const exclude = new Set(excludeIds ?? []);
+    const groups = await readyContainerGroups(projectId, workspaceId, hidden, facets);
+    const chosen = groups.find((g) => !exclude.has(g.container!.id));
+    return chosen ? presentContainerGroup(chosen, hidden) : null;
+  },
+
+  /**
    * Expansion-nudge detection (Subtask 7.11.7 / MOTIR-904) — productises
    * Principle #17 ("the plan should keep itself runnable"). When the ready
    * set is below the documented {@link EXPANSION_NUDGE_THRESHOLD} AND an
@@ -8020,6 +8173,247 @@ async function collectReadyLeaves(
 }
 
 /**
+ * The tenant + browse gate every ready read opens with, and the Visitor's hidden
+ * set — the same gate `listReady` applies, factored for the lane reads
+ * (MOTIR-6830). Cross-workspace, missing and un-browsable projects are all
+ * `ProjectNotFoundError`.
+ */
+async function openReadyRead(
+  projectId: string,
+  ctx: ServiceContext | VisitorReadContext,
+): Promise<{ workspaceId: string; hidden: ReadonlySet<string> | null }> {
+  if (isVisitorContext(ctx)) {
+    return { workspaceId: openVisitorRead(projectId, ctx).workspaceId, hidden: ctx.hiddenIds };
+  }
+  const project = await readProject(projectId, ctx);
+  if (!project || project.workspaceId !== ctx.workspaceId) {
+    throw new ProjectNotFoundError(projectId);
+  }
+  await assertBrowseAsNotFound(projectId, ctx);
+  return { workspaceId: project.workspaceId, hidden: null };
+}
+
+/** One ready leaf, placed in its lane: the runnable container it groups under. */
+interface ReadyLaneRow {
+  row: ReadyLayerRow;
+  container: ReadyContainerShapeRow | null;
+}
+
+/**
+ * PARTITION the walk's result into the leaves and bugs lanes (MOTIR-6830).
+ *
+ * The walk is `collectReadyLeaves`, called exactly as `listReady` calls it, so
+ * the lanes inherit its cascade, facets and `allowSoftBlock` rather than
+ * re-deriving any of them. The only new read is `findContainerShapes` over the
+ * DISTINCT parents of the collected rows — one query, whatever the page size.
+ *
+ * The lanes come back UNORDERED; {@link groupLaneRows} gives them their order.
+ */
+async function partitionReadyLanes(
+  projectId: string,
+  workspaceId: string,
+  hidden: ReadonlySet<string> | null,
+  facets: Omit<ReadyListFilter, 'cursor' | 'limit' | 'allowSoftBlock'>,
+  allowSoftBlock: boolean,
+): Promise<{ leaves: ReadyLaneRow[]; bugs: ReadyLaneRow[] }> {
+  const collected = await collectReadyLeaves(projectId, workspaceId, { workspaceId }, facets, {
+    allowSoftBlock,
+  });
+  const visible = hidden ? collected.filter((r) => !hidden.has(r.id)) : collected;
+  const parentIds = [...new Set(visible.flatMap((r) => (r.parentId === null ? [] : [r.parentId])))];
+  const shapes = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRepository.findContainerShapes(parentIds, workspaceId, tx),
+  );
+  const byId = new Map(shapes.map((s) => [s.id, s]));
+  const leaves: ReadyLaneRow[] = [];
+  const bugs: ReadyLaneRow[] = [];
+  for (const row of visible) {
+    const parent = row.parentId === null ? null : (byId.get(row.parentId) ?? null);
+    const container = parent && isRunnableContainer(parent) ? parent : null;
+    if (isBugWork(row, parent)) {
+      // A bug leaf standing under a story is its OWN group in the bugs lane;
+      // only a bug's subtasks group under it.
+      bugs.push({ row, container: container?.kind === 'bug' ? container : null });
+    } else {
+      leaves.push({ row, container });
+    }
+  }
+  return { leaves, bugs };
+}
+
+/** A lane group: its head (the container, or `null` for a standalone row), its
+ *  members in the flat comparator's order, and its position for the cursor. */
+interface ReadyLaneGroup {
+  container: ReadyContainerShapeRow | null;
+  members: ReadyLaneRow[];
+  position: ReadyGroupPosition;
+}
+
+/**
+ * GROUP a lane's rows by `container ?? self` and put the groups in
+ * {@link groupRank} order, members in {@link compareReadyRows} order. The
+ * input's order does not matter; the output's is the lane's contract.
+ */
+function groupLaneRows(rows: ReadyLaneRow[]): ReadyLaneGroup[] {
+  const byHead = new Map<string, ReadyLaneGroup>();
+  for (const entry of rows) {
+    const headId = entry.container?.id ?? entry.row.id;
+    let group = byHead.get(headId);
+    if (!group) {
+      group = {
+        container: entry.container,
+        members: [],
+        position: {
+          best: entry.row,
+          headKey: entry.container?.key ?? entry.row.key,
+        },
+      };
+      byHead.set(headId, group);
+    }
+    group.members.push(entry);
+  }
+  const groups = [...byHead.values()];
+  for (const group of groups) {
+    group.members.sort((a, b) => compareReadyRows(a.row, b.row));
+    const best = group.members[0]!.row;
+    group.position = {
+      best: { kind: best.kind, priority: best.priority, key: best.key },
+      headKey: group.position.headKey,
+    };
+  }
+  groups.sort((a, b) => groupRank(a.position, b.position));
+  return groups;
+}
+
+/**
+ * The CONTAINERS lane's groups, in order and faceted (MOTIR-6830): the leaves
+ * lane read UNFACETED — so a container's `readyLeafCount` never depends on the
+ * caller's facet — grouped, standalone groups dropped, then narrowed by the
+ * facets on the CONTAINER itself.
+ */
+async function readyContainerGroups(
+  projectId: string,
+  workspaceId: string,
+  hidden: ReadonlySet<string> | null,
+  filter: Omit<ReadyContainersFilter, 'cursor' | 'limit'>,
+): Promise<ReadyLaneGroup[]> {
+  const sprintId = await resolveSprintFacet(projectId, workspaceId, filter.sprintRef);
+  const { leaves } = await partitionReadyLanes(projectId, workspaceId, hidden, {}, false);
+  let groups = groupLaneRows(leaves).filter((g) => g.container !== null);
+  if (filter.priority && filter.priority.length > 0) {
+    const set = new Set<string>(filter.priority);
+    groups = groups.filter((g) => set.has(g.container!.priority));
+  }
+  if (filter.assigneeId === null) groups = groups.filter((g) => g.container!.assigneeId === null);
+  else if (filter.assigneeId !== undefined) {
+    groups = groups.filter((g) => g.container!.assigneeId === filter.assigneeId);
+  }
+  if (sprintId !== null) groups = groups.filter((g) => g.container!.sprintId === sprintId);
+  return groups;
+}
+
+/** One container group as its lane row, the Visitor's display-name rule applied. */
+function presentContainerGroup(
+  g: ReadyLaneGroup,
+  hidden: ReadonlySet<string> | null,
+): ReadyContainerDto {
+  const shape = g.container!;
+  const assignee = shape.assigneeId
+    ? {
+        id: shape.assigneeId,
+        name: hidden ? personName(shape.assigneeName) : (shape.assigneeName ?? ''),
+        email: hidden ? '' : (shape.assigneeEmail ?? ''),
+        image: storedAssetUrl(shape.assigneeImage),
+      }
+    : null;
+  return toReadyContainerDto(shape, { assignee, readyLeafCount: g.members.length });
+}
+
+/** A lane row's full position: its group's, then its own. */
+function laneRowPosition(
+  row: ReadyLaneRow,
+  group: ReadyGroupPosition,
+): { group: ReadyGroupPosition; member: ReadyCursor } {
+  return { group, member: { kind: row.row.kind, priority: row.row.priority, key: row.row.key } };
+}
+
+/** Strictly after the cursor under (group order, then member order). */
+function isAfterLaneCursor(
+  position: { group: ReadyGroupPosition; member: ReadyCursor },
+  cursor: ReadyLaneCursor,
+): boolean {
+  const d = groupRank(position.group, cursor.group);
+  if (d !== 0) return d > 0;
+  return compareReadyPosition(position.member, cursor.member!) > 0;
+}
+
+/**
+ * The shared body of the two ROW lanes — `leaf` and `bug`: gate, walk,
+ * partition, seek past the lane cursor, slice, and present each row as a
+ * `ReadyItemDto` carrying its `container`. The presentation is `listReady`'s
+ * (lineage in one batched read, the Visitor's display-name rule).
+ */
+async function listReadyLaneRows(
+  projectId: string,
+  lane: Exclude<ReadyLane, 'container'>,
+  filter: ReadyListFilter,
+  ctx: ServiceContext | VisitorReadContext,
+): Promise<{ items: ReadyItemDto[]; nextCursor: string | null }> {
+  const { workspaceId, hidden } = await openReadyRead(projectId, ctx);
+  const readCtx = { workspaceId };
+  const limit = clampReadyLimit(filter.limit);
+  const cursor = filter.cursor ? decodeReadyLaneCursor(filter.cursor, lane) : undefined;
+  const { cursor: _c, limit: _l, allowSoftBlock, ...facets } = filter;
+  const partition = await partitionReadyLanes(
+    projectId,
+    workspaceId,
+    hidden,
+    facets,
+    allowSoftBlock === true,
+  );
+  const groups = groupLaneRows(lane === 'leaf' ? partition.leaves : partition.bugs);
+  const containerOf = new Map(
+    groups.flatMap((g) =>
+      g.container ? [[g.container.id, presentContainerGroup(g, hidden)]] : [],
+    ),
+  );
+  const positioned = groups.flatMap((g) =>
+    g.members.map((m) => ({ entry: m, position: laneRowPosition(m, g.position) })),
+  );
+  const start = cursor ? positioned.findIndex((p) => isAfterLaneCursor(p.position, cursor)) : 0;
+  const begin = start === -1 ? positioned.length : start;
+  const window = positioned.slice(begin, begin + limit);
+  const last = window.at(-1);
+  const nextCursor =
+    begin + window.length < positioned.length && last
+      ? encodeReadyLaneCursor({ lane, ...last.position })
+      : null;
+  const lineages = await workItemsService.getInheritedSessionBranches(
+    window.map((p) => p.entry.row.id),
+    readCtx,
+  );
+  return {
+    items: window.map(({ entry }) => {
+      const r = entry.row;
+      const context = rowReadyContext(r);
+      const assignee =
+        hidden && context.assignee
+          ? { ...context.assignee, name: personName(r.assigneeName), email: '' }
+          : context.assignee;
+      return {
+        ...toReadyItemDto(r, {
+          ...context,
+          assignee,
+          inheritedSessionBranch: lineages[r.id] ?? null,
+        }),
+        container: entry.container ? (containerOf.get(entry.container.id) ?? null) : null,
+      };
+    }),
+    nextCursor,
+  };
+}
+
+/**
  * Resolve `?ancestor=` keys to work-item ids within THIS project, or `null`
  * when the facet is absent.
  *
@@ -8092,11 +8486,7 @@ export function compareReadyRows(
   a: { kind: WorkItemKind; priority: WorkItemPriority; key: number },
   b: { kind: WorkItemKind; priority: WorkItemPriority; key: number },
 ): number {
-  const dk = READY_KIND_RANK[a.kind] - READY_KIND_RANK[b.kind];
-  if (dk !== 0) return dk;
-  const dp = READY_PRIORITY_ASC.indexOf(b.priority) - READY_PRIORITY_ASC.indexOf(a.priority);
-  if (dp !== 0) return dp;
-  return a.key - b.key;
+  return compareReadyPosition(a, b);
 }
 
 /** True when `row` sorts STRICTLY AFTER `cursor` under {@link compareReadyRows} —

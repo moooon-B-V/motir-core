@@ -144,6 +144,7 @@ function workbenchRow(status: string): HomeWorkItemRowDto {
     project: { id: 'p1', identifier: 'PROD', name: 'Prod' },
     viewerIsAssignee: true,
     viewerIsReporter: true,
+    canContinueHosted: false,
   } as HomeWorkItemRowDto;
 }
 

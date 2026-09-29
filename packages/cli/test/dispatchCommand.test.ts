@@ -271,7 +271,7 @@ describe('motir next --print', () => {
     setup({ item: null });
     await nextCommand({ print: true });
     expect(toolNames()).toEqual(['whoami', 'next_ready']);
-    expect(harness.stderr).toContain('No ready work items.');
+    expect(harness.stderr).toContain('No ready work items in the leaf lane.');
   });
 
   it('passes --kinds through to next_ready', async () => {

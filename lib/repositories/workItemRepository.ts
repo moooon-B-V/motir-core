@@ -698,6 +698,29 @@ export type ReadyCandidateRow = WorkItem & {
 export type ReadyLayerRow = ReadyCandidateRow & { hasChildren: boolean };
 
 /**
+ * The SHAPE of a ready leaf's PARENT (Story MOTIR-6829 · MOTIR-6830) — what the
+ * ready lanes need to decide whether that parent is a RUNNABLE CONTAINER (a
+ * `story` / `task` / `bug` none of whose children has children) and to render
+ * it as a group header. `childCount` counts the parent's live children, ready or
+ * not; `hasGrandchildren` is true when any live child has a live child.
+ */
+export interface ReadyContainerShapeRow {
+  id: string;
+  identifier: string;
+  key: number;
+  kind: WorkItemKind;
+  title: string;
+  priority: WorkItemPriority;
+  sprintId: string | null;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  assigneeEmail: string | null;
+  assigneeImage: string | null;
+  childCount: number;
+  hasGrandchildren: boolean;
+}
+
+/**
  * One row of the triage QUEUE read (Subtask 6.11.3) — the FULL `work_item` row
  * (so the mapper consumes its `triagedAt` / `snoozedUntil` columns directly)
  * PLUS the bits the SAME single read resolves so the service doesn't re-query:
@@ -1704,6 +1727,48 @@ export const workItemRepository = {
   },
 
   /**
+   * The container SHAPES of a set of parents (Story MOTIR-6829 · MOTIR-6830) —
+   * ONE query for any number of ids, so partitioning a ready page into lanes
+   * costs one read bounded by its distinct parents, never one per row.
+   *
+   * The child tests read `archivedAt IS NULL` exactly as `findReadyLayer`'s
+   * `hasChildren` does, so "is this a container" and "is its child a leaf" are
+   * answered by the same predicate the walk used. `workspaceId` is filtered
+   * explicitly (finding #26). Empty input short-circuits to `[]`.
+   */
+  async findContainerShapes(
+    parentIds: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ReadyContainerShapeRow[]> {
+    if (parentIds.length === 0) return [];
+    const client = tx ?? dbRead;
+    return client.$queryRaw<ReadyContainerShapeRow[]>`
+      SELECT p."id",
+             p."identifier",
+             p."key",
+             p."kind",
+             p."title",
+             p."priority",
+             p."sprintId",
+             p."assigneeId",
+             au."name"  AS "assigneeName",
+             au."email" AS "assigneeEmail",
+             au."image" AS "assigneeImage",
+             (SELECT count(*)::int FROM "work_item" c
+               WHERE c."parentId" = p."id" AND c."archivedAt" IS NULL) AS "childCount",
+             EXISTS (
+               SELECT 1 FROM "work_item" c
+                 JOIN "work_item" g ON g."parentId" = c."id" AND g."archivedAt" IS NULL
+                WHERE c."parentId" = p."id" AND c."archivedAt" IS NULL
+             ) AS "hasGrandchildren"
+        FROM "work_item" p
+        LEFT JOIN "user" au ON au."id" = p."assigneeId"
+       WHERE p."id" = ANY(${parentIds})
+         AND p."workspaceId" = ${workspaceId}`;
+  },
+
+  /**
    * Childless expandable STUBS (Subtask 7.11.7 / MOTIR-904) — epics and stories
    * that have NO children and are NOT terminal, so expanding them would
    * replenish the ready set. Sorted by priority desc, key asc so the
@@ -1878,6 +1943,21 @@ export const workItemRepository = {
        WHERE "id" = ANY(${ids}::text[])
        ORDER BY "id"
        FOR UPDATE`;
+  },
+
+  /**
+   * {@link lockByIds} for a caller that must NEVER WAIT on a card lock — the run
+   * sweeps closing a lapsed or abandoned run (MOTIR-6881). Rows another transaction
+   * holds are SKIPPED, not waited for, so the caller compares what came back with
+   * what it asked for and backs off when they differ. Same ascending order.
+   */
+  async tryLockByIds(ids: string[], tx: Prisma.TransactionClient): Promise<Array<{ id: string }>> {
+    if (ids.length === 0) return [];
+    return tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "work_item"
+       WHERE "id" = ANY(${ids}::text[])
+       ORDER BY "id"
+       FOR UPDATE SKIP LOCKED`;
   },
 
   /**
@@ -4749,8 +4829,20 @@ export const workItemRepository = {
       where: { id },
       data: {
         fixReason: value.fixReason,
-        // A plain data record — every field a string, number or null.
-        fixDetail: value.fixDetail === null ? Prisma.DbNull : { ...value.fixDetail },
+        // A plain data record — every field a string, number, boolean or null, and a
+        // dead run's branch list re-spelled as literal objects (an interface carries no
+        // index signature, so the JSON input type refuses it as declared).
+        fixDetail:
+          value.fixDetail === null
+            ? Prisma.DbNull
+            : {
+                ...value.fixDetail,
+                branches:
+                  value.fixDetail.branches?.map((b) => ({
+                    repository: b.repository,
+                    branch: b.branch,
+                  })) ?? null,
+              },
       },
     });
   },

@@ -748,6 +748,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // RE-MEASURE from the first green CI run that includes it.
   'public-selfhost.spec.ts': 9.0,
   'quick-view-edit.spec.ts': 16.4,
+  // MOTIR-6836 — ESTIMATED, not measured: three tests, a sign-up each; two seed
+  // an eleven-item tree and walk the lanes, the third seeds 62 items over HTTP
+  // and scrolls a pane until a second page streams in. Sized high, per the
+  // calibration note above. RE-MEASURE from the first green CI run that has it.
+  'ready-lanes.spec.ts': 45.0,
   'ready.spec.ts': 6.7,
   // ⚠️ `registration-lands-on-onboarding.spec.ts` (MOTIR-4876) carries the LOCAL
   // provenance, and the guard caught it with no entry on its FIRST CI run — the

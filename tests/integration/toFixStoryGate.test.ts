@@ -8,6 +8,7 @@ import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { db } from '@/lib/db';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { homeService } from '@/lib/services/homeService';
@@ -388,6 +389,57 @@ describe('priority', () => {
     const seen = await whereIs(s, item.id);
     expect(seen.tabs).toEqual(['to-fix']);
     expect(seen.row?.fixReason).toBe('conflicted');
+  });
+});
+
+describe('priority — a dead run (Story MOTIR-6590 · MOTIR-6883, case 5)', () => {
+  it('a card at In Progress with a dead run AND a failing check reads run_died, listed above queue_failed and changes_requested', async () => {
+    const s = await makeScenario('gate-priority-died@example.com');
+    // Each PR reason through its own event, as the cases above reach them.
+    const sentBack = await card(s, 'sent back', 131);
+    await check(s, 131, 'sha-a', 'vitest', 'success');
+    await requestChanges(s, sentBack.item.id, 'Not yet.');
+    const queued = await card(s, 'queued', 132);
+    await check(s, 132, 'sha-a', 'vitest', 'success');
+    await queueFailure(s, queued.item.id, 132, 'sha-a');
+
+    // The dead-run card: In Progress, its pull request red, and its run dies.
+    const died = await card(s, 'died', 133);
+    await check(s, 133, 'sha-a', 'vitest', 'failure');
+    // Opening the pull request moved it to Implemented; the run that picks it back up
+    // is working on it again, so it is In Progress with its check still red.
+    await workItemsService.updateStatus(died.item.id, 'in_progress', s.ctx);
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: s.project.identifier,
+        command: 'run',
+        cards: [{ key: died.item.identifier, disposition: 'queued' }],
+      },
+      s.ctx,
+    );
+    await dispatchRunService.appendEvents(
+      run.id,
+      [
+        {
+          kind: 'checkout_ready',
+          workItemKey: died.item.identifier,
+          disposition: 'running',
+          data: { branch: died.headRef },
+        },
+      ],
+      s.ctx,
+    );
+    await dispatchRunService.close(run.id, { stopReason: 'interrupted' }, s.ctx);
+
+    const seen = await whereIs(s, died.item.id);
+    expect(seen.tabs).toEqual(['to-fix']);
+    expect(seen.row).toMatchObject({
+      status: 'in_progress',
+      fixReason: 'run_died',
+      fixDetail: { repair: 'continue', continueKey: died.item.identifier },
+    });
+    const order = (await homeService.listToFix(hctx(s))).items.map((r) => r.fixReason);
+    expect(order).toEqual(['run_died', 'queue_failed', 'changes_requested']);
   });
 });
 

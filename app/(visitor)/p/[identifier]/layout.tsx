@@ -15,6 +15,7 @@ import { CreateIssueProvider } from '@/app/(authed)/_components/CreateIssueProvi
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
 import { HelpMenu } from '@/app/(authed)/_components/HelpMenu';
 import { ThemeToggle } from '@/app/(authed)/_components/ThemeToggle';
+import { VisitorAddressFetch } from './_components/VisitorAddressFetch';
 import { VisitorBanner } from './_components/VisitorBanner';
 import { VisitorTopNav } from './_components/VisitorTopNav';
 import { VisitorRail } from './_components/VisitorRail';
@@ -63,9 +64,11 @@ export default async function VisitorLayout({
   );
 
   // Every shared body under here builds its hrefs for this project's Visitor
-  // paths (MOTIR-6888) — the ApprovalOverlay's included, so it sits inside.
+  // paths (MOTIR-6888) — the ApprovalOverlay's included, so it sits inside —
+  // and every request this tab makes names the project it reads (MOTIR-6892).
   return (
     <ReaderRoutesProvider identifier={project.identifier}>
+      <VisitorAddressFetch identifier={project.identifier} />
       <ToastProvider>
         <CommandPaletteProvider>
           <CreateIssueProvider canEdit={false} canCreate={false}>

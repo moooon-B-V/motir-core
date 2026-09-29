@@ -1435,6 +1435,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'The project key — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value. Case-insensitive.',
       },
+      lane: {
+        type: 'string',
+        enum: ['leaf', 'container', 'bug'],
+        description:
+          'Which ready lane: "leaf" (default) — ready leaves that are not bug work, each naming its runnable container; "container" — runnable containers (a story, task or bug whose children are all leaves) holding a ready leaf, i.e. what a parent run takes; "bug" — a ready bug or a ready subtask of one. Rows come grouped by container, a group ranked by its best member.',
+      },
       kinds: {
         type: 'array',
         items: { type: 'string', enum: ['epic', 'story', 'task', 'bug', 'subtask'] },
@@ -1592,6 +1598,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         minLength: 1,
         description:
           'The project key — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value. Case-insensitive.',
+      },
+      lane: {
+        type: 'string',
+        enum: ['leaf', 'container', 'bug'],
+        description:
+          'Which ready lane: "leaf" (default) — ready leaves that are not bug work, each naming its runnable container; "container" — runnable containers (a story, task or bug whose children are all leaves) holding a ready leaf, i.e. what a parent run takes; "bug" — a ready bug or a ready subtask of one. Rows come grouped by container, a group ranked by its best member.',
       },
       kinds: {
         type: 'array',

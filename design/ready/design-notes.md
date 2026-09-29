@@ -308,3 +308,140 @@ then shows a brief loading state before the `MarkdownView`.
 | empty state             | inline (lucide `file-x` + copy) — the same shape as `EmptyState` at modal scale |
 
 No new design-system entry is invented — every piece reuses a shipped primitive.
+
+---
+
+## Lanes — runnable containers, standalone leaves and a Bugs lane, one switched full-height pane (MOTIR-6831, gating MOTIR-6834)
+
+Asset: **`ready--lanes.mock.html`** — a DELTA on `ready.mock.html` (§ _Layout_ and
+§ _Dispatch-card anatomy_ above), drawn against `/ready` as `origin/main` renders it
+(rendered before drawing: a flat list of dispatch cards under "Ready to start").
+Story MOTIR-6829 splits the ready set into three **lanes**, defined once in
+`lib/workItems/readyFilter.ts` and served by `workItemsService.listReadyLeaves` /
+`listReadyContainers` / `listReadyBugs` / `countReadyLanes`:
+
+- **leaves** — the ready leaves that are not bug work, each naming its **runnable
+  container** (a `story` / `task` / `bug` whose every child is childless — the shape
+  `motir run <parent>` accepts) or none;
+- **containers** — every non-bug runnable container holding at least one ready leaf;
+- **bugs** — a ready `bug`, or a ready subtask of a bug.
+
+The page shows the leaves lane as **Ready to run** and the bugs lane as **Bugs**. An
+**epic is never a row**, and neither is a container holding a grandchild: its leaves
+stand alone. Eight panels, one per state — review each.
+
+**Revised twice on review.** Version `c181c7ae2` stacked Bugs under the main list;
+the review asked for _"full page height for both 'ready to run' and 'bugs'"_. Version
+`106bc0386` put them side by side in two full-height panes; the review asked to _"add a
+switch to switch between 'ready to run' and bugs"_. This version: **one switch, one
+full-height pane.**
+
+### The page (panel 1)
+
+- **Header** — unchanged: title **"Ready to start"**, the neutral **`{n} ready`**
+  chip (`ready.count`, now the LEAVES lane's count from `countReadyLanes`), subtitle,
+  "What is this?". The chip drops out with the EmptyState (panel 6), as today.
+- **The lane switch** — directly below the header, a `Segmented` control
+  (`components/ui/Segmented.tsx`, `role="tablist"`, `aria-label` **"Ready lanes"**,
+  `ready.lanes.switchAria`) with two segments, each carrying its lane's count:
+  **"Ready to run {n}"** (`ready.lanes.main.heading` + the leaves count) and
+  **"Bugs {n}"** (`ready.lanes.bugs.heading` + the bugs count), the count in
+  `text-xs text-(--el-text-secondary)`. **Default: Ready to run.** The choice is URL
+  state the CLIENT reads — `?lane=bugs`, absent for Ready to run — written with
+  `shallowPush` (`lib/navigation/shallowUrl.ts`, CLAUDE.md § _URL state the CLIENT
+  reads_): both lanes' first pages are server-rendered with the page, so switching
+  needs no server round-trip, draws no pending state, and a reload or a shared link
+  lands on the same lane. The switch never moves on its own — not even when the
+  chosen lane is empty (panel 4).
+- **The pane** — ONE `role="tabpanel"` below the switch, filling the page height
+  (`flex-1 min-h-0`, the page a `h-[calc(100dvh-<shell chrome>)]` flex column) with
+  its OWN scroll container (`overflow-y-auto`). It holds the chosen lane's
+  `role="list"`: **"Ready work items"** (`ready.listAria`, unchanged) for Ready to
+  run, **"Ready bugs"** (`ready.lanes.bugs.listAria`) for Bugs. `gap-2`, as today.
+- **Order** — the service's lane order, never re-sorted by the page: groups rank by
+  their best member's `(kind, priority, key)`, members keep that order inside a
+  group. A group is contiguous by construction.
+
+### Rows
+
+Every row is **today's dispatch card**, unchanged (`ReadyRow`: `IssueTypeIcon`, mono
+key in `--el-text-secondary`, title, `WorkItemTypeChip`, the priority `Pill`,
+`Avatar` + name, the hover copy button + `Tooltip`), with ONE addition at its lead:
+the **tree toggle slot**, composed from `components/ui/TreeTable.tsx` exactly.
+
+- **Runnable-container row** — a 16px **chevron button** (lucide `ChevronRight`, 12px,
+  `text-(--el-text-secondary)`, `rounded-(--radius-control)`; `rotate-90` when open;
+  `aria-expanded`; `aria-label` **"Expand {key}"** / **"Collapse {key}"** —
+  `ready.container.expand` / `ready.container.collapse`), then the kind icon, key,
+  title and meta cluster, which OPENS with the **hint** **"{ready} of {children}
+  ready"** (`ready.container.hint`, `text-xs text-(--el-text-secondary)`) —
+  `readyLeafCount` of `childCount`. A container has no work type, so no type chip.
+  Its **copy** button copies **`motir run <KEY>`** — the parent run — with the tooltip
+  **Copy `motir run <KEY>`** and the `aria-label` **"Copy parent-run command for
+  {key}"** (`ready.container.copyAria`). **Collapsed by default.** The chevron
+  toggles; the rest of the row still opens the peek, as today.
+- **Standalone leaf row** — no chevron; the 16px slot is RESERVED (TreeTable's leaf
+  slot) so every kind icon in the list aligns. Otherwise exactly today's row,
+  including its copy (`motir run` / `motir plan`) or the manual _Show instruction_.
+- **Expanded container (panel 2)** — its ready leaves render directly beneath it,
+  each a full leaf row indented ONE tree level: **22px** (`TreeTable`'s
+  `INDENT_PX`) via `ml-[22px]`. Only the READY leaves are listed; the hint says how
+  many children there are in all.
+- **A bug with ready subtasks (panel 3)** — the same container row in the Bugs lane;
+  a childless bug is a plain leaf row there.
+
+### States
+
+- **(3) The switch on Bugs** — the Bugs lane in the same full-height pane.
+- **(4) Ready to run empty, bugs present** — the pane shows ONE line, **"Nothing
+  ready to run."** (`ready.lanes.main.empty`, `text-sm text-(--el-text-secondary)`),
+  and the switch's **"Bugs 2"** is what says there is still work. Never the
+  EmptyState, because the page is not empty.
+- **(5) Bugs empty** — with the switch on Bugs, **"No ready bugs."**
+  (`ready.lanes.bugs.empty`), the pane still full height.
+- **(6) All empty** — today's `EmptyState`, unchanged (panel 3 of `ready.mock.html`),
+  with no switch and no chip.
+- **(7) Loading** — `PageSkeleton` in an in-page `<Suspense>` below the page gate
+  (never a `loading.tsx`): the REAL header and the REAL switch (its counts arrive
+  with the data), then pulsing card-height blocks (`--el-muted` on `--radius-card`)
+  in the pane.
+- **(8) Load-more at scale** — the pane is a virtualized, cursor-streamed list
+  (`useRowWindow` measured against the PANE's scroll container, a bottom sentinel
+  inside it), one per lane. The load-more cursor is the LANE cursor, which may end a
+  page inside a group: the next page's first rows are that group's remaining members
+  and they **merge into the rendered group** — never a second header for the same
+  container. Expand state is client-local, keyed by container id, and survives a
+  load and a switch to the other lane and back. "Loading more…" (`ready.loadingMore`)
+  is unchanged.
+
+### Access path
+
+Unchanged: the sidebar **Ready** entry (`nav.ready`, lucide `circle-play`) opens
+`/ready` on Ready to run; `/ready?lane=bugs` opens it on Bugs. No filter is added.
+
+### i18n — new keys under `ready.*` (en + zh)
+
+`lanes.switchAria` ("Ready lanes"), `lanes.main.heading` ("Ready to run"),
+`lanes.main.empty` ("Nothing ready to run."), `lanes.bugs.heading` ("Bugs"),
+`lanes.bugs.empty` ("No ready bugs."), `lanes.bugs.listAria` ("Ready bugs"),
+`container.hint` ("{ready} of {total} ready"), `container.expand` ("Expand {key}"),
+`container.collapse` ("Collapse {key}"), `container.copyAria` ("Copy parent-run
+command for {key}").
+
+### Primitives composed (no hand-rolling)
+
+| Element                      | Shipped primitive                                                      |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| every row                    | `app/(authed)/ready/_components/ReadyList.tsx` `ReadyRow` (unchanged)  |
+| chevron · leaf slot · indent | `components/ui/TreeTable.tsx` (`ChevronRight`, 16px slot, `INDENT_PX`) |
+| lane switch                  | `components/ui/Segmented.tsx` + `shallowPush`                          |
+| count chip                   | `components/ui/Pill.tsx` (`tone="neutral"`)                            |
+| priority chip                | `Pill` via `PriorityValue` (`PRIORITY_META`)                           |
+| all-empty                    | `components/ui/EmptyState.tsx` (unchanged)                             |
+| loading                      | `components/ui/PageSkeleton.tsx`                                       |
+| copy tooltip · confirmation  | `components/ui/Tooltip.tsx` · `components/ui/Toast.tsx`                |
+| virtualization               | `components/ui/useRowWindow.ts`                                        |
+
+No new design-system entry. The expand grammar is TreeTable's; the page does not
+become a TreeTable — each lane is a list of dispatch cards, which is what the page
+already is.

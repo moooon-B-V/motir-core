@@ -8,6 +8,7 @@ import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/utils/cn';
 import { buildIssueListHref, type IssueListView, type IssueSort } from '@/lib/issues/issueListView';
 import type { IssueFilter } from '@/lib/issues/issueListFilter';
+import { parseVisitorPath, visitorViewPath } from '@/lib/visitor/routes';
 
 // The working [Tree ▾] view switcher (Subtask 2.5.8) — replaces the disabled
 // placeholder 2.5.3 shipped as a forward-compatible seam. A Popover menu toggling
@@ -16,6 +17,11 @@ import type { IssueFilter } from '@/lib/issues/issueListFilter';
 // URL-driven (`?view=`) — shareable / reload-safe — so this only navigates; the
 // Server Component reads `view` and renders the matching table. The current List
 // sort is preserved when toggling INTO list (so a round-trip keeps the column).
+//
+// On the Visitor route tree (MOTIR-6889) the choice is the PATH instead:
+// `/p/<id>/items` pins the List and `/p/<id>/tree` the Tree, and both pages
+// ignore `?view=`. So there the switch moves between the two paths, carrying
+// sort and filter and writing no `view` param.
 
 interface ViewOption {
   view: IssueListView;
@@ -34,6 +40,20 @@ export interface IssueViewSwitcherProps {
   filter: IssueFilter;
 }
 
+/** Where choosing `view` goes from `pathname` — a Visitor path's other segment, else `?view=`. */
+function switchHref(
+  pathname: string,
+  opts: { view: IssueListView; sort: IssueSort; filter: IssueFilter },
+): string {
+  const visitor = parseVisitorPath(pathname);
+  if (visitor && visitor.sub === null && (visitor.view === 'items' || visitor.view === 'tree')) {
+    const path = visitorViewPath(visitor.identifier, opts.view === 'tree' ? 'tree' : 'items');
+    // `view: 'tree'` is the default buildIssueListHref omits: the path carries the choice.
+    return buildIssueListHref(path, { view: 'tree', sort: opts.sort, filter: opts.filter });
+  }
+  return buildIssueListHref(pathname, opts);
+}
+
 export function IssueViewSwitcher({ view, sort, filter }: IssueViewSwitcherProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -50,7 +70,7 @@ export function IssueViewSwitcher({ view, sort, filter }: IssueViewSwitcherProps
       // Preserve the active sort only when the List is the destination (the Tree
       // ignores sort, so its canonical URL drops the param), and the active
       // filter always (it applies to both views).
-      router.push(buildIssueListHref(pathname, { view: next, sort, filter }));
+      router.push(switchHref(pathname, { view: next, sort, filter }));
     }
   }
 

@@ -16,6 +16,7 @@ import zhMessages from '@/messages/zh.json';
 afterEach(cleanup);
 
 const NAMES: Record<WorkItemFixReasonDto, string> = {
+  run_died: 'To fix · run died',
   queue_failed: 'To fix · failed in the merge queue',
   conflicted: 'To fix · conflicts with its base branch',
   ci_failed: 'To fix · CI failed',
@@ -89,6 +90,14 @@ describe('ToFixTag — the label form (board card, quick view)', () => {
     const el = document.getElementById('t-zh')!;
     expect(el.textContent).toBe('待修复 · 在合并队列中失败');
     expect(el.getAttribute('title')).toBe('待修复 · 在合并队列中失败');
+  });
+
+  it('names a dead run in zh', () => {
+    render(<ToFixTag fixReason="run_died" statusCategory="in_progress" form="glyph" />, {
+      locale: 'zh',
+      messages: zhMessages,
+    });
+    expect(screen.getByRole('img', { name: '待修复 · 运行已中断' })).toBeTruthy();
   });
 
   it('builds the card-scoped id the board points aria-describedby at', () => {

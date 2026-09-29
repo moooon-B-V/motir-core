@@ -27,6 +27,13 @@ const BASE: FixDetailDto = {
   reviewerName: null,
   notePreview: null,
   gate: null,
+  lastHeardAt: null,
+  ranByName: null,
+  branch: null,
+  branches: null,
+  pushed: null,
+  continueKey: null,
+  diedReason: null,
   affected: 1,
   total: 1,
 };
@@ -128,6 +135,68 @@ describe('the command — from `fixDetail.repair`, never from the reason', () =>
     cleanup();
     renderBanner('conflicted', { base: 'main' });
     expect(banner().textContent).not.toContain('pull requests affected');
+  });
+});
+
+describe('a dead run (MOTIR-6880) — one sentence, pointing at #development, no command', () => {
+  const heard = () => new Date(Date.now() - 12 * 60_000).toISOString();
+  const died = (over: Partial<FixDetailDto> = {}) => ({
+    repair: 'continue' as const,
+    lastHeardAt: heard(),
+    ranByName: 'Mara S.',
+    branch: 'subtask/PROD-42-work',
+    branches: [{ repository: 'web', branch: 'subtask/PROD-42-work' }],
+    pushed: true,
+    continueKey: 'PROD-42',
+    diedReason: 'lapsed' as const,
+    affected: 0,
+    total: 0,
+    ...over,
+  });
+
+  it.each([
+    [
+      'pushed',
+      {},
+      /^This needs a fix: its run died, last heard from 12 min\. ago, and its work is kept on its branch\.$/,
+      'See how to continue it',
+    ],
+    [
+      'nothing pushed',
+      { repair: 'none' as const, pushed: false, branch: null, branches: [], continueKey: null },
+      /^This needs a fix: its run died, last heard from 12 min\. ago, before it pushed anything\.$/,
+      'See how to start over',
+    ],
+    [
+      'a leg of a parent run',
+      { continueKey: 'PROD-12' },
+      /^This needs a fix: the run of PROD-12 it was part of died, last heard from 12 min\. ago\.$/,
+      'See how to continue it',
+    ],
+  ])('%s', (_label, over, sentence, link) => {
+    renderBanner('run_died', died(over));
+    expect(banner().querySelector('p')?.textContent).toMatch(sentence);
+    expect(banner().getAttribute('data-to-fix')).toBe('run_died');
+    // The run-died marker below carries the command — the banner draws none, and no lead.
+    expect(banner().querySelector('pre')).toBeNull();
+    expect(banner().textContent).not.toContain('motir');
+    expect(screen.getByRole('link', { name: link }).getAttribute('href')).toBe('#development');
+    // Its time is a <time> carrying the instant.
+    const time = banner().querySelector('time')!;
+    expect(time.getAttribute('title')).toMatch(/UTC$/);
+  });
+
+  it('names the parent in bold', () => {
+    renderBanner('run_died', died({ continueKey: 'PROD-12' }));
+    expect(banner().querySelector('p b')?.textContent).toBe('PROD-12');
+  });
+
+  it('reads in Chinese', () => {
+    renderBanner('run_died', died(), { locale: 'zh' });
+    expect(banner().querySelector('p')?.textContent).toMatch(
+      /^需要修复：它的运行已中断，最后一次联系在.+，其工作保留在分支上。$/,
+    );
+    expect(screen.getByRole('link', { name: '查看如何继续' })).toBeTruthy();
   });
 });
 

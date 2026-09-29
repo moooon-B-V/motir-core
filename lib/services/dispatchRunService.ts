@@ -10,6 +10,7 @@ import type {
   DispatchStopReason,
 } from '@/generated/prisma/client';
 import {
+  DispatchRunCardsBusyError,
   DispatchRunEventBodyTooLargeError,
   DispatchRunEventLimitError,
   DispatchRunNoTargetError,
@@ -66,6 +67,7 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { availableRoomViews, holdsAnyOf, RUN_ACT_PERMISSIONS } from '@/lib/rooms/roomView';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { recomputeWorkItemFixReason } from './fixReasonService';
 
 // THE DISPATCH RUN SERVICE (Story MOTIR-1789 · MOTIR-1792) — the WRITE half of
 // the run seam, specified by `docs/decisions/dispatch-run-record.md`.
@@ -415,6 +417,79 @@ function runTouches(
   return run.cards.some((card) => card.workItemId !== null && set.has(card.workItemId));
 }
 
+/**
+ * How a close takes the covered cards' row locks (MOTIR-6881). `wait` is every
+ * caller with somebody waiting on the answer. `skip_if_busy` is the run SWEEPS: a
+ * background pass must never wait on a card lock another writer holds, because the
+ * writer it would wait on (a continue claim) holds that card and then wants the
+ * run — see `lockCoveredCards`.
+ */
+export type RunCardLockMode = 'wait' | 'skip_if_busy';
+
+/**
+ * Every work item a run COVERS — the scope card of a parent or scope run FIRST,
+ * then each leg's card, ascending by id, without duplicates. This order is the
+ * lock order, so it is the one place it is decided.
+ */
+function coveredCardIds(run: {
+  scopeWorkItemId: string | null;
+  cards: ReadonlyArray<{ workItemId: string | null }>;
+}): { scope: string | null; legs: string[] } {
+  const legs = [
+    ...new Set(
+      run.cards
+        .map((card) => card.workItemId)
+        .filter((id): id is string => id !== null && id !== run.scopeWorkItemId),
+    ),
+  ].sort();
+  return { scope: run.scopeWorkItemId, legs };
+}
+
+/**
+ * Take the covered cards' ROW LOCKS — BEFORE the run's own lock (MOTIR-6881).
+ *
+ * ⚠️ THE ORDER IS CARD, THEN RUN, BECAUSE `claimContinue` ALREADY TAKES IT THAT WAY.
+ * The claim locks the card it is claiming, then closes the lapsed run (the run's
+ * lock) inside the same transaction. A close that took the run first and the cards
+ * second — which a recompute after the settle would do by itself — is the inverse
+ * order, and `reapLapsed` racing `claimContinue` on one card would deadlock.
+ *
+ * Within the cards: the SCOPE card first (a parent-run claim holds the scope card
+ * when it closes the run), then the legs ascending. A claim on one card of a
+ * scope-LESS multi-card run can still hold a leg out of that order, which no fixed
+ * order fixes; that is why the sweeps pass `skip_if_busy` — they never wait on a
+ * card lock, and back off with {@link DispatchRunCardsBusyError} instead.
+ */
+async function lockCoveredCards(
+  covered: { scope: string | null; legs: string[] },
+  runId: string,
+  mode: RunCardLockMode,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (mode === 'wait') {
+    if (covered.scope) await workItemRepository.lockById(covered.scope, tx);
+    await workItemRepository.lockByIds(covered.legs, tx);
+    return;
+  }
+  const wanted = [...(covered.scope ? [covered.scope] : []), ...covered.legs];
+  const got = await workItemRepository.tryLockByIds(wanted, tx);
+  if (got.length !== wanted.length) throw new DispatchRunCardsBusyError(runId);
+}
+
+/**
+ * RECOMPUTE the To fix reason of every card a run covers (MOTIR-6881) — after the
+ * run was opened or closed, in the same transaction. The trigger is the TRANSITION:
+ * a close takes the run out of the running set and an open puts one in, which is
+ * exactly what the dead-run reason (`run_died`) reads. A heartbeat changes neither.
+ */
+async function recomputeCovered(
+  covered: { scope: string | null; legs: string[] },
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (covered.scope) await recomputeWorkItemFixReason(covered.scope, tx);
+  for (const id of covered.legs) await recomputeWorkItemFixReason(id, tx);
+}
+
 export const dispatchRunService = {
   /**
    * OPEN a run WITH ITS SET.
@@ -545,6 +620,14 @@ export const dispatchRunService = {
     const withCards = await dispatchRunRepository.findByIdWithCards(run.id, tx);
     /* v8 ignore next -- the row was just written inside this transaction */
     if (!withCards) throw new DispatchRunNotFoundError(run.id);
+
+    // A NEW run on a card whose last run died makes that card's run ALIVE again,
+    // which clears `run_died` (MOTIR-6881) — `motir run` again, Run hosted, a
+    // repair run, the continue run itself. Cards first, ascending, as a close
+    // takes them, so two writers on one card set cannot lock it in two orders.
+    const covered = coveredCardIds(withCards);
+    await lockCoveredCards(covered, run.id, 'wait', tx);
+    await recomputeCovered(covered, tx);
     return { run: toDispatchRunDto(withCards, 0), created: true };
   },
 
@@ -863,10 +946,11 @@ export const dispatchRunService = {
     runId: string,
     input: CloseDispatchRunInput,
     ctx: ServiceContext,
+    cardLocks: RunCardLockMode = 'wait',
   ): Promise<DispatchRunDto> {
     assertRunTokenScope(runId, ctx);
     return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
-      dispatchRunService.closeWithin(runId, input, ctx, tx),
+      dispatchRunService.closeWithin(runId, input, ctx, tx, undefined, cardLocks),
     );
   },
 
@@ -880,6 +964,10 @@ export const dispatchRunService = {
    * `closingLog`, when given, is appended as a run-scoped `log` event just before
    * the close, under the same row lock — the reason a server-side close records.
    * `tx` must be bound to the run's workspace.
+   *
+   * Every card the run covers has its To fix reason RECOMPUTED once the legs are
+   * settled (MOTIR-6881): a run that ended without finishing is what `run_died`
+   * reads. Those cards are locked BEFORE the run — `lockCoveredCards` says why.
    */
   async closeWithin(
     runId: string,
@@ -887,8 +975,17 @@ export const dispatchRunService = {
     ctx: ServiceContext,
     tx: Prisma.TransactionClient,
     closingLog?: Prisma.InputJsonObject,
+    cardLocks: RunCardLockMode = 'wait',
   ): Promise<DispatchRunDto> {
+    // The covered set is fixed when the run opens (its legs and its scope are
+    // written once, by `openWithin`), so reading it before the run lock is safe.
+    const before = await dispatchRunRepository.findByIdWithCards(runId, tx);
+    if (!before) throw new DispatchRunNotFoundError(runId);
+    const covered = coveredCardIds(before);
+    // ⚠️ CARDS FIRST, THEN THE RUN — the order `claimContinue` takes them in.
+    await lockCoveredCards(covered, runId, cardLocks, tx);
     const locked = await dispatchRunRepository.findTerminalStateForUpdate(runId, tx);
+    /* v8 ignore next -- the run was read a statement ago in this transaction */
     if (!locked) throw new DispatchRunNotFoundError(runId);
     if (locked.status !== 'running') {
       throw new DispatchRunTerminalError(runId, locked.status);
@@ -933,6 +1030,8 @@ export const dispatchRunService = {
         tx,
       );
     }
+
+    await recomputeCovered(covered, tx);
 
     const withCards = await dispatchRunRepository.findByIdWithCards(runId, tx);
     /* v8 ignore next -- the row was just written inside this transaction */

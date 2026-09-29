@@ -280,12 +280,21 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
   {
     path: 'ready',
     signature: '',
-    description: 'List the linked project’s ready set (every dependency satisfied).',
+    description:
+      'List the linked project’s ready leaves, grouped under their runnable containers — or, with --parent / --bug, the other two ready lanes.',
     helpGroup: HELP_GROUP.read,
     options: [
       {
         flags: '--kinds <list>',
         description: 'Comma-separated kinds: epic,story,task,bug,subtask.',
+      },
+      {
+        flags: '--parent',
+        description: 'List the runnable containers — what `motir next --parent` runs.',
+      },
+      {
+        flags: '--bug',
+        description: 'List the ready bugs instead of the leaves.',
       },
       {
         flags: '--assignee <id>',
@@ -393,12 +402,22 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
   {
     path: 'next',
     signature: '',
-    description: 'Dispatch the next ready work item: claim it and deliver its prompt.',
+    description:
+      'Dispatch the next ready leaf (never a bug): claim it and deliver its prompt. --parent runs the next runnable container; --bug takes the next bug.',
     helpGroup: HELP_GROUP.workLoop,
     options: [
       {
         flags: '--kinds <list>',
         description: 'Comma-separated kinds: epic,story,task,bug,subtask.',
+      },
+      {
+        flags: '--parent',
+        description:
+          'Run the next runnable container (a story, task or bug whose children are all leaves) as a parent run — as `motir run <KEY>` would.',
+      },
+      {
+        flags: '--bug',
+        description: 'Take the next ready bug instead of the next leaf.',
       },
       {
         flags: '--print',
