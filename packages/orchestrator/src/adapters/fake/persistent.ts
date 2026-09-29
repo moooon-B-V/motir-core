@@ -97,7 +97,8 @@ const persistentSpecs: PersistentContainerSpec[] = [];
 const operations: string[] = [];
 const execs: Array<{ machineId: string; command: string[] }> = [];
 let nextExec: PersistentExecResult | null = null;
-const failures: Record<'provision' | 'machine' | 'start' | 'stop' | 'destroy', string | null> = {
+type FailureKind = 'provision' | 'machine' | 'start' | 'stop' | 'destroy';
+const failures: Record<FailureKind, string | null> = {
   provision: null,
   machine: null,
   start: null,
@@ -129,10 +130,49 @@ function save(): void {
   writeFileSync(path, JSON.stringify(store), 'utf8');
 }
 
-function takeFailure(kind: keyof typeof failures): string | null {
-  const detail = failures[kind];
+/**
+ * Arranged failures also live in a SIDECAR beside a shared state file, so another
+ * process sharing the fleet sees them — an E2E runner arms a failure the web
+ * server then meets. A sidecar, not a field of the store: reading one must never
+ * reload the store mid-operation.
+ */
+function failuresPath(): string | null {
+  const path = statePath();
+  return path ? `${path}.failures.json` : null;
+}
+
+function readSharedFailures(): Partial<Record<FailureKind, string>> {
+  const path = failuresPath();
+  if (!path || !existsSync(path)) return {};
+  try {
+    return JSON.parse(readFileSync(path, 'utf8')) as Partial<Record<FailureKind, string>>;
+  } catch {
+    return {};
+  }
+}
+
+function writeSharedFailures(value: Partial<Record<FailureKind, string>>): void {
+  const path = failuresPath();
+  if (!path) return;
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(value), 'utf8');
+}
+
+function takeFailure(kind: FailureKind): string | null {
+  const shared = readSharedFailures();
+  const detail = failures[kind] ?? shared[kind] ?? null;
   failures[kind] = null;
+  if (shared[kind] !== undefined) {
+    delete shared[kind];
+    writeSharedFailures(shared);
+  }
   return detail;
+}
+
+/** Arm one failure in memory and, when a state file is shared, in its sidecar. */
+function armFailure(kind: FailureKind, detail: string): void {
+  failures[kind] = detail;
+  if (failuresPath()) writeSharedFailures({ ...readSharedFailures(), [kind]: detail });
 }
 
 function nextId(prefix: string): string {
@@ -166,23 +206,24 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       execs.length = 0;
       nextExec = null;
       for (const key of Object.keys(failures) as Array<keyof typeof failures>) failures[key] = null;
+      writeSharedFailures({});
       bootBehaviour = 'start';
       now = () => new Date();
     },
     failNextProvision(detail = 'the fake refused to provision') {
-      failures.provision = detail;
+      armFailure('provision', detail);
     },
     failNextMachineCreate(detail = 'the fake refused to create the machine') {
-      failures.machine = detail;
+      armFailure('machine', detail);
     },
     failNextStart(detail = 'no capacity on the volume host') {
-      failures.start = detail;
+      armFailure('start', detail);
     },
     failNextStop(detail = 'the fake refused to stop') {
-      failures.stop = detail;
+      armFailure('stop', detail);
     },
     failNextDestroy(detail = 'the fake refused to destroy') {
-      failures.destroy = detail;
+      armFailure('destroy', detail);
     },
     setBootBehaviour(behaviour) {
       bootBehaviour = behaviour;

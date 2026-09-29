@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -166,6 +166,21 @@ describe('the cross-process seam', () => {
     const inventory = await fake.listPersistent(h.app);
     expect(inventory.machines[0]!.createdAt).toBeInstanceOf(Date);
     expect(fake.liveMachineIds()).toEqual([h.machineId]);
+  });
+
+  it('a failure armed by ANOTHER process (the sidecar) is met once, here', async () => {
+    // What an E2E runner does: write the arranged failure beside the shared state.
+    writeFileSync(
+      join(dir, 'state.json.failures.json'),
+      JSON.stringify({ provision: 'no room on the host' }),
+    );
+    await expect(fake.provisionPersistent(SPEC)).rejects.toThrow('no room on the host');
+    await expect(fake.provisionPersistent(SPEC)).resolves.toBeTruthy();
+    // …and one armed here reaches the sidecar for the other process to meet.
+    fake.failNextStart('capacity');
+    const h = await fake.provisionPersistent(SPEC);
+    await fake.stop(h);
+    await expect(fake.start(h)).rejects.toThrow('capacity');
   });
 });
 
