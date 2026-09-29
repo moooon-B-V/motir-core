@@ -152,6 +152,9 @@ describe('the curated overview', () => {
         done [options] [key]      Close out a merged item — or a whole merged session
                                   branch.
 
+      ADDITIONAL COMMANDS:
+        agent-terminal            The terminal server inside a Motir agent image.
+
       HELP TOPICS:
         help [command...]         Show help for a command, or read a help topic.
         environment               Environment variables Motir reads, and what each one
@@ -229,6 +232,7 @@ describe('group membership', () => {
       HELP_GROUP.setup,
       HELP_GROUP.read,
       HELP_GROUP.workLoop,
+      HELP_GROUP.additional,
       HELP_GROUP.topics,
     ]);
     // `login` / `logout` lead the group: the device grant is the command a
@@ -252,6 +256,9 @@ describe('group membership', () => {
       'plan',
       'done',
     ]);
+    // The agent machine's terminal server (MOTIR-6938): published, but not a
+    // command a person types, so it takes the default bucket.
+    expect(groups.get(HELP_GROUP.additional)).toEqual(['agent-terminal']);
     expect(groups.get(HELP_GROUP.topics)).toEqual(['help', 'environment', 'files', 'runs']);
   });
 
@@ -266,7 +273,7 @@ describe('group membership', () => {
 
     const groups = commandGroups(render(program));
 
-    expect(groups.get(HELP_GROUP.additional)).toEqual(['throwaway']);
+    expect(groups.get(HELP_GROUP.additional)).toEqual(['agent-terminal', 'throwaway']);
   });
 
   it('renders the WORK LOOP heading now that the dispatch commands have landed', () => {

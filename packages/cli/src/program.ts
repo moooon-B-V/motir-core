@@ -19,6 +19,7 @@ import { fixCommand } from './commands/fix.js';
 import { autoCommand } from './commands/auto.js';
 import { batchCommand } from './commands/batch.js';
 import { planCommand } from './commands/plan.js';
+import { agentTerminalServeCommand } from './commands/agentTerminal.js';
 import { applyHelpConfiguration, registerHelpSurface } from './help.js';
 
 // The command tree. 7.9.1 ships the scaffold + auth + link; the read commands
@@ -559,6 +560,20 @@ export function buildProgram(): Command {
     // Arity-2 wrapper: commander appends the Command object, which must not
     // land in `doneCommand`'s options parameter when `[key]` is omitted.
     .action((key: string | undefined, opts) => doneCommand(key, opts));
+
+  // ── agent-terminal (MOTIR-6938) ────────────────────────────────────────────
+  // The server an agent's machine runs as its main process. `motir
+  // agent-terminal --help` exiting 0 is the machine init's probe for an image
+  // that carries it (`docs/decisions/agent-terminal.md` Q4, Q8).
+  const agentTerminal = register(program, 'agent-terminal');
+  register(agentTerminal, 'agent-terminal serve')
+    .option('--port <port>', 'Port to listen on, on every interface (default 7681).')
+    // Arity-1 wrapper: commander appends the Command object, which must not land
+    // in the command's injectable-deps parameter. The server keeps the process
+    // alive; nothing awaits it past listening.
+    .action(async (opts) => {
+      await agentTerminalServeCommand(opts);
+    });
 
   // After the real commands, so HELP TOPICS renders below them.
   registerHelpSurface(program);
