@@ -1,0 +1,2038 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The planning TARGET search and the canvas's Set as target — delta (MOTIR-6895)</title>
+
+    <!--
+      ══════════════════════════════════════════════════════════════════════════
+      A DELTA MOCK. It holds ONLY the panels that CHANGE.
+      ══════════════════════════════════════════════════════════════════════════
+
+      WHAT IT AMENDS, by path:
+        · design/ai-chat/target-picker.mock.html (MOTIR-1490, re-tokened by
+          MOTIR-4346) — panel 1 (the `@` trigger and its dropdown), panel 2
+          (the visible `@` button) and panel 4 (the dropdown's states)
+        · the SELECTED-CARD chrome of the shared roadmap canvas — the action
+          slot `ProjectRoadmapCanvas.tsx` renders under a selected card (View ·
+          Open). That chrome is owned by `design/roadmap/` and is NOT redrawn
+          here: the two shipped buttons are reproduced from the component's own
+          classes, and ONE button is added between them, on the planning surface
+          only.
+
+      Everything the base sheets decide is INHERITED and NOT redrawn: the
+      composer's bottom-aligned geometry and its multi-line growth
+      (planning-workspace--multiline-composer.mock.html, decision 2), the
+      target tray and its chips (target-picker.mock.html panel 2), the row
+      grammar of the results (type icon · mono key · title · status Pill), the
+      target ring + "Target" pill on a canvas node (`PlanningTargetFrame`), and
+      the arrival and follow rules (planning-workspace--arrival.mock.html).
+
+      The story every panel draws: MOTIR-6894.
+
+      ⚠️ A NOTE ON WHAT THIS STYLESHEET IS. It is a hand-written rendering of the
+      shipped components, not their CSS. Where a panel claims what the PRODUCT
+      does today, the claim was read from the component (named in each panel's
+      note), never from this file.
+    -->
+
+    <style>
+      /* ═══════════════════════════════════════════════════════════════════════
+         TOKENS — the `--el-*` element layer, copied from
+         `target-picker.mock.html` (the sheet this delta amends). Roles only; no
+         invented hue. `--el-text-muted` / `--el-text-faint` are DECLARED so the
+         ink scanners resolve them by name; muted is used only on untinted
+         surfaces, faint only on `aria-hidden` decoration.
+         ═══════════════════════════════════════════════════════════════════════ */
+      :root {
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+
+        --el-page-bg: #ffffff;
+        --el-card: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+        --el-canvas: #ecebe7;
+
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
+
+        --el-accent: #5645d4;
+        --el-accent-on-surface: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-accent-pressed: #4534b3;
+        --el-highlight: #ff64c8;
+
+        --el-tint-mint: #d9f3e1;
+        --el-tint-sky: #dcecfa;
+        --el-tint-peach: #ffe8d4;
+
+        --el-type-epic: #ff64c8;
+        --el-type-story: #1aae39;
+        --el-type-task: #0075de;
+        --el-type-bug: #e03131;
+        --el-type-subtask: #2a9d99;
+
+        --el-accent-wash: color-mix(in srgb, var(--el-accent) 6%, var(--el-page-bg));
+
+        --radius-card: 12px;
+        --radius-btn: 8px;
+        --radius-input: 9px;
+        --radius-control: 6px;
+        --radius-badge: 999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px #0000000d;
+        --shadow-card: 0 2px 6px #0000000f;
+        --shadow-elevated: 0 8px 26px -10px #0000001f;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+
+      /* ── doc scaffold (annotations — NOT product UI) ─────────────────────── */
+      .page-head {
+        max-width: 1150px;
+        margin: 0 auto 22px;
+      }
+      .page-head h1 {
+        margin: 0 0 8px;
+        font-size: 22px;
+        color: var(--el-text-strong);
+      }
+      .page-head p {
+        margin: 0 0 6px;
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .sheet {
+        max-width: 1150px;
+        margin: 0 auto 28px;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .sheethead .n {
+        font: 700 11px var(--font-mono);
+        color: var(--el-accent-on-surface);
+        background: var(--el-accent-wash);
+        padding: 2px 7px;
+        border-radius: var(--radius-control);
+      }
+      .sheethead h2 {
+        font-size: 14.5px;
+        margin: 0;
+        color: var(--el-text-strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-left: auto;
+      }
+      .sheetbody {
+        padding: 20px 18px;
+        background: var(--el-surface);
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 22px;
+        align-items: flex-start;
+      }
+      .col {
+        flex: 1 1 320px;
+        min-width: 300px;
+      }
+      .label {
+        font: 600 10.5px var(--font-mono);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+      }
+      .note {
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        padding: 12px 18px 16px;
+        border-top: 1px solid var(--el-border-soft);
+        background: var(--el-card);
+      }
+      .note b {
+        color: var(--el-text);
+      }
+      .note p {
+        margin: 0 0 6px;
+      }
+      .cardref {
+        font: 600 12px var(--font-mono);
+        color: var(--el-accent-on-surface);
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+        background: var(--el-muted);
+        border-radius: var(--radius-kbd);
+        padding: 1px 5px;
+        color: var(--el-text-strong);
+      }
+      .kbd {
+        font: 600 11px var(--font-mono);
+        border: 1px solid var(--el-border-strong);
+        border-bottom-width: 2px;
+        border-radius: var(--radius-kbd);
+        padding: 0 5px;
+        background: var(--el-card);
+        color: var(--el-text-strong);
+      }
+      .callout {
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        margin: 8px 0 0;
+      }
+      .callout b {
+        color: var(--el-text);
+      }
+      table.keys {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      table.keys th,
+      table.keys td {
+        text-align: left;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: top;
+        color: var(--el-text);
+      }
+      table.keys th {
+        font: 600 10.5px var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft);
+      }
+      svg.i {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        flex: none;
+      }
+      svg.i.sm {
+        width: 14px;
+        height: 14px;
+      }
+      svg.i.xs {
+        width: 12px;
+        height: 12px;
+      }
+
+      /* ── THE RAIL + COMPOSER (the shipped `PlanChangeComposer` form) ─────── */
+      .rail {
+        width: 380px;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: visible;
+      }
+      .log {
+        padding: 14px 14px 6px;
+        min-height: 72px;
+      }
+      .bubble {
+        font-size: 13px;
+        line-height: 1.5;
+        background: var(--el-surface);
+        border-radius: var(--radius-card);
+        padding: 8px 11px;
+        color: var(--el-text);
+        max-width: 90%;
+      }
+      /* `form.relative border-t border-(--el-border) px-3 py-3` */
+      .composer {
+        position: relative;
+        border-top: 1px solid var(--el-border);
+        padding: 12px;
+      }
+      .tray {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .tray-label {
+        font: 600 10px var(--font-mono);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      /* The shipped `PlanningTargetChip` — not redrawn, reproduced. */
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        border: 1px solid var(--el-border);
+        background: var(--el-accent-wash);
+        border-radius: var(--radius-badge);
+        padding: 2px 4px 2px 8px;
+        color: var(--el-text);
+      }
+      .chip .k {
+        font: 600 11px var(--font-mono);
+        color: var(--el-accent-on-surface);
+      }
+      .chip .x {
+        display: inline-flex;
+        color: var(--el-text-secondary);
+      }
+      /* `flex items-end gap-2` — decision 2, bottom-aligned */
+      .composer-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+      }
+      .field-wrap {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+      }
+      .field {
+        min-height: 44px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface);
+        padding: 12px 12px 12px 32px;
+        font-size: 14px;
+        line-height: 18px;
+        color: var(--el-text);
+      }
+      .field .ph {
+        color: var(--el-text-secondary);
+      }
+      .field .caret {
+        border-left: 1.5px solid var(--el-accent);
+        margin-left: 1px;
+      }
+      .field.focus {
+        box-shadow: 0 0 0 2px var(--el-accent);
+      }
+      /* THE SEARCH CONTROL — the `planning-target-trigger` slot, new glyph.
+         `absolute bottom-1.5 left-1.5 … p-(--spacing-icon-btn) text-(--el-text-muted)` */
+      .search-ctl {
+        position: absolute;
+        left: 6px;
+        bottom: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        background: transparent;
+      }
+      .search-ctl.hover {
+        background: var(--el-card);
+        color: var(--el-text);
+      }
+      .search-ctl.focus {
+        box-shadow: 0 0 0 2px var(--el-accent);
+        color: var(--el-text);
+      }
+      .search-ctl.pressed {
+        background: var(--el-accent-wash);
+        color: var(--el-accent-on-surface);
+      }
+      .search-ctl.disabled {
+        opacity: 0.5;
+      }
+      .tooltip {
+        position: absolute;
+        left: -4px;
+        bottom: calc(100% + 6px);
+        white-space: nowrap;
+        font-size: 11.5px;
+        line-height: 1.3;
+        background: var(--el-text-strong);
+        color: var(--el-page-bg);
+        border-radius: var(--radius-control);
+        padding: 5px 8px;
+        box-shadow: var(--shadow-elevated);
+        z-index: 5;
+      }
+      .tooltip .kb {
+        font: 600 10.5px var(--font-mono);
+        border: 1px solid var(--el-text-muted);
+        border-radius: var(--radius-kbd);
+        padding: 0 4px;
+        margin-left: 6px;
+      }
+      .send {
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .send.off {
+        opacity: 0.5;
+      }
+
+      /* ── THE TARGET SEARCH POPOVER — the shipped `TargetSearchListbox` shell
+         (`absolute right-3 bottom-full left-3 mb-2 rounded-(--radius-card)
+         border bg-(--el-surface) shadow-(--shadow-elevated)`), which GAINS its
+         own search field at the top. ─────────────────────────────────────── */
+      .pop-host {
+        position: relative;
+        padding-top: 330px;
+      }
+      .pop-host.short {
+        padding-top: 150px;
+      }
+      .pop {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        bottom: 64px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+      }
+      .pop.inline {
+        position: static;
+      }
+      .pop-field {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-card);
+        color: var(--el-text-secondary);
+      }
+      .pop-field .q {
+        flex: 1;
+        font-size: 13.5px;
+        color: var(--el-text);
+      }
+      .pop-field .q .ph {
+        color: var(--el-text-secondary);
+      }
+      .pop-field .q .caret {
+        border-left: 1.5px solid var(--el-accent);
+        margin-left: 1px;
+      }
+      .pop-field.disabled .q {
+        color: var(--el-text-secondary);
+      }
+      .pop-field .esc {
+        font: 600 10px var(--font-mono);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-kbd);
+        padding: 0 4px;
+        color: var(--el-text-secondary);
+      }
+      .pop-head {
+        border-bottom: 1px solid var(--el-border-soft);
+        padding: 4px 8px;
+        font: 600 10px var(--font-mono);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .pop-state {
+        padding: 10px 8px;
+        text-align: center;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .pop-state.spin {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+      .pop-list {
+        padding: 4px;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: var(--radius-control);
+        padding: 4px 8px;
+        font-size: 13.5px;
+        color: var(--el-text);
+      }
+      .opt.active {
+        background: var(--el-surface-soft);
+      }
+      .opt .ty {
+        display: inline-flex;
+      }
+      .ty.t-epic {
+        color: var(--el-type-epic);
+      }
+      .ty.t-story {
+        color: var(--el-type-story);
+      }
+      .ty.t-task {
+        color: var(--el-type-task);
+      }
+      .ty.t-subtask {
+        color: var(--el-type-subtask);
+      }
+      .opt .key {
+        font: 12px var(--font-mono);
+        color: var(--el-text-secondary);
+        flex: none;
+      }
+      .opt .ti {
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .opt .ti mark {
+        background: transparent;
+        color: var(--el-text);
+        font-weight: 700;
+      }
+      .opt.is-target .ti,
+      .opt.is-target .key {
+        color: var(--el-text-secondary);
+      }
+      .pill {
+        font-size: 11px;
+        font-weight: 600;
+        border-radius: var(--radius-badge);
+        padding: 1px 8px;
+        color: var(--el-text);
+        flex: none;
+      }
+      .pill.p-planned {
+        background: var(--el-muted);
+      }
+      .pill.p-progress {
+        background: var(--el-tint-sky);
+      }
+      .pill.p-done {
+        background: var(--el-tint-mint);
+      }
+      /* "Already a target" — the canvas node's own `Target` pill vocabulary
+         (`PlanningTargetFrame`), in its quiet on-surface form so it does not
+         out-shout the active row. */
+      .tpill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font: 700 10px var(--font-mono);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-accent-on-surface);
+        background: var(--el-accent-wash);
+        border: 1px solid var(--el-accent-on-surface);
+        border-radius: var(--radius-badge);
+        padding: 0 6px;
+        flex: none;
+      }
+      .pop-foot {
+        display: flex;
+        gap: 12px;
+        border-top: 1px solid var(--el-border-soft);
+        padding: 5px 10px;
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        background: var(--el-card);
+      }
+
+      /* ── THE CANVAS — the shipped node + its selected-card action slot ───── */
+      .canvas {
+        background: var(--el-canvas);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 40px 34px 42px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 44px 70px;
+        align-items: flex-start;
+        position: relative;
+      }
+      .canvas.tall {
+        min-height: 330px;
+      }
+      .crumbs {
+        position: absolute;
+        top: 8px;
+        left: 12px;
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .crumbs b {
+        color: var(--el-text);
+      }
+      .slot {
+        position: relative;
+        width: 224px;
+      }
+      /* `WorkItemNode` — reproduced, not restyled */
+      .node {
+        width: 224px;
+        height: 104px;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 10px 12px;
+        position: relative;
+      }
+      .node .top {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font: 11.5px var(--font-mono);
+        color: var(--el-text-secondary);
+      }
+      .node .idrow {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 6px;
+        font: 11px var(--font-mono);
+        color: var(--el-text-secondary);
+      }
+      .node .nt {
+        margin-top: 2px;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.3;
+        color: var(--el-text);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .node .bar {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        bottom: 10px;
+        height: 4px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+      }
+      .node .bar span {
+        display: block;
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-type-story);
+      }
+      /* the SELECTED ring: `ring-2 ring-(--el-accent-on-surface) ring-offset-2` */
+      .slot.selected .node {
+        border-color: var(--el-accent-on-surface);
+        box-shadow: 0 0 0 1px var(--el-accent-on-surface);
+      }
+      /* PlanningTargetFrame — the shipped target ring + glow + pill */
+      .slot.target .node::after {
+        content: '';
+        position: absolute;
+        inset: -2px;
+        border: 2px solid var(--el-accent);
+        border-radius: var(--radius-card);
+        box-shadow:
+          0 0 14px color-mix(in srgb, var(--el-accent) 24%, transparent),
+          0 0 28px -4px color-mix(in srgb, var(--el-highlight) 30%, transparent);
+        pointer-events: none;
+      }
+      .node-tpill {
+        position: absolute;
+        top: -8px;
+        right: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font: 700 10px var(--font-mono);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-accent-text);
+        background: var(--el-accent);
+        border-radius: var(--radius-badge);
+        padding: 1px 6px;
+        z-index: 2;
+      }
+      /* PROPOSED card (the plan canvas) — the diff frame, no key */
+      .slot.proposed .node {
+        border: 1.5px dashed var(--el-type-story);
+      }
+      .node .add {
+        font: 700 10px var(--font-mono);
+        color: var(--el-text);
+        background: var(--el-tint-mint);
+        border-radius: var(--radius-badge);
+        padding: 0 6px;
+      }
+      /* THE ACTION SLOT — `absolute -bottom-3.5 left-1/2 -translate-x-1/2 flex gap-2` */
+      .actions {
+        position: absolute;
+        left: 50%;
+        bottom: -14px;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 8px;
+        z-index: 3;
+      }
+      .act {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: var(--radius-btn);
+        padding: 4px 10px;
+        box-shadow: var(--shadow-card);
+      }
+      /* View's classes, verbatim: border bg-(--el-surface) text-(--el-text-secondary) */
+      .act.secondary {
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+      }
+      .act.secondary.hover {
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+      }
+      .act.secondary.disabled {
+        opacity: 0.55;
+      }
+      /* Open's classes, verbatim: bg-(--el-accent) text-(--el-accent-text) */
+      .act.primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .act-tip {
+        position: absolute;
+        left: 0;
+        top: calc(100% + 24px);
+        white-space: nowrap;
+        font-size: 11.5px;
+        background: var(--el-text-strong);
+        color: var(--el-page-bg);
+        border-radius: var(--radius-control);
+        padding: 5px 8px;
+        z-index: 4;
+      }
+      .unmoved {
+        margin-top: 26px;
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── THE FULL SURFACE (access path) ───────────────────────────────────── */
+      .surface {
+        display: grid;
+        grid-template-columns: 1fr 360px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-card);
+      }
+      .surface .bar-top {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--el-border);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .surface .bar-top b {
+        color: var(--el-text);
+      }
+      .surface .canvas {
+        border: 0;
+        border-radius: 0;
+      }
+      .surface .rail {
+        border: 0;
+        border-left: 1px solid var(--el-border);
+        border-radius: 0;
+        width: auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+      }
+      .door {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 14px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .door .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        font-weight: 600;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        padding: 5px 10px;
+        background: var(--el-card);
+        color: var(--el-text);
+      }
+      .num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font: 700 10.5px var(--font-mono);
+        flex: none;
+      }
+      .pin {
+        position: absolute;
+        z-index: 6;
+      }
+    </style>
+  </head>
+
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="i-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8" />
+        <path d="m21 21-4.3-4.3" />
+      </symbol>
+      <symbol id="i-at" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+      </symbol>
+      <symbol id="i-target" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <circle cx="12" cy="12" r="6" />
+        <circle cx="12" cy="12" r="2" />
+      </symbol>
+      <symbol id="i-x" viewBox="0 0 24 24">
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+      </symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24">
+        <path
+          d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+        />
+        <circle cx="12" cy="12" r="3" />
+      </symbol>
+      <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24">
+        <path
+          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+        />
+        <path d="m21.854 2.147-10.94 10.939" />
+      </symbol>
+      <symbol id="i-loader" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></symbol>
+      <symbol id="i-story" viewBox="0 0 24 24">
+        <path d="M12 7v14" />
+        <path
+          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+        />
+      </symbol>
+      <symbol id="i-epic" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" /></symbol>
+      <symbol id="i-task" viewBox="0 0 24 24">
+        <path d="m3 17 2 2 4-4" />
+        <path d="m3 7 2 2 4-4" />
+        <path d="M13 6h8" />
+        <path d="M13 12h8" />
+        <path d="M13 18h8" />
+      </symbol>
+      <symbol id="i-sparkle" viewBox="0 0 24 24">
+        <path
+          d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+        />
+      </symbol>
+    </svg>
+
+    <header class="page-head">
+      <h1>
+        Setting the planning target — a Search control, a search with its own field, and Set as
+        target on the canvas
+      </h1>
+      <p>
+        A <b>delta</b> of <code>target-picker.mock.html</code> panels 1, 2 and 4, and of the shared
+        canvas's selected-card chrome. Story <span class="cardref">MOTIR-6894</span>; this card
+        <span class="cardref">MOTIR-6895</span>. The code cards that build it:
+        <span class="cardref">MOTIR-6897</span> (the composer's Search control and popover) and
+        <span class="cardref">MOTIR-6898</span> (the canvas action). The number match every panel
+        relies on is <span class="cardref">MOTIR-6896</span>'s, in the shared search.
+      </p>
+      <p>
+        Two decisions carry the sheet. <b>The search gets its own field</b>, so a space is part of
+        the query instead of the end of it. <b>A pick closes the search</b> and puts the person back
+        in their sentence. Everything else here follows from those two.
+      </p>
+    </header>
+
+    <!-- ═══════════════ PANEL 1 — the Search control ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">1</span>
+        <h2>
+          The Search control — a magnifier replaces the <code>@</code> glyph, in the same slot
+        </h2>
+        <span class="cap">amends target-picker panel 2 (the visible <code>@</code> button)</span>
+      </div>
+      <div class="sheetbody">
+        <div class="row">
+          <div class="col">
+            <p class="label">Rest</p>
+            <div class="rail">
+              <div class="composer">
+                <div class="composer-row">
+                  <div class="field-wrap">
+                    <span class="search-ctl" role="img" aria-label="Search work items to plan"
+                      ><svg class="i"><use href="#i-search" /></svg
+                    ></span>
+                    <div class="field">
+                      <span class="ph">Reply, or refine further…</span>
+                    </div>
+                  </div>
+                  <span class="send off"
+                    ><svg class="i"><use href="#i-send" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col">
+            <p class="label">Hover — the tooltip</p>
+            <div class="rail">
+              <div class="composer" style="padding-top: 52px">
+                <div class="composer-row">
+                  <div class="field-wrap">
+                    <span class="tooltip" role="tooltip"
+                      >Search work items to plan<span class="kb">@</span></span
+                    >
+                    <span class="search-ctl hover"
+                      ><svg class="i"><use href="#i-search" /></svg
+                    ></span>
+                    <div class="field">
+                      <span class="ph">Reply, or refine further…</span>
+                    </div>
+                  </div>
+                  <span class="send off"
+                    ><svg class="i"><use href="#i-send" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 22px">
+          <div class="col">
+            <p class="label">Keyboard focus — the same tooltip shows on focus</p>
+            <div class="rail">
+              <div class="composer" style="padding-top: 52px">
+                <div class="composer-row">
+                  <div class="field-wrap">
+                    <span class="tooltip" role="tooltip"
+                      >Search work items to plan<span class="kb">@</span></span
+                    >
+                    <span class="search-ctl focus"
+                      ><svg class="i"><use href="#i-search" /></svg
+                    ></span>
+                    <div class="field">
+                      <span class="ph">Reply, or refine further…</span>
+                    </div>
+                  </div>
+                  <span class="send off"
+                    ><svg class="i"><use href="#i-send" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col">
+            <p class="label">Disabled — the 20-target cap (tooltip names why)</p>
+            <div class="rail">
+              <div class="composer" style="padding-top: 52px">
+                <div class="composer-row">
+                  <div class="field-wrap">
+                    <span class="tooltip" role="tooltip"
+                      >You can plan around up to 20 work items at once.</span
+                    >
+                    <span class="search-ctl disabled"
+                      ><svg class="i"><use href="#i-search" /></svg
+                    ></span>
+                    <div class="field"><span class="ph">Ask Motir to plan around these…</span></div>
+                  </div>
+                  <span class="send off"
+                    ><svg class="i"><use href="#i-send" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <p class="callout">
+              The tray above the field (not drawn here) carries twenty chips and the shipped
+              <code>limitReached</code> line, unchanged.
+            </p>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 22px">
+          <div class="col">
+            <p class="label">Disabled — the composer is locked (a turn in flight)</p>
+            <div class="rail">
+              <div class="composer">
+                <div class="composer-row">
+                  <div class="field-wrap">
+                    <span class="search-ctl disabled"
+                      ><svg class="i"><use href="#i-search" /></svg
+                    ></span>
+                    <div class="field" style="opacity: 0.6">
+                      <span class="ph">Reply, or refine further…</span>
+                    </div>
+                  </div>
+                  <span class="send off"
+                    ><svg class="i"><use href="#i-send" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <p class="callout">
+              No tooltip here: the whole composer is visibly locked, and the running bar above it
+              already says why.
+            </p>
+          </div>
+          <div class="col">
+            <p class="label">Open — pressed while its popover is up (panel 2)</p>
+            <div class="rail">
+              <div class="composer">
+                <div class="composer-row">
+                  <div class="field-wrap">
+                    <span class="search-ctl pressed" aria-expanded="true"
+                      ><svg class="i"><use href="#i-search" /></svg
+                    ></span>
+                    <div class="field">Break this into stories that each ship alone</div>
+                  </div>
+                  <span class="send"
+                    ><svg class="i"><use href="#i-send" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <p>
+          <b>Same slot, same geometry, new glyph.</b> The control is the shipped
+          <code>planning-target-trigger</code> button — absolutely placed 6px from the field's
+          bottom-left corner (<code>bottom-1.5 left-1.5</code>), which is the multi-line composer's
+          decision 2. The composer is not redrawn. Only the icon changes, from lucide
+          <code>AtSign</code> to lucide <code>Search</code>, because a bare <code>@</code> reads as
+          <i>mention someone</i>, and the control's job is to find a work item.
+        </p>
+        <p>
+          <b>Accessible name and tooltip:</b> “Search work items to plan”. The tooltip adds the
+          keyboard shortcut as a key cap (<span class="kbd">@</span>, panel 4) and shows on hover
+          and on keyboard focus. The button carries <code>aria-haspopup="dialog"</code> and
+          <code>aria-expanded</code>. It is <b>pressed</b> (accent wash, accent ink) while the
+          popover it opened is up.
+        </p>
+        <p>
+          <b>Disabled twice, as today:</b> at the 20-target cap (<code>MAX_PLANNING_TARGETS</code>)
+          and while the composer is disabled. At the cap the tooltip is the shipped
+          <code>limitReached</code> sentence, so the reason is on the control itself, not only in
+          the tray. Both placeholders (<code>composerPlaceholder</code>,
+          <code>composerPlaceholderTargets</code>) are unchanged: the visible control, not a longer
+          prompt, is what tells the person the search exists.
+        </p>
+      </div>
+    </section>
+
+    <!-- ═══════════════ PANEL 2 — the search popover ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">2</span>
+        <h2>The target SEARCH popover — its own field, so a number and a phrase both work</h2>
+        <span class="cap">amends target-picker panel 1</span>
+      </div>
+      <div class="sheetbody">
+        <div class="row">
+          <div class="col">
+            <p class="label">A — <code>6010</code>: the bare number</p>
+            <div class="rail">
+              <div class="log">
+                <div class="bubble">Which part of the plan should I work on?</div>
+              </div>
+              <div class="composer pop-host">
+                <div class="pop" role="dialog" aria-label="Search work items to plan">
+                  <div class="pop-field">
+                    <svg class="i sm"><use href="#i-search" /></svg>
+                    <span class="q" role="combobox" aria-expanded="true"
+                      >6010<span class="caret">&nbsp;</span></span
+                    >
+                    <span class="esc">Esc</span>
+                  </div>
+                  <div class="pop-head">Work items matching “6010”</div>
+                  <div class="pop-list" role="listbox" aria-label="Work items to plan around">
+                    <div class="opt active" role="option" aria-selected="true">
+                      <span class="ty t-epic"
+                        ><svg class="i"><use href="#i-epic" /></svg
+                      ></span>
+                      <span class="key">MOTIR-6010</span>
+                      <span class="ti"
+                        >Refine AI planning — a planning session is a first-class record</span
+                      >
+                      <span class="pill p-progress">In Progress</span>
+                    </div>
+                    <div class="opt" role="option" aria-selected="false">
+                      <span class="ty t-task"
+                        ><svg class="i"><use href="#i-task" /></svg
+                      ></span>
+                      <span class="key">SITE-6010</span>
+                      <span class="ti">Footer links on the pricing page</span>
+                      <span class="pill p-planned">To Do</span>
+                    </div>
+                    <div class="opt" role="option" aria-selected="false">
+                      <span class="ty t-story"
+                        ><svg class="i"><use href="#i-story" /></svg
+                      ></span>
+                      <span class="key">MOTIR-4471</span>
+                      <span class="ti">Import the <mark>6010</mark> legacy rows</span>
+                      <span class="pill p-done">Done</span>
+                    </div>
+                  </div>
+                  <div class="pop-foot">
+                    <span>↑↓ move</span><span>Enter add as target</span><span>Esc close</span>
+                  </div>
+                </div>
+                <div class="composer-row">
+                  <div class="field-wrap">
+                    <span class="search-ctl pressed"
+                      ><svg class="i"><use href="#i-search" /></svg
+                    ></span>
+                    <div class="field">
+                      <span class="ph">Reply, or refine further…</span>
+                    </div>
+                  </div>
+                  <span class="send off"
+                    ><svg class="i"><use href="#i-send" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <p class="callout">
+              <b>Exact number first, per project.</b> Every browsable project's
+              <code>…-6010</code> ranks with the exact key, in the shared search's existing
+              key-then-identifier order; a title that only <i>contains</i> the digits comes after.
+              Rows carry their key, so two projects' 6010s are told apart by it.
+            </p>
+          </div>
+          <div class="col">
+            <p class="label">B — <code>MOTIR-60</code>: a key prefix</p>
+            <div class="pop inline">
+              <div class="pop-field">
+                <svg class="i sm"><use href="#i-search" /></svg>
+                <span class="q">MOTIR-60<span class="caret">&nbsp;</span></span>
+                <span class="esc">Esc</span>
+              </div>
+              <div class="pop-head">Work items matching “MOTIR-60”</div>
+              <div class="pop-list" role="listbox" aria-label="Work items to plan around">
+                <div class="opt active" role="option" aria-selected="true">
+                  <span class="ty t-story"
+                    ><svg class="i"><use href="#i-story" /></svg
+                  ></span>
+                  <span class="key">MOTIR-60</span>
+                  <span class="ti">Board columns follow the workflow</span>
+                  <span class="pill p-done">Done</span>
+                </div>
+                <div class="opt" role="option" aria-selected="false">
+                  <span class="ty t-task"
+                    ><svg class="i"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="key">MOTIR-600</span>
+                  <span class="ti">Sprint burndown reads the history table</span>
+                  <span class="pill p-done">Done</span>
+                </div>
+                <div class="opt" role="option" aria-selected="false">
+                  <span class="ty t-epic"
+                    ><svg class="i"><use href="#i-epic" /></svg
+                  ></span>
+                  <span class="key">MOTIR-6010</span>
+                  <span class="ti"
+                    >Refine AI planning — a planning session is a first-class record</span
+                  >
+                  <span class="pill p-progress">In Progress</span>
+                </div>
+                <div class="opt" role="option" aria-selected="false">
+                  <span class="ty t-story"
+                    ><svg class="i"><use href="#i-story" /></svg
+                  ></span>
+                  <span class="key">MOTIR-6011</span>
+                  <span class="ti">A planning conversation is a SESSION from its first turn</span>
+                  <span class="pill p-done">Done</span>
+                </div>
+              </div>
+              <div class="pop-foot">
+                <span>↑↓ move</span><span>Enter add as target</span><span>Esc close</span>
+              </div>
+            </div>
+            <p class="callout">
+              Unchanged ranking: the exact key, then every key it prefixes, in key order.
+            </p>
+
+            <p class="label" style="margin-top: 20px">
+              C — <code>plan approval gate</code>: several words
+            </p>
+            <div class="pop inline">
+              <div class="pop-field">
+                <svg class="i sm"><use href="#i-search" /></svg>
+                <span class="q">plan approval gate<span class="caret">&nbsp;</span></span>
+                <span class="esc">Esc</span>
+              </div>
+              <div class="pop-head">Work items matching “plan approval gate”</div>
+              <div class="pop-list" role="listbox" aria-label="Work items to plan around">
+                <div class="opt active" role="option" aria-selected="true">
+                  <span class="ty t-story"
+                    ><svg class="i"><use href="#i-story" /></svg
+                  ></span>
+                  <span class="key">MOTIR-5543</span>
+                  <span class="ti"
+                    >A <mark>plan</mark> under review has an <mark>approval gate</mark></span
+                  >
+                  <span class="pill p-done">Done</span>
+                </div>
+                <div class="opt" role="option" aria-selected="false">
+                  <span class="ty t-task"
+                    ><svg class="i"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="key">MOTIR-6157</span>
+                  <span class="ti"
+                    >The <mark>approval gate</mark> of an MCP-authored <mark>plan</mark></span
+                  >
+                  <span class="pill p-done">Done</span>
+                </div>
+              </div>
+              <div class="pop-foot">
+                <span>↑↓ move</span><span>Enter add as target</span><span>Esc close</span>
+              </div>
+            </div>
+            <p class="callout">
+              The space is part of the query. Every word must appear in the title, in any order —
+              the shared search already does this; the old inline <code>@</code> query simply never
+              sent it past the first space.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <p>
+          <b>What is new: the field.</b> The popover is the shipped
+          <code>TargetSearchListbox</code> shell — same placement over the composer (<code
+            >right-3 bottom-full left-3 mb-2</code
+          >), same <code>--el-surface</code> card, same section label, same rows — with a search
+          field ADDED as its first row. The field is the combobox (<code>role="combobox"</code>,
+          <code>aria-controls</code> the listbox, <code>aria-activedescendant</code> the active
+          row); the popover is a non-modal <code>dialog</code> named “Search work items to plan”.
+          Opening it puts focus in the field. Placeholder: “Key, number or title…”.
+        </p>
+        <p>
+          <b>Row grammar is not changed:</b> type icon · mono key · title · status Pill, the active
+          row on <code>--el-surface-soft</code>. The one addition is the matched words in the title
+          in bold ink (<code>--el-text</code>, weight 700 — not colour, so it survives every palette
+          and theme). The foot is a hint line of the three keys, in secondary ink.
+        </p>
+        <p>
+          <b>Search behaviour is the shared search's</b> (<code
+            >GET /api/work-items/mention-search</code
+          >, the browsable-project scope, the 8-row cap, the 250ms debounce, the 2-character
+          minimum). A bare number, <code>#6010</code> and the full key in either case find the exact
+          item because of <span class="cardref">MOTIR-6896</span>; this popover adds no search of
+          its own.
+        </p>
+      </div>
+    </section>
+
+    <!-- ═══════════════ PANEL 3 — every state ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">3</span>
+        <h2>
+          Every state of the popover — too short, loading, no match, already a target, at the cap
+        </h2>
+        <span class="cap">amends target-picker panel 4</span>
+      </div>
+      <div class="sheetbody">
+        <div class="row">
+          <div class="col">
+            <p class="label">Empty — just opened</p>
+            <div class="pop inline">
+              <div class="pop-field">
+                <svg class="i sm"><use href="#i-search" /></svg>
+                <span class="q"
+                  ><span class="caret">&nbsp;</span
+                  ><span class="ph">Key, number or title…</span></span
+                >
+                <span class="esc">Esc</span>
+              </div>
+              <div class="pop-head">Work items</div>
+              <p class="pop-state">Search by key, number or title…</p>
+            </div>
+          </div>
+          <div class="col">
+            <p class="label">Too short — one character</p>
+            <div class="pop inline">
+              <div class="pop-field">
+                <svg class="i sm"><use href="#i-search" /></svg>
+                <span class="q">6<span class="caret">&nbsp;</span></span>
+                <span class="esc">Esc</span>
+              </div>
+              <div class="pop-head">Work items matching “6”</div>
+              <p class="pop-state">Keep typing to search work items…</p>
+            </div>
+          </div>
+          <div class="col">
+            <p class="label">Loading — the debounce and the request</p>
+            <div class="pop inline">
+              <div class="pop-field">
+                <svg class="i sm"><use href="#i-search" /></svg>
+                <span class="q">plan appro<span class="caret">&nbsp;</span></span>
+                <span class="esc">Esc</span>
+              </div>
+              <div class="pop-head">Work items matching “plan appro”</div>
+              <p class="pop-state spin" role="status">
+                <svg class="i sm" aria-hidden="true"><use href="#i-loader" /></svg>Searching…
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 22px">
+          <div class="col">
+            <p class="label">No match</p>
+            <div class="pop inline">
+              <div class="pop-field">
+                <svg class="i sm"><use href="#i-search" /></svg>
+                <span class="q">quokka ledger<span class="caret">&nbsp;</span></span>
+                <span class="esc">Esc</span>
+              </div>
+              <div class="pop-head">Work items matching “quokka ledger”</div>
+              <p class="pop-state">No work items match “quokka ledger”.</p>
+            </div>
+          </div>
+          <div class="col">
+            <p class="label">A row that is ALREADY a target</p>
+            <div class="pop inline">
+              <div class="pop-field">
+                <svg class="i sm"><use href="#i-search" /></svg>
+                <span class="q">6010<span class="caret">&nbsp;</span></span>
+                <span class="esc">Esc</span>
+              </div>
+              <div class="pop-head">Work items matching “6010”</div>
+              <div class="pop-list" role="listbox" aria-label="Work items to plan around">
+                <div class="opt is-target" role="option" aria-selected="false" aria-disabled="true">
+                  <span class="ty t-epic"
+                    ><svg class="i"><use href="#i-epic" /></svg
+                  ></span>
+                  <span class="key">MOTIR-6010</span>
+                  <span class="ti"
+                    >Refine AI planning — a planning session is a first-class record</span
+                  >
+                  <span class="tpill"
+                    ><svg class="i xs"><use href="#i-target" /></svg>Target</span
+                  >
+                </div>
+                <div class="opt active" role="option" aria-selected="true">
+                  <span class="ty t-task"
+                    ><svg class="i"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="key">SITE-6010</span>
+                  <span class="ti">Footer links on the pricing page</span>
+                  <span class="pill p-planned">To Do</span>
+                </div>
+              </div>
+              <div class="pop-foot">
+                <span>↑↓ move</span><span>Enter add as target</span><span>Esc close</span>
+              </div>
+            </div>
+          </div>
+          <div class="col">
+            <p class="label">At the 20-target cap (reached by <code>@</code>)</p>
+            <div class="pop inline">
+              <div class="pop-field disabled">
+                <svg class="i sm"><use href="#i-search" /></svg>
+                <span class="q"><span class="ph">Key, number or title…</span></span>
+                <span class="esc">Esc</span>
+              </div>
+              <div class="pop-head">Work items</div>
+              <p class="pop-state">You can plan around up to 20 work items at once.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <p>
+          <b>The four shipped states keep their copy and their rule</b> — each is plain text OUTSIDE
+          the listbox (an empty <code>role="listbox"</code> is an a11y violation), and
+          <i>Searching…</i> is a <code>role="status"</code>. Too short means below
+          <code>QUICK_SEARCH_MIN_QUERY_LENGTH</code> (2); loading covers the debounce window. One
+          hint changes: the empty hint becomes “Search by key, number or title…”, because the field
+          now takes all three.
+        </p>
+        <p>
+          <b>Already a target:</b> the row stays in the list, so the person can see the item IS
+          found — and is marked with the canvas node's own <b>Target</b> pill (lucide
+          <code>Target</code>, the word in real text) in place of its status. Its key and title drop
+          to secondary ink. It is <code>aria-disabled="true"</code>: ↑/↓ skip it, a click or Enter
+          on it does nothing, and the active row is the first pickable one. Nothing is added twice,
+          which <code>addPlanningTarget</code> already guarantees; the design only makes it visible.
+        </p>
+        <p>
+          <b>At the cap</b> the field is disabled, no row is offered, and the popover says the
+          shipped <code>limitReached</code> sentence. The Search control is disabled at the cap
+          (panel 1), so this state is reached only by the <code>@</code> shortcut — which opens it
+          rather than typing a bare <code>@</code>, so the person learns why nothing happens. Esc
+          closes it.
+        </p>
+      </div>
+    </section>
+
+    <!-- ═══════════════ PANEL 4 — the @ shortcut ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">4</span>
+        <h2>
+          The <code>@</code> shortcut — opens the same search, and the <code>@</code> is consumed
+        </h2>
+        <span class="cap">amends target-picker panel 1's trigger</span>
+      </div>
+      <div class="sheetbody">
+        <div class="row">
+          <div class="col">
+            <p class="label">1 · Typing — the caret after “into ”</p>
+            <div class="rail">
+              <div class="composer">
+                <div class="composer-row">
+                  <div class="field-wrap">
+                    <span class="search-ctl"
+                      ><svg class="i"><use href="#i-search" /></svg
+                    ></span>
+                    <div class="field focus">Break this into <span class="caret">&nbsp;</span></div>
+                  </div>
+                  <span class="send"
+                    ><svg class="i"><use href="#i-send" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col">
+            <p class="label">
+              2 · <span class="kbd">@</span> pressed — search opens, no <code>@</code> left
+            </p>
+            <div class="rail">
+              <div class="composer pop-host short">
+                <div class="pop" role="dialog" aria-label="Search work items to plan">
+                  <div class="pop-field">
+                    <svg class="i sm"><use href="#i-search" /></svg>
+                    <span class="q"
+                      ><span class="caret">&nbsp;</span
+                      ><span class="ph">Key, number or title…</span></span
+                    >
+                    <span class="esc">Esc</span>
+                  </div>
+                  <div class="pop-head">Work items</div>
+                  <p class="pop-state">Search by key, number or title…</p>
+                </div>
+                <div class="composer-row">
+                  <div class="field-wrap">
+                    <span class="search-ctl pressed"
+                      ><svg class="i"><use href="#i-search" /></svg
+                    ></span>
+                    <div class="field">Break this into&nbsp;</div>
+                  </div>
+                  <span class="send"
+                    ><svg class="i"><use href="#i-send" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 22px">
+          <div class="col">
+            <p class="label">3 · Keys typed next go into the search field</p>
+            <div class="rail">
+              <div class="composer pop-host short" style="padding-top: 170px">
+                <div class="pop" role="dialog" aria-label="Search work items to plan">
+                  <div class="pop-field">
+                    <svg class="i sm"><use href="#i-search" /></svg>
+                    <span class="q">6011<span class="caret">&nbsp;</span></span>
+                    <span class="esc">Esc</span>
+                  </div>
+                  <div class="pop-head">Work items matching “6011”</div>
+                  <div class="pop-list" role="listbox" aria-label="Work items to plan around">
+                    <div class="opt active" role="option" aria-selected="true">
+                      <span class="ty t-story"
+                        ><svg class="i"><use href="#i-story" /></svg
+                      ></span>
+                      <span class="key">MOTIR-6011</span>
+                      <span class="ti"
+                        >A planning conversation is a SESSION from its first turn</span
+                      >
+                      <span class="pill p-done">Done</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="composer-row">
+                  <div class="field-wrap">
+                    <span class="search-ctl pressed"
+                      ><svg class="i"><use href="#i-search" /></svg
+                    ></span>
+                    <div class="field">Break this into&nbsp;</div>
+                  </div>
+                  <span class="send"
+                    ><svg class="i"><use href="#i-send" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col">
+            <p class="label">
+              4 · Enter — the chip joins the tray, the caret is back in the sentence
+            </p>
+            <div class="rail">
+              <div class="composer">
+                <div class="tray">
+                  <span class="tray-label">Target</span>
+                  <span class="chip"
+                    ><span class="k">MOTIR-6011</span>A planning conversation…<span class="x"
+                      ><svg class="i xs"><use href="#i-x" /></svg></span
+                  ></span>
+                </div>
+                <div class="composer-row">
+                  <div class="field-wrap">
+                    <span class="search-ctl"
+                      ><svg class="i"><use href="#i-search" /></svg
+                    ></span>
+                    <div class="field focus">Break this into <span class="caret">&nbsp;</span></div>
+                  </div>
+                  <span class="send"
+                    ><svg class="i"><use href="#i-send" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 22px">
+          <div class="col">
+            <p class="label">Not a trigger — <code>@</code> inside a word</p>
+            <div class="rail">
+              <div class="composer">
+                <div class="composer-row">
+                  <div class="field-wrap">
+                    <span class="search-ctl"
+                      ><svg class="i"><use href="#i-search" /></svg
+                    ></span>
+                    <div class="field focus">
+                      Ask foo@bar.com about it<span class="caret">&nbsp;</span>
+                    </div>
+                  </div>
+                  <span class="send"
+                    ><svg class="i"><use href="#i-send" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <p class="callout">
+              <code>foo@bar</code> types an ordinary <code>@</code>: the shortcut fires only at the
+              start of the message or after whitespace — the shipped
+              <code>findMentionQuery</code> boundary, unchanged.
+            </p>
+          </div>
+          <div class="col">
+            <p class="label">Esc — search closes, nothing inserted, the surface stays open</p>
+            <div class="rail">
+              <div class="composer">
+                <div class="composer-row">
+                  <div class="field-wrap">
+                    <span class="search-ctl"
+                      ><svg class="i"><use href="#i-search" /></svg
+                    ></span>
+                    <div class="field focus">Break this into <span class="caret">&nbsp;</span></div>
+                  </div>
+                  <span class="send"
+                    ><svg class="i"><use href="#i-send" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <p class="callout">
+              Esc is swallowed by the popover, so the planning surface's own Esc does not close the
+              whole surface.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <p>
+          <b>The <code>@</code> hands off; it does not stay in the text.</b> An <code>@</code> typed
+          at a word boundary is removed from the draft the moment it is typed, the caret stays where
+          it was, and focus moves to the popover's field. Every key typed after it lands in the
+          search, so <code>@plan approval</code> searches “plan approval” — which the inline query
+          could not, because it ended at the first space. The target goes to the TRAY, never inline
+          into the message (target-picker panel 2's decision, unchanged).
+        </p>
+        <p>
+          <b>A literal <code>@</code> at the start of a word</b> is the one thing this costs. It is
+          rare in a planning instruction and the shipped picker already treated it as a trigger; an
+          <code>@</code> inside a word (an email address) is untouched.
+        </p>
+      </div>
+    </section>
+
+    <!-- ═══════════════ PANEL 5 — the keyboard model ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">5</span>
+        <h2>Where every key goes — the composer and the popover share one keyboard</h2>
+        <span class="cap">new — settles the hand-off</span>
+      </div>
+      <div class="sheetbody">
+        <table class="keys">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>In the message field</th>
+              <th>In the popover's field</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="kbd">@</span> at a word boundary</td>
+              <td>
+                Opens the popover. The <code>@</code> is consumed; focus moves to the popover field.
+              </td>
+              <td>An ordinary character of the query.</td>
+            </tr>
+            <tr>
+              <td><span class="kbd">↑</span> <span class="kbd">↓</span></td>
+              <td>Move the caret between lines (unchanged).</td>
+              <td>Move the active row, skipping rows that are already targets; wraps.</td>
+            </tr>
+            <tr>
+              <td><span class="kbd">Enter</span></td>
+              <td>
+                Sends the turn (unchanged). <span class="kbd">Shift</span>+<span class="kbd"
+                  >Enter</span
+                >
+                breaks the line.
+              </td>
+              <td>
+                Adds the active row as a target and <b>closes</b> the popover. With no pickable row
+                it does nothing — it never sends the message from here.
+              </td>
+            </tr>
+            <tr>
+              <td><span class="kbd">Esc</span></td>
+              <td>Reaches the surface's own Esc (unchanged).</td>
+              <td>
+                Closes the popover and is swallowed. Focus returns to the message field
+                <b>at the caret it left</b>.
+              </td>
+            </tr>
+            <tr>
+              <td><span class="kbd">Tab</span></td>
+              <td>Moves focus on (unchanged).</td>
+              <td>
+                Closes the popover, like a click outside; focus moves on from the Search control.
+              </td>
+            </tr>
+            <tr>
+              <td>A click outside</td>
+              <td>—</td>
+              <td>
+                Closes the popover. A click on the canvas both closes it and does what the click
+                does there.
+              </td>
+            </tr>
+            <tr>
+              <td>IME composing</td>
+              <td>Enter confirms the candidate, never sends (unchanged).</td>
+              <td>Enter confirms the candidate, never picks — the same three-signal guard.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <p>
+          <b>A pick closes the popover.</b> The reference is how the pickers people already use hand
+          a reference back to the text they were writing: GitHub's <code>#</code> issue picker in a
+          comment box, Slack's <code>@</code> mention and Cursor's <code>@</code> context picker all
+          close on the pick and put the caret back in the sentence. Most turns anchor at one item,
+          so the common case costs no extra key; a second target is one more
+          <span class="kbd">@</span> or one more click on the Search control. Keeping the popover
+          open for several picks (the GitHub <i>Assignees</i> menu model) was rejected: it would
+          leave focus in a search after the person had got what they came for, and the next key they
+          typed for their message would go into the query.
+        </p>
+        <p>
+          <b>Esc returns focus to the message at its caret</b> — the same place a pick returns it —
+          whether the popover was opened by the control or by <code>@</code>. Opened from the
+          control with the caret never placed, the caret goes to the end of the draft.
+        </p>
+      </div>
+    </section>
+
+    <!-- ═══════════════ PANEL 6 — the canvas card action ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">6</span>
+        <h2>
+          Set as target on the selected canvas card — beside View and Open, on the planning surface
+          only
+        </h2>
+        <span class="cap">amends the shared canvas's selected-card chrome</span>
+      </div>
+      <div class="sheetbody">
+        <div class="canvas tall">
+          <span class="crumbs">Roadmap › <b>MOTIR-6010 Refine AI planning</b></span>
+          <div>
+            <p class="label">Selected, a container — View · Set as target · Open</p>
+            <div class="slot selected">
+              <div class="node">
+                <div class="top"><span class="pill p-progress">In Progress</span></div>
+                <div class="idrow">
+                  <span class="ty t-story"
+                    ><svg class="i sm"><use href="#i-story" /></svg></span
+                  >MOTIR-6894
+                </div>
+                <div class="nt">Setting the planning TARGET works the way people look for work</div>
+                <div class="bar"><span style="width: 18%"></span></div>
+              </div>
+              <div class="actions">
+                <span class="act secondary"
+                  ><svg class="i sm"><use href="#i-eye" /></svg>View</span
+                >
+                <span class="act secondary hover"
+                  ><svg class="i sm"><use href="#i-target" /></svg>Set as target</span
+                >
+                <span class="act primary"
+                  >Open<svg class="i sm"><use href="#i-chev" /></svg
+                ></span>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="label">After Set — ring + pill, the button flips</p>
+            <div class="slot selected target">
+              <span class="node-tpill"
+                ><svg class="i xs"><use href="#i-target" /></svg>Target</span
+              >
+              <div class="node">
+                <div class="top"><span class="pill p-progress">In Progress</span></div>
+                <div class="idrow">
+                  <span class="ty t-story"
+                    ><svg class="i sm"><use href="#i-story" /></svg></span
+                  >MOTIR-6894
+                </div>
+                <div class="nt">Setting the planning TARGET works the way people look for work</div>
+                <div class="bar"><span style="width: 18%"></span></div>
+              </div>
+              <div class="actions">
+                <span class="act secondary"
+                  ><svg class="i sm"><use href="#i-eye" /></svg>View</span
+                >
+                <span class="act secondary"
+                  ><svg class="i sm"><use href="#i-x" /></svg>Remove target</span
+                >
+                <span class="act primary"
+                  >Open<svg class="i sm"><use href="#i-chev" /></svg
+                ></span>
+              </div>
+            </div>
+            <p class="unmoved">The canvas has not moved: same level, same pan, same zoom.</p>
+          </div>
+          <div>
+            <p class="label">A leaf — View · Set as target</p>
+            <div class="slot selected">
+              <div class="node">
+                <div class="top"><span class="pill p-planned">To Do</span></div>
+                <div class="idrow">
+                  <span class="ty t-subtask"
+                    ><svg class="i sm"><use href="#i-task" /></svg></span
+                  >MOTIR-6896
+                </div>
+                <div class="nt">The shared quick search finds an item by its bare number</div>
+                <div class="bar"><span style="width: 0%"></span></div>
+              </div>
+              <div class="actions">
+                <span class="act secondary"
+                  ><svg class="i sm"><use href="#i-eye" /></svg>View</span
+                >
+                <span class="act secondary"
+                  ><svg class="i sm"><use href="#i-target" /></svg>Set as target</span
+                >
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="label">At the cap — Set disabled, with the reason</p>
+            <div class="slot selected">
+              <div class="node">
+                <div class="top"><span class="pill p-planned">To Do</span></div>
+                <div class="idrow">
+                  <span class="ty t-subtask"
+                    ><svg class="i sm"><use href="#i-task" /></svg></span
+                  >MOTIR-6899
+                </div>
+                <div class="nt">Story coverage and integration gate</div>
+                <div class="bar"><span style="width: 0%"></span></div>
+              </div>
+              <div class="actions">
+                <span class="act secondary"
+                  ><svg class="i sm"><use href="#i-eye" /></svg>View</span
+                >
+                <span class="act secondary disabled" aria-disabled="true"
+                  ><svg class="i sm"><use href="#i-target" /></svg>Set as target</span
+                >
+              </div>
+              <span class="act-tip" role="tooltip"
+                >You can plan around up to 20 work items at once.</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top: 22px">
+          <div class="col">
+            <p class="label">A PROPOSED card (the plan canvas) — no target action</p>
+            <div class="canvas" style="padding-bottom: 36px">
+              <div class="slot selected proposed">
+                <div class="node">
+                  <div class="top">
+                    <span class="add">+ ADD</span
+                    ><span class="ty t-subtask"
+                      ><svg class="i sm"><use href="#i-task" /></svg></span
+                    >new
+                  </div>
+                  <div class="nt">Retry the search when the request fails</div>
+                </div>
+                <div class="actions">
+                  <span class="act secondary"
+                    ><svg class="i sm"><use href="#i-eye" /></svg>View</span
+                  >
+                </div>
+              </div>
+            </div>
+            <p class="callout">
+              A proposal has no key yet, so it cannot be a target: its selected chrome is what it is
+              today.
+            </p>
+          </div>
+          <div class="col">
+            <p class="label">The Roadmap page — the same canvas, opted OUT</p>
+            <div class="canvas" style="padding-bottom: 36px">
+              <div class="slot selected">
+                <div class="node">
+                  <div class="top"><span class="pill p-progress">In Progress</span></div>
+                  <div class="idrow">
+                    <span class="ty t-story"
+                      ><svg class="i sm"><use href="#i-story" /></svg></span
+                    >MOTIR-6894
+                  </div>
+                  <div class="nt">
+                    Setting the planning TARGET works the way people look for work
+                  </div>
+                  <div class="bar"><span style="width: 18%"></span></div>
+                </div>
+                <div class="actions">
+                  <span class="act secondary"
+                    ><svg class="i sm"><use href="#i-eye" /></svg>View</span
+                  >
+                  <span class="act primary"
+                    >Open<svg class="i sm"><use href="#i-chev" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <p class="callout"><code>/roadmap</code> is unchanged: a target means nothing there.</p>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <p>
+          <b>One button added, nothing redrawn.</b> The action slot is the shipped one under a
+          selected card (<code>absolute -bottom-3.5 left-1/2 -translate-x-1/2 flex gap-2</code>),
+          owned by <code>design/roadmap/</code>. View and Open are reproduced from their own
+          classes. <b>Set as target</b> takes View's SECONDARY treatment (bordered,
+          <code>--el-surface</code>, secondary ink), because Open stays the one accent action on the
+          card. It sits between them, with lucide <code>Target</code> — the same glyph as the node's
+          Target pill, so the button and its result read as one thing. Accessible name: “Set
+          &lt;key&gt; as the planning target”.
+        </p>
+        <p>
+          <b>Set</b> adds the item through the host's existing <code>addTarget</code> — the tray
+          gains its chip and the card takes the shipped <code>PlanningTargetFrame</code> ring and
+          pill. <b>The canvas does not move</b>: a target the person just picked on the level they
+          are looking at is not a reason to navigate (<span class="cardref">MOTIR-6161</span>'s
+          never-after-navigation rule — the person has plainly navigated here). The card stays
+          selected, so its button now reads <b>Remove target</b> (lucide <code>X</code>), which
+          calls <code>removeTarget</code>. At the cap, Set is disabled and its tooltip is the
+          <code>limitReached</code> sentence; Remove is never disabled.
+        </p>
+        <p>
+          <b>Opt-in.</b> The canvas is one component on two pages. The action appears only where the
+          host passes it — the planning surface. The Roadmap page passes nothing and looks exactly
+          as it does today. A proposed card (no key) never shows it.
+        </p>
+      </div>
+    </section>
+
+    <!-- ═══════════════ PANEL 7 — the access path ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">7</span>
+        <h2>The ACCESS PATH — Plan with AI opens the surface; both doors to a target are on it</h2>
+        <span class="cap">where the two changes sit</span>
+      </div>
+      <div class="sheetbody">
+        <div class="door">
+          <span>On an item's page or quick view:</span>
+          <span class="btn"
+            ><svg class="i sm"><use href="#i-sparkle" /></svg>Plan with AI</span
+          >
+          <span
+            >→ the planning surface opens inside the item (shipped,
+            <span class="cardref">MOTIR-6154</span>).</span
+          >
+        </div>
+        <div class="surface">
+          <div class="bar-top"><b>Planning</b> · MOTIR-6010 Refine AI planning</div>
+          <div class="canvas tall" style="position: relative">
+            <span class="crumbs">Roadmap › <b>MOTIR-6010 Refine AI planning</b></span>
+            <div class="slot">
+              <div class="node">
+                <div class="top"><span class="pill p-done">Done</span></div>
+                <div class="idrow">
+                  <span class="ty t-story"
+                    ><svg class="i sm"><use href="#i-story" /></svg></span
+                  >MOTIR-6011
+                </div>
+                <div class="nt">A planning conversation is a SESSION from its first turn</div>
+                <div class="bar"><span style="width: 100%"></span></div>
+              </div>
+            </div>
+            <div class="slot selected" style="position: relative">
+              <span class="pin" style="left: -26px; top: -10px"><span class="num">B</span></span>
+              <div class="node">
+                <div class="top"><span class="pill p-progress">In Progress</span></div>
+                <div class="idrow">
+                  <span class="ty t-story"
+                    ><svg class="i sm"><use href="#i-story" /></svg></span
+                  >MOTIR-6894
+                </div>
+                <div class="nt">Setting the planning TARGET works the way people look for work</div>
+                <div class="bar"><span style="width: 18%"></span></div>
+              </div>
+              <div class="actions">
+                <span class="act secondary"
+                  ><svg class="i sm"><use href="#i-eye" /></svg>View</span
+                >
+                <span class="act secondary"
+                  ><svg class="i sm"><use href="#i-target" /></svg>Set as target</span
+                >
+                <span class="act primary"
+                  >Open<svg class="i sm"><use href="#i-chev" /></svg
+                ></span>
+              </div>
+            </div>
+          </div>
+          <div class="rail">
+            <div class="log">
+              <div class="bubble">What should we plan inside Refine AI planning?</div>
+            </div>
+            <div class="composer">
+              <span class="pin" style="left: -2px; bottom: 50px"><span class="num">A</span></span>
+              <div class="composer-row">
+                <div class="field-wrap">
+                  <span class="search-ctl"
+                    ><svg class="i"><use href="#i-search" /></svg
+                  ></span>
+                  <div class="field">
+                    <span class="ph">Reply, or refine further…</span>
+                  </div>
+                </div>
+                <span class="send off"
+                  ><svg class="i"><use href="#i-send" /></svg
+                ></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <p>
+          <b>The door is shipped and unchanged:</b> <b>Plan with AI</b> on an item (or the project's
+          own entrance) opens the planning surface inside that item — canvas on the left, the
+          conversation rail on the right (<span class="cardref">MOTIR-6154</span>; the arrival is
+          <code>planning-workspace--arrival.mock.html</code>). On it, a target is set two ways:
+          <b>A</b> — the Search control in the composer's bottom-left corner (or
+          <span class="kbd">@</span>), and <b>B</b> — Set as target on the card selected on the
+          canvas. Both write the same target set, so the tray and the canvas ring always agree.
+        </p>
+      </div>
+    </section>
+  </body>
+</html>

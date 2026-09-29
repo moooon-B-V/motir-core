@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-libra
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { parsePlanningLaunch } from '@/lib/planning/launcher';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
-import type { PlanningTarget } from '@/lib/planning/planningTargets';
+import { MAX_PLANNING_TARGETS, type PlanningTarget } from '@/lib/planning/planningTargets';
 
 // The established-project planning HOST (Subtask MOTIR-1729, extended by
 // MOTIR-1730) — what "Plan with AI" opens once a project has a plan. These lock
@@ -62,6 +62,8 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
     followTo,
     loadingFallback,
     emptyRoot,
+    onToggleTarget,
+    canAddTarget,
   }: {
     projectKey: string;
     ariaLabel?: string;
@@ -71,6 +73,11 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
     followTo?: { key: string; trail: readonly { id: string; label: string }[] } | null;
     loadingFallback?: ReactNode;
     emptyRoot?: ReactNode;
+    onToggleTarget?: (
+      target: { id: string; identifier: string; title: string; kind: string },
+      isTarget: boolean,
+    ) => void;
+    canAddTarget?: boolean;
   }) => (
     <div
       data-testid="canvas-stub"
@@ -87,10 +94,33 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
       {/* The two states the host DELEGATES to the canvas (MOTIR-2069). The real
           canvas picks between them off the level it reads itself; the stub
           renders both so the host's side of that contract is assertable. */}
+      {/* The canvas's Set as target (MOTIR-6898): the real button lives in
+          `ProjectRoadmapCanvas` and has its own suite; the stub hands the HOST
+          the call the canvas would make for the card in `stubCard`. */}
+      {onToggleTarget ? (
+        <button
+          type="button"
+          data-testid="stub-toggle-target"
+          data-can-add={String(canAddTarget)}
+          onClick={() =>
+            onToggleTarget(stubCard.current, (targetIds ?? []).includes(stubCard.current.id))
+          }
+        >
+          toggle
+        </button>
+      ) : null}
       <div data-testid="canvas-loading-slot">{loadingFallback}</div>
       <div data-testid="canvas-empty-slot">{emptyRoot}</div>
     </div>
   ),
+}));
+
+// The card the canvas stub's toggle acts on — a hoisted box, so a test can move
+// it between presses.
+const { stubCard } = vi.hoisted(() => ({
+  stubCard: {
+    current: { id: 'wi_c1', identifier: 'MOTIR-51', title: 'Canvas card', kind: 'story' },
+  },
 }));
 
 const { conversation } = vi.hoisted(() => ({
@@ -847,15 +877,21 @@ describe('coverage · the TARGET SET the host owns (MOTIR-4733)', () => {
     renderHost({ mode: 'replan', from: 'project' });
     expect(screen.getByTestId('canvas-stub').getAttribute('data-targets')).toBe('');
 
-    const composer = screen.getByRole('textbox');
+    // The Search control opens the target search; the query goes in ITS field
+    // (MOTIR-6897), never in the message.
     await act(async () => {
-      fireEvent.change(composer, { target: { value: '@Billing' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Search work items to plan' }));
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('planning-target-search-field'), {
+        target: { value: 'Billing' },
+      });
     });
 
     const option = screen.queryByRole('option', { name: /MOTIR-9/ });
     // If the listbox did not open, say so rather than passing on a missing
     // element — a `queryBy` that finds nothing is not a green test.
-    expect(option, 'the mention listbox did not open').not.toBeNull();
+    expect(option, 'the target search listbox did not open').not.toBeNull();
     // ⚠️ `mouseDown`, not `click`: the option commits on POINTER DOWN so the
     // composer's input never loses focus to it (`TargetSearchListbox`). A
     // `click` here would assert nothing and pass silently.
@@ -892,6 +928,72 @@ describe('coverage · the TARGET SET the host owns (MOTIR-4733)', () => {
   });
 });
 
+describe('PlanningWorkspaceHost — Set as target on the CANVAS (MOTIR-6898)', () => {
+  const toggle = () => screen.getByTestId('stub-toggle-target');
+  const card = (n: number) => ({
+    id: `wi_c${n}`,
+    identifier: `MOTIR-${50 + n}`,
+    title: `Canvas card ${n}`,
+    kind: 'story',
+  });
+
+  afterEach(() => {
+    stubCard.current = card(1);
+  });
+
+  it('adds the card to the SAME set the composer feeds — the chip and the ring agree', () => {
+    renderHost({ mode: 'replan', from: 'project' });
+    stubCard.current = card(1);
+
+    fireEvent.click(toggle());
+
+    expect(screen.getByTestId('planning-target-chip').getAttribute('data-target-key')).toBe(
+      'MOTIR-51',
+    );
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-targets')).toBe('wi_c1');
+  });
+
+  it('a card that already IS a target is removed by the same toggle', () => {
+    renderHost({ mode: 'replan', from: 'project' });
+    stubCard.current = card(1);
+
+    fireEvent.click(toggle());
+    fireEvent.click(toggle());
+
+    expect(screen.queryByTestId('planning-target-chip')).toBeNull();
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-targets')).toBe('');
+  });
+
+  it('tells the canvas when the set is at the CAP, and again when it is not', () => {
+    renderHost({ mode: 'replan', from: 'project' });
+    expect(toggle().getAttribute('data-can-add')).toBe('true');
+
+    for (let n = 1; n <= MAX_PLANNING_TARGETS; n++) {
+      stubCard.current = card(n);
+      fireEvent.click(toggle());
+    }
+    expect(toggle().getAttribute('data-can-add')).toBe('false');
+
+    // Remove still works at the cap.
+    stubCard.current = card(1);
+    fireEvent.click(toggle());
+    expect(toggle().getAttribute('data-can-add')).toBe('true');
+  });
+
+  it('a target picked ON THE CANVAS never arms the follow-move — the canvas stays put', async () => {
+    fetchPlanningAnchor.mockReset();
+    renderHost({ mode: 'replan', from: 'project' });
+    stubCard.current = card(1);
+
+    await act(async () => {
+      fireEvent.click(toggle());
+    });
+
+    expect(fetchPlanningAnchor).not.toHaveBeenCalled();
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-follow-key')).toBe('');
+  });
+});
+
 // ── THE FOLLOW-MOVE's REQUEST (MOTIR-6161, Story MOTIR-6154) ─────────────────
 //
 // The host DERIVES it; the canvas decides whether to honour it and has its own
@@ -906,12 +1008,18 @@ describe('PlanningWorkspaceHost — the follow-move request', () => {
   // the input never loses focus to it (`TargetSearchListbox`) — a `click` adds
   // nothing and the test passes on an empty target set.
   async function addBillingTarget() {
-    const composer = screen.getByRole('textbox');
+    // The Search control opens the target search; the query goes in ITS field
+    // (MOTIR-6897), never in the message.
     await act(async () => {
-      fireEvent.change(composer, { target: { value: '@Billing' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Search work items to plan' }));
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('planning-target-search-field'), {
+        target: { value: 'Billing' },
+      });
     });
     const option = screen.queryByRole('option', { name: /MOTIR-9/ });
-    expect(option, 'the mention listbox did not open').not.toBeNull();
+    expect(option, 'the target search listbox did not open').not.toBeNull();
     await act(async () => {
       fireEvent.mouseDown(option!);
     });

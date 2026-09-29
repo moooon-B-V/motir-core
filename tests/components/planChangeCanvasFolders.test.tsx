@@ -258,3 +258,113 @@ describe('PlanChangeCanvas — folders over the wire, with no plan (decisions 1,
     expect(await screen.findByText('This folder is empty')).toBeTruthy();
   });
 });
+
+// MOTIR-6898 — Set as target on the planning surface's committed-tree canvas.
+// The button itself is `ProjectRoadmapCanvas`'s (its own suite); what is ruled on
+// here is this canvas's half: WHICH nodes are eligible (the work items its levels
+// drew, never a folder) and WHAT the host is handed (the item, and whether it is
+// already a target).
+describe('PlanChangeCanvas — the target action over the wire (MOTIR-6898)', () => {
+  const tree = {
+    __root__: {
+      nodes: [wireNode('E1', 'Road epic', 'epic', true)],
+      edges: [],
+      offLevelBlockers: [],
+      folders: [wireFolder('f1', 'Parked', 0, 0)],
+    },
+  };
+
+  it('is OFF without `onToggleTarget` — every other mount of this canvas', async () => {
+    serve(tree);
+    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k1" />);
+    await screen.findByText('Road epic');
+    fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+
+    await screen.findByTestId('drill-button');
+    expect(screen.queryByTestId('target-toggle-button')).toBeNull();
+  });
+
+  it('hands the host the card’s WORK ITEM, and whether it is a target already', async () => {
+    serve(tree);
+    const onToggleTarget = vi.fn();
+    const { rerender } = render(
+      <PlanChangeCanvas projectKey="MOTIR" diffKey="k1" onToggleTarget={onToggleTarget} />,
+    );
+    await screen.findByText('Road epic');
+    fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+
+    fireEvent.click(await screen.findByTestId('target-toggle-button'));
+    expect(onToggleTarget).toHaveBeenCalledWith(
+      { id: 'E1', identifier: 'MOTIR-E1', title: 'Road epic', kind: 'epic' },
+      false,
+    );
+    expect(screen.getByTestId('target-toggle-button').getAttribute('aria-label')).toBe(
+      'Set MOTIR-E1 as the planning target',
+    );
+
+    rerender(
+      <PlanChangeCanvas
+        projectKey="MOTIR"
+        diffKey="k1"
+        targetIds={['E1']}
+        onToggleTarget={onToggleTarget}
+        canAddTarget={false}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('target-toggle-button').textContent).toBe('Remove target'),
+    );
+    fireEvent.click(screen.getByTestId('target-toggle-button'));
+    expect(onToggleTarget).toHaveBeenLastCalledWith(
+      expect.objectContaining({ identifier: 'MOTIR-E1' }),
+      true,
+    );
+  });
+
+  it('a DRILLED work-item level registers its items too — its cards are targets', async () => {
+    serve({
+      ...tree,
+      E1: {
+        nodes: [wireNode('S1', 'A story')],
+        edges: [],
+        offLevelBlockers: [],
+      },
+    });
+    const onToggleTarget = vi.fn();
+    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k1" onToggleTarget={onToggleTarget} />);
+    await screen.findByText('Road epic');
+    await drill('E1');
+    await screen.findByText('A story');
+    fireEvent.keyDown(el('S1')!, { key: 'Enter' });
+
+    fireEvent.click(await screen.findByTestId('target-toggle-button'));
+    expect(onToggleTarget).toHaveBeenCalledWith(
+      { id: 'S1', identifier: 'MOTIR-S1', title: 'A story', kind: 'story' },
+      false,
+    );
+  });
+
+  it('a NEW diffKey (an approve) drops the cached levels and re-reads the one on screen', async () => {
+    const spy = serve(tree);
+    const { rerender } = render(
+      <PlanChangeCanvas projectKey="MOTIR" diffKey="k1" onToggleTarget={vi.fn()} />,
+    );
+    await screen.findByText('Road epic');
+    const before = spy.mock.calls.length;
+
+    rerender(<PlanChangeCanvas projectKey="MOTIR" diffKey="k2" onToggleTarget={vi.fn()} />);
+
+    await waitFor(() => expect(spy.mock.calls.length).toBeGreaterThan(before));
+    expect(await screen.findByText('Road epic')).toBeTruthy();
+  });
+
+  it('a FOLDER tile is never a target', async () => {
+    serve(tree);
+    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k1" onToggleTarget={vi.fn()} />);
+    await screen.findByText('Parked');
+    fireEvent.keyDown(el('folder:f1')!, { key: 'Enter' });
+
+    await screen.findByTestId('drill-button');
+    expect(screen.queryByTestId('target-toggle-button')).toBeNull();
+  });
+});

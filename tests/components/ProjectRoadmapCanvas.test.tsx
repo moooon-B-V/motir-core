@@ -5,6 +5,7 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { fireEvent } from '@testing-library/dom';
 import {
   ProjectRoadmapCanvas,
+  type CanvasTargetAction,
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
 import type { ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
@@ -277,6 +278,120 @@ describe('ProjectRoadmapCanvas', () => {
     await screen.findByText('View me');
     fireEvent.keyDown(el('V')!, { key: 'Enter' });
     expect(screen.queryByTestId('view-button')).toBeNull();
+  });
+
+  // The PLANNING-TARGET action (MOTIR-6898; design
+  // `target-picker--search-and-canvas.mock.html` panel 6) — opt-in, between View
+  // and Open on the selected card, absent on every other consumer.
+  describe('the planning-target action (targetAction)', () => {
+    function action(overrides: Partial<CanvasTargetAction> = {}): CanvasTargetAction {
+      return {
+        isEligible: (id) => id !== 'F',
+        isTarget: () => false,
+        keyFor: (id) => `MOTIR-${id}`,
+        canAdd: true,
+        disabledReason: 'You can plan around up to 20 work items at once.',
+        onToggle: vi.fn<(id: string) => void>(),
+        ...overrides,
+      };
+    }
+    const level: RoadmapLevel = {
+      nodes: [
+        { ...node('D', 'Drill me', true), viewable: true },
+        { ...node('L', 'Leaf me'), viewable: true },
+        node('F', 'A folder tile', true),
+      ],
+      deps: [],
+    };
+    const select = (id: string) => fireEvent.keyDown(el(id)!, { key: 'Enter' });
+    const actionLabels = () =>
+      Array.from(el('D')?.parentElement?.querySelectorAll('button') ?? []).map(
+        (b) => b.textContent,
+      );
+
+    it('WITHOUT the prop the selected card offers exactly View and Open — every other consumer', async () => {
+      render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} onView={vi.fn()} />);
+      await screen.findByText('Drill me');
+      select('D');
+
+      await screen.findByTestId('view-button');
+      expect(screen.queryByTestId('target-toggle-button')).toBeNull();
+      expect(actionLabels()).toEqual(['View', 'Open']);
+    });
+
+    it('sits BETWEEN View and Open, and calls onToggle with the card id', async () => {
+      const a = action();
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={() => Promise.resolve(level)}
+          onView={vi.fn()}
+          targetAction={a}
+        />,
+      );
+      await screen.findByText('Drill me');
+      select('D');
+
+      const button = await screen.findByTestId('target-toggle-button');
+      expect(actionLabels()).toEqual(['View', 'Set as target', 'Open']);
+      expect(button.getAttribute('aria-label')).toBe('Set MOTIR-D as the planning target');
+      expect(button.getAttribute('aria-pressed')).toBe('false');
+      // Pressing it does not start a canvas drag or drop the selection — the
+      // press stops at the button, like View's and Open's.
+      fireEvent.pointerDown(button);
+      expect(screen.getByTestId('target-toggle-button')).toBe(button);
+      fireEvent.click(button);
+      expect(a.onToggle).toHaveBeenCalledWith('D');
+    });
+
+    it('reads REMOVE TARGET on a card that already is one — never disabled, even at the cap', async () => {
+      const a = action({ isTarget: (id) => id === 'L', canAdd: false });
+      render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} targetAction={a} />);
+      await screen.findByText('Leaf me');
+      select('L');
+
+      const button = await screen.findByTestId('target-toggle-button');
+      expect(button.textContent).toBe('Remove target');
+      expect(button.getAttribute('aria-label')).toBe('Remove MOTIR-L from the planning targets');
+      expect((button as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(button);
+      expect(a.onToggle).toHaveBeenCalledWith('L');
+    });
+
+    it('at the CAP, Set is disabled with the reason', async () => {
+      const a = action({ canAdd: false });
+      render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} targetAction={a} />);
+      await screen.findByText('Leaf me');
+      select('L');
+
+      const button = (await screen.findByTestId('target-toggle-button')) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      expect(button.title).toBe('You can plan around up to 20 work items at once.');
+    });
+
+    it('an INELIGIBLE node (a folder tile, a proposal) gets no target action', async () => {
+      render(
+        <ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} targetAction={action()} />,
+      );
+      await screen.findByText('A folder tile');
+      select('F');
+
+      await screen.findByTestId('drill-button');
+      expect(screen.queryByTestId('target-toggle-button')).toBeNull();
+    });
+
+    it('does not move the canvas: the level and the selection stay', async () => {
+      render(
+        <ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} targetAction={action()} />,
+      );
+      await screen.findByText('Drill me');
+      select('D');
+      fireEvent.click(await screen.findByTestId('target-toggle-button'));
+
+      expect(screen.getByText('Drill me')).toBeTruthy();
+      // Still selected: its action slot (and so the flipped button) is still up.
+      expect(screen.getByTestId('target-toggle-button')).toBeTruthy();
+      expect(screen.getByTestId('drill-button')).toBeTruthy();
+    });
   });
 
   // FULL-SCREEN mode (MOTIR-1420) — opt-in via `fullScreenable`.

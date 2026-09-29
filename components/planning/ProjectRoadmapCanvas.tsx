@@ -15,6 +15,7 @@ import {
   RotateCcw,
   Search,
   Target,
+  X,
 } from 'lucide-react';
 import {
   PlanningCanvas,
@@ -65,6 +66,22 @@ import {
 // same state a manual drill sets, so Back / the crumbs / search / locate need no
 // special case.
 
+/** The selected card's planning-target action (MOTIR-6898) — see `targetAction`. */
+export interface CanvasTargetAction {
+  /** May this node be a target at all — a committed work item on this level? */
+  isEligible: (id: string) => boolean;
+  /** The node's work-item KEY, for the button's accessible name. */
+  keyFor: (id: string) => string;
+  /** Is it one already? The button then reads **Remove target**. */
+  isTarget: (id: string) => boolean;
+  /** False at the target cap — **Set as target** is disabled, Remove never is. */
+  canAdd: boolean;
+  /** The reason Set is disabled, shown as its tooltip (the cap sentence). */
+  disabledReason: string;
+  /** Add it, or remove it when it already is one. */
+  onToggle: (id: string) => void;
+}
+
 export interface RoadmapLevel {
   nodes: ProjectCanvasNode[];
   deps: ProjectCanvasDep[];
@@ -93,6 +110,19 @@ interface ProjectRoadmapCanvasBaseProps {
    *  quick-view peek, the onboarding consumer opens the tier doc. View (open detail)
    *  is DISTINCT from select (highlight) and from "Open" (drill into children). */
   onView?: (id: string) => void;
+  /**
+   * The PLANNING TARGET action on the selected card (Story MOTIR-6894 · MOTIR-6898;
+   * design `target-picker--search-and-canvas.mock.html` panel 6) — **Set as
+   * target** / **Remove target**, between View and Open.
+   *
+   * ⚠️ OPT-IN, and absent everywhere but the planning surface. The canvas is one
+   * component on several pages, and a target means nothing outside a planning
+   * session — the Roadmap page, the item page's roadmap, onboarding and the plan
+   * review pane pass nothing, and their selected card is exactly what it was.
+   * `isEligible` narrows it further to committed WORK ITEMS: a folder tile, a
+   * group node or a proposal never gets it.
+   */
+  targetAction?: CanvasTargetAction;
 
   /** Show the EXPAND-to-full-screen control (MOTIR-1420). The roadmap consumer opts
    *  in so a viewer can use the whole display for a large tree; onboarding does not.
@@ -529,6 +559,7 @@ export function ProjectRoadmapCanvas({
   onResetPositions,
   onSelect,
   onView,
+  targetAction,
   searchable = false,
   searchLabel,
   fullScreenable = false,
@@ -558,6 +589,7 @@ export function ProjectRoadmapCanvas({
   elsewhereOffer,
 }: ProjectRoadmapCanvasProps) {
   const t = useTranslations('roadmap.canvas');
+  const tTargets = useTranslations('planningWorkspace.targets');
   const tFolders = useTranslations('folders');
   const tTarget = useTranslations('planningWorkspace.arrival');
   // The breadcrumb root, the canvas aria label, and the WARNING legend row default
@@ -1355,6 +1387,51 @@ export function ProjectRoadmapCanvas({
         : t('locateReady');
   const locateDisabledReason = emphasis ? emphasis.emptyLabel : t('locateNothing');
 
+  /** Does the selected card offer the planning-target action (MOTIR-6898)? */
+  function targetActionFor(id: string): boolean {
+    return targetAction !== undefined && targetAction.isEligible(id);
+  }
+
+  /**
+   * SET AS TARGET / REMOVE TARGET — View's secondary treatment verbatim, so Open
+   * stays the one accent action on the card (design panel 6). It adds nothing to
+   * navigation: the canvas stays on this level, and the card keeps its selection,
+   * so the same button now reads Remove.
+   */
+  function renderTargetButton(id: string) {
+    const action = targetAction!;
+    const label = action.keyFor(id);
+    const isTarget = action.isTarget(id);
+    const disabled = !isTarget && !action.canAdd;
+    return (
+      <button
+        type="button"
+        data-testid="target-toggle-button"
+        aria-label={
+          isTarget
+            ? tTargets('removeTargetAria', { key: label })
+            : tTargets('setTargetAria', { key: label })
+        }
+        aria-pressed={isTarget}
+        disabled={disabled}
+        title={disabled ? action.disabledReason : undefined}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          action.onToggle(id);
+        }}
+        className="inline-flex items-center gap-1 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-semibold whitespace-nowrap text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-55"
+      >
+        {isTarget ? (
+          <X className="size-3.5" aria-hidden="true" />
+        ) : (
+          <Target className="size-3.5" aria-hidden="true" />
+        )}
+        {isTarget ? tTargets('removeTarget') : tTargets('setTarget')}
+      </button>
+    );
+  }
+
   function renderNode(cn: CanvasNode) {
     const node = byId.get(cn.id) ?? (motion ? lastDrawnRef.current.get(cn.id) : undefined);
     if (!node) return null;
@@ -1399,7 +1476,7 @@ export function ProjectRoadmapCanvas({
             (which now just selects). VIEW (open the quick-view detail, MOTIR-1352)
             and OPEN (drill into children) are DISTINCT and sit side by side; a leaf
             shows View alone. Each stops the press from starting a canvas drag. */}
-        {selected && ((onView && node.viewable) || node.drillable) && (
+        {selected && ((onView && node.viewable) || node.drillable || targetActionFor(cn.id)) && (
           <div className="absolute -bottom-3.5 left-1/2 flex -translate-x-1/2 items-center gap-2">
             {onView && node.viewable && (
               <button
@@ -1417,6 +1494,7 @@ export function ProjectRoadmapCanvas({
                 View
               </button>
             )}
+            {targetActionFor(cn.id) && renderTargetButton(cn.id)}
             {node.drillable && (
               <button
                 type="button"

@@ -74,44 +74,35 @@ export function extraPlanningTargetKeys(targets: readonly PlanningTarget[]): str
   return targets.slice(1).map((t) => t.identifier);
 }
 
-/** The `@` query the caret currently sits in. */
-export interface MentionQueryRange {
-  /** The text typed after the `@` (empty right after the trigger). */
-  query: string;
-  /** Index of the `@` itself. */
-  start: number;
-  /** Index just past the query (the caret). */
-  end: number;
-}
-
 /**
- * Find the `@`-mention query the caret is inside, or null when there is none.
+ * Did this edit TYPE the target-search shortcut? (Story MOTIR-6894 · MOTIR-6897;
+ * design `target-picker--search-and-canvas.mock.html` panel 4.)
  *
- * The composer is a PLAIN TEXT INPUT (not the rich-text editor's Tiptap
- * suggestion plugin — the design is explicit that this is a standalone combobox),
- * so the trigger is derived from the text before the caret: an `@` at the start of
- * the value or after whitespace, followed by non-whitespace, non-`@` characters.
- * That makes an email-ish `foo@bar` NOT a trigger, and a second `@` closes the
- * first query rather than nesting.
+ * The composer's `@` no longer starts an INLINE query — that query ended at the
+ * first space, so `@plan approval` searched `plan`. It is a SHORTCUT: an `@`
+ * typed at the start of the message or after whitespace opens the target search
+ * popover, whose own field takes the query, and the `@` is CONSUMED so no stray
+ * `@` is left in the message. An `@` inside a word (`foo@bar`) is an ordinary
+ * character.
+ *
+ * Derived from the edit itself rather than from a keydown, because a keydown's
+ * `key` is not reliable across IMEs and on-screen keyboards, while every input
+ * path ends in the same change: `next` is `previous` with ONE `@` inserted just
+ * before `caret`. Anything else — a paste, a deletion, a replaced selection —
+ * returns `null` and is ordinary typing.
+ *
+ * Returns the draft and caret to restore (the text as it was before the `@`).
  */
-export function findMentionQuery(text: string, caret: number): MentionQueryRange | null {
-  const upToCaret = text.slice(0, Math.max(0, Math.min(caret, text.length)));
-  const match = /(?:^|\s)@([^\s@]*)$/.exec(upToCaret);
-  if (!match) return null;
-  const query = match[1] ?? '';
-  return { query, start: upToCaret.length - query.length - 1, end: upToCaret.length };
-}
-
-/**
- * The composer text once a pick has consumed its `@` query. The chip lands in the
- * TRAY, not inline in the message (design panel 2), so the query token is removed
- * and the caret closes over the gap — the user keeps typing the same sentence.
- */
-export function clearMentionQuery(
-  text: string,
-  range: MentionQueryRange,
-): { text: string; caret: number } {
-  const before = text.slice(0, range.start);
-  const after = text.slice(range.end);
-  return { text: `${before}${after}`, caret: before.length };
+export function consumeTargetShortcut(
+  previous: string,
+  next: string,
+  caret: number,
+): { text: string; caret: number } | null {
+  if (next.length !== previous.length + 1) return null;
+  const at = caret - 1;
+  if (at < 0 || next[at] !== '@') return null;
+  if (next.slice(0, at) + next.slice(at + 1) !== previous) return null;
+  const before = at === 0 ? '' : next[at - 1]!;
+  if (before !== '' && !/\s/.test(before)) return null;
+  return { text: previous, caret: at };
 }

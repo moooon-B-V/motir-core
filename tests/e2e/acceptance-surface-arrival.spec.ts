@@ -270,11 +270,12 @@ test('the planner opens INSIDE the thing you are planning — from a card, from 
   await chapter('Name the epic you mean — the canvas moves inside it, and says so', async () => {
     const arrived = drilledLevelLoad(page);
     await rail(page).getByTestId('planning-target-trigger').click();
-    // ⚠️ The composer's MESSAGE FIELD *is* the mention search — `triggerMention`
-    // inserts an `@` into it and opens the picker from the caret. So the query is
-    // TYPED after that `@`; `fill()` would replace it and close the picker with
-    // it. The listbox is the results, rendered below the field in the same rail.
-    await composer(page).pressSequentially(seed.epicKey, { delay: 20 });
+    // The Search control opens the target search with focus in its OWN field
+    // (MOTIR-6897) — the query is typed there, never into the message. The
+    // listbox is the results, rendered in the same popover.
+    await rail(page).getByTestId('planning-target-search-field').pressSequentially(seed.epicKey, {
+      delay: 20,
+    });
     await rail(page)
       .getByRole('listbox', { name: 'Work items to plan around' })
       .getByRole('option')
