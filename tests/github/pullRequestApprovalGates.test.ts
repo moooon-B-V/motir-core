@@ -709,3 +709,118 @@ describe('AMENDMENT 6 Q5 — the withdrawal records WHY, and the three PR causes
     expect(await statusOf(item.id)).toBe('implemented');
   });
 });
+
+// ── A SET THAT LEAVES GREEN WITHOUT GOING RED WITHDRAWS IT TOO (MOTIR-6946) ──────
+//
+// The other arm of the asymmetry MOTIR-6271 closed the red half of. On
+// moooon-B-V/motir-core#3261 @ 688ce704 the gate was raised at 18:40:08 over a set the
+// acceptance lane alone had made green; CI's first job was created at 18:40:58, its checks
+// arrived `pending` at the SAME head, and the question stood `awaiting` for the whole run —
+// a person could press Approve over commits whose tests had not finished.
+
+/** One check at one commit, as its `check_run` delivery arrives. */
+const checkRun = (opts: {
+  name: string;
+  headSha: string;
+  number: number;
+  status: string;
+  conclusion?: string | null;
+  suiteId?: number;
+}) =>
+  githubWebhookService.handleEvent('check_run', {
+    action: opts.status === 'completed' ? 'completed' : 'created',
+    installation: INSTALLATION,
+    repository: { id: Number(REPO_PROVIDER_ID) },
+    check_run: {
+      name: opts.name,
+      head_sha: opts.headSha,
+      status: opts.status,
+      conclusion: opts.conclusion ?? null,
+      pull_requests: [{ number: opts.number }],
+      check_suite: { id: opts.suiteId ?? 36613621931, head_branch: null },
+    },
+  });
+
+describe('a PENDING check at the asked-about commits withdraws the question (MOTIR-6946)', () => {
+  it('supersedes the gate as `ci_rerunning` and takes the card out of In Review', async () => {
+    const { item } = await reviewedWithGate('pa-rerun-withdraws@example.com');
+
+    // The SAME commit the gate was raised over — a check the set did not have starts.
+    await checkRun({ name: 'Vitest (1/12)', headSha: 'sha-a', number: 11, status: 'queued' });
+
+    expect((await approvalGates(item.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'ci_rerunning'],
+    ]);
+    expect(await statusOf(item.id)).toBe('implemented');
+  });
+
+  it('the next all-green delivery raises exactly ONE fresh question over the same commits', async () => {
+    const { item } = await reviewedWithGate('pa-rerun-then-green@example.com');
+    await checkRun({ name: 'Vitest (1/12)', headSha: 'sha-a', number: 11, status: 'in_progress' });
+    expect(await awaiting(item.id)).toHaveLength(0);
+
+    // Nothing was pushed: the check simply finishes, and the set is green again.
+    await checkRun({
+      name: 'Vitest (1/12)',
+      headSha: 'sha-a',
+      number: 11,
+      status: 'completed',
+      conclusion: 'success',
+    });
+
+    expect((await approvalGates(item.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'ci_rerunning'],
+      ['awaiting', null],
+    ]);
+    const [fresh] = await awaiting(item.id);
+    expect(fresh?.subjectVersion).toBe('moooon/acme#11@sha-a,moooon/acme#12@sha-b');
+    expect(await statusOf(item.id)).toBe('in_review');
+  });
+
+  it('a pending check at a NEW head is a head move, never `ci_rerunning`', async () => {
+    const { item } = await reviewedWithGate('pa-rerun-new-head@example.com');
+
+    await checkRun({ name: 'Vitest (1/12)', headSha: 'sha-a2', number: 11, status: 'queued' });
+
+    expect((await approvalGates(item.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'head_moved'],
+    ]);
+  });
+
+  it('a DECIDED gate is untouched by a later pending check — §8 decision 5', async () => {
+    const { s, item } = await reviewedWithGate('pa-rerun-after-decision@example.com');
+    const [gate] = await awaiting(item.id);
+    await adminDb.approvalGate.update({
+      where: { id: gate!.id },
+      data: {
+        state: 'approved',
+        decidedById: s.user.id,
+        decidedAt: new Date(),
+        decidedByLabel: 'Owner',
+      },
+    });
+
+    await checkRun({ name: 'Vitest (1/12)', headSha: 'sha-a', number: 11, status: 'queued' });
+
+    const [row] = await approvalGates(item.id);
+    expect(row).toMatchObject({ state: 'approved', supersededCause: null });
+    expect(row!.decidedById).toBe(s.user.id);
+  });
+
+  it('a red check after the rerun still withdraws as `ci_failed` — MOTIR-6271 is unchanged', async () => {
+    const { item } = await reviewedWithGate('pa-rerun-then-red@example.com');
+
+    await checkRun({
+      name: 'Vitest (1/12)',
+      headSha: 'sha-a',
+      number: 11,
+      status: 'completed',
+      conclusion: 'failure',
+    });
+
+    expect((await approvalGates(item.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'ci_failed'],
+    ]);
+    expect(await statusOf(item.id)).toBe('implemented');
+  });
+});

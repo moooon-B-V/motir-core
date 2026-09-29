@@ -380,6 +380,73 @@ export async function withdrawPullRequestApprovalGatesOnCiFailure(
 }
 
 /**
+ * WITHDRAW when the set leaves green WITHOUT going red: a check at the very commits the
+ * question was asked about is `pending` again (MOTIR-6946; `approval-gates.md` §8's
+ * amendment, decision 2).
+ *
+ * ⚠️ THE OTHER HALF OF THE ASYMMETRY `ci_failed` CLOSED ONE ARM OF. A gate raised over a
+ * set that looked green — a workflow run GitHub had created but that had not created a job
+ * yet, a re-run of a finished check, a slow App reporting late — stood `awaiting` for the
+ * whole of the run that followed, so a person could press *Approve and merge* over commits
+ * whose tests had not finished. Green → `running` at an unchanged head is none of the
+ * other causes: no head moved, no member closed, nothing failed.
+ *
+ * ⚠️ ONLY AT THE GATE'S OWN VERSION. A pending row for a NEW head is a push, which
+ * `withdrawPullRequestApprovalGatesOnHeadMove` retires as `head_moved` — the same delivery
+ * calls it first — so a gate whose asked-about set no longer matches the current one is
+ * left to that cause rather than mislabelled here.
+ *
+ * The caller has already established that the pull request's live set at its head reads
+ * `running` (`derivePrCiState`); this retires the question, and the re-ask raises nothing
+ * while it runs — the NEXT green raises exactly one fresh gate. Returns the cards whose
+ * merge question it retired, which are the only cards the caller moves. GATES ONLY, like
+ * `…OnCiFailure`: `ciPromotion`'s `withdrawDeliveredCardsOffGreen` composes the status
+ * move. A DECIDED gate is untouched (§8's decision 5).
+ */
+export async function withdrawPullRequestApprovalGatesOnCiRerun(
+  pullRequestId: string,
+  tx: Prisma.TransactionClient,
+): Promise<string[]> {
+  const withdrawn: string[] = [];
+  for (const { workItemId } of await workItemDeliveryRepository.listByPullRequest(
+    pullRequestId,
+    tx,
+  )) {
+    const gate = (await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx)).find(
+      (row) => row.kind === KIND,
+    );
+    if (gate) {
+      const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
+      const current = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
+      if (!current || current !== gate.subjectVersion) continue;
+      if (
+        (await approvalGateRepository.supersedeAwaitingByWorkItem(
+          workItemId,
+          KIND,
+          'ci_rerunning',
+          tx,
+        )) > 0
+      ) {
+        withdrawn.push(workItemId);
+      }
+    }
+    // The acceptance question rides on the same green set (MOTIR-5903) — and an `auto`
+    // project raises no merge gate, so it can be the only question standing. Asked
+    // through the predicate, which leaves one still owed exactly where it is.
+    if (await acceptanceNoLongerOwed(workItemId, tx)) {
+      await approvalGateRepository.supersedeAwaitingByWorkItem(
+        workItemId,
+        ACCEPTANCE_KIND,
+        'ci_rerunning',
+        tx,
+      );
+    }
+    await reraiseAfterWithdrawal(workItemId, tx);
+  }
+  return withdrawn;
+}
+
+/**
  * WITHDRAW on a SET CHANGE: a delivery row joined or left this card, so the set its gate
  * asked about is not the set it now carries. Called by every writer of `work_item_delivery`
  * (`githubPullRequestService`'s two link arms and two unlink arms), only when the write
