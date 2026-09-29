@@ -177,7 +177,7 @@ describe('what each built-in role is offered', () => {
     expect(gone).toEqual([]);
   });
 
-  it('a VIEWER loses exactly the ONE destination that refuses them outright', () => {
+  it('a VIEWER loses exactly the TWO destinations that refuse them outright', () => {
     // Three became two for the same reason as above: `/code` is browse-reachable,
     // so a viewer is offered the room and meets Health's own admin-only state
     // inside it rather than being denied the door. Two became ONE with MOTIR-6332:
@@ -185,7 +185,9 @@ describe('what each built-in role is offered', () => {
     const gone = PROJECT_NAV_ACCESS.map((e) => e.href).filter(
       (href) => !offered(VIEWER as never).includes(href),
     );
-    expect(gone.sort()).toEqual(['/requested-features']);
+    // One became TWO with MOTIR-6874: `/my-agents` needs `instance:use`, which a
+    // viewer does not hold (agent-instances.md §8 — a viewer runs no machine).
+    expect(gone.sort()).toEqual(['/my-agents', '/requested-features']);
   });
 
   it('a viewer keeps every READ surface', () => {

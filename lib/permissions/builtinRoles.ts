@@ -132,6 +132,11 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   // `tests/permissions/accessParity.test.ts` proves that rather than assuming it.
   'plan:view_any',
   'run:view_any',
+  // MOTIR-6872 — using your own agent instances (`docs/decisions/agent-instances.md`
+  // §8): granted to `member` and every role above it, never `viewer`. The key is
+  // NEW, so no actor loses anything by its arriving; a custom role holds it only
+  // when an admin ticks it.
+  'instance:use',
   // MOTIR-2256 — the twelve per-domain administrative keys that fall out of
   // `project:administer`. Admin holds all twelve, which is what makes the split
   // neutral wherever the umbrella already stood.
@@ -260,6 +265,8 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceRole, ReadonlySet<Permi
     'approval:view_any',
     'plan:view_any',
     'run:view_any',
+    // MOTIR-6872 — a member runs their own agent instances (§8).
+    'instance:use',
   ]),
   // MOTIR-6328 — the same three view-any keys, and NOTHING that authors, decides
   // or starts (DECISION MOTIR-6165 Q2). A viewer opens Plans, Approvals and Runs

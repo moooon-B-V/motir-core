@@ -15,14 +15,14 @@ import { Button } from '@/components/ui/Button';
 //   • it does NOT flip access on open — the mutation fires only when the footer
 //     "Start building in public" button is pressed (→ `onConfirm`);
 //   • the owner holds the pending/optimistic state and closes the dialog on
-//     success, so this component never calls `setAccessLevel` itself.
+//     success, so this component never calls `setAccessMode` itself.
 // All copy lives under `settings.buildInPublic.*` (the centralized namespace).
 
 export interface BuildInPublicDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  // Fired when the user confirms. The owner runs the `setAccessLevel('public')`
-  // write (the shipped 6.4 path) and closes the dialog on success.
+  // Fired when the user confirms. The owner runs the `setAccessMode('public')`
+  // write (via `useGoPublic`) and closes the dialog on success.
   onConfirm: () => void;
   // The owner's in-flight flag for the access write — disables both buttons and
   // shows the spinner on confirm.

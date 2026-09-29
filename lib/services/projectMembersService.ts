@@ -1,4 +1,4 @@
-import { Prisma, type ProjectAccessMode } from '@/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -6,7 +6,6 @@ import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/co
 import { isCloud } from '@/lib/billing/availability';
 import {
   AlreadyProjectMemberError,
-  InvalidAccessLevelError,
   InvalidAccessModeError,
   NotAProjectMemberError,
   PublicAccessUnavailableError,
@@ -14,7 +13,6 @@ import {
 } from '@/lib/projects/errors';
 import { resolveProjectByKeyWithAliasInTx } from '@/lib/projects/resolveByKey';
 import { asAccessMode } from '@/lib/projects/accessMode';
-import { asAccessLevel } from '@/lib/projects/roles';
 import { bindOrganizationContext } from '@/lib/organizations/context';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -54,8 +52,7 @@ import type {
 // `projectAccessService.assertPermission` for a named key:
 //
 //   * `addMember` / `removeMember`              → `member:manage`
-//   * `setAccessMode` / `setAccessLevel`
-//     / `previewAccessModeChange`               → `project:manage_access`
+//   * `setAccessMode` / `previewAccessModeChange` → `project:manage_access`
 //     Its own key on purpose: who is IN the project and how open the project is
 //     to the workspace are different decisions, and Jira separates them too.
 //   * `listMembers` / `getAccess`               → `project:browse`
@@ -133,19 +130,6 @@ export interface ActorScopedInput {
   ctx: WorkspaceContext;
 }
 
-/**
- * The DECISION's level → mode mapping (`role-model.md` Q1), for the one release in
- * which the shipped UI still sends a level. It maps a REQUEST; a stored row
- * carries its mode, and `20260928000000_project_access_mode_not_null` restates
- * this table for the rows it backfilled.
- */
-const LEVEL_TO_MODE = {
-  open: 'workspace',
-  limited: 'members',
-  private: 'members',
-  public: 'public',
-} as const satisfies Record<string, ProjectAccessMode>;
-
 export const projectMembersService = {
   /**
    * List a project's members as DTOs. BROWSE-gated (MOTIR-2295): any actor who
@@ -167,11 +151,11 @@ export const projectMembersService = {
   },
 
   /**
-   * Read the project's current browse-access level (open / limited / private).
+   * Read the project's current access mode (and the level derived from it).
    * BROWSE-gated, for the same reason as `listMembers` (MOTIR-2295): the
    * Settings → Access control pane in 6.4.5 renders it read-only for non-admins,
    * so the gate is `project:browse`, never `project:manage_access` — that key is
-   * the WRITE counterpart, `setAccessLevel`.
+   * the WRITE counterpart, `setAccessMode`.
    */
   async getAccess(input: ActorScopedInput): Promise<ProjectAccessDTO> {
     return withWorkspaceContext(input.ctx, async (tx) => {
@@ -278,8 +262,8 @@ export const projectMembersService = {
   /**
    * Set the project's ACCESS MODE — Open to the workspace · Members only · Public
    * (Story MOTIR-6169 · MOTIR-6544; `role-model.md` Q1). `project:manage_access`
-   * gated. Writes the mode and the legacy level TOGETHER through
-   * `projectRepository.setAccessMode`, and NEVER adds anybody to the project:
+   * gated. Writes the mode alone through `projectRepository.setAccessMode` (the
+   * retired level is no longer written, MOTIR-6692), and NEVER adds anybody to the project:
    * "Members only" means the people deliberately added, so switching to it
    * removes the project from every Full member who was not, at once. (The old
    * `private` switch added every workspace member, which made it mean "everyone
@@ -314,24 +298,6 @@ export const projectMembersService = {
         stampMadePublicAt,
       });
       return toProjectAccessDTO(updated);
-    });
-  },
-
-  /**
-   * The legacy LEVEL setter, kept as a thin adapter onto {@link setAccessMode}
-   * for the one release in which the shipped UI still sends `{ accessLevel }`.
-   * The level is mapped by the DECISION's table — `limited` and `private` both
-   * land at Members only — and validated as a level first, so a bad level keeps
-   * its own error.
-   */
-  async setAccessLevel(input: ActorScopedInput & { level: string }): Promise<ProjectAccessDTO> {
-    const level = asAccessLevel(input.level);
-    if (!level) throw new InvalidAccessLevelError(input.level);
-    return projectMembersService.setAccessMode({
-      key: input.key,
-      actorUserId: input.actorUserId,
-      ctx: input.ctx,
-      mode: LEVEL_TO_MODE[level],
     });
   },
 

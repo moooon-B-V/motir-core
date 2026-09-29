@@ -211,11 +211,11 @@ describe('SEAM 1 · the To-approve read is the WHOLE set, under a ceiling it SAY
       projectId: hidden.id,
       parentId: hiddenStory.id,
     });
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: hidden.identifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     await adminDb.projectMembership.deleteMany({
       where: { userId: reader.id, projectId: hidden.id },

@@ -139,11 +139,11 @@ test('1 · an org Admin creates a workspace, and the Members page lists them as 
     orderBy: { createdAt: 'asc' },
   });
   const mayaCtx = { userId: seed.maya.id, workspaceId: harborId };
-  await projectMembersService.setAccessLevel({
+  await projectMembersService.setAccessMode({
     key: project.identifier,
     actorUserId: seed.maya.id,
     ctx: mayaCtx,
-    level: 'private',
+    mode: 'members',
   });
   item = await workItemsService.createWorkItem(
     { projectId: project.id, kind: 'task', title: 'Chart the harbour lights' },

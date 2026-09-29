@@ -158,7 +158,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-async function readJson(res: Response): Promise<unknown> {
+export async function readFlyJson(res: Response): Promise<unknown> {
   try {
     return await res.json();
   } catch {
@@ -166,7 +166,7 @@ async function readJson(res: Response): Promise<unknown> {
   }
 }
 
-function errorDetail(body: unknown): string {
+export function flyErrorDetail(body: unknown): string {
   const record = asRecord(body);
   const message = record?.['error'] ?? record?.['message'];
   return typeof message === 'string' ? message.slice(0, 200) : '';
@@ -191,7 +191,7 @@ function errorDetail(body: unknown): string {
  * is wrong — the opposite diagnosis, and mis-reporting it as an image problem
  * would send an operator to the registry while the token rots.
  */
-function isImagePullRefusal(detail: string): boolean {
+export function isFlyImagePullRefusal(detail: string): boolean {
   return (
     /failed to (get|pull|resolve) (the )?manifest/i.test(detail) ||
     /manifest unknown/i.test(detail) ||
@@ -200,7 +200,7 @@ function isImagePullRefusal(detail: string): boolean {
   );
 }
 
-function parseDate(value: unknown): Date | null {
+export function parseFlyDate(value: unknown): Date | null {
   if (typeof value === 'string') {
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -294,7 +294,7 @@ export function toFlyMachine(body: unknown): FlyMachine | null {
       {
         type: typeof event['type'] === 'string' ? event['type'] : '',
         status: typeof event['status'] === 'string' ? event['status'] : '',
-        timestamp: parseDate(event['timestamp']),
+        timestamp: parseFlyDate(event['timestamp']),
         exitCode: exitCodeOfEvent(event),
       },
     ];
@@ -304,8 +304,8 @@ export function toFlyMachine(body: unknown): FlyMachine | null {
     name: typeof record?.['name'] === 'string' ? record['name'] : '',
     state: typeof record?.['state'] === 'string' ? record['state'] : '',
     region: typeof record?.['region'] === 'string' ? record['region'] : '',
-    createdAt: parseDate(record?.['created_at']),
-    updatedAt: parseDate(record?.['updated_at']),
+    createdAt: parseFlyDate(record?.['created_at']),
+    updatedAt: parseFlyDate(record?.['updated_at']),
     metadata: stringMap(asRecord(record?.['config'])?.['metadata']),
     events,
   };
@@ -390,8 +390,12 @@ export function stoppedAtOf(machine: FlyMachine): Date | null {
  * created, so the kill leaves both a registered runner and a live container with
  * nobody supervising either. Bounded, the same hang is an error the boot path
  * settles and the reaper can still catch the container.
+ *
+ * Exported for the PERSISTENT adapter (`./persistent.ts`, MOTIR-6869), which
+ * talks to the instance apps with a different token: the one bounded `fetch`
+ * stays the only one, and the token is an argument rather than a config read.
  */
-async function request(
+export async function flyRequest(
   path: string,
   init: { method: string; token: string; body?: string },
 ): Promise<Response> {
@@ -453,7 +457,7 @@ export const flyMachinesClient = {
    */
   async createMachine(input: CreateMachineInput): Promise<FlyMachine> {
     const { token, app } = flyFleetConfig();
-    const res = await request(`/apps/${encodeURIComponent(app)}/machines`, {
+    const res = await flyRequest(`/apps/${encodeURIComponent(app)}/machines`, {
       method: 'POST',
       token,
       body: JSON.stringify({
@@ -473,13 +477,13 @@ export const flyMachinesClient = {
         },
       }),
     });
-    const body = await readJson(res);
+    const body = await readFlyJson(res);
     if (!res.ok) {
       // §6.2 — the DISTINGUISHABLE reason. An unpullable image and an
       // unreachable Fly both arrive here as a non-2xx; only the body tells them
       // apart, and only here is the body still in scope.
-      const detail = errorDetail(body);
-      if (isImagePullRefusal(detail)) {
+      const detail = flyErrorDetail(body);
+      if (isFlyImagePullRefusal(detail)) {
         throw new OrchestratorImageUnpullableError('fly', res.status, input.image, detail);
       }
       throw new OrchestratorApiError('fly', res.status, detail);
@@ -499,13 +503,13 @@ export const flyMachinesClient = {
    *  the happy path that is the expected observation, not a failure. */
   async getMachine(id: string): Promise<FlyMachine | null> {
     const { token, app } = flyFleetConfig();
-    const res = await request(
+    const res = await flyRequest(
       `/apps/${encodeURIComponent(app)}/machines/${encodeURIComponent(id)}`,
       { method: 'GET', token },
     );
     if (res.status === 404) return null;
-    const body = await readJson(res);
-    if (!res.ok) throw new OrchestratorApiError('fly', res.status, errorDetail(body));
+    const body = await readFlyJson(res);
+    if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
     return toFlyMachine(body);
   },
 
@@ -522,12 +526,12 @@ export const flyMachinesClient = {
    */
   async destroyMachine(id: string): Promise<void> {
     const { token, app } = flyFleetConfig();
-    const res = await request(
+    const res = await flyRequest(
       `/apps/${encodeURIComponent(app)}/machines/${encodeURIComponent(id)}?force=true`,
       { method: 'DELETE', token },
     );
     if (res.ok || res.status === 404) return;
-    throw new OrchestratorApiError('fly', res.status, errorDetail(await readJson(res)));
+    throw new OrchestratorApiError('fly', res.status, flyErrorDetail(await readFlyJson(res)));
   },
 
   /**
@@ -541,12 +545,12 @@ export const flyMachinesClient = {
    */
   async listMachines(): Promise<FlyMachine[]> {
     const { token, app } = flyFleetConfig();
-    const res = await request(`/apps/${encodeURIComponent(app)}/machines`, {
+    const res = await flyRequest(`/apps/${encodeURIComponent(app)}/machines`, {
       method: 'GET',
       token,
     });
-    const body = await readJson(res);
-    if (!res.ok) throw new OrchestratorApiError('fly', res.status, errorDetail(body));
+    const body = await readFlyJson(res);
+    if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
     const entries = Array.isArray(body) ? body : [];
     return entries.flatMap((entry) => {
       const machine = toFlyMachine(entry);

@@ -550,11 +550,11 @@ describe('POST /api/internal/ai/similar-work-items — tenancy', () => {
       title: 'Hidden card',
       embedding: oneHot(0),
     });
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     // A real workspace member who is NOT a member of this private project — the
     // permission denial, as distinct from the cross-tenant case above.

@@ -1,16 +1,20 @@
 import {
   createUsageSink,
   fakeOrchestrator,
+  fakePersistentOrchestrator,
   flyFleetConfig,
   flyIndexerImage,
   flyOrchestrator,
+  flyPersistentOrchestrator,
   isFlyFleetConfigured,
+  isFlyInstancesConfigured,
   isFlyIndexerImageConfigured,
   INDEXER_IMAGE_ENV_VAR,
   OrchestratorNotConfiguredError,
   probeImagePull,
   type ContainerOrchestrator,
   type OrchestratorProvider,
+  type PersistentContainerOrchestrator,
   type RegistryCredentialResolver,
 } from '@motir/orchestrator';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
@@ -74,6 +78,29 @@ export function getOrchestrator(): ContainerOrchestrator {
     );
   }
   return flyOrchestrator;
+}
+
+/**
+ * The PERSISTENT half of the port — a user agent instance's machine and volume
+ * (Story MOTIR-6860 · MOTIR-6869, `docs/decisions/agent-instances.md` §1, §7) —
+ * or the typed not-configured error. Selected by the same
+ * `MOTIR_FLEET_ORCHESTRATOR` switch as the ephemeral half, so a suite that
+ * selects the fake gets both fakes; configured by the instance lane's OWN
+ * variables, never `FLY_FLEET_*` (§7).
+ */
+export function getPersistentOrchestrator(): PersistentContainerOrchestrator {
+  if (selectedOrchestratorProvider() === 'fake') return fakePersistentOrchestrator;
+  if (!isFlyInstancesConfigured()) {
+    throw new OrchestratorNotConfiguredError(
+      'set FLY_INSTANCES_API_TOKEN, or select the fake adapter',
+    );
+  }
+  return flyPersistentOrchestrator;
+}
+
+/** Can this deployment boot agent instances at all? Never throws. */
+export function isPersistentOrchestratorConfigured(): boolean {
+  return selectedOrchestratorProvider() === 'fake' || isFlyInstancesConfigured();
 }
 
 /** Can this deployment provision containers at all? Never throws — the sweep

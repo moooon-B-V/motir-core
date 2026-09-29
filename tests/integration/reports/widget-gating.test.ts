@@ -70,11 +70,11 @@ async function makePrivateTeam(): Promise<Team> {
     targetUserId: member.id,
     role: 'member',
   });
-  await projectMembersService.setAccessLevel({
+  await projectMembersService.setAccessMode({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,
-    level: 'private',
+    mode: 'members',
   });
   await workspacesService.addMember({
     userId: outsider.id,

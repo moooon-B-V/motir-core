@@ -231,7 +231,10 @@ beforeEach(() => {
   vi.spyOn(codeGraphIndexAdmissionService, 'admit').mockResolvedValue({
     outcome: 'admitted',
     admission: ADMISSION,
-    census: { total: 1, byWorkload: { ci_runner: 0, code_graph_index: 1, hosted_agent: 0 } },
+    census: {
+      total: 1,
+      byWorkload: { ci_runner: 0, code_graph_index: 1, hosted_agent: 0, agent_instance: 0 },
+    },
   });
   vi.spyOn(codeGraphIndexAdmissionService, 'release').mockImplementation(
     async (slotRef, dispatchId) => {

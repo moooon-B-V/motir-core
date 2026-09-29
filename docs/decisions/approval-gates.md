@@ -138,6 +138,12 @@
   webhook, or read by the reconcile tick) re-settles a still-standing exit. The
   FIFTH AMENDMENT's affected sentences carry narrowed notes; none is struck.
 
+- **AMENDED 2026-09-29 (MOTIR-6903), at §4 — a re-queue made OUTSIDE Motir.**
+  §4's SEVENTH AMENDMENT handles GitHub's `enqueued` delivery: an exit still
+  standing at the head it names is stamped re-queued, so the card's red, the
+  promotion hold and `motir fix`'s claim lift. It moves no status and decides no
+  gate; the merge moves the card. Nothing earlier is struck.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -2430,6 +2436,76 @@ An approval that does not merge is a note, not a gate.
 > | 1, 2, 4       | MOTIR-6847 — the disposition, the class, and the late re-settle            |
 > | 4 (backstop)  | MOTIR-6848 — the reconcile tick reads the conclusion from GitHub           |
 > | 1 (surface)   | MOTIR-6845 — the design delta · MOTIR-6849 — the row, the overlay and copy |
+>
+> ### §4 — SEVENTH AMENDMENT (MOTIR-6903, 2026-09-29): a re-queue made OUTSIDE Motir clears the exit and nothing else — GitHub's `enqueued` stamps a standing exit re-queued, the red, the hold and the repair claim lift, and no status moves and no gate is decided
+>
+> **DECIDED BY THE IMPLEMENTING RUN (MOTIR-6903, 2026-09-29)**, which the card asked
+> to choose between two answers and say which; the requester confirms or reverses it
+> on the pull request. It amends no earlier decision. It adds a THIRD writer of
+> `requeuedAt` beside the two presses (_Queue again_ in `auto`, and the re-asked
+> gate's approve in `manual`), and says what that writer does and does not do.
+>
+> **What was OPEN.** An exit stops standing when `requeuedAt` is stamped or a push
+> moves the head (`queueExitStandsAtHead`). Only Motir's own presses stamped it, and
+> the webhook read `dequeued` but not `enqueued`. So a pull request put back into
+> the queue anywhere else — GitHub's _Merge when ready_ / _Add to merge queue_,
+> `gh pr merge --auto`, another integration — sat in the queue on GitHub while its
+> card read _Left the queue_, folded `ciState: failing`, held the promotion, and was
+> claimable by `motir fix`. **The fixture:** MOTIR-6829 / `motir-core` PR #3235,
+> 2026-09-29 — ejected `CI_FAILURE` at 09:04:27 UTC, re-added on GitHub by a person
+> at 09:28:07, and still red on the card while queued at position 5.
+>
+> **1. THE EXIT.** A `pull_request` `enqueued` delivery whose pull request's LATEST
+> exit still stands at the head the delivery names stamps that exit's `requeuedAt`
+> (`githubPullRequestQueueExitRepository.claimRequeue`, the claim the presses make),
+> and recomputes every delivered card's `ciState` and fix reason in the same
+> transaction, exactly as a press does. The row stops reading _Left the queue_ /
+> _Removed from the queue_, the card stops reading red, the promotion hold lifts, and
+> `motir fix` stops claiming it. Every disposition is answered, a `neutral` exit as
+> well as a `failure`: both stood, and both are what the queue now contradicts.
+>
+> - **At another head** it changes nothing. A pull request whose head moved since
+>   the exit is already past it (the push ended the exit), and the queue is testing
+>   commits the exit says nothing about.
+> - **Twice** it changes nothing: the claim writes only while `requeuedAt` is null.
+>   So a redelivery, and the `enqueued` GitHub sends after Motir's own _Queue again_,
+>   are no-ops, and a press racing this delivery enqueues once. Whichever claims
+>   first wins, and the other finds the exit already re-queued.
+> - **Motir's first enqueue** has no exit to answer and changes nothing.
+>
+> **2. NO STATUS MOVES AND NO GATE IS DECIDED.** A queue action taken on GitHub is
+> not an answer to the question Motir asks. Point 1 of the FOURTH AMENDMENT (_one
+> approval = one merge or enqueue_) is about Motir's approval, and a GitHub-side
+> enqueue is not one; treating it as one would write a decision into the gate table
+> that nobody made in Motir, from a delivery whose sender Motir does not read. So:
+>
+> - A card held at `implemented` by a can't-land exit (the FIFTH) stays at
+>   `implemented`, with no gate. It is no longer red and no longer on To fix.
+> - A card at `in_review` with the re-asked gate (a neutral or setting exit, the
+>   FOURTH and SIXTH) keeps that gate awaiting. Answering it is harmless: the enqueue
+>   finds the pull request already queued and records that entry.
+> - An `auto` card stays where the exit put it.
+> - **The merge is what moves the card.** When the queue lands the pull request, the
+>   merge webhook writes `done` and withdraws any awaiting merge question, as for any
+>   merge. When the queue ejects it again, the new exit is recorded and settled like
+>   any exit.
+> - Because the hold has lifted, a check that goes green at that head afterwards is
+>   promoted by the ordinary CI path and may ask the merge question; answering it is
+>   the same harmless enqueue.
+>
+> _Why not the other answer:_ reading the enqueue as the approval would give a person
+> with merge rights on GitHub a way to decide a Motir gate that _Approving on GitHub_
+> deliberately limits to reviews at the current commit. Clearing only the red keeps
+> the one fact the card was wrong about — whether the pull request is out of the
+> queue — and leaves the question of who approved it where it was.
+>
+> **3. THE APP SUBSCRIPTION IS UNCHANGED.** `enqueued` is an action of the
+> `pull_request` event, which the Motir GitHub App already receives for `dequeued`;
+> no permission and no event is added.
+>
+> **What this does NOT decide:** recording a GitHub-side enqueue as Motir's merge
+> record (`mergeOutcomeRef` stays written only by Motir's own merge paths); reading
+> who enqueued; GitLab merge trains (MOTIR-4608).
 
 ### 5. The line against Story 9.2 — DECIDED BY THE PLANNER (rung 3, and it re-scopes existing cards)
 

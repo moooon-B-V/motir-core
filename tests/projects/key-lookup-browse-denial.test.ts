@@ -84,11 +84,11 @@ async function seed(slug: string): Promise<Seeded> {
     identifier: 'PRIV',
   });
   const owner = ctxFor(ownerUser.id, workspace.id);
-  await projectMembersService.setAccessLevel({
+  await projectMembersService.setAccessMode({
     key: project.identifier,
     actorUserId: ownerUser.id,
     ctx: owner,
-    level: 'private',
+    mode: 'members',
   });
 
   const memberUser = await user(`member-${slug}@ex.com`, 'Member');
