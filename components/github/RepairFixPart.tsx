@@ -160,18 +160,39 @@ function FailingLines({ failing }: { failing: RepairPullRequestRefDto[] }) {
  *  false — the part names the review instead. The shipped `pointer` line's recipe, not the
  *  failing line's: a refusal is not a failure. `{count}` is the story's open pull requests,
  *  every one of which the fix is handed. */
-function SentBackLine({ count }: { count: number }) {
+function SentBackLine({ count, by }: { count: number; by: SentBackBy | 'acceptance' }) {
   const t = useTranslations('github.development.fix');
   return (
     <p
       className="flex items-start gap-2 text-[13px] leading-normal text-(--el-text-secondary)"
       data-testid="repair-sent-back-line"
+      data-sent-back-by={by === 'acceptance' ? 'acceptance' : by.by}
     >
       <Undo2 className="mt-0.5 h-4 w-4 shrink-0 text-(--el-icon-muted)" aria-hidden />
-      <span>{t('sentBack', { count })}</span>
+      <span>
+        {by === 'acceptance'
+          ? t('sentBack', { count })
+          : by.by === 'agent'
+            ? t('sentBackByAgent', { count })
+            : by.name
+              ? t.rich('personSentBack', {
+                  name: by.name,
+                  count,
+                  b: (chunks) => <b className="font-semibold text-(--el-text)">{chunks}</b>,
+                })
+              : t('personSentBackAnon', { count })}
+      </span>
     </p>
   );
 }
+
+/**
+ * WHO SENT A `review` REPAIR'S COMMITS BACK (Story MOTIR-1626 · MOTIR-6825; design
+ * `design/github` § 30 Panels 3 and 3e) — the review agent's `changes_requested` on
+ * `agent_review`, or a person's *Request changes* on the approve-and-merge gate (§12.7).
+ * The host reads it off the gate its frame leads with.
+ */
+export type SentBackBy = { by: 'agent' } | { by: 'person'; name: string | null };
 
 /** A member the shipped failing lines name — red checks, a queue exit or a conflict. On a
  *  sent-back story the part is handed EVERY open member, green ones included, so only these
@@ -198,7 +219,10 @@ function Command({
   itemIdentifier,
   many,
   conflict,
+  reviewedAgain = false,
 }: {
+  /** A card a REVIEW sent back (MOTIR-6825): the next green version is reviewed again. */
+  reviewedAgain?: boolean;
   itemIdentifier: string;
   many: boolean;
   /** A member conflicts (MOTIR-5916): the agent rebases or resolves, and there is nothing
@@ -212,6 +236,7 @@ function Command({
       <CopyableCodeBlock language="shell" code={`motir fix ${itemIdentifier}`} />
       <p className="text-xs leading-normal text-(--el-text-secondary)">
         {t(conflict ? 'howConflict' : many ? 'howMany' : 'how')}
+        {reviewedAgain ? ` ${t('reviewedAgain')}` : null}
       </p>
       {conflict ? (
         <p className="text-xs leading-normal text-(--el-text-secondary)">{t('rearm')}</p>
@@ -233,8 +258,18 @@ export function RepairFixPart({
   repair,
   itemIdentifier,
   now,
+  sentBackBy = null,
+  hostedDoor = null,
 }: {
   repair: WorkItemRepairViewDto;
+  /** Who sent a `review` repair's commits back — the host's frame knows (MOTIR-6825). */
+  sentBackBy?: SentBackBy | null;
+  /**
+   * THE SEAM FOR *FIX ON THE HOSTED AGENT* (MOTIR-6930; design § 30 Panels 3–3e) — drawn
+   * above the copyable `motir fix <KEY>` of a card a review sent back, in the offer state.
+   * Nothing passes it yet, so the part draws the command alone.
+   */
+  hostedDoor?: ReactNode;
   /** The card's own `MOTIR-<n>` — the command names it. */
   itemIdentifier: string;
   /** The clock the relative times read. Injected by tests; `Date.now()` otherwise. */
@@ -249,7 +284,12 @@ export function RepairFixPart({
   // An acceptance sent back to Re-run names the review, never failing checks (MOTIR-6502);
   // its title and first line are the design's sent-back class (MOTIR-6506). The command,
   // the lead, `how` / `howMany`, in progress and gave up are the shipped ones.
-  const sentBack = repair.state !== 'pointer' && repair.repairClass === 'acceptance_rerun';
+  const acceptanceSentBack =
+    repair.state !== 'pointer' && repair.repairClass === 'acceptance_rerun';
+  // A card a REVIEW sent back (MOTIR-6822's `review` class; § 30 Panels 3 and 3e): its checks
+  // are green, so it names the review — the agent or the person — never failing checks.
+  const reviewSentBack = repair.state !== 'pointer' && repair.repairClass === 'review';
+  const sentBack = acceptanceSentBack || reviewSentBack;
   const failingLines = sentBack ? repair.failing.filter(isFailing) : repair.failing;
 
   const pill =
@@ -280,7 +320,10 @@ export function RepairFixPart({
         </h4>
         {pill}
       </div>
-      {sentBack ? <SentBackLine count={repair.failing.length} /> : null}
+      {acceptanceSentBack ? <SentBackLine count={repair.failing.length} by="acceptance" /> : null}
+      {reviewSentBack && sentBackBy ? (
+        <SentBackLine count={repair.failing.length} by={sentBackBy} />
+      ) : null}
       <FailingLines failing={failingLines} />
 
       {repair.state === 'in_progress' ? (
@@ -327,10 +370,12 @@ export function RepairFixPart({
               </div>
             </div>
           ) : null}
+          {reviewSentBack ? hostedDoor : null}
           <Command
             itemIdentifier={itemIdentifier}
             many={repair.failing.length > 1}
             conflict={repair.failing.some((pr) => pr.conflict !== null)}
+            reviewedAgain={reviewSentBack}
           />
           {!sentBack && repair.failing.some(isEjectedOnly) ? (
             <WhichToUse ejected={repair.failing.filter(isEjectedOnly)} />

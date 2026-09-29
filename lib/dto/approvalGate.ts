@@ -20,6 +20,7 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
+import type { AgentReviewViewDto } from '@/lib/dto/agentReview';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
@@ -1064,6 +1065,14 @@ export type ApprovalGateOverlaySubjectDTO =
        * and the claim already share.
        */
       repair?: WorkItemRepairViewDto | null;
+      /**
+       * THE AGENT REVIEW THE PORT IS ABOUT (Story MOTIR-1626; ADR `approval-gates.md` §12.3) —
+       * present exactly when the address names an `agent_review` gate: its state, the
+       * could-not-run reason and the review run, which the frame draws as its band above
+       * the delivery set. The item page reads the same DTO (`agentReviewViewService`), so the
+       * card and the overlay cannot disagree about why the review is waiting.
+       */
+      agentReview?: AgentReviewViewDto | null;
     };
 
 /** The overlay's one read. */

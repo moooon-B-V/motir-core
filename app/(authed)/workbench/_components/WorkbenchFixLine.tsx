@@ -22,11 +22,15 @@ import { formatRunInstant } from '@/lib/runs/runClock';
 // LEFT, WHY: one glyph and one sentence, read from `fixReason` + `fixDetail`. RIGHT,
 // WHAT REPAIRS IT: the command chip and an always-visible copy button.
 //
-// ⚠️ THE COMMAND COMES FROM `fixDetail.repair`, NEVER FROM THE REASON. A reviewer's
-// Request changes on the approve-to-merge gate is `run`, and a story's acceptance video
-// sent back with Re-run is stored as the SAME reason and is `fix` — because `motir fix`
-// claims it. Deriving the verb from the reason would print the wrong command on exactly
-// that row.
+// ⚠️ THE COMMAND COMES FROM `fixDetail.repair`, NEVER FROM THE REASON. Every review
+// refusal — the review agent's, a person's Request changes on the approve-to-merge gate,
+// an acceptance Re-run — is `fix` since MOTIR-6822 (`approval-gates.md` §12.7), because
+// `motir fix` claims it; a dead run is `continue`. Deriving the verb from the reason would
+// print the wrong command on exactly the rows where the two differ.
+//
+// ⚠️ A REFUSAL THE REVIEW AGENT WROTE NAMES THE AGENT (MOTIR-6825; § 32): *Sent back by the
+// review agent — "{first findings line}"*, keyed by `fixDetail.gate`, never the run's
+// attributed user.
 //
 // ⚠️ THE REASON LINE IS NOT THE CI BADGE. The badge on line 1 is a glyph about the
 // checks; this is a sentence about why the card is stuck. A conflicted, queue-failed
@@ -138,6 +142,11 @@ const REASON_SENTENCE: Readonly<
       ? t.rich('toFix.reason.ciFailed', { check: d.check, d: mono })
       : t('toFix.reason.ciFailedBare'),
   changes_requested: (t, d) => {
+    if (d.gate === 'agent_review') {
+      return d.notePreview
+        ? t.rich('toFix.reason.sentBackByAgent', { note: d.notePreview, b: plainBold })
+        : t.rich('toFix.reason.sentBackByAgentNoNote', { b: plainBold });
+    }
     if (!d.reviewerName) return t('toFix.reason.changesRequestedAnon');
     return d.notePreview
       ? t.rich('toFix.reason.changesRequested', {
@@ -226,7 +235,14 @@ export function WorkbenchFixLine({
   viewerId = null,
   onStarted,
   onStateMoved,
+  repairDoor = null,
 }: {
+  /**
+   * THE SEAM FOR *FIX ON THE HOSTED AGENT* (MOTIR-6930; `design/workbench` § 32 Panel 2):
+   * the door that LEADS the command on a row a review sent back, in § 31's repairs slot.
+   * Nothing passes it yet — the row draws the command alone.
+   */
+  repairDoor?: ReactNode;
   itemKey: string;
   reason: WorkItemFixReasonDto;
   detail: FixDetailDto;
@@ -298,7 +314,9 @@ export function WorkbenchFixLine({
   } else if (command !== null) {
     repairs = (
       <span className="relative z-10 flex flex-wrap items-center justify-end gap-2">
-        {/* § 31: Continue hosted leads; the command keeps the right edge. */}
+        {/* § 31: Continue hosted leads; the command keeps the right edge. § 32: so does the
+            hosted repair door on a sent-back row (MOTIR-6930's seam). */}
+        {reason === 'changes_requested' ? repairDoor : null}
         {hostedTarget ? (
           <ContinueHostedButtonRow
             continueTarget={hostedTarget}

@@ -6750,7 +6750,11 @@
         "conflictOn": "<prs></prs> 与 {base} 冲突，无法合并。",
         "conflictOnNoBase": "<prs></prs> 与其目标分支冲突，无法合并。",
         "howConflict": "代理会在拉取请求自己的分支上变基或解决冲突、推送，检查随即重新运行。",
-        "rearm": "这里没有可批准的东西。推送会移动 HEAD 并重新武装这个问题；下一次检查全绿时，会就新的提交提出一次合并审批。"
+        "rearm": "这里没有可批准的东西。推送会移动 HEAD 并重新武装这个问题；下一次检查全绿时，会就新的提交提出一次合并审批。",
+        "sentBackByAgent": "审查代理退回了这些提交。智能体会在同一个拉取请求上修复它们，并把审查发现写进提示词。",
+        "personSentBack": "<b>{name}</b> 退回了这些提交。智能体会在同一个拉取请求上修复它们，并把退回原因写进提示词。",
+        "personSentBackAnon": "这些提交被退回了。智能体会在同一个拉取请求上修复它们，并把退回原因写进提示词。",
+        "reviewedAgain": "下一个检查通过的版本会再次接受审查。"
       },
       "continue": {
         "title": "继续这项工作",
@@ -8137,7 +8141,9 @@
         "runDiedBare": "运行已中断",
         "runDiedMoreRepositories": "另有 {count} 个代码仓库",
         "runDiedParent": "属于 <b>{parent}</b> 的运行——两种方式都会继续整个运行",
-        "runDiedCannotEdit": "你无法编辑此工作项，因此需要由有编辑权限的人来继续。"
+        "runDiedCannotEdit": "你无法编辑此工作项，因此需要由有编辑权限的人来继续。",
+        "sentBackByAgent": "已被<b>审查代理</b>退回——“{note}”",
+        "sentBackByAgentNoNote": "已被<b>审查代理</b>退回"
       },
       "queueReason": {
         "CI_FAILURE": "检查未通过",
@@ -9111,7 +9117,8 @@
       "opening": "正在打开{decision}…"
     },
     "settingsDoor": {
-      "mergeMode": "更改该项目合并拉取请求的方式 →"
+      "mergeMode": "更改该项目合并拉取请求的方式 →",
+      "reviewAgent": "更改是否由代理审查本项目的拉取请求 →"
     },
     "confirm": {
       "title": "批准后将会：",
@@ -9816,6 +9823,67 @@
     "planDoor": {
       "label": "用 AI 规划",
       "aria": "用 AI 规划 {item} 的后续工作"
+    },
+    "agentReview": {
+      "kindLabel": "代理审查",
+      "state": {
+        "reviewing": "审查中",
+        "couldNotRun": "未能运行"
+      },
+      "reviewing": {
+        "title": "审查代理正在审查这个版本",
+        "why": "正在等待审查代理。在它给出结论之前，不会合并任何内容，也不会请任何人批准。"
+      },
+      "run": {
+        "started": "<run>{label}</run> · <when></when>开始 · {count} 个提交",
+        "decided": "<run>{label}</run> · {when} · {count} 个提交",
+        "decidedNoRun": "{when} · {count} 个提交",
+        "commits": "{count} 个提交"
+      },
+      "passed": {
+        "title": "已由审查代理审查",
+        "pill": "已通过"
+      },
+      "findings": {
+        "show": "显示审查发现",
+        "hide": "收起审查发现"
+      },
+      "sentBack": {
+        "title": "已被审查代理退回",
+        "record": "已被<b>审查代理</b>退回 · {when} · {count} 个提交",
+        "why": "不会合并任何内容，也不会请任何人批准。不会自动重新运行。"
+      },
+      "couldNotRun": {
+        "lead": "<b>审查未能运行：</b><reason></reason>",
+        "reason": {
+          "no_credits": "你的组织 AI 额度已用完。",
+          "no_model": "没有可用于托管运行的模型。",
+          "repository_unreadable": "审查无法读取它要审查的某个代码仓库。",
+          "no_verdict": "审查运行结束时没有给出结论——<run>{label}</run>。",
+          "no_verdictNoRun": "审查运行结束时没有给出结论。",
+          "boot_failed": "审查所用的托管机器未能启动。",
+          "no_actor": "没有人可以运行它——该工作项没有经办人或报告人，工作区也没有代理管理员。",
+          "unknown": "审查运行未能启动。"
+        },
+        "why": "在审查完成或有人决定不经审查继续之前，不会合并任何内容。",
+        "whyNotYours": "等待 {name} 处理。在审查完成或对方决定不经审查继续之前，不会合并任何内容。"
+      },
+      "verb": {
+        "reviewAgain": "重新审查",
+        "continueWithout": "不经审查继续"
+      },
+      "override": {
+        "title": "不经审查继续将会：",
+        "records": "记录你决定不经审查继续——以你的名义，并附上你的原因。",
+        "asks": "发起常规审批：这些拉取请求将等待“批准并合并”。",
+        "label": "为什么不经审查继续？",
+        "helper": "必填。它会以你的名义记录——绝不会记为审查代理的通过。",
+        "required": "请说明原因——不经审查继续需要附上原因。",
+        "proceed": "确认，不经审查继续",
+        "bandTitle": "已不经审查继续",
+        "bandNote": "审查代理没有审查这 {count} 个提交。",
+        "record": "<b>{name}</b> 决定不经审查继续 · {when}"
+      }
     }
   },
   "approvalOverlay": {
@@ -10228,7 +10296,8 @@
       "queue_failed": "待修复 · 在合并队列中失败",
       "conflicted": "待修复 · 与其目标分支冲突",
       "ci_failed": "待修复 · CI 未通过",
-      "changes_requested": "待修复 · 已要求修改"
+      "changes_requested": "待修复 · 已要求修改",
+      "sent_back_by_agent": "待修复 · 已被审查代理退回"
     },
     "banner": {
       "queueFailed": "需要修复：它在合并队列中失败（检查 <code>{check}</code>）。",
@@ -10243,7 +10312,6 @@
       "changesRequestedAnon": "需要修复：已要求修改。",
       "onAcceptance": "由验收视频退回。",
       "leadFix": "用以下命令修复：",
-      "leadRun": "重新运行该工作项。新一次运行的提示词会带上审阅者的说明：",
       "toDevelopment": "查看它的拉取请求",
       "opening": "正在打开它的拉取请求…",
       "runDied": "需要修复：它的运行已中断，最后一次联系在<when></when>，其工作保留在分支上。",
@@ -10251,7 +10319,9 @@
       "runDiedParent": "需要修复：它所属的 <b>{parent}</b> 运行已中断，最后一次联系在<when></when>。",
       "toContinue": "查看如何继续",
       "toStartOver": "查看如何重新开始",
-      "openingDevelopment": "正在打开“开发”…"
+      "openingDevelopment": "正在打开“开发”…",
+      "sentBackByAgent": "需要修复：审查代理已将它退回——“{note}”",
+      "sentBackByAgentNoNote": "需要修复：审查代理已将它退回。"
     }
   },
   "workItems": {

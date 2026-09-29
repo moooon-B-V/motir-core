@@ -10,6 +10,7 @@ import { routingTargetId } from '@/lib/approvalGates/routing';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { reconcileGatesFor } from '@/lib/services/gateSetFor';
+import type { GateSettingsDoor } from './settingsDoor';
 import { requireArgsCard, requireGateCard } from './gateCard';
 import type { PullRequestApprovalSubject } from './pullRequestApprovalHandler';
 
@@ -32,6 +33,16 @@ import type { PullRequestApprovalSubject } from './pullRequestApprovalHandler';
 //
 // Raised ONLY by the gate set (`resolveGateSet` → `reconcileGatesFor`), on the green
 // verdict with the switch on — never on review entry (`currentSubject` answers null).
+
+/**
+ * THE KIND'S SETTINGS DOOR (MOTIR-6825; `design/github/design-notes.md` § 30, band 3) — the
+ * Approvals room's review-agent switch (`REVIEW_AGENT_ANCHOR`), handed only to a holder of
+ * `workflow:manage` by `settingsDoorFor`.
+ */
+export const REVIEW_AGENT_SETTINGS_DOOR: GateSettingsDoor = {
+  href: '/settings/project/approvals#review-agent',
+  labelKey: 'reviewAgent',
+};
 
 export const agentReviewGateHandler: GateHandler<PullRequestApprovalSubject> = {
   /** The run target's delivery SET — the approve-and-merge gate's own subject (§12.1). */
@@ -70,6 +81,8 @@ export const agentReviewGateHandler: GateHandler<PullRequestApprovalSubject> = {
 
   /** A person's floor — the approve-and-merge gate's own (§12.1's registry row). */
   permission: 'work_item:edit',
+
+  settingsDoor: REVIEW_AGENT_SETTINGS_DOOR,
 
   statusIntent: null,
 

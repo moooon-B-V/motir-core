@@ -9,6 +9,7 @@ import { ChoiceSection } from './ChoiceSection';
 import { DecisionConfirmSection } from './DecisionConfirmSection';
 import { DecidedGateStatusBridge } from './DecidedGateStatusBridge';
 import { queueAgainAutoAction, retryApproveAndMergeMemberAction } from '../approvalGateActions';
+import { membersOf } from '@/lib/approvalGates/memberVersion';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { ActivitySection } from './ActivitySection';
 import { DevelopmentSectionBody, hasOpenPullRequest } from '@/components/github/DevelopmentSection';
@@ -169,9 +170,43 @@ function frameGateFor(
   // is `changes_requested`, the acceptance stays the frame's gate: its record, the
   // `motir fix` offer or the re-plan door, and no merge band.
   if (acceptanceSentBack) return primary(r.acceptanceGate);
+  // ⚠️ THE AGENT REVIEW LEADS WHILE IT ASKS, AND WHILE ITS REFUSAL STANDS (Story MOTIR-1626 ·
+  // MOTIR-6825; design `design/github` § 30). With the review agent on, a green set raises
+  // `agent_review` IN PLACE OF the approve-and-merge gate (§12.2), so the frame is its port
+  // — Reviewing, Could not run, Sent back — until a pass or a person's override raises the
+  // ordinary gate for the same version, which then leads with the review's record above it.
+  // A merge gate NEWER than the review is a later question and keeps the lead; a refusal
+  // over commits a push has since moved is history, not the card's question.
+  const review = r.agentReview?.gate ?? null;
+  if (
+    review &&
+    (review.state === 'awaiting' ||
+      (review.state === 'changes_requested' && reviewedHeadsCurrent(review.subjectVersion, r))) &&
+    (!r.mergeGate.gate || r.mergeGate.gate.createdAt <= review.createdAt)
+  ) {
+    return {
+      gate: review,
+      canDecide: r.agentReview!.canDecide,
+      routedToLabel: r.agentReview!.routedToLabel,
+      stamp: r.agentReview!.stamp,
+      members: [],
+    };
+  }
   if (r.designGate.gate?.state === 'awaiting' && r.mergeGate.gate) return primary(r.designGate);
   if (merge?.gate.state === 'superseded' && !anyPullRequestOpen) return null;
   return merge;
+}
+
+/** Every member the review names is still at the head it reviewed — read off the rows. */
+function reviewedHeadsCurrent(version: string | null, r: LateReads): boolean {
+  const members = membersOf(version);
+  if (members.length === 0) return false;
+  return members.every((member) => {
+    const row = r.pullRequests.find(
+      (pr) => pr.repo.toLowerCase() === member.repo.toLowerCase() && pr.number === member.number,
+    );
+    return !row?.headSha || row.headSha === member.headSha;
+  });
 }
 
 /** One pulsing placeholder block. Fill + radius through tokens only. */
@@ -368,6 +403,9 @@ export async function LateUpperSections({
   const developmentAnchors: ApprovalGateKindDTO[] = [
     'pull_request_approval',
     'decision_approval',
+    // The agent review's states are shown on the card, in this block (§12.1); the overlay
+    // is where its one decision is made.
+    'agent_review',
     ...(designInDevelopment ? (['design_result'] as const) : []),
     ...(acceptanceInDevelopment ? (['acceptance_result'] as const) : []),
   ];
@@ -549,6 +587,12 @@ export async function LateUpperSections({
                   // host passes neither `decide` nor `approveAndMerge`. `retryMember` stays: on a
                   // decided gate *Retry merge* / *Queue again* carry out the decision already made.
                   handOver={{ routedToViewer: developmentFrame?.gate.routedToId === currentUserId }}
+                  // THE AGENT REVIEW (MOTIR-6825; § 30): its states when it leads, and its pass
+                  // or override above the approve-and-merge gate. Its one decision, *Continue
+                  // without the review*, HANDS OVER to the approval overlay like every other
+                  // (MOTIR-6323) — no decide door is passed here. *Review again* is the start
+                  // card's route (a new run, not a decision), pressed from the frame.
+                  agentReview={r.agentReview}
                   canReplan={canReplan}
                   gateActions={{ retryMember: retryApproveAndMergeMemberAction }}
                   // An `auto` card's exits (MOTIR-5635): Queue again for a reader who may edit.

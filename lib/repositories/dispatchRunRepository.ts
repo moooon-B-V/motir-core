@@ -372,6 +372,23 @@ export const dispatchRunRepository = {
   },
 
   /**
+   * The LATEST run, in any status, whose idempotency key starts with `prefix` — the
+   * review run an `agent_review` gate's band links (MOTIR-6825): every review run of a
+   * gate is opened under `agent-review:<gateId>:…`, so its newest run is this read.
+   */
+  async findLatestByIdempotencyKeyPrefix(
+    workspaceId: string,
+    prefix: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; command: DispatchRun['command']; startedAt: Date } | null> {
+    return tx.dispatchRun.findFirst({
+      where: { workspaceId, idempotencyKey: { startsWith: prefix } },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: { id: true, command: true, startedAt: true },
+    });
+  },
+
+  /**
    * ONE CARD'S RUN HISTORY — every run that owned a leg naming it, newest first.
    *
    * ⚠️ CURSOR-PAGINATED, because run history is UNBOUNDED. A card worked by

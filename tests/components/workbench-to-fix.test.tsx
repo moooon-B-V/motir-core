@@ -181,6 +181,39 @@ describe('To fix — one fix line per reason (§ 30 Panel 2)', () => {
     expect(fixCommandOf(detail({ repair: 'run' }), 'X-1')).toBe('motir run X-1');
   });
 
+  // § 32 (MOTIR-6825): the review agent's refusal names THE AGENT and the findings' first
+  // line — never the run's attributed user — and a person's Request changes is `motir fix`.
+  it("names the review agent for its refusal, and a person's Request changes is motir fix", () => {
+    render(
+      list([
+        stuck(
+          'M-6',
+          'changes_requested',
+          detail({
+            repair: 'fix',
+            reviewerName: 'Review agent',
+            notePreview: "Two of the card's acceptance criteria are not met yet.",
+            gate: 'agent_review',
+          }),
+        ),
+        stuck('M-7', 'changes_requested', detail({ repair: 'fix', gate: 'agent_review' })),
+        stuck(
+          'M-8',
+          'changes_requested',
+          detail({ repair: 'fix', reviewerName: 'Mei Lin', gate: 'pull_request_approval' }),
+        ),
+      ]),
+    );
+    expect(fixLine('M-6').querySelector('p')?.textContent).toBe(
+      "Sent back by the review agent — “Two of the card's acceptance criteria are not met yet.”",
+    );
+    expect(fixLine('M-6').querySelector('svg')?.getAttribute('class')).toContain('lucide-undo2');
+    expect(within(fixLine('M-6')).getByText('motir fix M-6')).toBeTruthy();
+    expect(fixLine('M-7').querySelector('p')?.textContent).toBe('Sent back by the review agent');
+    expect(fixLine('M-8').textContent).toContain('Changes requested by Mei Lin');
+    expect(within(fixLine('M-8')).getByText('motir fix M-8')).toBeTruthy();
+  });
+
   it.each([
     [
       'a queue failure with no check, a KNOWN reason',

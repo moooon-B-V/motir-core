@@ -22,8 +22,14 @@ import { useLandOnLateSection } from './useLandOnLateSection';
 //
 // ⚠️ THE COMMAND COMES FROM `fixDetail.repair`, NEVER FROM THE REASON — the
 // Workbench To fix row's rule (`workbench/design-notes.md` § 30), so the two can
-// never name different commands for one card. An approve-to-merge Request changes
-// is `run` (its re-run's prompt carries the note); an acceptance Re-run is `fix`.
+// never name different commands for one card. Every review refusal — the review
+// agent's, a person's approve-to-merge Request changes, an acceptance Re-run — is
+// `fix` (MOTIR-6822; `approval-gates.md` §12.7), and the lead is *Repair it with this
+// command:* for every command (`leadRun` retired, MOTIR-6825; § 32).
+//
+// ⚠️ A REFUSAL THE REVIEW AGENT WROTE (`fixDetail.gate === 'agent_review'`) NAMES THE
+// AGENT and the findings' first line (§ 32), never the run's attributed user — the
+// findings in full are one link below, in the Development frame's review band.
 //
 // ⚠️ IT DRAWS WHAT THE STORED DETAIL SAYS AND NOTHING ELSE. No pull request is
 // read here: the Development block below already lists them, and the banner points
@@ -57,6 +63,11 @@ export interface ToFixBannerProps {
   fixDetail: FixDetailDto | null;
   /** The item's status CATEGORY — a `done` card draws nothing (`toFixTagState`). */
   statusCategory: StatusCategoryDto | null;
+  /**
+   * The hosted repair door (MOTIR-6930's seam; `design/workbench` § 32 Panel 4) — drawn
+   * beside the command for a card a review sent back. Absent, the command alone.
+   */
+  hostedDoor?: ReactNode;
 }
 
 export function ToFixBanner({
@@ -64,6 +75,7 @@ export function ToFixBanner({
   fixReason,
   fixDetail,
   statusCategory,
+  hostedDoor = null,
 }: ToFixBannerProps) {
   const t = useTranslations('toFix.banner');
   const tw = useTranslations('workbench.toFix');
@@ -120,6 +132,11 @@ export function ToFixBanner({
           ? t.rich('ciFailed', { check: fixDetail.check, code })
           : t('ciFailedBare');
       case 'changes_requested':
+        if (fixDetail.gate === 'agent_review') {
+          return fixDetail.notePreview
+            ? t('sentBackByAgent', { note: fixDetail.notePreview })
+            : t('sentBackByAgentNoNote');
+        }
         if (!fixDetail.reviewerName) return t('changesRequestedAnon');
         return fixDetail.notePreview
           ? t.rich('changesRequested', {
@@ -171,8 +188,11 @@ export function ToFixBanner({
         ) : null}
         {isDeadRun ? null : (
           <>
+            {/* THE SEAM FOR *FIX ON THE HOSTED AGENT* (MOTIR-6930; § 32 Panel 4): the door
+                leads the command for a card a review sent back. Nothing passes it yet. */}
+            {hostedDoor}
             <p className="m-0 mt-1 font-sans text-[13px] text-(--el-danger-surface-text)">
-              {t(fixDetail.repair === 'run' ? 'leadRun' : 'leadFix')}
+              {t('leadFix')}
             </p>
             <CopyableCodeBlock language="shell" code={`motir ${fixDetail.repair} ${identifier}`} />
           </>
