@@ -137,10 +137,10 @@ describe('the completed document', () => {
         'GET /api/v1/work-items/{key}/activity',
       ].sort(),
     );
-    // The ready set and the project list have no cheap count, so they are plain.
-    expect(findV1Operation('GET', '/api/v1/projects/{projectKey}/ready')?.response.body.kind).toBe(
-      'page',
-    );
+    // The ready lanes and the project list have no cheap count, so they are plain.
+    expect(
+      findV1Operation('GET', '/api/v1/projects/{projectKey}/ready/leaves')?.response.body.kind,
+    ).toBe('page');
     expect(findV1Operation('GET', '/api/v1/projects')?.response.body.kind).toBe('page');
   });
 
