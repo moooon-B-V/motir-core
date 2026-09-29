@@ -30,6 +30,7 @@ import { codeGraphOffboardSweepService } from '@/lib/services/codeGraphOffboardS
 import { firstAuditTriggerService } from '@/lib/services/firstAuditTriggerService';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import { ciMinutesReconciliationService } from '@/lib/services/ciMinutesReconciliationService';
+import { ciLiveChargeService } from '@/lib/services/ciLiveChargeService';
 import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
@@ -92,6 +93,8 @@ export const jobServices = {
   firstAuditTrigger: firstAuditTriggerService,
   autoPlanCadence: autoPlanCadenceService,
   ciMinutesReconciliation: ciMinutesReconciliationService,
+  // The live CI charge (MOTIR-6910): every debit period, live CI containers are charged.
+  ciLiveCharge: ciLiveChargeService,
   ciActionsGate: ciActionsGateService,
   ciRunnerBoot: ciRunnerBootService,
   // A hosted run's supervision (Story MOTIR-683 · MOTIR-690).

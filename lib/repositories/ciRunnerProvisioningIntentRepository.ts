@@ -387,6 +387,37 @@ export const ciRunnerProvisioningIntentRepository = {
   },
 
   /**
+   * Every CI container whose JOB HAS STARTED and has not settled — the input of
+   * the live charge (MOTIR-6910). A container still booting has run nothing
+   * GitHub would bill, so it accrues nothing yet. Rides `[status, bootedAt]`.
+   */
+  async listStartedInFlight(tx: Prisma.TransactionClient): Promise<CiRunnerProvisioningIntent[]> {
+    return tx.ciRunnerProvisioningIntent.findMany({
+      where: { status: { in: [...CI_RUNNER_INTENT_IN_FLIGHT] }, startedAt: { not: null } },
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
+  /**
+   * Lock ONE intent for the live charge's read-derived write (MOTIR-6910) and
+   * re-read what the decision needs. `FOR UPDATE`, because two ticks that
+   * overlap (a slow one and the next) would otherwise both read the same
+   * checkpoint and both add the minutes since it. Null when the row is gone.
+   */
+  async lockForAccrual(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ status: string; startedAt: Date | null } | null> {
+    const rows = await tx.$queryRaw<{ status: string; started_at: Date | null }[]>`
+      SELECT "status", "started_at" FROM "ci_runner_provisioning_intent"
+      WHERE "id" = ${id}
+      FOR UPDATE
+    `;
+    const row = rows[0];
+    return row ? { status: row.status, startedAt: row.started_at } : null;
+  },
+
+  /**
    * How many CI RUNNERS are in flight across the whole fleet — the `ci_runner`
    * term of the fleet-wide census (`fleetCeilingService.census`).
    *

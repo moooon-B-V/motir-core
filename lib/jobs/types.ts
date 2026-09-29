@@ -492,6 +492,9 @@ export interface JobEventDataMap {
   /** Monthly CI-minutes reconciliation (Story MOTIR-1775 · MOTIR-1896) — cron
    *  triggered, so it carries no payload beyond the scheduled envelope. */
   'system.ci-minutes-reconcile': SystemScheduledData;
+  /** The live CI charge (Story MOTIR-6906 · MOTIR-6910) — every debit period,
+   *  each live CI container's minutes are charged. Cron triggered. */
+  'system.ci-live-charge': SystemScheduledData;
   'system.ci-actions-gate-sweep': SystemScheduledData;
   /** The migrate-onboarding SWEEP lane — every transition of that state machine
    *  is observed only by an open browser tab, so this re-derives from durable

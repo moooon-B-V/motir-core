@@ -1438,6 +1438,9 @@ export default defineConfig({
         'lib/github/actionsRuns.ts',
         // Story MOTIR-6906 · MOTIR-6909 — the paid-AI-plan gate.
         'lib/services/aiPlanGateService.ts',
+        // Story MOTIR-6906 · MOTIR-6910 — CI debited while it runs.
+        'lib/services/ciLiveChargeService.ts',
+        'lib/repositories/ciLiveAccrualRepository.ts',
         'lib/repositories/ciRunnerProvisioningIntentRepository.ts',
         'lib/repositories/ciFleetAdmissionLockRepository.ts',
         'lib/repositories/fleetInFlightSlotRepository.ts',
@@ -4654,6 +4657,8 @@ export default defineConfig({
         'lib/services/fleetStopService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/github/actionsRuns.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/aiPlanGateService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/ciLiveChargeService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/ciLiveAccrualRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/ciRunnerProvisioningIntentRepository.ts': {
           branches: 90,
           functions: 90,

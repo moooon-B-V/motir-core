@@ -1014,6 +1014,7 @@ model Organization {
   // meaningless without the org.
   ciWorkflowRunUsages         CiWorkflowRunUsage[]
   ciPeriodUsages              CiPeriodUsage[]
+  ciLiveAccruals              CiLiveAccrual[]
   // Runner-fleet provisioning intents (Story MOTIR-1916 · MOTIR-1920) — the
   // queued fleet jobs attributed to this org. Cascade for the same reason: an
   // intent is a request to spend on the org's behalf, meaningless without it.
@@ -1252,6 +1253,7 @@ model Workspace {
   // tenant can never read another's consumption. Cascade with the workspace.
   ciWorkflowRunUsages         CiWorkflowRunUsage[]
   ciPeriodUsages              CiPeriodUsage[]
+  ciLiveAccruals              CiLiveAccrual[]
   // Runner-fleet provisioning intents (Story MOTIR-1916 · MOTIR-1920) — the same
   // workspace_id + RLS contract as the two metering tables above.
   ciRunnerProvisioningIntents CiRunnerProvisioningIntent[]
@@ -9336,6 +9338,8 @@ model CiRunnerProvisioningIntent {
   project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
   githubRepo   GithubRepo?  @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
 
+  liveAccruals CiLiveAccrual[]
+
   /// The idempotency guarantee: a redelivered webhook produces no second intent,
   /// while a RE-RUN (a new attempt) and every sibling JOB of the same run each
   /// get their own.
@@ -9353,6 +9357,49 @@ model CiRunnerProvisioningIntent {
   /// ago must not be swept as an hour-old orphan.
   @@index([status, bootedAt])
   @@map("ci_runner_provisioning_intent")
+}
+
+/// CI IS DEBITED WHILE IT RUNS (Story MOTIR-6906 · MOTIR-6910 ·
+/// `docs/decisions/fleet-per-org-pool.md` §3). One row per live CI container per
+/// debit period: the WHOLE minutes that container accrued since its previous row,
+/// added to the org's `ci_period_usage` in the same transaction so the existing
+/// allowance-then-credits charge sees them before the run ends.
+///
+/// The row is the idempotency record: `(provisioning_intent_id, tick_start)` makes
+/// a replayed or retried tick a no-op, and the per-intent SUM is the checkpoint the
+/// next tick subtracts from, so a late tick never counts a minute twice. When the
+/// run completes, the `workflow_run` meter subtracts this run's sum from GitHub's
+/// figure and adds only the difference (`ciMinutesMeterService.meterWorkflowRun`).
+model CiLiveAccrual {
+  id                   String @id @default(cuid())
+  provisioningIntentId String @map("provisioning_intent_id")
+  organizationId       String @map("organization_id")
+  workspaceId          String @map("workspace_id")
+
+  /// The GitHub run this container served — the completion meter's key.
+  runId      String @map("run_id")
+  runAttempt Int    @map("run_attempt")
+
+  /// The start of the 5-minute debit period this row was written in.
+  tickStart   DateTime @map("tick_start")
+  /// The calendar month (`ci_period_usage.period_start`) the minutes landed in.
+  periodStart DateTime @map("period_start")
+
+  /// Whole minutes, in seconds (always a multiple of 60).
+  accruedSeconds Int @map("accrued_seconds")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  provisioningIntent CiRunnerProvisioningIntent @relation(fields: [provisioningIntentId], references: [id], onDelete: Cascade)
+  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace          Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([provisioningIntentId, tickStart])
+  /// The completion meter's read: what this run was already charged live.
+  @@index([runId, runAttempt])
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@map("ci_live_accrual")
 }
 
 /// The CONTAINER-SECONDS RECORD (Story MOTIR-1916 · MOTIR-1924) — what ONE fleet

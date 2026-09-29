@@ -182,6 +182,11 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
     source: 'scan',
     why: 'organization_active',
   },
+  'lib/services/ciLiveChargeService.ts#chargeOrganization': {
+    tables: ['organization'],
+    source: 'scan',
+    why: 'organization_active',
+  },
   'lib/services/fleetCeilingService.ts#resolveOrgPool': {
     tables: ['organization'],
     source: 'scan',
