@@ -11485,6 +11485,17 @@ enum AgentInstanceState {
   @@map("agent_instance_state")
 }
 
+/// Whether an instance's pinned image carries the in-image terminal server
+/// (`docs/decisions/agent-terminal.md` Q8 · MOTIR-6939), probed once per digest
+/// on a booted machine. `unknown` until the first probe answers.
+enum AgentTerminalServer {
+  unknown
+  present
+  absent
+
+  @@map("agent_terminal_server")
+}
+
 /// Why a running interval ended (§4).
 enum AgentInstanceIntervalEndReason {
   hibernated
@@ -11548,6 +11559,13 @@ model AgentInstance {
   /// A deleted instance keeps its row so its intervals keep their parent (§4);
   /// every list excludes it.
   deletedAt      DateTime?          @map("deleted_at")
+
+  /// Does the pinned image serve a terminal (agent-terminal.md Q8)? Probed with
+  /// `motir agent-terminal --help` after a boot whose digest was not probed yet.
+  terminalServer       AgentTerminalServer @default(unknown) @map("terminal_server")
+  /// The image digest `terminalServer` was probed for; null = never probed. A
+  /// digest that differs from `imageDigest` is re-probed on the next boot.
+  terminalServerDigest String?             @map("terminal_server_digest")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

@@ -1,4 +1,6 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer, request, type IncomingMessage } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +9,7 @@ import {
   OrchestratorApiError,
   fakePersistentOrchestrator as fake,
   type PersistentContainerSpec,
+  type PersistentTerminalConfig,
 } from '../src/index';
 
 // The FAKE persistent adapter (Story MOTIR-6860 · MOTIR-6869) — the second
@@ -24,6 +27,7 @@ const SPEC: PersistentContainerSpec = {
   region: 'iad',
   volumeSizeGb: 10,
   mountPath: '/home/node',
+  terminal: null,
 };
 
 beforeEach(() => fake.reset());
@@ -200,5 +204,97 @@ describe('exec (MOTIR-6872)', () => {
     await expect(fake.exec(h, ['true'])).rejects.toThrow(/not running/);
     fake.destroyOutside(h.machineId);
     await expect(fake.exec(h, ['true'])).rejects.toThrow(/not running/);
+  });
+});
+
+describe('the terminal (agent-terminal.md Q2, Q8 · MOTIR-6939)', () => {
+  const TERMINAL: PersistentTerminalConfig = {
+    version: 1,
+    keyId: 'kid-1',
+    command: ['sh', '-c', 'exec motir agent-terminal serve'],
+    env: { MOTIR_TERMINAL_KEY: 'k' },
+    service: {
+      internalPort: 7681,
+      ports: [{ port: 443, handlers: ['tls', 'http'] }],
+      autostart: false,
+      autostop: 'off',
+    },
+  };
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('stamps a machine created with a terminal config, and 0 for one created without', async () => {
+    const withTerminal = await fake.provisionPersistent({ ...SPEC, terminal: TERMINAL });
+    const legacy = await fake.provisionPersistent({ ...SPEC, instanceId: 'inst-2' });
+    expect(fake.machineConfigVersion(withTerminal.machineId)).toBe(1);
+    expect(fake.machineConfigVersion(legacy.machineId)).toBe(0);
+    expect(await fake.ensureMachineConfig(withTerminal, TERMINAL)).toBe('current');
+  });
+
+  it('updates an older machine ONCE without starting it, re-applies a rotated key, and leaves a newer one alone', async () => {
+    const handle = await fake.provisionPersistent(SPEC);
+    await fake.stop(handle);
+    expect(await fake.ensureMachineConfig(handle, TERMINAL)).toBe('updated');
+    expect(await fake.ensureMachineConfig(handle, TERMINAL)).toBe('current');
+    expect((await fake.describePersistent(handle)).state).toBe('stopped');
+    expect(fake.operations.filter((o) => o.startsWith('machine:update'))).toHaveLength(1);
+    expect(await fake.ensureMachineConfig(handle, { ...TERMINAL, keyId: 'rotated' })).toBe(
+      'updated',
+    );
+    expect(await fake.ensureMachineConfig(handle, { ...TERMINAL, version: 0 })).toBe('current');
+    fake.destroyOutside(handle.machineId);
+    await expect(fake.ensureMachineConfig(handle, TERMINAL)).rejects.toThrow(OrchestratorApiError);
+  });
+
+  it('resolves an agent’s address to a REAL locally started server, carrying the machine id', async () => {
+    // A stand-in for the in-image server (MOTIR-6938 ships the real one): it
+    // answers the WebSocket upgrade on /v1/terminal, which is all the relay dials.
+    const seen: IncomingMessage[] = [];
+    const server = createServer();
+    server.on('upgrade', (req, socket) => {
+      seen.push(req);
+      socket.end(
+        'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n',
+      );
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    try {
+      const handle = await fake.provisionPersistent({ ...SPEC, terminal: TERMINAL });
+      fake.setTerminalAddress(`ws://127.0.0.1:${port}/`);
+      const endpoint = fake.terminalEndpoint(handle);
+      expect(endpoint).toEqual({
+        url: `ws://127.0.0.1:${port}/v1/terminal`,
+        headers: { 'x-motir-machine-id': handle.machineId },
+      });
+      const status = await new Promise<number>((resolve, reject) => {
+        const req = request(endpoint.url.replace(/^ws/, 'http'), {
+          headers: { ...endpoint.headers, connection: 'Upgrade', upgrade: 'websocket' },
+        });
+        req.on('upgrade', (res, socket) => {
+          socket.destroy();
+          resolve(res.statusCode ?? 0);
+        });
+        req.on('response', (res) => resolve(res.statusCode ?? 0));
+        req.on('error', reject);
+        req.end();
+      });
+      expect(status).toBe(101);
+      expect(seen.map((r) => [r.url, r.headers['x-motir-machine-id']])).toEqual([
+        ['/v1/terminal', handle.machineId],
+      ]);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('defaults the address to MOTIR_FAKE_TERMINAL_URL, then to 127.0.0.1:7681', async () => {
+    const handle = await fake.provisionPersistent(SPEC);
+    expect(fake.terminalEndpoint(handle).url).toBe('ws://127.0.0.1:7681/v1/terminal');
+    vi.stubEnv('MOTIR_FAKE_TERMINAL_URL', 'ws://localhost:9999');
+    expect(fake.terminalEndpoint(handle).url).toBe('ws://localhost:9999/v1/terminal');
+    fake.reset();
+    vi.stubEnv('MOTIR_FAKE_TERMINAL_URL', '');
+    expect(fake.terminalEndpoint(handle).url).toBe('ws://127.0.0.1:7681/v1/terminal');
   });
 });

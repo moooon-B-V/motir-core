@@ -80,3 +80,17 @@ export class AgentInstancesUnavailableError extends Error {
     this.name = 'AgentInstancesUnavailableError';
   }
 }
+
+/**
+ * The agent's image has no terminal server (`agent-terminal.md` Q3, Q8): it was
+ * made before the terminal existed. Recorded on the instance by the boot probe
+ * (`terminalServer: 'absent'` on its DTO); the terminal ticket refuses with it.
+ * The agent stays usable otherwise — moving it to a newer image is MOTIR-6862's.
+ */
+export class AgentInstanceNoTerminalServerError extends Error {
+  readonly code = 'no_terminal_server' as const;
+  constructor(readonly instanceId: string) {
+    super('This agent was made before the terminal existed, so its image has no terminal to open.');
+    this.name = 'AgentInstanceNoTerminalServerError';
+  }
+}

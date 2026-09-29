@@ -21,6 +21,9 @@ import type {
   PersistentContainerState,
   PersistentContainerStatus,
   PersistentExecResult,
+  PersistentPublicService,
+  PersistentTerminalConfig,
+  PersistentTerminalEndpoint,
 } from '../../types';
 
 // The FLY adapter's PERSISTENT half (Story MOTIR-6860 · MOTIR-6869) — a user
@@ -80,6 +83,121 @@ export function isFlyInstancesConfigured(): boolean {
 
 /** Machine metadata naming the instance, so the reconcile can map a machine back to its record. */
 export const INSTANCE_METADATA_KEY = 'motir_instance_id';
+
+/**
+ * Machine metadata carrying the version of the terminal machine config the
+ * machine was last written with (`docs/decisions/agent-terminal.md` Q8). Absent
+ * on a machine created before the terminal, which reads as version 0.
+ */
+export const MACHINE_CONFIG_METADATA_KEY = 'motir_machine_config';
+
+/** Machine metadata carrying the non-secret id of the terminal key the machine holds. */
+export const TERMINAL_KEY_ID_METADATA_KEY = 'motir_terminal_key_id';
+
+/** The terminal server's path on the machine (`agent-terminal.md` Q4). */
+const TERMINAL_PATH = '/v1/terminal';
+
+/** The version a machine's metadata stamps, or 0 when it carries none (or garbage). */
+export function machineConfigVersionOf(metadata: Readonly<Record<string, string>>): number {
+  const raw = metadata[MACHINE_CONFIG_METADATA_KEY];
+  if (raw === undefined || !/^\d+$/.test(raw)) return 0;
+  return Number(raw);
+}
+
+/**
+ * Is a machine stamped with `metadata` already on `terminal`? A NEWER stamp is
+ * left alone (a rollback never rewrites a machine a later build configured); the
+ * same version with another key id is not current — the master key was rotated.
+ */
+export function isMachineConfigCurrent(
+  metadata: Readonly<Record<string, string>>,
+  terminal: PersistentTerminalConfig,
+): boolean {
+  const stamped = machineConfigVersionOf(metadata);
+  if (stamped !== terminal.version) return stamped > terminal.version;
+  return metadata[TERMINAL_KEY_ID_METADATA_KEY] === terminal.keyId;
+}
+
+/**
+ * The Q2 service in Fly's machine-config vocabulary (`fly.MachineService`,
+ * Machines API OpenAPI, read 2026-09-29): `autostart: false` and
+ * `autostop: "off"` so the Fly Proxy never wakes nor stops an agent — Motir does.
+ */
+export function toFlyService(service: PersistentPublicService): Record<string, unknown> {
+  return {
+    protocol: 'tcp',
+    internal_port: service.internalPort,
+    ports: service.ports.map((p) => ({ port: p.port, handlers: [...p.handlers] })),
+    autostart: service.autostart,
+    autostop: service.autostop,
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function stringRecord(value: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(asRecord(value) ?? {})) {
+    if (typeof v === 'string') out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * A machine's CURRENT config rewritten to `terminal` (Q8) — the main process, the
+ * one public service, the key in the env and the version stamp. Every other field
+ * — above all `image` (the pinned digest) and `mounts` (the home volume at
+ * `/home/node`) — is carried over from the machine's own config untouched,
+ * because Fly's update REPLACES the config: a field not re-sent is a field lost.
+ */
+export function withTerminalConfig(
+  current: Record<string, unknown>,
+  terminal: PersistentTerminalConfig,
+): Record<string, unknown> {
+  return {
+    ...current,
+    init: { ...(asRecord(current['init']) ?? {}), cmd: [...terminal.command] },
+    services: [toFlyService(terminal.service)],
+    env: { ...stringRecord(current['env']), ...terminal.env },
+    metadata: {
+      ...stringRecord(current['metadata']),
+      [MACHINE_CONFIG_METADATA_KEY]: String(terminal.version),
+      [TERMINAL_KEY_ID_METADATA_KEY]: terminal.keyId,
+    },
+  };
+}
+
+interface FlyIpAssignment {
+  ip: string;
+  egress: boolean;
+  /** Set only on a Flycast (`private_v6`) address. */
+  privateNetwork: boolean;
+}
+
+function toFlyIpAssignment(entry: unknown): FlyIpAssignment | null {
+  const record = asRecord(entry);
+  const ip = record?.['ip'];
+  if (typeof ip !== 'string' || ip.length === 0) return null;
+  return {
+    ip,
+    egress: record?.['egress'] === true,
+    privateNetwork: asRecord(record?.['network']) !== null || /^fdaa:/i.test(ip),
+  };
+}
+
+/** A public (ingress) IPv4 — shared or dedicated, either answers the relay. */
+function isPublicV4(a: FlyIpAssignment): boolean {
+  return !a.egress && !a.privateNetwork && !a.ip.includes(':');
+}
+
+/** A public (ingress) IPv6 — never a Flycast `fdaa:` address. */
+function isPublicV6(a: FlyIpAssignment): boolean {
+  return !a.egress && !a.privateNetwork && a.ip.includes(':');
+}
 
 /** The first 16 hex digits of a SHA-256 — a stable, collision-resistant label for a name. */
 function digest16(value: string): string {
@@ -215,6 +333,46 @@ const flyInstancesClient = {
     throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
   },
 
+  /**
+   * Give the app the public addresses the relay dials (`agent-terminal.md` Q2):
+   * a shared IPv4 and an IPv6, each allocated only when the app has none, so a
+   * second ensure allocates nothing.
+   *
+   * The door is the Machines REST API's IP assignments — `GET` and `POST
+   * /v1/apps/{app_name}/ip_assignments`, the POST taking `{ "type": "shared_v4" |
+   * "v6" | … }` (Fly, _List IP assignments for app_ and _Assign new IP address to
+   * app_, https://docs.fly.io/api/machines/apps/list-ip-assignments-for-app and
+   * …/assign-new-ip-address-to-app, from the Machines API OpenAPI
+   * https://docs.fly.io/api/machines/openapi.json, read 2026-09-29). The older
+   * _Apps resource_ page still says IPs need flyctl or GraphQL
+   * (`allocateIpAddress`); the OpenAPI is the newer source, and it keeps this
+   * adapter on one API and one token.
+   */
+  async ensureAddresses(config: FlyInstancesConfig, app: string): Promise<void> {
+    const res = await flyRequest(path(app, '/ip_assignments'), {
+      method: 'GET',
+      token: config.token,
+    });
+    const body = await readFlyJson(res);
+    if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
+    const ips = asRecord(body)?.['ips'];
+    const assigned = (Array.isArray(ips) ? ips : []).flatMap((entry) => {
+      const parsed = toFlyIpAssignment(entry);
+      return parsed ? [parsed] : [];
+    });
+    const wanted: Array<'shared_v4' | 'v6'> = [];
+    if (!assigned.some(isPublicV4)) wanted.push('shared_v4');
+    if (!assigned.some(isPublicV6)) wanted.push('v6');
+    for (const type of wanted) {
+      const created = await flyRequest(path(app, '/ip_assignments'), {
+        method: 'POST',
+        token: config.token,
+        body: JSON.stringify({ type }),
+      });
+      if (!created.ok) await fail(created);
+    }
+  },
+
   async createVolume(
     config: FlyInstancesConfig,
     app: string,
@@ -256,14 +414,30 @@ const flyInstancesClient = {
             cpus: spec.size.cpus,
             memory_mb: spec.size.memoryMb,
           },
-          env: { ...spec.env },
+          env: { ...spec.env, ...(spec.terminal?.env ?? {}) },
           metadata: {
             [INSTANCE_METADATA_KEY]: spec.instanceId,
             motir_org_id: spec.orgId,
             motir_workspace_id: spec.workspaceId,
             motir_project_id: spec.projectId,
+            ...(spec.terminal
+              ? {
+                  [MACHINE_CONFIG_METADATA_KEY]: String(spec.terminal.version),
+                  [TERMINAL_KEY_ID_METADATA_KEY]: spec.terminal.keyId,
+                }
+              : {}),
           },
           mounts: [{ volume: volumeId, path: spec.mountPath }],
+          // agent-terminal.md Q4 + Q2: the terminal server is the MAIN process
+          // (the argv replaces the image's CMD under its unchanged ENTRYPOINT),
+          // behind the one public service the relay dials. Absent without a
+          // terminal config, so such a machine boots exactly as before.
+          ...(spec.terminal
+            ? {
+                init: { cmd: [...spec.terminal.command] },
+                services: [toFlyService(spec.terminal.service)],
+              }
+            : {}),
           // §1: the machine OUTLIVES its process. A crashed main process is
           // restarted by Fly; an explicit stop through the API is not a failure,
           // so a hibernated instance stays stopped.
@@ -303,6 +477,49 @@ const flyInstancesClient = {
     const body = await readFlyJson(res);
     if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
     return toFlyMachine(body);
+  },
+
+  /** The machine's raw JSON — its FULL config, which an update must re-send. Null when gone. */
+  async getMachineRaw(
+    config: FlyInstancesConfig,
+    app: string,
+    id: string,
+  ): Promise<Record<string, unknown> | null> {
+    const res = await flyRequest(path(app, `/machines/${encodeURIComponent(id)}`), {
+      method: 'GET',
+      token: config.token,
+    });
+    if (res.status === 404) return null;
+    const body = await readFlyJson(res);
+    if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
+    return asRecord(body);
+  },
+
+  /**
+   * `POST /v1/apps/{app}/machines/{id}` — Fly's machine update, with the FULL
+   * config, and `skip_launch: true` so a stopped machine STAYS stopped: the wake
+   * starts it afterwards, through the one start door (Fly, _Update Machine_,
+   * https://docs.fly.io/api/machines/machines/update-machine, read 2026-09-29).
+   * `current_version` guards against a concurrent change: a machine changed since
+   * the read answers 409 and nothing is written.
+   */
+  async updateMachine(
+    config: FlyInstancesConfig,
+    app: string,
+    id: string,
+    machineConfig: Record<string, unknown>,
+    currentVersion: string | null,
+  ): Promise<void> {
+    const res = await flyRequest(path(app, `/machines/${encodeURIComponent(id)}`), {
+      method: 'POST',
+      token: config.token,
+      body: JSON.stringify({
+        config: machineConfig,
+        skip_launch: true,
+        ...(currentVersion ? { current_version: currentVersion } : {}),
+      }),
+    });
+    if (!res.ok) await fail(res);
   },
 
   async machineAction(
@@ -414,6 +631,8 @@ export const flyPersistentOrchestrator: PersistentContainerOrchestrator = {
     const app = instanceAppName(config.appPrefix, spec.orgId);
     const region = spec.region || config.region;
     await flyInstancesClient.ensureApp(config, app);
+    // Only a machine with a public service needs the app's public addresses.
+    if (spec.terminal) await flyInstancesClient.ensureAddresses(config, app);
     const volume = await flyInstancesClient.createVolume(config, app, {
       name: instanceVolumeName(spec.instanceId),
       region,
@@ -543,5 +762,38 @@ export const flyPersistentOrchestrator: PersistentContainerOrchestrator = {
       command,
       options.timeoutSeconds ?? 120,
     );
+  },
+
+  async ensureMachineConfig(
+    handle: PersistentContainerHandle,
+    terminal: PersistentTerminalConfig,
+  ): Promise<'updated' | 'current'> {
+    const config = flyInstancesConfig();
+    const raw = await flyInstancesClient.getMachineRaw(config, handle.app, handle.machineId);
+    if (!raw) {
+      throw new OrchestratorApiError('fly', 404, `machine ${handle.machineId} is gone`);
+    }
+    const current = asRecord(raw['config']) ?? {};
+    if (isMachineConfigCurrent(stringRecord(current['metadata']), terminal)) return 'current';
+    // An app made before the terminal has no public address yet.
+    await flyInstancesClient.ensureAddresses(config, handle.app);
+    const version = raw['version'] ?? raw['instance_id'];
+    await flyInstancesClient.updateMachine(
+      config,
+      handle.app,
+      handle.machineId,
+      withTerminalConfig(current, terminal),
+      typeof version === 'string' && version.length > 0 ? version : null,
+    );
+    return 'updated';
+  },
+
+  terminalEndpoint(handle: PersistentContainerHandle): PersistentTerminalEndpoint {
+    // agent-terminal.md Q2: the org app's public service, pinned to the one
+    // machine by `fly-force-instance-id` — a header only the relay can set.
+    return {
+      url: `wss://${handle.app}.fly.dev${TERMINAL_PATH}`,
+      headers: { 'fly-force-instance-id': handle.machineId },
+    };
   },
 };

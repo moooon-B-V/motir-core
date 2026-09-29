@@ -7,6 +7,7 @@ import {
 import {
   AgentInstanceNameInvalidError,
   AgentInstanceNameTakenError,
+  AgentInstanceNoTerminalServerError,
   AgentInstanceNotFoundError,
   AgentInstanceStartRefusedError,
   AgentInstanceStateConflictError,
@@ -44,7 +45,8 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
   }
   if (
     err instanceof AgentInstanceNameTakenError ||
-    err instanceof AgentInstanceStateConflictError
+    err instanceof AgentInstanceStateConflictError ||
+    err instanceof AgentInstanceNoTerminalServerError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
