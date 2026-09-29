@@ -24,7 +24,10 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubPullRequestService } from '@/lib/services/githubPullRequestService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { promoteDeliveredCardsOnGreen } from '@/lib/services/ciPromotion';
-import { raisePullRequestApprovalGate } from '@/lib/services/pullRequestApprovalGates';
+import {
+  raisePullRequestApprovalGate,
+  withdrawPullRequestApprovalGatesOnCiRerun,
+} from '@/lib/services/pullRequestApprovalGates';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -822,5 +825,61 @@ describe('a PENDING check at the asked-about commits withdraws the question (MOT
       ['superseded', 'ci_failed'],
     ]);
     expect(await statusOf(item.id)).toBe('implemented');
+  });
+
+  // ── The withdrawer on its own, for the arms no delivery reaches ─────────────
+  const rerun = (s: Scenario, number: number) =>
+    prId(number).then((id) =>
+      withWorkspaceContext(s.ctx, (tx) => withdrawPullRequestApprovalGatesOnCiRerun(id, tx)),
+    );
+
+  it('leaves a gate whose version is no longer the current set — a head move owns it', async () => {
+    const { s, item } = await reviewedWithGate('pa-rerun-stale-version@example.com');
+    // A newer head recorded straight onto the pull request, as a late row does before its
+    // `pull_request` delivery: the set's version no longer matches the one asked about.
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: await prId(11),
+        commitSha: 'sha-a9',
+        checkName: 'Vitest (1/12)',
+        conclusion: 'pending',
+      },
+    });
+
+    expect(await rerun(s, 11)).toEqual([]);
+    expect((await approvalGates(item.id)).map((g) => g.state)).toEqual(['awaiting']);
+  });
+
+  it('reports no card when the supersede retired nothing (a concurrent withdrawal won)', async () => {
+    const { s, item } = await reviewedWithGate('pa-rerun-lost-race@example.com');
+    vi.spyOn(approvalGateRepository, 'supersedeAwaitingByWorkItem').mockResolvedValueOnce(0);
+
+    expect(await rerun(s, 11)).toEqual([]);
+    expect((await approvalGates(item.id)).map((g) => g.state)).toEqual(['awaiting']);
+  });
+
+  it('retires a standing ACCEPTANCE question with the merge question, under the same cause', async () => {
+    const { s, item } = await reviewedWithGate('pa-rerun-acceptance@example.com');
+    // An acceptance question the card is not owed on its own (a task, no receipt) — the
+    // predicate answers "no longer owed", so it goes with the merge question.
+    await adminDb.approvalGate.create({
+      data: {
+        workspaceId: s.workspace.id,
+        projectId: s.project.id,
+        workItemId: item.id,
+        kind: 'acceptance_result',
+        subjectId: 'receipt-rerun',
+        state: 'awaiting',
+        subjectVersion: 'receipt-rerun@1',
+      },
+    });
+
+    expect(await rerun(s, 11)).toEqual([item.id]);
+    const acceptance = await adminDb.approvalGate.findMany({
+      where: { workItemId: item.id, kind: 'acceptance_result' },
+    });
+    expect(acceptance.map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'ci_rerunning'],
+    ]);
   });
 });
