@@ -97,7 +97,8 @@ import {
 // times shorter. So every CI job longer than ~5 minutes had its supervisor killed
 // mid-loop with `FUNCTION_INVOCATION_TIMEOUT`: the `finally` never ran, the intent
 // stayed `running` and held a fleet slot against BOTH the per-project cap and the
-// fail-CLOSED cross-workload ceiling until the reaper aged it out 70 minutes
+// fail-CLOSED cross-workload ceiling (both since folded into the org's pool,
+// MOTIR-6907) until the reaper aged it out 70 minutes
 // later, the run dead-lettered while the job had actually succeeded, and the
 // container's cost was recorded late and coarsely or not at all. A spend guard
 // turning into an outage. **All of that happened, and none of it is in doubt.**
@@ -133,8 +134,8 @@ import {
 // `settleSupervision`.
 //
 // ⚠️ WHO DECIDES WHETHER THIS RUNS AT ALL. §10 puts the ADMISSION GATE — the
-// per-project in-flight cap, the fleet-wide ceiling and the
-// `ci_credits_exhausted` refusal — in MOTIR-1922, "consulted BEFORE this card
+// org's in-flight pool (MOTIR-6907, which replaced MOTIR-1922's per-project cap
+// and fleet-wide ceiling) and the `ci_credits_exhausted` refusal — in MOTIR-1922, "consulted BEFORE this card
 // provisions". It has landed as `ciRunnerAdmissionService`, and {@link
 // ciRunnerBootService.runIntent} consults it EXACTLY WHERE THE CLAIM USED TO BE:
 // the gate decides and claims in one locked transaction, because the claim is
@@ -523,8 +524,8 @@ export type RunIntentOutcome =
  */
 export type CiRunnerAdmissionWakeOutcome =
   | CiRunnerBootDispatchOutcome
-  /** The freed slot belonged to no project, so no per-project cap ever deferred
-   *  anything behind it. */
+  /** The freed slot belonged to no project, so there is no project queue to wake;
+   *  the org's other pending jobs are the sweep's. */
   | 'no_project'
   /** The queue for that project is empty — the ordinary case, and the reason this
    *  is cheap: one indexed read per teardown, not one per minute forever. */
@@ -1068,8 +1069,8 @@ export const ciRunnerBootService = {
   async dispatchNextPendingForProject(
     projectId: string | null,
   ): Promise<CiRunnerAdmissionWakeOutcome> {
-    // No project means no per-project cap was ever consulted (`admit` skips guard
-    // 1 for a null project), so nothing was queued behind this slot.
+    // No project means no project queue to wake. The slot is the ORG's (MOTIR-6907),
+    // so another project's job may now fit — the provisioning sweep picks it up.
     if (!projectId) return 'no_project';
     if (!isOrchestratorConfigured()) return 'not_configured';
     try {
@@ -1621,7 +1622,7 @@ async function deregisterByNameQuietly(runnerName: string, intentId: string): Pr
  *
  * ⚠️ `projectId` IS REQUIRED, POSITIONALLY, AND THAT IS THE POINT. Every settle is
  * an intent leaving the in-flight set (`provisioning` / `running`), which is
- * exactly what {@link ciRunnerProvisioningIntentRepository.countInFlightForProject}
+ * exactly what {@link ciRunnerProvisioningIntentRepository.countInFlightForOrganization}
  * counts — so every settle frees a slot, and there is no such thing as a settle
  * that should not wake. Threading the project through the ONE funnel every path
  * already goes through makes that total by construction: a new terminal path

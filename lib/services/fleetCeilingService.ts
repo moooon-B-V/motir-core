@@ -10,85 +10,82 @@ import {
   FLEET_WORKLOAD_KINDS,
   type FleetWorkloadKind,
 } from '@/lib/ciFleet/workloads';
-import { fleetInFlightCeiling, fleetSlotTtlSeconds } from '@/lib/ciFleet/limits';
+import { fleetKillSwitchEngaged, fleetSlotTtlSeconds, orgPoolCap } from '@/lib/ciFleet/limits';
+import { withOrgServiceWriteContext } from '@/lib/organizations/context';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
 
-// THE CROSS-WORKLOAD FLEET CEILING (Story MOTIR-1916 · MOTIR-1997) — ONE
-// in-flight bound over every container the fleet runs, whatever its workload,
-// and the only thing that bounds Motir's fleet invoice.
+// THE FLEET'S ADMISSION — PER ORGANISATION (Story MOTIR-6906 · MOTIR-6907,
+// re-cutting MOTIR-1916 · MOTIR-1997). `docs/decisions/fleet-per-org-pool.md`.
 //
-// ⚠️ WHY IT IS NOT MOTIR-1922's CEILING ANY MORE. That guard counted
-// `ci_runner_provisioning_intent`, and its comment was accurate — *"bounds
-// Motir's total CI spend"*. It is not wrong; it stopped being SUFFICIENT the
-// moment MOTIR-1981 put code-graph INDEX containers in the same Fly org, and
-// Epic 9 will add AGENT containers. Neither writes a runner intent, so neither
-// was visible to the number that is supposed to bound the invoice.
+// Every container any workload boots on Motir's fleet is admitted here, or by a
+// gate that takes the same lock and calls {@link fleetCeilingService.orgCensus}
+// in-line (CI's `ciRunnerAdmissionService`, indexing's
+// `codeGraphIndexAdmissionService`).
 //
-// **Two independent ceilings do not compose into a bound.** With MOTIR-1922's
-// runner ceiling and MOTIR-1990's index cap, real peak concurrency is
-// `runners + index (+ agents)` and no single number expresses it. Measured, not
-// theorised: on 2026-08-02 `system.code-graph-index` and
-// `system.code-graph-refresh` each carried `concurrency: 2` against one
-// motir-ai, so the effective limit was 4 and neither cap meant what it said.
+// ── WHAT DECIDES ────────────────────────────────────────────────────────────
+//   * THE ORGANISATION'S POOL (§2) — `MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default
+//     500, or the org's own enterprise number. It counts the org's CI runners,
+//     hosted-agent runs and index containers, summed across workloads, so one
+//     org's burst queues only that org. It is NOT the bound on Motir's spend:
+//     the org's credits are (§3), and the attribution reconciler removes every
+//     machine no paying org owns (§5).
+//   * THE KILL SWITCH (§6) — `MOTIR_FLEET_MAX_IN_FLIGHT=0` stops every new boot
+//     of every workload. It is what the one fleet-wide ceiling (MOTIR-1997,
+//     default 24) became; unset or positive, it imposes nothing.
+//   * A WORKLOAD'S OWN CAP, where it has one, through the request's `guard`
+//     (the agent-instance pool, MOTIR-6872).
 //
-// ── THE LAYERING ────────────────────────────────────────────────────────────
-// The per-workload caps sit UNDERNEATH this one and keep their own semantics:
-//
-//   * MOTIR-1922's per-project cap  — CI fairness.
-//   * MOTIR-1990's index caps       — index fairness and throughput.
-//   * Epic 9's agent cap            — seats.
-//   * THIS ceiling                  — the invoice.
-//
-// One number that means what it says; several fairness caps below it that do
-// not. This replaces none of them.
-//
-// ── WHY IT SHARES MOTIR-1922's LOCK ─────────────────────────────────────────
-// A ceiling over N workloads is exact only if every workload's admission
-// contends on the SAME row. `FLEET_ADMISSION_SCOPE` is that row, and it is
-// already the one every CI admission takes, so a second anchor would be two
-// locks over one invariant — which is not a lock. Everything read under it is a
-// read-derived write (`notes.html` #35; the CLAUDE.md
-// lock-before-read-derived-update contract). MUTATION-CHECK IT: delete the
-// `lockScope` call below and `tests/ciFleet/fleetCeiling.test.ts`'s
-// mixed-workload race must go red.
+// ── WHY STILL ONE LOCK ──────────────────────────────────────────────────────
+// The count is keyed by organisation, but the lock is NOT: every admission still
+// takes the one `FLEET_ADMISSION_SCOPE` row. A lock per org was considered and
+// rejected (§2): it would add a lock-ordering constraint against every other
+// gate and re-open the race this header used to close — a read-derived write
+// (`notes.html` #35; the CLAUDE.md lock-before-read-derived-update contract) is
+// exact only if every writer that can change the count contends on the same row.
+// MUTATION-CHECK IT: delete the `lockScope` call below and
+// `tests/ciFleet/fleetCeiling.test.ts`'s two-org race must go red.
 //
 // ── FAIL CLOSED ─────────────────────────────────────────────────────────────
-// If the count cannot be established, DO NOT BOOT. This matches MOTIR-1922's
-// deliberate asymmetry from the other side: the credit read fails OPEN because a
-// Motir outage must never read to a user as "you are out of credits"; this fails
-// CLOSED because the other side is unbounded spend on an account with no
-// provider ceiling at all (`docs/decisions/ci-runner-fleet.md` §9 — Fly offers
-// neither a spending cap nor a billing alert). A queued container is
-// recoverable; a runaway invoice is not.
+// If the count, or the org's pool, cannot be established, DO NOT BOOT. A queued
+// container is recoverable; a container nothing bounds is not.
 //
-// ── NO BYPASS ───────────────────────────────────────────────────────────────
-// `isMeta` does NOT lift it, and neither does self-hosting. MOTIR-1922 already
-// said it for CI — *"it bounds Motir's own invoice, and a meta-org runaway costs
-// exactly as much as any other"* — and MOTIR-1981 decision 7 puts meta's INDEX
-// containers on this same fleet, so it now matters more, not less. There is
-// deliberately no tenant-shaped argument to any function here.
+// ── NO BYPASS, AND NO ORG-LESS SLOT ──────────────────────────────────────────
+// `isMeta` keeps the same pool (§1). A request that names no organisation is
+// REFUSED (`organization_required`): it would be counted by no org's pool, which
+// is a container nothing bounds.
 
-/** What the ceiling saw, per workload and in total. Carried out of every
- *  decision so an operator's log names WHICH workload filled the fleet — a bare
- *  "24/24" cannot be acted on. */
+/** What a census saw, per workload and in total — for one organisation (the
+ *  admission's reading) or for the whole fleet (the operator's). Carried out of
+ *  every decision so a log names WHICH workload filled the pool — a bare
+ *  "500/500" cannot be acted on. */
 export interface FleetInFlightCensus {
-  /** Containers counted against the SHARED ceiling — every `shared`-pool workload.
-   *  An `own`-pool workload appears in `byWorkload` and never here. */
+  /** Containers counted against the pool — every `shared`-pool workload. An
+   *  `own`-pool workload appears in `byWorkload` and never here. */
   total: number;
   byWorkload: Record<FleetWorkloadKind, number>;
 }
 
 export type FleetSlotVerdict =
   /** Reserved — the slot is taken and this caller owes the release. */
-  | { outcome: 'reserved'; census: FleetInFlightCensus; ceiling: number }
+  | { outcome: 'reserved'; census: FleetInFlightCensus; pool: number | null }
   /** This `(workload, ref)` already held a slot. Not an error: the take is
    *  idempotent, so a redelivery lands here rather than double-occupying. */
   | { outcome: 'already_held' }
   /** Not reserved. Nothing was written; the caller queues and retries. */
   | {
       outcome: 'deferred';
-      /** `workload_cap` (MOTIR-6872): the request's own {@link FleetSlotRequest.guard}
-       *  refused — a workload-specific cap under the same lock, never the ceiling. */
-      reason: 'fleet_ceiling' | 'gate_unavailable' | 'workload_cap';
+      /** `org_pool` (MOTIR-6907): the request's organisation already holds its
+       *  pool. `fleet_ceiling`: the operator's kill switch is engaged
+       *  (`MOTIR_FLEET_MAX_IN_FLIGHT=0`). `organization_required`: the request
+       *  named no organisation, so no pool could count it. `workload_cap`
+       *  (MOTIR-6872): the request's own {@link FleetSlotRequest.guard} refused —
+       *  a workload-specific cap under the same lock. */
+      reason:
+        | 'org_pool'
+        | 'fleet_ceiling'
+        | 'organization_required'
+        | 'gate_unavailable'
+        | 'workload_cap';
       detail: string;
     };
 
@@ -100,8 +97,10 @@ export interface FleetSlotRequest {
    *  {@link fleetCeilingService.release} can be ownership-checked. Only a workload
    *  whose `ref` already names one run may leave it unset. */
   ownerRef?: string | null;
-  /** Attribution only — never a tenancy boundary, and never a bypass. */
-  organizationId?: string | null;
+  /** The organisation whose POOL this container counts against — REQUIRED
+   *  (MOTIR-6907). Never a bypass. A blank one is refused. */
+  organizationId: string;
+  /** Attribution only. */
   workspaceId?: string | null;
   /**
    * The container's own hard-kill budget. Becomes the slot's `expires_at`
@@ -109,15 +108,15 @@ export interface FleetSlotRequest {
    * instead of forever. Defaults to the configured fleet-wide TTL.
    *
    * ⚠️ A value SHORTER than the container's real life would under-count and let
-   * the ceiling be exceeded — pass the workload's real timeout, not a guess.
+   * the pool be exceeded — pass the workload's real timeout, not a guess.
    */
   ttlSeconds?: number;
   /**
    * A WORKLOAD'S OWN CAP, decided under the SAME fleet admission lock as the
-   * ceiling (MOTIR-6872). Returns `null` to admit, or a sentence naming the cap
+   * pool (MOTIR-6872). Returns `null` to admit, or a sentence naming the cap
    * that refused. Evaluated after the already-held check and before the census,
    * in the locked transaction — so a cap on how many of one workload may run is
-   * as exact as the ceiling itself, and two racers cannot both squeeze under it.
+   * as exact as the pool itself, and two racers cannot both squeeze under it.
    * A guard that THROWS fails closed like any other count (`gate_unavailable`).
    */
   guard?: (tx: Prisma.TransactionClient, now: Date) => Promise<string | null>;
@@ -128,9 +127,9 @@ function detailOf(err: unknown): string {
 }
 
 /** "CI runners 12, code-graph index 8, hosted agents 4" — the breakdown an
- *  operator needs to know which workload to lean on. Exported because
- *  MOTIR-1922's gate reports the same refusal from its own transaction, and two
- *  spellings of one ceiling's log would be two ceilings as far as a reader is
+ *  operator needs to know which workload to lean on. Exported because the CI and
+ *  index gates report the same refusal from their own transactions, and two
+ *  spellings of one pool's log would be two pools as far as a reader is
  *  concerned. */
 export function describeFleetCensus(census: FleetInFlightCensus): string {
   return FLEET_WORKLOAD_KINDS.map(
@@ -138,17 +137,24 @@ export function describeFleetCensus(census: FleetInFlightCensus): string {
   ).join(', ');
 }
 
+/** The words an `org_pool` deferral carries (`fleet-per-org-pool.md` §4). */
+export function orgPoolDetail(census: FleetInFlightCensus, pool: number): string {
+  return `the organization is running ${census.total} of its ${pool} fleet containers (${describeFleetCensus(census)})`;
+}
+
+/** The words a kill-switch deferral carries. */
+export const FLEET_KILL_SWITCH_DETAIL =
+  'the fleet kill switch is engaged (MOTIR_FLEET_MAX_IN_FLIGHT=0): nothing boots';
+
 export const fleetCeilingService = {
   /**
    * How many containers the WHOLE FLEET is holding, across every registered
-   * workload.
+   * workload and every organisation — the OPERATOR's reading (the platform
+   * admin's monitor, MOTIR-6905). Since MOTIR-6907 no admission decides on it;
+   * admission reads {@link orgCensus}.
    *
-   * ⚠️ THE CALLER MUST ALREADY HOLD `FLEET_ADMISSION_SCOPE` IN `tx`. This is the
-   * read half of a read-derived write; taken outside the lock it is a snapshot
-   * two racers can both act on. It is exposed rather than inlined because
-   * MOTIR-1922's gate calls it from INSIDE its own locked transaction — it has
-   * already taken the lock and is mid-claim, so re-entering through `reserve`
-   * would deadlock the gate against itself.
+   * ⚠️ Read under `FLEET_ADMISSION_SCOPE` when it guards a write; as a report it
+   * is a snapshot.
    *
    * Counted SEQUENTIALLY, not with `Promise.all`: the counts share one
    * interactive transaction, and Prisma serialises concurrent queries on a
@@ -157,8 +163,7 @@ export const fleetCeilingService = {
    * clever.
    *
    * Never swallows: a counter that throws must reach the caller's fail-CLOSED
-   * handler rather than contribute a silent zero, which is the one arithmetic
-   * that turns a full fleet into an empty one.
+   * handler rather than contribute a silent zero.
    */
   async census(now: Date, tx: Prisma.TransactionClient): Promise<FleetInFlightCensus> {
     const byWorkload = {} as Record<FleetWorkloadKind, number>;
@@ -172,27 +177,111 @@ export const fleetCeilingService = {
   },
 
   /**
-   * Decide whether ONE container of `workload` may boot, and TAKE its slot if
-   * so — the admission path for every workload that is not CI.
+   * How many containers ONE ORGANISATION is holding, per workload and summed
+   * over the `shared`-pool workloads — the number its pool is judged against
+   * (MOTIR-6907, `docs/decisions/fleet-per-org-pool.md` §2).
    *
-   * CI does not use this: MOTIR-1922's gate has three guards to decide in one
-   * transaction and takes the same lock itself, so it calls {@link census}
-   * in-line. Everything else — MOTIR-1990's index dispatch, Epic 9's agent
-   * dispatch — gets the ceiling by calling this and nothing more, which is the
+   * ⚠️ THE CALLER MUST ALREADY HOLD `FLEET_ADMISSION_SCOPE` IN `tx`. This is the
+   * read half of a read-derived write; taken outside the lock it is a snapshot
+   * two racers can both act on. It is exposed rather than inlined because the CI
+   * and index gates call it from INSIDE their own locked transactions — they have
+   * already taken the lock and are mid-claim, so re-entering through `reserve`
+   * would deadlock the gate against itself.
+   *
+   * Sequential and never swallowing, for the reasons {@link census} gives.
+   */
+  async orgCensus(
+    organizationId: string,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetInFlightCensus> {
+    const byWorkload = {} as Record<FleetWorkloadKind, number>;
+    let total = 0;
+    for (const kind of FLEET_WORKLOAD_KINDS) {
+      const count = await FLEET_WORKLOADS[kind].countInFlightForOrg(organizationId, now, tx);
+      byWorkload[kind] = count;
+      if (FLEET_WORKLOADS[kind].pool === 'shared') total += count;
+    }
+    return { total, byWorkload };
+  },
+
+  /**
+   * The organisation's POOL — its enterprise override when platform staff set
+   * one, else the environment's number (`orgPoolCap`). Null when the org row
+   * could not be read: every caller then FAILS CLOSED rather than hand an org
+   * whose pool is unknown the default.
+   *
+   * Read under the ORG GUC (`withOrgServiceWriteContext`), NOT inside the
+   * admission's system-context transaction: the org policies have no system
+   * escape in production, so a read there would silently answer "no override".
+   * It is read BEFORE the lock, so the fleet-wide lock is never held across it.
+   */
+  async resolveOrgPool(organizationId: string): Promise<number | null> {
+    try {
+      const override = await withOrgServiceWriteContext(organizationId, (tx) =>
+        organizationRepository.findFleetPoolCapInTx(organizationId, tx),
+      );
+      return orgPoolCap(override);
+    } catch (err) {
+      console.error("[fleetCeilingService] could not read the organization's fleet pool", {
+        organizationId,
+        detail: detailOf(err),
+      });
+      return null;
+    }
+  },
+
+  /**
+   * Decide whether ONE container of `workload` may boot, and TAKE its slot if
+   * so — the admission path for every workload that is not CI or indexing.
+   *
+   * CI and indexing do not use this: their gates have more to decide in one
+   * transaction and take the same lock themselves, so they call
+   * {@link orgCensus} in-line. Everything else — Epic 9's hosted runs, the agent
+   * instances — gets the pool by calling this and nothing more, which is the
    * point: a new workload cannot be admitted without being counted.
    *
    * Deciding and taking the slot in ONE locked transaction is what makes the
-   * ceiling exact, for the reason MOTIR-1922's claim documents: a gate that
-   * decided and let someone else take the slot would be deciding from a count
-   * that does not yet include the decisions already made.
+   * pool exact: a gate that decided and let someone else take the slot would be
+   * deciding from a count that does not yet include the decisions already made.
    *
    * Never throws. Every refusal is a typed verdict, because every caller is a
-   * background dispatch: a throw becomes a job retry, and retrying "the fleet is
+   * background dispatch: a throw becomes a job retry, and retrying "the pool is
    * full" achieves nothing that queueing does not.
    */
   async reserve(request: FleetSlotRequest, now = new Date()): Promise<FleetSlotVerdict> {
-    const ceiling = fleetInFlightCeiling();
+    // An org-less request is counted by no org's pool — refuse it, before any
+    // read (MOTIR-6907 criterion 5). The type already requires the field; this
+    // is the runtime half, for a caller whose value is blank.
+    if (typeof request.organizationId !== 'string' || request.organizationId.trim() === '') {
+      console.error('[fleetCeilingService] a fleet slot was requested with no organization', {
+        workload: request.workload,
+        ref: request.ref,
+      });
+      return {
+        outcome: 'deferred',
+        reason: 'organization_required',
+        detail: 'a fleet container must belong to an organization, and this request named none',
+      };
+    }
+    if (fleetKillSwitchEngaged()) {
+      return { outcome: 'deferred', reason: 'fleet_ceiling', detail: FLEET_KILL_SWITCH_DETAIL };
+    }
+
+    const shared = FLEET_WORKLOADS[request.workload].pool === 'shared';
+    // An `own`-pool workload is bounded by its guard alone and never reads the
+    // org's pool (AMENDMENT 2 of `agent-instances.md`).
+    const pool = shared ? await this.resolveOrgPool(request.organizationId) : null;
+    if (shared && pool === null) {
+      return {
+        outcome: 'deferred',
+        reason: 'gate_unavailable',
+        detail: "the organization's fleet pool could not be read",
+      };
+    }
+
     const ttlSeconds = request.ttlSeconds ?? fleetSlotTtlSeconds();
+    const organizationId = request.organizationId;
     try {
       return await withSystemContext(async (tx) => {
         await locks.ensureScope(FLEET_ADMISSION_SCOPE, tx);
@@ -201,9 +290,9 @@ export const fleetCeilingService = {
         }
 
         // An already-held slot is NOT a new container, so it must not be judged
-        // against the ceiling — a redelivery of a job that is already running
-        // would otherwise be refused capacity it is already occupying, and the
-        // caller would tear down a live container to honour a refusal.
+        // against the pool — a redelivery of a job that is already running would
+        // otherwise be refused capacity it is already occupying, and the caller
+        // would tear down a live container to honour a refusal.
         const held = await slots.findByRef(request.workload, request.ref, tx);
         if (held) return { outcome: 'already_held' as const };
 
@@ -218,15 +307,12 @@ export const fleetCeilingService = {
           }
         }
 
-        const census = await this.census(now, tx);
-        // An `own`-pool workload is bounded by its guard alone: it neither counts
-        // toward nor is refused by the shared ceiling (AMENDMENT 2 of
-        // `agent-instances.md`).
-        if (FLEET_WORKLOADS[request.workload].pool === 'shared' && census.total >= ceiling) {
+        const census = await this.orgCensus(organizationId, now, tx);
+        if (pool !== null && census.total >= pool) {
           return {
             outcome: 'deferred' as const,
-            reason: 'fleet_ceiling' as const,
-            detail: `the fleet is at its in-flight ceiling (${census.total}/${ceiling}: ${describeFleetCensus(census)})`,
+            reason: 'org_pool' as const,
+            detail: orgPoolDetail(census, pool),
           };
         }
 
@@ -235,7 +321,7 @@ export const fleetCeilingService = {
             workload: request.workload,
             ref: request.ref,
             ownerRef: request.ownerRef ?? null,
-            organizationId: request.organizationId ?? null,
+            organizationId,
             workspaceId: request.workspaceId ?? null,
             expiresAt: new Date(now.getTime() + ttlSeconds * 1_000),
           },
@@ -246,23 +332,20 @@ export const fleetCeilingService = {
         // idempotent — the slot exists exactly once either way.
         if (!took) return { outcome: 'already_held' as const };
 
-        return { outcome: 'reserved' as const, census, ceiling };
+        return { outcome: 'reserved' as const, census, pool };
       });
     } catch (err) {
       // FAIL CLOSED. The transaction rolled back, so no slot was taken. An
-      // unestablished count is treated as a FULL fleet, never an empty one.
-      console.error(
-        '[fleetCeilingService] the fleet ceiling could not be evaluated — not booting',
-        {
-          workload: request.workload,
-          ref: request.ref,
-          detail: detailOf(err),
-        },
-      );
+      // unestablished count is treated as a FULL pool, never an empty one.
+      console.error('[fleetCeilingService] the fleet pool could not be evaluated — not booting', {
+        workload: request.workload,
+        ref: request.ref,
+        detail: detailOf(err),
+      });
       return {
         outcome: 'deferred',
         reason: 'gate_unavailable',
-        detail: `the cross-workload in-flight count could not be established: ${detailOf(err)}`,
+        detail: `the organization's in-flight count could not be established: ${detailOf(err)}`,
       };
     }
   },

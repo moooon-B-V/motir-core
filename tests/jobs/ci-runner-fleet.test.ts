@@ -776,7 +776,7 @@ describe('a container that outlives many polls still reaches teardown', () => {
     // and must not schedule a teardown for a container that does not exist.
     vi.spyOn(ciRunnerBootService, 'bootIntent').mockResolvedValue({
       phase: 'terminal',
-      outcome: { outcome: 'gate_deferred', reason: 'project_cap', detail: 'at the cap' },
+      outcome: { outcome: 'gate_deferred', reason: 'org_pool', detail: 'at the cap' },
     });
     const poll = vi.spyOn(ciRunnerBootService, 'pollOnce');
     const settle = vi.spyOn(ciRunnerBootService, 'settleSupervision');
@@ -788,7 +788,7 @@ describe('a container that outlives many polls still reaches teardown', () => {
     expect(settle).not.toHaveBeenCalled();
     expect(result).toEqual({
       outcome: 'gate_deferred',
-      reason: 'project_cap',
+      reason: 'org_pool',
       detail: 'at the cap',
     });
   });

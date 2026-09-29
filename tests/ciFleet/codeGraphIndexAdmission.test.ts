@@ -15,7 +15,7 @@ import { ciFleetAdmissionLockRepository } from '@/lib/repositories/ciFleetAdmiss
 import {
   DEFAULT_INDEX_IN_FLIGHT_CAP,
   indexInFlightCap,
-  workspaceIndexInFlightCap,
+  orgIndexInFlightCap,
 } from '@/lib/ciFleet/limits';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
@@ -27,7 +27,7 @@ import { randomInt } from '../helpers/random';
 // `docs/decisions/code-graph-index-fleet.md` §7 · §7.2.
 //
 // ⚠️ WHAT THIS SUITE HAS TO PROVE THAT THE SIBLINGS CANNOT.
-// `fleetCeiling.test.ts` proves ONE ceiling over every workload — the invoice.
+// `fleetCeiling.test.ts` proves ONE pool per org over every workload.
 // `codeGraphIndexDispatch.test.ts` proves the dispatch service's spec, taxonomy
 // and supervision, with the gate stubbed and no database at all. This file is the
 // only place the CAP ITSELF is decided against real transactions, so every
@@ -118,12 +118,12 @@ function indexInFlight(now = NOW): Promise<number> {
   );
 }
 
-/** How many index slots one workspace is holding right now. */
-function workspaceInFlight(workspaceId: string, now = NOW): Promise<number> {
+/** How many index slots one organisation is holding right now. */
+function orgInFlight(organizationId: string, now = NOW): Promise<number> {
   return withSystemContext((tx) =>
-    fleetInFlightSlotRepository.countLiveForWorkloadInWorkspace(
+    fleetInFlightSlotRepository.countLiveForWorkloadInOrganization(
       'code_graph_index',
-      workspaceId,
+      organizationId,
       now,
       tx,
     ),
@@ -179,10 +179,11 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
   vi.stubEnv('MOTIR_AI_URL', 'https://ai.test');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
-  // Room above the index cap by default, so a fleet_ceiling refusal never masks
-  // the branch a case is actually about. The ceiling gets its own cases below.
-  vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '100');
-  vi.stubEnv('MOTIR_FLEET_PROJECT_CAP_FREE', '50');
+  // The kill switch disengaged and the org pool at its default (500), so an
+  // org_pool refusal never masks the branch a case is actually about. The pool
+  // gets its own cases below.
+  vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');
+  vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '');
 });
 
 afterEach(async () => {
@@ -208,11 +209,11 @@ afterAll(async () => {
 
 // ── The numbers are CONFIG, and the per-tenant one is DERIVED ────────────────
 
-describe('the caps are configuration, and the per-workspace one is a RELATION', () => {
+describe('the caps are configuration, and the per-org one is a RELATION', () => {
   it('reads the global cap from the environment, not from a constant', async () => {
     const fx = await seedTenant();
     vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '2');
-    // Two DIFFERENT workspaces, so the per-workspace cap cannot be what refuses.
+    // Two DIFFERENT orgs, so the per-org cap cannot be what refuses.
     const other = await seedTenant();
     expect((await admit(fx)).outcome).toBe('admitted');
     expect((await admit(other)).outcome).toBe('admitted');
@@ -233,16 +234,16 @@ describe('the caps are configuration, and the per-workspace one is a RELATION', 
   // ⚠️ DERIVED, NEVER SEPARATELY CONFIGURED. Two independent numbers drift, and
   // the invariant that matters ("no tenant holds more than half") is only
   // expressible as a relation between them.
-  it('derives the per-workspace cap as ceil(global / 2) at every value', () => {
+  it('derives the per-org cap as ceil(global / 2) at every value', () => {
     for (const global of [0, 1, 2, 3, 6, 7, 24]) {
-      expect(workspaceIndexInFlightCap(global)).toBe(Math.ceil(global / 2));
+      expect(orgIndexInFlightCap(global)).toBe(Math.ceil(global / 2));
     }
     // ceil, not floor: at a global of 1 the floor would be 0, which is not "fair"
     // but "nothing indexes, ever".
-    expect(workspaceIndexInFlightCap(1)).toBe(1);
+    expect(orgIndexInFlightCap(1)).toBe(1);
     // And there is deliberately no env var for it — moving the global moves both.
-    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT_PER_WORKSPACE', '99');
-    expect(workspaceIndexInFlightCap(indexInFlightCap())).toBe(
+    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT_PER_ORG', '99');
+    expect(orgIndexInFlightCap(indexInFlightCap())).toBe(
       Math.ceil(DEFAULT_INDEX_IN_FLIGHT_CAP / 2),
     );
   });
@@ -256,13 +257,13 @@ describe('the caps are configuration, and the per-workspace one is a RELATION', 
   });
 
   // Zero is the index-only kill switch: it stops indexing without touching CI,
-  // which is what distinguishes it from the fleet ceiling's zero.
+  // which is what distinguishes it from the fleet kill switch's zero.
   it('ZERO stops indexing and nothing else', async () => {
     const fx = await seedTenant();
     vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '0');
     stubMotirAi();
 
-    expect(await admit(fx)).toMatchObject({ outcome: 'deferred', reason: 'workspace_index_cap' });
+    expect(await admit(fx)).toMatchObject({ outcome: 'deferred', reason: 'org_index_cap' });
     // CI is untouched — the two caps are different numbers about different things.
     expect((await ciRunnerAdmissionService.admit(await seedIntent(fx))).outcome).toBe('admitted');
   });
@@ -270,8 +271,8 @@ describe('the caps are configuration, and the per-workspace one is a RELATION', 
 
 // ── The two caps, and which one refuses ─────────────────────────────────────
 
-describe('the GLOBAL cap and the PER-WORKSPACE cap', () => {
-  it('lets a workspace take up to half the lane and no more', async () => {
+describe('the GLOBAL cap and the PER-ORG cap', () => {
+  it('lets an org take up to half the lane and no more', async () => {
     vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '6');
     const fx = await seedTenant();
 
@@ -279,10 +280,10 @@ describe('the GLOBAL cap and the PER-WORKSPACE cap', () => {
 
     expect(await admit(fx)).toMatchObject({
       outcome: 'deferred',
-      reason: 'workspace_index_cap',
+      reason: 'org_index_cap',
       detail: expect.stringContaining('3/3'),
     });
-    expect(await workspaceInFlight(fx.workspaceId)).toBe(3);
+    expect(await orgInFlight(fx.organizationId)).toBe(3);
   });
 
   // ⚠️ THE FAIRNESS PROPERTY, STATED AS THE CARD STATES IT. One tenant's burst
@@ -303,14 +304,14 @@ describe('the GLOBAL cap and the PER-WORKSPACE cap', () => {
     expect((await admit(quiet)).outcome).toBe('admitted');
   });
 
-  it('reports the SPECIFIC reason — a workspace pacing itself is not a full fleet', async () => {
+  it('reports the SPECIFIC reason — an org pacing itself is not a full fleet', async () => {
     vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '6');
     const fx = await seedTenant();
     for (let i = 0; i < 3; i += 1) await admit(fx);
 
     const verdict = await admit(fx);
 
-    expect(verdict).toMatchObject({ reason: 'workspace_index_cap' });
+    expect(verdict).toMatchObject({ reason: 'org_index_cap' });
     // Indexing as a whole is nowhere near its cap, which is exactly why the two
     // reasons must not be collapsed: an operator reads different actions off them.
     expect(await indexInFlight()).toBe(3);
@@ -360,18 +361,17 @@ describe('the GLOBAL cap and the PER-WORKSPACE cap', () => {
       NOW,
     );
 
-    expect(await workspaceInFlight(fx.workspaceId)).toBe(3);
+    expect(await orgInFlight(fx.organizationId)).toBe(3);
   });
 });
 
-// ── The cross-workload ceiling still binds (MOTIR-1997) ─────────────────────
+// ── The org's pool binds indexing too (fleet-per-org-pool.md §2) ─────────
 
-describe('the fleet CEILING binds indexing too — a cap that only counted index containers is not a bound', () => {
+describe("the org's POOL binds indexing too — a cap that only counted index containers is not a bound", () => {
   // ⚠️ THE CASE A PER-WORKLOAD CAP STRUCTURALLY CANNOT CATCH. Indexing is nowhere
-  // near its own cap; the fleet is full of CI runners on the same invoice, and
-  // §7.2 records that nothing sits underneath that number.
-  it('refuses an index container when CI RUNNERS filled the fleet', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '2');
+  // near its own cap; the org's pool is full of its OWN CI runners.
+  it("refuses an index container when the org's CI RUNNERS filled its pool", async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '2');
     vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '10');
     const fx = await seedTenant();
     await seedIntent(fx, { status: 'running' });
@@ -379,15 +379,26 @@ describe('the fleet CEILING binds indexing too — a cap that only counted index
 
     const verdict = await admit(fx);
 
-    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'fleet_ceiling' });
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'org_pool' });
+    expect((verdict as { detail: string }).detail).toContain('2 of its 2');
     expect((verdict as { detail: string }).detail).toContain('CI runners 2');
     expect(await indexInFlight()).toBe(0);
   });
 
-  // And the mirror — an admitted index container is COUNTED by the ceiling, which
-  // is the whole reason the dispatcher must take a slot at all (§7.2).
+  // …and never because ANOTHER org filled its own.
+  it("admits an index container while ANOTHER org's pool is full", async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '2');
+    const busy = await seedTenant();
+    await seedIntent(busy, { status: 'running' });
+    await seedIntent(busy, { status: 'running' });
+
+    expect((await admit(await seedTenant())).outcome).toBe('admitted');
+  });
+
+  // And the mirror — an admitted index container is COUNTED in its org's pool,
+  // which is the whole reason the dispatcher must take a slot at all (§7.2).
   it('makes an admitted index container visible to the CI gate', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '1');
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
     stubMotirAi();
     const fx = await seedTenant();
 
@@ -395,9 +406,19 @@ describe('the fleet CEILING binds indexing too — a cap that only counted index
 
     expect(await ciRunnerAdmissionService.admit(await seedIntent(fx))).toMatchObject({
       outcome: 'deferred',
-      reason: 'fleet_ceiling',
+      reason: 'org_pool',
       detail: expect.stringContaining('code-graph index 1'),
     });
+  });
+
+  it('the kill switch stops indexing too', async () => {
+    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '0');
+
+    expect(await admit(await seedTenant())).toMatchObject({
+      outcome: 'deferred',
+      reason: 'fleet_ceiling',
+    });
+    expect(await indexInFlight()).toBe(0);
   });
 });
 
@@ -471,8 +492,8 @@ describe('a refused index WAITS and later runs — nothing is dropped', () => {
     expect(verdicts.filter((v) => v.outcome === 'admitted')).toHaveLength(4);
     // Exactly half each: the derived cap is what makes "both progress" a
     // guarantee rather than a hope about scheduling order.
-    expect(await workspaceInFlight(left.workspaceId)).toBe(2);
-    expect(await workspaceInFlight(right.workspaceId)).toBe(2);
+    expect(await orgInFlight(left.organizationId)).toBe(2);
+    expect(await orgInFlight(right.organizationId)).toBe(2);
   });
 });
 
@@ -486,7 +507,7 @@ describe('the caps hold under REAL concurrency', () => {
   // serial loop cannot see.
   it('never exceeds the GLOBAL cap when many dispatches race', async () => {
     vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '4');
-    // Eight different workspaces, so ONLY the global cap can be what binds.
+    // Eight different orgs, so ONLY the global cap can be what binds.
     const tenants = await Promise.all(Array.from({ length: 8 }, () => seedTenant()));
 
     const verdicts = await Promise.all(tenants.map((fx, i) => admit(fx, `moooon/r${i}`)));
@@ -495,9 +516,9 @@ describe('the caps hold under REAL concurrency', () => {
     expect(await indexInFlight()).toBe(4);
   });
 
-  // The per-tenant half of the same guarantee: one workspace racing its own
+  // The per-tenant half of the same guarantee: one org racing its own
   // repo-connect burst cannot walk past `ceil(global / 2)`.
-  it('never exceeds the PER-WORKSPACE cap when one tenant races itself', async () => {
+  it('never exceeds the PER-ORG cap when one tenant races itself', async () => {
     vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '6');
     const fx = await seedTenant();
 
@@ -506,7 +527,7 @@ describe('the caps hold under REAL concurrency', () => {
     );
 
     expect(verdicts.filter((v) => v.outcome === 'admitted')).toHaveLength(3);
-    expect(await workspaceInFlight(fx.workspaceId)).toBe(3);
+    expect(await orgInFlight(fx.organizationId)).toBe(3);
     // …and the global lane still has room, which is the point of a per-tenant cap.
     expect(await indexInFlight()).toBe(3);
   });
@@ -514,8 +535,8 @@ describe('the caps hold under REAL concurrency', () => {
   // ⚠️ RACED AGAINST THE OTHER WORKLOADS, not just against itself. A same-workload
   // race would pass against an implementation that took a per-workload lock —
   // which is exactly the shape MOTIR-1997 exists to replace.
-  it('never exceeds the fleet CEILING when index and CI dispatches race', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '3');
+  it("never exceeds the org's POOL when its index and CI dispatches race", async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '3');
     vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '10');
     stubMotirAi();
     const fx = await seedTenant();
@@ -528,7 +549,9 @@ describe('the caps hold under REAL concurrency', () => {
 
     const won = results.filter((r) => r.outcome === 'admitted');
     expect(won).toHaveLength(3);
-    const census = await withSystemContext((tx) => fleetCeilingService.census(NOW, tx));
+    const census = await withSystemContext((tx) =>
+      fleetCeilingService.orgCensus(fx.organizationId, NOW, tx),
+    );
     expect(census.total).toBe(3);
   });
 
@@ -585,9 +608,9 @@ describe('the index gate fails CLOSED', () => {
     expect(fleetInFlightSlotCount).toBe(0);
   });
 
-  it('DECLINES when the per-WORKSPACE count throws', async () => {
+  it('DECLINES when the per-ORG count throws', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.spyOn(fleetInFlightSlotRepository, 'countLiveForWorkloadInWorkspace').mockRejectedValue(
+    vi.spyOn(fleetInFlightSlotRepository, 'countLiveForWorkloadInOrganization').mockRejectedValue(
       new Error('connection reset'),
     );
 
@@ -1075,7 +1098,7 @@ describe('nothing bypasses the index caps', () => {
     const meta = await seedTenant({ isMeta: true });
 
     expect((await admit(meta, 'moooon/a')).outcome).toBe('admitted');
-    expect(await admit(meta, 'moooon/b')).toMatchObject({ reason: 'workspace_index_cap' });
+    expect(await admit(meta, 'moooon/b')).toMatchObject({ reason: 'org_index_cap' });
   });
 
   it('MOTIR_CLOUD=false does not lift them either', async () => {

@@ -6,13 +6,15 @@ import {
 } from '@/lib/repositories/ciFleetAdmissionLockRepository';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
-  fleetInFlightCeiling,
+  fleetKillSwitchEngaged,
   indexInFlightCap,
-  workspaceIndexInFlightCap,
+  orgIndexInFlightCap,
 } from '@/lib/ciFleet/limits';
 import {
   fleetCeilingService,
   describeFleetCensus,
+  orgPoolDetail,
+  FLEET_KILL_SWITCH_DETAIL,
   type FleetInFlightCensus,
 } from '@/lib/services/fleetCeilingService';
 
@@ -37,21 +39,21 @@ import {
 //     index queued behind all of it.
 //
 // ── THE LAYERING, AND WHAT THIS FILE IS NOT ─────────────────────────────────
-// §7.2's table, which this implements the middle row of:
+// `docs/decisions/fleet-per-org-pool.md` §7 re-derived it per ORGANISATION
+// (MOTIR-6907):
 //
-//   MOTIR_FLEET_MAX_IN_FLIGHT  → THE INVOICE, every container of any workload
-//                                — MOTIR-1997, and NOT this story's to re-derive
-//   MOTIR_INDEX_MAX_IN_FLIGHT  → index throughput — this file
-//   ceil(global / 2)           → index fairness, tenant vs tenant — this file
-//   PROJECT_IN_FLIGHT_CAPS     → CI fairness — MOTIR-1922
+//   MOTIR_FLEET_ORG_MAX_IN_FLIGHT → the org's pool, every shared workload — §2
+//   MOTIR_INDEX_MAX_IN_FLIGHT     → the one Motir-side bound on indexing, which
+//                                   nobody is charged for — this file
+//   ceil(global / 2)              → index fairness, org vs org — this file
+//   MOTIR_FLEET_MAX_IN_FLIGHT=0   → the operator's kill switch — §6
 //
-// So this gate enforces THREE bounds, not two, and the ceiling is one of them:
-// `fleetCeilingService.census` is called in-line here, from inside this
-// transaction, exactly as MOTIR-1922's CI gate calls it from inside its own. A
-// cap that only counted index containers would repeat precisely the defect
-// MOTIR-1997 fixed — two independent per-workload caps do not compose into a
-// bound.
-//
+// So this gate enforces the two index bounds AND the org's pool: an index
+// container counts in its organisation's pool of 500 (§2), and
+// `fleetCeilingService.orgCensus` is called in-line here, from inside this
+// transaction, exactly as the CI gate calls it from inside its own. At 3 per org
+// the index share cannot crowd the org's CI, but the pool must still see it.
+
 // ── IN THE ORCHESTRATOR, NOT IN INNGEST ─────────────────────────────────────
 // It belongs next to the resource it protects. And an Inngest-side per-tenant cap
 // would need a KEYED concurrency limit, which `defineJob` discards entirely
@@ -64,21 +66,20 @@ import {
 // lock-before-read-derived-update contract): count, decide, take, in ONE
 // transaction with `FLEET_ADMISSION_SCOPE` held `FOR UPDATE`. That row is the
 // same one every CI admission and every `fleetCeilingService.reserve` takes,
-// which is what makes the cross-workload ceiling exact.
+// which is what makes the per-organisation pool exact.
 //
-// There is deliberately NO second, per-workspace lock. The fleet scope is
+// There is deliberately NO second, per-organisation lock. The fleet scope is
 // GLOBAL, so holding it already serializes every admission in the system,
-// including two from the same workspace — a workspace-scoped anchor would add a
-// lock-ordering constraint against `ciRunnerAdmissionService`'s fixed
-// project→fleet order and buy nothing. MUTATION-CHECK IT: delete the `lockScope`
+// including two from the same organisation — a tenant-scoped anchor would add a
+// lock-ordering constraint and buy nothing. MUTATION-CHECK IT: delete the `lockScope`
 // call and `tests/ciFleet/codeGraphIndexAdmission.test.ts`'s race cases must go
 // red.
 //
 // ── FAIL CLOSED ─────────────────────────────────────────────────────────────
-// If a count cannot be established, DO NOT BOOT — the same posture as
-// `fleetCeilingService`, for the same reason: a deferred index is recoverable
-// (the caller waits and asks again, and nothing is dropped), a runaway invoice on
-// an account with no provider ceiling is not.
+// If a count, or the org's pool, cannot be established, DO NOT BOOT — the same
+// posture as `fleetCeilingService`, for the same reason: a deferred index is
+// recoverable (the caller waits and asks again, and nothing is dropped), a
+// container nothing bounds is not.
 //
 // ── NO BYPASS ───────────────────────────────────────────────────────────────
 // `isMeta` does not lift any of these, and neither does self-hosting. §8 puts
@@ -97,7 +98,7 @@ const CODE_GRAPH_INDEX_WORKLOAD = 'code_graph_index' satisfies FleetWorkloadKind
  * The slot's `expires_at` is a SAFETY NET for a release that never runs, and the
  * one direction it must never err in is SHORT: a TTL under the container's real
  * life stops counting a container that is still running and spending, which lets
- * the ceiling be exceeded. So the container's timeout plus the boot deadline plus
+ * the pool be exceeded. So the container's timeout plus the boot deadline plus
  * a settle margin, rounded up — never the timeout alone.
  */
 const SLOT_TTL_MARGIN_SECONDS = 300;
@@ -111,17 +112,20 @@ export type IndexAdmissionDeferralReason =
    *  the holder is minutes from settling, and the wait ends with THIS run
    *  indexing the newer head. */
   | 'repo_index_in_flight'
-  /** This workspace already holds `ceil(global / 2)` index containers. Its own
-   *  burst is being paced so another tenant's first index is not stuck behind it. */
-  | 'workspace_index_cap'
+  /** This organisation already holds `ceil(global / 2)` index containers
+   *  (MOTIR-6907, `fleet-per-org-pool.md` §7). Its own burst is being paced so
+   *  another org's first index is not stuck behind it. */
+  | 'org_index_cap'
   /** Indexing as a whole is at its configured global cap. */
   | 'index_cap'
-  /** The CROSS-WORKLOAD fleet ceiling — the invoice bound (MOTIR-1997). The
-   *  containers that filled it may be CI runners or hosted agents, not index
-   *  containers at all; the detail carries the per-workload breakdown. */
+  /** The organisation already holds its whole fleet pool (§2). The containers
+   *  that filled it may be the org's CI runners or hosted runs; the detail
+   *  carries the per-workload breakdown. */
+  | 'org_pool'
+  /** The operator's kill switch is engaged (`MOTIR_FLEET_MAX_IN_FLIGHT=0`). */
   | 'fleet_ceiling'
   /** The gate itself could not decide. FAIL-CLOSED: an unestablished count is
-   *  treated as a full fleet, never an empty one. */
+   *  treated as a full pool, never an empty one. */
   | 'gate_unavailable';
 
 /**
@@ -188,8 +192,9 @@ export interface IndexAdmissionRequest {
    * nothing defends.
    */
   readonly dispatchId: string;
-  /** Attribution, and the key the per-workspace cap counts on. */
+  /** Attribution. */
   readonly workspaceId: string;
+  /** The key the per-organisation index share and the org's pool count on. */
   readonly organizationId: string;
   /**
    * The container's own hard kill, in ms — the slot's TTL is derived from it.
@@ -294,8 +299,21 @@ export const codeGraphIndexAdmissionService = {
   async admit(request: IndexAdmissionRequest, now = new Date()): Promise<IndexAdmissionVerdict> {
     const slotRef = indexSlotRef(request.projectId, request.repoRef);
     const globalCap = indexInFlightCap();
-    const workspaceCap = workspaceIndexInFlightCap(globalCap);
+    const orgCap = orgIndexInFlightCap(globalCap);
     const ttlSeconds = Math.ceil(request.containerTimeoutMs / 1000) + SLOT_TTL_MARGIN_SECONDS;
+
+    if (fleetKillSwitchEngaged()) {
+      return { outcome: 'deferred', reason: 'fleet_ceiling', detail: FLEET_KILL_SWITCH_DETAIL };
+    }
+    // Read under the org GUC, before the lock (`fleetCeilingService.resolveOrgPool`).
+    const pool = await fleetCeilingService.resolveOrgPool(request.organizationId);
+    if (pool === null) {
+      return {
+        outcome: 'deferred',
+        reason: 'gate_unavailable',
+        detail: "the organization's fleet pool could not be read",
+      };
+    }
 
     try {
       return await withSystemContext(async (tx) => {
@@ -324,8 +342,8 @@ export const codeGraphIndexAdmissionService = {
         // `repo_index_in_flight` — 60 attempts over ~1.7 hours per run, nine runs
         // that day, a 100% failure rate, and a code graph that silently stopped
         // tracking the repository while the fleet sat at ZERO live containers.
-        // The refusal was never a cap: `index_cap`, `workspace_index_cap` and
-        // `fleet_ceiling` all read the live counts and all had room.
+        // The refusal was never a cap: every cap read the live counts and all
+        // had room.
         //
         // ⚠️ THE REAP GOES HERE, NOT ON A SCHEDULE, and the placement is the
         // point. Under `FLEET_ADMISSION_SCOPE` every admission in the system is
@@ -345,34 +363,26 @@ export const codeGraphIndexAdmissionService = {
         // rather than boot a second one: the ownership test is the difference
         // between an idempotent replay and an overlap, and reading it as the
         // former was how a second run reached a boot having consulted none of the
-        // three bounds below.
+        // bounds below.
         const held = await slots.findByRef(CODE_GRAPH_INDEX_WORKLOAD, slotRef, tx);
         if (held) return heldVerdict(held, slotRef, request.dispatchId);
 
-        // ⚠️ ONE census for all three counts. `byWorkload.code_graph_index` IS
-        // the global index in-flight number, so the workload cap costs no extra
-        // read — and, more importantly, the ceiling and the index cap are then
-        // decided from the SAME observation of the world rather than from two
-        // reads a container could have landed between.
-        const census = await fleetCeilingService.census(now, tx);
-        const indexInFlight = census.byWorkload[CODE_GRAPH_INDEX_WORKLOAD];
-        const workspaceInFlight = await slots.countLiveForWorkloadInWorkspace(
-          CODE_GRAPH_INDEX_WORKLOAD,
-          request.workspaceId,
-          now,
-          tx,
-        );
+        // The org's census answers two of the three bounds at once:
+        // `byWorkload.code_graph_index` IS the org's index share, and `total` is
+        // its pool count — both from the SAME observation of the world.
+        const census = await fleetCeilingService.orgCensus(request.organizationId, now, tx);
+        const orgIndexInFlight = census.byWorkload[CODE_GRAPH_INDEX_WORKLOAD];
+        const indexInFlight = await slots.countLiveForWorkload(CODE_GRAPH_INDEX_WORKLOAD, now, tx);
 
-        // ── 1 · THE PER-WORKSPACE CAP — the fairness bound, checked first ─────
-        // Most specific reason first, the same ordering MOTIR-1922's gate uses
-        // (project cap before fleet ceiling): "your workspace is pacing its own
-        // burst" is a materially different operator answer from "the fleet is
+        // ── 1 · THE PER-ORGANISATION INDEX SHARE — fairness, checked first ─────
+        // Most specific reason first: "your organisation is pacing its own
+        // burst" is a materially different operator answer from "indexing is
         // full", and the caller's log is the only place the difference survives.
-        if (workspaceInFlight >= workspaceCap) {
+        if (orgIndexInFlight >= orgCap) {
           return {
             outcome: 'deferred' as const,
-            reason: 'workspace_index_cap' as const,
-            detail: `the workspace is at its index cap (${workspaceInFlight}/${workspaceCap}, half of the global ${globalCap})`,
+            reason: 'org_index_cap' as const,
+            detail: `the organization is at its index cap (${orgIndexInFlight}/${orgCap}, half of the global ${globalCap})`,
           };
         }
 
@@ -385,18 +395,15 @@ export const codeGraphIndexAdmissionService = {
           };
         }
 
-        // ── 3 · THE CROSS-WORKLOAD FLEET CEILING — the invoice (MOTIR-1997) ───
-        // ⚠️ NOT redundant with the cap above, and not re-derived here: CI
-        // runners and hosted agents share the org and therefore the invoice, so
-        // an index container is refused when THEY filled the fleet even though
-        // indexing is nowhere near its own cap. That is the case per-workload
-        // caps structurally cannot catch.
-        const ceiling = fleetInFlightCeiling();
-        if (census.total >= ceiling) {
+        // ── 3 · THE ORGANISATION'S POOL (§2) ──────────────────────────────────
+        // An index container counts in its org's pool, so it waits when the
+        // org's own CI runners and hosted runs filled it — and never because
+        // another org's did.
+        if (census.total >= pool) {
           return {
             outcome: 'deferred' as const,
-            reason: 'fleet_ceiling' as const,
-            detail: `the fleet is at its in-flight ceiling (${census.total}/${ceiling}: ${describeFleetCensus(census)})`,
+            reason: 'org_pool' as const,
+            detail: orgPoolDetail(census, pool),
           };
         }
 
@@ -438,9 +445,9 @@ export const codeGraphIndexAdmissionService = {
             slotRef,
             admittedAt: now.toISOString(),
             detail:
-              `admitted: workspace ${workspaceInFlight + 1}/${workspaceCap}, ` +
+              `admitted: organization index ${orgIndexInFlight + 1}/${orgCap}, ` +
               `indexing ${indexInFlight + 1}/${globalCap}, ` +
-              `fleet ${census.total + 1}/${ceiling} (${describeFleetCensus(census)})`,
+              `organization pool ${census.total + 1}/${pool} (${describeFleetCensus(census)})`,
           },
         };
       });
@@ -451,7 +458,7 @@ export const codeGraphIndexAdmissionService = {
         '[codeGraphIndexAdmissionService] the index admission gate failed — not booting',
         {
           slotRef,
-          workspaceId: request.workspaceId,
+          organizationId: request.organizationId,
           detail: detailOf(err),
         },
       );
@@ -469,7 +476,7 @@ export const codeGraphIndexAdmissionService = {
    *
    * ⚠️ ONLY WHEN THE CONTAINER IS REALLY GONE. Releasing a slot whose container
    * may still be running under-counts a container that is still spending, which
-   * is the one direction the ceiling must never err in — so a FAILED teardown
+   * is the one direction the pool must never err in — so a FAILED teardown
    * deliberately does not release, and the slot's `expires_at` ages it out
    * instead while the reaper does its work.
    *

@@ -968,6 +968,15 @@ model Organization {
   /// unlike `isMeta`'s data-flip, classifying an org is an operator's act.
   internalBilling Boolean @default(false) @map("internal_billing")
 
+  /// THIS ORGANISATION'S OWN FLEET POOL — the enterprise override of
+  /// `MOTIR_FLEET_ORG_MAX_IN_FLIGHT` (default 500): how many shared-workload
+  /// containers (CI runners, hosted-agent runs, index containers) the org may
+  /// have in flight at once (`docs/decisions/fleet-per-org-pool.md` §2,
+  /// MOTIR-6907). NULL = the environment's number. Set by platform staff with the
+  /// org, the way its tier is, and never as a per-org env var. `0` is legal and
+  /// means the org boots nothing. Read by `lib/ciFleet/limits.ts` `orgPoolCap`.
+  fleetPoolCap Int? @map("fleet_pool_cap")
+
   /// The git CONNECTIONS this organisation holds, and the REPOSITORIES behind
   /// them (Story MOTIR-4669 · MOTIR-4649) — a repository is connected ONCE, to
   /// the organisation, and which projects use it is visibility configuration.
@@ -9786,12 +9795,15 @@ model FleetInFlightSlot {
   /// … ON CONFLICT DO NOTHING` occupies no extra capacity.
   ref String
 
-  /// Attribution for the operator breakdown; never a tenancy boundary (see the
-  /// model comment). Not FKs: a slot must survive the deletion of whatever it
+  /// The organisation whose POOL this slot counts against
+  /// (`docs/decisions/fleet-per-org-pool.md` §2, MOTIR-6907) — REQUIRED since the
+  /// pool became per organisation: a slot with no org would be counted by no
+  /// org's pool, which is a container nothing bounds. The workspace is
+  /// attribution only. Not FKs: a slot must survive the deletion of whatever it
   /// pointed at, because a leaked slot that outlives its owner is exactly the
   /// row `expires_at` exists to age out — a cascade would silently free
   /// capacity a live container is still spending.
-  organizationId String? @map("organization_id")
+  organizationId String  @map("organization_id")
   workspaceId    String? @map("workspace_id")
 
   /// The container this slot stands for, once the workload knows it. Nullable
@@ -9837,6 +9849,8 @@ model FleetInFlightSlot {
   /// The ceiling's read — count live rows for one workload. Ordered
   /// `[workload, expiresAt]` because that is the predicate's shape.
   @@index([workload, expiresAt])
+  /// The per-organisation pool count (MOTIR-6907), read under the fleet lock.
+  @@index([organizationId, expiresAt])
   @@map("fleet_in_flight_slot")
 }
 

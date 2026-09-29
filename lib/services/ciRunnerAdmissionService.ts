@@ -1,44 +1,36 @@
 import type { CiRunnerProvisioningIntent } from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
-import { withOrgServiceWriteContext } from '@/lib/organizations/context';
-import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import {
   ciFleetAdmissionLockRepository as locks,
   FLEET_ADMISSION_SCOPE,
-  projectAdmissionScope,
 } from '@/lib/repositories/ciFleetAdmissionLockRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
-import { pmTierForOrg, type PmTier } from '@/lib/billing/entitlements';
-import { isCloudBilling } from '@/lib/billing/availability';
-import { fleetInFlightCeiling, projectInFlightCapFor } from '@/lib/ciFleet/limits';
-import { fleetCeilingService, describeFleetCensus } from '@/lib/services/fleetCeilingService';
+import { fleetKillSwitchEngaged } from '@/lib/ciFleet/limits';
+import {
+  fleetCeilingService,
+  describeFleetCensus,
+  FLEET_KILL_SWITCH_DETAIL,
+} from '@/lib/services/fleetCeilingService';
 
-// THE PROVISIONING GATE (Story MOTIR-1916 · MOTIR-1922) — the one place that
-// answers *should this intent get a runner at all?*, decided under a lock before
-// anything is spent.
+// THE PROVISIONING GATE (Story MOTIR-1916 · MOTIR-1922, re-cut by MOTIR-6906 ·
+// MOTIR-6907) — the one place that answers *should this intent get a runner at
+// all?*, decided under a lock before anything is spent.
+// `docs/decisions/fleet-per-org-pool.md` is the record.
 //
-// Three guards, one call site, because they are three answers to the same
-// question about the same intent:
+// The guards, one call site, because they are answers to the same question about
+// the same intent:
 //
-//   1. THE PER-PROJECT IN-FLIGHT CAP — how much concurrency this tenant has
-//      bought (the Vercel/Netlify shape). Fairness first: without it one project
-//      can occupy the whole fleet and starve every other tenant. A per-tenant
-//      cost bound second.
-//   2. THE CROSS-WORKLOAD FLEET CEILING — how much compute Motir is willing to
-//      run at once, whoever asked AND WHATEVER WORKLOAD (MOTIR-1997). ⚠️ THE
-//      ONLY THING THAT BOUNDS MOTIR'S TOTAL FLEET SPEND:
-//      `docs/decisions/ci-runner-fleet.md` §9 records that Fly offers neither a
-//      spending cap nor a billing alert, so there is no provider-side backstop
-//      under this number, and per-project caps do not add up to one — they
-//      multiply by an unbounded project count.
-//      ⚠️ IT IS NO LONGER A RUNNER COUNT. MOTIR-1981 put code-graph INDEX
-//      containers in the same Fly org and Epic 9 adds AGENT containers; neither
-//      writes a runner intent, so a runner-only ceiling stopped being a bound on
-//      the invoice the moment they landed. The number now comes from
-//      `fleetCeilingService.census` — a union over the workload registry — and a
-//      CI job can be refused here because INDEXING filled the fleet. That is the
-//      case per-workload caps structurally cannot catch.
+//   1. THE KILL SWITCH — `MOTIR_FLEET_MAX_IN_FLIGHT=0` stops every boot (§6).
+//      What the fleet-wide ceiling (MOTIR-1997) became; nothing else of it is
+//      left.
+//   2. THE ORGANISATION'S POOL (§2) — `MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default
+//      500, or the org's enterprise number. It counts the org's CI runners,
+//      hosted-agent runs and index containers (`fleetCeilingService.orgCensus`),
+//      so a CI job can wait because the SAME org's indexing filled its pool —
+//      and never because another org's did. It replaces MOTIR-1922's per-project
+//      tier caps, which are retired (§6): how an org shares its pool between its
+//      own projects is its own business.
 //   3. THE CREDIT REFUSAL — `ci_credits_exhausted` declines to boot. The state
 //      comes from the SHIPPED `ciAllowanceService.getEntitlementState` and is
 //      never re-derived here, so the billing panel, MOTIR-1907's Actions pause,
@@ -52,14 +44,11 @@ import { fleetCeilingService, describeFleetCensus } from '@/lib/services/fleetCe
 // terms the PRODUCT controls, so that changing provider changes nothing about
 // what stops the spend.
 //
-// ── THE DELIBERATE ASYMMETRY (the card states it; it is implemented here) ────
-// Guard 3 fails OPEN: if the entitlement read throws, BOOT and log. Motir's own
-// outage must never read to a user as "you are out of credits", and §6.4 already
-// prices the bounded overshoot that letting a run through can cause.
-// Guards 1–2 fail CLOSED: if the counts cannot be established, do NOT boot. The
-// failure mode on the other side is unbounded spend on an account with no
-// provider-side cap, and a queued job is recoverable while a runaway invoice is
-// not.
+// ── THE DELIBERATE ASYMMETRY ────────────────────────────────────────────────
+// Guard 3 fails OPEN today: if the entitlement read throws, BOOT and log (the
+// fail-closed credit admission of §3 is MOTIR-6911's). Guards 1–2 fail CLOSED: if
+// the org's pool or its count cannot be established, do NOT boot — a queued job
+// is recoverable while a container nothing bounds is not.
 //
 // ── WHY THE CREDIT READ IS NOT INSIDE THE LOCKED TRANSACTION ────────────────
 // It cannot be, and it should not be. `getEntitlementState` opens its own
@@ -68,49 +57,40 @@ import { fleetCeilingService, describeFleetCensus } from '@/lib/services/fleetCe
 // the FLEET-WIDE lock — which every admission in the system queues behind —
 // across an HTTP call to another service would serialize the entire fleet behind
 // motir-ai's latency, and a motir-ai timeout would become a fleet outage. So the
-// caps are decided and the slot is CLAIMED under the lock; the credit state is
+// pool is decided and the slot is CLAIMED under the lock; the credit state is
 // read after, and a refusal RELEASES the claim. The window between them is
-// microseconds of local work and errs toward the cap, never past it: for that
-// moment the intent occupies a slot it may not keep.
-//
-// This ordering is also the cheaper one under load. When the fleet is saturated —
-// exactly when the gate is busiest — guards 1–2 answer from local reads and the
-// cross-boundary call never happens.
+// microseconds of local work and errs toward the pool, never past it: for that
+// moment the intent occupies a slot it may not keep. The org's pool override is
+// read BEFORE the lock for the same reason (it is an org-GUC read).
 
 /** Why an intent was not admitted. Every one of these leaves the intent PENDING,
  *  so the provisioning sweep retries it — a deferral, never a rejection. */
 export type AdmissionDeferralReason =
-  /** The project is at its plan tier's concurrency allowance. */
-  | 'project_cap'
-  /** The whole fleet is at its ceiling — §9.1, the spend bound. Cross-workload:
-   *  the containers that filled it may belong to indexing or agents, not to CI
-   *  (MOTIR-1997). The verdict's `detail` carries the per-workload breakdown, so
-   *  an operator can see which one to lean on. */
+  /** The intent's organisation already holds its whole pool (§2). Only that org
+   *  waits. */
+  | 'org_pool'
+  /** The operator's kill switch is engaged (`MOTIR_FLEET_MAX_IN_FLIGHT=0`). */
   | 'fleet_ceiling'
   /** The org is past its pool AND out of credits. */
   | 'ci_credits_exhausted'
   /** The gate itself could not decide. FAIL-CLOSED: an unestablished count is
-   *  treated as a full fleet, not an empty one. */
+   *  treated as a full pool, not an empty one. */
   | 'gate_unavailable';
 
 export type AdmissionVerdict =
   /** Admitted AND CLAIMED — the intent is now `provisioning` and the caller owns
-   *  it. The counts are carried out for the caller's log; `fleetInFlight` is the
-   *  CROSS-WORKLOAD total (runners + index + agents), not a runner count. */
-  | { outcome: 'admitted'; projectInFlight: number; fleetInFlight: number }
+   *  it. `orgInFlight` is the org's pool count at the decision (runners + index
+   *  + hosted runs), for the caller's log. */
+  | { outcome: 'admitted'; orgInFlight: number; orgPool: number }
   /** Another provisioner claimed it first. Not an error; the compare-and-set
    *  worked. */
   | { outcome: 'already_claimed' }
   /** Not admitted. The intent is still `pending`. */
   | { outcome: 'deferred'; reason: AdmissionDeferralReason; detail: string };
 
-/** What the caps resolved to for one org, before any counting. */
-interface ResolvedCaps {
-  tier: PmTier;
-  /** null = the per-project allowance does not apply to this tier (`meta`,
-   *  `enterprise`). The fleet ceiling still binds it. */
-  projectCap: number | null;
-  fleetCeiling: number;
+/** The words an `org_pool` CI deferral carries (`fleet-per-org-pool.md` §4). */
+export function orgPoolCiDetail(inFlight: number, pool: number): string {
+  return `Your organization is running ${inFlight} of its ${pool} CI containers. This job starts when one finishes.`;
 }
 
 function detailOf(err: unknown): string {
@@ -133,95 +113,65 @@ export const ciRunnerAdmissionService = {
    * full" achieves nothing a queued intent and the next sweep do not.
    */
   async admit(intent: CiRunnerProvisioningIntent): Promise<AdmissionVerdict> {
-    // ONE instant for the whole decision. The cross-workload census compares
-    // slot expiries against it, and a gate that re-read the clock per workload
-    // could count a slot as live for one workload and expired for the next —
-    // the same total, arrived at from two different worlds.
+    // ONE instant for the whole decision. The census compares slot expiries
+    // against it, and a gate that re-read the clock per workload could count a
+    // slot as live for one workload and expired for the next.
     const now = new Date();
-    const caps = await this.resolveCaps(intent.organizationId);
-    if (!caps) {
-      // The tier read failed. FAIL CLOSED with the caps, per the asymmetry above:
-      // an org whose plan cannot be established must not be handed the largest
-      // allowance by default.
-      console.error('[ciRunnerAdmissionService] could not resolve the org caps — not booting', {
+
+    // ── 1 · THE KILL SWITCH ───────────────────────────────────────────────────
+    if (fleetKillSwitchEngaged()) {
+      return { outcome: 'deferred', reason: 'fleet_ceiling', detail: FLEET_KILL_SWITCH_DETAIL };
+    }
+
+    const pool = await fleetCeilingService.resolveOrgPool(intent.organizationId);
+    if (pool === null) {
+      // FAIL CLOSED: an org whose pool cannot be established must not be handed
+      // the default by accident.
+      console.error('[ciRunnerAdmissionService] could not resolve the org pool — not booting', {
         intentId: intent.id,
         organizationId: intent.organizationId,
       });
       return {
         outcome: 'deferred',
         reason: 'gate_unavailable',
-        detail: "could not resolve the org's concurrency allowance",
+        detail: "could not resolve the organization's fleet pool",
       };
     }
 
-    // ── Guards 1 + 2, and the claim — one locked transaction ──────────────────
+    // ── 2 · The org's pool, and the claim — one locked transaction ────────────
     let claimed: AdmissionVerdict;
     try {
       claimed = await withSystemContext(async (tx) => {
-        // ⚠️ LOCK ORDER IS FIXED — project scope, then fleet — and this is the
-        // only site that takes either, so the order cannot be violated from
-        // elsewhere. It matters because every admission takes the fleet lock
-        // while only same-project admissions contend on the project one; a site
-        // that took them the other way round could deadlock against this one.
-        if (intent.projectId !== null && caps.projectCap !== null) {
-          await locks.ensureScope(projectAdmissionScope(intent.projectId), tx);
-          if (!(await locks.lockScope(projectAdmissionScope(intent.projectId), tx))) {
-            throw new Error('the project admission lock could not be taken');
-          }
-        }
         await locks.ensureScope(FLEET_ADMISSION_SCOPE, tx);
         if (!(await locks.lockScope(FLEET_ADMISSION_SCOPE, tx))) {
           throw new Error('the fleet admission lock could not be taken');
         }
 
-        // 1 · THE PER-PROJECT CAP. Skipped for a tier with no allowance, and for
-        // an intent naming no project — that intent is refused by the boot for a
-        // better reason (no runner group, no tenant to bill), and inventing a
-        // per-project cap for a null project would only hide it.
-        let projectInFlight = 0;
-        if (intent.projectId !== null) {
-          projectInFlight = await intents.countInFlightForProject(intent.projectId, tx);
-          if (caps.projectCap !== null && projectInFlight >= caps.projectCap) {
-            return {
-              outcome: 'deferred' as const,
-              reason: 'project_cap' as const,
-              detail: `project is at its in-flight cap (${projectInFlight}/${caps.projectCap}, tier ${caps.tier})`,
-            };
-          }
-        }
-
-        // 2 · THE CROSS-WORKLOAD FLEET CEILING, immediately after guard 1, under
-        // the same lock, in the same transaction. NOT bypassed by `isMeta` and
-        // not by the tier: it bounds Motir's own invoice, and a meta-org runaway
-        // costs exactly as much as any other.
-        //
-        // ⚠️ THIS COUNTS EVERY WORKLOAD, NOT JUST RUNNERS (MOTIR-1997). A CI
-        // admission is refused when index or agent containers have filled the
-        // fleet, because they share one Fly org and therefore one invoice. The
-        // census is taken here rather than through `fleetCeilingService.reserve`
-        // precisely because this transaction ALREADY holds
+        // Counted from inside this transaction rather than through
+        // `fleetCeilingService.reserve` precisely because it ALREADY holds
         // `FLEET_ADMISSION_SCOPE` and is mid-claim — re-entering would deadlock
-        // the gate against itself.
-        const census = await fleetCeilingService.census(now, tx);
-        if (census.total >= caps.fleetCeiling) {
+        // the gate against itself. Not bypassed by `isMeta` (§1: meta keeps the
+        // same pool).
+        const census = await fleetCeilingService.orgCensus(intent.organizationId, now, tx);
+        if (census.total >= pool) {
           return {
             outcome: 'deferred' as const,
-            reason: 'fleet_ceiling' as const,
-            detail: `the fleet is at its in-flight ceiling (${census.total}/${caps.fleetCeiling}: ${describeFleetCensus(census)})`,
+            reason: 'org_pool' as const,
+            detail: `${orgPoolCiDetail(census.total, pool)} (${describeFleetCensus(census)})`,
           };
         }
 
-        // 3 · TAKE THE SLOT. The compare-and-set on `pending` is what makes the
+        // TAKE THE SLOT. The compare-and-set on `pending` is what makes the
         // count above true of the world the moment this transaction commits.
         const took = await intents.claimPending(intent.id, tx);
         if (!took) return { outcome: 'already_claimed' as const };
 
-        return { outcome: 'admitted' as const, projectInFlight, fleetInFlight: census.total };
+        return { outcome: 'admitted' as const, orgInFlight: census.total, orgPool: pool };
       });
     } catch (err) {
       // FAIL CLOSED. The transaction rolled back, so nothing was claimed and the
       // intent is still pending — the next sweep retries it. A count that could
-      // not be established is treated as a full fleet.
+      // not be established is treated as a full pool.
       console.error('[ciRunnerAdmissionService] the admission gate failed — not booting', {
         intentId: intent.id,
         organizationId: intent.organizationId,
@@ -236,12 +186,11 @@ export const ciRunnerAdmissionService = {
 
     if (claimed.outcome !== 'admitted') return claimed;
 
-    // ── Guard 3 · the credit refusal, on the claim we now hold ────────────────
+    // ── 3 · the credit refusal, on the claim we now hold ──────────────────────
     const exhausted = await this.isCreditsExhausted(intent.organizationId);
     if (exhausted) {
       // Give the slot back. A refusal must not leave the intent occupying
-      // capacity it is not using — that would let one exhausted org's queue
-      // squeeze every paying tenant out of the fleet.
+      // capacity it is not using.
       await this.releaseClaim(intent.id);
       return {
         outcome: 'deferred',
@@ -251,45 +200,6 @@ export const ciRunnerAdmissionService = {
     }
 
     return claimed;
-  },
-
-  /**
-   * The two caps for one org, or null when the org's plan could not be read.
-   *
-   * The tier resolves through `pmTierForOrg` — the SINGLE chokepoint every §4 cap
-   * already goes through — so the meta exemption and any future tier are honoured
-   * here without this file knowing what a subscription is. Read under the org
-   * GUC, like every other no-acting-user org read (`getEntitlementState` does the
-   * same, and `withSystemContext` would be the silent bug: the org policies have
-   * no system escape in production).
-   *
-   * ⚠️ TWO BYPASSES OF THE PER-PROJECT CAP, AND NEITHER TOUCHES THE FLEET
-   * CEILING:
-   *   * OFF-CLOUD (`MOTIR_CLOUD` unset/false) — a plan allowance is a commercial
-   *     construct, and a self-hosted GPL build has no plan. Every §4 cap is
-   *     already inert off-cloud (`entitlementsService`); this one matches.
-   *   * The META tier — the card's own criterion.
-   * The ceiling survives both because it is not a tenant's allowance: it is the
-   * bound on whoever is paying the container bill, and a self-hoster's runaway
-   * fleet is as real as Motir's.
-   */
-  async resolveCaps(organizationId: string): Promise<ResolvedCaps | null> {
-    try {
-      const tier = await withOrgServiceWriteContext(organizationId, async (tx) =>
-        pmTierForOrg(await organizationRepository.findCapContextInTx(organizationId, tx)),
-      );
-      return {
-        tier,
-        projectCap: isCloudBilling() ? projectInFlightCapFor(tier) : null,
-        fleetCeiling: fleetInFlightCeiling(),
-      };
-    } catch (err) {
-      console.error('[ciRunnerAdmissionService] could not read the org cap context', {
-        organizationId,
-        detail: detailOf(err),
-      });
-      return null;
-    }
   },
 
   /**
