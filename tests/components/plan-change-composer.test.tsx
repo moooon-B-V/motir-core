@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
+import { Modal } from '@/components/ui/Modal';
 import { MAX_PLANNING_TARGETS, type PlanningTarget } from '@/lib/planning/planningTargets';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 
@@ -515,6 +516,35 @@ describe('where every key goes (design panel 5)', () => {
     await waitFor(() => expect(screen.queryByTestId('target-search-popup')).toBeNull());
     expect(document.activeElement).toBe(message);
     expect(message.selectionStart).toBe(5);
+  });
+
+  it('Escape in the search does NOT close a Radix dialog around the composer (the planning surface)', async () => {
+    // The surface is a Radix Dialog, which hears Escape on `document` in the
+    // CAPTURE phase — before any React handler. Found by the acceptance run: the
+    // whole surface closed behind a dismissed search.
+    const onOpenChange = vi.fn();
+    renderWithIntl(
+      <Modal open onOpenChange={onOpenChange} size="full" srTitle="Planning">
+        <PlanChangeComposer
+          draft=""
+          onDraftChange={() => {}}
+          targets={[]}
+          onAddTarget={() => {}}
+          onRemoveTarget={() => {}}
+          onSubmit={() => {}}
+        />
+      </Modal>,
+    );
+    fireEvent.click(searchControl());
+    await waitFor(() => expect(document.activeElement).toBe(searchField()));
+
+    fireEvent.keyDown(searchField(), { key: 'Escape' });
+
+    expect(screen.queryByTestId('target-search-popup')).toBeNull();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    // …while an Escape from the MESSAGE still reaches the dialog, unchanged.
+    fireEvent.keyDown(field(), { key: 'Escape' });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it('opened before any caret was placed, Esc returns focus to the END of the draft', async () => {

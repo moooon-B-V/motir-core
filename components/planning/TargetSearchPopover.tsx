@@ -72,6 +72,24 @@ export function TargetSearchPopover({ targets, onPick, onClose }: TargetSearchPo
     (atLimit ? rootRef.current : fieldRef.current)?.focus();
   }, [atLimit]);
 
+  // ⚠️ ESC MUST NOT REACH THE PLANNING SURFACE (design panel 5). The surface is
+  // a Radix Dialog, and Radix listens for Escape on `document` in the CAPTURE
+  // phase — before any React handler runs — so `stopPropagation` in the field's
+  // own handler arrives too late and the whole surface closed behind a dismissed
+  // search. Radix skips its dismiss when the event is already
+  // `defaultPrevented`, and a WINDOW capture listener runs before the document
+  // one, so this marks an Escape aimed at the popover before Radix sees it. The
+  // field's own handler (bubble phase) still runs and does the closing.
+  useEffect(() => {
+    function onEscapeCapture(event: globalThis.KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      const target = event.target as Node | null;
+      if (target && rootRef.current?.contains(target)) event.preventDefault();
+    }
+    window.addEventListener('keydown', onEscapeCapture, true);
+    return () => window.removeEventListener('keydown', onEscapeCapture, true);
+  }, []);
+
   // A click OUTSIDE closes it (design panel 5). The Search control is excluded:
   // its own click toggles the popover, and closing here first would reopen it.
   useEffect(() => {
