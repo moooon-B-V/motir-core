@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   toActivityAllPage,
+  toDispatchRunView,
   toActivityHistoryPage,
   toCommentsPage,
   toProjectList,
@@ -361,5 +362,59 @@ describe('toWorkItemRepairClaim — the acceptance Re-run class (MOTIR-6502)', (
       reviewerName: 'Review agent',
       decidedAt: '2026-09-29T10:00:00.000Z',
     });
+  });
+});
+
+describe('toDispatchRunView — an adopted hosted REPAIR run (MOTIR-6929)', () => {
+  const base = {
+    id: 'run-fix',
+    status: 'running',
+    command: 'fix',
+    origin: 'hosted',
+    model: 'claude-opus-5-5',
+    endedAt: null,
+    cards: [{ key: 'ACME-12', position: 1, disposition: 'running' }],
+    continues: null,
+  };
+  const pr = {
+    repo: 'acme/web',
+    number: 7,
+    url: 'https://github.com/acme/web/pull/7',
+    branch: 'acme-12-fix',
+    baseRef: 'main',
+    headSha: 'abc123',
+  };
+
+  it('maps the repair the claim decided — its class, pull requests and findings', () => {
+    const findings = {
+      gate: 'agent_review',
+      gateId: 'g1',
+      subjectVersion: 'acme/web#7@abc123',
+      findingsMd: 'Handle the empty list.',
+      reviewerName: 'Review agent',
+    };
+    const view = toDispatchRunView({
+      ...base,
+      repair: { repairClass: 'review', title: 'Export button', pullRequests: [pr], findings },
+    } as never);
+    expect(view.repair).toEqual({
+      repairClass: 'review',
+      title: 'Export button',
+      pullRequests: [pr],
+      findings,
+    });
+  });
+
+  it('carries a repair recorded WITHOUT findings as null findings, never throwing', () => {
+    const view = toDispatchRunView({
+      ...base,
+      repair: { repairClass: 'review', title: 'Export button', pullRequests: [pr], findings: null },
+    } as never);
+    expect(view.repair?.findings).toBeNull();
+    expect(view.repair?.pullRequests).toEqual([pr]);
+  });
+
+  it('reads a server older than contract 1.58.0 — no `repair` at all — as null', () => {
+    expect(toDispatchRunView(base as never).repair).toBeNull();
   });
 });
