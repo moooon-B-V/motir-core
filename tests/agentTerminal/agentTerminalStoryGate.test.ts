@@ -193,6 +193,8 @@ async function startServer(instanceId: string): Promise<ServerProcess> {
 
 // ── The relay, wired as `scripts/relay.ts` wires it ─────────────────────────
 
+/** This relay's id on its connection rows — `relayMachineId()` in `scripts/relay.ts`. */
+const RELAY_MACHINE_ID = 'relay-story-gate';
 let relay: TerminalRelay;
 let relayUrl: string;
 const relayLogs: string[] = [];
@@ -205,11 +207,15 @@ async function startRelay(): Promise<void> {
   relay = createTerminalRelay({
     allowedOrigin: ORIGIN,
     authorize: (ticket) => relayService.authorizeConnection(ticket),
-    openConnection: (input) => relayService.openConnection(input),
+    openConnection: (input) =>
+      relayService.openConnection({ ...input, relayMachineId: RELAY_MACHINE_ID }),
     closeConnection: (input) => relayService.closeConnection(input),
     touchActivity: async (instanceId) => {
       if (failTouch) throw new Error(`touch failed while carrying ${MARKER}`);
       await agentInstanceActivityService.touchActivity(instanceId);
+    },
+    heartbeat: async (connections) => {
+      await relayService.heartbeatConnections({ relayMachineId: RELAY_MACHINE_ID, connections });
     },
     log: (line) => relayLogs.push(line),
     // The error-reporter stub: what `scripts/relay.ts` hands Sentry.

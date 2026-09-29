@@ -114,6 +114,7 @@ async function harness(overrides: Partial<TerminalRelayDeps> = {}): Promise<Harn
       h.closed.push({ closeCode: input.closeCode, closeReason: input.closeReason });
     },
     touchActivity: async () => {},
+    heartbeat: async () => {},
     log: (line) => h.logs.push(line),
     reportError: (err) => h.reported.push(err),
     now: () => Date.now(),
@@ -220,6 +221,7 @@ describe('the relay refuses what a browser should never send', () => {
       openConnection: async () => 'row',
       closeConnection: async () => {},
       touchActivity: async () => {},
+      heartbeat: async () => {},
       log: () => {},
       reportError: () => {},
       now: () => Date.now(),

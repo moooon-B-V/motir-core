@@ -478,7 +478,7 @@ function useTerminalArea({
           icon={<Package className={FACE_ICON} aria-hidden="true" />}
           title={t('panel.noTerminal.title')}
         >
-          <span className="max-w-md">{t('panel.noTerminal.body')}</span>
+          <span className="max-w-[28rem]">{t('panel.noTerminal.body')}</span>
         </Face>
       ),
     };
@@ -610,7 +610,7 @@ function WakingFace() {
 function RefusedWake({ refusal, wake }: { refusal: AgentRefusal; wake: ReactNode }) {
   return (
     <Face>
-      <div className="max-w-md text-left">
+      <div className="max-w-[28rem] text-left">
         <RefusalBox refusal={refusal} />
       </div>
       {wake}

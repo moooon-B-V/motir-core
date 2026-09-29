@@ -43,18 +43,23 @@ const copy = en.myAgents;
 const TYPE_DELAY_MS = 30;
 const WIDE = { width: 1440, height: 810 };
 
+/**
+ * The panel, scoped to the LIVE subtree (`main`) — a page-rooted strict locator
+ * could also match a streamed or outgoing copy (`tests/e2e-page-rooted-locators.test.ts`).
+ */
+const panel = (page: Page): Locator => page.getByRole('main').getByTestId('agent-panel');
+
 /** The agent terminal's screen text, as xterm's DOM renderer draws it. */
 const screen = (page: Page): Locator =>
-  page.getByTestId('agent-panel').getByTestId('agent-terminal').locator('.xterm-rows');
+  panel(page).getByTestId('agent-terminal').locator('.xterm-rows');
 
-const panel = (page: Page): Locator => page.getByTestId('agent-panel');
 const connWord = (page: Page): Locator => panel(page).getByTestId('agent-conn');
 const signInLine = (page: Page): Locator => panel(page).getByTestId('agent-signin');
 const panelTitle = (page: Page): Locator => panel(page).getByRole('heading', { level: 2 });
 const rowOf = (page: Page, name: string): Locator =>
   page.getByRole('table').getByTestId('agent-row').filter({ hasText: name });
 const cardOf = (page: Page, name: string): Locator =>
-  page.getByTestId('agent-list-column').locator('li').filter({ hasText: name });
+  page.getByRole('main').getByTestId('agent-list-column').locator('li').filter({ hasText: name });
 
 /** Type a line into the terminal at a readable speed, then Enter. */
 async function typeLine(page: Page, line: string): Promise<void> {
