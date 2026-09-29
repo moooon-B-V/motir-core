@@ -13,9 +13,12 @@ import type { IssueRowData } from '@/app/(authed)/items/_components/issueRows';
 // We stub next/navigation (no real router under happy-dom) and assert the URLs.
 
 const push = vi.fn();
+// Mutable so the Visitor cases (MOTIR-6889) can render the switcher on
+// `/p/<identifier>/items` and `/p/<identifier>/tree`; reset to the member route.
+let pathname = '/items';
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
-  usePathname: () => '/items',
+  usePathname: () => pathname,
   useSearchParams: () => new URLSearchParams(),
 }));
 // The rows are inline-editable (Subtask 2.5.5), so the cells import the detail
@@ -45,6 +48,7 @@ beforeAll(() => {
 
 afterEach(() => {
   push.mockReset();
+  pathname = '/items';
   cleanup();
 });
 
@@ -303,6 +307,65 @@ describe('IssueViewSwitcher — Tree ↔ List toggle', () => {
     expect(screen.getByRole('menuitemradio', { name: /Tree/ }).getAttribute('aria-checked')).toBe(
       'false',
     );
+  });
+});
+
+// MOTIR-6889 — on the Visitor route tree the list/tree choice is the PATH
+// SEGMENT (`/p/<id>/items` pins the List, `/p/<id>/tree` the Tree) and both pages
+// ignore `?view=`. So the switch must move between the two paths, carrying sort
+// and filter, and never write a `view` param.
+describe('IssueViewSwitcher — on a Visitor path (MOTIR-6889)', () => {
+  const sort = { column: 'priority', direction: 'desc' } as const;
+  const filter = { ...EMPTY_FILTER, text: 'login' };
+
+  function choose(active: 'List' | 'Tree', next: 'List' | 'Tree') {
+    fireEvent.click(screen.getByRole('button', { name: `View: ${active}` }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: new RegExp(next) }));
+  }
+
+  it('choosing Tree on /p/<id>/items navigates to /p/<id>/tree, keeping sort + filter', () => {
+    pathname = '/p/MOTIR/items';
+    render(<IssueViewSwitcher view="list" sort={sort} filter={filter} />);
+    choose('List', 'Tree');
+    expect(push).toHaveBeenCalledTimes(1);
+    const href = push.mock.calls[0]![0] as string;
+    const url = new URL(href, 'http://x');
+    expect(url.pathname).toBe('/p/MOTIR/tree');
+    expect(url.searchParams.get('view')).toBeNull();
+    expect(url.searchParams.get('sort')).toBe('priority:desc');
+    expect(url.searchParams.get('q')).toBe('login');
+  });
+
+  it('choosing List on /p/<id>/tree navigates to /p/<id>/items, keeping sort + filter', () => {
+    pathname = '/p/MOTIR/tree';
+    render(<IssueViewSwitcher view="tree" sort={sort} filter={filter} />);
+    choose('Tree', 'List');
+    expect(push).toHaveBeenCalledTimes(1);
+    const href = push.mock.calls[0]![0] as string;
+    const url = new URL(href, 'http://x');
+    expect(url.pathname).toBe('/p/MOTIR/items');
+    expect(url.searchParams.get('view')).toBeNull();
+    expect(url.searchParams.get('sort')).toBe('priority:desc');
+    expect(url.searchParams.get('q')).toBe('login');
+  });
+
+  it('with the default sort and no filter the Visitor path is bare', () => {
+    pathname = '/p/MOTIR/items';
+    render(
+      <IssueViewSwitcher
+        view="list"
+        sort={{ column: 'key', direction: 'asc' }}
+        filter={EMPTY_FILTER}
+      />,
+    );
+    choose('List', 'Tree');
+    expect(push).toHaveBeenCalledWith('/p/MOTIR/tree');
+  });
+
+  it('the member /items hrefs are unchanged', () => {
+    render(<IssueViewSwitcher view="list" sort={sort} filter={EMPTY_FILTER} />);
+    choose('List', 'Tree');
+    expect(push).toHaveBeenCalledWith('/items?sort=priority%3Adesc');
   });
 });
 
