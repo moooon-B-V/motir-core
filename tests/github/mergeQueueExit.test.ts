@@ -1312,4 +1312,47 @@ describe('a re-queue made on GitHub (MOTIR-6903)', () => {
       outcome: 'unknown_pull_request',
     });
   });
+  it('reaches no pull request without a known installation and repository', async () => {
+    await makeScenario('gh-requeue-unknown@example.com');
+    const entry = { providerRepoId: REPO_PROVIDER_ID, number: 11, headSha: 'sha-a' };
+    for (const installationId of [null, 'inst-nobody-installed']) {
+      expect(await mergeQueueExitService.recordEntry({ installationId, entry })).toEqual({
+        event: 'pull_request_enqueued',
+        outcome: 'unknown_installation',
+      });
+    }
+    expect(
+      await mergeQueueExitService.recordEntry({
+        installationId: INSTALLATION_ID,
+        entry: { ...entry, providerRepoId: '424242' },
+      }),
+    ).toMatchObject({ outcome: 'unknown_repo' });
+  });
+
+  it('a claim a racing press won first answers no_standing_exit and recomputes nothing', async () => {
+    const { item } = await approvedAndQueued('gh-requeue-lost-claim@example.com');
+    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'g-lost');
+    // The press stamps between this delivery's unlocked read and its claim.
+    const { githubPullRequestQueueExitRepository } =
+      await import('@/lib/repositories/githubPullRequestQueueExitRepository');
+    vi.spyOn(githubPullRequestQueueExitRepository, 'claimRequeue').mockResolvedValueOnce(0);
+
+    const now = new Date('2026-09-29T09:28:07Z');
+    expect(
+      await mergeQueueExitService.recordEntry({
+        installationId: INSTALLATION_ID,
+        entry: { providerRepoId: REPO_PROVIDER_ID, number: 11, headSha: 'sha-a' },
+        now,
+      }),
+    ).toMatchObject({ outcome: 'no_standing_exit' });
+    expect(await cardOf(item.id)).toMatchObject({ ciState: 'failing' });
+
+    // Unmocked, the same call stamps the time it was given.
+    await mergeQueueExitService.recordEntry({
+      installationId: INSTALLATION_ID,
+      entry: { providerRepoId: REPO_PROVIDER_ID, number: 11, headSha: 'sha-a' },
+      now,
+    });
+    expect((await exits(11))[0]!.requeuedAt).toEqual(now);
+  });
 });

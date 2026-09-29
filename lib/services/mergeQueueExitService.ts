@@ -221,19 +221,16 @@ export const mergeQueueExitService = {
         tx,
       );
       if (!pr) return result('unknown_pull_request');
-      const standing = async () => {
-        const exit = (
-          await githubPullRequestQueueExitRepository.findLatestByPullRequests([pr.id], tx)
-        ).get(pr.id);
-        return queueExitStandsAtHead(exit, entry.headSha) ? exit! : null;
-      };
-      // Read unlocked first, so a delivery with nothing to answer — Motir's own first
-      // enqueue, every time — takes no lock at all.
-      if (!(await standing())) return result('no_standing_exit');
-      const delivered = await resolveDeliveredWorkItems(pr.id, tx);
-      for (const ref of delivered) await lockCard(ref.id, tx);
-      const exit = await standing();
-      if (!exit) return result('no_standing_exit');
+      // Read unlocked, so a delivery with nothing to answer — Motir's own first enqueue,
+      // every time — takes no lock at all. The exit's head never changes, and the claim
+      // below re-checks `requeuedAt` itself, so nothing read here goes stale under it.
+      const exit = (
+        await githubPullRequestQueueExitRepository.findLatestByPullRequests([pr.id], tx)
+      ).get(pr.id);
+      if (!exit || !queueExitStandsAtHead(exit, entry.headSha)) {
+        return result('no_standing_exit');
+      }
+      for (const ref of await resolveDeliveredWorkItems(pr.id, tx)) await lockCard(ref.id, tx);
       const claimed = await githubPullRequestQueueExitRepository.claimRequeue(
         exit.id,
         input.now ?? new Date(),
