@@ -115,14 +115,19 @@ export function AgentTerminal({
       // The host's resolved `--el-code-text` (a computed `color` is always a
       // concrete value in a browser); no hue is invented here.
       const ink = style.color || 'CanvasText';
+      // The PAPER is the region's resolved `--el-code-bg`, handed to xterm as a
+      // concrete colour. A transparent theme background is not honoured by
+      // xterm's viewport, which then paints its own black under the ink — the
+      // dark-on-black the acceptance recording caught (MOTIR-6943).
+      const paper =
+        (el.parentElement && getComputedStyle(el.parentElement).backgroundColor) || 'Canvas';
       const t = new XTerm({
-        allowTransparency: true,
         cursorBlink: true,
         fontFamily: style.fontFamily || 'monospace',
         fontSize: 12,
         lineHeight: 1.2,
         scrollback: 5_000,
-        theme: { background: 'transparent', foreground: ink, cursor: ink },
+        theme: { background: paper, foreground: ink, cursor: ink },
       });
       fit = new Fit();
       t.loadAddon(fit);
