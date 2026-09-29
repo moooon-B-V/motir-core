@@ -41,6 +41,11 @@ export const HOSTED_AGENT_ENV_KEYS = [
   'CODEGRAPH_TELEMETRY',
   'GIT_CONFIG_GLOBAL',
   'GIT_TERMINAL_PROMPT',
+  // A hosted REPAIR's push lock (MOTIR-6929, `lockHostedRunToBranches`): the run's hooks
+  // directory in the command scope. Unset in every other run, so absent from the agent's.
+  'GIT_CONFIG_COUNT',
+  'GIT_CONFIG_KEY_0',
+  'GIT_CONFIG_VALUE_0',
 ] as const;
 
 /**

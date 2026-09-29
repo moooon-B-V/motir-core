@@ -1,9 +1,9 @@
 // THE ROUTES A HOSTED RUN'S OWN CREDENTIAL MAY CALL (MOTIR-6557,
 // `docs/decisions/hosted-run-runs-the-cli-as-the-app.md` §4).
 //
-// The container runs the CLI's own `motir run` / `motir continue`, so a run
-// token must reach exactly what those commands call — for its run and its run's
-// cards, and nothing else. This is the ONE list. Each route here sets
+// The container runs the CLI's own `motir run` / `motir continue` / `motir review`
+// / `motir fix`, so a run token must reach exactly what those commands call — for
+// its run and its run's cards, and nothing else. This is the ONE list. Each route here sets
 // `acceptsRunToken: true` on its `withV1Route`, and no route outside it does;
 // `tests/hostedRuns/runTokenRouteTable.test.ts` holds both directions, and holds
 // the list against the operations the CLI client actually calls on those paths.
@@ -258,4 +258,6 @@ export const RUN_TOKEN_DENIED_CLI_OPERATIONS: Readonly<Record<string, string>> =
     'the re-plan a scope run submits when its scope is refused as mis-shaped — plan authoring is not a run token’s; a hosted run reports the refusal instead',
   submitWorkItemExpansion:
     '`--include-planning` / `motir auto` expansion — an AI planning surface, never a hosted run',
+  claimWorkItemRepair:
+    "a terminal `motir fix`'s repair claim — a HOSTED repair's claim is taken by the server when the person presses (MOTIR-6928), and the container ADOPTS the `fix` run it opened, reading the decision back from `getDispatchRun` (MOTIR-6929); a second claim would find the card taken by its own run",
 };

@@ -14,7 +14,7 @@ import {
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cliArgs, readLaunch, REQUIRED_INPUTS, SETUP_FAILED } from './entrypoint.js';
+import { cliArgs, readLaunch, REQUIRED_INPUTS, RUN_MODES, SETUP_FAILED } from './entrypoint.js';
 
 // The hosted-agent image's smoke test (Story MOTIR-683 · MOTIR-687, rewritten
 // for the CLI-running image by MOTIR-6560).
@@ -37,6 +37,12 @@ import { cliArgs, readLaunch, REQUIRED_INPUTS, SETUP_FAILED } from './entrypoint
 // pull request checked out at its reviewed head, ONE verdict POST carrying the
 // version, and nothing pushed or posted to GitHub — the harness logs every `git`
 // the CLI and the agent run, and the fake `gh`'s log stays empty.
+//
+// And a REPAIR (MOTIR-6929, `hosted-agent-run.md` §8.6) of a one-repository and a
+// two-repository card a review sent back: the run the server's repair claim opened is
+// adopted (never claimed), every pull request is checked out on its OWN branch, the
+// agent's fix is pushed to exactly those branches, and no branch, pull request or
+// `gh` call is made — an agent that tries another ref or `gh` is refused.
 //
 // What stands in for what:
 //   - a stub MOTIR answering every route the hosted CLI calls, with bodies the
@@ -135,6 +141,31 @@ const options = JSON.parse(configText).provider.anthropic.options;
   console.log('model call answered ' + res.status);
   if (prompt.includes('FAKE:fail')) { console.error('boom: the fake agent failed on purpose'); process.exit(3); }
   const root = path.dirname(process.cwd());
+  // A REPAIR (MOTIR-6929): commit in every checkout the review-fix prompt names, ON the
+  // branch it is on, and push that branch. \`FAKE:try-sneaky\` also tries another ref
+  // and \`gh pr create\` — both must be refused. \`FAKE:no-change\` changes nothing.
+  if (prompt.includes('FAKE:fix')) {
+    const attempt = (fn) => { try { fn(); return { status: 0, stderr: '' }; } catch (e) { return { status: e.status || 1, stderr: String(e.stderr || '') }; } };
+    const checkouts = [...prompt.matchAll(/branch \`([^\`]+)\` at \`([^\`]+)\`/g)].map((m) => ({ branch: m[1], dir: m[2] }));
+    const record = { checkouts, heads: {}, tried: null, prompt };
+    for (const { branch, dir } of checkouts) {
+      record.heads[dir] = git(dir, 'rev-parse', '--abbrev-ref', 'HEAD').trim();
+      if (prompt.includes('FAKE:no-change')) continue;
+      fs.writeFileSync(path.join(dir, key + '-fix.txt'), 'the fix for ' + key + ' on ' + branch + '\\n');
+      git(dir, 'add', key + '-fix.txt');
+      git(dir, 'commit', '-m', key + ': answer the review on ' + branch);
+      git(dir, ...redirect, 'push', 'origin', 'HEAD');
+    }
+    if (prompt.includes('FAKE:try-sneaky')) {
+      const dir = checkouts[0].dir;
+      record.tried = {
+        push: attempt(() => git(dir, ...redirect, 'push', 'origin', 'HEAD:refs/heads/sneaky')),
+        gh: attempt(() => execFileSync('gh', ['pr', 'create', '--title', 'x', '--body', 'y'], { cwd: dir, stdio: 'pipe' })),
+      };
+    }
+    fs.appendFileSync(path.join(process.env.HOME, 'fix-records.jsonl'), JSON.stringify(record) + '\\n');
+    process.exit(0);
+  }
   // A REVIEW (MOTIR-6824): read each checkout's HEAD, and write the ONE verdict to
   // the file the CLI's prompt names. \`FAKE:try-push\` is an agent that ignores its
   // rules: it tries to push and to comment, and writes no verdict.
@@ -243,7 +274,7 @@ type Scenario = {
   runId: string;
   /** The card the launcher is booted with — the leaf, or the parent. */
   key: string;
-  command: 'run' | 'run_scope' | 'continue' | 'review';
+  command: 'run' | 'run_scope' | 'continue' | 'review' | 'fix';
   /** The run's legs, in the run's own order. */
   legs: string[];
   cards: Record<string, Card>;
@@ -264,6 +295,11 @@ type Scenario = {
     markers?: string;
     /** Each pull request; `headSha` is filled when the remotes are seeded. */
     prs: { repo: string; number: number; headSha?: string }[];
+  };
+  /** A `fix` run (MOTIR-6929): each pull request's own branch, and the findings' markers. */
+  fix?: {
+    markers: string;
+    prs: { repo: string; number: number; branch: string; headSha?: string }[];
   };
 };
 
@@ -443,6 +479,65 @@ const REVIEW_SCENARIOS: Scenario[] = [
   },
 ];
 
+// The REPAIR (MOTIR-6929): a card a review sent back, the server's repair claim having
+// opened the `fix` run; each pull request lives on its own branch in its remote.
+const FIX_SCENARIOS: Scenario[] = [
+  {
+    name: 'a repair of a one-repository card sent back by a review',
+    runId: 'run_smoke_fix1',
+    key: 'ACME-30',
+    command: 'fix',
+    legs: ['ACME-30'],
+    cards: { 'ACME-30': { ...leafCard('ACME-30', ['app-a']), status: 'implemented' } },
+    fix: {
+      markers: 'FAKE:fix FAKE:key=ACME-30',
+      prs: [{ repo: 'app-a', number: 5, branch: 'hosted/ACME-30' }],
+    },
+  },
+  {
+    name: 'a repair of a two-repository card sent back by a review',
+    runId: 'run_smoke_fix2',
+    key: 'ACME-31',
+    command: 'fix',
+    legs: ['ACME-31'],
+    cards: { 'ACME-31': { ...leafCard('ACME-31', ['app-a', 'app-b']), status: 'implemented' } },
+    fix: {
+      markers: 'FAKE:fix FAKE:key=ACME-31 FAKE:try-sneaky',
+      prs: [
+        { repo: 'app-a', number: 6, branch: 'hosted/ACME-31' },
+        { repo: 'app-b', number: 7, branch: 'hosted/ACME-31-b' },
+      ],
+    },
+  },
+];
+
+/** What the server's repair claim recorded on the run, as `GET /dispatch-runs/{id}` answers it. */
+function repairOf(s: Scenario) {
+  if (!s.fix) return null;
+  return {
+    repairClass: 'review',
+    title: `Card ${s.key}`,
+    pullRequests: s.fix.prs.map((pr) => ({
+      repo: `acme/${pr.repo}`,
+      number: pr.number,
+      url: `https://github.com/acme/${pr.repo}/pull/${pr.number}`,
+      branch: pr.branch,
+      baseRef: 'main',
+      headSha: pr.headSha ?? null,
+    })),
+    findings: {
+      gate: 'agent_review',
+      gateId: `gate_${s.key}`,
+      subjectVersion: s.fix.prs.map((pr) => `acme/${pr.repo}#${pr.number}@${pr.headSha}`).join(','),
+      findingsMd: `- README.md:1 — the criterion is not met in ${s.key}.\n${s.fix.markers}`,
+      reviewerName: 'Review agent',
+      decidedByLabel: 'Review agent',
+      decidedUnderAuthority: 'review_agent',
+      decidedAt: NOW,
+    },
+  };
+}
+
 // ── The stub Motir (and gateway) ───────────────────────────────────────────
 
 const NOW = '2026-09-27T00:00:00Z';
@@ -572,6 +667,7 @@ function dispatchRun(s: Scenario, status: 'running' | 'succeeded') {
     })),
     seq: 0,
     continues: s.continues ?? null,
+    repair: repairOf(s),
   };
 }
 
@@ -947,7 +1043,7 @@ describe('the hosted launcher (MOTIR-6560)', () => {
     ...over,
   });
 
-  it('runs `motir run <KEY>` by default, `motir continue <KEY>` and `motir review <KEY>` in their modes', () => {
+  it('runs `motir run <KEY>` by default, and `motir continue|review|fix <KEY>` in their modes', () => {
     expect(cliArgs(readLaunch(full()))).toEqual(['run', 'ACME-7']);
     expect(cliArgs(readLaunch(full({ MOTIR_RUN_MODE: 'continue' })))).toEqual([
       'continue',
@@ -955,6 +1051,9 @@ describe('the hosted launcher (MOTIR-6560)', () => {
     ]);
     // MOTIR-6824 (`hosted-agent-run.md` §8.1): the launcher's third mode.
     expect(cliArgs(readLaunch(full({ MOTIR_RUN_MODE: 'review' })))).toEqual(['review', 'ACME-7']);
+    // MOTIR-6929 (`hosted-agent-run.md` §8.6): the fourth mode, a hosted repair.
+    expect(cliArgs(readLaunch(full({ MOTIR_RUN_MODE: 'fix' })))).toEqual(['fix', 'ACME-7']);
+    expect(RUN_MODES).toEqual(['run', 'continue', 'review', 'fix']);
   });
 
   it('names EVERY missing input at once, and refuses a bad key or mode', () => {
@@ -963,7 +1062,7 @@ describe('the hosted launcher (MOTIR-6560)', () => {
     );
     expect(() => readLaunch(full({ MOTIR_WORK_ITEM_KEY: 'not a key' }))).toThrow(/work item key/);
     expect(() => readLaunch(full({ MOTIR_RUN_MODE: 'retry' }))).toThrow(
-      /"run", "continue" or "review", got "retry"/,
+      /"run", "continue", "review" or "fix", got "retry"/,
     );
   });
 
@@ -1455,6 +1554,123 @@ describe('the hosted image, as processes: the launcher runs the real CLI (MOTIR-
     expect(stub.verdicts).toEqual([]);
     expect(stub.closed).toEqual([{ stopReason: 'halted' }]);
   }, 120_000);
+
+  // ── The REPAIR (MOTIR-6929) ──────────────────────────────────────────────
+
+  /** Seed each pull request's OWN branch in its remote — the work a review sent back. */
+  function armFix(s: Scenario): World {
+    const world = arm(s);
+    for (const pr of s.fix!.prs) {
+      seedDead(world, pr.repo, pr.branch, s.key);
+      pr.headSha = git(world.remotes[pr.repo]!, 'rev-parse', `refs/heads/${pr.branch}`).trim();
+    }
+    world.env.MOTIR_RUN_MODE = 'fix';
+    return world;
+  }
+
+  const readFixes = (
+    home: string,
+  ): {
+    checkouts: { branch: string; dir: string }[];
+    heads: Record<string, string>;
+    tried: {
+      push: { status: number; stderr: string };
+      gh: { status: number; stderr: string };
+    } | null;
+    prompt: string;
+  }[] =>
+    readFileSync(join(home, 'fix-records.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+
+  /** Every branch a remote has, less `main`. */
+  const branchesOf = (bare: string) =>
+    git(bare, 'for-each-ref', '--format=%(refname)', 'refs/heads/')
+      .trim()
+      .split('\n')
+      .filter((ref) => ref && ref !== 'refs/heads/main');
+
+  /** What every repair shares: adopted, never claimed; own branches only; zero `gh pr`; no status. */
+  function expectRepaired(s: Scenario, world: World) {
+    expectAdoptedAndClosed(s);
+    expectAgentsConfined(world.home);
+    const paths = stub.requests.map((r) => `${r.method} ${r.path}`);
+    // Adopted, never claimed: the server's repair claim opened this run.
+    expect(paths.some((p) => /\/(repair|claim|continue)$/.test(p))).toBe(false);
+    // No status write, no link, no dispatch prompt — a repair moves nothing.
+    expect(
+      paths.some(
+        (p) =>
+          p.endsWith('/transitions') ||
+          p.endsWith('/pull-requests') ||
+          p.endsWith('/integration') ||
+          p.endsWith('/dispatch-prompt'),
+      ),
+    ).toBe(false);
+    expect(stub.events.map((e) => e.kind)).not.toContain('run_opened');
+    expect(stub.closed).toEqual([{ stopReason: 'completed' }]);
+
+    // Each pull request's OWN branch carries the fix on top of what it had, as the App.
+    for (const pr of s.fix!.prs) {
+      const bare = world.remotes[pr.repo]!;
+      expect(subjects(bare, pr.branch)).toEqual([
+        `${s.key}: answer the review on ${pr.branch}`,
+        `${s.key}: before the run died`,
+      ]);
+      const bot = BOTS[`acme/${pr.repo}`]!;
+      expect(authorOn(bare, pr.branch)).toBe(`${bot.name} <${bot.email}>`);
+    }
+    // ZERO new branches in any remote, zero `git switch -c`, zero `gh pr`.
+    for (const [repo, bare] of Object.entries(world.remotes)) {
+      expect(branchesOf(bare).sort()).toEqual(
+        s
+          .fix!.prs.filter((pr) => pr.repo === repo)
+          .map((pr) => `refs/heads/${pr.branch}`)
+          .sort(),
+      );
+    }
+    const commands = gitCommands(world.home);
+    expect(commands.filter((c) => /(^|\s)switch\s+(-c|-C|--create)/.test(c))).toEqual([]);
+    expect(commands.filter((c) => /(^|\s)checkout\s+-b/.test(c))).toEqual([]);
+    expect(readPrs(world.home).calls.filter((c) => c.args[0] === 'pr')).toEqual([]);
+    expect(readPrs(world.home).prs).toEqual([]);
+
+    // The agent was handed the recorded findings, verbatim, on each own-branch checkout.
+    const [fix] = readFixes(world.home);
+    expect(fix!.prompt).toContain(`- README.md:1 — the criterion is not met in ${s.key}.`);
+    expect(Object.values(fix!.heads).sort()).toEqual(s.fix!.prs.map((pr) => pr.branch).sort());
+    return fix!;
+  }
+
+  it('a repair of a one-repository card sent back by a review: its own branch, the fix pushed there, nothing else', async () => {
+    const s = FIX_SCENARIOS[0]!;
+    const world = armFix(s);
+    const res = await launch(world.env);
+    expect(res.code, res.stderr + res.stdout).toBe(0);
+    const fix = expectRepaired(s, world);
+    expect(fix.checkouts).toHaveLength(1);
+    expect(fix.tried).toBeNull();
+  }, 120_000);
+
+  it('a repair of a two-repository card: both on their own branches, each fix pushed to it; another ref and gh are refused', async () => {
+    const s = FIX_SCENARIOS[1]!;
+    const world = armFix(s);
+    const res = await launch(world.env);
+    expect(res.code, res.stderr + res.stdout).toBe(0);
+    expect(existsSync(join(world.workspace, 'app-a', '.git'))).toBe(true);
+    expect(existsSync(join(world.workspace, 'app-b', '.git'))).toBe(true);
+    const fix = expectRepaired(s, world);
+    expect(fix.checkouts.map((c) => c.branch).sort()).toEqual([
+      'hosted/ACME-31',
+      'hosted/ACME-31-b',
+    ]);
+    // The agent that tried another ref and `gh pr create` was refused both.
+    expect(fix.tried!.push.status).not.toBe(0);
+    expect(fix.tried!.push.stderr).toMatch(/pushes only to its pull requests' own branches/);
+    expect(fix.tried!.gh.status).not.toBe(0);
+    expect(fix.tried!.gh.stderr).toMatch(/`gh` is disabled in a hosted REPAIR run/);
+  }, 120_000);
 });
 
 // ── Layer 2: the image ─────────────────────────────────────────────────────
@@ -1494,5 +1710,13 @@ describe.skipIf(!IMAGE)('the hosted-agent IMAGE (MOTIR-6560)', () => {
     const res = spawnSync('docker', ['run', '--rm', image], { encoding: 'utf8' });
     expect(res.status).toBe(SETUP_FAILED);
     expect(res.stderr).toContain('missing required input(s): MOTIR_DISPATCH_RUN_ID');
+  });
+
+  it('its launcher knows every mode — `fix` included (MOTIR-6929) — and refuses an unknown one', () => {
+    const res = spawnSync('docker', ['run', '--rm', '-e', 'MOTIR_RUN_MODE=retry', image], {
+      encoding: 'utf8',
+    });
+    expect(res.status).toBe(SETUP_FAILED);
+    expect(res.stderr).toContain('"run", "continue", "review" or "fix", got "retry"');
   });
 });

@@ -5,6 +5,7 @@ import type { User } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
+import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import {
   HostedFixRefusedError,
   HostedModelNotOfferedError,
@@ -357,6 +358,35 @@ describe('Fix on the hosted agent — the run it starts', () => {
         decidedAt: '2026-09-29T10:00:00.000Z',
       },
     });
+
+    // The run's OWN read says what it repairs (MOTIR-6929) — what the container adopting
+    // it reads back instead of claiming.
+    const run = await dispatchRunService.getRun(started.dispatchRunId, fx.ctx);
+    expect(run.continues).toBeNull();
+    expect(run.repair).toEqual({
+      repairClass: 'review',
+      title: card.title,
+      pullRequests: [
+        {
+          repo: `acme/${prs[0]!.repo.name}`,
+          number: prs[0]!.pr.number,
+          url: `https://github.com/acme/${prs[0]!.repo.name}/pull/${prs[0]!.pr.number}`,
+          branch: prs[0]!.pr.headRef,
+          baseRef: prs[0]!.pr.baseRef,
+          headSha: HEAD,
+        },
+      ],
+      findings: {
+        gate: 'agent_review',
+        gateId: gate.id,
+        subjectVersion: expect.any(String),
+        findingsMd: FINDINGS,
+        reviewerName: REVIEW_AGENT_REVIEWER_NAME,
+        decidedByLabel: 'Review agent',
+        decidedUnderAuthority: 'review_agent',
+        decidedAt: '2026-09-29T10:00:00.000Z',
+      },
+    });
   });
 
   it('a PERSON’s Request changes: the findings name the person and their authority', async () => {
@@ -545,6 +575,8 @@ describe('Fix on the hosted agent — one repair at a time, local or hosted', ()
     expect(runs.map((r) => [r.id, r.origin])).toEqual([[local.runId, 'local']]);
     expect(mintCalls()).toEqual([]);
     expect(fakeOrchestrator.provisioned).toEqual([]);
+    // A LOCAL repair's run records no decision for a container to adopt (MOTIR-6929).
+    expect((await dispatchRunService.getRun(local.runId!, rival.ctx)).repair).toBeNull();
   });
 
   it('the presser’s OWN local repair is not adopted — the press is refused taken', async () => {

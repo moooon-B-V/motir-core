@@ -15,22 +15,32 @@ import {
   type FixCheckout,
 } from '../ciWatch.js';
 import type {
+  DispatchRunRepair,
   DispatchStopReason,
   MotirClient,
   RepairPullRequest,
   WorkItemRepairClaim,
   WorkItemRepairRefusal,
 } from '../client.js';
-import { resolveDispatchTarget } from '../dispatch.js';
+import {
+  materializeDispatchCheckouts,
+  renderMaterialization,
+  resolveDispatchTarget,
+  resolveDispatchTargets,
+} from '../dispatch.js';
 import { createDispatchRunReporter } from '../dispatchRunReporter.js';
 import { bindInterruptSignals, INTERRUPT_EXIT_CODE, type InterruptSignal } from '../interrupt.js';
 import { CliError } from '../errors.js';
 import { execCommand, type CommandRunner } from '../git.js';
 import type { LinkConfig } from '../config/linkConfig.js';
+import { hostedOpenCodeAgent } from '../hostedAgent.js';
+import { activeHostedRun } from '../hostedAttribution.js';
+import { lockHostedRunToBranches } from '../hostedGit.js';
+import { assertAdoptsLeaf, hostedRunId, type AdoptedRun } from '../hostedMode.js';
 import { info } from '../output.js';
-import { withProjectSession } from '../session.js';
+import { withHostedProjectSession, withProjectSession } from '../session.js';
 import { requireAgent } from './auto.js';
-import { CI_WATCH_EVENT, CI_WATCH_STOP_REASON } from './dispatch.js';
+import { CI_WATCH_EVENT, CI_WATCH_STOP_REASON, hostedCheckoutPreparer } from './dispatch.js';
 
 // `motir fix <key>` (Story MOTIR-5460 · MOTIR-5465) — hand a card's RED pull
 // requests to an agent, after the run that opened them has ended: an `implemented`
@@ -69,6 +79,19 @@ import { CI_WATCH_EVENT, CI_WATCH_STOP_REASON } from './dispatch.js';
 // same branches); the loop then runs unchanged. There is no closing turn — the push
 // withdraws the review, and the next green version is reviewed again (§12.4, §12.5).
 //
+// ── In a HOSTED container it ADOPTS, never claims (MOTIR-6929) ────────────────
+// *Fix on the hosted agent* (`hosted-agent-run.md` §8.6): the server took the repair
+// claim when the person pressed, opened the `command: fix` run as its lock, recorded
+// what it decided on the run's ONE `run_opened` (MOTIR-6928), and booted this
+// container with `MOTIR_RUN_MODE=fix`. So with a hosted run id the command reads that
+// decision back from the run (`DispatchRun.repair`) — the hosted `continue`'s
+// precedent (MOTIR-6795) — and `claimWorkItemRepair` is never called: a second claim
+// would find the card `taken` by its own run. It then clones every repository of the
+// pull requests, checks each out ON its own branch, LOCKS pushes to exactly those
+// branches and `gh` shut (`lockHostedRunToBranches`), and hands the same `repair()`
+// the same claim shape a terminal would. A repair whose agent pushed nothing ends
+// there: nothing to watch, the card stays To fix.
+//
 // ── What it never does ────────────────────────────────────────────────────────
 // It writes no status (the build moves the card, through `ciPromotion`), opens
 // no pull request, and links nothing. It adds nothing to `motir auto` or
@@ -102,7 +125,19 @@ export interface FixDeps {
   onInterrupt?: (handler: (signal?: InterruptSignal) => void) => () => void;
   /** How the process ends after an interrupt. `process.exit` in production. */
   exit?: (code: number) => void;
+  /** The environment — where a hosted run id and the run's model are read. */
+  env?: NodeJS.ProcessEnv;
+  /** HOSTED: lock the run's pushes to these branches. Defaults to the active hosted run's state. */
+  lockPushes?: (
+    allowed: ReadonlyArray<{ repository: string; branch: string }>,
+    env: NodeJS.ProcessEnv,
+  ) => void;
+  /** HOSTED: per-checkout preparation (the code graph). */
+  prepareHostedCheckouts?: (cwds: string[]) => void;
 }
+
+/** The launcher's exit code for a run that could not be set up (`sandbox/hosted/entrypoint.ts`). */
+const HOSTED_SETUP_FAILED = 20;
 
 /**
  * The words for each refusal — TOTAL over the server's reason vocabulary, so a
@@ -264,6 +299,31 @@ export function renderRepairGaveUp(input: {
 export async function fixCommand(key: string, opts: FixOptions, deps: FixDeps = {}): Promise<void> {
   const trimmed = key.trim();
   if (!trimmed) throw new CliError('A work item key is required, e.g. `motir fix ACME-7`.');
+
+  // ── HOSTED OR LOCAL? (MOTIR-6929) ─────────────────────────────────────────
+  // A run id means the SERVER already took the repair claim (Fix on the hosted
+  // agent) and opened this run; this container ADOPTS it rather than claiming.
+  const env = deps.env ?? process.env;
+  const adoptId = hostedRunId({}, env);
+  if (adoptId) {
+    await withHostedProjectSession(
+      adoptId,
+      (session, adopted) =>
+        fixHosted({
+          key: trimmed,
+          client: session.client,
+          rootDir: session.link.dir,
+          config: session.link.config,
+          adopted,
+          env,
+          opts,
+          deps,
+        }),
+      trimmed,
+    );
+    return;
+  }
+
   await withProjectSession(async (session) => {
     const { client, link } = session;
     // The agent is resolved BEFORE the claim: a repair nobody can run must not
@@ -276,20 +336,271 @@ export async function fixCommand(key: string, opts: FixOptions, deps: FixDeps = 
       process.exitCode = 1;
       return;
     }
-    await repair({ client, claim, rootDir: link.dir, config: link.config, agent, opts, deps });
+    await repair({
+      client,
+      claim,
+      prepare: () =>
+        prepareCheckouts({
+          key: claim.key,
+          pullRequests: claim.pullRequests,
+          rootDir: link.dir,
+          config: link.config,
+          run: deps.run ?? execCommand,
+          exists: deps.exists ?? existsSync,
+        }),
+      agent,
+      opts,
+      deps,
+    });
+  });
+}
+
+/** `owner/name` → `name`, the checkout's directory under the workspace. */
+function repoNameOf(repository: string): string {
+  return repository.slice(repository.lastIndexOf('/') + 1);
+}
+
+/**
+ * The HOSTED checkout (MOTIR-6929): CLONE every repository of the repair's pull
+ * requests into the workspace as `<root>/<name>` through `motir run`'s own
+ * materializer, then {@link prepareCheckouts} exactly as a terminal repair does —
+ * each pull request ON its own branch, never a new one and never detached.
+ */
+export function prepareHostedRepairCheckouts(input: {
+  key: string;
+  pullRequests: readonly RepairPullRequest[];
+  rootDir: string;
+  config: LinkConfig;
+  run: CommandRunner;
+  exists: (path: string) => boolean;
+}): Prepared {
+  const repositories = [...new Set(input.pullRequests.map((pr) => pr.repo))];
+  const targets = resolveDispatchTargets(
+    input.rootDir,
+    input.config,
+    repositories.map((repository) => ({
+      name: repoNameOf(repository),
+      cloneUrl: `https://github.com/${repository}.git`,
+    })),
+    { exists: input.exists },
+  );
+  const materialized = materializeDispatchCheckouts(input.rootDir, targets, { run: input.run });
+  const lines = renderMaterialization(materialized);
+  for (const line of lines) info(line);
+  if (materialized.failures.length > 0) {
+    return {
+      ok: false,
+      message: `${input.key}: a repository under repair could not be cloned. No agent was started.`,
+    };
+  }
+  return prepareCheckouts(input);
+}
+
+/**
+ * What the hosted repair's agent is told on top of the fix prompt — in place of the
+ * BUILD addendum, which would tell it how to end a pull request's body it must not open.
+ */
+export function hostedRepairAddendum(): string {
+  return [
+    '',
+    '## HOSTED REPAIR RUN — git',
+    '',
+    "- git is already authenticated for this run's repositories and commits as Motir's GitHub App.",
+    '  Do not change `user.name`, `user.email`, remote URLs or credential settings.',
+    '- Push ONLY to the branch each checkout above is on — its pull request’s own branch. A push',
+    '  to any other ref, a branch delete and a force push are refused.',
+    '- `gh` is disabled: open no pull request, and comment on or review nothing.',
+    '',
+  ].join('\n');
+}
+
+/** The hosted run's push lock, on the active run's state (`prepareHostedRun`). */
+function lockActiveRunToBranches(
+  allowed: ReadonlyArray<{ repository: string; branch: string }>,
+  env: NodeJS.ProcessEnv,
+): void {
+  const active = activeHostedRun();
+  if (!active) {
+    throw new CliError('This hosted run has no git setup to lock; refusing to repair.', {
+      exitCode: HOSTED_SETUP_FAILED,
+    });
+  }
+  lockHostedRunToBranches(active.stateDir, allowed, env);
+}
+
+/**
+ * The claim a terminal `motir fix` would have been handed, rebuilt from what the
+ * server's claim RECORDED on the run — so `repair()` runs unchanged.
+ */
+export function claimFromRun(input: {
+  key: string;
+  runId: string;
+  repair: DispatchRunRepair;
+}): WorkItemRepairClaim {
+  const { repair: decided } = input;
+  return {
+    key: input.key,
+    title: decided.title ?? input.key,
+    outcome: 'claimed',
+    reason: null,
+    runTargetKey: null,
+    runId: input.runId,
+    holder: null,
+    startedAt: null,
+    repairClass: decided.repairClass,
+    acceptanceRefusal: null,
+    reviewRefusal: decided.findings
+      ? {
+          gate: decided.findings.gate,
+          findingsMd: decided.findings.findingsMd,
+          reviewerName: decided.findings.reviewerName,
+          decidedAt: decided.findings.decidedAt,
+        }
+      : null,
+    pullRequests: decided.pullRequests.map((pr) => ({
+      repo: pr.repo,
+      number: pr.number,
+      url: pr.url,
+      headRef: pr.branch,
+      baseRef: pr.baseRef,
+      ci: null,
+      failingChecks: [],
+      queueExit: null,
+    })),
+  };
+}
+
+/**
+ * `motir fix` IN A HOSTED CONTAINER (Story MOTIR-1626 · MOTIR-6929) — on the `fix`
+ * run the server's repair claim opened. Nothing is claimed.
+ */
+async function fixHosted(input: {
+  key: string;
+  client: MotirClient;
+  rootDir: string;
+  config: LinkConfig;
+  adopted: AdoptedRun;
+  env: NodeJS.ProcessEnv;
+  opts: FixOptions;
+  deps: FixDeps;
+}): Promise<void> {
+  const { key, client, adopted, env, opts, deps } = input;
+  // ⚠️ REFUSED BEFORE ANYTHING IS ADOPTED: a run that is not a repair is somebody
+  // else's work, and closing it from here would end it.
+  const view = await client.getDispatchRun(adopted.runId);
+  if (view.command !== 'fix') {
+    throw new CliError(
+      `Run ${adopted.runId} is a \`${view.command}\` run, not a repair — nothing to fix.`,
+      {
+        exitCode: HOSTED_SETUP_FAILED,
+        hint: 'A hosted repair is booted by Fix on the hosted agent, on the `fix` run its claim opened.',
+      },
+    );
+  }
+  assertAdoptsLeaf(adopted, key);
+  const decided = view.repair ?? null;
+  // What the claim decided, or a refusal — never a guess: without it there is no
+  // branch this run may push to. The run IS ours, so it is closed on the way out.
+  const missing =
+    decided === null
+      ? 'the run records no repair decision'
+      : decided.repairClass !== 'review'
+        ? `the run records a \`${decided.repairClass}\` repair, and a hosted repair answers a review`
+        : decided.findings === null
+          ? 'the run records no review findings'
+          : decided.pullRequests.length === 0
+            ? 'the run records no pull request'
+            : null;
+  if (missing !== null || decided === null) {
+    const reporter = createDispatchRunReporter({ client, reportLogBodies: true });
+    reporter.adopt(adopted.runId);
+    reporter.event({
+      kind: 'card_settled',
+      workItemKey: key,
+      disposition: 'failed',
+      data: { reason: missing },
+    });
+    await reporter.close('halted');
+    throw new CliError(`${key}: cannot repair on run ${adopted.runId} — ${missing}.`, {
+      exitCode: HOSTED_SETUP_FAILED,
+    });
+  }
+
+  // ── The push lock, before any agent: those branches, and nothing else. ──
+  (deps.lockPushes ?? lockActiveRunToBranches)(
+    decided.pullRequests.map((pr) => ({ repository: pr.repo, branch: pr.branch })),
+    env,
+  );
+  // Read AFTER the lock, so the agent's allow-listed environment carries it. An explicit
+  // `--agent` is honoured, as `resolveAgent` honours it for every hosted command.
+  const agent = opts.agent
+    ? requireAgent({ ...opts, print: false }, 'motir fix')
+    : {
+        parsed: hostedOpenCodeAgent(env, { addendum: hostedRepairAddendum }),
+        source: 'hosted' as const,
+      };
+
+  const claim = claimFromRun({ key, runId: adopted.runId, repair: decided });
+  info(`Adopted run ${adopted.runId}: repairing ${key}, sent back by a review.`);
+  const run = deps.run ?? execCommand;
+  await repair({
+    client,
+    claim,
+    prepare: () => {
+      const prepared = prepareHostedRepairCheckouts({
+        key,
+        pullRequests: claim.pullRequests,
+        rootDir: input.rootDir,
+        config: input.config,
+        run,
+        exists: deps.exists ?? existsSync,
+      });
+      if (prepared.ok) {
+        (deps.prepareHostedCheckouts ?? hostedCheckoutPreparer)([
+          ...new Set(prepared.checkouts.map((c) => c.path)),
+        ]);
+      }
+      return prepared;
+    },
+    agent,
+    opts,
+    deps,
+    hosted: { run },
+  });
+}
+
+/**
+ * Where each pull request's branch is on its remote NOW — fetched, then read. A hosted
+ * repair compares it before and after the agent to know whether anything was pushed.
+ */
+function remoteHeads(checkouts: readonly FixCheckout[], run: CommandRunner): string[] {
+  return checkouts.map((c) => {
+    run(
+      'git',
+      ['fetch', '--quiet', 'origin', `+refs/heads/${c.branch}:refs/remotes/origin/${c.branch}`],
+      c.path,
+    );
+    const head = run('git', ['rev-parse', `refs/remotes/origin/${c.branch}`], c.path);
+    return head.exitCode === 0 ? head.stdout.trim() : '';
   });
 }
 
 async function repair(input: {
   client: MotirClient;
   claim: WorkItemRepairClaim;
-  rootDir: string;
-  config: LinkConfig;
-  agent: ReturnType<typeof requireAgent>;
+  /** Check each pull request out on its own branch — a terminal's worktrees, or a hosted clone. */
+  prepare: () => Prepared;
+  agent: { parsed: ParsedAgentCommand };
   opts: FixOptions;
   deps: FixDeps;
+  /**
+   * A HOSTED repair (MOTIR-6929): the server's claim wrote the run's `run_opened`, a
+   * give-up names the pull requests it started with (a re-claim is not the container's
+   * to make), and a review turn that pushed nothing ends the repair.
+   */
+  hosted?: { run: CommandRunner };
 }): Promise<void> {
-  const { client, claim, agent, opts, deps } = input;
+  const { client, claim, agent, opts, deps, hosted } = input;
   const key = claim.key;
   const reporter = createDispatchRunReporter({ client, reportLogBodies: opts.reportLog === true });
   // `claimed` / `mine` always carry the run — the server opened it.
@@ -309,19 +620,15 @@ async function repair(input: {
   });
 
   try {
-    reporter.event({
-      kind: 'run_opened',
-      data: { command: 'fix', key, outcome: claim.outcome },
-    });
+    // A hosted run's ONE `run_opened` is the server claim's record of what it decided.
+    if (!hosted) {
+      reporter.event({
+        kind: 'run_opened',
+        data: { command: 'fix', key, outcome: claim.outcome },
+      });
+    }
 
-    const prepared = prepareCheckouts({
-      key,
-      pullRequests: claim.pullRequests,
-      rootDir: input.rootDir,
-      config: input.config,
-      run: deps.run ?? execCommand,
-      exists: deps.exists ?? existsSync,
-    });
+    const prepared = input.prepare();
     if (!prepared.ok) {
       info(prepared.message);
       reporter.event({ kind: 'card_settled', workItemKey: key, disposition: 'failed' });
@@ -373,6 +680,7 @@ async function repair(input: {
       info(
         `${key}: answering the review sent back by ${review.refusal.reviewerName ?? 'the reviewer'}.`,
       );
+      const before = hosted ? remoteHeads(prepared.checkouts, hosted.run) : null;
       const ran = await runAgentStep(runAgentFn, {
         reporter,
         key,
@@ -389,6 +697,25 @@ async function repair(input: {
         process.exitCode = 1;
         await close('halted');
         return;
+      }
+      // ⚠️ A HOSTED repair that pushed nothing ends HERE (§8.6): the review still stands
+      // over the same version, so the card stays To fix, and there is no new head for CI
+      // to judge — watching the old one would only fix what nobody asked about.
+      if (hosted && before) {
+        const after = remoteHeads(prepared.checkouts, hosted.run);
+        if (after.every((head, i) => head === before[i])) {
+          info(
+            `${key}: the agent pushed nothing — the review still stands, and the card stays To fix.`,
+          );
+          reporter.event({
+            kind: 'card_settled',
+            workItemKey: key,
+            disposition: 'failed',
+            data: { reason: 'nothing_pushed' },
+          });
+          await close('completed');
+          return;
+        }
       }
     }
 
@@ -432,7 +759,8 @@ async function repair(input: {
       // this is `mine` and writes nothing, and it is the one read that carries
       // check names. A failure here falls back to the pull requests we started
       // with, which still name the repository and the attempt count.
-      const now = await client.claimWorkItemRepair(key).catch(() => null);
+      // A HOSTED container never claims (MOTIR-6929): it names what it started with.
+      const now = hosted ? null : await client.claimWorkItemRepair(key).catch(() => null);
       const pullRequests =
         now && now.outcome === 'mine' && now.pullRequests.length > 0
           ? now.pullRequests

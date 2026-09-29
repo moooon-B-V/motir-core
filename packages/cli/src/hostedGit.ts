@@ -382,6 +382,145 @@ export function lockHostedRunReadOnly(
   }
 }
 
+// ── A REPAIR run pushes to its pull requests' OWN branches only (MOTIR-6929) ──
+
+/** What the refusing `gh` says in a repair run — it opens and posts nothing. */
+export const REPAIR_GH_REFUSAL =
+  'motir: `gh` is disabled in a hosted REPAIR run — a repair opens no pull request and ' +
+  'posts nothing to GitHub (hosted-agent-run.md §8.6). Commit and push to the branch you are on.';
+
+/** The client hooks a repair run's hooks directory answers — each hands on to the checkout's own. */
+const CLIENT_HOOKS = [
+  'applypatch-msg',
+  'pre-applypatch',
+  'post-applypatch',
+  'pre-commit',
+  'pre-merge-commit',
+  'prepare-commit-msg',
+  'commit-msg',
+  'post-commit',
+  'pre-rebase',
+  'post-checkout',
+  'post-merge',
+  'pre-push',
+  'post-rewrite',
+] as const;
+
+/**
+ * The hook every name above runs: `pre-push` first checks every ref the push would
+ * update against the allow-list, then — for every hook — the checkout's OWN hook of
+ * that name runs (its local `core.hooksPath`, else `.git/hooks`), so a repository's
+ * husky hooks behave exactly as they would without the guard.
+ */
+function repairHookScript(allowedFile: string): string {
+  return `#!/bin/sh
+# Written by \`motir fix\` for a hosted REPAIR run (MOTIR-6929, hosted-agent-run.md §8.6).
+name=$(basename "$0")
+input=""
+if [ "$name" = "pre-push" ]; then
+  input=$(cat)
+  remote_url=$(git config --get "remote.$1.url" 2>/dev/null || true)
+  [ -n "$remote_url" ] || remote_url="$1"
+  repo=$(printf '%s' "$remote_url" | sed -e 's#^https://github\\.com/##' -e 's#^ssh://git@github\\.com/##' -e 's#^git@github\\.com:##' -e 's#/$##' -e 's#\\.git$##')
+  # A sha of zeros (40 or 64) is "no commit": a delete on the left, a new ref on the right.
+  nothing() { case "$1" in *[!0]*) return 1 ;; *) return 0 ;; esac; }
+  refused=0
+  while read -r local_ref local_sha remote_ref remote_sha; do
+    [ -n "$remote_ref" ] || continue
+    if ! grep -qxF "$repo $remote_ref" ${shellQuote(allowedFile)}; then
+      echo "motir: a hosted repair pushes only to its pull requests' own branches — refusing $remote_ref on $repo." >&2
+      refused=1
+    elif nothing "$local_sha"; then
+      echo "motir: a hosted repair never deletes a branch — refusing to delete $remote_ref on $repo." >&2
+      refused=1
+    elif ! nothing "$remote_sha" && ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+      echo "motir: a hosted repair never rewrites a pull request's history — refusing a non-fast-forward push to $remote_ref on $repo." >&2
+      refused=1
+    fi
+  done <<EOF_MOTIR_REFS
+$input
+EOF_MOTIR_REFS
+  [ "$refused" = 0 ] || exit 1
+fi
+own=$(git config --local --get core.hooksPath 2>/dev/null || true)
+if [ -n "$own" ]; then
+  case "$own" in /*) ;; *) own="$(git rev-parse --show-toplevel 2>/dev/null)/$own" ;; esac
+  hook="$own/$name"
+else
+  hook="$(git rev-parse --git-common-dir 2>/dev/null)/hooks/$name"
+fi
+if [ -x "$hook" ]; then
+  if [ "$name" = "pre-push" ]; then
+    printf '%s\\n' "$input" | "$hook" "$@"
+    exit $?
+  fi
+  exec "$hook" "$@"
+fi
+exit 0
+`;
+}
+
+/**
+ * LOCK a prepared hosted run to its pull requests' OWN branches, for a hosted `motir fix`
+ * (`hosted-agent-run.md` §8.6). Called after {@link prepareHostedRun} and before any
+ * agent:
+ *
+ *   - every hook git runs goes through the run's own hooks directory, set as
+ *     `core.hooksPath` in the COMMAND scope (`GIT_CONFIG_COUNT`), which outranks a
+ *     checkout's own `core.hooksPath` — so a `pnpm install` that re-installs husky
+ *     cannot move it aside. Its `pre-push` refuses any ref that is not
+ *     `refs/heads/<branch>` of an allowed pull request in ITS repository, a delete, and
+ *     a non-fast-forward; every hook then runs the checkout's own hook of that name;
+ *   - the run's `gh` shim is REPLACED by one that refuses every call — a repair opens
+ *     no pull request and posts nothing to GitHub.
+ *
+ * ⚠️ WHERE THE LOCK IS — as for the review's: it guards against an agent that pushes
+ * where it should not by mistake. An agent that runs `git push --no-verify` or rewrites
+ * the environment could pass it, which is why the §4 credential's own scope — the run's
+ * repositories, an hour, revoked at the run's end — stays the bound.
+ */
+export function lockHostedRunToBranches(
+  stateDir: string,
+  allowed: ReadonlyArray<{ repository: string; branch: string }>,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  const hooks = join(stateDir, 'repair-hooks');
+  mkdirSync(hooks, { recursive: true, mode: 0o700 });
+  const allowedFile = join(stateDir, 'repair-push-allowed');
+  writePrivate(
+    allowedFile,
+    `${[...new Set(allowed.map((a) => `${a.repository} refs/heads/${a.branch}`))].join('\n')}\n`,
+  );
+  const script = repairHookScript(allowedFile);
+  for (const name of CLIENT_HOOKS) {
+    writeFileSync(join(hooks, name), script, { mode: 0o755 });
+    chmodSync(join(hooks, name), 0o755);
+  }
+  // The COMMAND scope — the run's own, and the only entry: the agent's allow-listed
+  // environment carries exactly index 0 (`HOSTED_AGENT_ENV_KEYS`).
+  if (env['GIT_CONFIG_COUNT']?.trim()) {
+    throw new CliError(
+      'This hosted run already carries command-scope git config; refusing to repair.',
+      {
+        hint: 'A hosted container is booted without GIT_CONFIG_COUNT — the repair lock owns it.',
+      },
+    );
+  }
+  env['GIT_CONFIG_COUNT'] = '1';
+  env['GIT_CONFIG_KEY_0'] = 'core.hooksPath';
+  env['GIT_CONFIG_VALUE_0'] = hooks;
+
+  const bin = join(stateDir, 'bin');
+  mkdirSync(bin, { recursive: true, mode: 0o700 });
+  writeFileSync(join(bin, 'gh'), `#!/bin/sh\necho ${shellQuote(REPAIR_GH_REFUSAL)} >&2\nexit 1\n`, {
+    mode: 0o755,
+  });
+  chmodSync(join(bin, 'gh'), 0o755);
+  if (!(env['PATH'] ?? '').split(delimiter).includes(bin)) {
+    env['PATH'] = [bin, env['PATH'] ?? ''].filter(Boolean).join(delimiter);
+  }
+}
+
 // ── `motir git-credential` — git's credential-helper protocol ───────────────
 
 function stateArg(argv: string[]): { stateDir: string; rest: string[] } {

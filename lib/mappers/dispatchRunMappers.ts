@@ -12,6 +12,7 @@ import type {
   DispatchRunEventDto,
   DispatchRunLegCountsDto,
   DispatchRunListItemDto,
+  DispatchRunRepairDto,
   DispatchRunScopeDto,
 } from '@/lib/dto/dispatchRuns';
 
@@ -184,5 +185,59 @@ export function toDispatchRunContinuesDto(data: unknown): DispatchRunContinuesDt
     mode: d.mode === 'parent' ? 'parent' : 'card',
     landedKeys: strings(d.landedKeys),
     resumedKeys: strings(d.resumedKeys),
+  };
+}
+
+const REPAIR_CLASSES = new Set(['ci', 'acceptance_rerun', 'review']);
+const REVIEW_GATES = new Set(['agent_review', 'pull_request_approval']);
+
+/**
+ * A HOSTED `fix` run's `run_opened` data as what it repairs (MOTIR-6929). Written by
+ * the repair claim's hosted opening (MOTIR-6928, `hostedRepairOpenedData`); read
+ * defensively. A LOCAL repair's `run_opened` is the CLI's and records no class, so it
+ * reads as null — and so does anything unreadable, rather than a guess: a container
+ * handed a half-read decision would push to a branch nobody chose.
+ */
+export function toDispatchRunRepairDto(data: unknown): DispatchRunRepairDto | null {
+  const d = (data ?? {}) as {
+    repairClass?: unknown;
+    title?: unknown;
+    pullRequests?: unknown;
+    findings?: unknown;
+  };
+  if (typeof d.repairClass !== 'string' || !REPAIR_CLASSES.has(d.repairClass)) return null;
+  const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+  const pullRequests = Array.isArray(d.pullRequests)
+    ? (d.pullRequests as Array<Record<string, unknown> | null>).flatMap((pr) => {
+        const repo = str(pr?.repo);
+        const branch = str(pr?.branch) ?? str(pr?.headRef);
+        const url = str(pr?.url);
+        const number = pr?.number;
+        if (!repo || !branch || !url || typeof number !== 'number') return [];
+        return [
+          { repo, number, url, branch, baseRef: str(pr?.baseRef), headSha: str(pr?.headSha) },
+        ];
+      })
+    : [];
+  const f = (d.findings ?? null) as Record<string, unknown> | null;
+  const findings =
+    f && typeof f.gate === 'string' && REVIEW_GATES.has(f.gate) && str(f.decidedAt)
+      ? {
+          gate: f.gate as 'agent_review' | 'pull_request_approval',
+          gateId: str(f.gateId),
+          subjectVersion: str(f.subjectVersion),
+          // Verbatim: a findings text is never trimmed or re-read here.
+          findingsMd: typeof f.findingsMd === 'string' ? f.findingsMd : null,
+          reviewerName: str(f.reviewerName),
+          decidedByLabel: str(f.decidedByLabel),
+          decidedUnderAuthority: str(f.decidedUnderAuthority),
+          decidedAt: str(f.decidedAt) as string,
+        }
+      : null;
+  return {
+    repairClass: d.repairClass as DispatchRunRepairDto['repairClass'],
+    title: str(d.title),
+    pullRequests,
+    findings,
   };
 }

@@ -1188,6 +1188,37 @@ export interface DispatchRunView {
    * server older than contract 1.53.0.
    */
   continues?: DispatchRunContinues | null;
+  /**
+   * What a HOSTED `fix` run repairs (MOTIR-6929) — what the server's repair claim
+   * decided when it opened the run. Null for any other command and for a local repair;
+   * absent from a server older than contract 1.58.0.
+   */
+  repair?: DispatchRunRepair | null;
+}
+
+/** A hosted repair's decision, read back from its run (MOTIR-6929). */
+export interface DispatchRunRepair {
+  repairClass: WorkItemRepairClass;
+  title: string | null;
+  /** Every pull request, each on its OWN branch — the only refs the repair may push. */
+  pullRequests: Array<{
+    /** `owner/name`. */
+    repo: string;
+    number: number;
+    url: string;
+    branch: string;
+    baseRef: string | null;
+    headSha: string | null;
+  }>;
+  /** The review's refusal the repair answers, the findings verbatim; null off `review`. */
+  findings:
+    | (ReviewRefusal & {
+        gateId: string | null;
+        subjectVersion: string | null;
+        decidedByLabel: string | null;
+        decidedUnderAuthority: string | null;
+      })
+    | null;
 }
 
 /** One pull request under review, at the head the review is about (MOTIR-6824). */

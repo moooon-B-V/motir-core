@@ -42,6 +42,7 @@ import { listDispatchRepoNames } from '@/lib/workItems/dispatchRepo';
 import {
   toDispatchRunCardDto,
   toDispatchRunContinuesDto,
+  toDispatchRunRepairDto,
   toDispatchRunDto,
   toDispatchRunEventDto,
   toDispatchRunListItemDto,
@@ -1064,12 +1065,14 @@ export const dispatchRunService = {
         await assertMayReadRun(run, ctx, tx);
         const seq = (await dispatchRunEventRepository.maxSeq(runId, tx)) ?? 0;
         const opened =
-          run.command === 'continue'
+          run.command === 'continue' || run.command === 'fix'
             ? await dispatchRunEventRepository.findLatestOfKind(runId, 'run_opened', tx)
             : null;
         return {
           ...toDispatchRunDto(run, seq),
           continues: run.command === 'continue' ? toDispatchRunContinuesDto(opened?.data) : null,
+          // A hosted repair's decision (MOTIR-6929) — what its container adopts.
+          repair: run.command === 'fix' ? toDispatchRunRepairDto(opened?.data) : null,
         };
       },
     );

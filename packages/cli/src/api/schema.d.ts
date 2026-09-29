@@ -2678,6 +2678,30 @@ export interface components {
                 landedKeys: string[];
                 resumedKeys: string[];
             } | null;
+            repair?: {
+                /** @enum {string} */
+                repairClass: "ci" | "acceptance_rerun" | "review";
+                title: string | null;
+                pullRequests: {
+                    repo: string;
+                    number: number;
+                    url: string;
+                    branch: string;
+                    baseRef: string | null;
+                    headSha: string | null;
+                }[];
+                findings: {
+                    /** @enum {string} */
+                    gate: "agent_review" | "pull_request_approval";
+                    gateId: string | null;
+                    subjectVersion: string | null;
+                    findingsMd: string | null;
+                    reviewerName: string | null;
+                    decidedByLabel: string | null;
+                    decidedUnderAuthority: string | null;
+                    decidedAt: string;
+                } | null;
+            } | null;
         };
         DispatchRunCard: {
             id: string;
@@ -2738,6 +2762,30 @@ export interface components {
                     mode: "card" | "parent";
                     landedKeys: string[];
                     resumedKeys: string[];
+                } | null;
+                repair?: {
+                    /** @enum {string} */
+                    repairClass: "ci" | "acceptance_rerun" | "review";
+                    title: string | null;
+                    pullRequests: {
+                        repo: string;
+                        number: number;
+                        url: string;
+                        branch: string;
+                        baseRef: string | null;
+                        headSha: string | null;
+                    }[];
+                    findings: {
+                        /** @enum {string} */
+                        gate: "agent_review" | "pull_request_approval";
+                        gateId: string | null;
+                        subjectVersion: string | null;
+                        findingsMd: string | null;
+                        reviewerName: string | null;
+                        decidedByLabel: string | null;
+                        decidedUnderAuthority: string | null;
+                        decidedAt: string;
+                    } | null;
                 } | null;
             };
             created: boolean;

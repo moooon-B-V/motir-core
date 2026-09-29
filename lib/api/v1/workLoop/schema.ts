@@ -2118,6 +2118,39 @@ export const dispatchRunSchema = z.object({
     })
     .nullable()
     .optional(),
+  /**
+   * What a HOSTED `fix` run repairs (MOTIR-6929) — only on `getDispatchRun`, and
+   * null there for any other command and for a local repair.
+   */
+  repair: z
+    .object({
+      repairClass: z.enum(['ci', 'acceptance_rerun', 'review']),
+      title: z.string().nullable(),
+      pullRequests: z.array(
+        z.object({
+          repo: z.string(),
+          number: z.number().int(),
+          url: z.string(),
+          branch: z.string(),
+          baseRef: z.string().nullable(),
+          headSha: z.string().nullable(),
+        }),
+      ),
+      findings: z
+        .object({
+          gate: z.enum(['agent_review', 'pull_request_approval']),
+          gateId: z.string().nullable(),
+          subjectVersion: z.string().nullable(),
+          findingsMd: z.string().nullable(),
+          reviewerName: z.string().nullable(),
+          decidedByLabel: z.string().nullable(),
+          decidedUnderAuthority: z.string().nullable(),
+          decidedAt: z.string(),
+        })
+        .nullable(),
+    })
+    .nullable()
+    .optional(),
 });
 
 /** What OPEN answers with. */

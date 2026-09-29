@@ -871,5 +871,19 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.57.0` because the sibling
  *   MOTIR-6821 claims `1.56.0` on the same story branch. If either number is taken on
  *   `origin/main` by then, RENUMBER this entry — it names the ENUM MEMBER and the FIELD.
+ *
+ * - `1.58.0` — MOTIR-6929 (Story MOTIR-1626, the hosted repair) adds `repair` to
+ *   `DispatchRun`, filled only by `getDispatchRun` and only for a HOSTED `fix` run: the
+ *   repair class, every pull request on its OWN branch with the head it was handed, and
+ *   the review's findings (gate, version, text, reviewer, decider, authority, when), as
+ *   the repair claim's hosted opening recorded them on `run_opened` (MOTIR-6928). The
+ *   container ADOPTS the run instead of claiming a second time, so this is how it learns
+ *   what that claim decided — `continues` (1.53.0) for the repair.
+ *
+ *   Additive: one new optional, nullable field on an existing shape (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.58.0` after MOTIR-6822's
+ *   `1.57.0` on the same story branch. If it is taken on `origin/main` by then, RENUMBER
+ *   this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.57.0';
+export const V1_CONTRACT_VERSION = '1.58.0';

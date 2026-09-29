@@ -817,6 +817,22 @@ export function toDispatchRunView(body: SuccessBody<'getDispatchRun'>): Dispatch
           resumedKeys: [...body.continues.resumedKeys],
         }
       : null,
+    // A server older than contract 1.58.0 sends no `repair` (MOTIR-6929).
+    repair: body.repair
+      ? {
+          repairClass: body.repair.repairClass,
+          title: body.repair.title,
+          pullRequests: body.repair.pullRequests.map((pr) => ({
+            repo: pr.repo,
+            number: pr.number,
+            url: pr.url,
+            branch: pr.branch,
+            baseRef: pr.baseRef,
+            headSha: pr.headSha,
+          })),
+          findings: body.repair.findings ? { ...body.repair.findings } : null,
+        }
+      : null,
   };
 }
 

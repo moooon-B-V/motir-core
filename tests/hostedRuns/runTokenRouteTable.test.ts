@@ -135,6 +135,9 @@ const RUN_PATH_FILES = [
   // The hosted REVIEW run (MOTIR-6824): the review prompt and the ONE verdict.
   'commands/review.ts',
   'hostedReview.ts',
+  // The hosted REPAIR run (MOTIR-6929): adopts the `fix` run, never claims — the
+  // terminal arm's repair claim is a named denial.
+  'commands/fix.ts',
 ];
 
 /** Client method → the operations it calls, following `this.<method>` hops. */

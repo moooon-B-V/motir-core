@@ -65,6 +65,30 @@ describe('prepareHostedCheckouts', () => {
     expect(notes).toEqual([]);
   });
 
+  it('a WORKTREE (its `.git` is a file) is prepared through the clone’s common git dir (MOTIR-6929)', () => {
+    const clone = checkout();
+    const git = (...args: string[]) =>
+      spawnSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@e', ...args], { cwd: clone });
+    git('commit', '-q', '--allow-empty', '-m', 'seed');
+    const worktree = `${clone}-fix-prod-7-3`;
+    tmp.push(worktree);
+    git('worktree', 'add', '-q', '-b', 'feat/x', worktree);
+    const { spawn } = fakeSpawn();
+    const notes: string[] = [];
+    prepareHostedCheckouts([worktree], (line) => notes.push(line), { spawn });
+    expect(existsSync(join(worktree, '.codegraph'))).toBe(true);
+    expect(readFileSync(join(clone, '.git', 'info', 'exclude'), 'utf8')).toMatch(
+      /^\.codegraph\/$/m,
+    );
+    expect(readFileSync(join(clone, '.git', 'hooks', 'post-checkout'), 'utf8')).toContain(
+      'codegraph sync',
+    );
+    // The index never shows as a change in the worktree.
+    const status = spawnSync('git', ['status', '--porcelain'], { cwd: worktree, encoding: 'utf8' });
+    expect(status.stdout).not.toContain('.codegraph');
+    expect(notes).toEqual([]);
+  });
+
   it('prepares a checkout once per process — a parent’s legs share their checkouts', () => {
     const dir = checkout();
     const { spawn, calls } = fakeSpawn();
