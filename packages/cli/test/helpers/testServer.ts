@@ -687,8 +687,8 @@ export const DEFAULT_V1: V1Script = {
     ]),
   },
   'GET /api/v1/projects': { body: v1Page([v1Project('PROD', 'Prodect')]) },
-  'GET /api/v1/projects/{projectKey}/ready': { body: v1Page([]) },
-  // The ready LANES (MOTIR-6835) — what the CLI reads now. Empty by default.
+  // The ready LANES (MOTIR-6835) — what the CLI reads; the flat `…/ready` they
+  // replaced is gone from the server (MOTIR-6841). Empty by default.
   'GET /api/v1/projects/{projectKey}/ready/leaves': { body: v1Page([]) },
   'GET /api/v1/projects/{projectKey}/ready/containers': { body: v1Page([]) },
   'GET /api/v1/projects/{projectKey}/ready/bugs': { body: v1Page([]) },

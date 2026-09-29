@@ -4,7 +4,6 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { GET as GET_ME } from '@/app/api/v1/me/route';
 import { GET as GET_WORKSPACES } from '@/app/api/v1/workspaces/route';
 import { GET as GET_PROJECTS } from '@/app/api/v1/projects/route';
-import { GET as GET_READY } from '@/app/api/v1/projects/[projectKey]/ready/route';
 import { GET as GET_READY_LEAVES } from '@/app/api/v1/projects/[projectKey]/ready/leaves/route';
 import { GET as GET_READY_CONTAINERS } from '@/app/api/v1/projects/[projectKey]/ready/containers/route';
 import { GET as GET_READY_BUGS } from '@/app/api/v1/projects/[projectKey]/ready/bugs/route';
@@ -93,7 +92,6 @@ const ROUTES: Record<string, Handler> = {
   'GET /api/v1/me': GET_ME as Handler,
   'GET /api/v1/workspaces': GET_WORKSPACES as Handler,
   'GET /api/v1/projects': GET_PROJECTS as Handler,
-  'GET /api/v1/projects/{projectKey}/ready': GET_READY as Handler,
   // The ready LANES (MOTIR-6835) — what the CLI reads now.
   'GET /api/v1/projects/{projectKey}/ready/leaves': GET_READY_LEAVES as Handler,
   'GET /api/v1/projects/{projectKey}/ready/containers': GET_READY_CONTAINERS as Handler,
@@ -548,10 +546,6 @@ describe('the generated validators, against the EMITTER rather than a sample', (
     {
       operationId: 'listProjects',
       read: () => callRoute('GET', '/api/v1/projects'),
-    },
-    {
-      operationId: 'getProjectReadySet',
-      read: () => callRoute('GET', `/api/v1/projects/${caller.projectKey}/ready`),
     },
     {
       operationId: 'getProjectReadyLeaves',

@@ -257,7 +257,6 @@ export const V1_COLLECTIONS = [
   'sprints',
   'backlog',
   'sprintWorkItems',
-  'ready',
   // A project's REPOSITORY SET (Story MOTIR-3584 · MOTIR-3586). Its position is
   // a bare row id, structurally identical to `backlog`'s and
   // `sprintWorkItems`' — which is exactly why the collection SCOPE, not the
