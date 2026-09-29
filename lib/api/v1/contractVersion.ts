@@ -201,7 +201,8 @@
  *   up split across two pull requests. Additive: one new endpoint (§8's first
  *   allowed change) and one new resource (`ScopeClaim`); no declared shape
  *   changed.
- * - `1.19.0` — MOTIR-3196 adds two query parameters to `getProjectReadySet`:
+ * - `1.19.0` — MOTIR-3196 adds two query parameters to the flat ready set
+ *   (`GET …/ready`, deleted in `1.55.0`):
  *   `ancestor` (repeatable) narrows the ready set to the leaves STRICTLY
  *   BENEATH one or more containers, at any depth; `sprintId` (single-valued,
  *   with the reserved literal `active`) narrows it to the items whose OWN
@@ -584,7 +585,8 @@
  *   was `1.38.0` at `bfae2ec2b`, so this claims `1.39.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
  *
- * - `1.40.0` — MOTIR-6366 adds one query parameter to `getProjectReadySet`:
+ * - `1.40.0` — MOTIR-6366 adds one query parameter to the flat ready set
+ *   (`GET …/ready`, deleted in `1.55.0`):
  *   `allowSoftBlock` (`true` / `false`, default `false`). `true` lists a leaf
  *   held only by an ANCESTOR's block (a SOFT block) while still excluding one
  *   with its own open `blocked_by` (a HARD block). A non-boolean value is the
@@ -819,16 +821,34 @@
  *   row naming its runnable `container`, with the new `ReadyLaneItem` and
  *   `ReadyContainer` components.
  *
- *   Additive: three new READ operations (§8's allowed list). `getProjectReadySet`
+ *   Additive: three new READ operations (§8's allowed list). The flat ready set
  *   is unchanged; the user's 2026-09-28 decision deletes it in a later task, once
- *   the released CLI no longer calls it.
+ *   the released CLI no longer calls it (`1.55.0`).
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.53.0` after MOTIR-6791 (`1.52.0`) and MOTIR-6795 (`1.53.0`) merged while
  *   this branch held `1.52.0`, so it was RENUMBERED to `1.54.0`. If a sibling has
  *   taken it since, RENUMBER this entry — it names the OPERATIONS.
  *
- * - `1.55.0` — MOTIR-6818 (Story MOTIR-1626, the review agent) adds `review` to
+ * - `1.55.0` — MOTIR-6841 DELETES the flat ready set, `GET
+ *   /api/v1/projects/{projectKey}/ready`: its operation, its route (now a 404) and
+ *   a hosted run's token grant for it. The three lanes of `1.54.0` replace it —
+ *   `getProjectReadyLeaves` plus `getProjectReadyBugs` hold exactly its rows, with
+ *   the same facets and cascade — and `@motir/cli` 0.8.0, published with the
+ *   sandbox images at `cli-v0.8.0` (MOTIR-6840), reads only the lanes.
+ *
+ *   NOT additive, and deliberately so: a removal is what §8 reserves for a new
+ *   major. The user decided on 2026-09-28 that this one operation is DELETED
+ *   rather than deprecated, because nothing else calls it; the decision is
+ *   recorded here and on MOTIR-6841, and it overrides §8 for this operation only.
+ *   A MINOR, because the path version stays `1` and every other operation is
+ *   untouched. The two lanes' descriptions also stop naming the deleted read.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: `V1_CONTRACT_VERSION` was `1.54.0`
+ *   at `58946b8a0`, so this claims `1.55.0`. If a sibling has taken it since,
+ *   RENUMBER this entry.
+ *
+ * - `1.56.0` — MOTIR-6818 (Story MOTIR-1626, the review agent) adds `review` to
  *   `DispatchCommand`: a hosted REVIEW run the server opens for an `agent_review`
  *   gate (`docs/decisions/hosted-agent-run.md` §8). No operation writes it yet. The
  *   approval-gate record gains `agent_review` (kind), `review_agent` (authority) and
@@ -837,11 +857,11 @@
  *   Additive: new members of enums every client must tolerate unknown members of
  *   (§8's allowed list); no declared field changes meaning.
  *
- *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: `V1_CONTRACT_VERSION` was `1.54.0`
- *   after MOTIR-6832, so this claims `1.55.0`. If a sibling has taken it since,
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: `V1_CONTRACT_VERSION` was `1.55.0`
+ *   after MOTIR-6841, so this claims `1.56.0`. If a sibling has taken it since,
  *   RENUMBER this entry — it names the ENUM MEMBER.
  *
- * - `1.56.0` — MOTIR-6821 (Story MOTIR-1626, the review agent) adds the hosted REVIEW
+ * - `1.57.0` — MOTIR-6821 (Story MOTIR-1626, the review agent) adds the hosted REVIEW
  *   run's two operations (`docs/decisions/hosted-agent-run.md` §8.2 / §8.4):
  *   `getWorkItemReviewPrompt` (`GET …/work-items/{key}/review-prompt`, the server-assembled
  *   review brief with every pull request at its reviewed head) and
@@ -852,11 +872,11 @@
  *
  *   Additive: two new operations; no declared shape changes.
  *
- *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.56.0` after MOTIR-6818's
- *   `1.55.0`, and the sibling MOTIR-6822 claims `1.57.0` above it on the same branch. If
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.57.0` after MOTIR-6818's
+ *   `1.56.0`, and the sibling MOTIR-6822 claims `1.58.0` above it on the same branch. If
  *   either number is taken on `origin/main` by then, RENUMBER — it names the OPERATIONS.
  *
- * - `1.57.0` — MOTIR-6822 (Story MOTIR-1626, the review agent) adds `review` to the
+ * - `1.58.0` — MOTIR-6822 (Story MOTIR-1626, the review agent) adds `review` to the
  *   `WorkItemRepairClaim` component's `repairClass`, and `reviewRefusal`
  *   (`{ gate, findingsMd, reviewerName, decidedAt }`, nullable) beside it. `review` is a
  *   card a REVIEW sent back — the review agent's `changes_requested` on `agent_review`, or
@@ -868,11 +888,11 @@
  *   field (§8's allowed list). A client that predates it reads `review` as an unknown
  *   class and runs its CI loop, which finds nothing red — it changes nothing.
  *
- *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.57.0` because the sibling
- *   MOTIR-6821 claims `1.56.0` on the same story branch. If either number is taken on
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.58.0` because the sibling
+ *   MOTIR-6821 claims `1.57.0` on the same story branch. If either number is taken on
  *   `origin/main` by then, RENUMBER this entry — it names the ENUM MEMBER and the FIELD.
  *
- * - `1.58.0` — MOTIR-6929 (Story MOTIR-1626, the hosted repair) adds `repair` to
+ * - `1.59.0` — MOTIR-6929 (Story MOTIR-1626, the hosted repair) adds `repair` to
  *   `DispatchRun`, filled only by `getDispatchRun` and only for a HOSTED `fix` run: the
  *   repair class, every pull request on its OWN branch with the head it was handed, and
  *   the review's findings (gate, version, text, reviewer, decider, authority, when), as
@@ -882,8 +902,8 @@
  *
  *   Additive: one new optional, nullable field on an existing shape (§8's allowed list).
  *
- *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.58.0` after MOTIR-6822's
- *   `1.57.0` on the same story branch. If it is taken on `origin/main` by then, RENUMBER
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.59.0` after MOTIR-6822's
+ *   `1.58.0` on the same story branch. If it is taken on `origin/main` by then, RENUMBER
  *   this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.58.0';
+export const V1_CONTRACT_VERSION = '1.59.0';

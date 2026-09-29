@@ -255,7 +255,8 @@ describe('no re-derivation of the lane order', () => {
   ];
 
   it('the scan is not vacuous', () => {
-    expect(ROUTES.length).toBeGreaterThanOrEqual(4);
+    // The three lane routes; the flat `…/ready/route.ts` was deleted by MOTIR-6841.
+    expect(ROUTES.length).toBeGreaterThanOrEqual(3);
     expect(CLI.length).toBeGreaterThan(20);
   });
 

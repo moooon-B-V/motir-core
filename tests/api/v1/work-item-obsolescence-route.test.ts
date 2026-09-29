@@ -1,11 +1,11 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { GET as LIST, POST } from '@/app/api/v1/projects/[projectKey]/work-items/route';
-import { GET as READY } from '@/app/api/v1/projects/[projectKey]/ready/route';
+import { GET as READY } from '@/app/api/v1/projects/[projectKey]/ready/leaves/route';
 import { GET, PATCH } from '@/app/api/v1/work-items/[key]/route';
 import { POST as TRANSITION } from '@/app/api/v1/work-items/[key]/transitions/route';
 import { classifyApiV1Error } from '@/lib/api/v1/errors';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
-import { readyItemSchema, type V1ReadyItem } from '@/lib/api/v1/ready/schema';
+import { readyLaneItemSchema, type V1ReadyLaneItem } from '@/lib/api/v1/ready/schema';
 import {
   markedCardCannotReopenSchema,
   obsolescenceRequiresFinishedSchema,
@@ -108,14 +108,16 @@ async function collection(caller: V1ProjectCaller): Promise<WorkItemSummary[]> {
   return body.items.map((row) => workItemSummarySchema.parse(row));
 }
 
-async function readySet(caller: V1ProjectCaller): Promise<V1ReadyItem[]> {
+async function readySet(caller: V1ProjectCaller): Promise<V1ReadyLaneItem[]> {
   const res = await READY(
-    new Request(`${BASE}/projects/${caller.projectKey}/ready`, { headers: caller.headers }),
+    new Request(`${BASE}/projects/${caller.projectKey}/ready/leaves`, {
+      headers: caller.headers,
+    }),
     projectParams(caller),
   );
   const body = (await res.json()) as { items: unknown[] };
   expect(res.status, JSON.stringify(body)).toBe(200);
-  return body.items.map((row) => readyItemSchema.parse(row));
+  return body.items.map((row) => readyLaneItemSchema.parse(row));
 }
 
 async function refusal(res: Response): Promise<{ status: number; code: string }> {

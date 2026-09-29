@@ -126,7 +126,7 @@ const SPRINT = {
   committedIssueCount: null,
 };
 
-const READY_SET = {
+const READY_LEAVES = {
   items: [
     {
       key: 'MOTIR-1',
@@ -148,6 +148,9 @@ const READY_SET = {
       descriptionExcerpt: null,
       inheritedSessionBranch: null,
       dependencies: { blockedBy: [], blocks: [] },
+      // The lane row's runnable container (MOTIR-6832) — `null` for a row that
+      // stands alone.
+      container: null,
     },
   ],
   nextCursor: null,
@@ -166,13 +169,13 @@ describe('the generated validators accept a real response from each family', () 
     expect(validators.operation_getSprint(SPRINT)).toBe(true);
   });
 
-  it('ReadyItem, inside its PAGE envelope — `getProjectReadySet`', () => {
+  it('ReadyLaneItem, inside its PAGE envelope — `getProjectReadyLeaves`', () => {
     // Deliberately the PAGED shape rather than a bare row. The emitter composes
     // it as `allOf: [$ref PageEnvelope, { items: … }]`, so this is the
     // assertion that the generator's "one Ajv instance, everything registered"
     // rule actually resolved the envelope reference — a validator compiled in
     // isolation would have thrown at generation time or passed anything here.
-    expect(validators.operation_getProjectReadySet(READY_SET)).toBe(true);
+    expect(validators.operation_getProjectReadyLeaves(READY_LEAVES)).toBe(true);
   });
 });
 
@@ -203,10 +206,10 @@ describe('a malformed response NAMES the field, rather than blanking a cell', ()
     // The path points into the array, which is what makes the message
     // actionable on a 50-row page rather than merely true.
     const corrupted = {
-      ...READY_SET,
-      items: [{ ...READY_SET.items[0], priority: 'urgent' }],
+      ...READY_LEAVES,
+      items: [{ ...READY_LEAVES.items[0], priority: 'urgent' }],
     };
-    expect(failingPaths(validators.operation_getProjectReadySet, corrupted)).toContainEqual(
+    expect(failingPaths(validators.operation_getProjectReadyLeaves, corrupted)).toContainEqual(
       '/items/0/priority',
     );
   });
@@ -214,12 +217,15 @@ describe('a malformed response NAMES the field, rather than blanking a cell', ()
   it('a MISSING field on a row inside the page is still named', () => {
     // The other half of opening the schemas (MOTIR-6180): tolerating an extra
     // field must not stop a missing one from being reported.
-    const { key: _dropped, ...withoutKey } = READY_SET.items[0]!;
+    const { key: _dropped, ...withoutKey } = READY_LEAVES.items[0]!;
     expect(
-      failingPaths(validators.operation_getProjectReadySet, { ...READY_SET, items: [withoutKey] }),
+      failingPaths(validators.operation_getProjectReadyLeaves, {
+        ...READY_LEAVES,
+        items: [withoutKey],
+      }),
     ).toContainEqual('/items/0');
     const errors = (
-      validators.operation_getProjectReadySet as { errors?: { params: unknown }[] | null }
+      validators.operation_getProjectReadyLeaves as { errors?: { params: unknown }[] | null }
     ).errors;
     expect(JSON.stringify(errors)).toContain('"missingProperty":"key"');
   });
@@ -235,13 +241,13 @@ describe('a response carrying a field this client does not know is ACCEPTED', ()
     expect(validators.operation_getProject({ ...PROJECT, surprise: true })).toBe(true);
   });
 
-  it('on a row INSIDE a page — the `getProjectReadySet` failure users hit', () => {
+  it('on a row INSIDE a page — the ready-row failure users hit (0.5.0)', () => {
     const grown = {
-      ...READY_SET,
-      items: [{ ...READY_SET.items[0], difficulty: null, surprise: 'later field' }],
+      ...READY_LEAVES,
+      items: [{ ...READY_LEAVES.items[0], difficulty: null, surprise: 'later field' }],
       surprise: 'on the envelope too',
     };
-    expect(validators.operation_getProjectReadySet(grown)).toBe(true);
+    expect(validators.operation_getProjectReadyLeaves(grown)).toBe(true);
   });
 
   it('on nested objects at every depth — `getWorkItem`', () => {
@@ -272,18 +278,18 @@ describe('a response carrying a field this client does not know is ACCEPTED', ()
     ).toBe(true);
   });
 
-  it('the obsolescence mark on a READY row — `getProjectReadySet`', () => {
+  it('the obsolescence mark on a READY row — `getProjectReadyLeaves`', () => {
     const marked = {
-      ...READY_SET,
+      ...READY_LEAVES,
       items: [
         {
-          ...READY_SET.items[0],
+          ...READY_LEAVES.items[0],
           obsolescence: 'outdated',
           obsolescenceNoteMd: 'See the new flow.',
         },
       ],
     };
-    expect(validators.operation_getProjectReadySet(marked)).toBe(true);
+    expect(validators.operation_getProjectReadyLeaves(marked)).toBe(true);
   });
 
   it('the obsolescence mark on a COLLECTION row and on the write answers', () => {
@@ -323,9 +329,9 @@ describe('a response carrying a field this client does not know is ACCEPTED', ()
       }),
     ).toContainEqual('/obsolescence');
     expect(
-      failingPaths(validators.operation_getProjectReadySet, {
-        ...READY_SET,
-        items: [{ ...READY_SET.items[0], obsolescence: 'stale' }],
+      failingPaths(validators.operation_getProjectReadyLeaves, {
+        ...READY_LEAVES,
+        items: [{ ...READY_LEAVES.items[0], obsolescence: 'stale' }],
       }),
     ).toContainEqual('/items/0/obsolescence');
   });

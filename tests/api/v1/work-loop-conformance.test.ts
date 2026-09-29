@@ -161,9 +161,9 @@ describe('/api/v1 work-loop conformance — an external client with a real PAT',
     const childKey = (await json<{ key: string }>(child)).key;
 
     // ── 2. FIND READY WORK ──────────────────────────────────────────────────
-    const readyRes = await http(`${project}/ready`, caller);
+    const readyRes = await http(`${project}/ready/leaves`, caller);
     const ready = await json<{ items: { key: string }[] }>(readyRes);
-    conforms(readyRes, 'GET', '/api/v1/projects/{projectKey}/ready', ready);
+    conforms(readyRes, 'GET', '/api/v1/projects/{projectKey}/ready/leaves', ready);
     expect(ready.items.map((i) => i.key)).toContain(childKey);
 
     // ── 3. FETCH ITS DISPATCH PROMPT ────────────────────────────────────────
@@ -235,7 +235,7 @@ describe('/api/v1 work-loop conformance — an external client with a real PAT',
     expect(final.status, 'the loop CLOSES — the item ends done').toBe('done');
 
     const stillReady = await json<{ items: { key: string }[] }>(
-      await http(`${project}/ready`, caller),
+      await http(`${project}/ready/leaves`, caller),
     );
     expect(stillReady.items.map((i) => i.key)).not.toContain(childKey);
 
@@ -333,7 +333,7 @@ describe('/api/v1 work-loop conformance — an external client with a real PAT',
 
   it('answers an EMPTY ready set with 200 and no items, never a 404', async () => {
     const empty = await createV1ProjectCaller({ scopes: ['read'] });
-    const res = await http(`/api/v1/projects/${empty.projectKey}/ready`, empty);
+    const res = await http(`/api/v1/projects/${empty.projectKey}/ready/leaves`, empty);
     expect(res.status).toBe(200);
     expect((await json<{ items: unknown[] }>(res)).items).toEqual([]);
   });

@@ -414,7 +414,7 @@ describe('toDispatchRunView — an adopted hosted REPAIR run (MOTIR-6929)', () =
     expect(view.repair?.pullRequests).toEqual([pr]);
   });
 
-  it('reads a server older than contract 1.58.0 — no `repair` at all — as null', () => {
+  it('reads a server older than contract 1.59.0 — no `repair` at all — as null', () => {
     expect(toDispatchRunView(base as never).repair).toBeNull();
   });
 });

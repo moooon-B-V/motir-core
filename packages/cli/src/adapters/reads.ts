@@ -733,7 +733,7 @@ export function toWorkItemRepairClaim(
           decidedAt: body.acceptanceRefusal.decidedAt,
         }
       : null,
-    // A server older than contract 1.57.0 sends no `reviewRefusal` (MOTIR-6822).
+    // A server older than contract 1.58.0 sends no `reviewRefusal` (MOTIR-6822).
     reviewRefusal: body.reviewRefusal
       ? {
           gate: body.reviewRefusal.gate,
@@ -817,7 +817,7 @@ export function toDispatchRunView(body: SuccessBody<'getDispatchRun'>): Dispatch
           resumedKeys: [...body.continues.resumedKeys],
         }
       : null,
-    // A server older than contract 1.58.0 sends no `repair` (MOTIR-6929).
+    // A server older than contract 1.59.0 sends no `repair` (MOTIR-6929).
     repair: body.repair
       ? {
           repairClass: body.repair.repairClass,

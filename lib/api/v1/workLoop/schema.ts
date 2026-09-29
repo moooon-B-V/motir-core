@@ -1956,7 +1956,7 @@ function presentActivityValue(value: unknown): z.infer<typeof activityValueSchem
 
 /** Which CLI command opened the run. `fix` (MOTIR-5464) is opened by the server's
  *  repair claim, never by `openDispatchRun` from a client that knows the others.
- *  `review` (MOTIR-6818, contract 1.55.0) is a hosted REVIEW run the server opens
+ *  `review` (MOTIR-6818, contract 1.56.0) is a hosted REVIEW run the server opens
  *  for an `agent_review` gate (`hosted-agent-run.md` §8). */
 export const dispatchCommandSchema = z.enum([
   'next',

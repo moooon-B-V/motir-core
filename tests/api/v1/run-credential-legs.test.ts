@@ -318,15 +318,8 @@ describe('a hosted run credential reaches its run’s legs and scope, and nothin
 
   it('reads its own project (the ready set, the work-item list) and who it is', async () => {
     const params = { projectKey: caller.projectKey };
-    const ready = await call(
-      () => import('@/app/api/v1/projects/[projectKey]/ready/route'),
-      'GET',
-      `/projects/${caller.projectKey}/ready`,
-      params,
-      run,
-    );
-    expect(ready.status).toBe(200);
-    // The three ready LANES (MOTIR-6832) answer the same project-bound token.
+    // The three ready LANES (MOTIR-6832) answer the project-bound token; the flat
+    // `GET …/ready` they replaced is gone (MOTIR-6841).
     for (const lane of ['leaves', 'containers', 'bugs'] as const) {
       const res = await call(
         () => import(`@/app/api/v1/projects/[projectKey]/ready/${lane}/route`),

@@ -516,12 +516,6 @@ describe('every operation’s REAL response validates against its declared schem
       { projectKey: pk },
     );
     await drive(
-      'getProjectReadySet',
-      () => import('@/app/api/v1/projects/[projectKey]/ready/route'),
-      get(`/api/v1/projects/${pk}/ready`),
-      { projectKey: pk },
-    );
-    await drive(
       'getProjectReadyLeaves',
       () => import('@/app/api/v1/projects/[projectKey]/ready/leaves/route'),
       get(`/api/v1/projects/${pk}/ready/leaves`),

@@ -1191,7 +1191,7 @@ export interface DispatchRunView {
   /**
    * What a HOSTED `fix` run repairs (MOTIR-6929) — what the server's repair claim
    * decided when it opened the run. Null for any other command and for a local repair;
-   * absent from a server older than contract 1.58.0.
+   * absent from a server older than contract 1.59.0.
    */
   repair?: DispatchRunRepair | null;
 }

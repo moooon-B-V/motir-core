@@ -107,7 +107,7 @@ describe('assertProjectAccessible', () => {
 
   it.each([
     ['an auth failure', new AuthError()],
-    ['a missing permission', new PermissionError('project:browse', 'getProjectReadySet')],
+    ['a missing permission', new PermissionError('project:browse', 'getProjectReadyLeaves')],
     [
       'a transport failure',
       new CliError('Could not reach https://app.motir.co: fetch failed.', {

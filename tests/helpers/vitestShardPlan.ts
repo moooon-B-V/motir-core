@@ -191,7 +191,6 @@ export const FILE_TEST_SECONDS: Readonly<Record<string, number>> = {
   'tests/api/v1/projects-route.test.ts': 18.8,
   'tests/api/v1/ranked-collections-routes.test.ts': 11.7,
   'tests/api/v1/rate-limit.test.ts': 14.5,
-  'tests/api/v1/ready-route.test.ts': 24.4,
   'tests/api/v1/scope-claim-route.test.ts': 18.6,
   'tests/api/v1/session-close-out-routes.test.ts': 27.7,
   'tests/api/v1/shared-store.test.ts': 26.2,
