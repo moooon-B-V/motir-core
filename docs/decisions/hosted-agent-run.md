@@ -12,6 +12,7 @@
   - MOTIR-6449 (the run's git credential)
   - MOTIR-690 (start), MOTIR-691 (the UI), MOTIR-692 and MOTIR-6451 (the test gates), MOTIR-6452 (the E2E) and MOTIR-6453 (production configuration), for the model choice in §7
   - through them, MOTIR-6450 (end)
+- **AMENDED 2026-09-29 by MOTIR-6815, for Story MOTIR-1626 (9.8, the review agent) — §8, NEW: the REVIEW run.** A second kind of hosted run, which implements nothing: it reads a green card's pull requests against the card and returns ONE verdict to the `agent_review` gate ([`approval-gates.md`](approval-gates.md) §12). §8 decides its command and mode, attribution and billing, credential, what it reads and what it never writes, and the coding convention as OPTIONAL input. §2, §3, §7 and _What this does NOT decide_ each carry a pointer; nothing is struck. **Consumed by** MOTIR-6818, MOTIR-6820, MOTIR-6821, MOTIR-6824 and MOTIR-6904. **Revised the same day by the requester** (MOTIR-6817's design gate): **§8.6, the hosted REPAIR run** — a card a review sent back can be repaired on the hosted agent by a person's press.
 - **Supersedes:** this card's own earlier scope, a `motir-ai/docs/hosted-execution.md` that was to choose a container orchestrator and a per-agent `*_BASE_URL` matrix. It was never written; both questions have since been settled elsewhere (see Context).
 
 > Structured **Status → Context → Decision → Consequences**, in the shape the other records here use. Every enumeration below was read on `origin/main` of motir-core `84b69443e`, motir-gateway `00f72c8` and motir-ai `c440da5` (2026-09-26).
@@ -75,6 +76,8 @@ The story forbids a hosted-only status or event vocabulary, so a hosted run is e
 | ~~wall-clock timeout, 90 minutes (§5)~~ the 12-hour backstop (§5) | `timed_out`         | `job_timed_out` | keeps its status, marked _run died_                                                                                                                                               |
 | stalled (§5)                                                      | `timed_out`         | `job_timed_out` | keeps its status, marked _run died_                                                                                                                                               |
 
+> **§2 · POINTER (MOTIR-6815, 2026-09-29).** A **review** run (§8) uses the same phases and statuses, with two differences: it emits no `delivery_linked`, and it moves **no card status on any end**. It succeeds when its ONE verdict is accepted; every other end is a review that could not run, written onto the gate ([`approval-gates.md`](approval-gates.md) §12.6).
+
 Stall and timeout share a status because they are the same fact to the record: the run ran out of time. The run's closing `log` event names which one it was (_"stalled: no agent output for 15 minutes"_ / ~~_"timed out after 90 minutes"_~~ _"reached the 12-hour backstop"_), and that line is what the panel shows. ~~Both edges out of `in_progress` are legal in the default workflow (`lib/workflows/defaultWorkflow.ts`). **Returning to To Do rather than staying In Progress is deliberate:** a failed hosted run holds no worktree and no person, so In Progress would be a claim nobody is exercising, and both claim doors refuse it.~~ _Withdrawn 2026-09-27 ([`run-death-keeps-work.md`](run-death-keeps-work.md) §3, Rejected): sending the card back to To Do makes it lie about how far the work got and drops the branch out of sight. The card keeps its status and the_ run died _marker makes the state legible._
 
 `implementationSource: hosted` (with `implementationHarness: opencode`) is stamped at start and never cleared. It records how the card was attempted, and a later local run overwrites it through its own seam, as provenance already does (`docs/decisions/work-item-provenance.md`).
@@ -88,6 +91,8 @@ The container needs to call Motir to report through the shared ingest and to rea
 - **Grant:** `HOSTED_RUN_TOKEN_GRANT` = `['project:browse', 'work_item:edit']`, the two keys those routes assert. The binding in the first bullet is what narrows it; the keys alone are as coarse as the CLI's. It holds no `ai:*` key, so it cannot author or read plans.
 - **Lifetime:** `expiresAt` = boot time + the run's timeout (§5) + 5 minutes for settle. _Amended 2026-09-27 ([`run-death-keeps-work.md`](run-death-keeps-work.md) §1): the run's timeout is now the 12-hour backstop, so this is boot + 12 hours + 5 minutes._
 - **Death:** revoked at run end by the end path. Revoking an `ApiToken` **deletes its row** (MOTIR-3546), so a revoked run token cannot be revived. Its expiry is the backstop if revocation fails.
+
+> **§3 · POINTER (MOTIR-6815, 2026-09-29).** A review run's token is the same run-bound `ApiToken` with the same grant. The binding admits two more routes, for that run's card only and only while the run's command is `review`: the review prompt, and the verdict `POST /api/v1/work-items/{key}/agent-review` (§8.4).
 
 **Reference:** GitHub Actions' `GITHUB_TOKEN`, minted per job, limited to that job's repository and declared permissions, and invalid when the job ends. **Rejected:** a second, purpose-built token system. `ApiToken` already carries hashing, expiry and grant checks, so a run token differs by one column and one grant.
 
@@ -213,6 +218,8 @@ Until that story lands, the offered set is the Anthropic models already rated an
 | the chosen model has left the list since the page loaded | the start path refuses with `hosted_model_not_offered` before the run is opened, and the panel asks the person to choose again                               |
 | the run starts                                           | `DispatchRun.model` records the choice, the card's `implementationModel` is stamped with it, and the run key is minted with that one model as its allow-list |
 
+> **§7 · POINTER (MOTIR-6815, 2026-09-29).** A review run has no dispatcher to choose, so it takes the list's **default**, and the first offered model when the list names none. An empty or unreachable list is a review that could not run, reason _no model_ (§8.1).
+
 **One id, two spellings, never mixed.** The list, `DispatchRun.model`, `implementationModel` and the key's `models` allow-list all hold the gateway's **bare** id (`claude-opus-5-5`), because the gateway compares the request's bare id against the allow-list. The start path adds the `anthropic/` prefix only for OpenCode's `--model` flag. Putting the prefixed form on the allow-list would get every call refused with `403`.
 
 **Rejected.**
@@ -221,6 +228,64 @@ Until that story lands, the offered set is the Anthropic models already rated an
 - **The whole gateway catalog.** It lists 63 models across six providers. Some cannot be billed, OpenCode is not configured for most of their providers, and DeepSeek has no transfer basis for customer code.
 - **A list kept in motir-core.** This is the planning picker's defect, described above.
 - **A list per organization or project.** It needs a settings surface and a rule for what a narrower list may refuse. Neither is in Story 9.1 (below).
+
+### 8 · The REVIEW run — AMENDED 2026-09-29 (MOTIR-6815, for Story MOTIR-1626 · 9.8)
+
+A card's delivery set has gone green in a project with the review agent on, and [`approval-gates.md`](approval-gates.md) §12 has raised an `agent_review` gate. This section decides the hosted run that answers it. Everything in §1–§7 applies unless a point below says otherwise.
+
+#### 8.1 · What starts, and as whom
+
+- **One review run per awaiting `agent_review` gate**, started by the server from the gate's raise (the `agent-review/requested` job, MOTIR-6820), and again only on _Review again_. Nothing else starts one, and nothing retries one.
+- It is a `DispatchRun` with **`command: review`** (a new `DispatchCommand` member), **`origin: hosted`**, and **`MOTIR_RUN_MODE=review`** in the container. The launcher's `run` / `continue` seam (`packages/cli/sandbox/hosted/entrypoint.ts`, MOTIR-6527) gains that third mode, and the container runs `motir review <KEY>` (MOTIR-6824).
+- **It makes NO to-do claim.** The card is already in the review band, and a review changes nobody's claim on it. The run is not a claim either: the gate it answers is the one-review-at-a-time lock.
+- **Every Run-hosted pre-flight still applies**: the fleet slot, the organisation's agent credits, the offered model (§7, taking the default), and a credential for every delivery-set repository (§4). A refusal before anything boots opens no container and is written onto the gate as the reason the review could not run.
+- **Attributed to the card's assignee, else its reporter, else the workspace's stand-in manager** — the actor the CI-feedback path already writes as when no person pressed anything. `DispatchRun.dispatcherId`, the run token's owner and the verdict's `decidedById` are that user. The authority column, not the user, says a machine decided (`approval-gates.md` §12.3).
+- **Billed to the organisation at the agent-lane rate**, exactly as any hosted run: the same run key, the same meter by `DispatchRun.id` (§1). A review is paid work, which is why the switch defaults off.
+
+#### 8.2 · What it reads
+
+- **Both bodies of the card** (description and explanation), its **acceptance criteria**, its published **How to test**, and **every pull request of the delivery set at the reviewed head** — the `subjectVersion` the gate names, never a head read later. A card with pull requests in two repositories is ONE review over both.
+- **The coding convention for each repository, when there is one** — §8.5.
+- It reads them from a **server-assembled review prompt** (MOTIR-6821), served to the run through its token. The run does not assemble its own brief, for the same reason a build run does not: the prompt is the same text for every agent by design.
+
+#### 8.3 · What it never writes
+
+- **It pushes nothing.** The pull requests are checked out read-only at their reviewed heads, and the launcher never pushes in this mode. On a Motir-created repository the §4 installation token is requested with **`contents: read`** only. On a user's repository the §4 user token cannot be narrowed by permission, so the launcher's no-push rule is the guard there.
+- **It posts nothing to GitHub** — no review, no comment, no check. [MOTIR-4910](motir:cmtt4ogrf000hhutxyjqeaxeq)'s one-directional rule stands: the agent's review lives in Motir only.
+- **It writes no card status on any end** (§2's pointer). A review that finds problems is To fix by the gate's derivation, never by a status write.
+
+#### 8.4 · How the verdict reaches Motir
+
+- **A run-token REST route, `POST /api/v1/work-items/{key}/agent-review`** (MOTIR-6821), because a run token cannot use the MCP (`lib/mcp/auth.ts`, the `dispatchRunId` arm).
+- The body is **`pass`** or **`changes_requested`** with **findings in Markdown** (required and non-empty for `changes_requested`), and the version the run reviewed.
+- **ONE verdict per run.** The first accepted verdict ends the question; a second is refused.
+- **A verdict for a superseded gate** — the head moved mid-review — decides nothing (`approval-gates.md` §12.5). It is recorded on the run while the run is alive; a run the supersede already cancelled has lost its token, so its late verdict is refused at authentication and the cancelled close is the record.
+- The run then closes `succeeded`. **A run that ends without an accepted verdict** — failed, stalled, backstopped, cancelled, or exited without submitting — is written onto the gate as a review that could not run (`approval-gates.md` §12.6).
+
+#### 8.5 · The coding convention is OPTIONAL input
+
+- **For each delivery-set repository, the review prompt carries the derived convention Motir holds for it, when there is one** — motir-ai's `getConvention` (`lib/ai/motirAiClient.ts`), keyed `owner/name`, the convention Code Health shows. The reviewer checks the CHANGED code against it, and a finding that relies on it quotes the rule it breaks. It is read server-side over the service credential while the prompt is assembled, never through the `/code` page's admin-gated read (`aiConventionService`), which a review has no admin to satisfy.
+- **Three absent cases, and none of them stops the review:**
+  1. **there is no convention** for the repository;
+  2. **motir-ai is not configured** on this deployment;
+  3. **motir-ai errors or times out** when asked.
+
+  In each, that repository is **reviewed against the card alone**. **None of the three is a review that could not run** (`approval-gates.md` §12.6): it raises no gate reason and holds nothing, and **a missing convention is never grounds for `changes_requested`**. It is the same tolerance `/code` already has (`readRepoConvention`, `app/(authed)/code/_health.ts`, which turns a `MotirAiError` into "no convention").
+
+- **A repository's own `CLAUDE.md` / `AGENTS.md`** is read as the same kind of standard only when the checkout has one. It is never required.
+- **Where a card's criteria explicitly require what a convention forbids, the card wins.** The convention says how code is usually written here; the card says what this change must do.
+- A convention is capped to a bounded size in the prompt (MOTIR-6904 sets the cap), so one repository's long convention cannot crowd out the card.
+
+#### 8.6 · The hosted REPAIR run — _Fix on the hosted agent_ (the requester, 2026-09-29; `approval-gates.md` §12.4b)
+
+A card a review sent back — To fix `changes_requested` — can be repaired on the hosted agent. It is `motir fix` in a container, and every rule of a local `motir fix` holds.
+
+- **Started by a person's press**, never by the refusal and never retried. The press is offered to whoever may press **Run hosted** on the card, and passes the same pre-flights (fleet slot, agent credits, the model — the pressing person picks it, as in §7 — and a credential per repository).
+- **It is the server's REPAIR claim**, exactly as `motir fix` takes it: a `DispatchRun` with **`command: fix`**, **`origin: hosted`**, opened by the claim, and the open run IS the one-repair-at-a-time lock. A repair already open on the card — local or hosted — refuses the press and names who holds it. **No to-do claim and no status write**, as for a local repair.
+- **`MOTIR_RUN_MODE=fix`** — the launcher's third mode beside `run` / `continue`, alongside `review` (§8.1). The container ADOPTS the run the claim opened, checks out **each pull request's own branch**, and runs `motir fix <KEY>` with the review's findings in its prompt.
+- **It pushes to those branches, and opens nothing.** Unlike §8.3's review, a repair must write: its credential is §4's, with `contents: write` on each repository of the delivery set. It opens no pull request, merges nothing, and posts nothing to GitHub.
+- **Attributed to the person who pressed**, billed to the organisation at the agent-lane rate, and identified by `DispatchRun.id` as every hosted run (§1).
+- **Its ends are §2's**, with one difference: no end moves the card. A push moves the head, which retires the review's version, and CI's next green is reviewed again. A repair that ends without pushing leaves the card To fix.
 
 ## Consequences
 
@@ -248,4 +313,8 @@ Until that story lands, the offered set is the Anthropic models already rated an
 - **Network-level egress enforcement.** The lock is the credential (egress contract §4).
 - **What a _local_ run's card becomes on failure.** Only hosted runs are decided here.
 - **How a hosted run is re-run automatically after a design is sent back.** That is Story 9.2, which calls the start path this document's §1–§3 describe.
+- **What a review DECIDES, or what its verdict does to the card.** That is [`approval-gates.md`](approval-gates.md) §12; §8 decides only the run that produces the verdict.
+- **Any AUTOMATIC re-run after a review.** A review never starts a run; §8.6's hosted repair starts only on a person's press. ~~A hosted `motir fix` … is its own ask~~ — reversed by the requester for a card a review sent back (§8.6).
+- **A hosted repair for the other To-fix reasons** (a red build, a merge-queue failure). §8.6 covers a card a REVIEW sent back.
+- **How a coding convention is derived.** That is the `/code` surface's; §8.5 only reads what it has derived.
 - **Whether Motir-created repositories ever move to user-authored pull requests.** That belongs to repository handover (MOTIR-711), not here.
