@@ -72,6 +72,8 @@ import { organizationDeletionReminders } from './definitions/organizationDeletio
 import { organizationErasureSweep } from './definitions/organizationErasureSweep';
 import { organizationRetentionPurge } from './definitions/organizationRetentionPurge';
 import { dlqStandingDepthSweep } from './definitions/dlqStandingDepthSweep';
+import { agentInstanceIdleCheck } from './definitions/agentInstanceIdleCheck';
+import { agentInstanceSweep } from './definitions/agentInstanceSweep';
 
 // EVERY JOB THIS IMAGE KNOWS (Story 1.6 · Subtask 1.6.2; re-based onto the
 // Postgres engine by Story MOTIR-3418).
@@ -163,4 +165,8 @@ export const jobDefinitions = [
   // The DLQ standing-depth filer (MOTIR-5869): one bug per job function whose
   // dead letters have stood seven days, re-armed only when that depth drains.
   dlqStandingDepthSweep,
+  // Agent instances (Story MOTIR-6860 · MOTIR-6873): the per-instance idle timer
+  // and the 30-minute sweep beneath it.
+  agentInstanceIdleCheck,
+  agentInstanceSweep,
 ];

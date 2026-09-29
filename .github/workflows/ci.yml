@@ -2465,6 +2465,51 @@ jobs:
       - run: pnpm -r --filter './packages/*' build
       - run: pnpm coverage:hosted-agent-run
 
+  story-6860-coverage:
+    name: Coverage (agent instances)
+    runs-on: ubuntu-latest
+    # Story MOTIR-6860's coverage floor (MOTIR-6876): the agent-instance record,
+    # lifecycle, sweep and charge, routes, jobs and page, measured over their own
+    # tests against Postgres. A new lane with no CI run to quote yet; the 20-min
+    # ceiling bounds a hang rather than setting a target.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-6860
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-6860
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-6860.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-6860.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm coverage:agent-instances
+
   # Story MOTIR-1626 (9.8, the review agent) — MOTIR-6826's story gate: a per-file
   # floor over the server files the story created (`vitest.coverage.review-agent.config.ts`),
   # measured by the story journeys plus the per-card server suites. Needs Postgres, and
@@ -2549,6 +2594,7 @@ jobs:
         story-4905-coverage,
         story-6617-coverage,
         story-683-coverage,
+        story-6860-coverage,
         story-1626-coverage,
         e2e,
         e2e-at-scale,

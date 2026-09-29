@@ -414,6 +414,19 @@ export interface HostedRunSuperviseData {
 }
 
 /**
+ * The `agent-instance/idle-check` payload (Story MOTIR-6860 · MOTIR-6873) — the
+ * idle TIMER of one agent instance. Emitted when an instance starts running and
+ * whenever its activity is bumped; the job is DEBOUNCED on `instanceId`, so it
+ * runs once the instance has gone quiet for the idle window, and the debounce
+ * cap makes it run at the 12-hour backstop even under steady activity
+ * (`docs/decisions/agent-instances.md` §2).
+ */
+export interface AgentInstanceIdleCheckData {
+  workspaceId: string;
+  instanceId: string;
+}
+
+/**
  * Map of event-name → payload. Each key is a job id and the event name that
  * triggers it; for an event's FIRST consumer the two are the same string (the
  * 1:1 convention). An event with MULTIPLE consumers (e.g.
@@ -544,6 +557,8 @@ export interface JobEventDataMap {
   'account/data-export.requested': DataExportRequestedData;
   /** A booted hosted run's supervision (Story MOTIR-683 · MOTIR-690). */
   'hosted-run/supervise': HostedRunSuperviseData;
+  /** One agent instance's idle timer (Story MOTIR-6860 · MOTIR-6873). */
+  'agent-instance/idle-check': AgentInstanceIdleCheckData;
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;
   'work-item/mentioned': WorkItemMentionedData;
@@ -577,6 +592,10 @@ export interface JobEventDataMap {
    *  whose dead letters have stood undisposed for seven days. Cross-tenant by
    *  design: `job_run_dlq` is deployment-wide. */
   'system.dlq-standing-depth-sweep': SystemScheduledData;
+  /** The agent-instance sweep (Story MOTIR-6860 · MOTIR-6873) — settles, reconciles
+   *  and hibernates instances, destroys orphans and charges pending intervals.
+   *  Cross-tenant by design: it walks every live instance. */
+  'system.agent-instance-sweep': SystemScheduledData;
 }
 
 /**

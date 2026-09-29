@@ -58,11 +58,11 @@ describe('listProjects — browsable-only filter (6.4.6)', () => {
       actorUserId: owner.id,
       name: 'Private Project',
     });
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: privateProject.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level: 'private',
+      mode: 'members',
     });
 
     // A plain workspace member who was never added to the private project
@@ -93,11 +93,11 @@ describe('listProjects — browsable-only filter (6.4.6)', () => {
       actorUserId: owner.id,
       name: 'Secret',
     });
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level: 'private',
+      mode: 'members',
     });
     const member = await makeUser('member-lp2@ex.com', 'Member');
     await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
@@ -140,11 +140,11 @@ describe('assignableMembersService.list — access-scoped pickers (6.4.6)', () =
     // going private adds nobody since Story MOTIR-6169.
     const onProject = await makeUser('onproj-am@ex.com', 'OnProject');
     await workspacesService.addMember({ userId: onProject.id, workspaceId: workspace.id });
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: privateProject.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level: 'private',
+      mode: 'members',
     });
     for (const userId of [owner.id, onProject.id]) {
       await adminDb.projectMembership.create({

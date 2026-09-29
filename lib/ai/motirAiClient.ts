@@ -372,13 +372,20 @@ export async function debitCiOverage(
  */
 export interface AgentMachineDebitInput {
   coreOrganizationId: string;
-  /** The run's `DispatchRun.id`. */
-  coreRunId: string;
+  /** The run's `DispatchRun.id` — send this OR `instanceIntervalId`, never both. */
+  coreRunId?: string;
+  /**
+   * One RUNNING INTERVAL of a user agent instance (`AgentInstanceInterval.id`,
+   * MOTIR-6873 · motir-ai MOTIR-6871) — recorded on motir-ai's instance-usage
+   * record, never on a run's usage.
+   */
+  instanceIntervalId?: string;
   /** Whole credits (integer ≥ 1), already converted. */
   credits: number;
   /** The settled billable seconds the credits were computed from (integer ≥ 1). */
   billableSeconds: number;
-  /** The idempotency key — the dispatch run id: one charge per run. */
+  /** The idempotency key — the dispatch run id (one charge per run), or
+   *  `agent-instance-interval:<id>` (one charge per interval). */
   externalRef: string;
   reason?: string;
 }

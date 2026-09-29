@@ -281,11 +281,11 @@ describe('the PROJECT bound — the token’s project, and only the token’s', 
     const fx = await makeFixture();
     const jobId = 'job_private';
     await openPlan(fx, jobId);
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     // A real workspace member who is NOT a member of this private project.
     const outsider = await createTestUser();

@@ -80,11 +80,11 @@ async function buildScenario(slug: string): Promise<Scenario> {
     name: `Project ${slug}`,
   });
   const ownerCtx = ctxFor(owner.id, workspace.id);
-  await projectMembersService.setAccessLevel({
+  await projectMembersService.setAccessMode({
     key: project.identifier,
     actorUserId: owner.id,
     ctx: ownerCtx,
-    level: 'private',
+    mode: 'members',
   });
 
   async function projectActor(role: 'viewer' | 'member' | 'admin') {

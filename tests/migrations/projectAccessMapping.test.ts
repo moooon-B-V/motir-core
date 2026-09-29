@@ -8,6 +8,7 @@ import {
   relaxProjectAccessModeNotNull,
   restoreProjectAccessModeNotNull,
 } from './_projectAccessModeNotNull';
+import { readLegacyAccessLevel, writeLegacyAccessLevel } from '../helpers/legacyProjectAccess';
 
 // The access migration (Story MOTIR-6169 · Subtask MOTIR-6542), run over a
 // fixture tenant exactly as `prisma migrate deploy` runs it: one script, one
@@ -65,10 +66,10 @@ async function tenant() {
         slug: `pam-${level}-${n}`,
         identifier: `PAM${level.slice(0, 2).toUpperCase()}${n}`,
         workspaceId: ws.id,
-        // legacy-access-level: the mapping migration of each legacy level is what this file tests.
-        accessLevel: level,
       },
     });
+    // legacy-access-level: the mapping migration of each legacy level is what this file tests.
+    await writeLegacyAccessLevel(adminDb, p.id, level);
     // The mapping ran over NULL-mode rows (`_projectAccessModeNotNull.ts`).
     await nullAccessMode(p.id);
     return p;
@@ -113,11 +114,14 @@ async function tenant() {
 }
 
 async function projectRows(wsId: string) {
-  return adminDb.project.findMany({
+  const rows = await adminDb.project.findMany({
     where: { workspaceId: wsId },
-    select: { identifier: true, accessLevel: true, accessMode: true },
+    select: { id: true, identifier: true, accessMode: true },
     orderBy: { identifier: 'asc' },
   });
+  return Promise.all(
+    rows.map(async (r) => ({ ...r, accessLevel: await readLegacyAccessLevel(adminDb, r.id) })),
+  );
 }
 
 /** A digest of every row the migration may write, to prove a re-run writes none. */

@@ -53,6 +53,7 @@ import { organizationDeletionNotifier } from '@/lib/services/organizationDeletio
 import { organizationErasureSweepService } from '@/lib/services/organizationErasureSweepService';
 import { organizationRetentionPurgeService } from '@/lib/services/organizationRetentionPurgeService';
 import { supervisionSweepService } from '@/lib/services/supervisionSweepService';
+import { agentInstanceSweepService } from '@/lib/services/agentInstanceSweepService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
 // (Story 1.6 · Subtask 1.6.2). This is the seam that keeps the 4-layer rule
@@ -152,6 +153,9 @@ export const jobServices = {
   // The DLQ standing-depth filer (MOTIR-5869): the dead-letter queue is a job's
   // subject a second time, read for what nobody has disposed of.
   dlqStandingDepth: dlqStandingDepthService,
+  // Agent instances (Story MOTIR-6860 · MOTIR-6873): the idle timer's check and
+  // the sweep that reconciles, hibernates, cleans orphans and charges.
+  agentInstanceSweep: agentInstanceSweepService,
 };
 
 export type JobServices = typeof jobServices;

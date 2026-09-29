@@ -154,11 +154,11 @@ describe('GET /api/ai/coding-convention/audit-coverage', () => {
     // 403 case above proves the browser arm; this one is what makes the pair
     // complete — and it is the branch the coverage floor was short of.
     const { workspace, project } = await signInAtProject();
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: project.identifier,
       actorUserId: ctxRef.current!.userId,
       ctx: { userId: ctxRef.current!.userId, workspaceId: workspace.id },
-      level: 'private',
+      mode: 'members',
     });
     const outsider = await createTestUser();
     await workspacesService.addMember({ userId: outsider.id, workspaceId: workspace.id });

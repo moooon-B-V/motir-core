@@ -251,7 +251,7 @@ export class ProjectWorkspaceMismatchError extends Error {
 // The management surface (add/remove member, set role, set access level) is
 // gated to project admins (or the workspace owner/admin, who always pass). The
 // route maps these to: NotProjectAdminError → 403, TargetNotWorkspaceMemberError
-// / InvalidProjectRoleError / InvalidAccessLevelError → 400, ProjectNotFoundError
+// / InvalidProjectRoleError / InvalidAccessModeError → 400, ProjectNotFoundError
 // / NotAProjectMemberError → 404, AlreadyProjectMemberError / LastProjectAdminError
 // → 409.
 
@@ -355,15 +355,5 @@ export class InvalidAccessModeError extends Error {
   constructor(mode: string) {
     super(`"${mode}" is not a valid project access mode (use workspace, members, or public).`);
     this.name = 'InvalidAccessModeError';
-  }
-}
-
-export class InvalidAccessLevelError extends Error {
-  readonly code = 'INVALID_ACCESS_LEVEL' as const;
-  constructor(level: string) {
-    super(
-      `"${level}" is not a valid project access level (use public, open, limited, or private).`,
-    );
-    this.name = 'InvalidAccessLevelError';
   }
 }

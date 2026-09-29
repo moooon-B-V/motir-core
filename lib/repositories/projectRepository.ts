@@ -9,7 +9,6 @@ import {
   type WorkflowPolicyMode,
 } from '@/generated/prisma/client';
 import { db, dbRead } from '@/lib/db';
-import { levelForMode } from '@/lib/projects/accessMode';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ProjectSquareRank } from '@/lib/projectSquare/rank';
 
@@ -772,11 +771,10 @@ export const projectRepository = {
 
   /**
    * Set the project's ACCESS MODE (Story MOTIR-6169 · MOTIR-6541) — `access_mode`
-   * AND the legacy `accessLevel` (`levelForMode`), in ONE update. THE ONLY
-   * WRITER of `access_mode`. Nothing reads `accessLevel` any more (MOTIR-6687:
-   * the RLS policies and every public query key on the mode); it is still
-   * written here only because the previous image, serving during this release's
-   * deploy window, reads it. Phase 2 (MOTIR-6692) stops the write. `stampMadePublicAt` stamps `madePublicAt` (the project square's
+   * and nothing else of the access model. THE ONLY WRITER of `access_mode`. The
+   * retired `accessLevel` is no longer written (MOTIR-6692): nothing has read it
+   * since MOTIR-6687, and its field is `@ignore`d pending the phase-3 drop.
+   * `stampMadePublicAt` stamps `madePublicAt` (the project square's
    * "newest" axis, Subtask 6.13.4); the service passes it only on the
    * not-public → public edge, so a re-save keeps the original go-public moment.
    */
@@ -790,7 +788,6 @@ export const projectRepository = {
       where: { id },
       data: {
         accessMode,
-        accessLevel: levelForMode(accessMode),
         ...(options.stampMadePublicAt ? { madePublicAt: new Date() } : {}),
       },
     });

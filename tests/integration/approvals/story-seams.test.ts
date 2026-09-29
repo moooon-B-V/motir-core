@@ -195,11 +195,11 @@ describe('CLAIM 2 · access is enforced IN the query, over a population the read
         parentId: hiddenStory.id,
       });
     }
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: hiddenProject.identifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     await adminDb.projectMembership.deleteMany({
       where: { userId: reader.id, projectId: hiddenProject.id },

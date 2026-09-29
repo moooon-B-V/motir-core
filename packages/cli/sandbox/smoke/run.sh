@@ -32,6 +32,12 @@
 #                             device grant, approved out of band, written to the
 #                             container's own config dir.
 #
+# ── runs 4 and 5: a HOST DIRECTORY mounted at /home/node (MOTIR-6887) ───────
+#   home-seed-smoke.sh      — a user agent instance's persistent home: an EMPTY
+#                             one is seeded from the image's own home by the
+#                             entrypoint, and one holding the user's files is
+#                             left byte-for-byte.
+#
 # Running the assertions THROUGH the real recipes is the point, and it is why
 # three container runs rather than three scripts in one: whether a credential
 # mount is present, and whether a token is in the environment, are properties of
@@ -148,7 +154,7 @@ chmod 644 "$CREDENTIAL/config.json"
 # default is used here and the EGRESS question is left where the image header
 # leaves it: a docker-level decision, not something this image pretends to make.
 
-echo "== [1/3] the MOUNTED recipe — the runtimes, confinement, the loop, the failure path, the login refusal"
+echo "== [1/5] the MOUNTED recipe — the runtimes, confinement, the loop, the failure path, the login refusal"
 docker run --rm \
     -v "$FIXTURE:/workspace" \
     -v "$CREDENTIAL:/home/node/.config/motir:ro" \
@@ -164,7 +170,7 @@ docker run --rm \
 # anything else, so neither leg can pass on a credential it was handed by the
 # mount rather than by the tier under test.
 
-echo "== [2/3] the ENV recipe — no credential mount, MOTIR_TOKEN + MOTIR_SERVER only"
+echo "== [2/5] the ENV recipe — no credential mount, MOTIR_TOKEN + MOTIR_SERVER only"
 docker run --rm \
     -v "$FIXTURE:/workspace" \
     -e "MOTIR_TOKEN=env-not-a-real-token" \
@@ -173,11 +179,41 @@ docker run --rm \
     "$IMAGE" \
     /workspace/.smoke/env-credential-smoke.sh
 
-echo "== [3/3] the FRESH-MACHINE recipe — no mount, no token: \`motir login\` in the container"
+echo "== [3/5] the FRESH-MACHINE recipe — no mount, no token: \`motir login\` in the container"
 docker run --rm \
     -v "$FIXTURE:/workspace" \
     -e "MOTIR_SMOKE_PORT_LOGIN=$LOGIN_PORT" \
     "$IMAGE" \
     /workspace/.smoke/login-smoke.sh
 
+# ── the persistent-home recipes (MOTIR-6887) ────────────────────────────────
+# A user agent instance boots with a volume over /home/node
+# (`docs/decisions/agent-instances.md` §1). Whether HOME is a mount is a property
+# of how the container was LAUNCHED, so each case is a run of its own: an EMPTY
+# home, which the entrypoint must seed, and a home already holding the user's
+# files, which it must leave byte-for-byte. The no-mount case is every run above.
+HOME_EMPTY="$(mktemp -d)"
+HOME_POPULATED="$(mktemp -d)"
+chmod 777 "$HOME_EMPTY" "$HOME_POPULATED"
+printf '%s\n' '# the user edited this' 'alias ll="ls -la"' > "$HOME_POPULATED/.bashrc"
+printf '%s\n' 'notes the user keeps in their home' > "$HOME_POPULATED/user-notes.txt"
+chmod 666 "$HOME_POPULATED/.bashrc" "$HOME_POPULATED/user-notes.txt"
+RC_SHA="$(sha256sum < "$HOME_POPULATED/.bashrc" | cut -d' ' -f1)"
+USER_SHA="$(sha256sum < "$HOME_POPULATED/user-notes.txt" | cut -d' ' -f1)"
+
+echo "== [4/5] the EMPTY-HOME recipe — a volume over /home/node, seeded by the entrypoint"
+docker run --rm \
+    -v "$FIXTURE:/workspace" \
+    -v "$HOME_EMPTY:/home/node" \
+    "$IMAGE" \
+    /workspace/.smoke/home-seed-smoke.sh empty
+
+echo "== [5/5] the POPULATED-HOME recipe — the user's own files survive the seed"
+docker run --rm \
+    -v "$FIXTURE:/workspace" \
+    -v "$HOME_POPULATED:/home/node" \
+    "$IMAGE" \
+    /workspace/.smoke/home-seed-smoke.sh populated "$RC_SHA" "$USER_SHA"
+
 echo '== sandbox smoke PASSED'
+

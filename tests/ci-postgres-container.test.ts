@@ -94,6 +94,9 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // gate and the per-card hosted-run tests it measures run against a real
       // database.
       'ci.yml:story-683-coverage',
+      // MOTIR-6876's agent-instances coverage lane (Story MOTIR-6860): the story
+      // gate and the per-card instance tests run against a real database.
+      'ci.yml:story-6860-coverage',
       'ci.yml:test',
     ]);
   });

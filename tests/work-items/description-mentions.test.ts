@@ -127,11 +127,11 @@ describe('createWorkItem — description mentions', () => {
 
   it('drops a mention of a user who cannot view a private project', async () => {
     const s = await buildScenario();
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,
       ctx: s.fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     // Going private adds nobody (Story MOTIR-6169): the member who keeps their
     // view is ADDED explicitly; the outsider is a workspace member with no
