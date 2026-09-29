@@ -10,6 +10,7 @@ import {
   restoreProjectAccessModeNotNull,
 } from './_projectAccessModeNotNull';
 import { runMigrationFile } from './_workspaceRoleTenant';
+import { writeLegacyAccessLevel } from '../helpers/legacyProjectAccess';
 
 // The contract migration of `project.access_mode` (Story MOTIR-6554 · Subtask
 // MOTIR-6686), run exactly as `prisma migrate deploy` runs it: one script, one
@@ -60,11 +61,11 @@ async function legacyProject(
       slug: `pamn-${level}-${n}`,
       identifier: `PAMN${n}`,
       workspaceId,
-      // legacy-access-level: the NULL-mode rows this migration fills are what it tests.
-      accessLevel: level,
       ...(mode ? { accessMode: mode } : {}),
     },
   });
+  // legacy-access-level: the NULL-mode rows this migration fills are what it tests.
+  await writeLegacyAccessLevel(adminDb, project.id, level);
   if (!mode) await nullAccessMode(project.id);
   return project;
 }

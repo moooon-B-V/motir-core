@@ -237,19 +237,19 @@ describe('SEAM 5 · the access level, against real Postgres', () => {
     });
     await workspacesService.addMember({ userId: sam.id, workspaceId: fx.workspaceId });
 
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: fx.projectKey,
       actorUserId: fx.ownerId,
       ctx: fx.ownerCtx,
-      level: 'open',
+      mode: 'workspace',
     });
     expect((await resolvedFor(fx, sam.id)).has('work_item:edit')).toBe(true);
 
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: fx.projectKey,
       actorUserId: fx.ownerId,
       ctx: fx.ownerCtx,
-      level: 'limited',
+      mode: 'members',
     });
     const onLimited = await resolvedFor(fx, sam.id);
     expect(onLimited.has('work_item:edit')).toBe(false);

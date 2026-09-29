@@ -72,10 +72,8 @@ interface CommentsScenario {
 /**
  * The standard substrate: an OPEN project (makeWorkItemFixture's default)
  * with one issue, plus one actor per comment-relevant role. Tests that need a
- * `limited`/`private` level flip it via projectMembersService.setAccessLevel
- * AFTER this builds (going private auto-enrolls the then-current workspace
- * members as project members — add late actors after the flip to keep them
- * out).
+ * Members-only project flip it via projectMembersService.setAccessMode AFTER
+ * this builds (a mode change adds nobody to the project, MOTIR-6544).
  */
 async function buildScenario(): Promise<CommentsScenario> {
   const fx = await makeWorkItemFixture();
@@ -193,11 +191,11 @@ describe('commentsService.addComment', () => {
   it('hides a legacy LIMITED project — Members only since MOTIR-6169 — from a plain workspace member who was not added', async () => {
     const s = await buildScenario();
     captureCommentEvents();
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,
       ctx: s.ownerCtx,
-      level: 'limited',
+      mode: 'members',
     });
 
     // `limited` used to mean "every workspace member views and comments"; the
@@ -216,11 +214,11 @@ describe('commentsService.addComment', () => {
     captureCommentEvents();
     // Flip private (Members only). Nobody is added by the flip since Story
     // MOTIR-6169, so the mentionee is added explicitly; the late joiner stays out.
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,
       ctx: s.ownerCtx,
-      level: 'private',
+      mode: 'members',
     });
     await adminDb.projectMembership.create({
       data: {

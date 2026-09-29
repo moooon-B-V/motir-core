@@ -6,8 +6,8 @@ import { describe, expect, it } from 'vitest';
 // No test writes a project's `accessLevel` itself (MOTIR-6685).
 //
 // A project's access is its MODE. Every test that sets it goes through
-// `tests/helpers/projectAccess.ts`, which writes the mode and the level it maps to
-// together — exactly what `projectRepository.setAccessMode` writes. A fixture that
+// `tests/helpers/projectAccess.ts`, which writes the mode alone — exactly what
+// `projectRepository.setAccessMode` writes since phase 2 (MOTIR-6692). A fixture that
 // writes `accessLevel` alone only worked while the retired NULL-mode fallback
 // derived the mode from the level; once `access_mode` is NOT NULL (MOTIR-6686) it silently seeds an
 // Open-to-the-workspace project instead, and the test fails — or worse, passes —
@@ -23,13 +23,12 @@ import { describe, expect, it } from 'vitest';
 
 /** The files allowed to write `accessLevel`. */
 const ALLOWED = new Set([
-  // The helper itself: it writes the level `levelForMode` maps the mode to.
-  'tests/helpers/projectAccess.ts',
-  // The LEGACY-MAPPING test: it seeds a legacy level ON PURPOSE, because the
-  // level-to-mode mapping migration is what it tests. It says so beside its
-  // fixture. (The storage and mapper tests left this list with MOTIR-6686, once
-  // the NULL-mode state they described could no longer exist.)
-  'tests/migrations/projectAccessMapping.test.ts',
+  // The raw-SQL door onto the `@ignore`d column (MOTIR-6692): the one place a
+  // test may write a legacy level, for the tests that own the column itself or a
+  // migration that read it — each call site says so with the marker below.
+  // (`tests/helpers/projectAccess.ts` and the legacy-mapping test left this list
+  // with phase 2: the first writes the mode alone, the second seeds through here.)
+  'tests/helpers/legacyProjectAccess.ts',
   // This file: its self-check below carries direct writes as SOURCE TEXT.
   'tests/projects/accessFixtureGuard.test.ts',
 ]);
@@ -66,8 +65,9 @@ function propertyName(node: ts.Node): string | null {
 /**
  * An HTTP call whose options also take a `data` key — Playwright's
  * `page.request.patch(url, { data })`. That `data` is a REQUEST BODY sent to the
- * product (the legacy `{ accessLevel }` arm is a legitimate thing to send it), not
- * a row written to the database, so it is never this guard's business.
+ * product (the retired `{ accessLevel }` arm, which the route now refuses, is a
+ * legitimate thing to send it), not a row written to the database, so it is never
+ * this guard's business.
  */
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'fetch']);
 

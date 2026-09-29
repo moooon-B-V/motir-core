@@ -16,7 +16,7 @@ import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
-import { setProjectAccess } from '@/tests/helpers/projectAccess';
+import { modeForLegacyLevel, setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // THE STORY GATE for MOTIR-2282 (Subtask MOTIR-2264) — run against the merged
 // surface of the story's cards, doing the three things a per-card unit test
@@ -64,11 +64,11 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   if (level === 'public') {
     await setProjectAccess(adminDb, project.id, 'public');
   } else {
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level,
+      mode: modeForLegacyLevel(level),
     });
   }
 

@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getOrchestrator,
+  getPersistentOrchestrator,
   isOrchestratorConfigured,
+  isPersistentOrchestratorConfigured,
   recordContainerUsage,
   selectedOrchestratorProvider,
 } from '@/lib/orchestrator';
@@ -10,7 +12,9 @@ import {
   OrchestratorNotConfiguredError,
   buildContainerUsage,
   fakeOrchestrator,
+  fakePersistentOrchestrator,
   flyOrchestrator,
+  flyPersistentOrchestrator,
   type ContainerHandle,
   type UsageAttribution,
 } from '@motir/orchestrator';
@@ -149,5 +153,27 @@ describe('the usage sink', () => {
       '[containerUsage] could not record a container-seconds row',
       expect.objectContaining({ handleId: 'm-1' }),
     );
+  });
+});
+
+describe('the PERSISTENT half — agent instances (MOTIR-6869)', () => {
+  it('selects the fake with the ephemeral fake, whatever else is set', () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    vi.stubEnv('FLY_INSTANCES_API_TOKEN', '');
+    expect(getPersistentOrchestrator()).toBe(fakePersistentOrchestrator);
+    expect(isPersistentOrchestratorConfigured()).toBe(true);
+  });
+
+  it('selects Fly only with the INSTANCE token — the fleet’s variables do not configure it (§7)', () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', 'fleet-token');
+    vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', 'registry.fly.io/runner@sha256:abc');
+    vi.stubEnv('FLY_INSTANCES_API_TOKEN', '');
+    expect(isPersistentOrchestratorConfigured()).toBe(false);
+    expect(() => getPersistentOrchestrator()).toThrow(OrchestratorNotConfiguredError);
+    vi.stubEnv('FLY_INSTANCES_API_TOKEN', 'instances-token');
+    expect(isPersistentOrchestratorConfigured()).toBe(true);
+    expect(getPersistentOrchestrator()).toBe(flyPersistentOrchestrator);
   });
 });

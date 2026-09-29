@@ -91,16 +91,14 @@ function totalityEscapes(source: string): string[] {
 }
 
 /**
- * The sites still allowed to name the retired level (MOTIR-6687): the legacy
- * WRITE path phase 2 (MOTIR-6692) retires, the mode ⇄ level mapping, and the
- * derived, never-read-back `accessLevel` the DTO, API v1 and MCP publish.
+ * The sites still allowed to name the retired level: only the derived,
+ * never-read-back `accessLevel` the DTO, API v1 and MCP publish, and the mode →
+ * level mapping that computes it. Nothing writes the column since phase 2
+ * (MOTIR-6692), which took the legacy request arm, its setter and the level
+ * vocabulary off this list.
  */
 const LEVEL_ALLOWED = [
-  // The legacy `{ accessLevel }` request arm and its setter — retired by phase 2.
-  /^app\/api\/projects\/\[key\]\/access\/route\.ts$/,
-  /^lib\/services\/projectMembersService\.ts$/,
-  /^lib\/projects\/roles\.ts$/,
-  // `levelForMode` — the level written beside a mode.
+  // `levelForMode` — the derived level a mode is published as.
   /^lib\/projects\/accessMode\.ts$/,
   // The derived public contract: DTO types, API v1's schema, MCP's row.
   /^lib\/dto\/projects\.ts$/,
@@ -112,8 +110,8 @@ const LEVEL_ALLOWED = [
 /**
  * A read of the retired level: any code line naming `accessLevel`, the SQL column
  * `"accessLevel"` or the `project_access_level` type — except the one line shape
- * that WRITES or DERIVES it from the mode, `accessLevel: levelForMode(…)`
- * (`projectRepository.setAccessMode` and the two mappers).
+ * that DERIVES it from the mode, `accessLevel: levelForMode(…)` (the two mappers
+ * and API v1's schema).
  */
 function levelReads(source: string): string[] {
   const found: string[] = [];
@@ -248,14 +246,14 @@ describe('the guards have been SEEN to fail', () => {
     expect(new RegExp(`if \\(!${m[1]}\\) redirect\\('/sign-in'\\)`).test(src)).toBe(true);
   });
 
-  it('a read of the retired level is caught, and the derived write is not', () => {
+  it('a read of the retired level is caught, and the derived field is not', () => {
     const fixture = [
       "return db.project.findMany({ where: { accessLevel: 'public' } });",
       'select: { id: true, accessLevel: true },',
       "type Row = Pick<Project, 'id' | 'accessLevel'>;",
       "if (project.accessLevel === 'public') publish();",
       'WHERE p."accessLevel" = \'public\'::"project_access_level"',
-      'accessLevel: levelForMode(accessMode),',
+      'accessLevel: levelForMode(project.accessMode),',
       '// a comment naming accessLevel is a record, not a read',
     ].join('\n');
     expect(levelReads(fixture)).toHaveLength(5);

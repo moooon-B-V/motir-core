@@ -232,11 +232,11 @@ describe('a real comment mention is fanned in and read back through the feed (5.
     // Take the project private AFTER the comment: going private adds nobody
     // (Story MOTIR-6169), so a member added now has no project access — "lost
     // view access between the write and the fan-in".
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: j.fx.projectIdentifier,
       actorUserId: j.fx.ownerId,
       ctx: j.fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     const late = await usersService.createUser({
       email: 'late@example.com',

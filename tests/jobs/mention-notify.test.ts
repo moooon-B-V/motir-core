@@ -140,11 +140,11 @@ describe('mentionNotificationsService.fanOut — comment mentions', () => {
     // their view is ADDED to the project explicitly; a user added to the
     // workspace AFTER the flip has no project membership — exactly "lost view
     // access between write and send" for this issue.
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,
       ctx: s.fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     await adminDb.projectMembership.create({
       data: {

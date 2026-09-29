@@ -295,7 +295,7 @@ describe('listFields', () => {
   it('hides a private project from a non-member (browse-denied 404 shape)', async () => {
     const fx = await makeWorkItemFixture();
     await createField(fx, 'Customer');
-    await projectMembersService.setAccessLevel({ ...actorInput(fx), level: 'private' });
+    await projectMembersService.setAccessMode({ ...actorInput(fx), mode: 'members' });
     // Never added to the private project, so no project membership.
     const outsider = await usersService.createUser({
       email: 'outsider-list@example.com',
