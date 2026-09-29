@@ -122,8 +122,11 @@ export function extractClassCandidates(markup: string): string[] {
   return [...out];
 }
 
-/** Resolve an `@import` the way a bundler would: a package id, or a path relative to `base`. */
-async function loadStylesheet(id: string, base: string) {
+/**
+ * Resolve an `@import` the way a bundler would: a package id, or a path relative to `base`.
+ * Exported for its own test only — the `./mock` barrel does not re-export it.
+ */
+export async function loadStylesheet(id: string, base: string) {
   let file: string;
   if (id.startsWith('.') || id.startsWith('/')) {
     file = path.resolve(base, id);
