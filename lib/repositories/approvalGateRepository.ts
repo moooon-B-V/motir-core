@@ -674,6 +674,32 @@ export const approvalGateRepository = {
   },
 
   /**
+   * Write (or, with `null`, clear) why an AWAITING `agent_review` gate's review could not
+   * run (Story MOTIR-1626 · MOTIR-6820; ADR `approval-gates.md` §12.6). The
+   * `state: 'awaiting'` + `kind` predicate is the whole guard: a decided or withdrawn
+   * review keeps whatever it had, and the immutability trigger is structurally
+   * unreachable. `onlyWhenUnset` writes only over no reason at all, so a run's end never
+   * overwrites the more specific refusal its own start recorded. Returns the rows written.
+   */
+  async setReviewUnavailableReason(
+    id: string,
+    reason: string | null,
+    tx: Prisma.TransactionClient,
+    opts: { onlyWhenUnset?: boolean } = {},
+  ): Promise<number> {
+    const result = await tx.approvalGate.updateMany({
+      where: {
+        id,
+        kind: 'agent_review',
+        state: 'awaiting',
+        ...(opts.onlyWhenUnset ? { reviewUnavailableReason: null } : {}),
+      },
+      data: { reviewUnavailableReason: reason },
+    });
+    return result.count;
+  },
+
+  /**
    * The CARD-LESS form of {@link supersedeAwaitingByWorkItem} (MOTIR-6034; ADR §11.7):
    * withdraw the `awaiting` gate of one `kind` about one subject that belongs to no
    * work item, keyed on `(subjectId, kind)` as the card-less index is. The card form's

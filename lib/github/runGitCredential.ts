@@ -67,6 +67,21 @@ const APP_LABEL: Record<RunGitApp, string> = {
 export const RUN_GIT_PERMISSIONS = { contents: 'write', pull_requests: 'write' } as const;
 
 /**
+ * A REVIEW run's narrowing (MOTIR-6820; `hosted-agent-run.md` §8.3): it pushes nothing,
+ * so its installation token is requested with `contents: read` ONLY — it can fetch the
+ * pull requests at their reviewed heads and can write nothing.
+ */
+export const RUN_GIT_REVIEW_PERMISSIONS = { contents: 'read' } as const;
+
+/** What a run needs of a repository: a build writes it, a review only reads it. */
+export type RunGitNeed = 'write' | 'read';
+
+/** The permissions a run's token is narrowed to, by what its command does. */
+function permissionsFor(command: string): Record<string, string> {
+  return command === 'review' ? RUN_GIT_REVIEW_PERMISSIONS : RUN_GIT_PERMISSIONS;
+}
+
+/**
  * Which App writes a project repository. A `created` repository stays Motir's
  * until its takeover has TRANSFERRED it (`awaiting_reinstall` onwards): before
  * that it is still in Motir's organisation, where only `motir-studio` reaches it.
@@ -209,6 +224,7 @@ async function installationOn(
 }
 
 const canWrite = (level: string | undefined) => level === 'write' || level === 'admin';
+const canRead = (level: string | undefined) => level === 'read' || canWrite(level);
 
 /** The two refusals, verbatim from the decision (§8). */
 const REFUSAL: Record<RunGitWriteFix, (repository: string, account: string) => string> = {
@@ -222,8 +238,13 @@ type RepoAccess =
   | { ok: true; installation: InstallationOnRepo }
   | { ok: false; refusal: RunGitWriteRefusal };
 
-/** Whether `app` can write `repository`, with the installation when it can. */
-async function accessFor(repository: string, app: RunGitApp): Promise<RepoAccess> {
+/** Whether `app` can write (or, for a review, read) `repository`, with the installation
+ *  when it can. */
+async function accessFor(
+  repository: string,
+  app: RunGitApp,
+  need: RunGitNeed = 'write',
+): Promise<RepoAccess> {
   const installation = await installationOn(app, repository);
   if (app === 'motir-studio') {
     // Motir's own App not reaching a repository Motir created is an operational
@@ -247,10 +268,12 @@ async function accessFor(repository: string, app: RunGitApp): Promise<RepoAccess
       },
     };
   }
-  if (
-    !canWrite(installation.permissions['contents']) ||
-    !canWrite(installation.permissions['pull_requests'])
-  ) {
+  const lacking =
+    need === 'read'
+      ? !canRead(installation.permissions['contents'])
+      : !canWrite(installation.permissions['contents']) ||
+        !canWrite(installation.permissions['pull_requests']);
+  if (lacking) {
     return {
       ok: false,
       refusal: {
@@ -376,10 +399,12 @@ export async function repositoriesForItems(
  * Whether each repository can be written by its App — one answer per repository,
  * in the order given. The run can write only when every answer is ok. A pure
  * read: nothing is minted. The start path refuses on it, and the Repositories room
- * shows it.
+ * shows it. `need: 'read'` asks the same question at the read level — a REVIEW run's
+ * pre-flight (MOTIR-6820), which only needs `contents: read`.
  */
 export async function hostedRunWriteAccess(
   repos: readonly Pick<RunRepository, 'repository' | 'app'>[],
+  need: RunGitNeed = 'write',
 ): Promise<RunGitWriteAccess[]> {
   const out: RunGitWriteAccess[] = [];
   for (const { repository, app } of repos) {
@@ -388,7 +413,7 @@ export async function hostedRunWriteAccess(
       out.push({ repository, app, ok: true });
       continue;
     }
-    const access = await accessFor(repository, app);
+    const access = await accessFor(repository, app, need);
     out.push(access.ok ? { repository, app, ok: true } : { app, ok: false, ...access.refusal });
   }
   return out;
@@ -417,8 +442,9 @@ export async function mintRunGitCredentials(
   // that cannot write one repository is refused with all of them named.
   const resolved: { repo: RunRepository; installation: InstallationOnRepo }[] = [];
   const refusals: RunGitWriteRefusal[] = [];
+  const need: RunGitNeed = run.command === 'review' ? 'read' : 'write';
   for (const repo of repos) {
-    const access = await accessFor(repo.repository, repo.app);
+    const access = await accessFor(repo.repository, repo.app, need);
     if (access.ok) resolved.push({ repo, installation: access.installation });
     else refusals.push(access.refusal);
   }
@@ -449,7 +475,7 @@ export async function mintRunGitCredentials(
       body: {
         // By id, not name: a rename between resolve and mint cannot widen it.
         repository_ids: group.repos.map((r) => Number(r.providerRepoId)),
-        permissions: RUN_GIT_PERMISSIONS,
+        permissions: permissionsFor(run.command),
       },
     });
     if (!res.ok) {

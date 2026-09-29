@@ -556,7 +556,9 @@ export interface JobEventDataMap {
   'pull-request/auto-merge.requested': PullRequestAutoMergeRequestedData;
   /** An `agent_review` gate was RAISED (Story MOTIR-1626 · MOTIR-6819; `approval-gates.md`
    *  §12.2, `hosted-agent-run.md` §8.1) — start ONE review run for it. Emitted after the
-   *  raising transaction commits. NO consumer yet: MOTIR-6820 builds the job. */
+   *  raising transaction commits. Consumed by `agent-review/requested`
+   *  (`lib/jobs/definitions/agentReviewRequested.ts`, MOTIR-6820), and emitted again by
+   *  *Review again*. */
   'agent-review/requested': AgentReviewRequestedData;
   /** A push moved a repository's DEFAULT branch (MOTIR-5914): re-read the host's
    *  mergeability of every open pull request that targets it, and withdraw the question
@@ -642,6 +644,14 @@ export interface AgentReviewRequestedData {
   workItemId: string;
   /** The delivery-set version the review is about — `deliverySetVersion`'s spelling. */
   subjectVersion: string;
+  /**
+   * The REQUEST's key (MOTIR-6820) — `agent-review:<gateId>:raise` for the gate's raise,
+   * `agent-review:<gateId>:again:<uuid>` for one *Review again* press
+   * (`lib/agentReview/reviewRunKey.ts`). The job's dedup key and the review run's
+   * idempotency key, so a redelivered request starts nothing twice. Absent on an event
+   * emitted before it existed: the consumer then reads it as the raise.
+   */
+  idempotencyKey?: string;
 }
 
 /**

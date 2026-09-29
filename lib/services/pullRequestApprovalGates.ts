@@ -1,6 +1,7 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { gateSetFor, reconcileGatesFor, type GateSetSignals } from './gateSetFor';
+import { agentReviewStartService } from './agentReviewStartService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import {
   approvalGateRepository,
@@ -39,15 +40,32 @@ const REVIEW_KIND = 'agent_review' as const;
  * field. A decided review is history and is never touched. The next green raises a fresh
  * review at the new version (the re-ask below).
  *
- * The review RUN in flight for it is cancelled by MOTIR-6820 (§12.5's third bullet),
- * which owns the run; this writes the gate only.
+ * The review RUN in flight for it is CANCELLED once this transaction commits (§12.5's
+ * third bullet; MOTIR-6820): its answer can no longer decide anything and it is still
+ * being paid for.
  */
 async function withdrawAgentReview(
   workItemId: string,
   cause: LiveSupersedeCause,
   tx: Prisma.TransactionClient,
 ): Promise<number> {
-  return approvalGateRepository.supersedeAwaitingByWorkItem(workItemId, REVIEW_KIND, cause, tx);
+  const awaiting = (await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx)).filter(
+    (gate) => gate.kind === REVIEW_KIND,
+  );
+  const count = await approvalGateRepository.supersedeAwaitingByWorkItem(
+    workItemId,
+    REVIEW_KIND,
+    cause,
+    tx,
+  );
+  const first = awaiting[0];
+  if (count > 0 && first) {
+    agentReviewStartService.cancelRunsAfterCommit(
+      first.workspaceId,
+      awaiting.map((gate) => gate.id),
+    );
+  }
+  return count;
 }
 
 /**

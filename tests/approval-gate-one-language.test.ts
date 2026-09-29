@@ -359,6 +359,16 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       writes: 'superseded',
       callers: ['lib/services/planGateService.ts'],
     },
+    {
+      method: 'setReviewUnavailableReason',
+      // MOTIR-6820 (Story MOTIR-1626; `approval-gates.md` §12.6): why an AWAITING
+      // `agent_review` gate's review could not run — written on a refused start or a run
+      // that ended with no verdict, cleared by *Review again*. It moves no state and names
+      // no decider: the gate stays `awaiting`, so it is a note on the open question, never a
+      // decision.
+      writes: 'awaiting',
+      callers: ['lib/services/agentReviewStartService.ts', 'lib/services/hostedRunService.ts'],
+    },
   ] as const;
 
   it('routes every DECISION through `approvalGatesService.decide` — one call site', () => {

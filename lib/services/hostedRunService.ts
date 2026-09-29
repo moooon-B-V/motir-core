@@ -2,10 +2,12 @@ import { FLEET_CONTAINER_SIZE, type TeardownReason } from '@motir/orchestrator';
 import { checkAgentRunCredits } from '@/lib/ai/motirAiClient';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { DispatchRunTerminalError } from '@/lib/dispatchRuns/errors';
+import { gateIdOfReviewRunKey } from '@/lib/agentReview/reviewRunKey';
 import {
   hostedRunWriteAccess,
   repositoriesForItems,
   revokeRunGitCredentials,
+  type RunGitNeed,
   type RunRepository,
 } from '@/lib/github/runGitCredential';
 import {
@@ -17,6 +19,7 @@ import {
   HostedRunCreditsUnavailableError,
   HostedRunNotFoundError,
   HostedRunOutOfCreditsError,
+  HostedRunRepositoryNotReadableError,
   HostedRunRepositoryNotWritableError,
   type RunGitWriteRefusal,
 } from '@/lib/hostedRuns/errors';
@@ -31,9 +34,11 @@ import type { MemoizingSteps } from '@/lib/jobs/supervision/inProcessSteps';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import type { HostedRunSuperviseData } from '@/lib/jobs/types';
 import { hostedAgentFleetConfig } from '@/lib/orchestrator';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
@@ -98,6 +103,27 @@ export interface StartHostedRunInput {
    */
   mode?: 'run' | 'continue';
 }
+
+/**
+ * What a REVIEW start asks for (Story MOTIR-1626 · MOTIR-6820; `hosted-agent-run.md` §8.1)
+ * — the gate the run answers, at the version it asks about. No model: a review has no
+ * dispatcher to choose one, so it takes the offered list's default.
+ */
+export interface StartHostedReviewInput {
+  workItemId: string;
+  gateId: string;
+  subjectVersion: string;
+  /** The request's key (`lib/agentReview/reviewRunKey.ts`) — the run's idempotency key,
+   *  which is how the run names its gate. */
+  idempotencyKey: string;
+}
+
+/** The `reviewUnavailableReason` a review run that ended without a verdict leaves on its
+ *  still-awaiting gate (`approval-gates.md` §12.6, the column's own comment). */
+export const REVIEW_NO_VERDICT_REASON = 'no_verdict';
+
+/** The teardown detail of a review run whose gate was superseded (§12.5). */
+export const HOSTED_REVIEW_SUPERSEDED_DETAIL = 'its review was superseded';
 
 export interface HostedRunStarted {
   dispatchRunId: string;
@@ -284,6 +310,8 @@ function detailOf(err: unknown): string {
 
 /** What the pre-flights settled — the inputs the boot needs. */
 interface HostedRunPreflight {
+  /** The model the run takes — the dispatcher's choice, or a review's default. */
+  model: string;
   organizationId: string;
   repositories: RunRepository[];
   fleet: ReturnType<typeof hostedAgentFleetConfig>;
@@ -293,20 +321,29 @@ interface HostedRunPreflight {
  * EVERY REFUSAL BEFORE ANY SPEND, in order: the CI-credit gate, the model, the
  * organization's credits, every repository of the run writable, the fleet
  * configured. Each is a read. Shared by Run hosted and Continue hosted
- * (MOTIR-6792) so a continue costs and refuses exactly like a run.
+ * (MOTIR-6792) so a continue costs and refuses exactly like a run — and by the
+ * REVIEW start (MOTIR-6820), which passes no model (it takes the offered list's
+ * default) and needs every repository READABLE only (`hosted-agent-run.md` §8.1, §8.3).
  */
 async function preflight(
-  input: Pick<StartHostedRunInput, 'model'>,
+  input: { model?: string | undefined },
   projectId: string,
   legIds: string[],
   ctx: ServiceContext,
+  need: RunGitNeed = 'write',
 ): Promise<HostedRunPreflight> {
   // The CI-credit gate every dispatch entry point runs — here, before the run
   // opens, so an exhausted organization is refused rather than failed.
   await ciAllowanceService.assertDispatchAllowed(ctx);
 
   // ── 2 · The model, live — never a cache ──────────────────────────────────
-  await hostedRunModelService.assertOffered(input.model);
+  let model: string;
+  if (input.model === undefined) {
+    model = await hostedRunModelService.defaultOffered();
+  } else {
+    await hostedRunModelService.assertOffered(input.model);
+    model = input.model;
+  }
 
   // ── 3 · Credits — the gateway's own balance rule ────────────────────────
   const organizationId = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -324,17 +361,18 @@ async function preflight(
     ctx.workspaceId,
     legIds,
   );
-  const access = await hostedRunWriteAccess(repositories);
+  const access = await hostedRunWriteAccess(repositories, need);
   const refusals = access.filter((a): a is Extract<typeof a, { ok: false }> => !a.ok);
   if (refusals.length > 0) {
-    throw new HostedRunRepositoryNotWritableError(
-      refusals.map(({ ok: _ok, app: _app, ...refusal }) => refusal as RunGitWriteRefusal),
-      repositories.length,
+    const named = refusals.map(
+      ({ ok: _ok, app: _app, ...refusal }) => refusal as RunGitWriteRefusal,
     );
+    if (need === 'read') throw new HostedRunRepositoryNotReadableError(named);
+    throw new HostedRunRepositoryNotWritableError(named, repositories.length);
   }
   // The fleet, last of the reads: an unconfigured deployment opens nothing.
   const fleet = hostedAgentFleetConfig();
-  return { organizationId, repositories, fleet };
+  return { model, organizationId, repositories, fleet };
 }
 
 /**
@@ -351,20 +389,25 @@ async function launch(
   ctx: ServiceContext,
   options: HostedRunStartOptions,
   extraEnv: Record<string, string> = {},
+  /** False for a REVIEW (MOTIR-6820): it implements nothing, so it stamps no card's
+   *  implementation provenance (`hosted-agent-run.md` §8.3 — it writes no card). */
+  stampLegs = true,
 ): Promise<void> {
   const now = options.now ?? ((): Date => new Date());
   const { identifier, legIds } = target;
   const { organizationId, repositories, fleet } = checked;
   const project = { id: target.projectId };
-  await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
-    for (const id of legIds) {
-      await workItemsService.recordImplementationProvenance(
-        id,
-        { source: 'hosted', harness: 'opencode', model: input.model },
-        tx,
-      );
-    }
-  });
+  if (stampLegs) {
+    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+      for (const id of legIds) {
+        await workItemsService.recordImplementationProvenance(
+          id,
+          { source: 'hosted', harness: 'opencode', model: input.model },
+          tx,
+        );
+      }
+    });
+  }
 
   // ── 6 · The two credentials, each dying by the backstop ────────────────
   const startedAt = new Date(run.startedAt);
@@ -541,7 +584,146 @@ async function startContinue(
   }
 }
 
+/**
+ * START A HOSTED REVIEW (Story MOTIR-1626 · MOTIR-6820; `hosted-agent-run.md` §8.1) —
+ * Run hosted's start with the readiness check and the claim taken OUT: the card is in the
+ * review band and belongs to whoever built it, so a review claims nothing and moves no
+ * status. Every money and access pre-flight stays, in Run hosted's order: the CI-credit
+ * gate, the model (the offered list's DEFAULT — nobody chooses), the organisation's
+ * credits, every repository READABLE, the fleet. Then ONE `command: review` run is opened
+ * over the card as its one leg (the run token's card binding), its `run_opened` names the
+ * gate and version, and the container boots with `MOTIR_RUN_MODE=review`.
+ *
+ * `ctx` is the run's ATTRIBUTED user (assignee → reporter → the workspace stand-in
+ * manager, resolved by the caller): the run's `createdById`, the run token's owner and so
+ * the verdict's `decidedById`. The run key is billed to the workspace's organisation, as
+ * every hosted run's is.
+ *
+ * Throws every pre-flight refusal `start` throws (with the read-level
+ * `HostedRunRepositoryNotReadableError` and the review's `HostedNoModelOfferedError`),
+ * before anything is opened. After the open, a failure ends the run `failed` and is
+ * rethrown. Idempotent on `idempotencyKey`: a repeat answers the run it already opened.
+ */
+async function startReview(
+  input: StartHostedReviewInput,
+  ctx: ServiceContext,
+  options: HostedRunStartOptions,
+): Promise<HostedRunStarted> {
+  const already = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    dispatchRunRepository.findByIdempotencyKey(ctx.workspaceId, input.idempotencyKey, tx),
+  );
+  if (already) return { dispatchRunId: already.id, created: false };
+
+  // The caller read the card under its gate a moment ago; only a delete in between
+  // finds it gone.
+  /* v8 ignore start */
+  const target = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+    const item = await workItemRepository.findById(input.workItemId, tx);
+    const project = item ? await projectRepository.findById(item.projectId, tx) : null;
+    return item && project ? { item, project } : null;
+  });
+  if (!target) throw new HostedRunCardNotReadyError(input.workItemId, 'it no longer exists');
+  /* v8 ignore stop */
+  const { item, project } = target;
+
+  const checked = await preflight({}, project.id, [item.id], ctx, 'read');
+
+  const opened = await dispatchRunService.open(
+    {
+      projectKey: project.identifier,
+      command: 'review',
+      origin: 'hosted',
+      agent: 'opencode',
+      model: checked.model,
+      idempotencyKey: input.idempotencyKey,
+      cards: [{ key: item.identifier, disposition: 'queued' }],
+    },
+    ctx,
+  );
+  const run = opened.run;
+  /* v8 ignore next -- race-only: two deliveries of one request both passed the read above */
+  if (!opened.created) return { dispatchRunId: run.id, created: false };
+
+  try {
+    await dispatchRunService.appendEvents(
+      run.id,
+      [
+        {
+          kind: 'run_opened',
+          data: {
+            command: 'review',
+            key: item.identifier,
+            origin: 'hosted',
+            model: checked.model,
+            gateId: input.gateId,
+            subjectVersion: input.subjectVersion,
+          },
+        },
+      ],
+      ctx,
+    );
+    await launch(
+      run,
+      { model: checked.model },
+      { identifier: item.identifier, projectId: project.id, legIds: [item.id] },
+      checked,
+      ctx,
+      options,
+      {
+        MOTIR_RUN_MODE: 'review',
+        MOTIR_REVIEW_GATE_ID: input.gateId,
+        MOTIR_REVIEW_VERSION: input.subjectVersion,
+      },
+      false,
+    );
+    return { dispatchRunId: run.id, created: true };
+  } catch (err) {
+    if (!(err instanceof HostedRunBootFailedError)) {
+      await hostedRunService.endHostedRun(
+        run.id,
+        'failed',
+        `the review could not start: ${detailOf(err)}`,
+      );
+    }
+    throw err;
+  }
+}
+
+/**
+ * A REVIEW run that has ended leaves its reason on its gate (`approval-gates.md` §12.6;
+ * `hosted-agent-run.md` §8.4) — whatever the end: the CLI's own close without a verdict,
+ * a crash, a stall, the backstop, a cancel, a lost supervision. Written only while the
+ * gate is still AWAITING (an accepted verdict decided it; a supersede withdrew it) and
+ * only over no reason (a refusal its start recorded is the more specific one). Never a
+ * throw: the end path must finish.
+ */
+async function recordReviewEnd(run: {
+  id: string;
+  workspaceId: string;
+  command: string;
+  idempotencyKey: string | null;
+}): Promise<void> {
+  if (run.command !== 'review') return;
+  const gateId = gateIdOfReviewRunKey(run.idempotencyKey);
+  if (!gateId) return;
+  try {
+    await withWorkspaceServiceContext(run.workspaceId, (tx) =>
+      approvalGateRepository.setReviewUnavailableReason(gateId, REVIEW_NO_VERDICT_REASON, tx, {
+        onlyWhenUnset: true,
+      }),
+    );
+  } catch (err) {
+    /* v8 ignore next 4 -- a database fault mid end-path; the run's own close stands */
+    console.error('[hostedRunService] could not record the review run’s end on its gate', {
+      dispatchRunId: run.id,
+      detail: detailOf(err),
+    });
+  }
+}
+
 export const hostedRunService = {
+  startReview,
+
   /**
    * Start a hosted run on a READY card — a leaf, or a parent through its
    * children — and return its id once its container is booted and supervised.
@@ -734,6 +916,18 @@ export const hostedRunService = {
     if (run?.status === 'cancelled') {
       return { reason: 'gate_revoked', detail: HOSTED_RUN_CANCEL_DETAIL };
     }
+    // A REVIEW whose gate was withdrawn is cancelled (§12.5): its answer can decide
+    // nothing and it is still being paid for. The withdrawal's own seam cancels it at
+    // once; this read is the catch-all for a supersede that reached no seam.
+    const gateId = run?.command === 'review' ? gateIdOfReviewRunKey(run.idempotencyKey) : null;
+    if (gateId) {
+      const gate = await withWorkspaceServiceContext(session.attribution.workspaceId, (tx) =>
+        approvalGateRepository.findById(gateId, tx),
+      );
+      if (gate?.state === 'superseded') {
+        return { reason: 'gate_revoked', detail: HOSTED_REVIEW_SUPERSEDED_DETAIL };
+      }
+    }
     return this.stallDetail(dispatchRunId, session, now);
   },
 
@@ -880,6 +1074,8 @@ export const hostedRunService = {
         }
       }
     }
+    // A REVIEW run's end, closed by whoever: a gate still awaiting was not answered.
+    if (run) await recordReviewEnd(run);
     return {
       closed,
       runKey: key.ok ? 'revoked' : 'failed',

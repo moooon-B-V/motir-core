@@ -152,6 +152,8 @@ export const dispatchRunRepository = {
     const row = await tx.dispatchRun.findFirst({
       where: {
         status: 'running',
+        // A review run writes no How to test (§8.3), so it is never the record's run.
+        command: { not: 'review' },
         OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }],
       },
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
@@ -233,8 +235,8 @@ export const dispatchRunRepository = {
   },
 
   /**
-   * The NEWEST run of ANY command that holds a leg for this work item or is SCOPED
-   * to it, with everything the continue claim reads about it (MOTIR-6532): its
+   * The NEWEST run of any command but `review` that holds a leg for this work item or
+   * is SCOPED to it, with everything the continue claim reads about it (MOTIR-6532): its
    * liveness columns, its starter, its scope, and the leg naming this item (none
    * for a scoped run's container). Null when the item has never been run.
    */
@@ -243,7 +245,13 @@ export const dispatchRunRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<LatestRunForWorkItem | null> {
     return tx.dispatchRun.findFirst({
-      where: { OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }] },
+      where: {
+        // ⚠️ NEVER A REVIEW RUN (MOTIR-1626; `hosted-agent-run.md` §8.1 / §8.3). A review
+        // builds nothing and holds no card: its end is not the card's run dying, and a
+        // review opened after a build died must not hide that death from To fix.
+        command: { not: 'review' },
+        OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }],
+      },
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       select: {
         id: true,
@@ -339,6 +347,24 @@ export const dispatchRunRepository = {
   ): Promise<DispatchRun | null> {
     return tx.dispatchRun.findUnique({
       where: { workspaceId_idempotencyKey: { workspaceId, idempotencyKey } },
+    });
+  },
+
+  /**
+   * The RUNNING runs whose idempotency key starts with `prefix`, in one workspace —
+   * what a REVIEW run's gate is found by (MOTIR-6820): the server opens every review run
+   * under `agent-review:<gateId>:…`, so the gate's in-flight review is this read. Served
+   * by the `(workspace_id, idempotency_key)` unique index's prefix.
+   */
+  async listRunningByIdempotencyKeyPrefix(
+    workspaceId: string,
+    prefix: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string }>> {
+    return tx.dispatchRun.findMany({
+      where: { workspaceId, status: 'running', idempotencyKey: { startsWith: prefix } },
+      orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
+      select: { id: true },
     });
   },
 

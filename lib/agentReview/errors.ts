@@ -79,3 +79,66 @@ export class ReviewStaleError extends Error {
     this.name = 'ReviewStaleError';
   }
 }
+
+// ── REVIEW AGAIN (Story MOTIR-1626 · MOTIR-6820; `approval-gates.md` §12.6) ──────────────
+//
+// The routed person's press on a review that COULD NOT RUN. Raised by
+// `agentReviewStartService.reviewAgain` and mapped by the session route
+// `POST /api/approval-gates/[id]/review-again`.
+
+/**
+ * 404 — no `agent_review` gate by that id that the caller can see: missing, another
+ * workspace, a card the caller cannot browse, or a gate of another kind. One answer for
+ * all of them, so the route leaks no existence.
+ */
+export class ReviewAgainGateNotFoundError extends Error {
+  readonly code = 'REVIEW_AGAIN_GATE_NOT_FOUND';
+  constructor(readonly gateId: string) {
+    super('There is no agent review here to run again.');
+    this.name = 'ReviewAgainGateNotFoundError';
+  }
+}
+
+/**
+ * 403 — the caller may see the card but is not the person the review is routed to (the
+ * assignee, the reporter when there is no assignee, or `approval:decide_any`), or lacks
+ * the kind's `work_item:edit` floor — the SAME authority *Continue without the review*
+ * takes (§12.3, §12.6).
+ */
+export class ReviewAgainForbiddenError extends Error {
+  readonly code = 'REVIEW_AGAIN_FORBIDDEN';
+  constructor(readonly gateId: string) {
+    super('Only the person this review is routed to can run it again.');
+    this.name = 'ReviewAgainForbiddenError';
+  }
+}
+
+/** Why *Review again* is not offered on this gate right now. */
+export type ReviewAgainRefusal =
+  /** The gate is no longer awaiting — decided, or withdrawn by a head move or the switch. */
+  | 'not_awaiting'
+  /** The review has not failed to run: there is no `reviewUnavailableReason` to clear. */
+  | 'no_reason'
+  /** A review run for this gate is still running — one review at a time. */
+  | 'run_in_flight';
+
+/**
+ * 409 — *Review again* is offered only on an AWAITING review that could not run and has
+ * no run in flight (§12.6). Nothing was cleared and nothing was requested.
+ */
+export class ReviewAgainNotOfferedError extends Error {
+  readonly code = 'REVIEW_AGAIN_NOT_OFFERED';
+  constructor(
+    readonly gateId: string,
+    readonly reason: ReviewAgainRefusal,
+  ) {
+    super(
+      reason === 'run_in_flight'
+        ? 'A review of this version is already running.'
+        : reason === 'no_reason'
+          ? 'This review has not failed to run, so there is nothing to run again.'
+          : 'This review is no longer waiting, so it cannot be run again.',
+    );
+    this.name = 'ReviewAgainNotOfferedError';
+  }
+}

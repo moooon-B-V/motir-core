@@ -237,6 +237,8 @@ describe('§12.2 — a green set with the switch on asks the REVIEW, not the mer
       gateId: review.id,
       workItemId: item.id,
       subjectVersion: version(61, 'sha-a'),
+      // The request's own key — the job's dedup and the review run's idempotency (MOTIR-6820).
+      idempotencyKey: `agent-review:${review.id}:raise`,
     });
     // Sent only once the raising transaction had committed.
     expect(reviewRequests()[0]!.reviewsAtSend).toBe(1);

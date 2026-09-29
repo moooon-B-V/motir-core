@@ -28,6 +28,7 @@ import {
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { githubPullRequestMergeRefusalRepository } from '@/lib/repositories/githubPullRequestMergeRefusalRepository';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { reviewRaiseKey } from '@/lib/agentReview/reviewRunKey';
 import { deferUntilCommit } from '@/lib/workspaces/afterCommit';
 import { mergeCandidateHead } from './mergeGates';
 import { workflowsService } from './workflowsService';
@@ -355,7 +356,13 @@ function requestAgentReviewAfterCommit(gate: {
   /* v8 ignore next */
   if (workItemId === null || subjectVersion === null) return;
   const deferred = deferUntilCommit(() =>
-    sendEvent('agent-review/requested', { workspaceId, gateId, workItemId, subjectVersion }),
+    sendEvent('agent-review/requested', {
+      workspaceId,
+      gateId,
+      workItemId,
+      subjectVersion,
+      idempotencyKey: reviewRaiseKey(gateId),
+    }),
   );
   if (!deferred) {
     console.warn(

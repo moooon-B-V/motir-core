@@ -121,6 +121,17 @@ const CARD_ROUTES: CardRoute[] = [
   },
 ];
 
+/**
+ * The review run's two routes (MOTIR-6821) answer ONLY a `command: review` run's token, so
+ * the `run_scope` token this file mints is refused there by the review-run check before any
+ * leg question arises. Their binding — the run's own card, and a refusal for a card outside
+ * it — is proven in `tests/api/v1/agent-review-routes.test.ts` with a review run's token.
+ */
+const REVIEW_RUN_ONLY = [
+  'GET /api/v1/work-items/{key}/review-prompt',
+  'POST /api/v1/work-items/{key}/agent-review',
+];
+
 async function seedItem(
   caller: V1ProjectCaller,
   kind: 'story' | 'task',
@@ -190,7 +201,9 @@ describe('a hosted run credential reaches its run’s legs and scope, and nothin
   it('every card-keyed route in the table is exercised here', () => {
     const tableCardPaths = RUN_TOKEN_ROUTES.filter(
       (r) => r.binding === 'run_cards' && r.path.includes('{key}'),
-    ).map((r) => `${r.method} ${r.path}`);
+    )
+      .map((r) => `${r.method} ${r.path}`)
+      .filter((p) => !REVIEW_RUN_ONLY.includes(p));
     expect(CARD_ROUTES.map((r) => `${r.method} ${r.path}`).sort()).toEqual(tableCardPaths.sort());
   });
 

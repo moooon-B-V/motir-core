@@ -34,6 +34,21 @@ export class HostedModelsUnavailableError extends Error {
   }
 }
 
+/**
+ * motir-ai answered, and offers NO model at all (MOTIR-6820; `hosted-agent-run.md` §7's
+ * pointer). Only the REVIEW run meets it: it has no dispatcher to choose, so it takes the
+ * list's default, else the first model offered — and an empty list is a review that could
+ * not run, reason _no model_. Distinct from {@link HostedModelsUnavailableError}: motir-ai
+ * being down never reads as "no models exist".
+ */
+export class HostedNoModelOfferedError extends Error {
+  readonly code = 'hosted_no_model_offered' as const;
+  constructor() {
+    super('No model is offered for hosted runs.');
+    this.name = 'HostedNoModelOfferedError';
+  }
+}
+
 // --- The hosted-run key wiring (MOTIR-689) ---
 
 /** Why a per-run key could not be minted. Every reason means the same thing to
@@ -101,6 +116,20 @@ export class HostedRunRepositoryNotWritableError extends Error {
   ) {
     super(refusals.map((r) => r.reason).join('; '));
     this.name = 'HostedRunRepositoryNotWritableError';
+  }
+}
+
+/**
+ * A REVIEW run covers at least one repository its App cannot READ (MOTIR-6820;
+ * `hosted-agent-run.md` §8.1, §8.3). A review pushes nothing, so it needs only read
+ * access — the refusals are the write check's, asked at the read level, every refused
+ * repository named.
+ */
+export class HostedRunRepositoryNotReadableError extends Error {
+  readonly code = 'hosted_repository_not_readable' as const;
+  constructor(readonly refusals: readonly RunGitWriteRefusal[]) {
+    super(refusals.map((r) => r.reason).join('; '));
+    this.name = 'HostedRunRepositoryNotReadableError';
   }
 }
 

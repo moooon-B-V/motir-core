@@ -3,6 +3,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { reconcileGatesFor } from '@/lib/services/gateSetFor';
+import { agentReviewStartService } from '@/lib/services/agentReviewStartService';
 import { evaluateAfterRaise } from '@/lib/services/pullRequestReviewSync';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { ProjectNotFoundError, ReviewAgentNeedsManualMergeError } from '@/lib/projects/errors';
@@ -56,8 +57,8 @@ function toSettingsDTO(project: {
  * ⚠️ LOCK ORDER — the gates, then each card: the order a transition and the decide door
  * take them in. `reconcileGatesFor` relies on its caller holding the card's row lock.
  *
- * The review RUN in flight for a retired gate is cancelled by MOTIR-6820, which owns runs
- * (§12.5, *"reviews in progress are cancelled"*); this writes the gates only.
+ * The review RUN in flight for each retired gate is CANCELLED once this transaction
+ * commits (§12.5, *"reviews in progress are cancelled"*; MOTIR-6820).
  */
 async function retireAwaitingReviews(
   projectId: string,
@@ -71,6 +72,16 @@ async function retireAwaitingReviews(
   const cards = [
     ...new Set(awaiting.flatMap((gate) => (gate.workItemId ? [gate.workItemId] : []))),
   ];
+  const first = awaiting[0];
+  if (first) {
+    const project = await projectRepository.findById(projectId, tx);
+    if (project) {
+      agentReviewStartService.cancelRunsAfterCommit(
+        project.workspaceId,
+        awaiting.map((gate) => gate.id),
+      );
+    }
+  }
   for (const workItemId of cards) {
     await workItemRepository.lockById(workItemId, tx);
     await approvalGateRepository.supersedeAwaitingByWorkItem(
