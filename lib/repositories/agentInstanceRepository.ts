@@ -205,6 +205,28 @@ export const agentInstanceRepository = {
   },
 
   /**
+   * Every instance that EXISTED at some moment in `[from, to)` — the daily storage
+   * charge's discovery (`agent-instance-storage.md` §2), across tenants, so it runs
+   * under `withSystemContext`. Existed means created before `to` and either deleted
+   * at or after `from`, or not deleted and not mid-delete: a row still `deleting`
+   * with no `deletedAt` is left for the pass after its delete completes, which
+   * charges it through `deletedAt` for every day it stood.
+   */
+  async listExistedBetween(
+    from: Date,
+    to: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance[]> {
+    return tx.agentInstance.findMany({
+      where: {
+        createdAt: { lt: to },
+        OR: [{ deletedAt: { gte: from } }, { deletedAt: null, state: { not: 'deleting' } }],
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /**
    * Every live record in one instance app — the reconcile's "who owns this
    * machine / volume" read. Deleted rows are excluded, so a machine or volume
    * that only a deleted record names is an orphan.

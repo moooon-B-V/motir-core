@@ -73,6 +73,7 @@ import { organizationRetentionPurge } from './definitions/organizationRetentionP
 import { dlqStandingDepthSweep } from './definitions/dlqStandingDepthSweep';
 import { agentInstanceIdleCheck } from './definitions/agentInstanceIdleCheck';
 import { agentInstanceSweep } from './definitions/agentInstanceSweep';
+import { agentInstanceStorageCharge } from './definitions/agentInstanceStorageCharge';
 
 // EVERY JOB THIS IMAGE KNOWS (Story 1.6 · Subtask 1.6.2; re-based onto the
 // Postgres engine by Story MOTIR-3418).
@@ -166,4 +167,6 @@ export const jobDefinitions = [
   // and the 30-minute sweep beneath it.
   agentInstanceIdleCheck,
   agentInstanceSweep,
+  // Agent storage (Story MOTIR-6914 · MOTIR-6919): one debit per agent per UTC day.
+  agentInstanceStorageCharge,
 ];

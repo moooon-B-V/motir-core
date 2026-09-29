@@ -590,6 +590,10 @@ export interface JobEventDataMap {
    *  and hibernates instances, destroys orphans and charges pending intervals.
    *  Cross-tenant by design: it walks every live instance. */
   'system.agent-instance-sweep': SystemScheduledData;
+  /** The agent storage charge (Story MOTIR-6914 · MOTIR-6919) — writes and debits
+   *  one storage day per agent per UTC day on which it existed. Cross-tenant by
+   *  design: it walks every instance that stood in its window. */
+  'system.agent-instance-storage-charge': SystemScheduledData;
 }
 
 /**

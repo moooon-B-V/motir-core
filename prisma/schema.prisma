@@ -1046,6 +1046,7 @@ model Organization {
   /// Agent instances billed to this organisation (MOTIR-6870). Cascade.
   agentInstances         AgentInstance[]
   agentInstanceIntervals AgentInstanceInterval[]
+  agentInstanceStorageCharges AgentInstanceStorageCharge[]
 
   @@map("organization")
 }
@@ -1270,6 +1271,7 @@ model Workspace {
   /// Users' agent instances in this workspace's projects (MOTIR-6870). Cascade.
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]
+  agentInstanceStorageCharges AgentInstanceStorageCharge[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -11557,6 +11559,7 @@ model AgentInstance {
   project      Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
   owner        User                    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   intervals    AgentInstanceInterval[]
+  storageCharges AgentInstanceStorageCharge[]
 
   /// The owner's list: newest first per project.
   @@index([ownerId, projectId, createdAt(sort: Desc)])
@@ -11610,4 +11613,42 @@ model AgentInstanceInterval {
   @@index([chargeOutcome, endedAt])
   @@index([workspaceId])
   @@map("agent_instance_interval")
+}
+
+// ONE UTC DAY OF AN AGENT INSTANCE'S STORAGE, charged (Story MOTIR-6914 ·
+// MOTIR-6919; `docs/decisions/agent-instance-storage.md` §2). One row per
+// (instance, day) on which the instance existed at any moment — running,
+// hibernated or failed — written by the daily storage charge before it asks
+// motir-ai, so a charge motir-ai could not take stays `pending` and is asked
+// again with the same key. Workspace-scoped tenant data under RLS (the migration).
+model AgentInstanceStorageCharge {
+  id              String @id @default(cuid())
+  workspaceId     String @map("workspace_id")
+  organizationId  String @map("organization_id")
+  agentInstanceId String @map("agent_instance_id")
+
+  /// The UTC calendar day charged.
+  day     DateTime @db.Date
+  /// The record's daily rate at the moment the row was written.
+  credits Int
+
+  /// The debit's idempotency key: `agent-storage:<instance id>:<YYYY-MM-DD>`.
+  /// Unique, so one instance is charged at most once per day.
+  chargeReference String                     @unique @map("charge_reference")
+  chargeOutcome   AgentInstanceChargeOutcome @default(pending) @map("charge_outcome")
+  chargeDetail    String?                    @map("charge_detail")
+  chargeAttempts  Int                        @default(0) @map("charge_attempts")
+  chargedAt       DateTime?                  @map("charged_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agentInstance AgentInstance @relation(fields: [agentInstanceId], references: [id], onDelete: Cascade)
+
+  /// The charge pass's discovery read: rows still `pending`, oldest day first.
+  @@index([chargeOutcome, day])
+  @@index([workspaceId])
+  @@map("agent_instance_storage_charge")
 }

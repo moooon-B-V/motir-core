@@ -25,6 +25,15 @@ export const INSTANCE_INTERVAL_BACKSTOP_MS = 12 * 60 * 60 * 1000;
  */
 export const INSTANCE_SLOT_TTL_SECONDS = 12 * 60 * 60 + 45 * 60;
 
+/**
+ * `agent-instance-storage.md` §2: what one agent's storage costs its organisation
+ * per UTC day on which it existed at any moment — running, hibernated or failed —
+ * in whole credits. Derived there (volume + one full snapshot copy, + the agent
+ * lane's ~20% margin, rounded UP) and re-derived there when a measured snapshot
+ * size or Fly's prices move; this constant changes with a note in that record.
+ */
+export const INSTANCE_STORAGE_CREDITS_PER_DAY = 10;
+
 /** §6: live (not deleted) instances one user may hold, across projects. */
 export const INSTANCE_MAX_PER_USER = 10;
 

@@ -416,6 +416,51 @@ export async function debitAgentMachine(
   return (await res.json()) as RawAgentMachineDebitResponse;
 }
 
+// ── An agent instance's daily storage charge (MOTIR-6919 · motir-ai MOTIR-6915) ──
+
+/**
+ * What `POST /v1/credits/agent-storage` takes: ONE agent instance's storage for
+ * ONE UTC day, at the rate `docs/decisions/agent-instance-storage.md` §2 fixes.
+ * There is no `externalRef` — motir-ai builds the key from `instanceId` and `day`
+ * (`agent-storage:<instance id>:<day>`), so an agent is charged at most once per
+ * day whatever this side retries.
+ */
+export interface AgentStorageDebitInput {
+  coreOrganizationId: string;
+  /** `AgentInstance.id`. */
+  instanceId: string;
+  /** The UTC day charged, `YYYY-MM-DD`. */
+  day: string;
+  /** Whole credits (integer ≥ 1) — the record's daily rate. */
+  credits: number;
+  reason?: string;
+}
+
+/** The same body `ci-overage` answers, `idempotent` included. */
+export type RawAgentStorageDebitResponse = RawCiOverageDebitResponse;
+
+/**
+ * POST /v1/credits/agent-storage — charge an org's ledger for one agent's storage
+ * on one UTC day, the `agent_storage` kind.
+ *
+ * {@link debitAgentMachine}'s contract: it THROWS a typed error on failure, and the
+ * caller (`agentInstanceStorageChargeService`) — which has already written the
+ * `pending` row — decides to retry. Idempotent on the instance and the day, so a
+ * retry after a timed-out call that had in fact landed answers `idempotent: true`.
+ */
+export async function debitAgentStorage(
+  input: AgentStorageDebitInput,
+): Promise<RawAgentStorageDebitResponse> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/credits/agent-storage`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawAgentStorageDebitResponse;
+}
+
 /**
  * POST /v1/credits/index-check — may this organisation's next index container
  * boot? (MOTIR-4593; motir-ai MOTIR-5284.)
