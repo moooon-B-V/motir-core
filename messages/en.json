@@ -6065,6 +6065,21 @@
       "optionMoveCta": "Move repositories",
       "viewUsage": "View Usage & cost"
     },
+    "agents": {
+      "name": "Agents",
+      "tagline": "The agents your organization hosts — their machine time and their storage.",
+      "perUse": "Per use",
+      "machineLabel": "Machine time",
+      "storageLabel": "Storage",
+      "totalLabel": "Total this month",
+      "creditsUnit": "credits",
+      "rate": "Machine time is 1 credit per running minute. Storage is 10 credits per agent per day, asleep or not. Both draw from your Motir AI balance.",
+      "zero": "No agents ran or existed this month. Machine time is 1 credit per running minute. Storage is 10 credits per agent per day, asleep or not.",
+      "noPlan": "Agents need a paid AI plan (Standard, Pro, Max or Enterprise).",
+      "choosePlan": "Choose an AI plan",
+      "unavailable": "Agent figures aren’t available right now. Your agents are still being charged — this is the display, not the billing.",
+      "unavailableValue": "Unavailable"
+    },
     "search": {
       "name": "Motir Search",
       "tagline": "The web searches your planning runs make to ground themselves in current sources.",

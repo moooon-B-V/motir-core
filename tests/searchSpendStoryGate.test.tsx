@@ -75,6 +75,10 @@ function upstream(over: Partial<RawUsageResponse> = {}): RawUsageResponse {
       attributedSpend: 246,
       unattributedSpend: 66,
     },
+    // motir-ai sends the agent blocks on every response too (MOTIR-6915); present
+    // here so only the SEARCH blocks read as unavailable below.
+    agentMachine: { totalSpend: 0, monthSpend: 0 },
+    agentStorage: { totalSpend: 0, monthSpend: 0 },
     ...over,
   };
 }

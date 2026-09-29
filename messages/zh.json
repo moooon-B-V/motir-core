@@ -6065,6 +6065,21 @@
       "optionMoveCta": "迁移仓库",
       "viewUsage": "查看用量与费用"
     },
+    "agents": {
+      "name": "智能体",
+      "tagline": "你的组织托管的智能体——它们的机器时长和存储。",
+      "perUse": "按用量",
+      "machineLabel": "机器时长",
+      "storageLabel": "存储",
+      "totalLabel": "本月合计",
+      "creditsUnit": "积分",
+      "rate": "机器时长按每运行一分钟 1 积分计费。存储按每个智能体每天 10 积分计费，无论是否休眠。两者都从你的 Motir AI 余额中扣除。",
+      "zero": "本月没有智能体运行或存在。机器时长按每运行一分钟 1 积分计费。存储按每个智能体每天 10 积分计费，无论是否休眠。",
+      "noPlan": "智能体需要付费 AI 方案（Standard、Pro、Max 或 Enterprise）。",
+      "choosePlan": "选择 AI 方案",
+      "unavailable": "智能体数据暂时无法显示。你的智能体仍在计费——这是显示问题，不是计费问题。",
+      "unavailableValue": "不可用"
+    },
     "search": {
       "name": "Motir 搜索",
       "tagline": "规划运行为获取最新资料而发起的网页搜索。",
