@@ -1,4 +1,5 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { dropLegacyRoleStorage, ensureLegacyRoleStorage } from './helpers/legacyRoleStorage';
 import { db } from '@/lib/db';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -390,6 +391,11 @@ const BACKFILL_SQL: string[] = [
 class RollbackSignal extends Error {}
 
 describe('migration backfill (6.10.3) — one default org per workspace, idempotent', () => {
+  // Step 3 reads `workspace_membership.role`, which MOTIR-6569 dropped; rebuild
+  // it for this replay only (tests/helpers/legacyRoleStorage.ts).
+  beforeEach(ensureLegacyRoleStorage);
+  afterEach(dropLegacyRoleStorage);
+
   it('backfills pre-org workspaces into one owner-having org each, then is a no-op on re-run', async () => {
     // Seed two workspaces (in two orgs) via the service, with an extra member
     // in the first — the rows the backfill will be made to "forget" their orgs.
