@@ -4161,3 +4161,246 @@ The card's _{when}_ is the gate's `decidedAt` rendered relatively (_just now_ / 
 press). Its other strings reuse `approvalGate.choice.record.chose` and
 `approvalGate.choice.bestIfYouWant`. The keys are suggestions; MOTIR-6433 owns the turn's catalogue
 keys, MOTIR-6435 the rail's and the card's, and MOTIR-6434 the Plans row's.
+
+---
+
+## ⭐ Setting the planning TARGET — the Search control, a search with its own field, the `@` hand-off, and Set as target on the canvas (MOTIR-6895, 2026-09-29)
+
+**Mock:** [`target-picker--search-and-canvas.mock.html`](target-picker--search-and-canvas.mock.html),
+a DELTA holding only the panels that change. **Story:** MOTIR-6894 — every behaviour below is that
+story's, and each paragraph names the acceptance line it draws.
+
+**What it amends, by path.** [`target-picker.mock.html`](target-picker.mock.html) (MOTIR-1490's
+design, re-tokened by MOTIR-4346) **panel 1** (the `@` trigger and its dropdown), **panel 2** (the
+visible `@` button) and **panel 4** (the dropdown's states); and, from the section
+[`@-mention work-item picker in the planning chat (MOTIR-1490)`](#-mention-work-item-picker-in-the-planning-chat-motir-1490)
+above, the rule that the query is the inline text after the `@`. It also adds ONE button to the
+**selected-card chrome of the shared roadmap canvas** — the action slot owned by `design/roadmap/`
+(`ProjectRoadmapCanvas.tsx`, the View · Open slot under a selected card). That chrome is NOT redrawn:
+the two shipped buttons are reproduced from their own classes. The existing mocks are records and are
+not edited.
+
+**Inherited, not redrawn:** the composer's bottom-aligned geometry and its multi-line growth
+(the MULTI-LINE composer section above, decision 2), the target TRAY and its chips (target-picker
+panel 2), the row grammar of the results, the target ring + `Target` pill a canvas node wears
+(`PlanningTargetFrame`), and the arrival / follow rules (the ARRIVES INSIDE section above).
+
+### What was read and rendered first
+
+- **Read:** `components/planning/PlanChangeComposer.tsx` (the `planning-target-trigger` button, its
+  `absolute bottom-1.5 left-1.5` placement, `pl-8` on the field, the `open` / `atLimit` / `dismissed`
+  logic and the combobox wrapper), `TargetSearchListbox.tsx` (the popup shell, the four text states
+  outside the listbox, the row), `lib/hooks/useWorkItemTargetSearch.ts` (250ms debounce, the
+  2-character minimum), `lib/planning/planningTargets.ts` (`findMentionQuery` — the `(?:^|\s)@([^\s@]*)$`
+  boundary that ends the query at the first space — `addPlanningTarget`, `MAX_PLANNING_TARGETS`),
+  `ProjectRoadmapCanvas.tsx`'s `renderNode` action slot, `PlanningTargetNode.tsx` and
+  `PlanChangeCanvas.tsx` (which passes `onView` and `targetIds` but no target action today), and the
+  `planningWorkspace.targets` catalogue in both locales.
+- **Rendered:** the running planning surface on this branch's dev server, signed in as the seed
+  owner — see _Render check_ at the end of this section.
+
+### 1 · The Search control (mock panel 1) — _"The composer shows a Search control with a magnifier icon, a visible tooltip and an accessible name"_
+
+- **Same slot, same geometry, new glyph.** The control IS the shipped `planning-target-trigger`
+  button, still `absolute bottom-1.5 left-1.5` inside the field (decision 2 of the multi-line
+  composer), still `p-(--spacing-icon-btn)`, `rounded-(--radius-control)`, ink
+  `--el-text-secondary` at rest. Only the icon changes, lucide `AtSign` → lucide **`Search`**: a bare
+  `@` reads as _mention someone_, and the control's job is to find a work item.
+- **Accessible name and tooltip:** **"Search work items to plan"**. The tooltip adds the keyboard
+  shortcut as a key cap (`@`), shows on hover AND on keyboard focus, and uses the design system's
+  tooltip (`--radius-control`, `--spacing-tooltip-x/y`, `--shadow-elevated`). The button carries
+  `aria-haspopup="dialog"` and `aria-expanded`.
+- **Hover:** `bg-(--el-card)` / ink `--el-text`. **Focus:** the `--focus-ring-color` ring.
+  **Pressed** (its popover is open): `--el-accent-wash` fill, `--el-accent-on-surface` ink.
+- **Disabled twice, as today:** at the 20-target cap and while the composer is disabled
+  (`disabled:opacity-50`). **At the cap the tooltip is the `limitReached` sentence**, so the reason
+  is on the control, not only in the tray. With the composer locked there is no tooltip: the running
+  bar already says why.
+- **Placeholders are unchanged** (`composerPlaceholder`, `composerPlaceholderTargets`). The visible
+  control, not a longer prompt, tells the person the search exists.
+
+### 2 · The target SEARCH popover (mock panel 2) — _"entering `6010`, `#6010`, `motir-6010` and `MOTIR-6010` … list MOTIR-6010 first"_; _"a multi-word title fragment … keeps searching after each space"_
+
+- **The shell is `TargetSearchListbox`'s, unchanged:** `absolute right-3 bottom-full left-3 mb-2`
+  over the composer, `rounded-(--radius-card)`, `border-(--el-border)`, `bg-(--el-surface)`,
+  `shadow-(--shadow-elevated)`, the mono section label (`sectionLabel` / `sectionLabelQuery`), the
+  rows in a `p-1` listbox.
+- **NEW — its own search field, as the first row.** A borderless field on `--el-card` with a lucide
+  `Search` glyph (`aria-hidden`), `border-b border-(--el-border-soft)`, padding
+  `--spacing-control-x/y`, and an `Esc` key cap at its right end (`--radius-kbd`,
+  `--el-border-strong`, ink `--el-text-secondary`). Placeholder **"Key, number or title…"**. The
+  field is the combobox (`role="combobox"`, `aria-controls` the listbox, `aria-activedescendant` the
+  active row, `aria-autocomplete="list"`); the popover is a NON-modal `dialog` named
+  "Search work items to plan". **Opening it puts focus in the field.**
+- **Why a field and not the inline query:** the inline query is `findMentionQuery`'s text after the
+  `@`, which ends at the first whitespace, so `@plan approval` searched `plan`. In a field of its own
+  a space is part of the query. The shared search already requires every word in the title, in any
+  order.
+- **Rows unchanged** — type-hue icon · mono key (`--el-text-secondary`) · title · status `Pill`, the
+  active row on `--el-surface-soft`. Rows carry their key, so two projects' `…-6010` are told apart.
+  One addition: **the matched words of the title in bold** (`--el-text`, weight 700 — weight, not
+  colour, so it holds in every palette and theme).
+- **A foot hint line** below the rows: "↑↓ move · Enter add as target · Esc close", 11px,
+  `--el-text-secondary` on `--el-card`, `border-t border-(--el-border-soft)`. Shown only when there are
+  rows.
+- **Search is the shared search, nothing new:** `GET /api/work-items/mention-search` (browsable-project
+  scope, 8 rows, 250ms debounce, 2-character minimum). The exact number ranks first because of
+  MOTIR-6896, in the shared `quickSearch`; this popover adds no search of its own.
+- **Three queries drawn:** `6010` (MOTIR-6010 first, another project's `SITE-6010` below it, then a
+  title that merely contains the digits), `MOTIR-60` (the exact key, then every key it prefixes) and
+  `plan approval gate` (several words). The rows other than MOTIR-6010 are ILLUSTRATIVE — their keys
+  and titles show the ranking, not real items.
+
+### 3 · Every state (mock panel 3) — _"too-short query, loading, no match, an item already a target, the 20-target cap reached"_
+
+| state                                                 | what shows                                                                                                                                                                                                                                                         | copy (en)                                                                                                                            |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| empty, just opened                                    | the hint, outside the listbox                                                                                                                                                                                                                                      | **Search by key, number or title…** (changed from "Type to search the project's work items…", because the field now takes all three) |
+| too short (below `QUICK_SEARCH_MIN_QUERY_LENGTH` = 2) | the hint                                                                                                                                                                                                                                                           | Keep typing to search work items… (unchanged)                                                                                        |
+| loading (the debounce + the request)                  | `role="status"`, `Loader2` spinner in `--el-text-faint` (`aria-hidden`)                                                                                                                                                                                            | Searching… (unchanged)                                                                                                               |
+| no match                                              | the line                                                                                                                                                                                                                                                           | No work items match "{query}". (unchanged)                                                                                           |
+| a row ALREADY a target                                | the row stays; key + title in `--el-text-secondary`; the status Pill is replaced by the canvas node's **Target** pill (lucide `Target` + the real word, `--el-accent-on-surface` ink on `--el-accent-wash`, 1px `--el-accent-on-surface` border, `--radius-badge`) | `nodePill` — Target (reused)                                                                                                         |
+| at the 20-target cap                                  | the field disabled; no rows; the line                                                                                                                                                                                                                              | `limitReached` — You can plan around up to {max} work items at once. (reused)                                                        |
+
+- **An already-target row is `aria-disabled="true"`:** ↑/↓ skip it, a click or Enter on it does
+  nothing, and the active row is the first PICKABLE one. It is kept in the list because hiding it
+  would read as _not found_. `addPlanningTarget` already refuses a duplicate; the design makes that
+  visible.
+- **The cap state is reached only by `@`.** The Search control is disabled at the cap (panel 1), so
+  `@` at a word boundary is the one way in — and it opens the popover in this state instead of typing
+  a bare `@`, so the person learns why nothing is offered. Esc closes it.
+
+### 4 · The `@` shortcut (mock panel 4) — _"Typing `@` at the start of a word opens the same search and leaves no stray `@` in the message"_
+
+- **Boundary unchanged:** an `@` at the start of the message or after whitespace (`findMentionQuery`'s
+  rule). `foo@bar.com` types an ordinary `@`.
+- **The `@` is CONSUMED.** It is removed from the draft the moment it is typed, the caret stays where
+  it was, and focus moves to the popover's field. Every key typed after it lands in the search.
+- **The pick goes to the TRAY, never inline** — target-picker panel 2's decision, unchanged. The
+  sentence the person was typing is intact.
+- **The one cost:** a literal `@` at the start of a word cannot be typed in the composer. The shipped
+  picker already treated it as a trigger, and it is rare in a planning instruction.
+
+### 5 · The keyboard model (mock panel 5) — the hand-off between a free-text composer and a combobox
+
+| key                    | in the message field                           | in the popover's field                                                                             |
+| ---------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `@` at a word boundary | opens the popover; the `@` is consumed         | an ordinary character                                                                              |
+| ↑ / ↓                  | caret between lines (unchanged)                | move the active row, skipping already-target rows; wraps                                           |
+| Enter                  | sends (unchanged); Shift+Enter breaks the line | adds the active row and **closes** the popover; with no pickable row it does NOTHING (never sends) |
+| Esc                    | the surface's own Esc (unchanged)              | closes the popover, is swallowed; focus returns to the message **at the caret it left**            |
+| Tab                    | moves focus on (unchanged)                     | closes the popover, as a click outside does                                                        |
+| click outside          | —                                              | closes the popover; a click on the canvas also does what it does there                             |
+| IME composing          | Enter confirms the candidate (unchanged)       | Enter confirms the candidate, never picks — the same three-signal guard                            |
+
+**Decision — a pick CLOSES the popover.** Reference products: GitHub's `#` issue picker in a comment
+box, Slack's `@` mention and Cursor's `@` context picker all close on the pick and put the caret back
+in the text being written. Most turns anchor at ONE item, so the common case costs no extra key; a
+second target is one more `@` or one more click on the control. Keeping it open for several picks (the
+GitHub _Assignees_ menu model) was rejected: focus would stay in a search after the person got what
+they came for, and the next key typed for the message would land in the query.
+
+**Decision — Esc returns focus to the message at its caret**, the same place a pick returns it,
+whichever door opened the popover. Opened from the control before the caret was ever placed, the caret
+goes to the end of the draft.
+
+### 6 · Set as target on the selected canvas card (mock panel 6) — _"Selecting a committed work-item card … shows **Set as target** … without moving the canvas. On a card that is already a target the action reads **Remove target**"_
+
+- **One button added, between View and Open**, in the shipped action slot (`absolute -bottom-3.5
+left-1/2 -translate-x-1/2 flex gap-2`). It takes **View's secondary treatment verbatim** —
+  `border-(--el-border) bg-(--el-surface) text-(--el-text-secondary)`, `rounded-(--radius-btn)`,
+  `px-(--spacing-btn-x) py-(--spacing-btn-y)`, `text-xs font-semibold`, `shadow-(--shadow-card)`,
+  hover `bg-(--el-surface-soft) text-(--el-text)` — because **Open stays the one accent action** on the
+  card. Icon lucide **`Target`**, the same glyph as the node's Target pill, so the button and its result
+  read as one thing. It stops the pointer-down from starting a canvas drag, like its neighbours.
+- **Copy:** **Set as target** / accessible name "Set {key} as the planning target". On a card that is
+  already a target: **Remove target** (lucide `X`) / "Remove {key} from the planning targets".
+- **Set** calls the host's existing `addTarget`: the tray gains the chip and the card takes the
+  shipped `PlanningTargetFrame` ring + Target pill. **The canvas does NOT move** — same level, pan and
+  zoom. The person picked the card on the level they are looking at, so there is nothing to follow to,
+  and MOTIR-6161's rule is that the canvas never moves after the person has navigated.
+  **The card stays selected**, so its button flips to Remove target, which calls `removeTarget`.
+- **At the cap** Set is disabled (`disabled:opacity-55`, `aria-disabled`) with the `limitReached`
+  sentence as its tooltip. **Remove is never disabled.**
+- **A leaf** shows View · Set as target (no Open, as today). **A PROPOSED card** (the plan canvas,
+  no key yet) shows no target action — it cannot be a target.
+- **Opt-in.** _"The action is OPT-IN on the shared canvas, so the Roadmap page does not change."_ The
+  canvas is one component on two pages; the action appears only where the host passes it — the
+  planning surface. `/roadmap` passes nothing and is unchanged.
+
+### 7 · The access path (mock panel 7)
+
+The door is shipped and unchanged: **Plan with AI** on an item's page or quick view (and the project's
+own entrance) opens the planning surface INSIDE that item — canvas left, conversation rail right
+(MOTIR-6154; the arrival is `planning-workspace--arrival.mock.html`). On it a target is set two ways:
+**A** the Search control in the composer's bottom-left corner (or `@`), and **B** Set as target on the
+card selected on the canvas. Both write the same target set, so the tray and the canvas ring agree.
+
+### Copy (en / zh)
+
+| where                                       | key (suggested)                                                 | en                                        | zh                                  |
+| ------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------- | ----------------------------------- |
+| Search control, name + tooltip              | `planningWorkspace.targets.trigger` (reworded)                  | Search work items to plan                 | 搜索要规划的工作项                  |
+| popover field placeholder                   | `planningWorkspace.targets.searchPlaceholder`                   | Key, number or title…                     | 键、编号或标题…                     |
+| popover field accessible name               | `planningWorkspace.targets.searchLabel`                         | Search work items                         | 搜索工作项                          |
+| empty hint                                  | `planningWorkspace.targets.emptyHint` (reworded)                | Search by key, number or title…           | 按键、编号或标题搜索…               |
+| foot hint                                   | `planningWorkspace.targets.hintMove` / `hintPick` / `hintClose` | ↑↓ move · Enter add as target · Esc close | ↑↓ 移动 · Enter 设为目标 · Esc 关闭 |
+| canvas action                               | `planningWorkspace.targets.setTarget`                           | Set as target                             | 设为目标                            |
+| canvas action, accessible name              | `planningWorkspace.targets.setTargetAria`                       | Set {key} as the planning target          | 将 {key} 设为规划目标               |
+| canvas action, is a target                  | `planningWorkspace.targets.removeTarget`                        | Remove target                             | 移除目标                            |
+| canvas action, is a target, accessible name | `planningWorkspace.targets.removeTargetAria`                    | Remove {key} from the planning targets    | 从规划目标中移除 {key}              |
+
+Reused unchanged: `sectionLabel`, `sectionLabelQuery`, `keepTyping`, `searching`, `noResults`,
+`listboxLabel`, `limitReached`, `nodePill`. The keys are suggestions; the two code cards own their
+catalogue entries.
+
+### Tokens
+
+Colour only through `--el-*`: `--el-surface` / `--el-card` / `--el-surface-soft` (popover, field, active
+row), `--el-border` / `--el-border-soft` / `--el-border-strong`, `--el-text` / `--el-text-secondary`
+(all text; `--el-text-faint` only on the `aria-hidden` spinner), `--el-accent` / `--el-accent-text` /
+`--el-accent-on-surface` / `--el-accent-wash` (Open, the pressed control, the Target pill),
+`--el-type-*` (row icons). Shape only through `--radius-{card,btn,input,control,badge,kbd}`,
+`--spacing-{control,btn,icon-btn,tooltip}-*` and `--shadow-{card,elevated}`.
+
+### GIVES / TAKES — every key the mock and this section name
+
+- **MOTIR-6894** (the story) — GIVES: the drawn shape of all four ways in. TAKES: nothing.
+- **MOTIR-6895** (this card) — the design itself.
+- **MOTIR-6896** (the number match) — GIVES: nothing new; the mock relies on its ranking. TAKES:
+  nothing.
+- **MOTIR-6897** (the composer UI) — GIVES: panels 1–5, the copy table's composer rows, the keyboard
+  table. TAKES: nothing its criteria claim.
+- **MOTIR-6898** (the canvas UI) — GIVES: panel 6, the canvas copy rows. TAKES: nothing its criteria
+  claim.
+- **MOTIR-6899** (story tests) — named only as sample card data on the canvas (panel 6). GIVES / TAKES
+  nothing.
+- **MOTIR-6154**, **MOTIR-6160**, **MOTIR-6161** — cited as the shipped arrival, target-crumb and follow rules. GIVES / TAKES nothing
+  (done).
+- **MOTIR-1490**, **MOTIR-4346** — the base design and its re-token. GIVES / TAKES nothing (done;
+  their mock is a record and is not edited).
+- **MOTIR-6010**, **MOTIR-6011** — sample row and card data (MOTIR-6010 is the story's own example).
+  GIVES / TAKES nothing.
+- **MOTIR-60**, **MOTIR-600**, **MOTIR-4471**, **MOTIR-5543**, **MOTIR-6157** — ILLUSTRATIVE rows in
+  the result lists; their titles are invented to show the ranking. GIVES / TAKES nothing.
+
+### Render check — the shipped surface, rendered on this branch
+
+The planning surface was opened on this branch's dev server (seeded tenant, signed in as the owner,
+`/items/PROD-2?plan=contextual&planFrom=work-item&planItem=PROD-2`) and screenshotted before the canvas
+and composer panels were finalised. What the render settled, against the first draft of the mock:
+
+- **The canvas card** puts its status Pill top-left and the type icon + mono key on the row BELOW it,
+  above the title — the mock's first draft had them on one row. Redrawn to match.
+- **The selected card's ring** hugs the card's own border, and the action slot is a row of compact
+  `text-xs` buttons straddling the bottom edge; a leaf shows **View** alone. Selecting a card dims the
+  cards it is not connected to (unchanged, and not redrawn here).
+- **The composer** at rest is one line with the `@` button inside its bottom-left corner, the tray
+  (`TARGET` + the entrance's chip) above it, and the placeholder "Ask Motir to plan around these…" —
+  as panel 1 draws, with the magnifier in the `@`'s place.
+- **The dropdown** opened by the `@` button sits over the composer at the rail's width, with the mono
+  section label and the row grammar panel 2 reuses. Typing `60` on this branch already listed PROD-60
+  first — MOTIR-6896's number match, committed on this branch — which is the ranking panel 2 draws.
+- **The target is the level itself** when the surface opens inside it: the breadcrumb's last crumb
+  carries the target glyph (MOTIR-6160). Set as target on a card on that level therefore ADDS a second
+  anchor beside the one the surface opened on; it never replaces it.

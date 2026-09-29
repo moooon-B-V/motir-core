@@ -89,12 +89,7 @@ const ACTIONS: {
   { file: 'app/(authed)/items/actions.ts', action: 'listRootIssuesAction', kind: 'read' },
   { file: 'app/(authed)/items/actions.ts', action: 'listChildIssuesAction', kind: 'read' },
   { file: 'app/(authed)/items/actions.ts', action: 'listFolderLevelAction', kind: 'read' },
-  {
-    file: 'app/(authed)/plans/_actions.ts',
-    action: 'loadMoreSessionsAction',
-    kind: 'read',
-    owedBy: 'MOTIR-6890',
-  },
+  { file: 'app/(authed)/plans/_actions.ts', action: 'loadMoreSessionsAction', kind: 'read' },
   // MEMBER — writes, and the reads that only an edit affordance or a write's own
   // follow-up makes (the pickers, the How-to-test draft, the placement re-read,
   // the archive): a Visitor holds no key that draws any of them.

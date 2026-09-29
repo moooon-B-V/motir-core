@@ -5,11 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // row view-model builder, and the load-more action that re-gates browse on every
 // streamed page.
 
-const { getActiveProject, getCapabilities, listSessions } = vi.hoisted(() => ({
-  getActiveProject: vi.fn(),
-  getCapabilities: vi.fn(),
-  listSessions: vi.fn(),
-}));
+const { getActiveProject, getCapabilities, listSessions, resolveActionReadActor } = vi.hoisted(
+  () => ({
+    getActiveProject: vi.fn(),
+    getCapabilities: vi.fn(),
+    listSessions: vi.fn(),
+    resolveActionReadActor: vi.fn(),
+  }),
+);
 
 vi.mock('next-intl/server', () => ({
   getFormatter: async () => ({ relativeTime: (d: Date) => `at ${d.toISOString()}` }),
@@ -21,6 +24,7 @@ vi.mock('@/lib/services/projectAccessService', () => ({
 vi.mock('@/lib/services/planSessionsService', () => ({
   planSessionsService: { listSessions },
 }));
+vi.mock('@/lib/visitor/readActor', () => ({ resolveActionReadActor }));
 
 import { buildSessionRowViews } from '@/app/(authed)/plans/sessionRowView';
 import { loadMoreSessionsAction } from '@/app/(authed)/plans/_actions';
@@ -45,6 +49,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   getActiveProject.mockResolvedValue({ userId: 'u1', workspaceId: 'ws1', projectId: 'p1' });
   getCapabilities.mockResolvedValue({ canBrowse: true });
+  resolveActionReadActor.mockResolvedValue({ kind: 'none' });
 });
 
 describe('buildSessionRowViews', () => {
@@ -97,8 +102,10 @@ describe('loadMoreSessionsAction', () => {
       { userId: 'u1', workspaceId: 'ws1' },
       { cursor: 'cur_1', planState: 'none', view: 'mine' },
     );
-    expect(out.nextCursor).toBe('cur_2');
-    expect(out.views.map((v) => v.id)).toEqual(['s_1']);
+    expect(out).toEqual({
+      views: [expect.objectContaining({ id: 's_1' })],
+      nextCursor: 'cur_2',
+    });
   });
 
   it('streams nothing once signed out', async () => {
@@ -115,6 +122,32 @@ describe('loadMoreSessionsAction', () => {
     expect(await loadMoreSessionsAction('cur_1', null, 'project')).toEqual({
       views: [],
       nextCursor: null,
+    });
+    expect(listSessions).not.toHaveBeenCalled();
+  });
+
+  // MOTIR-6890 — a Visitor's list streams the public project the cookie names.
+  it('a Visitor streams the VIEWED project in the Project view, not their active one', async () => {
+    const visitorCtx = { project: { id: 'pub' }, actorUserId: 'v1' };
+    resolveActionReadActor.mockResolvedValue({ kind: 'visitor', ctx: visitorCtx });
+    listSessions.mockResolvedValue({ sessions: [dto()], nextCursor: null, scope: 'project' });
+
+    const out = await loadMoreSessionsAction('cur_1', null, 'mine');
+
+    expect(listSessions).toHaveBeenCalledWith('pub', visitorCtx, {
+      cursor: 'cur_1',
+      planState: null,
+      view: 'project',
+    });
+    expect(getActiveProject).not.toHaveBeenCalled();
+    expect(out).toEqual({ views: [expect.objectContaining({ id: 's_1' })], nextCursor: null });
+  });
+
+  it('a Visitor past the read budget gets the rate-limited answer', async () => {
+    resolveActionReadActor.mockResolvedValue({ kind: 'limited', response: new Response() });
+    expect(await loadMoreSessionsAction('cur_1', null, 'project')).toEqual({
+      ok: false,
+      error: 'rate_limited',
     });
     expect(listSessions).not.toHaveBeenCalled();
   });

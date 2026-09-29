@@ -39,6 +39,7 @@ import { isProposedReview } from '@/lib/planning/planReview';
 import { defaultPlanView, type PlanViewDto } from '@/lib/planning/planView';
 import {
   addPlanningTarget,
+  MAX_PLANNING_TARGETS,
   removePlanningTarget,
   type PlanningTarget,
 } from '@/lib/planning/planningTargets';
@@ -253,6 +254,25 @@ export function PlanningWorkspaceHost({
     [],
   );
 
+  // SET AS TARGET on the canvas (MOTIR-6898; design panel 6). The same set the
+  // composer feeds, so the tray and the ring always agree. A target picked ON
+  // the canvas is one the reader is already looking at, so it never arms the
+  // follow-move below: that would move the canvas off the level the card was
+  // just picked on (MOTIR-6161's never-after-navigation rule, read from the
+  // reader's side). Recorded by key, and read only by the follow's trigger.
+  const [pickedOnCanvas, setPickedOnCanvas] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleCanvasTarget = useCallback(
+    (target: PlanningTarget, isTarget: boolean) => {
+      if (isTarget) {
+        removeTarget(target.identifier);
+        return;
+      }
+      setPickedOnCanvas((current) => new Set(current).add(target.identifier.toUpperCase()));
+      addTarget(target);
+    },
+    [addTarget, removeTarget],
+  );
+
   // ── THE FOLLOW-MOVE (MOTIR-6161, Story MOTIR-6154) ─────────────────────────
   //
   // A conversation that opened with NO target sits at the root while the plan
@@ -277,7 +297,12 @@ export function PlanningWorkspaceHost({
   // ANCESTORS, which only the anchor read has, so this is a fetch rather than a
   // derivation from the chip.
   const firstTarget = targets[0] ?? null;
-  const firstTargetKey = startedWithNoTarget ? (firstTarget?.identifier ?? null) : null;
+  const firstTargetKey =
+    startedWithNoTarget &&
+    firstTarget !== null &&
+    !pickedOnCanvas.has(firstTarget.identifier.toUpperCase())
+      ? firstTarget.identifier
+      : null;
   useEffect(() => {
     if (firstTargetKey === null) return;
     const controller = new AbortController();
@@ -761,6 +786,12 @@ export function PlanningWorkspaceHost({
                 projectKey={projectKey}
                 diffKey={diffKey}
                 targetIds={targetIds}
+                // The canvas's Set as target / Remove target (MOTIR-6898) — on
+                // here, and only here: the proposed-plan pane above draws no
+                // target action (its cards are proposals, or committed cards seen
+                // through a plan under review).
+                onToggleTarget={toggleCanvasTarget}
+                canAddTarget={targets.length < MAX_PLANNING_TARGETS}
                 initialTrail={initialCanvasTrail}
                 // MOTIR-6154/6161's follow-move. It stays on THIS branch of the
                 // swap and is not passed to the component above: the follow moves

@@ -1,6 +1,7 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
+import type { KeyboardEventHandler, ReactNode, Ref } from 'react';
+import { Loader2, Target } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
@@ -11,10 +12,12 @@ import type {
 } from '@/components/ui/markdownEditorMentions';
 import type { IssueType } from '@/lib/issues/parentRules';
 
-// The `@` dropdown of the planning composer's target picker (Subtask MOTIR-1491;
-// design `target-picker.mock.html` panels 1 + 4). Presentational: the composer
-// owns the query, the results and the active row, so the keyboard lives with the
-// input that has focus.
+// The planning composer's target SEARCH popover shell (Subtask MOTIR-1491, design
+// `target-picker.mock.html` panels 1 + 4; since MOTIR-6897 the delta
+// `target-picker--search-and-canvas.mock.html` panels 2 + 3, which give it its
+// OWN search field as the first row). Presentational: `TargetSearchPopover` owns
+// the query, the results and the active row, so the keyboard lives with the
+// field that has focus.
 //
 // ⚠️ ROW GRAMMAR REUSED, not reinvented: type-hue icon · mono key · title · status
 // Pill — the shipped work-item search row from the editor's `@` picker
@@ -58,6 +61,19 @@ export interface TargetSearchListboxProps {
   activeIndex: number;
   onPick: (candidate: WorkItemMentionCandidate) => void;
   onHover: (index: number) => void;
+  /** The popover's own search field, drawn as the first row (MOTIR-6897). */
+  field?: ReactNode;
+  /** Ids already in the TARGET SET — their rows stay listed, marked with the
+   *  canvas node's `Target` pill, and cannot be picked (design panel 3). */
+  targetIds?: ReadonlySet<string>;
+  /** The set is at `MAX_PLANNING_TARGETS`: no row is offered, the line says why. */
+  limitMessage?: string | null;
+  /** Names the shell a non-modal `dialog` — the popover's accessible name. */
+  dialogLabel?: string;
+  rootRef?: Ref<HTMLDivElement>;
+  /** Keys that reach the shell itself — the cap state, where the field is
+   *  disabled and the shell holds focus so Esc still closes it. */
+  onRootKeyDown?: KeyboardEventHandler<HTMLDivElement>;
 }
 
 export function TargetSearchListbox({
@@ -70,25 +86,39 @@ export function TargetSearchListbox({
   activeIndex,
   onPick,
   onHover,
+  field,
+  targetIds,
+  limitMessage = null,
+  dialogLabel,
+  rootRef,
+  onRootKeyDown,
 }: TargetSearchListboxProps) {
   const t = useTranslations('planningWorkspace.targets');
   const trimmed = query.trim();
 
   return (
     <div
+      ref={rootRef}
+      {...(dialogLabel ? { role: 'dialog', 'aria-label': dialogLabel, tabIndex: -1 } : {})}
+      onKeyDown={onRootKeyDown}
       data-testid="target-search-popup"
       // Inset to the composer's own gutter (the form's `px-3`), so the popup
       // lines up with the input it belongs to instead of bleeding to the rail's
       // edges — the design draws it over the composer, not over the rail.
-      className="absolute right-3 bottom-full left-3 z-30 mb-2 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) shadow-(--shadow-elevated)"
+      className="absolute right-3 bottom-full left-3 z-30 mb-2 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) shadow-(--shadow-elevated) focus:outline-none"
     >
       <p className="border-b border-(--el-border-soft) px-(--spacing-control-x) py-(--spacing-control-y) font-mono text-[10px] font-semibold tracking-wider text-(--el-text-secondary) uppercase">
         {trimmed ? t('sectionLabelQuery', { query: trimmed }) : t('sectionLabel')}
       </p>
 
-      {/* The four states, in the design's order. Each is text OUTSIDE the
-          listbox — an empty `role="listbox"` violates aria-required-children. */}
-      {tooShort ? (
+      {field}
+      {/* The states, in the design's order. Each is text OUTSIDE the listbox —
+          an empty `role="listbox"` violates aria-required-children. */}
+      {limitMessage ? (
+        <p className="px-(--spacing-control-x) py-2 text-center text-xs text-(--el-text-secondary)">
+          {limitMessage}
+        </p>
+      ) : tooShort ? (
         <p className="px-(--spacing-control-x) py-2 text-center text-xs text-(--el-text-secondary)">
           {trimmed.length === 0 ? t('emptyHint') : t('keepTyping')}
         </p>
@@ -106,45 +136,79 @@ export function TargetSearchListbox({
         </p>
       ) : (
         <div role="listbox" id={listboxId} aria-label={t('listboxLabel')} className="p-1">
-          {results.map((item, index) => (
-            <div
-              key={item.id}
-              id={`${optionIdPrefix}-${index}`}
-              role="option"
-              aria-selected={index === activeIndex}
-              onMouseEnter={() => onHover(index)}
-              // mousedown, not click: the input keeps focus (and its caret), so
-              // the query range the pick consumes is still where it was.
-              onMouseDown={(event) => {
-                event.preventDefault();
-                onPick(item);
-              }}
-              className={cn(
-                'flex cursor-pointer items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
-                index === activeIndex
-                  ? 'bg-(--el-surface-soft) text-(--el-text)'
-                  : 'text-(--el-text)',
-              )}
-            >
-              <IssueTypeIcon type={item.kind as IssueType} className="size-4 shrink-0" />
-              {/* One ink for both states: only the ACTIVE row is tinted, but a
-                  conditional background is not something the ink scanner can
-                  correlate with the branch that paints it, and
-                  `--el-text-secondary` is AA on the tint and off it alike
-                  (MOTIR-2477). */}
-              <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
-                {item.identifier}
-              </span>
-              <span className="min-w-0 flex-1 truncate">{item.title}</span>
-              {item.status ? (
-                <span className="ml-auto shrink-0">
-                  <StatusPill status={item.status} />
+          {results.map((item, index) => {
+            // ALREADY A TARGET: kept in the list so the item reads as FOUND, but
+            // not pickable — `aria-disabled`, skipped by the arrows, inert to a
+            // click (design panel 3). `addPlanningTarget` would refuse the
+            // duplicate anyway; the row says so before anyone tries.
+            const isTarget = targetIds?.has(item.id) ?? false;
+            return (
+              <div
+                key={item.id}
+                id={`${optionIdPrefix}-${index}`}
+                role="option"
+                aria-selected={index === activeIndex}
+                aria-disabled={isTarget || undefined}
+                data-target={isTarget || undefined}
+                onMouseEnter={() => {
+                  if (!isTarget) onHover(index);
+                }}
+                // mousedown, not click: the field keeps focus, so the pick and
+                // the focus hand-back happen from one place.
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  if (!isTarget) onPick(item);
+                }}
+                className={cn(
+                  'flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
+                  isTarget ? 'cursor-default' : 'cursor-pointer',
+                  index === activeIndex
+                    ? 'bg-(--el-surface-soft) text-(--el-text)'
+                    : 'text-(--el-text)',
+                )}
+              >
+                <IssueTypeIcon type={item.kind as IssueType} className="size-4 shrink-0" />
+                {/* One ink for both states: only the ACTIVE row is tinted, but a
+                    conditional background is not something the ink scanner can
+                    correlate with the branch that paints it, and
+                    `--el-text-secondary` is AA on the tint and off it alike
+                    (MOTIR-2477). */}
+                <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
+                  {item.identifier}
                 </span>
-              ) : null}
-            </div>
-          ))}
+                <span
+                  className={cn(
+                    'min-w-0 flex-1 truncate',
+                    isTarget && 'text-(--el-text-secondary)',
+                  )}
+                >
+                  {item.title}
+                </span>
+                {isTarget ? (
+                  <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-(--el-accent-on-surface) px-(--spacing-chip-x) font-mono text-[10px] font-bold tracking-wide text-(--el-accent-on-surface) uppercase">
+                    <Target className="size-3" aria-hidden="true" />
+                    {t('nodePill')}
+                  </span>
+                ) : item.status ? (
+                  <span className="ml-auto shrink-0">
+                    <StatusPill status={item.status} />
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       )}
+      {!limitMessage && !tooShort && !loading && results.length > 0 ? (
+        <p
+          aria-hidden="true"
+          className="flex gap-3 border-t border-(--el-border-soft) bg-(--el-card) px-(--spacing-control-x) py-1 text-[11px] text-(--el-text-secondary)"
+        >
+          <span>{t('hintMove')}</span>
+          <span>{t('hintPick')}</span>
+          <span>{t('hintClose')}</span>
+        </p>
+      ) : null}
     </div>
   );
 }
