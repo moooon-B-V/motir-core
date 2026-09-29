@@ -6,8 +6,8 @@ import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/clien
 // read from `workspace_membership.workspace_role`. A project membership carries
 // no role at all since MOTIR-6464 — it only says the person is IN the project.
 // The legacy `member_role` enum (owner / admin / member / viewer) the two
-// membership tables once shared is neither read (MOTIR-6561) nor written
-// (MOTIR-6562), and the phase-3 release drops it.
+// membership tables once shared stopped being read (MOTIR-6561) and written
+// (MOTIR-6562), and MOTIR-6569 dropped it with the columns.
 //
 //   * `isWorkspaceManager` — the tier that ALWAYS passes the project-management
 //     gate regardless of project membership (the Jira "site admin sees every

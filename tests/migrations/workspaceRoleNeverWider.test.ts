@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Client } from 'pg';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ensureLegacyRoleStorage } from '../helpers/legacyRoleStorage';
 import { db } from '@/lib/db';
 import {
   BUILTIN_ROLE_PERMISSIONS,
@@ -70,6 +71,9 @@ const implicitSnapshot = JSON.parse(
 
 beforeEach(async () => {
   await truncateAuthTables();
+  // The migration under test reads the legacy role storage MOTIR-6569 dropped;
+  // rebuild it for the test (tests/helpers/legacyRoleStorage.ts).
+  await ensureLegacyRoleStorage();
 });
 
 // The fixture drops MOTIR-6561's NOT NULL to seed pre-migration rows; put it back.

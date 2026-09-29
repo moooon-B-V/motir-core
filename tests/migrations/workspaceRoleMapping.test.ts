@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ensureLegacyRoleStorage } from '../helpers/legacyRoleStorage';
 import { db } from '@/lib/db';
 import { BUILTIN_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { adminDb } from '../helpers/adminDb';
@@ -11,7 +12,7 @@ import {
   type Tenant,
 } from './_workspaceRoleTenant';
 import { truncateAuthTables } from '../helpers/db';
-import { listLegacyProjectRoles } from '../helpers/legacyProjectRoles';
+import { listLegacyProjectRoles } from '../helpers/legacyRoleStorage';
 
 // The role migration's MAPPING (Story MOTIR-6168 · Subtask MOTIR-6458) — run
 // against the real database over a fixture tenant holding every case the card
@@ -53,6 +54,9 @@ async function runMigration(): Promise<void> {
 
 beforeEach(async () => {
   await truncateAuthTables();
+  // The migration under test reads the legacy role storage MOTIR-6569 dropped;
+  // rebuild it for the test (tests/helpers/legacyRoleStorage.ts).
+  await ensureLegacyRoleStorage();
 });
 
 // The fixture drops MOTIR-6561's NOT NULL to seed pre-migration rows; put it back.

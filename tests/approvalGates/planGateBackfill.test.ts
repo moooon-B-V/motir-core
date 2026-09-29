@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { dropLegacyRoleStorage, ensureLegacyRoleStorage } from '../helpers/legacyRoleStorage';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { db } from '@/lib/db';
@@ -197,6 +198,11 @@ describe('the population — `planned`, ≥1 proposal, no awaiting gate', () => 
 });
 
 describe('the MIGRATION raises what the shipped raise would (MOTIR-6039, §11.9 amended)', () => {
+  // This migration reads the legacy role storage MOTIR-6569 dropped; rebuild it
+  // for these tests only (tests/helpers/legacyRoleStorage.ts).
+  beforeEach(ensureLegacyRoleStorage);
+  afterEach(dropLegacyRoleStorage);
+
   // The deploy runs `20260923200200_backfill_plan_approval_gates`: plain SQL carrying a
   // second, frozen copy of the population and routing rules. This proves the two copies
   // agree — the script's dry-run (which goes through `planGateService`) predicts EXACTLY

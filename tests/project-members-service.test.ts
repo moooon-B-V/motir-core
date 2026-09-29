@@ -17,7 +17,6 @@ import {
 import { PublicAccessUnavailableError } from '@/lib/projects/errors';
 import { projectMemberErrorResponse } from '@/lib/projects/memberErrorResponse';
 import { runAsCloudBuild } from './helpers/cloudBuild';
-import { legacyRoleDefinitionOf } from './helpers/legacyProjectRoles';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
 import { setWorkspaceRoleFor } from './helpers/workspaceRoleFixtures';
@@ -110,11 +109,6 @@ describe('addMember', () => {
     const persisted = await withWorkspaceServiceContext(workspace.id, (tx) =>
       projectMembershipRepository.findByUserAndProject(alice.id, project.id, tx),
     );
-    // No legacy role is written (MOTIR-6562); the pointer stays empty. Read raw:
-    // the column is `@ignore`d (MOTIR-6567).
-    expect(
-      await legacyRoleDefinitionOf(adminDb, { userId: alice.id, projectId: project.id }),
-    ).toBeNull();
     expect(persisted?.workspaceId).toBe(workspace.id);
   });
 

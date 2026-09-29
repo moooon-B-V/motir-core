@@ -3,21 +3,11 @@ import { isWorkspaceManager } from '@/lib/projects/roles';
 import {
   CUSTOM_WORKSPACE_ROLE_TIER,
   customRolePermissionsOf,
-  legacyToWorkspaceRole,
   WORKSPACE_ROLES,
 } from '@/lib/workspaces/roles';
 
 // The workspace-role vocabulary (Story MOTIR-6168 · MOTIR-6457 / MOTIR-6459) —
 // pure helpers, so unit-tested without a database.
-
-describe('legacyToWorkspaceRole — the DECISION’s table, kept for a pre-release invite token', () => {
-  it('is total over the legacy values', () => {
-    expect(legacyToWorkspaceRole('owner')).toBe('manager');
-    expect(legacyToWorkspaceRole('admin')).toBe('manager');
-    expect(legacyToWorkspaceRole('member')).toBe('member');
-    expect(legacyToWorkspaceRole('viewer')).toBe('viewer');
-  });
-});
 
 describe('isWorkspaceManager — the Manager, and nothing else (MOTIR-6462)', () => {
   it('answers true for manager only', () => {

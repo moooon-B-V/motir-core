@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ensureLegacyRoleStorage } from '../helpers/legacyRoleStorage';
 import { db } from '@/lib/db';
 import type { WorkspaceRole } from '@/generated/prisma/client';
 import { resolvePermissions } from '@/lib/permissions/resolve';
@@ -31,6 +32,9 @@ const CHECK = '20260926100200_workspace_role_never_wider';
 
 beforeEach(async () => {
   await truncateAuthTables();
+  // The migration under test reads the legacy role storage MOTIR-6569 dropped;
+  // rebuild it for the test (tests/helpers/legacyRoleStorage.ts).
+  await ensureLegacyRoleStorage();
 });
 
 // The fixture drops MOTIR-6561's NOT NULL to seed pre-migration rows; put it back.
