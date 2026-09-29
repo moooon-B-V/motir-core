@@ -490,7 +490,9 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     // `work_item:edit`. 69 with MOTIR-6832's THREE ready lanes
     // (`getProjectReadyLeaves`, `getProjectReadyContainers`,
     // `getProjectReadyBugs`), all `project:browse` like `getProjectReadySet`.
-    expect(V1_OPERATIONS.length).toBe(69);
+    // 71 with MOTIR-6821's review run's two routes — `getWorkItemReviewPrompt`
+    // (`project:browse`) and `submitWorkItemAgentReview` (`work_item:edit`).
+    expect(V1_OPERATIONS.length).toBe(71);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

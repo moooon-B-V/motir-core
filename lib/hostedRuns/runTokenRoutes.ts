@@ -45,6 +45,13 @@ export interface RunTokenRoute {
    */
   calledBy: 'cli' | 'published_cli' | 'git_credential_helper';
   /**
+   * The card that makes the CLI CALL a route that already exists, when no CLI source calls
+   * it yet — the review run's two routes (MOTIR-6821) are built before `motir review`
+   * (MOTIR-6824) calls them. The table test exempts such an entry from its "still called"
+   * check until the card lands and drops this field.
+   */
+  callerPendingCard?: string;
+  /**
    * The card that builds the route, when it does not exist yet. The table test
    * requires the route file to exist — and to opt in — once this is absent.
    */
@@ -123,6 +130,26 @@ export const RUN_TOKEN_ROUTES: readonly RunTokenRoute[] = [
     path: '/api/v1/work-items/{key}/how-to-test',
     binding: 'run_cards',
     calledBy: 'cli',
+  },
+  // A REVIEW run's own two routes (MOTIR-6821; `hosted-agent-run.md` §3's pointer, §8.4).
+  // ⚠️ NARROWER THAN `run_cards`: the service admits ONLY a `command: review` run's token
+  // (`REVIEW_RUN_TOKEN_REQUIRED`) — a build run's token is refused on both — and then the
+  // run's own card, through the same `runTokenScopeService` binding.
+  {
+    operationId: 'getWorkItemReviewPrompt',
+    method: 'GET',
+    path: '/api/v1/work-items/{key}/review-prompt',
+    binding: 'run_cards',
+    calledBy: 'cli',
+    callerPendingCard: 'MOTIR-6824',
+  },
+  {
+    operationId: 'submitWorkItemAgentReview',
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/agent-review',
+    binding: 'run_cards',
+    calledBy: 'cli',
+    callerPendingCard: 'MOTIR-6824',
   },
   {
     operationId: 'claimWorkItem',

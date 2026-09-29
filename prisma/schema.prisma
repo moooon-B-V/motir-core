@@ -10834,6 +10834,14 @@ enum DispatchEventKind {
   /// appends it, and the CLI reporter NEVER emits it — the v1 ingest refuses it,
   /// so a client with a run token cannot forge a report the server never made.
   unbuildable_reported
+  /// A REVIEW run's verdict (MOTIR-6821; `hosted-agent-run.md` §8.4,
+  /// `approval-gates.md` §12.5) — every verdict the run submitted, the one that
+  /// decided the `agent_review` gate AND a late one that decided nothing, naming the
+  /// verdict, the version it was about and what became of it. It is also what makes a
+  /// run's verdict ONE: a run holding one is refused a second.
+  /// ⚠️ SERVER-WRITTEN, like `unbuildable_reported`: the verdict route's service
+  /// appends it, and the v1 ingest refuses it, so a run token cannot forge one.
+  review_verdict
 
   @@map("dispatch_event_kind")
 }
