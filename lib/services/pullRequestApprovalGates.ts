@@ -419,16 +419,13 @@ export async function withdrawPullRequestApprovalGatesOnCiRerun(
       const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
       const current = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
       if (!current || current !== gate.subjectVersion) continue;
-      if (
-        (await approvalGateRepository.supersedeAwaitingByWorkItem(
-          workItemId,
-          KIND,
-          'ci_rerunning',
-          tx,
-        )) > 0
-      ) {
-        withdrawn.push(workItemId);
-      }
+      const retired = await approvalGateRepository.supersedeAwaitingByWorkItem(
+        workItemId,
+        KIND,
+        'ci_rerunning',
+        tx,
+      );
+      if (retired > 0) withdrawn.push(workItemId);
     }
     // The acceptance question rides on the same green set (MOTIR-5903) — and an `auto`
     // project raises no merge gate, so it can be the only question standing. Asked
