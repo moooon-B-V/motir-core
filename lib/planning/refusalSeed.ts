@@ -61,6 +61,8 @@ export function isRefusalSeedGate(gate: RefusalSeedGateFacts): boolean {
     case 'pull_request_approval':
     case 'pull_request_merge':
     case 'plan_approval':
+    // The review agent's findings are repaired by `motir fix`, never re-planned (ADR §12.8).
+    case 'agent_review':
       return false;
     default: {
       // A compile-time exhaustiveness check; at runtime an unknown value (a
@@ -192,6 +194,7 @@ export function anchorOf(
     case 'pull_request_merge':
     case 'acceptance_result':
     case 'plan_approval':
+    case 'agent_review':
       return itemKey;
     default: {
       const unreachable: never = kind;

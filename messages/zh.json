@@ -8088,7 +8088,8 @@
         "acceptance_result": "验收视频",
         "decision_choice": "选择",
         "decision_confirmation": "确认决策",
-        "plan_approval": "计划审批"
+        "plan_approval": "计划审批",
+        "agent_review": "代理审查"
       },
       "reviewRow": "查看 {key} — {sentence}",
       "pullRequest": {
@@ -8762,7 +8763,8 @@
       "batch": "motir batch",
       "auto": "motir auto",
       "fix": "motir fix",
-      "continue": "motir continue"
+      "continue": "motir continue",
+      "review": "motir review"
     },
     "skipReason": {
       "needsPlanning": "已跳过 — 需要规划。",

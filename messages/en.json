@@ -8092,7 +8092,8 @@
         "acceptance_result": "Acceptance video",
         "decision_choice": "Choice",
         "decision_confirmation": "Confirm decision",
-        "plan_approval": "Plan approval"
+        "plan_approval": "Plan approval",
+        "agent_review": "Agent review"
       },
       "reviewRow": "Review {key} — {sentence}",
       "pullRequest": {
@@ -8766,7 +8767,8 @@
       "batch": "motir batch",
       "auto": "motir auto",
       "fix": "motir fix",
-      "continue": "motir continue"
+      "continue": "motir continue",
+      "review": "motir review"
     },
     "skipReason": {
       "needsPlanning": "Skipped — needs planning.",

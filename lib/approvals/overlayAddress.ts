@@ -48,6 +48,9 @@ export const APPROVAL_GATE_KINDS = [
   // planning surface, and the overlay address is NOT extended to it (ADR
   // `approval-gates.md` §11.5b). Listed so the tuple stays total over the enum.
   'plan_approval',
+  // A WIRE SPELLING too: the review agent's gate is never on a To-approve row, so no
+  // overlay address names it (ADR §12.1). Listed so the tuple stays total.
+  'agent_review',
 ] as const satisfies readonly ApprovalGateKindDTO[];
 
 // Exhaustiveness: a member added to `ApprovalGateKindDTO` and not to the tuple

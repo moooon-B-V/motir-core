@@ -190,6 +190,35 @@ export class InvalidPrMergeModeError extends Error {
 }
 
 /**
+ * The REVIEW AGENT and AUTO merging exclude each other (Story MOTIR-1626;
+ * `docs/decisions/approval-gates.md` §12.2a, decided by the requester 2026-09-29):
+ * turning the review agent ON in a project that merges automatically. Refused rather
+ * than silently switching the merge mode for the person. → 409.
+ */
+export class ReviewAgentNeedsManualMergeError extends Error {
+  readonly code = 'REVIEW_AGENT_NEEDS_MANUAL_MERGE' as const;
+  constructor(readonly projectId: string) {
+    super(
+      'The review agent can be turned on only while this project asks before merging. Choose "Ask before merging" first.',
+    );
+    this.name = 'ReviewAgentNeedsManualMergeError';
+  }
+}
+
+/**
+ * The other half of §12.2a: choosing AUTO merging while the review agent is on. → 409.
+ */
+export class MergeModeReviewAgentOnError extends Error {
+  readonly code = 'MERGE_MODE_REVIEW_AGENT_ON' as const;
+  constructor(readonly projectId: string) {
+    super(
+      'This project cannot merge automatically while its review agent is on. Turn the review agent off first.',
+    );
+    this.name = 'MergeModeReviewAgentOnError';
+  }
+}
+
+/**
  * A bug-destination write carrying something other than a folder id or `null`
  * (Story MOTIR-4927 · MOTIR-4938). `null` is a CHOICE — the project root — so it
  * is valid; a missing key, a number or an empty string is not. → 400.

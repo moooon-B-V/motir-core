@@ -42,6 +42,9 @@ const ALL_KINDS = [
   'decision_confirmation',
   // Story MOTIR-6012 · MOTIR-6032: a person approves or declines a PLAN — no card.
   'plan_approval',
+  // Story MOTIR-1626 · MOTIR-6818: the REVIEW AGENT's question (ADR §12) — a NOT-YET hole
+  // until MOTIR-6819 registers its handler.
+  'agent_review',
 ] as const satisfies readonly ApprovalGateKind[];
 
 describe('the approval-gate registry — totality at runtime', () => {
@@ -82,10 +85,13 @@ describe('the approval-gate registry — totality at runtime', () => {
     expect(isRegisteredGateKind('pull_request_merge')).toBe(false);
   });
 
-  it('leaves ONE declared hole — the RETIRED merge kind', () => {
+  it('leaves TWO declared holes — the RETIRED merge kind, and the review agent NOT YET built', () => {
     // `plan_approval` was a NOT-YET here from MOTIR-6032 until MOTIR-6035 registered its
-    // handler (ADR `approval-gates.md` §11), so it left the list.
-    expect([...UNREGISTERED_GATE_KINDS]).toEqual(['pull_request_merge']);
+    // handler (ADR `approval-gates.md` §11), so it left the list. `agent_review` is the
+    // same shape: MOTIR-6818 adds the enum value, MOTIR-6819 registers the handler and
+    // takes it off this list.
+    expect([...UNREGISTERED_GATE_KINDS]).toEqual(['pull_request_merge', 'agent_review']);
+    expect(isRegisteredGateKind('agent_review')).toBe(false);
     // ⚠️ `decision_approval` WAS THE OTHER HOLE — unbuilt, owned by MOTIR-4907 — until
     // MOTIR-5676 built it. `pull_request_merge` is a different kind of hole: it was built
     // (MOTIR-4793), raised real gates, and was WITHDRAWN by MOTIR-5616 — nothing owns it

@@ -827,5 +827,18 @@
  *   was `1.53.0` after MOTIR-6791 (`1.52.0`) and MOTIR-6795 (`1.53.0`) merged while
  *   this branch held `1.52.0`, so it was RENUMBERED to `1.54.0`. If a sibling has
  *   taken it since, RENUMBER this entry — it names the OPERATIONS.
+ *
+ * - `1.55.0` — MOTIR-6818 (Story MOTIR-1626, the review agent) adds `review` to
+ *   `DispatchCommand`: a hosted REVIEW run the server opens for an `agent_review`
+ *   gate (`docs/decisions/hosted-agent-run.md` §8). No operation writes it yet. The
+ *   approval-gate record gains `agent_review` (kind), `review_agent` (authority) and
+ *   `review_agent_disabled` (supersede cause) — `docs/decisions/approval-gates.md` §12.
+ *
+ *   Additive: new members of enums every client must tolerate unknown members of
+ *   (§8's allowed list); no declared field changes meaning.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: `V1_CONTRACT_VERSION` was `1.54.0`
+ *   after MOTIR-6832, so this claims `1.55.0`. If a sibling has taken it since,
+ *   RENUMBER this entry — it names the ENUM MEMBER.
  */
-export const V1_CONTRACT_VERSION = '1.54.0';
+export const V1_CONTRACT_VERSION = '1.55.0';

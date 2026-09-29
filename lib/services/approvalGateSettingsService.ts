@@ -1,7 +1,7 @@
 import { withWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { ProjectNotFoundError, ReviewAgentNeedsManualMergeError } from '@/lib/projects/errors';
 import type {
   ApprovalGateSettingsDTO,
   UpdateApprovalGateSettingsInput,
@@ -30,6 +30,17 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
  * A dedicated `gate:manage` is a reasonable later split and is deliberately NOT
  * made here: this card has no warrant to add a permission to the catalog.
  */
+/** The room's switches, read off the project row — one mapping for every return. */
+function toSettingsDTO(project: {
+  acceptanceVideoEnabled: boolean;
+  reviewAgentEnabled: boolean;
+}): ApprovalGateSettingsDTO {
+  return {
+    acceptanceVideoEnabled: project.acceptanceVideoEnabled,
+    reviewAgentEnabled: project.reviewAgentEnabled,
+  };
+}
+
 export const approvalGateSettingsService = {
   /**
    * The room's read. Resolution runs under `withSystemContext` and the ACCESS
@@ -50,7 +61,7 @@ export const approvalGateSettingsService = {
     const project = await withSystemContext((tx) => projectRepository.findById(projectId, tx));
     if (!project) throw new ProjectNotFoundError(projectId);
 
-    return { acceptanceVideoEnabled: project.acceptanceVideoEnabled };
+    return toSettingsDTO(project);
   },
 
   /**
@@ -68,22 +79,36 @@ export const approvalGateSettingsService = {
     // An empty patch is a no-op READ rather than an error: the route forwards only
     // the keys the body carried, and a caller sending none has asked for nothing.
     // Returning the current state keeps the client's reconcile honest either way.
-    if (patch.acceptanceVideoEnabled === undefined) {
+    // Only the switches the patch carries are written, so a PATCH naming one switch
+    // leaves every other exactly as it was.
+    const data: UpdateApprovalGateSettingsInput = {};
+    if (patch.acceptanceVideoEnabled !== undefined) {
+      data.acceptanceVideoEnabled = patch.acceptanceVideoEnabled;
+    }
+    if (patch.reviewAgentEnabled !== undefined) data.reviewAgentEnabled = patch.reviewAgentEnabled;
+    if (Object.keys(data).length === 0) {
       const project = await withSystemContext((tx) => projectRepository.findById(projectId, tx));
       if (!project) throw new ProjectNotFoundError(projectId);
-      return { acceptanceVideoEnabled: project.acceptanceVideoEnabled };
+      return toSettingsDTO(project);
     }
 
     const updated = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      (tx) =>
-        projectRepository.updateApprovalGateSettings(
-          projectId,
-          { acceptanceVideoEnabled: patch.acceptanceVideoEnabled },
-          tx,
-        ),
+      async (tx) => {
+        // ⚠️ THE REVIEW AGENT NEEDS A PROJECT THAT ASKS BEFORE MERGING (§12.2a). The
+        // merge mode is read under the project's row lock — the lock the merge-mode
+        // write takes too — so the two switches cannot be turned into the forbidden
+        // pair by two admins at once.
+        if (data.reviewAgentEnabled === true) {
+          await projectRepository.lockById(projectId, tx);
+          const mode = await projectRepository.findPrMergeMode(projectId, tx);
+          if (!mode) throw new ProjectNotFoundError(projectId);
+          if (mode.prMergeMode === 'auto') throw new ReviewAgentNeedsManualMergeError(projectId);
+        }
+        return projectRepository.updateApprovalGateSettings(projectId, data, tx);
+      },
     );
 
-    return { acceptanceVideoEnabled: updated.acceptanceVideoEnabled };
+    return toSettingsDTO(updated);
   },
 };

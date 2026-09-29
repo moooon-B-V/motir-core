@@ -1580,6 +1580,7 @@ const APPROVAL_GATE_KIND_VALUES = [
   'decision_choice',
   'decision_confirmation',
   'plan_approval',
+  'agent_review',
 ] as const satisfies readonly ApprovalGateKindDTO[];
 const _gateKindsTotal: AssertTotal<
   ApprovalGateKindDTO,
@@ -1605,6 +1606,7 @@ const APPROVAL_GATE_AUTHORITY_VALUES = [
   'admin',
   'github_review',
   'plan_permission',
+  'review_agent',
 ] as const satisfies readonly ApprovalGateAuthorityDTO[];
 const _gateAuthoritiesTotal: AssertTotal<
   ApprovalGateAuthorityDTO,
@@ -1646,6 +1648,7 @@ const APPROVAL_GATE_SUPERSEDE_CAUSE_VALUES = [
   'plan_stale',
   'plan_discarded',
   'queue_failed',
+  'review_agent_disabled',
 ] as const satisfies readonly ApprovalGateSupersedeCauseDTO[];
 const _gateCausesTotal: AssertTotal<
   ApprovalGateSupersedeCauseDTO,

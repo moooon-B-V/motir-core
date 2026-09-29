@@ -1810,16 +1810,16 @@ export interface components {
         ApprovalGateDecision: {
             id: string;
             /** @enum {string} */
-            kind: "design_result" | "decision_approval" | "pull_request_approval" | "pull_request_merge" | "acceptance_result" | "decision_choice" | "decision_confirmation" | "plan_approval";
+            kind: "design_result" | "decision_approval" | "pull_request_approval" | "pull_request_merge" | "acceptance_result" | "decision_choice" | "decision_confirmation" | "plan_approval" | "agent_review";
             /** @enum {string} */
             state: "awaiting" | "approved" | "changes_requested" | "superseded" | "overturned" | "declined";
             noteMd: string | null;
             decidedAt: string | null;
             decidedByLabel: string | null;
-            decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission") | null;
+            decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission" | "review_agent") | null;
             decisionSource: ("ui" | "api" | "mcp" | "github") | null;
             subjectVersion: string | null;
-            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed") | null;
+            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed" | "review_agent_disabled") | null;
             outcomeRef: string | null;
             refusalVerdict: ("revise" | "re_plan") | null;
             offersRefusalVerdict: boolean;
@@ -2175,7 +2175,7 @@ export interface components {
             deadRun: {
                 id: string;
                 /** @enum {string} */
-                command: "next" | "run" | "run_scope" | "batch" | "auto" | "fix" | "continue";
+                command: "next" | "run" | "run_scope" | "batch" | "auto" | "fix" | "continue" | "review";
                 /** @enum {string} */
                 origin: "local" | "hosted";
                 /** @enum {string} */
@@ -2584,7 +2584,7 @@ export interface components {
             id: string;
             projectId: string;
             /** @enum {string} */
-            command: "next" | "run" | "run_scope" | "batch" | "auto" | "fix" | "continue";
+            command: "next" | "run" | "run_scope" | "batch" | "auto" | "fix" | "continue" | "review";
             /** @enum {string} */
             origin: "local" | "hosted";
             scopeWorkItemId: string | null;
@@ -2645,7 +2645,7 @@ export interface components {
                 id: string;
                 projectId: string;
                 /** @enum {string} */
-                command: "next" | "run" | "run_scope" | "batch" | "auto" | "fix" | "continue";
+                command: "next" | "run" | "run_scope" | "batch" | "auto" | "fix" | "continue" | "review";
                 /** @enum {string} */
                 origin: "local" | "hosted";
                 scopeWorkItemId: string | null;
@@ -5608,7 +5608,7 @@ export interface operations {
         parameters: {
             query: {
                 /** @description Which gate to read. A card carries at most one LIVE gate per kind, and this answers the one the approval frame shows: a live question wins over a decided one, and among decided ones the newest. */
-                kind: "design_result" | "decision_approval" | "pull_request_approval" | "pull_request_merge" | "acceptance_result" | "decision_choice" | "decision_confirmation" | "plan_approval";
+                kind: "design_result" | "decision_approval" | "pull_request_approval" | "pull_request_merge" | "acceptance_result" | "decision_choice" | "decision_confirmation" | "plan_approval" | "agent_review";
             };
             header?: never;
             path: {
@@ -5639,20 +5639,20 @@ export interface operations {
                         workItemKey: string;
                         workItemTitle: string;
                         /** @enum {string} */
-                        kind: "design_result" | "decision_approval" | "pull_request_approval" | "pull_request_merge" | "acceptance_result" | "decision_choice" | "decision_confirmation" | "plan_approval";
+                        kind: "design_result" | "decision_approval" | "pull_request_approval" | "pull_request_merge" | "acceptance_result" | "decision_choice" | "decision_confirmation" | "plan_approval" | "agent_review";
                         gate: {
                             id: string;
                             /** @enum {string} */
-                            kind: "design_result" | "decision_approval" | "pull_request_approval" | "pull_request_merge" | "acceptance_result" | "decision_choice" | "decision_confirmation" | "plan_approval";
+                            kind: "design_result" | "decision_approval" | "pull_request_approval" | "pull_request_merge" | "acceptance_result" | "decision_choice" | "decision_confirmation" | "plan_approval" | "agent_review";
                             /** @enum {string} */
                             state: "awaiting" | "approved" | "changes_requested" | "superseded" | "overturned" | "declined";
                             noteMd: string | null;
                             decidedAt: string | null;
                             decidedByLabel: string | null;
-                            decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission") | null;
+                            decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission" | "review_agent") | null;
                             decisionSource: ("ui" | "api" | "mcp" | "github") | null;
                             subjectVersion: string | null;
-                            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed") | null;
+                            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed" | "review_agent_disabled") | null;
                             outcomeRef: string | null;
                             refusalVerdict: ("revise" | "re_plan") | null;
                             offersRefusalVerdict: boolean;
@@ -11515,7 +11515,7 @@ export interface operations {
                 "application/json": {
                     projectKey: string;
                     /** @enum {string} */
-                    command: "next" | "run" | "run_scope" | "batch" | "auto" | "fix" | "continue";
+                    command: "next" | "run" | "run_scope" | "batch" | "auto" | "fix" | "continue" | "review";
                     /**
                      * @default local
                      * @enum {string}

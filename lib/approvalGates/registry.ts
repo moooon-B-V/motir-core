@@ -108,6 +108,7 @@ export type RegisteredGateKind =
  * | kind                    | owner                                              |
  * | ----------------------- | -------------------------------------------------- |
  * | `pull_request_merge`    | nobody — RETIRED (MOTIR-5616)                      |
+ * | `agent_review`          | MOTIR-6819 — NOT YET (the review agent, ADR §12)   |
  *
  * (`plan_approval` was a NOT-YET here from MOTIR-6032 until MOTIR-6035 built it.)
  *
@@ -130,6 +131,9 @@ export type UnregisteredGateKind = Exclude<ApprovalGateKind, RegisteredGateKind>
  */
 export const UNREGISTERED_GATE_KINDS = [
   'pull_request_merge',
+  // NOT YET: MOTIR-6818 adds the enum value, MOTIR-6819 registers its handler. Until
+  // then the decide door refuses it by name (`ApprovalGateKindUnregisteredError`).
+  'agent_review',
 ] as const satisfies readonly UnregisteredGateKind[];
 
 // TOTALITY, asserted at the type level. `Exclude` gives us the complement of the
