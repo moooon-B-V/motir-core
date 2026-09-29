@@ -351,6 +351,8 @@ export class JobWorker {
   private loopDone: Promise<void> | undefined;
   /** The lease renewal in flight, if any — `clearInterval` stops the next, not this one. */
   private renewing: Promise<unknown> | undefined;
+  /** True while `renewing` is unsettled — the heartbeat's single-flight guard (MOTIR-6958). */
+  private renewalInFlight = false;
 
   constructor(opts: JobWorkerOptions) {
     this.workerId = opts.workerId ?? `worker-${randomUUID()}`;
@@ -656,10 +658,23 @@ export class JobWorker {
     if (this.running) return;
     this.running = true;
     this.draining = false;
+    // ⚠️ SINGLE-FLIGHT (MOTIR-6958). A tick that fires while the previous renewal
+    // is still on the wire SKIPS rather than starting a second one. `renewing` is
+    // one slot, so two overlapping renewals left `shutdown()` awaiting only the
+    // newest — and the older could land after `releaseClaims`, the hazard
+    // MOTIR-6734 closed. A skipped tick costs the lease nothing it can feel: the
+    // gap between two renewals is at most RENEW_MS plus one renewal's latency,
+    // against a LEASE_MS of 3× RENEW_MS.
     this.heartbeat = setInterval(() => {
+      if (this.renewalInFlight) return;
+      this.renewalInFlight = true;
       this.renewing = withSystemContext((tx) =>
         jobQueueRepository.renewLeases(this.workerId, this.leaseMs, tx),
-      ).catch((err: unknown) => this.log.warn('[job-worker] lease renewal failed', err));
+      )
+        .catch((err: unknown) => this.log.warn('[job-worker] lease renewal failed', err))
+        .finally(() => {
+          this.renewalInFlight = false;
+        });
     }, this.renewMs);
     // `unref` so a heartbeat timer alone never holds the process open.
     this.heartbeat.unref?.();
@@ -688,7 +703,8 @@ export class JobWorker {
     // Wait for the loop to leave its current claim, and for a renewal already on
     // the wire (MOTIR-6734). Without this, shutdown returned while a claim query
     // was still running: a claim landing after the release below leaves rows held
-    // by a worker that has stopped, until their lease runs out.
+    // by a worker that has stopped, until their lease runs out. The heartbeat is
+    // single-flight (MOTIR-6958), so `renewing` is the ONLY renewal there can be.
     await this.loopDone;
     await this.renewing;
 
