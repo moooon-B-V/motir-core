@@ -1,4 +1,5 @@
 import type { DesignAutoRerun, DesignAutoRerunSkipReason } from '@/generated/prisma/client';
+import { DESIGN_AUTO_RERUN_CAP } from '@/lib/approvalGates/designAutoRerunCap';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import {
   HostedModelNotOfferedError,
@@ -13,6 +14,7 @@ import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/erro
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { designAutoRerunRepository } from '@/lib/repositories/designAutoRerunRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -41,8 +43,8 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 // an idempotency key derived from the gate, so a redelivered event — or a retry
 // that died between the start and the record — starts at most one run.
 
-/** How many automatic re-runs one card may have (§1e). */
-export const DESIGN_AUTO_RERUN_CAP = 3;
+/** How many automatic re-runs one card may have (§1e) — re-exported from its home. */
+export { DESIGN_AUTO_RERUN_CAP };
 
 /** The `design/auto-rerun.requested` event payload. */
 export interface DesignAutoRerunRequestedData {
@@ -121,6 +123,7 @@ export const designAutoRerunService = {
     // ── 2 · The checks that need no start: the cap, the dispatcher, the model. ────
     let skipReason: DesignAutoRerunSkipReason | null = null;
     let dispatchRunId: string | null = null;
+    let refusedRepository: string | null = null;
     if (ordinal > DESIGN_AUTO_RERUN_CAP) skipReason = 'cap_reached';
     else if (lane.createdById === null) skipReason = 'dispatcher_gone';
     else if (lane.model === null) skipReason = 'model_not_offered';
@@ -143,6 +146,9 @@ export const designAutoRerunService = {
           dispatchRunId = err.dispatchRunId;
         } else {
           skipReason = skipReasonFor(err);
+          if (err instanceof HostedRunRepositoryNotWritableError) {
+            refusedRepository = err.refusals[0]?.repository ?? null;
+          }
           // Anything else is not a refusal the card can explain — let the job retry.
           if (skipReason === null) throw err;
         }
@@ -153,6 +159,15 @@ export const designAutoRerunService = {
     const record = await withWorkspaceServiceContext(workspaceId, async (tx) => {
       const raced = await designAutoRerunRepository.findByGateId(gateId, tx);
       if (raced) return raced;
+      // WHAT THE LINE NAMES (MOTIR-702), captured now — a record of the moment.
+      let detail: string | null = null;
+      if (skipReason === 'no_project_access' && lane.createdById) {
+        detail = (await userRepository.findById(lane.createdById, tx))?.name ?? null;
+      } else if (skipReason === 'model_not_offered') {
+        detail = lane.model;
+      } else if (skipReason === 'repository_not_writable') {
+        detail = refusedRepository;
+      }
       return designAutoRerunRepository.create(
         {
           workspaceId,
@@ -162,6 +177,7 @@ export const designAutoRerunService = {
           skipReason,
           dispatchRunId: skipReason === null ? dispatchRunId : null,
           ordinal,
+          detail,
         },
         tx,
       );

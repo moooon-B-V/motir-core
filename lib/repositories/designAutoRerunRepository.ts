@@ -18,6 +18,8 @@ export interface DesignAutoRerunCreateInput {
   skipReason: DesignAutoRerunSkipReason | null;
   dispatchRunId: string | null;
   ordinal: number;
+  /** What the skipped line names — see the column's note. */
+  detail: string | null;
 }
 
 export const designAutoRerunRepository = {

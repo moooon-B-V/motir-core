@@ -246,6 +246,22 @@ describe('when the dispatcher can no longer run hosted, nothing starts and the c
     expect(startSpy).toHaveBeenCalledTimes(1);
     const row = await adminDb.designAutoRerun.findUniqueOrThrow({ where: { gateId } });
     expect(row.skipReason).toBe('model_not_offered');
+    // What the card's line names, captured when written (MOTIR-702).
+    expect(row.detail).toBe('retired-model');
+  });
+
+  it('the dispatcher can no longer edit the project — the line names them', async () => {
+    await aRun('hosted');
+    const { PermissionDeniedError } = await import('@/lib/projects/errors');
+    startSpy.mockRejectedValueOnce(new PermissionDeniedError(fx.projectId, 'work_item:edit'));
+    const gateId = await aRefusal();
+
+    await attempt(gateId);
+
+    const row = await adminDb.designAutoRerun.findUniqueOrThrow({ where: { gateId } });
+    expect(row.skipReason).toBe('no_project_access');
+    const me = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ctx.userId } });
+    expect(row.detail).toBe(me.name);
   });
 
   it('an error the card cannot explain is thrown, so the job retries, and nothing is recorded', async () => {

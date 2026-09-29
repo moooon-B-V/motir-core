@@ -8204,7 +8204,8 @@
     "decidedByOnGithub": "{label} · on GitHub",
     "viewAria": "Show your approvals or the whole project's",
     "readFailedTitle": "We couldn’t load these approvals",
-    "readFailedBody": "Reload to try again."
+    "readFailedBody": "Reload to try again.",
+    "decidedBySystem": "Approved automatically · design approval off"
   },
   "platformAdmin": {
     "shell": {
@@ -9230,7 +9231,9 @@
       "willRepublish": "the agent will publish a new version",
       "version": "version {version}",
       "filesKept": "Files kept",
-      "filesNotKept": "Files not kept"
+      "filesNotKept": "Files not kept",
+      "systemApproved": "Approved automatically",
+      "systemApprovedWhy": "Design approval is off for this project"
     },
     "withdrawn": {
       "port": "This question was withdrawn.",
@@ -9924,6 +9927,35 @@
     "planDoor": {
       "label": "Plan with AI",
       "aria": "Plan the follow-up to {item} with AI"
+    },
+    "autoRerun": {
+      "started": "Re-running on the hosted agent",
+      "startedCount": "automatic re-run {ordinal} of {cap}",
+      "viewRun": "View run",
+      "skipped": "Automatic re-run skipped",
+      "reason": {
+        "cap_reached": "this design has been sent back {cap} times.",
+        "dispatcher_gone": "the person who last ran it is no longer here.",
+        "no_project_access": "{detail}, who last ran it, can no longer edit this project.",
+        "ci_credits_exhausted": "the organisation’s CI credits are used up.",
+        "model_not_offered": "{detail}, the model it last ran on, is no longer offered.",
+        "models_unavailable": "the list of models could not be read.",
+        "out_of_credits": "the organisation is out of credits.",
+        "credits_unavailable": "the credit balance could not be read.",
+        "repository_not_writable": "Motir cannot write to {detail}.",
+        "card_not_ready": "someone picked the work item up first."
+      },
+      "next": {
+        "cap_reached": "Run on the hosted agent",
+        "dispatcher_gone": "Run on the hosted agent",
+        "no_project_access": "Run on the hosted agent",
+        "ci_credits_exhausted": "Billing",
+        "model_not_offered": "Choose a model and run",
+        "models_unavailable": "Run on the hosted agent",
+        "out_of_credits": "Buy credits",
+        "credits_unavailable": "Run on the hosted agent",
+        "repository_not_writable": "Repositories"
+      }
     }
   },
   "approvalOverlay": {
@@ -9979,6 +10011,16 @@
         "label": "Merge automatically",
         "hint": "When its checks pass, Motir merges the pull request without asking anyone. The record says this setting allowed it — not that a person approved it."
       },
+      "saved": "Saved",
+      "saveError": "Couldn't save — try again."
+    },
+    "designApproval": {
+      "title": "Design approval",
+      "desc": "A published design result waits for a person to approve it. The work built on the design cannot start until they do.",
+      "on": "On",
+      "off": "Off",
+      "onWhat": "Every published design waits for a person to approve it.",
+      "offWhat": "Published designs are approved automatically, and each approval says this setting made it.",
       "saved": "Saved",
       "saveError": "Couldn't save — try again."
     }

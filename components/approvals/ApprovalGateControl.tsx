@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { AutoRerunLine } from './AutoRerunLine';
 import Link from 'next/link';
 import { AlertTriangle, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -1349,6 +1350,24 @@ export function ApprovalGateControl({
               handle rather than as an account of what happened. */}
             {recordLead ? (
               <span>{recordLead}</span>
+            ) : gate.decisionSource === 'system' ? (
+              // A SYSTEM approval (MOTIR-702; `design-result--system-approved.mock.html`):
+              // WHAT happened in the slot a name takes, then WHY — a link to the switch
+              // for a reader who may open it, plain text for everyone else. Never the
+              // null-label fallback below, which would say a name was lost (§6a).
+              <>
+                <span className="font-medium text-(--el-text)">{t('record.systemApproved')}</span>
+                {gate.systemApprovalSettingsHref ? (
+                  <Link
+                    className="text-(--el-link) underline underline-offset-2"
+                    href={gate.systemApprovalSettingsHref}
+                  >
+                    {t('record.systemApprovedWhy')}
+                  </Link>
+                ) : (
+                  <span>{t('record.systemApprovedWhy')}</span>
+                )}
+              </>
             ) : (
               <span className="font-medium text-(--el-text)">
                 {gate.decisionSource === 'github' && gate.decidedByLabel
@@ -1398,6 +1417,9 @@ export function ApprovalGateControl({
             {gate.state === 'changes_requested' ? (
               <RefusalReasonQuote noteMd={gate.noteMd} decisionSource={gate.decisionSource} />
             ) : null}
+            {/* THE AUTOMATIC RE-RUN LINE (MOTIR-702) — after the quote, its own row; absent
+              when this refusal attempted nothing. */}
+            {gate.state === 'changes_requested' ? <AutoRerunLine rerun={gate.autoRerun} /> : null}
             {/* ⚠️ ONLY ON AN APPROVAL, AND ONLY WHEN THE KIND ANSWERED. §6c pins
               for approvals alone, so the line has no meaning on a rejection —
               and `null` means the kind was not asked, which renders nothing

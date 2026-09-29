@@ -5173,6 +5173,12 @@ model DesignAutoRerun {
   /// Which automatic re-run of this card this was, counting Motir-pressed Revise
   /// refusals (§1e). The cap reads the same count; storing it lets the line say "2 of 3".
   ordinal Int
+  /// What the skipped line NAMES, captured when it was written (MOTIR-702; the design's
+  /// `design-result--auto-rerun.mock.html`): the dispatcher's name for
+  /// `no_project_access`, the model for `model_not_offered`, the repository for
+  /// `repository_not_writable`. Null for every other outcome. A record of the moment, so
+  /// the line still says who it was after that person's name changes.
+  detail  String?
 
   createdAt DateTime @default(now()) @map("created_at")
 

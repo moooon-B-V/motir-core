@@ -384,7 +384,49 @@ export interface ApprovalGateDTO {
 
   createdAt: string;
   updatedAt: string;
+  /**
+   * THE AUTOMATIC HOSTED RE-RUN this refusal caused or skipped (Story MOTIR-693 ·
+   * MOTIR-702; `hosted-design-rerun-and-design-approval-switch.md` §1g). Set by the
+   * item-page gate read on a refused `design_result` gate that HAS a record; absent or
+   * null everywhere else — and null means the frame draws no line (a card that was not
+   * hosted, a Re-plan, a GitHub refusal: nothing was attempted).
+   */
+  autoRerun?: DesignAutoRerunDTO | null;
+  /**
+   * Where a SYSTEM-approved gate's "Design approval is off for this project" links to —
+   * the switch on Settings → Approvals — for a reader who holds `workflow:manage`, the
+   * key that room is guarded by (MOTIR-702; the design's panel 1). Null or absent for
+   * everyone else, who get the same words as plain text (panel 2).
+   */
+  systemApprovalSettingsHref?: string | null;
 }
+
+/** The re-run line's facts (MOTIR-702) — `design_auto_rerun`, as the frame reads it. */
+export interface DesignAutoRerunDTO {
+  outcome: 'started' | 'skipped';
+  /** Null exactly when `outcome` is `started`. */
+  skipReason: DesignAutoRerunSkipReasonDTO | null;
+  /** The run it started; the line's *View run* link. */
+  dispatchRunId: string | null;
+  /** Which automatic re-run of the card this was, and the cap it counts against. */
+  ordinal: number;
+  cap: number;
+  /** The dispatcher, model or repository a skipped line names; null otherwise. */
+  detail: string | null;
+}
+
+/** Why an automatic re-run did not start — mirrors `DesignAutoRerunSkipReason`. */
+export type DesignAutoRerunSkipReasonDTO =
+  | 'cap_reached'
+  | 'dispatcher_gone'
+  | 'no_project_access'
+  | 'ci_credits_exhausted'
+  | 'model_not_offered'
+  | 'models_unavailable'
+  | 'out_of_credits'
+  | 'credits_unavailable'
+  | 'repository_not_writable'
+  | 'card_not_ready';
 
 /**
  * THE APPROVAL A RE-ASKED MERGE GATE REPLACED (Bug MOTIR-5863; `design/github/design-notes.md`

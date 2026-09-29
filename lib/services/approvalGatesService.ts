@@ -28,7 +28,11 @@ import {
 } from '@/lib/approvalGates/registry';
 import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
 import { foldPendingDecisions } from '@/lib/approvalGates/pendingDecision';
-import { settingsDoorFor, type GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
+import {
+  SETTINGS_DOOR_PERMISSION,
+  settingsDoorFor,
+  type GateSettingsDoor,
+} from '@/lib/approvalGates/settingsDoor';
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateNotAuthorisedError,
@@ -92,6 +96,11 @@ import { planGateStampInputs, planSubjectVersion } from '@/lib/approvalGates/pla
 import { readPlanGateHeld } from '@/lib/approvalGates/planApprovalHandler';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { designAutoRerunRepository } from '@/lib/repositories/designAutoRerunRepository';
+import { toDesignAutoRerunDto } from '@/lib/mappers/designAutoRerunMappers';
+
+/** The design-approval switch's address — the card's anchor on Settings → Approvals. */
+export const DESIGN_APPROVAL_SETTINGS_HREF = '/settings/project/approvals#design-approval';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { resolveStatusIntent } from '@/lib/workflows/statusIntent';
 
@@ -915,7 +924,22 @@ export const approvalGatesService = {
       const offersRefusalVerdict =
         row.state === 'awaiting' ? await refusalVerdictOfferFor(row, tx) : false;
 
-      const gateDto = toApprovalGateDto(row, item.descriptionMd, offersRefusalVerdict);
+      // THE TWO VIEW FACTS a design gate's record band draws (Story MOTIR-693 · MOTIR-702).
+      // A refused design gate carries its automatic re-run's record, if one was written;
+      // a SYSTEM-approved one carries the switch's address for a reader who may open it.
+      const rerunRow =
+        row.kind === 'design_result' && row.state === 'changes_requested'
+          ? await designAutoRerunRepository.findByGateId(row.id, tx)
+          : null;
+      const baseDto = toApprovalGateDto(row, item.descriptionMd, offersRefusalVerdict);
+      const gateDto = {
+        ...baseDto,
+        autoRerun: rerunRow ? toDesignAutoRerunDto(rerunRow) : null,
+        systemApprovalSettingsHref:
+          row.decisionSource === 'system' && held.has(SETTINGS_DOOR_PERMISSION)
+            ? DESIGN_APPROVAL_SETTINGS_HREF
+            : null,
+      };
       const earlierDto = earlier ? toEarlierApprovalDto(earlier) : null;
       // A Visitor reads every person by name only (MOTIR-6646).
       const decider = isVisitorActor(ctx)

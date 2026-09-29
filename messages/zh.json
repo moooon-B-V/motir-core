@@ -8200,7 +8200,8 @@
     "decidedByOnGithub": "{label} · 在 GitHub 上",
     "viewAria": "显示你的审批或整个项目的审批",
     "readFailedTitle": "无法加载这些审批",
-    "readFailedBody": "请重新加载后重试。"
+    "readFailedBody": "请重新加载后重试。",
+    "decidedBySystem": "已自动批准 · 设计审批已关闭"
   },
   "platformAdmin": {
     "shell": {
@@ -9226,7 +9227,9 @@
       "willRepublish": "代理将发布新版本",
       "version": "版本 {version}",
       "filesKept": "已保留文件",
-      "filesNotKept": "未保留文件"
+      "filesNotKept": "未保留文件",
+      "systemApproved": "已自动批准",
+      "systemApprovedWhy": "此项目已关闭设计审批"
     },
     "withdrawn": {
       "port": "该问题已被撤回。",
@@ -9920,6 +9923,35 @@
     "planDoor": {
       "label": "用 AI 规划",
       "aria": "用 AI 规划 {item} 的后续工作"
+    },
+    "autoRerun": {
+      "started": "正在托管代理上重新运行",
+      "startedCount": "第 {ordinal} 次自动重新运行（共 {cap} 次）",
+      "viewRun": "查看运行",
+      "skipped": "已跳过自动重新运行",
+      "reason": {
+        "cap_reached": "此设计已被退回 {cap} 次。",
+        "dispatcher_gone": "上次运行它的人已不在此工作区。",
+        "no_project_access": "上次运行它的 {detail} 已无法编辑此项目。",
+        "ci_credits_exhausted": "组织的 CI 额度已用完。",
+        "model_not_offered": "它上次使用的模型 {detail} 已不再提供。",
+        "models_unavailable": "无法读取模型列表。",
+        "out_of_credits": "组织的额度已用完。",
+        "credits_unavailable": "无法读取额度余额。",
+        "repository_not_writable": "Motir 无法写入 {detail}。",
+        "card_not_ready": "已有人先领取了此工作项。"
+      },
+      "next": {
+        "cap_reached": "在托管代理上运行",
+        "dispatcher_gone": "在托管代理上运行",
+        "no_project_access": "在托管代理上运行",
+        "ci_credits_exhausted": "账单",
+        "model_not_offered": "选择模型并运行",
+        "models_unavailable": "在托管代理上运行",
+        "out_of_credits": "购买额度",
+        "credits_unavailable": "在托管代理上运行",
+        "repository_not_writable": "仓库"
+      }
     }
   },
   "approvalOverlay": {
@@ -9977,6 +10009,16 @@
       },
       "saved": "已保存",
       "saveError": "保存失败，请重试。"
+    },
+    "designApproval": {
+      "title": "设计审批",
+      "desc": "已发布的设计结果需等待有人批准。在批准之前，基于该设计的工作无法开始。",
+      "on": "开启",
+      "off": "关闭",
+      "onWhat": "每个已发布的设计都等待有人批准。",
+      "offWhat": "已发布的设计会被自动批准，每次批准都会注明是此设置做出的。",
+      "saved": "已保存",
+      "saveError": "无法保存，请重试。"
     }
   },
   "folders": {

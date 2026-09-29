@@ -6,6 +6,7 @@ import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { approvalGateSettingsService } from '@/lib/services/approvalGateSettingsService';
 import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
 import { projectPrMergeModeService } from '@/lib/services/projectPrMergeModeService';
+import { DesignApprovalGateCard } from './_components/DesignApprovalGateCard';
 import { AcceptanceVideoGateCard } from './_components/AcceptanceVideoGateCard';
 import { PrMergeModeCard } from './_components/PrMergeModeCard';
 import { guardSettingsPage } from '../_guard';
@@ -83,6 +84,13 @@ export default async function ProjectApprovalsPage() {
         projectKey={ctx.project.identifier}
         initialEnabled={settings.acceptanceVideoEnabled}
         entitled={eligibility.reason !== 'no_plan'}
+      />
+
+      {/* The two approval switches together, then the merge setting that follows every
+          approval (MOTIR-702; `approvals--design-gate.mock.html` panel 3). */}
+      <DesignApprovalGateCard
+        projectKey={ctx.project.identifier}
+        initialEnabled={settings.designApprovalGate}
       />
 
       <PrMergeModeCard projectKey={ctx.project.identifier} initialMode={prMergeMode} />
