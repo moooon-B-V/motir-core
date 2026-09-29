@@ -255,11 +255,11 @@ describe('workItemsService.quickSearch — a BARE NUMBER (MOTIR-6896)', () => {
     const alpha = await create('Alpha', 'ALPHA');
     const beta = await create('Beta', 'BETA');
     const priv = await create('Private', 'PRIV');
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: priv.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level: 'private',
+      mode: 'members',
     });
     const outsider = await usersService.createUser({
       email: 'outsider-num@ex.com',
