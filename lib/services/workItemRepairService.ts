@@ -1,12 +1,19 @@
 import type {
+  AcceptanceRefusalDto,
   RepairCloseOutcome,
   RepairPullRequestDto,
+  ReviewRefusalDto,
   WorkItemRepairClaimDto,
+  WorkItemRepairClass,
   WorkItemRepairRefusal,
   WorkItemRepairRunDto,
   WorkItemRepairViewDto,
 } from '@/lib/dto/workItemRepair';
-import type { DispatchRun, DispatchStopReason } from '@/generated/prisma/client';
+import type { ClaimActorDto } from '@/lib/dto/claim';
+import type { DispatchRun, DispatchStopReason, Prisma } from '@/generated/prisma/client';
+import { readStandingReviewRefusal } from '@/lib/approvalGates/reviewRefusal';
+import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { DispatchRunTerminalError, RepairRunRefusedError } from '@/lib/dispatchRuns/errors';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -122,6 +129,124 @@ const refOf = (pr: RepairPullRequestDto) => ({
   conflict: pr.conflicted ? { baseRef: pr.baseRef } : null,
 });
 
+/**
+ * A HOSTED repair's opening (Story MOTIR-1626 · MOTIR-6928; `hosted-agent-run.md` §8.6).
+ * The hosted start hands it to the claim so the lock it takes IS the hosted run: one
+ * `fix` row, recorded `origin: 'hosted'` with the agent and model it runs on, and
+ * idempotent on the start's key — the continue claim's hosted opening (MOTIR-6790),
+ * for the repair. Server-internal: the v1 repair route never accepts one.
+ */
+export interface HostedRepairOpening {
+  origin: 'hosted';
+  agent: 'opencode';
+  model: string;
+  idempotencyKey: string;
+}
+
+export interface ClaimRepairOptions {
+  opening?: HostedRepairOpening | undefined;
+  /**
+   * Asked under the lock with the class the claim is about to open a run for, BEFORE
+   * anything is written; a throw aborts the claim with nothing written. The hosted
+   * start refuses every class but `review` through it (§12.4b), so a card whose class
+   * changed between its preview and the lock never gets a hosted run.
+   */
+  admit?: ((repairClass: WorkItemRepairClass) => void) | undefined;
+  /** Told when the opening's key was ALREADY used: the answer replays that run, so a
+   *  hosted start racing its own repeat never boots it a second container. */
+  onReplay?: ((runId: string) => void) | undefined;
+}
+
+/**
+ * What a hosted repair's preview found (MOTIR-6928) — the claim's own evaluation and
+ * its lock read, WITHOUT the lock and writing nothing. The claim decides again under
+ * its lock; this is a pre-flight, never the decision.
+ */
+export type HostedRepairPreview =
+  | {
+      ok: true;
+      key: string;
+      workItemId: string;
+      repairClass: WorkItemRepairClass;
+      pullRequests: RepairPullRequestDto[];
+    }
+  | {
+      ok: false;
+      key: string;
+      /** `taken` — an open `fix` run holds the card (whoever's, the caller's included). */
+      refusal:
+        | { kind: 'not_repairable'; reason: WorkItemRepairRefusal; runTargetKey: string | null }
+        | { kind: 'not_sent_back'; repairClass: WorkItemRepairClass }
+        | { kind: 'taken'; holder: ClaimActorDto | null; startedAt: string };
+    };
+
+/** One pull request as a hosted repair's `run_opened` records it — the claim's row,
+ *  with its OWN branch named as such and the head it was handed at. */
+interface RecordedRepairPullRequest extends RepairPullRequestDto {
+  branch: string;
+  headSha: string | null;
+}
+
+/**
+ * What a hosted repair's claim DECIDED, as its ONE `run_opened` records it (MOTIR-6928)
+ * — so the container ADOPTS the run and reads the decision back rather than claiming a
+ * second time (the continue precedent, MOTIR-6795): the class, every pull request on its
+ * own branch at its head, and the findings with who decided them and under what authority.
+ */
+async function hostedRepairOpenedData(
+  item: { id: string; identifier: string; title: string },
+  opening: HostedRepairOpening,
+  decided: {
+    repairClass: WorkItemRepairClass;
+    pullRequests: RepairPullRequestDto[];
+    reviewRefusal: ReviewRefusalDto | null;
+    acceptanceRefusal: AcceptanceRefusalDto | null;
+  },
+  tx: Prisma.TransactionClient,
+): Promise<Prisma.InputJsonObject> {
+  const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx);
+  const headOf = new Map(
+    deliveries.map((d) => [
+      `${d.repo.owner}/${d.repo.name}#${d.pullRequest.number}`,
+      liveRowsAtLatestSha(d.pullRequest.checkRuns)[0]?.commitSha ?? null,
+    ]),
+  );
+  const pullRequests: RecordedRepairPullRequest[] = decided.pullRequests.map((pr) => ({
+    ...pr,
+    branch: pr.headRef,
+    headSha: headOf.get(`${pr.repo}#${pr.number}`) ?? null,
+  }));
+  // The gate itself, for what the DTO leaves out: which gate, at which version, and the
+  // authority it was decided under (`review_agent` for the agent, a person's otherwise).
+  const gate =
+    decided.repairClass === 'review'
+      ? await readStandingReviewRefusal(item.id, deliveries, tx)
+      : null;
+  const findings =
+    decided.reviewRefusal === null
+      ? null
+      : {
+          ...decided.reviewRefusal,
+          gateId: gate?.id ?? null,
+          subjectVersion: gate?.subjectVersion ?? null,
+          decidedByLabel: gate?.decidedByLabel ?? null,
+          decidedUnderAuthority: gate?.decidedUnderAuthority ?? null,
+        };
+  return JSON.parse(
+    JSON.stringify({
+      command: 'fix',
+      key: item.identifier,
+      title: item.title,
+      origin: opening.origin,
+      model: opening.model,
+      repairClass: decided.repairClass,
+      findings,
+      acceptanceRefusal: decided.acceptanceRefusal,
+      pullRequests,
+    }),
+  ) as Prisma.InputJsonObject;
+}
+
 export const workItemRepairService = {
   /**
    * CLAIM the repair of one `implemented` card's failing pull requests.
@@ -135,7 +260,9 @@ export const workItemRepairService = {
     projectId: string,
     identifier: string,
     ctx: ServiceContext,
+    options: ClaimRepairOptions = {},
   ): Promise<WorkItemRepairClaimDto> {
+    const { opening, admit, onReplay } = options;
     // Tenancy + browse, with the 404-not-403 answer for a foreign key — the same
     // read every keyed operation opens with.
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
@@ -164,6 +291,29 @@ export const workItemRepairService = {
         /* v8 ignore next -- the row was resolved above; only a delete between the two reads gets here */
         if (!state) throw new WorkItemNotFoundError(identifier);
 
+        // The same hosted press again, raced past the hosted start's own short-circuit:
+        // answered with the run its key already opened, under this lock, before the lock
+        // read below would call that very run `mine`.
+        /* v8 ignore start -- race-only: the hosted start answers a known key before it claims */
+        if (opening) {
+          const replayed = await dispatchRunRepository.findByIdempotencyKey(
+            ctx.workspaceId,
+            opening.idempotencyKey,
+            tx,
+          );
+          if (replayed) {
+            onReplay?.(replayed.id);
+            return {
+              ...refused(item, 'not_failing'),
+              outcome: 'claimed',
+              reason: null,
+              runId: replayed.id,
+              startedAt: replayed.startedAt.toISOString(),
+            };
+          }
+        }
+        /* v8 ignore stop */
+
         const verdict = await evaluateRepair(
           { id: item.id, status: state.status, archivedAt: state.archivedAt },
           statuses,
@@ -180,7 +330,11 @@ export const workItemRepairService = {
           tx,
         );
         if (held) {
-          const mine = held.createdById === ctx.userId;
+          // ⚠️ A HOSTED repair is never `mine` to a claim, even the presser's own: its
+          // container is working those branches, and a local `motir fix` resuming it
+          // would put two agents on one pull request (§8.6 — one repair at a time).
+          // Only a local run its own operator re-claims is a resume.
+          const mine = held.createdById === ctx.userId && held.origin !== 'hosted';
           return {
             key: item.identifier,
             title: item.title,
@@ -198,12 +352,50 @@ export const workItemRepairService = {
           };
         }
 
-        await dispatchRunService.openWithin(
+        // Asked before anything is written: a throw rolls the whole claim back.
+        admit?.(repairClass);
+
+        // A hosted opening rides on the SAME insert, so the lock and the hosted run are
+        // one row (§8.6) — a local `motir fix` and a hosted press exclude each other
+        // through the lock read above, in both directions.
+        const openedRun = await dispatchRunService.openWithin(
           projectId,
-          { command: 'fix', cards: [{ key: item.identifier, disposition: 'queued' }] },
+          {
+            command: 'fix',
+            cards: [{ key: item.identifier, disposition: 'queued' }],
+            ...(opening
+              ? {
+                  origin: opening.origin,
+                  agent: opening.agent,
+                  model: opening.model,
+                  idempotencyKey: opening.idempotencyKey,
+                }
+              : {}),
+          },
           ctx,
           tx,
         );
+        // A LOCAL claim writes no event: `motir fix` appends its own `run_opened`. A
+        // HOSTED one writes the ONE `run_opened` the container reads back.
+        if (opening) {
+          await dispatchRunEventRepository.createMany(
+            [
+              {
+                workspaceId: ctx.workspaceId,
+                dispatchRunId: openedRun.run.id,
+                seq: 1,
+                kind: 'run_opened',
+                data: await hostedRepairOpenedData(
+                  item,
+                  opening,
+                  { repairClass, pullRequests, reviewRefusal, acceptanceRefusal },
+                  tx,
+                ),
+              },
+            ],
+            tx,
+          );
+        }
         // Read back through the SAME lock read, so `claimed` names its holder
         // exactly as a later `taken` will — one projection, not two.
         const opened = await dispatchRunRepository.findRunningByCommandForWorkItem(
@@ -226,6 +418,84 @@ export const workItemRepairService = {
           acceptanceRefusal,
           reviewRefusal,
           pullRequests,
+        };
+      },
+    );
+  },
+
+  /**
+   * Whether a HOSTED repair of `identifier` would be admitted, and over which pull
+   * requests (Story MOTIR-1626 · MOTIR-6928) — {@link claimRepair}'s evaluation and lock
+   * read WITHOUT the lock, writing nothing. The claim decides again under its lock, so
+   * this is the hosted start's pre-flight, never the decision.
+   *
+   * Asserts what the claim asserts up front — tenancy + browse (the keyed read) and edit
+   * — so a person who could not press gets the claim's own answer, not a preview.
+   */
+  async previewHostedRepair(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+  ): Promise<HostedRepairPreview> {
+    const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
+    await projectAccessService.assertCanEdit(projectId, ctx);
+    const statuses = await workflowsService.listStatusesByProject(projectId, ctx.workspaceId);
+
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+      async (tx): Promise<HostedRepairPreview> => {
+        const state = await workItemRepository.findClaimStateById(item.id, tx);
+        /* v8 ignore next -- the row was resolved above; only a delete between the two reads gets here */
+        if (!state) throw new WorkItemNotFoundError(identifier);
+        const key = item.identifier;
+        const verdict = await evaluateRepair(
+          { id: item.id, status: state.status, archivedAt: state.archivedAt },
+          statuses,
+          ctx,
+          tx,
+        );
+        if (!verdict.ok) {
+          return {
+            ok: false,
+            key,
+            refusal: {
+              kind: 'not_repairable',
+              reason: verdict.reason,
+              runTargetKey: verdict.runTargetKey,
+            },
+          };
+        }
+        // The lock read BEFORE the class: a repair already running is the truer answer
+        // whatever the class, and it names who to ask.
+        const held = await dispatchRunRepository.findRunningByCommandForWorkItem(
+          item.id,
+          'fix',
+          tx,
+        );
+        if (held) {
+          return {
+            ok: false,
+            key,
+            refusal: {
+              kind: 'taken',
+              holder: held.createdBy,
+              startedAt: held.startedAt.toISOString(),
+            },
+          };
+        }
+        if (verdict.repairClass !== 'review') {
+          return {
+            ok: false,
+            key,
+            refusal: { kind: 'not_sent_back', repairClass: verdict.repairClass },
+          };
+        }
+        return {
+          ok: true,
+          key,
+          workItemId: item.id,
+          repairClass: verdict.repairClass,
+          pullRequests: verdict.pullRequests,
         };
       },
     );

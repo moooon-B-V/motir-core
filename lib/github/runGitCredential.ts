@@ -16,7 +16,9 @@ import {
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunGitCredentialRepository } from '@/lib/repositories/dispatchRunGitCredentialRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
@@ -346,7 +348,42 @@ export async function runRepositories(dispatchRunId: string): Promise<RunReposit
     const legs = await dispatchRunCardRepository.listByRun(run.id, tx);
     return legs.map((l) => l.workItemId).filter((id): id is string => id !== null);
   });
+  // A REPAIR (`hosted-agent-run.md` §8.6, MOTIR-6928) pushes to its pull requests' own
+  // branches, so its set is the repositories of those pull requests — not the card's
+  // target set, which may name a repository nothing was delivered to.
+  if (run.command === 'fix') return repositoriesForRepair(run.projectId, run.workspaceId, itemIds);
   return repositoriesForItems(run.projectId, run.workspaceId, itemIds);
+}
+
+/**
+ * The repository set a REPAIR over `itemIds` pushes to (Story MOTIR-1626 · MOTIR-6928;
+ * `hosted-agent-run.md` §8.6): the project repositories behind the cards' OPEN pull
+ * requests — the delivery set the repair claim hands over — in project repository order.
+ * A merged or closed member cannot be pushed to, so it adds nothing. Refuses, as
+ * {@link repositoriesForItems} does, a set with no repository in it.
+ */
+export async function repositoriesForRepair(
+  projectId: string,
+  workspaceId: string,
+  itemIds: readonly string[],
+): Promise<RunRepository[]> {
+  const set = await withWorkspaceServiceContext(workspaceId, async (tx) => {
+    const deliveries = await workItemDeliveryRepository.listByWorkItems([...itemIds], tx);
+    const open = new Set(
+      deliveries
+        .filter((d) => d.pullRequest.state === 'open' && !d.pullRequest.merged)
+        .map((d) => d.repoId),
+    );
+    const projectRows = await projectRepoRepository.listByProject(projectId, workspaceId, tx);
+    return projectRows.filter((row) => row.githubRepoId !== null && open.has(row.githubRepoId));
+  });
+  if (set.length === 0) {
+    throw new RunGitCredentialUnavailableError(
+      'no_repository',
+      'the repair covers no open pull request in a repository of its project',
+    );
+  }
+  return set.map(toRunRepository);
 }
 
 /**
@@ -377,20 +414,23 @@ export async function repositoriesForItems(
       'the run covers no repository of its project',
     );
   }
-  return set.map((row) => {
-    if (!row.githubRepo) {
-      throw new RunGitCredentialUnavailableError(
-        'repository_unrealized',
-        `the project repository "${row.name}" has no repository on GitHub yet`,
-      );
-    }
-    return {
-      projectRepoId: row.id,
-      repository: `${row.githubRepo.owner}/${row.githubRepo.name}`,
-      providerRepoId: row.githubRepo.repoId,
-      app: runGitAppFor(row),
-    };
-  });
+  return set.map(toRunRepository);
+}
+
+/** One project repository as a run's repository, refusing one with nothing on GitHub. */
+function toRunRepository(row: ProjectRepoWithRealized): RunRepository {
+  if (!row.githubRepo) {
+    throw new RunGitCredentialUnavailableError(
+      'repository_unrealized',
+      `the project repository "${row.name}" has no repository on GitHub yet`,
+    );
+  }
+  return {
+    projectRepoId: row.id,
+    repository: `${row.githubRepo.owner}/${row.githubRepo.name}`,
+    providerRepoId: row.githubRepo.repoId,
+    app: runGitAppFor(row),
+  };
 }
 
 // ── The check ─────────────────────────────────────────────────────────────

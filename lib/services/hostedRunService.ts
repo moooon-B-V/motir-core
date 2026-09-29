@@ -6,6 +6,7 @@ import { gateIdOfReviewRunKey } from '@/lib/agentReview/reviewRunKey';
 import {
   hostedRunWriteAccess,
   repositoriesForItems,
+  repositoriesForRepair,
   revokeRunGitCredentials,
   type RunGitNeed,
   type RunRepository,
@@ -15,6 +16,7 @@ import {
   HostedRunBootFailedError,
   HostedRunCancelForbiddenError,
   HostedContinueRefusedError,
+  HostedFixRefusedError,
   HostedRunCardNotReadyError,
   HostedRunCreditsUnavailableError,
   HostedRunNotFoundError,
@@ -59,6 +61,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { runCredentialService } from '@/lib/services/runCredentialService';
 import { scopeClaimService } from '@/lib/services/scopeClaimService';
 import { workItemContinueService } from '@/lib/services/workItemContinueService';
+import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { isClaimableState } from '@/lib/workItems/claimOutcome';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -99,9 +102,11 @@ export interface StartHostedRunInput {
   /**
    * `run` (the default) starts a READY card. `continue` (MOTIR-6792) resumes a
    * card whose last run DIED, on that run's branches: the container runs
-   * `motir continue <KEY>` instead of `motir run <KEY>`.
+   * `motir continue <KEY>` instead of `motir run <KEY>`. `fix` (MOTIR-6928;
+   * `hosted-agent-run.md` §8.6) repairs a card a REVIEW sent back, on its pull
+   * requests' own branches: the container runs `motir fix <KEY>`.
    */
-  mode?: 'run' | 'continue';
+  mode?: 'run' | 'continue' | 'fix';
 }
 
 /**
@@ -331,6 +336,9 @@ async function preflight(
   legIds: string[],
   ctx: ServiceContext,
   need: RunGitNeed = 'write',
+  /** `repair` (MOTIR-6928): the repositories of the legs' OPEN pull requests — what a
+   *  hosted repair pushes to — rather than the legs' target set. */
+  scope: 'legs' | 'repair' = 'legs',
 ): Promise<HostedRunPreflight> {
   // The CI-credit gate every dispatch entry point runs — here, before the run
   // opens, so an exhausted organization is refused rather than failed.
@@ -356,11 +364,9 @@ async function preflight(
   if (!credits.mayRun) throw new HostedRunOutOfCreditsError(credits.balanceCredits);
 
   // ── 3b · Every repository the run touches can be written ────────────────
-  const repositories: RunRepository[] = await repositoriesForItems(
-    projectId,
-    ctx.workspaceId,
-    legIds,
-  );
+  const repositories: RunRepository[] = await (
+    scope === 'repair' ? repositoriesForRepair : repositoriesForItems
+  )(projectId, ctx.workspaceId, legIds);
   const access = await hostedRunWriteAccess(repositories, need);
   const refusals = access.filter((a): a is Extract<typeof a, { ok: false }> => !a.ok);
   if (refusals.length > 0) {
@@ -585,6 +591,127 @@ async function startContinue(
 }
 
 /**
+ * FIX ON THE HOSTED AGENT (Story MOTIR-1626 · MOTIR-6928; `hosted-agent-run.md` §8.6,
+ * `approval-gates.md` §12.4b) — {@link startContinue}'s order, around the REPAIR claim.
+ *
+ * ⚠️ THE ORDER IS THE CONTRACT. Preview the repair WITHOUT a lock and refuse, before any
+ * spend, a card the claim would refuse (`not_repairable`), one repairable for any reason
+ * but a review's (`not_sent_back` — §12.4b covers a card a REVIEW sent back only), and
+ * one whose repair is already open, local or hosted (`taken`, naming the holder). Then
+ * every pre-flight Run hosted runs, with the pressing person's model, over the
+ * repositories of the card's open pull requests. Only then the claim — which opens the
+ * hosted `fix` run itself, so one row is both the one-repair lock and the run, with ONE
+ * `run_opened` recording what the claim decided for the container to adopt. A failure
+ * after it ends the run through the shared end path.
+ *
+ * No to-do claim, no status write and no provenance stamp, start or end: a repair moves
+ * nothing (§8.6). Its push moves the head, which retires the review's version, and a
+ * repair that pushes nothing leaves the card To fix.
+ */
+async function startFix(
+  input: StartHostedRunInput,
+  identifier: string,
+  projectId: string,
+  ctx: ServiceContext,
+  options: HostedRunStartOptions,
+): Promise<HostedRunStarted> {
+  const preview = await workItemRepairService.previewHostedRepair(projectId, identifier, ctx);
+  if (!preview.ok) throw fixRefusal(preview.key, preview.refusal);
+  const target = preview.key;
+  const legIds = [preview.workItemId];
+  const checked = await preflight(input, projectId, legIds, ctx, 'write', 'repair');
+
+  let replayed = false;
+  const claim = await workItemRepairService.claimRepair(projectId, target, ctx, {
+    opening: {
+      origin: 'hosted',
+      agent: 'opencode',
+      model: input.model,
+      idempotencyKey: input.idempotencyKey,
+    },
+    admit: (repairClass) => {
+      // RACE-ONLY: the class changed between the preview and the lock.
+      /* v8 ignore next 3 */
+      if (repairClass !== 'review') {
+        throw fixRefusal(target, { kind: 'not_sent_back', repairClass });
+      }
+    },
+    onReplay: () => {
+      replayed = true;
+    },
+  });
+  // ⚠️ RACE-ONLY BELOW: the preview refused every state the claim refuses, so these
+  // answers reach here only when a terminal `motir fix` or another press won in the gap
+  // between the preview and the claim's lock.
+  /* v8 ignore next 7 -- race-only: the preview refused this state a moment earlier */
+  if (claim.outcome === 'not_repairable') {
+    throw fixRefusal(target, {
+      kind: 'not_repairable',
+      reason: claim.reason ?? 'not_failing',
+      runTargetKey: claim.runTargetKey,
+    });
+  }
+  // `mine` is the caller's OWN open repair — a terminal one, never this opening (a
+  // repeat of the key is answered `claimed`). A hosted press never adopts a repair
+  // somebody's terminal holds, even their own.
+  /* v8 ignore next 3 -- race-only: a repair opened since the preview holds the lock */
+  if (claim.outcome !== 'claimed' || claim.runId === null) {
+    throw fixRefusal(target, { kind: 'taken', holder: claim.holder, startedAt: claim.startedAt });
+  }
+  const runId = claim.runId;
+  /* v8 ignore next -- race-only: two presses of one key both passed the short-circuit */
+  if (replayed) return { dispatchRunId: runId, created: false };
+  /* v8 ignore next -- a `claimed` answer always carries its run's start */
+  const startedAt = claim.startedAt ?? new Date().toISOString();
+
+  try {
+    await launch(
+      { id: runId, startedAt },
+      input,
+      { identifier: target, projectId, legIds },
+      checked,
+      ctx,
+      options,
+      { MOTIR_RUN_MODE: 'fix' },
+      false,
+    );
+    return { dispatchRunId: runId, created: true };
+  } catch (err) {
+    if (!(err instanceof HostedRunBootFailedError)) {
+      await hostedRunService.endHostedRun(
+        runId,
+        'failed',
+        `the repair could not start: ${detailOf(err)}`,
+      );
+    }
+    throw err;
+  }
+}
+
+/** A hosted repair's refusal, from the preview's (or the claim's) answer. */
+function fixRefusal(
+  key: string,
+  refusal:
+    | { kind: 'not_repairable'; reason: string; runTargetKey: string | null }
+    | { kind: 'not_sent_back'; repairClass: string }
+    | { kind: 'taken'; holder: { id: string; name: string } | null; startedAt: string | null },
+): HostedFixRefusedError {
+  if (refusal.kind === 'not_repairable') {
+    return new HostedFixRefusedError(key, 'not_repairable', {
+      repairRefusal: refusal.reason,
+      runTargetKey: refusal.runTargetKey,
+    });
+  }
+  if (refusal.kind === 'not_sent_back') {
+    return new HostedFixRefusedError(key, 'not_sent_back', { repairClass: refusal.repairClass });
+  }
+  return new HostedFixRefusedError(key, 'taken', {
+    holder: refusal.holder,
+    startedAt: refusal.startedAt,
+  });
+}
+
+/**
  * START A HOSTED REVIEW (Story MOTIR-1626 · MOTIR-6820; `hosted-agent-run.md` §8.1) —
  * Run hosted's start with the readiness check and the claim taken OUT: the card is in the
  * review band and belongs to whoever built it, so a review claims nothing and moves no
@@ -760,6 +887,11 @@ export const hostedRunService = {
     // so it takes the continue claim's path instead of the readiness below.
     if (input.mode === 'continue') {
       return startContinue(input, identifier, project.id, ctx, options, now());
+    }
+    // A REPAIR of a card a review sent back (MOTIR-6928) — the card is In Review or
+    // Implemented by design, so it takes the repair claim's path, not the readiness below.
+    if (input.mode === 'fix') {
+      return startFix(input, identifier, project.id, ctx, options);
     }
 
     // ── 1 · READY — a leaf by the keyed claim's rule, a parent by the scope claim's ──

@@ -99,6 +99,8 @@ export interface RunningDispatchRunHolder {
   id: string;
   startedAt: Date;
   createdById: string | null;
+  /** `hosted` when the run is a container's (a hosted repair — MOTIR-6928), else `local`. */
+  origin: DispatchRun['origin'];
   /** Null when the operator's account has since been deleted (`SET NULL`). */
   createdBy: { id: string; name: string } | null;
 }
@@ -204,6 +206,7 @@ export const dispatchRunRepository = {
         id: true,
         startedAt: true,
         createdById: true,
+        origin: true,
         createdBy: { select: { id: true, name: true } },
       },
     });
