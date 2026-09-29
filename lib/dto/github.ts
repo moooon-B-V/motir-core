@@ -229,11 +229,16 @@ export interface DeliveryMergeRefusalDto {
 export interface DeliveryQueueExitDto {
   /** GitHub's own reason — `CI_FAILURE`, `MERGE_CONFLICT`, … */
   rawReason: string;
+  /** The STORED disposition, which a `CI_FAILURE` / `CI_TIMEOUT` exit's class follows
+   *  (§4 SIXTH AMENDMENT, MOTIR-6847). */
+  disposition: 'failure' | 'neutral' | 'landed';
   /** The head the queue tested, which is still the pull request's head. */
   headSha: string;
   /** The queue's failing check; both null when none is known (a conflict). */
   failingCheckName: string | null;
   failingCheckUrl: string | null;
+  /** That check's RAW GitHub conclusion, null when none is known (MOTIR-6846). */
+  failingCheckConclusion: string | null;
 }
 
 /**

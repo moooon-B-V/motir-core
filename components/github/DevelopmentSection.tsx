@@ -795,7 +795,7 @@ export function DevelopmentSectionBody({
             leftQueue:
               !!exit &&
               exit.rawReason !== 'MERGE_CONFLICT' &&
-              classOfQueueExit(exit.rawReason) === 'cant_land',
+              classOfQueueExit(exit) === 'cant_land',
           };
         })}
         terminal={cardTerminal}

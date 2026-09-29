@@ -15,6 +15,7 @@ import { runsHref } from '@/lib/runs/runsAddress';
 import type { RoomView } from '@/lib/rooms/roomView';
 import { formatRunInstant } from '@/lib/runs/runClock';
 import { RUN_STATUS_TONE } from '@/lib/runs/timeline';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // THE RUNS INDEX's list (Story MOTIR-1789 · MOTIR-3923).
 //
@@ -73,6 +74,7 @@ export function RunsIndex({
   initialPast,
   pageSize,
 }: RunsIndexProps) {
+  const routes = useReaderRoutes();
   const t = useTranslations('runs');
   // ⚠️ THE OPEN RUN IS DERIVED FROM THE URL, not held beside it. Next syncs
   // `useSearchParams` with `history.pushState`, so `shallowPush` is the ONLY
@@ -197,13 +199,13 @@ export function RunsIndex({
   // the first click.
   const onOpenRun = useCallback(
     (id: string) => {
-      shallowPush(runsHref({ view: addressView, scope: scopeKey, run: id }));
+      shallowPush(routes.view(runsHref({ view: addressView, scope: scopeKey, run: id })));
     },
-    [addressView, scopeKey],
+    [addressView, scopeKey, routes],
   );
   const onCloseRun = useCallback(() => {
-    shallowPush(runsHref({ view: addressView, scope: scopeKey }));
-  }, [addressView, scopeKey]);
+    shallowPush(routes.view(runsHref({ view: addressView, scope: scopeKey })));
+  }, [addressView, scopeKey, routes]);
 
   // ⚠️ RENDERED IN BOTH BRANCHES, and it must be. The empty-state return below
   // used to sit ABOVE the modal, so a list that went empty UNMOUNTED an open run

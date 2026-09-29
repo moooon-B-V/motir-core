@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // WHAT THE RUN PRODUCED beyond code (MOTIR-3983 ·
 // `design/runs/design-notes.md` § What the run PRODUCED).
@@ -52,6 +53,7 @@ export interface RunFindingsProps {
 }
 
 export function RunFindings({ events }: RunFindingsProps) {
+  const routes = useReaderRoutes();
   const t = useTranslations('runs');
 
   const findings = useMemo<Finding[]>(() => {
@@ -115,7 +117,7 @@ export function RunFindings({ events }: RunFindingsProps) {
           </span>
           {f.planId !== null ? (
             <Link
-              href={`/plans/${encodeURIComponent(f.planId)}`}
+              href={routes.plan(f.planId)}
               className="flex-none font-medium text-(--el-accent-on-surface) underline-offset-2 hover:underline"
             >
               {t('findings.review')}
@@ -149,7 +151,7 @@ export function RunFindings({ events }: RunFindingsProps) {
               <li key={f.seq}>
                 {f.planId !== null ? (
                   <Link
-                    href={`/plans/${encodeURIComponent(f.planId)}`}
+                    href={routes.plan(f.planId)}
                     className="text-(--el-accent-on-surface) underline-offset-2 hover:underline"
                   >
                     {f.planId}
@@ -187,7 +189,7 @@ export function RunFindings({ events }: RunFindingsProps) {
           </span>
           {f.itemKey !== null ? (
             <Link
-              href={`/items/${encodeURIComponent(f.itemKey)}`}
+              href={routes.item(f.itemKey)}
               className="flex-none font-medium text-(--el-accent-on-surface) underline-offset-2 hover:underline"
             >
               {t('findings.open')}

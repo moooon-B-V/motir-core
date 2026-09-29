@@ -357,7 +357,9 @@ describe('a FAILURE removal', () => {
   // five are `failure` rows; what differs is what a person can do about them. Since the
   // FIFTH AMENDMENT (MOTIR-6594) every queue failure but a setting is CAN'T-LAND.
   it.each([
-    ['CI_TIMEOUT', 'implemented', 0],
+    // A timeout with no check named says the checks did not finish, which failed
+    // nothing (§4 SIXTH AMENDMENT, MOTIR-6847): re-asked like MANUAL.
+    ['CI_TIMEOUT', 'in_review', 1],
     ['INVALID_MERGE_COMMIT', 'implemented', 0],
     ['GIT_TREE_INVALID', 'implemented', 0],
     // A setting somebody can change: the same commits land once it is changed.
@@ -372,7 +374,10 @@ describe('a FAILURE removal', () => {
     );
     expect(await statusOf(item.id)).toBe(status);
     expect(await awaitingGates(item.id)).toHaveLength(gateCount);
-    expect((await exits(11))[0]).toMatchObject({ rawReason: reason, disposition: 'failure' });
+    expect((await exits(11))[0]).toMatchObject({
+      rawReason: reason,
+      disposition: reason === 'CI_TIMEOUT' ? 'neutral' : 'failure',
+    });
   });
 
   it('a CONFLICT held at Implemented raises nothing on a green check at the SAME head', async () => {

@@ -37,6 +37,7 @@ import { WorkItemDetailActions } from './_components/WorkItemDetailActions';
 import { MonitorErrorsDoorProvider } from './_components/MonitorErrorsLinkControl';
 import { EpicPrivacyControl } from './_components/EpicPrivacyControl';
 import { isVisitorContext } from '@/lib/visitor/readScope';
+import { readerRoutes } from '@/lib/visitor/routes';
 import { WatchControl } from './_components/WatchControl';
 import { ContentSectionCard } from './_components/ContentSectionCard';
 import { readLateSections } from './_components/lateReads';
@@ -92,6 +93,8 @@ export default async function ItemView({
   // A Visitor (MOTIR-6648) acts on nothing, so the page draws no Watch control
   // and makes no plan-history read (below) for one.
   const isVisitor = isVisitorContext(ctx.read);
+  // The reader's addresses (MOTIR-6888): the Visitor path on the Visitor tree.
+  const routes = readerRoutes(ctx.visitor?.project.identifier ?? null);
 
   const { key } = await params;
   let detail;
@@ -108,7 +111,7 @@ export default async function ItemView({
       // must read the same (`epic-privacy.md` §3), and an alias could tell them
       // apart (MOTIR-6648).
       const canonical = ctx.visitor ? null : await resolveAliasedIssueKey(key, svc);
-      if (canonical) permanentRedirect(`/items/${canonical}`);
+      if (canonical) permanentRedirect(routes.item(canonical));
       notFound();
     }
     throw err;
@@ -577,12 +580,20 @@ export default async function ItemView({
               this card, which is nearly every card, or when the actor lacks
               `plan:view_any` (then `pendingPlans` is null: the read was skipped). */}
                     {pendingPlans && pendingPlans.length > 0 ? (
-                      <PendingPlanNotice identifier={item.identifier} proposals={pendingPlans} />
+                      <PendingPlanNotice
+                        identifier={item.identifier}
+                        proposals={pendingPlans}
+                        routes={routes}
+                      />
                     ) : null}
                     <ContentSectionCard
                       title={t('description')}
                       subtitle={t('descriptionGloss')}
-                      editHref={canEdit ? `/items/${item.identifier}/edit` : undefined}
+                      editHref={
+                        canEdit
+                          ? (routes.path(`/items/${item.identifier}/edit`) ?? undefined)
+                          : undefined
+                      }
                     >
                       {item.descriptionMd ? (
                         <MarkdownView
@@ -599,7 +610,11 @@ export default async function ItemView({
                     <IssueExplanation
                       explanationMd={item.explanationMd}
                       explanationSource={item.explanationSource}
-                      editHref={canEdit ? `/items/${item.identifier}/edit` : undefined}
+                      editHref={
+                        canEdit
+                          ? (routes.path(`/items/${item.identifier}/edit`) ?? undefined)
+                          : undefined
+                      }
                       workItemRefs={workItemRefs}
                     />
                     {/* MOTIR-3815: the to-do list — after Explanation and BEFORE

@@ -13,6 +13,7 @@ import {
   useHowToTestWrite,
 } from './HowToTestWrite';
 import type { HowToTestAuthorDto, HowToTestDto, HowToTestRunDto } from '@/lib/dto/howToTest';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // HOW TO TEST — the approve-to-merge gate's EVIDENCE (Story MOTIR-4906 · Subtask
 // MOTIR-5336), built to `design/github/design-notes.md` §20 · Panels 12a–12o.
@@ -139,6 +140,7 @@ function MissingPart({ owedBy }: { owedBy: HowToTestRunDto | null }) {
 
 /** Panel 12m — a child of a container run: ONE line, the target BY KEY. */
 function ChildPointer({ targetKey }: { targetKey: string | null }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('github.development.howToTest');
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-(--el-border-soft) pt-3 text-[13px] text-(--el-text-secondary)">
@@ -149,7 +151,7 @@ function ChildPointer({ targetKey }: { targetKey: string | null }) {
           link: (chunks) =>
             targetKey ? (
               <Link
-                href={`/items/${targetKey}`}
+                href={routes.item(targetKey)}
                 className="font-mono text-[12.5px] text-(--el-link) underline"
               >
                 {chunks}

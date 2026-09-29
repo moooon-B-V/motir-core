@@ -1136,7 +1136,7 @@ async function queueAgainUnderApproval(
   // as a conflict would send a person looking for a conflict that does not exist. The
   // approval that reaches here post-dates the exit — a gate re-asked under the old rule,
   // before the convergence (MOTIR-6595) withdrew it.
-  if (classOfQueueExit(args.exit.rawReason) === 'cant_land') {
+  if (classOfQueueExit(args.exit) === 'cant_land') {
     return {
       subjectVersion: member.subjectVersion,
       pullRequestId: target.pullRequestId,

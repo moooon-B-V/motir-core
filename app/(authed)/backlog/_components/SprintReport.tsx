@@ -20,6 +20,7 @@ import { StatusValue } from '../../items/_components/issueCellPrimitives';
 import type { StatusByKey } from './backlogShared';
 import { ReportBurndownSection } from './ReportBurndownSection';
 import { VelocityChart } from './VelocityChart';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The sprint report (Story 4.4 · Subtask 4.4.6) — what got done vs. what did not,
 // per design/sprints/sprint-lifecycle.mock.html panels 6–7. A PURE presentational
@@ -243,6 +244,7 @@ function ReportSection({
   done?: boolean;
   carryOverLabel?: string | null;
 }) {
+  const routes = useReaderRoutes();
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
@@ -262,7 +264,7 @@ function ReportSection({
           // The ?sprint= param is forward-compatible — see PRODECT_FINDINGS (the
           // navigator does not honour it yet); the link still lands on /items.
           <Link
-            href={`/items?sprint=${sprintId}`}
+            href={routes.view(`/items?sprint=${sprintId}`)}
             className="inline-flex items-center gap-1 text-xs font-medium text-(--el-link) hover:text-(--el-link-pressed) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
             {viewAllLabel}

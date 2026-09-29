@@ -6,6 +6,7 @@ import { shallowReplace } from '@/lib/navigation/shallowUrl';
 import { withoutApprovalOverlay } from '@/lib/approvals/overlayAddress';
 import { withPlanningOverlay } from '@/lib/planning/launcher';
 import { fetchPlanReview } from '@/lib/planning/planReviewClient';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // THE APPROVAL OVERLAY'S ONE PLAN ARM (Story MOTIR-6012 · MOTIR-6037; ADR
 // `approval-gates.md` §11.5b; design `design/ai-planning/design-notes.md` Part XXII §22.2).
@@ -26,6 +27,7 @@ import { fetchPlanReview } from '@/lib/planning/planReviewClient';
 
 /** Forward a plan gate's overlay address; `planId` null means there is nothing to do. */
 export function usePlanGateForward(planId: string | null): void {
+  const routes = useReaderRoutes();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -33,7 +35,7 @@ export function usePlanGateForward(planId: string | null): void {
   useEffect(() => {
     if (planId === null) return;
     const controller = new AbortController();
-    const planPage = `/plans/${encodeURIComponent(planId)}`;
+    const planPage = routes.plan(planId);
     void (async () => {
       try {
         const review = await fetchPlanReview(planId, controller.signal);
@@ -44,7 +46,8 @@ export function usePlanGateForward(planId: string | null): void {
         // an absent conversation, so an agent's plan, a cadence plan and a backfilled
         // one all have somewhere to return to. Only a plan with NO session lands on
         // the page — the same predicate `planRowDestination` answers for both rows.
-        if (!conversation) {
+        // A Visitor (MOTIR-6888) is not served the planning workspace: the page.
+        if (!conversation || routes.identifier !== null) {
           router.replace(planPage);
           return;
         }
@@ -69,5 +72,5 @@ export function usePlanGateForward(planId: string | null): void {
       }
     })();
     return () => controller.abort();
-  }, [planId, pathname, searchParams, router]);
+  }, [planId, pathname, searchParams, router, routes]);
 }

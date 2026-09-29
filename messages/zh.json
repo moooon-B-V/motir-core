@@ -651,6 +651,16 @@
       "workItemsAction": "前往工作项",
       "homeAction": "前往 Motir"
     },
+    "serverError": {
+      "pageTitle": "此页面无法加载",
+      "pageBody": "加载此页面时 Motir 这边出现了问题，这不是你的操作导致的。请重试；如果问题持续出现，联系支持时请附上下方的参考编号。",
+      "appTitle": "Motir 无法加载",
+      "appBody": "页面打开之前，我们这边出现了问题，这不是你的操作导致的。请重试，或返回 Motir 首页。如果问题持续出现，联系支持时请附上下方的参考编号。",
+      "retrying": "正在重试…",
+      "reference": "参考编号",
+      "copyReference": "复制参考编号",
+      "copied": "已复制"
+    },
     "actions": {
       "pickProjectFirst": "请先选择一个项目。",
       "unknownRelationship": "未知的关系类型。",
@@ -9409,7 +9419,15 @@
         },
         "neutral": {
           "reasked": "它们仍未合并，那次批准已经用掉，因此 Motir 再次征求你的批准。在拉取请求上按下 — 或按下方的<b>批准并合并</b> — 都是一次新的批准，会把它们放回合并队列。"
-        }
+        },
+        "hung": {
+          "cancelled": "<b>{pr}</b> 离开了合并队列：<b>{check}</b> 已被取消。代码没有任何失败。",
+          "timedOut": "<b>{pr}</b> 离开了合并队列：<b>{check}</b> 在完成前超时。代码没有任何失败。",
+          "noCheck": "<b>{pr}</b> 离开了合并队列：队列的检查未能在时限内完成。代码没有任何失败。",
+          "reasked": "该检查在对这些提交得出任何结论之前就停止了，那次批准已经用掉，因此 Motir 再次征求你的批准。在拉取请求上按下 — 或按下方的<b>批准并合并</b> — 都是一次新的批准，会把它们放回合并队列。"
+        },
+        "stoppedCheck": "已停止的检查：<link>{check}</link>",
+        "openStoppedCheck": "在 GitHub 上打开已停止的检查 {check}"
       },
       "requeue": {
         "progress": "正在将 {pr} 放回合并队列…",

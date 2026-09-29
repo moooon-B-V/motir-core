@@ -3,6 +3,7 @@ import { useTranslations } from 'next-intl';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/Button';
 import type { WorkItemPendingProposalDto } from '@/lib/dto/plans';
+import { readerRoutes, type ReaderRoutes } from '@/lib/visitor/routes';
 
 // The PENDING-PLAN indicator on the work-item detail page (bug MOTIR-4197),
 // per design/work-items/pending-plan-indicator.mock.html + design-notes
@@ -82,6 +83,8 @@ export interface PendingPlanNoticeProps {
   proposals: readonly WorkItemPendingProposalDto[];
   /** Test hook — mirrors `ArchivedNotice`'s. */
   testId?: string;
+  /** The reader's addresses (MOTIR-6888); absent means a member's. */
+  routes?: ReaderRoutes;
 }
 
 const FRAME =
@@ -94,6 +97,7 @@ export function PendingPlanNotice({
   identifier,
   proposals,
   testId = 'pending-plan-notice',
+  routes = readerRoutes(null),
 }: PendingPlanNoticeProps) {
   const t = useTranslations('issueViews');
   // `Plan.title` is nullable; the item page and the review surface say ONE
@@ -166,7 +170,7 @@ export function PendingPlanNotice({
           </span>
         </div>
         <Link
-          href={`/plans/${only.planId}`}
+          href={routes.plan(only.planId)}
           className={`${buttonVariants({ variant: 'secondary', size: 'sm' })} shrink-0`}
           aria-label={t('pendingPlanReviewAria', { key: identifier })}
         >
@@ -192,7 +196,7 @@ export function PendingPlanNotice({
         <ul className="m-0 flex list-none flex-col gap-1 p-0">
           {proposals.map((proposal) => (
             <li key={proposal.planId} className="flex min-w-0 items-baseline gap-1.5">
-              <Link href={`/plans/${proposal.planId}`} className={ROW_LINK}>
+              <Link href={routes.plan(proposal.planId)} className={ROW_LINK}>
                 {planName(proposal.planTitle)}
               </Link>
               <span className="shrink-0 font-sans text-[13px] text-(--el-text-secondary)">

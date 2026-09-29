@@ -23,6 +23,7 @@ import type {
 } from '@/lib/dto/plans';
 import { ContentSectionCard } from './ContentSectionCard';
 import { PLAN_HISTORY_FIRST_PAGE, PLAN_HISTORY_MORE_PAGE } from './planHistoryPaging';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The PLAN HISTORY section on the work-item detail page (Story MOTIR-5542 ·
 // MOTIR-5547), per design/work-items/plan-history.mock.html + design-notes
@@ -168,6 +169,7 @@ export function relationSentence(entry: WorkItemPlanHistoryEntryDto, t: IssueVie
 }
 
 function PlanHistoryRow({ entry }: { entry: WorkItemPlanHistoryEntryDto }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('issueViews');
   const tPlan = useTranslations('aiPlanning');
   const tReview = useTranslations('planReview');
@@ -209,7 +211,7 @@ function PlanHistoryRow({ entry }: { entry: WorkItemPlanHistoryEntryDto }) {
 
   return (
     <Link
-      href={`/plans/${entry.planId}`}
+      href={routes.plan(entry.planId)}
       className="-mx-(--spacing-control-x) my-1 flex items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) transition-colors hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
     >
       <span

@@ -154,6 +154,9 @@ function reported(
     checkName,
     checkSuiteId: SUITE_ID,
     conclusion,
+    rawConclusion: conclusion === 'pending' ? null : conclusion,
+    url: null,
+    completedAt: null,
   }));
 }
 

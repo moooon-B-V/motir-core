@@ -25,6 +25,7 @@ import {
 } from '@/app/(authed)/items/[key]/_components/PlacementProvider';
 import { PlacementBreadcrumb } from '@/app/(authed)/items/[key]/_components/PlacementBreadcrumb';
 import { ParentBreadcrumb } from '@/app/(authed)/items/[key]/_components/ParentBreadcrumb';
+import { ReaderRoutesProvider } from '@/lib/visitor/useReaderRoutes';
 
 afterEach(() => {
   cleanup();
@@ -226,5 +227,28 @@ describe('ParentBreadcrumb outside the channel', () => {
 
     expect(() => fireEvent.click(screen.getByRole('button', { name: 'report' }))).not.toThrow();
     expect(placementSpy).not.toHaveBeenCalled();
+  });
+});
+
+// MOTIR-6888 — the breadcrumb is a shared body: on the Visitor tree its ancestors
+// are that project's Visitor item pages, never the member route that would read
+// the reader's own project.
+describe('ParentBreadcrumb on the Visitor tree', () => {
+  it('links each ancestor to the public project’s Visitor item page', () => {
+    render(
+      <ReaderRoutesProvider identifier="ACME">
+        <ParentBreadcrumb ancestors={[q3]} />
+      </ReaderRoutesProvider>,
+    );
+    expect(screen.getByRole('link', { name: /Q3 launch/ }).getAttribute('href')).toBe(
+      '/p/ACME/items/PROD-40',
+    );
+  });
+
+  it('outside the Visitor tree it is the member route, unchanged', () => {
+    render(<ParentBreadcrumb ancestors={[q3]} />);
+    expect(screen.getByRole('link', { name: /Q3 launch/ }).getAttribute('href')).toBe(
+      '/items/PROD-40',
+    );
   });
 });

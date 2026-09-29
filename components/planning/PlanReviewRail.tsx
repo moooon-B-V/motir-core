@@ -21,6 +21,7 @@ import { PlanStaleBand } from '@/components/planning/PlanChangeConfirmBar';
 import type { PlanHistoryEventDto, PlanReviewDto } from '@/lib/dto/planReview';
 import type { PlanDecisionReasonDto } from '@/lib/dto/plans';
 import type { PlanStatusDto, StaleReason } from '@/lib/dto/plans';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The REVIEW RAIL of the plan detail (Subtask 7.4.5 / MOTIR-847) — the chat-side
 // pane of the composed canvas+chat shell. It carries the Plans-substrate chrome
@@ -825,6 +826,7 @@ function DecidedOutcome({
   t: ReturnType<typeof useTranslations>;
   codeOutcome: PlanCodeOutcome | null;
 }) {
+  const routes = useReaderRoutes();
   const tRepo = useTranslations('repositorySet');
   const approved = review.status === 'approved';
   return (
@@ -858,7 +860,7 @@ function DecidedOutcome({
       ) : null}
       {approved ? (
         <Link
-          href="/items"
+          href={routes.view('/items')}
           className="text-xs font-medium text-(--el-link) hover:text-(--el-link-pressed)"
         >
           {t('viewInBacklog')}

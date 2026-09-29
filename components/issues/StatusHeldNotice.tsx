@@ -17,6 +17,7 @@ import {
   goToObsolescenceField,
 } from './ObsolescenceBadge';
 import type { MarkHold } from './useStatusHeld';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // THE STATUS CONTROL SAYS SO (Story MOTIR-4887 · Subtask MOTIR-5528), built to
 // `design/work-items/status-held-by-decision.mock.html` and its § _The status
@@ -139,6 +140,7 @@ function ReviewAndApproveLink({ itemKey, kind }: { itemKey: string; kind: Approv
  *  an overlay over THIS page, written with `shallowPush` so Close returns here; the
  *  plan page is an ordinary link. */
 function ReviewPlanLink({ plan }: { plan: PlanHoldDTO }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('approvalGate.statusHeld');
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -149,6 +151,7 @@ function ReviewPlanLink({ plan }: { plan: PlanHoldDTO }) {
     sessionId: plan.sessionId,
     host: `${pathname}${qs ? `?${qs}` : ''}`,
     anchorKey: plan.anchorKey,
+    routes,
   });
   const className = buttonVariants({ variant: 'primary', size: 'sm' });
   const content = (
@@ -185,8 +188,9 @@ function ReviewPlanLink({ plan }: { plan: PlanHoldDTO }) {
 
 /** The mark's door — to the Obsolescence field, never a write. */
 function ClearTheMarkLink({ itemKey, fieldId }: { itemKey: string; fieldId: string }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('workItems.obsolescence.held');
-  const href = `/items/${itemKey}#${OBSOLESCENCE_FIELD_ANCHOR}`;
+  const href = routes.item(itemKey, OBSOLESCENCE_FIELD_ANCHOR);
   function onClick(event: MouseEvent<HTMLAnchorElement>) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
       return;
@@ -209,6 +213,7 @@ function ClearTheMarkLink({ itemKey, fieldId }: { itemKey: string; fieldId: stri
 /** The in-place form (the board card, the `/items` row): one line, the mark's
  *  glyph, and Open item — a plain link to the item page's field. */
 function MarkInPlaceLine({ itemKey, mark }: { itemKey: string; mark: MarkHold }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('workItems.obsolescence');
   const Glyph = OBSOLESCENCE_GLYPH[mark.mark];
   const strong = (chunks: ReactNode) => <strong className="font-semibold">{chunks}</strong>;
@@ -220,7 +225,7 @@ function MarkInPlaceLine({ itemKey, mark }: { itemKey: string; mark: MarkHold })
           {t.rich('heldLine', { mark: t(`value.${mark.mark}`), strong })}
         </p>
         <Link
-          href={`/items/${itemKey}#${OBSOLESCENCE_FIELD_ANCHOR}`}
+          href={routes.item(itemKey, OBSOLESCENCE_FIELD_ANCHOR)}
           data-mark-door="open-item"
           className={buttonVariants({ variant: 'secondary', size: 'sm' })}
         >

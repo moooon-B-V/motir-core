@@ -31,6 +31,8 @@ import { IssueTreeTable } from './IssueTreeTable';
 import { IssueTreeStaticTable } from './IssueTreeStaticTable';
 import { IssueListTable } from './IssueListTable';
 import { NewIssueButton } from './NewIssueButton';
+import { isVisitorContext } from '@/lib/visitor/readScope';
+import { readerRoutes } from '@/lib/visitor/routes';
 
 // The data half of the /items route (Subtask 2.5.3; the List view added in
 // 2.5.8) — an async Server Component the page renders inside a <Suspense> so the
@@ -82,6 +84,8 @@ export async function IssueTreeSection({
   members,
 }: IssueTreeSectionProps) {
   const ctx = service;
+  // The reader's addresses (MOTIR-6888): a Visitor's clear-all stays in their view.
+  const routes = readerRoutes(isVisitorContext(reader) ? reader.project.identifier : null);
   const repoFilter = toProjectTreeFilter(filter);
   if (ast !== null) repoFilter.ast = ast;
   const filtered = isFilterActive(filter) || ast !== null;
@@ -120,7 +124,7 @@ export async function IssueTreeSection({
         description={t('advancedNoMatchDescription')}
         action={
           <Link
-            href={buildIssueListHref('/items', { view, sort, filter: EMPTY_FILTER })}
+            href={routes.view(buildIssueListHref('/items', { view, sort, filter: EMPTY_FILTER }))}
             className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-(--el-border) px-3 font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
             {t('advancedClearAll')}

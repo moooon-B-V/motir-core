@@ -1205,6 +1205,9 @@ export interface PullRequestQueueExitDTO {
    *  the frame then states the reason alone. */
   failingCheckName: string | null;
   failingCheckUrl: string | null;
+  /** That check's RAW GitHub conclusion (`failure`, `cancelled`, `timed_out`, …), null
+   *  when no check is known (§4 SIXTH AMENDMENT, MOTIR-6846). */
+  failingCheckConclusion: string | null;
 }
 
 /** A pull request the merge queue removed and nobody has put back, on a card with NO

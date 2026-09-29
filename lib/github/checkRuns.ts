@@ -318,6 +318,20 @@ export interface ReportedCheckRun {
    *  `''` is never produced here, since every REST check run names its suite. */
   checkSuiteId: string;
   conclusion: CiConclusion;
+  /** The host's RAW conclusion, verbatim — `null` while the run is not `completed`.
+   *  `conclusion` above folds `cancelled` / `timed_out` into `failure`; a merge-queue
+   *  exit is judged by which one it was (§4 SIXTH AMENDMENT, MOTIR-6846). */
+  rawConclusion: string | null;
+  /** The run's own page, and when it completed — what a merge-queue attempt records
+   *  about its failing check (MOTIR-6848). */
+  url: string | null;
+  completedAt: Date | null;
+}
+
+function completedAtOf(raw: unknown): Date | null {
+  if (typeof raw !== 'string') return null;
+  const at = new Date(raw);
+  return Number.isNaN(at.getTime()) ? null : at;
 }
 
 /** At most this many check runs are read for one commit. motir-core's own
@@ -407,6 +421,9 @@ export async function readCommitCheckRuns(
         // `completed` is `pending`, whatever conclusion the payload carries.
         conclusion:
           status !== 'completed' ? 'pending' : mapGithubCiConclusion(conclusion ?? 'neutral'),
+        rawConclusion: status === 'completed' ? conclusion : null,
+        url: typeof run['html_url'] === 'string' ? run['html_url'] : null,
+        completedAt: completedAtOf(run['completed_at']),
       });
     }
 

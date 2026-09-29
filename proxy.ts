@@ -122,24 +122,14 @@ function isPrefetch(request: NextRequest): boolean {
 }
 
 /**
- * A MEMBER route followed FROM a Visitor view, sent to the Visitor path it means
- * (MOTIR-6648; design panel 5, "every in-page link a view body emits must point at
- * the Visitor path").
- *
- * The eight page bodies are shared with the member app (MOTIR-6643), so the links
- * they emit — a row's `/items/<key>`, the List/Tree switch's `/items?view=tree`,
- * a room's pager — are member routes. Rather than thread a path builder through
- * every client component that builds one, a navigation to one of those routes
- * whose REFERER is a same-origin Visitor view of the project the `motir_visitor`
- * cookie names is redirected to that project's Visitor equivalent. A route with
- * no Visitor view (the account menu's settings, say) is not touched.
- *
- * Requiring the COOKIE as well as the referer is what ends the one loop this
- * could make: the member redirect (`/api/visitor/enter`) clears the cookie, so a
- * reader who became a member while reading lands in their own view instead of
- * being sent back to the Visitor path it came from.
+ * The Visitor view a request was followed FROM — its same-origin Referer parsed
+ * as a Visitor path of the project the `motir_visitor` cookie names — else null.
+ * Requiring the COOKIE as well as the referer is what ends the one loop the
+ * redirect below could make: the member redirect (`/api/visitor/enter`) clears
+ * the cookie, so a reader who became a member while reading lands in their own
+ * view instead of being sent back to the Visitor path it came from.
  */
-function visitorLinkRedirect(request: NextRequest): NextResponse | null {
+function followedFromVisitorView(request: NextRequest): { identifier: string } | null {
   const cookie = request.cookies.get(VISITOR_COOKIE)?.value;
   if (!cookie) return null;
   const referer = request.headers.get('referer');
@@ -153,8 +143,28 @@ function visitorLinkRedirect(request: NextRequest): NextResponse | null {
   if (from.origin !== request.nextUrl.origin) return null;
   const view = parseVisitorPath(from.pathname);
   if (!view || view.identifier.toLowerCase() !== cookie.toLowerCase()) return null;
+  return { identifier: view.identifier };
+}
+
+/**
+ * A MEMBER route followed FROM a Visitor view, sent to the Visitor path it means
+ * (MOTIR-6648; design panel 5, "every in-page link a view body emits must point at
+ * the Visitor path").
+ *
+ * The eight page bodies are shared with the member app (MOTIR-6643). Since
+ * MOTIR-6888 they build the Visitor path themselves (`readerRoutes`, held by
+ * `tests/visitor/visitorReaderRoutesGuard.test.ts`), so this is the SAFETY NET,
+ * not the mechanism: a member route still followed from a Visitor view — a link
+ * that guard allows while its card is open, or one typed into the bar — whose
+ * REFERER is a same-origin Visitor view of the project the `motir_visitor` cookie
+ * names is redirected to that project's Visitor equivalent. A route with no
+ * Visitor view (the account menu's settings, say) is not touched.
+ */
+function visitorLinkRedirect(request: NextRequest): NextResponse | null {
+  const from = followedFromVisitorView(request);
+  if (!from) return null;
   const target = visitorPathForMemberPath(
-    view.identifier,
+    from.identifier,
     request.nextUrl.pathname,
     request.nextUrl.search,
   );
@@ -169,9 +179,22 @@ function visitorLinkRedirect(request: NextRequest): NextResponse | null {
  * who goes back to their OWN workspace would be served the public project's board
  * inside it. So a real navigation to any member page clears it — never a PREFETCH,
  * which happens while the reader is still on the Visitor view.
+ *
+ * ⚠️ AND NEVER A REQUEST FOLLOWED FROM THE VISITOR VIEW ITSELF (MOTIR-6888).
+ * `isPrefetch` cannot see a router prefetch on this Next: `next@16.2.6`'s adapter
+ * deletes every flight header, `next-router-prefetch` included, from the request
+ * before the proxy runs (`next/dist/server/web/adapter.js`, `FLIGHT_HEADERS`), and
+ * strips the `_rsc` marker from its URL. So the Visitor page's own prefetch of a
+ * member route with no Visitor view — the account menu's `/settings`, say — read
+ * as a navigation, cleared the cookie while the reader was still reading, and
+ * every data door and member link after it answered from the reader's OWN
+ * project. A request whose Referer is a Visitor view of the cookie's project is
+ * the Visitor tab talking — a prefetch, or the one click that leaves it — so it
+ * keeps the cookie; the next member page, referred by a member page, clears it.
  */
 function clearVisitorCookie(request: NextRequest, response: NextResponse): NextResponse {
   if (!request.cookies.has(VISITOR_COOKIE) || isPrefetch(request)) return response;
+  if (followedFromVisitorView(request)) return response;
   response.cookies.set(VISITOR_COOKIE, '', { ...visitorCookieOptions(), maxAge: 0 });
   return response;
 }

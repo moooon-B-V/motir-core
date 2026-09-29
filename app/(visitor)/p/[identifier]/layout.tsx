@@ -9,6 +9,7 @@ import { publicProjectUrl } from '@/lib/publicProjects/urls';
 import { legalIndexUrl as resolveLegalIndexUrl } from '@/lib/legal/links';
 import { docsIndexUrl as resolveDocsIndexUrl } from '@/lib/docs/links';
 import { settleVisitor } from '@/lib/visitor/pageGate';
+import { ReaderRoutesProvider } from '@/lib/visitor/useReaderRoutes';
 import { CommandPaletteProvider } from '@/app/(authed)/_components/CommandPaletteProvider';
 import { CreateIssueProvider } from '@/app/(authed)/_components/CreateIssueProvider';
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
@@ -61,54 +62,58 @@ export default async function VisitorLayout({
     <HelpMenu docsIndexUrl={resolveDocsIndexUrl()} legalIndexUrl={resolveLegalIndexUrl()} />
   );
 
+  // Every shared body under here builds its hrefs for this project's Visitor
+  // paths (MOTIR-6888) — the ApprovalOverlay's included, so it sits inside.
   return (
-    <ToastProvider>
-      <CommandPaletteProvider>
-        <CreateIssueProvider canEdit={false} canCreate={false}>
-          <ProjectAccessProvider permissions={permissions}>
-            <AppLayout
-              banner={<VisitorBanner projectName={project.name} />}
-              topNav={
-                <VisitorTopNav
-                  projectName={project.name}
-                  projectKey={project.identifier}
-                  landingHref={publicProjectUrl(project.identifier)}
-                  user={{ name: actorName, email: actorEmail }}
-                />
-              }
-              sidebar={<VisitorRail identifier={project.identifier} helpMenu={helpMenu} />}
-            >
-              <div
-                style={{ '--shell-bottom-clearance': '1.5rem' } as CSSProperties}
-                className="px-4 pt-6 pb-(--shell-bottom-clearance) sm:px-6 lg:px-8"
-              >
-                {children}
-              </div>
-            </AppLayout>
-            <SidebarDrawer
-              footer={
-                <>
-                  <div className="min-w-0 flex-1" />
-                  <HelpMenu
-                    placement="drawer"
-                    docsIndexUrl={resolveDocsIndexUrl()}
-                    legalIndexUrl={resolveLegalIndexUrl()}
+    <ReaderRoutesProvider identifier={project.identifier}>
+      <ToastProvider>
+        <CommandPaletteProvider>
+          <CreateIssueProvider canEdit={false} canCreate={false}>
+            <ProjectAccessProvider permissions={permissions}>
+              <AppLayout
+                banner={<VisitorBanner projectName={project.name} />}
+                topNav={
+                  <VisitorTopNav
+                    projectName={project.name}
+                    projectKey={project.identifier}
+                    landingHref={publicProjectUrl(project.identifier)}
+                    user={{ name: actorName, email: actorEmail }}
                   />
-                  <ThemeToggle placement="drawer" />
-                </>
-              }
-            >
-              <VisitorRail identifier={project.identifier} variant="drawer" />
-            </SidebarDrawer>
-            {/* The approval records' rows open the approval overlay from its
-                address, as they do for a member; its read by key is a Visitor
-                data door (MOTIR-6647), and a Visitor decides nothing in it. */}
-            <Suspense fallback={null}>
-              <ApprovalOverlay />
-            </Suspense>
-          </ProjectAccessProvider>
-        </CreateIssueProvider>
-      </CommandPaletteProvider>
-    </ToastProvider>
+                }
+                sidebar={<VisitorRail identifier={project.identifier} helpMenu={helpMenu} />}
+              >
+                <div
+                  style={{ '--shell-bottom-clearance': '1.5rem' } as CSSProperties}
+                  className="px-4 pt-6 pb-(--shell-bottom-clearance) sm:px-6 lg:px-8"
+                >
+                  {children}
+                </div>
+              </AppLayout>
+              <SidebarDrawer
+                footer={
+                  <>
+                    <div className="min-w-0 flex-1" />
+                    <HelpMenu
+                      placement="drawer"
+                      docsIndexUrl={resolveDocsIndexUrl()}
+                      legalIndexUrl={resolveLegalIndexUrl()}
+                    />
+                    <ThemeToggle placement="drawer" />
+                  </>
+                }
+              >
+                <VisitorRail identifier={project.identifier} variant="drawer" />
+              </SidebarDrawer>
+              {/* The approval records' rows open the approval overlay from its
+                  address, as they do for a member; its read by key is a Visitor
+                  data door (MOTIR-6647), and a Visitor decides nothing in it. */}
+              <Suspense fallback={null}>
+                <ApprovalOverlay />
+              </Suspense>
+            </ProjectAccessProvider>
+          </CreateIssueProvider>
+        </CommandPaletteProvider>
+      </ToastProvider>
+    </ReaderRoutesProvider>
   );
 }

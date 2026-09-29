@@ -113,7 +113,11 @@ const refOf = (pr: RepairPullRequestDto) => ({
   queueExit:
     pr.queueExit === null
       ? null
-      : { rawReason: pr.queueExit.rawReason, failingCheckName: pr.queueExit.failingCheckName },
+      : {
+          rawReason: pr.queueExit.rawReason,
+          disposition: pr.queueExit.disposition,
+          failingCheckName: pr.queueExit.failingCheckName,
+        },
   conflict: pr.conflicted ? { baseRef: pr.baseRef } : null,
 });
 

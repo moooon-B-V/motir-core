@@ -3,6 +3,8 @@ import {
   VISITOR_VIEWS,
   memberPathForVisitorPath,
   parseVisitorPath,
+  readerPath,
+  readerRoutes,
   visitorPathForMemberPath,
   visitorViewPath,
 } from '@/lib/visitor/routes';
@@ -142,5 +144,64 @@ describe('visitorPathForMemberPath — a shared body’s member href, followed f
 
   it('visitorViewPath encodes what it is given', () => {
     expect(visitorViewPath('A B', 'items', 'A B-1')).toBe('/p/A%20B/items/A%20B-1');
+  });
+});
+
+// ── MOTIR-6888: the shared bodies build the reader's address themselves ─────
+describe('readerPath / readerRoutes — a shared body’s href, for whichever reader it serves', () => {
+  it('a member page (null identifier) gets every member route back unchanged', () => {
+    const routes = readerRoutes(null);
+    expect(routes.identifier).toBeNull();
+    for (const path of [
+      '/items/ACME-7',
+      '/items/ACME-7#field-obsolescence',
+      '/items/archived',
+      '/items/ACME-7/edit',
+      '/backlog',
+      '/sprints/s1/report',
+      '/approvals?page=2',
+      '/runs?scope=ACME-4&run=r1',
+    ]) {
+      expect(readerPath(null, path)).toBe(path);
+      expect(routes.path(path)).toBe(path);
+      expect(routes.view(path)).toBe(path);
+    }
+    expect(routes.item('ACME-7')).toBe('/items/ACME-7');
+    expect(routes.item('ACME-7', 'field-x')).toBe('/items/ACME-7#field-x');
+    expect(routes.plan('cplan1')).toBe('/plans/cplan1');
+  });
+
+  it.each([
+    ['/items/ACME-7', '/p/ACME/items/ACME-7'],
+    ['/items/ACME-7#field-obsolescence', '/p/ACME/items/ACME-7#field-obsolescence'],
+    ['/items?view=tree&sort=key', '/p/ACME/tree?sort=key'],
+    ['/items?sprint=s1', '/p/ACME/items?sprint=s1'],
+    ['/plans', '/p/ACME/plans'],
+    ['/plans/cplan1', '/p/ACME/plans/cplan1'],
+    ['/approvals?page=2', '/p/ACME/approvals?page=2'],
+    ['/runs?scope=ACME-4&run=r1', '/p/ACME/runs?scope=ACME-4&run=r1'],
+    ['/boards?board=b1&status=todo', '/p/ACME/board?board=b1&status=todo'],
+  ])('on the Visitor tree %s → %s', (member, visitor) => {
+    expect(readerPath('ACME', member)).toBe(visitor);
+    expect(readerRoutes('ACME').view(member)).toBe(visitor);
+  });
+
+  it.each([
+    '/items/archived',
+    '/items/ACME-7/edit',
+    '/backlog',
+    '/sprints/s1/report',
+    '/settings/account',
+  ])('on the Visitor tree %s has no view — null, so the caller draws no link', (member) => {
+    expect(readerPath('ACME', member)).toBeNull();
+    expect(readerRoutes('ACME').path(member)).toBeNull();
+  });
+
+  it('item and plan pages exist for every Visitor, encoded as the Visitor path encodes', () => {
+    const routes = readerRoutes('ACME');
+    expect(routes.item('ACME-7')).toBe('/p/ACME/items/ACME-7');
+    expect(routes.item('ACME-7', 'field-x')).toBe('/p/ACME/items/ACME-7#field-x');
+    expect(routes.plan('cplan1')).toBe('/p/ACME/plans/cplan1');
+    expect(readerRoutes('A B').item('A B-1')).toBe('/p/A%20B/items/A%20B-1');
   });
 });

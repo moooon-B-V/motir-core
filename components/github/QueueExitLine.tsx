@@ -57,6 +57,25 @@ function heldSentenceKey(
   }
 }
 
+/**
+ * A QUEUE EXIT WHOSE CHECK HUNG (§4 SIXTH AMENDMENT; MOTIR-6849, design § 32): a
+ * `CI_FAILURE` / `CI_TIMEOUT` the server stored NEUTRAL because its check was cancelled
+ * or timed out (or the queue timed out with no check named). Read from the stored
+ * disposition, never re-derived from the reason, and worded without "failed".
+ */
+export function hungCheckSentenceKey(
+  exit: Pick<PullRequestQueueExitDTO, 'rawReason' | 'disposition' | 'failingCheckName'> & {
+    failingCheckConclusion?: string | null;
+  },
+): 'cancelled' | 'timedOut' | 'noCheck' | null {
+  if (exit.disposition !== 'neutral') return null;
+  if (exit.rawReason !== 'CI_FAILURE' && exit.rawReason !== 'CI_TIMEOUT') return null;
+  if (!exit.failingCheckName) return 'noCheck';
+  if (exit.failingCheckConclusion === 'cancelled') return 'cancelled';
+  if (exit.failingCheckConclusion === 'timed_out') return 'timedOut';
+  return 'noCheck';
+}
+
 export function QueueExitLine({
   name,
   exit,
@@ -79,6 +98,9 @@ export function QueueExitLine({
   const reason = t(`reason.${reasonKey(exit.rawReason)}`);
   const Glyph = failure ? CircleX : CircleMinus;
   const heldKey = held ? heldSentenceKey(exit) : null;
+  const hungKey = hungCheckSentenceKey(exit);
+  const checkLabel = hungKey ? 'stoppedCheck' : 'failingCheck';
+  const openLabel = hungKey ? 'openStoppedCheck' : 'openCheck';
   return (
     <span className="flex w-full min-w-0 basis-full flex-col gap-1" data-queue-exit>
       <span className="flex items-start gap-2 leading-snug">
@@ -89,25 +111,31 @@ export function QueueExitLine({
           aria-hidden
         />
         <span>
-          {heldKey
-            ? t.rich(`failed.${heldKey}`, {
+          {hungKey
+            ? t.rich(`hung.${hungKey}`, {
                 pr: name,
                 check: exit.failingCheckName ?? '',
                 b: bold,
               })
-            : t.rich(failure ? 'left' : 'removed', { pr: name, reason, b: bold })}
+            : heldKey
+              ? t.rich(`failed.${heldKey}`, {
+                  pr: name,
+                  check: exit.failingCheckName ?? '',
+                  b: bold,
+                })
+              : t.rich(failure ? 'left' : 'removed', { pr: name, reason, b: bold })}
         </span>
       </span>
-      {exit.failingCheckName && exit.failingCheckUrl ? (
+      {exit.failingCheckName && exit.failingCheckUrl && hungKey !== 'noCheck' ? (
         <span className="ml-5.5 text-(--el-text-secondary)">
-          {t.rich('failingCheck', {
+          {t.rich(checkLabel, {
             check: exit.failingCheckName,
             link: (chunks) => (
               <a
                 href={exit.failingCheckUrl!}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={t('openCheck', { check: exit.failingCheckName! })}
+                aria-label={t(openLabel, { check: exit.failingCheckName! })}
                 className="inline-flex items-center gap-1 text-(--el-link) underline underline-offset-2 hover:text-(--el-link-pressed)"
               >
                 {chunks}
