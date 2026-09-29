@@ -71,6 +71,8 @@ import { fleetInFlightCeiling, fleetSlotTtlSeconds } from '@/lib/ciFleet/limits'
  *  decision so an operator's log names WHICH workload filled the fleet — a bare
  *  "24/24" cannot be acted on. */
 export interface FleetInFlightCensus {
+  /** Containers counted against the SHARED ceiling — every `shared`-pool workload.
+   *  An `own`-pool workload appears in `byWorkload` and never here. */
   total: number;
   byWorkload: Record<FleetWorkloadKind, number>;
 }
@@ -164,7 +166,7 @@ export const fleetCeilingService = {
     for (const kind of FLEET_WORKLOAD_KINDS) {
       const count = await FLEET_WORKLOADS[kind].countInFlight(now, tx);
       byWorkload[kind] = count;
-      total += count;
+      if (FLEET_WORKLOADS[kind].pool === 'shared') total += count;
     }
     return { total, byWorkload };
   },
@@ -217,7 +219,10 @@ export const fleetCeilingService = {
         }
 
         const census = await this.census(now, tx);
-        if (census.total >= ceiling) {
+        // An `own`-pool workload is bounded by its guard alone: it neither counts
+        // toward nor is refused by the shared ceiling (AMENDMENT 2 of
+        // `agent-instances.md`).
+        if (FLEET_WORKLOADS[request.workload].pool === 'shared' && census.total >= ceiling) {
           return {
             outcome: 'deferred' as const,
             reason: 'fleet_ceiling' as const,

@@ -50,10 +50,23 @@ import type { FleetWorkloadKind } from '@motir/orchestrator';
  */
 export type { FleetWorkloadKind };
 
+/**
+ * Which ceiling a workload counts against.
+ *
+ * `shared` — `MOTIR_FLEET_MAX_IN_FLIGHT`, the ceiling CI, indexing and hosted runs
+ * share. `own` — a workload with a ceiling of its own, decided by its caller under
+ * the same admission lock, and NOT summed into the shared total: agent instances
+ * (`docs/decisions/agent-instances.md` AMENDMENT 2), whose machines are long-lived
+ * and paid for per minute, so letting them fill the shared ceiling would starve CI.
+ */
+export type FleetPool = 'shared' | 'own';
+
 export interface FleetWorkload {
   readonly kind: FleetWorkloadKind;
   /** How an operator reads this workload in a ceiling breakdown. */
   readonly label: string;
+  /** Which ceiling it counts against — see {@link FleetPool}. */
+  readonly pool: FleetPool;
   /**
    * How many containers this workload is holding right now.
    *
@@ -72,10 +85,15 @@ export interface FleetWorkload {
  * swaps its registry entry to count that instead, and the ceiling stays correct
  * with no change here and none in the service.
  */
-function slotBackedWorkload(kind: FleetWorkloadKind, label: string): FleetWorkload {
+function slotBackedWorkload(
+  kind: FleetWorkloadKind,
+  label: string,
+  pool: FleetPool = 'shared',
+): FleetWorkload {
   return {
     kind,
     label,
+    pool,
     countInFlight: (now, tx) => fleetInFlightSlotRepository.countLiveForWorkload(kind, now, tx),
   };
 }
@@ -95,13 +113,15 @@ export const FLEET_WORKLOADS: Record<FleetWorkloadKind, FleetWorkload> = {
   ci_runner: {
     kind: 'ci_runner',
     label: 'CI runners',
+    pool: 'shared',
     countInFlight: (_now, tx) => ciRunnerProvisioningIntentRepository.countInFlightFleetWide(tx),
   },
   code_graph_index: slotBackedWorkload('code_graph_index', 'code-graph index'),
   hosted_agent: slotBackedWorkload('hosted_agent', 'hosted agents'),
-  // MOTIR-6872 — a user agent instance holds a slot for exactly as long as a
-  // running interval is open (`docs/decisions/agent-instances.md` §6).
-  agent_instance: slotBackedWorkload('agent_instance', 'agent instances'),
+  // MOTIR-6872 — a user agent instance holds a slot for exactly as long as its
+  // machine runs (`docs/decisions/agent-instances.md` §6). Its OWN pool
+  // (AMENDMENT 2): counted and slotted here, never summed into CI's ceiling.
+  agent_instance: slotBackedWorkload('agent_instance', 'agent instances', 'own'),
 };
 
 /** Every registered kind, in a stable order — the iteration order of the

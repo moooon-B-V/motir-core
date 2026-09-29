@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  instanceMaxRunning,
-  instanceMaxRunningPerOrg,
-  INSTANCE_NAME_PATTERN,
-} from '@/lib/agentInstances/config';
+import { instanceMaxRunning, INSTANCE_NAME_PATTERN } from '@/lib/agentInstances/config';
 import { buildCloneCommand, installationBasicAuth } from '@/lib/agentInstances/cloneCommand';
 import {
   AgentInstanceNameInvalidError,
@@ -55,9 +51,10 @@ describe('mapAgentInstanceError — every typed refusal is a status, never a 500
     expect(statusOf(new AgentInstanceStateConflictError('i', 'waking', 'woken'))).toBe(409);
     expect(statusOf(new AgentInstanceStartRefusedError('credits', 'no'))).toBe(402);
     expect(statusOf(new AgentInstanceStartRefusedError('credits_unknown', 'no'))).toBe(503);
-    const cap = mapAgentInstanceError(new AgentInstanceStartRefusedError('org_cap', 'full'))!;
+    const cap = mapAgentInstanceError(new AgentInstanceStartRefusedError('user_cap', 'full'))!;
     expect(cap.status).toBe(429);
-    expect(await cap.json()).toMatchObject({ reason: 'org_cap', error: 'full' });
+    expect(await cap.json()).toMatchObject({ reason: 'user_cap', error: 'full' });
+    expect(statusOf(new AgentInstanceStartRefusedError('fleet_busy', 'busy'))).toBe(429);
     expect(statusOf(new AgentInstancesUnavailableError('x'))).toBe(503);
     expect(statusOf(new Error('anything else'))).toBeNull();
   });
@@ -120,15 +117,13 @@ describe('profiles and caps', () => {
     expect(profileDisplayName('unknown')).toBe('unknown');
   });
 
-  it('reads the two running caps from the environment, with §6’s defaults', () => {
+  it('reads the agent pool’s safety valve from the environment — default 50, no per-organisation cap', () => {
     vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '');
-    vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING_PER_ORG', '');
-    expect(instanceMaxRunning()).toBe(8);
-    expect(instanceMaxRunningPerOrg()).toBe(3);
-    vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '12');
-    vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING_PER_ORG', 'nonsense');
-    expect(instanceMaxRunning()).toBe(12);
-    expect(instanceMaxRunningPerOrg()).toBe(3);
+    expect(instanceMaxRunning()).toBe(50);
+    vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '120');
+    expect(instanceMaxRunning()).toBe(120);
+    vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', 'nonsense');
+    expect(instanceMaxRunning()).toBe(50);
   });
 
   it('accepts a lower-case dashed name and refuses the rest', () => {

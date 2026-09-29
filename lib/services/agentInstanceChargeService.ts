@@ -109,7 +109,14 @@ export const agentInstanceChargeService = {
         createdAt: interval.startedAt,
         startedAt: interval.startedAt,
         stoppedAt: interval.endedAt,
-        terminalState: interval.endReason === 'lost' ? 'destroyed' : 'stopped',
+        // A `rolled` interval's machine is still up — the running charge closed
+        // the interval, not the machine (AMENDMENT 2).
+        terminalState:
+          interval.endReason === 'lost'
+            ? 'destroyed'
+            : interval.endReason === 'rolled'
+              ? 'running'
+              : 'stopped',
       },
       reason: teardownReasonFor(interval.endReason),
     });

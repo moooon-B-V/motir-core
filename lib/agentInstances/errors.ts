@@ -38,19 +38,14 @@ export class AgentProfileNotOfferedError extends Error {
     displayName: string,
   ) {
     super(
-      `${displayName} isn't offered: its terms don't yet allow a platform to host it. Choose another agent.`,
+      `${displayName} isn't offered: its terms don't yet allow a platform to host it. Choose another coding agent.`,
     );
     this.name = 'AgentProfileNotOfferedError';
   }
 }
 
 /** Which rule refused a start (§5, §6). */
-export type AgentInstanceRefusalReason =
-  | 'credits'
-  | 'credits_unknown'
-  | 'org_cap'
-  | 'user_cap'
-  | 'fleet_busy';
+export type AgentInstanceRefusalReason = 'credits' | 'credits_unknown' | 'user_cap' | 'fleet_busy';
 
 /** A create or wake refused BEFORE anything was booted (§5, §6). */
 export class AgentInstanceStartRefusedError extends Error {

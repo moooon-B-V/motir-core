@@ -35,14 +35,19 @@ function positiveIntFromEnv(name: string, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-/** §6: running instances fleet-wide — `MOTIR_INSTANCE_MAX_RUNNING`, default 8. */
+/**
+ * The agent pool's safety valve — running instances fleet-wide, across every
+ * organisation: `MOTIR_INSTANCE_MAX_RUNNING`, default 50 (AMENDMENT 2).
+ *
+ * ⚠️ NOT A PRODUCT LIMIT. Who may run how many is decided by credits (charged
+ * while a machine runs) and by {@link INSTANCE_MAX_PER_USER}; there is no
+ * per-organisation cap. This bounds only what Motir has running on Fly at once if
+ * everything else failed — Fly offers no spending cap of its own — so it sits well
+ * above ordinary use and an operator raises it as usage grows. Agents have their
+ * OWN pool: this number is not a share of CI's `MOTIR_FLEET_MAX_IN_FLIGHT`.
+ */
 export function instanceMaxRunning(): number {
-  return positiveIntFromEnv('MOTIR_INSTANCE_MAX_RUNNING', 8);
-}
-
-/** §6: running instances per organisation — `MOTIR_INSTANCE_MAX_RUNNING_PER_ORG`, default 3. */
-export function instanceMaxRunningPerOrg(): number {
-  return positiveIntFromEnv('MOTIR_INSTANCE_MAX_RUNNING_PER_ORG', 3);
+  return positiveIntFromEnv('MOTIR_INSTANCE_MAX_RUNNING', 50);
 }
 
 /** How long a create or wake waits in the REQUEST for the machine to report running

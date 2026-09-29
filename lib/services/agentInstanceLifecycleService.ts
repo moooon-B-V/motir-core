@@ -16,7 +16,6 @@ import {
   INSTANCE_SLOT_TTL_SECONDS,
   INSTANCE_VOLUME_SIZE_GB,
   instanceMaxRunning,
-  instanceMaxRunningPerOrg,
 } from '@/lib/agentInstances/config';
 import {
   AgentInstanceNameInvalidError,
@@ -204,57 +203,46 @@ async function assertCredits(organizationId: string): Promise<void> {
 }
 
 /**
- * Take a fleet slot for one running interval, with the instance lane's two caps
- * decided under the SAME admission lock (§6). Returns nothing on success; throws
- * the refusal in words otherwise. `countingSelf` says whether the instance being
- * started is already counted as running (a wake reads `hibernated`, so never).
+ * Take a slot in the agents' OWN pool for one machine run, with the pool's safety
+ * valve decided under the fleet admission lock (§6, AMENDMENT 2). There is no
+ * per-organisation cap: credits decide who may run. The slot is keyed on the RUN
+ * (`runId`, the id of the run's first interval), because the running charge splits
+ * one run into several intervals. Returns nothing on success; throws the refusal
+ * in words otherwise.
  */
 async function reserveSlot(input: {
   instanceId: string;
-  intervalId: string;
+  runId: string;
   organizationId: string;
   workspaceId: string;
 }): Promise<void> {
   const maxRunning = instanceMaxRunning();
-  const maxPerOrg = instanceMaxRunningPerOrg();
   const verdict = await fleetCeilingService.reserve({
     workload: 'agent_instance',
     ref: input.instanceId,
-    ownerRef: input.intervalId,
+    ownerRef: input.runId,
     organizationId: input.organizationId,
     workspaceId: input.workspaceId,
     ttlSeconds: INSTANCE_SLOT_TTL_SECONDS,
     guard: async (tx) => {
-      const fleetWide = await agentInstanceRepository.countRunning({}, tx);
-      if (fleetWide >= maxRunning) return 'fleet_instances';
-      const inOrg = await agentInstanceRepository.countRunning(
-        { organizationId: input.organizationId },
-        tx,
-      );
-      if (inOrg >= maxPerOrg) return 'org_instances';
-      return null;
+      const running = await agentInstanceRepository.countRunning({}, tx);
+      return running >= maxRunning ? 'agent_pool_full' : null;
     },
   });
   if (verdict.outcome !== 'deferred') return;
-  if (verdict.reason === 'workload_cap' && verdict.detail === 'org_instances') {
-    throw new AgentInstanceStartRefusedError(
-      'org_cap',
-      `Your organization already has ${maxPerOrg} agents running. Hibernate one to start another.`,
-    );
-  }
   throw new AgentInstanceStartRefusedError(
     'fleet_busy',
     'Motir is running as many machines as it can right now. Try again in a few minutes.',
   );
 }
 
-function releaseSlot(instanceId: string, intervalId: string): Promise<boolean> {
-  return fleetCeilingService.release('agent_instance', instanceId, intervalId);
+function releaseSlot(instanceId: string, runId: string): Promise<boolean> {
+  return fleetCeilingService.release('agent_instance', instanceId, runId);
 }
 
 /**
  * Close the instance's open interval (if any) at `endedAt`, with `endReason`,
- * and release its slot. Idempotent: an instance with no open interval closes
+ * and release its run's slot — the machine run ends here. Idempotent: an instance with no open interval closes
  * nothing and releases nothing. Returns the closed interval, or null.
  */
 async function closeOpenInterval(
@@ -276,7 +264,7 @@ async function closeOpenInterval(
     return moved === 1 ? open : null;
   });
   if (closed) {
-    await releaseSlot(row.id, closed.id);
+    await releaseSlot(row.id, closed.runId);
     // Charge it now (§5); a transport failure leaves it `pending` for the sweep.
     try {
       await agentInstanceChargeService.chargeInterval(closed.id);
@@ -453,7 +441,7 @@ export const agentInstanceLifecycleService = {
     const intervalId = randomUUID();
     await reserveSlot({
       instanceId,
-      intervalId,
+      runId: intervalId,
       organizationId: project.organizationId,
       workspaceId: project.workspaceId,
     });
@@ -485,6 +473,8 @@ export const agentInstanceLifecycleService = {
             workspaceId: project.workspaceId,
             organizationId: project.organizationId,
             agentInstanceId: instanceId,
+            runId: intervalId,
+            runStartedAt: openedAt,
             startedAt: openedAt,
             chargeReference: intervalChargeReference(intervalId),
           },
@@ -552,7 +542,7 @@ export const agentInstanceLifecycleService = {
     const intervalId = randomUUID();
     await reserveSlot({
       instanceId,
-      intervalId,
+      runId: intervalId,
       organizationId: project.organizationId,
       workspaceId: project.workspaceId,
     });
@@ -574,6 +564,8 @@ export const agentInstanceLifecycleService = {
             workspaceId: row.workspaceId,
             organizationId: row.organizationId,
             agentInstanceId: row.id,
+            runId: intervalId,
+            runStartedAt: now,
             startedAt: now,
             chargeReference: intervalChargeReference(intervalId),
           },
@@ -794,6 +786,64 @@ export const agentInstanceLifecycleService = {
       agentInstanceRepository.touchActivity(row.id, agentInstanceClock.now(), tx),
     );
     if (moved === 1 && row.state === 'running') await armIdleTimer(row);
+  },
+
+  /**
+   * THE RUNNING CHARGE (AMENDMENT 2) — charge a running machine for the minutes it
+   * has already used, without stopping it. The open interval closes `rolled` at its
+   * last WHOLE-minute boundary and the next interval of the same run opens there,
+   * in one transaction; the closed one is then charged like any other, once, under
+   * its own key. So the organisation's balance falls while the machine runs, and a
+   * later credit check sees it — which a charge made only when the machine stops
+   * could never give. Whole minutes keep the rounding exact: ⌈seconds ÷ 60⌉ of a
+   * whole-minute interval is its minutes, and only a run's final interval rounds.
+   * The run — its slot and its 12-hour backstop — carries on untouched.
+   */
+  async rollInterval(instanceId: string): Promise<'rolled' | 'noop'> {
+    const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
+    if (!row || row.deletedAt || row.state !== 'running') return 'noop';
+    const now = agentInstanceClock.now();
+    const rolled = await withWorkspaceServiceContext(row.workspaceId, async (tx) => {
+      const open = await agentInstanceIntervalRepository.findOpen(row.id, tx);
+      if (!open) return null;
+      const wholeMinutes = Math.floor((now.getTime() - open.startedAt.getTime()) / 60_000);
+      if (wholeMinutes < 1) return null;
+      const boundary = new Date(open.startedAt.getTime() + wholeMinutes * 60_000);
+      // The close is guarded: a hibernate or delete that closed it first wins, and
+      // this roll then opens nothing.
+      const moved = await agentInstanceIntervalRepository.close(
+        open.id,
+        { endedAt: boundary, endReason: 'rolled', billableSeconds: wholeMinutes * 60 },
+        tx,
+      );
+      if (moved !== 1) return null;
+      const nextId = randomUUID();
+      await agentInstanceIntervalRepository.open(
+        {
+          id: nextId,
+          workspaceId: row.workspaceId,
+          organizationId: row.organizationId,
+          agentInstanceId: row.id,
+          runId: open.runId,
+          runStartedAt: open.runStartedAt,
+          startedAt: boundary,
+          chargeReference: intervalChargeReference(nextId),
+        },
+        tx,
+      );
+      return open;
+    });
+    if (!rolled) return 'noop';
+    try {
+      await agentInstanceChargeService.chargeInterval(rolled.id);
+    } catch (err) {
+      console.error('[agentInstanceLifecycle] a running charge failed; the sweep will retry it', {
+        instanceId: row.id,
+        intervalId: rolled.id,
+        detail: describeError(err),
+      });
+    }
+    return 'rolled';
   },
 
   /**

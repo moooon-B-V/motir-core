@@ -23,7 +23,7 @@
 CREATE TYPE "agent_instance_state" AS ENUM ('starting', 'running', 'hibernating', 'hibernated', 'waking', 'failed', 'deleting');
 
 -- CreateEnum
-CREATE TYPE "agent_instance_interval_end_reason" AS ENUM ('hibernated', 'idle', 'backstop', 'credits', 'deleted', 'lost');
+CREATE TYPE "agent_instance_interval_end_reason" AS ENUM ('hibernated', 'idle', 'backstop', 'credits', 'deleted', 'lost', 'rolled');
 
 -- CreateEnum
 CREATE TYPE "agent_instance_charge_outcome" AS ENUM ('pending', 'charged', 'not_charged', 'refused');
@@ -60,6 +60,8 @@ CREATE TABLE "agent_instance_interval" (
     "workspace_id" TEXT NOT NULL,
     "organization_id" TEXT NOT NULL,
     "agent_instance_id" TEXT NOT NULL,
+    "run_id" TEXT NOT NULL,
+    "run_started_at" TIMESTAMP(3) NOT NULL,
     "started_at" TIMESTAMP(3) NOT NULL,
     "ended_at" TIMESTAMP(3),
     "end_reason" "agent_instance_interval_end_reason",

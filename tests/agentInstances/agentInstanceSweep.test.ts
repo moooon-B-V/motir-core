@@ -28,6 +28,8 @@ interface Call {
 let calls: Call[] = [];
 let mayRun = true;
 let debitAnswer: 'ok' | 'unavailable' | 'out_of_credits' = 'ok';
+/** When set, a successful debit empties the balance — the pre-flight then says no. */
+let debitExhausts = false;
 
 function stubFetch(): void {
   calls = [];
@@ -50,7 +52,8 @@ function stubFetch(): void {
         if (debitAnswer === 'out_of_credits') {
           return json(402, { code: 'out_of_credits', title: 'out of credits' });
         }
-        return json(200, { idempotent: false, balanceCredits: 90 });
+        if (debitExhausts) mayRun = false;
+        return json(200, { idempotent: false, balanceCredits: debitExhausts ? 0 : 90 });
       }
       throw new Error(`unexpected fetch in test: ${url}`);
     }),
@@ -72,12 +75,12 @@ beforeEach(async () => {
   fx = await makeWorkItemFixture();
   mayRun = true;
   debitAnswer = 'ok';
+  debitExhausts = false;
   vi.stubEnv('MOTIR_CLOUD', 'true');
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
   vi.stubEnv('MOTIR_AI_URL', `${AI}/`);
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
   vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '');
-  vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING_PER_ORG', '');
   stubFetch();
   virtualNow = new Date('2026-09-28T10:00:00.000Z').getTime();
   vi.spyOn(agentInstanceClock, 'now').mockImplementation(() => new Date(virtualNow));
@@ -247,13 +250,19 @@ describe('the sweep', () => {
     virtualNow += 30 * MIN;
     const summary = await sweeper.sweep();
     expect(summary.hibernated.idle).toBe(1);
-    expect((await intervals())[0]).toMatchObject({ endReason: 'idle', chargeOutcome: 'charged' });
+    const all = await intervals();
+    expect(all.map((i) => i.endReason)).toEqual(['rolled', 'rolled', 'idle']);
+    // The rolled minutes are charged; the idle close's last partial minute may be
+    // zero seconds after the roll that ran just before it, which is `not_charged`.
+    expect(all.slice(0, 2).map((i) => i.chargeOutcome)).toEqual(['charged', 'charged']);
+    expect(['charged', 'not_charged']).toContain(all[2]!.chargeOutcome);
   });
 
   it('stops a running instance whose organisation the credit pre-flight now refuses', async () => {
     await createRunning();
     mayRun = false;
     const summary = await sweeper.sweep();
+    expect(summary.rolled).toBe(0); // not yet a whole minute to charge
     expect(summary.hibernated.credits).toBe(1);
     expect((await intervals())[0]).toMatchObject({ endReason: 'credits' });
   });
@@ -313,5 +322,69 @@ describe('the sweep', () => {
     expect((await sweeper.sweep()).orphans).toEqual({ machines: 0, volumes: 1 });
     expect(fleet.liveVolumeIds()).toEqual([row.volumeId]);
     expect((await instance()).state).toBe('running');
+  });
+});
+
+describe('the running charge (AMENDMENT 2)', () => {
+  it('charges a running machine for its whole minutes without stopping it, then the rest at hibernate', async () => {
+    const dto = await createRunning();
+    virtualNow += 30 * MIN + 20_000;
+    await lifecycle.touchActivity(dto.id); // in use — the idle window must not end it
+    const summary = await sweeper.sweep();
+    expect(summary.rolled).toBe(1);
+    expect((await instance()).state).toBe('running');
+
+    let [first, second] = await intervals();
+    expect(first).toMatchObject({
+      endReason: 'rolled',
+      billableSeconds: 1800,
+      credits: 30,
+      chargeOutcome: 'charged',
+    });
+    expect(second).toMatchObject({ endedAt: null, runId: first!.id });
+    expect(second!.startedAt.getTime()).toBe(first!.startedAt.getTime() + 30 * MIN);
+    expect(second!.runStartedAt.getTime()).toBe(first!.runStartedAt.getTime());
+    expect(debits().map((d) => d.body!.instanceIntervalId)).toEqual([first!.id]);
+    // One run, one slot — held under the run, not the interval.
+    const held = await adminDb.fleetInFlightSlot.findMany({
+      where: { workload: 'agent_instance' },
+    });
+    expect(held.map((h) => h.ownerRef)).toEqual([first!.id]);
+
+    virtualNow += 10 * MIN;
+    await lifecycle.hibernate(fx.projectIdentifier, dto.id, fx.ctx);
+    [first, second] = await intervals();
+    expect(second).toMatchObject({ endReason: 'hibernated', chargeOutcome: 'charged' });
+    expect(debits()).toHaveLength(2);
+    expect(await adminDb.fleetInFlightSlot.count({ where: { workload: 'agent_instance' } })).toBe(
+      0,
+    );
+  });
+
+  it('an organisation that runs out while its agent runs is stopped within one pass', async () => {
+    await createRunning();
+    debitExhausts = true;
+    virtualNow += 30 * MIN;
+    const summary = await sweeper.sweep();
+    expect(summary.rolled).toBe(1);
+    expect(summary.hibernated.credits).toBe(1);
+    expect((await intervals()).map((i) => i.endReason)).toEqual(['rolled', 'credits']);
+  });
+
+  it('the 12-hour backstop counts from the start of the RUN, across every roll', async () => {
+    const dto = await createRunning();
+    for (let pass = 0; pass < 23; pass++) {
+      virtualNow += 30 * MIN;
+      await lifecycle.touchActivity(dto.id);
+      await sweeper.sweep();
+    }
+    expect((await instance()).state).toBe('running');
+    virtualNow += 30 * MIN;
+    await lifecycle.touchActivity(dto.id);
+    expect((await sweeper.sweep()).hibernated.backstop).toBe(1);
+    const all = await intervals();
+    expect(all.at(-1)).toMatchObject({ endReason: 'backstop' });
+    expect(new Set(all.map((i) => i.runId)).size).toBe(1);
+    expect(all.reduce((sum, i) => sum + (i.billableSeconds ?? 0), 0)).toBe(12 * 60 * 60);
   });
 });

@@ -2,6 +2,8 @@ import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakePersistentOrchestrator as fleet } from '@motir/orchestrator';
 import { db } from '@/lib/db';
+import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
+import { withSystemContext } from '@/lib/workspaces/context';
 import {
   AgentInstanceNameInvalidError,
   AgentInstanceNameTakenError,
@@ -174,7 +176,6 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_APP_ID', '222');
   vi.stubEnv('GITHUB_APP_PRIVATE_KEY', PEM);
   vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '');
-  vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING_PER_ORG', '');
   stubFetch();
   virtualNow = new Date('2026-09-28T10:00:00.000Z').getTime();
   vi.spyOn(agentInstanceClock, 'now').mockImplementation(() => new Date(virtualNow));
@@ -316,23 +317,28 @@ describe('create', () => {
       await expectNothingStarted();
     });
 
-    it('the organisation’s running cap', async () => {
-      vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING_PER_ORG', '1');
-      await create('one');
-      await expect(create('two')).rejects.toMatchObject({ reason: 'org_cap' });
-      expect(await instances()).toHaveLength(1);
-      expect(await slots()).toHaveLength(1);
-      expect(fleet.persistentSpecs).toHaveLength(1);
+    it('there is no per-organisation cap: one organisation runs as many agents as it has credits for', async () => {
+      for (const name of ['one', 'two', 'three', 'four', 'five']) await create(name);
+      expect((await instances()).map((r) => r.state)).toEqual(Array(5).fill('running'));
+      expect(await slots()).toHaveLength(5);
     });
 
-    it('the fleet-wide instance cap and the fleet ceiling read as Motir being busy', async () => {
+    it('the agent pool’s safety valve reads as Motir being busy', async () => {
       vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '1');
       await create('one');
       await expect(create('two')).rejects.toMatchObject({ reason: 'fleet_busy' });
-      vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '');
-      vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '1');
-      await expect(create('three')).rejects.toMatchObject({ reason: 'fleet_busy' });
       expect(await instances()).toHaveLength(1);
+      expect(await slots()).toHaveLength(1);
+    });
+
+    it('agents have their OWN pool: CI’s shared ceiling neither refuses them nor counts them', async () => {
+      vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '1');
+      await create('one');
+      await create('two');
+      expect(await slots()).toHaveLength(2);
+      const census = await withSystemContext((tx) => fleetCeilingService.census(new Date(), tx));
+      expect(census.byWorkload.agent_instance).toBe(2);
+      expect(census.total).toBe(0);
     });
 
     it('the ten-per-user cap', async () => {

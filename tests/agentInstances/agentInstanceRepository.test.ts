@@ -393,6 +393,8 @@ describe('agentInstanceIntervalRepository', () => {
           workspaceId: f.workspaceId,
           organizationId: f.organizationId,
           agentInstanceId: instanceId,
+          runId: id,
+          runStartedAt: startedAt,
           startedAt,
           chargeReference: intervalChargeReference(id),
         },
@@ -446,6 +448,46 @@ describe('agentInstanceIntervalRepository', () => {
     });
     // …and a new interval may open once the old one is closed.
     await expect(open(f, row.id, new Date())).resolves.toBeTruthy();
+  });
+
+  it('correctStart moves a run-opening interval and its run start together — never a rolled one', async () => {
+    const f = await seedFixture();
+    const row = await createInstance(f);
+    const opened = new Date('2026-09-28T10:00:00.000Z');
+    const flyStart = new Date('2026-09-28T10:00:07.000Z');
+    const first = await open(f, row.id, opened);
+    await withWorkspaceServiceContext(f.workspaceId, async (tx) => {
+      expect(await agentInstanceIntervalRepository.correctStart(first.id, flyStart, tx)).toBe(1);
+      const back = await agentInstanceIntervalRepository.findById(first.id, tx);
+      expect(back?.startedAt.toISOString()).toBe(flyStart.toISOString());
+      expect(back?.runStartedAt.toISOString()).toBe(flyStart.toISOString());
+
+      // A roll: close the first, open the next interval of the SAME run.
+      await agentInstanceIntervalRepository.close(
+        first.id,
+        {
+          endedAt: new Date('2026-09-28T10:30:07.000Z'),
+          endReason: 'rolled',
+          billableSeconds: 1800,
+        },
+        tx,
+      );
+      const nextId = randomUUID();
+      await agentInstanceIntervalRepository.open(
+        {
+          id: nextId,
+          workspaceId: f.workspaceId,
+          organizationId: f.organizationId,
+          agentInstanceId: row.id,
+          runId: first.id,
+          runStartedAt: flyStart,
+          startedAt: new Date('2026-09-28T10:30:07.000Z'),
+          chargeReference: intervalChargeReference(nextId),
+        },
+        tx,
+      );
+      expect(await agentInstanceIntervalRepository.correctStart(nextId, opened, tx)).toBe(0);
+    });
   });
 
   it('records a charge once — a replay cannot overwrite it — and the backstop finds only pending ones', async () => {

@@ -11469,6 +11469,9 @@ enum AgentInstanceIntervalEndReason {
   credits
   deleted
   lost
+  /// Closed by the running charge (AMENDMENT 2): the machine is still up, and the
+  /// next interval of the same run opens at this one's end.
+  rolled
 
   @@map("agent_instance_interval_end_reason")
 }
@@ -11544,6 +11547,14 @@ model AgentInstanceInterval {
   workspaceId     String @map("workspace_id")
   organizationId  String @map("organization_id")
   agentInstanceId String @map("agent_instance_id")
+
+  /// The machine RUN this interval belongs to: the id of the interval that opened
+  /// it (itself, for the first). A run is split into intervals by the running
+  /// charge (AMENDMENT 2); the fleet slot and the 12-hour backstop key on the run.
+  runId        String   @map("run_id")
+  /// When the run began — the backstop's clock. Equal to `startedAt` on the
+  /// run's first interval, and copied onto every rolled one.
+  runStartedAt DateTime @map("run_started_at")
 
   startedAt DateTime                        @map("started_at")
   /// Null while the interval is OPEN. At most one open interval per instance —

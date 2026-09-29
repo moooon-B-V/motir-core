@@ -470,7 +470,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   'sweep-agent-instances': {
     file: 'lib/jobs/definitions/agentInstanceSweep.ts',
     shape:
-      '{ charges: { charged: number; notCharged: number; refused: number; retryable: number }; errors: number; hibernated: { backstop: number; credits: number; idle: number }; orphans: { machines: number; volumes: number }; reconciled: number; settled: number }',
+      '{ charges: { charged: number; notCharged: number; refused: number; retryable: number }; errors: number; hibernated: { backstop: number; credits: number; idle: number }; orphans: { machines: number; volumes: number }; reconciled: number; rolled: number; settled: number }',
   },
   'reap-lapsed-runs': {
     file: 'lib/jobs/definitions/runLivenessSweep.ts',

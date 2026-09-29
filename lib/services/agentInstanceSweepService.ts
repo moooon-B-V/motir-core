@@ -39,6 +39,17 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
 //     backstop, and a catch for an idle timer that was lost.
 // The 12-hour backstop is enforced by the idle timer's debounce cap AND by this
 // sweep; the fleet slot's TTL is sized to the sweep's 30-minute cadence.
+//
+// ⚠️ THE RUNNING CHARGE, AND WHY THE RUNNING PASS IS TWO LOOPS (AMENDMENT 2). The
+// credit pre-flight only asks "is the balance above zero?", and a machine used to
+// be charged only when it stopped — up to 12 hours later — so a running agent's
+// own minutes never lowered the balance a credit check read, and an organisation
+// with one credit could run a machine all day. Now every pass first CHARGES each
+// running machine for the whole minutes it has used ({@link
+// agentInstanceLifecycleService.rollInterval}), and only THEN asks each
+// organisation for credits, so the check reads a balance every running agent has
+// already paid into. An organisation that has run out stops within one pass: the
+// overdraft is bounded by the sweep's 30 minutes, not by the backstop's 12 hours.
 
 /** A machine or volume younger than this is never an orphan — its create may be in flight. */
 const ORPHAN_MIN_AGE_MS = 15 * 60 * 1000;
@@ -49,6 +60,8 @@ const SWEEP_BATCH = 200;
 export interface AgentInstanceSweepSummary {
   settled: number;
   reconciled: number;
+  /** Running machines charged for their minutes so far without stopping (AMENDMENT 2). */
+  rolled: number;
   hibernated: { idle: number; backstop: number; credits: number };
   orphans: { machines: number; volumes: number };
   charges: { charged: number; notCharged: number; refused: number; retryable: number };
@@ -59,15 +72,17 @@ function isIdle(row: AgentInstance, now: Date): boolean {
   return now.getTime() - row.lastActivityAt.getTime() >= INSTANCE_IDLE_WINDOW_MS;
 }
 
-async function openIntervalStart(row: AgentInstance): Promise<Date | null> {
+/** When the instance's current machine RUN began — not its open interval, which
+ *  the running charge restarts every pass (AMENDMENT 2). */
+async function runStart(row: AgentInstance): Promise<Date | null> {
   const open = await withWorkspaceServiceContext(row.workspaceId, (tx) =>
     agentInstanceIntervalRepository.findOpen(row.id, tx),
   );
-  return open?.startedAt ?? null;
+  return open?.runStartedAt ?? null;
 }
 
 async function pastBackstop(row: AgentInstance, now: Date): Promise<boolean> {
-  const startedAt = await openIntervalStart(row);
+  const startedAt = await runStart(row);
   return startedAt !== null && now.getTime() - startedAt.getTime() >= INSTANCE_INTERVAL_BACKSTOP_MS;
 }
 
@@ -95,6 +110,7 @@ export const agentInstanceSweepService = {
     const summary: AgentInstanceSweepSummary = {
       settled: 0,
       reconciled: 0,
+      rolled: 0,
       hibernated: { idle: 0, backstop: 0, credits: 0 },
       orphans: { machines: 0, volumes: 0 },
       charges: { charged: 0, notCharged: 0, refused: 0, retryable: 0 },
@@ -132,12 +148,12 @@ export const agentInstanceSweepService = {
         });
       }
 
-      // 2 · Every running instance: reconcile, then backstop, credits, idle.
+      // 2a · Every running instance: reconcile it against its machine, then charge
+      //      the minutes it has used so far — BEFORE any credit check below.
       const running = await withSystemContext((tx) =>
         agentInstanceRepository.listLiveInStates(['running'], SWEEP_BATCH, tx),
       );
-      const creditsByOrg = new Map<string, boolean>();
-      const now = agentInstanceClock.now();
+      const stillRunning: AgentInstance[] = [];
       for (const row of running) {
         await guarded(async () => {
           const reconciled = await lifecycle.reconcileRunning(row.id);
@@ -145,6 +161,16 @@ export const agentInstanceSweepService = {
             summary.reconciled += 1;
             return;
           }
+          if ((await lifecycle.rollInterval(row.id)) === 'rolled') summary.rolled += 1;
+          stillRunning.push(row);
+        });
+      }
+
+      // 2b · Then the three reasons to hibernate it: the backstop, credits, idle.
+      const creditsByOrg = new Map<string, boolean>();
+      const now = agentInstanceClock.now();
+      for (const row of stillRunning) {
+        await guarded(async () => {
           if (await pastBackstop(row, now)) {
             if (await lifecycle.beginHibernate(row.id, 'backstop'))
               summary.hibernated.backstop += 1;
