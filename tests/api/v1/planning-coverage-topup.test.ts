@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET as GET_BACKLOG } from '@/app/api/v1/projects/[projectKey]/backlog/route';
 import { GET as GET_SPRINT_ITEMS } from '@/app/api/v1/sprints/[sprintId]/work-items/route';
 import { POST as INTO_BACKLOG } from '@/app/api/v1/projects/[projectKey]/backlog/work-items/route';
-import { GET as GET_READY } from '@/app/api/v1/projects/[projectKey]/ready/route';
+import { GET as GET_READY } from '@/app/api/v1/projects/[projectKey]/ready/leaves/route';
 import { encodeCollectionCursor } from '@/lib/api/v1/pagination';
 import { parseReadyFilters, presentReadyItem, UNASSIGNED } from '@/lib/api/v1/ready/schema';
 import { FILTER_ROW_CAP, FILTER_PARAM_VERSION } from '@/lib/filters/ast';
@@ -205,11 +205,11 @@ describe('top-up — the ready endpoint’s rare arms', () => {
   // catch it would escape as a bare 500.
   it('maps a v1-signed cursor the READY codec rejects to 422, not a 500', async () => {
     const caller = await writer();
-    const signedButNotAReadyPosition = encodeCollectionCursor('ready', 'not-a-ready-token');
+    const signedButNotAReadyPosition = encodeCollectionCursor('ready.leaves', 'not-a-ready-token');
 
     const res = await GET_READY(
       new Request(
-        `${BASE}/projects/${caller.projectKey}/ready?cursor=${encodeURIComponent(signedButNotAReadyPosition)}`,
+        `${BASE}/projects/${caller.projectKey}/ready/leaves?cursor=${encodeURIComponent(signedButNotAReadyPosition)}`,
         { headers: caller.headers },
       ),
       projectParams(caller.projectKey),
@@ -225,10 +225,12 @@ describe('top-up — the ready endpoint’s rare arms', () => {
   it('re-throws a NON-cursor failure from the service instead of calling it a bad cursor', async () => {
     const caller = await writer();
     const boom = new Error('the database fell over');
-    const spy = vi.spyOn(workItemsService, 'listReady').mockRejectedValueOnce(boom);
+    const spy = vi.spyOn(workItemsService, 'listReadyLeaves').mockRejectedValueOnce(boom);
 
     const res = await GET_READY(
-      new Request(`${BASE}/projects/${caller.projectKey}/ready`, { headers: caller.headers }),
+      new Request(`${BASE}/projects/${caller.projectKey}/ready/leaves`, {
+        headers: caller.headers,
+      }),
       projectParams(caller.projectKey),
     );
 
@@ -244,7 +246,7 @@ describe('top-up — the ready endpoint’s rare arms', () => {
     const caller = await writer();
 
     const res = await GET_READY(
-      new Request(`${BASE}/projects/NOPE/ready`, { headers: caller.headers }),
+      new Request(`${BASE}/projects/NOPE/ready/leaves`, { headers: caller.headers }),
       projectParams('NOPE'),
     );
 
@@ -274,7 +276,9 @@ describe('top-up — the ready endpoint’s rare arms', () => {
     }
 
     const res = await GET_READY(
-      new Request(`${BASE}/projects/${caller.projectKey}/ready`, { headers: caller.headers }),
+      new Request(`${BASE}/projects/${caller.projectKey}/ready/leaves`, {
+        headers: caller.headers,
+      }),
       projectParams(caller.projectKey),
     );
 
@@ -303,7 +307,7 @@ describe('top-up — the ready endpoint’s rare arms', () => {
 
     const first = (await (
       await GET_READY(
-        new Request(`${BASE}/projects/${caller.projectKey}/ready?limit=1`, {
+        new Request(`${BASE}/projects/${caller.projectKey}/ready/leaves?limit=1`, {
           headers: caller.headers,
         }),
         projectParams(caller.projectKey),
@@ -312,7 +316,7 @@ describe('top-up — the ready endpoint’s rare arms', () => {
 
     const res = await GET_READY(
       new Request(
-        `${BASE}/projects/${caller.projectKey}/ready?limit=1&cursor=${encodeURIComponent(first.nextCursor as string)}`,
+        `${BASE}/projects/${caller.projectKey}/ready/leaves?limit=1&cursor=${encodeURIComponent(first.nextCursor as string)}`,
         { headers: caller.headers },
       ),
       projectParams(caller.projectKey),
@@ -334,7 +338,7 @@ describe('top-up — the ready endpoint’s rare arms', () => {
     );
 
     const res = await GET_READY(
-      new Request(`${BASE}/projects/${caller.projectKey}/ready?priority=highest`, {
+      new Request(`${BASE}/projects/${caller.projectKey}/ready/leaves?priority=highest`, {
         headers: caller.headers,
       }),
       projectParams(caller.projectKey),
@@ -350,7 +354,7 @@ describe('top-up — the ready endpoint’s rare arms', () => {
     const caller = await writer();
 
     const res = await GET_READY(
-      new Request(`${BASE}/projects/${caller.projectKey}/ready?priority=nonsense`, {
+      new Request(`${BASE}/projects/${caller.projectKey}/ready/leaves?priority=nonsense`, {
         headers: caller.headers,
       }),
       projectParams(caller.projectKey),
@@ -369,9 +373,12 @@ describe('top-up — the ready endpoint’s rare arms', () => {
     await workItemsService.updateWorkItem(item.id, { assigneeId: caller.user.id }, caller.ctx);
 
     const res = await GET_READY(
-      new Request(`${BASE}/projects/${caller.projectKey}/ready?assigneeId=${caller.user.id}`, {
-        headers: caller.headers,
-      }),
+      new Request(
+        `${BASE}/projects/${caller.projectKey}/ready/leaves?assigneeId=${caller.user.id}`,
+        {
+          headers: caller.headers,
+        },
+      ),
       projectParams(caller.projectKey),
     );
 

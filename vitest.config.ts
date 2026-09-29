@@ -1750,7 +1750,6 @@ export default defineConfig({
         'app/api/v1/projects/[projectKey]/sprints/route.ts',
         'app/api/v1/projects/[projectKey]/backlog/route.ts',
         'app/api/v1/projects/[projectKey]/backlog/work-items/route.ts',
-        'app/api/v1/projects/[projectKey]/ready/route.ts',
         'app/api/v1/sprints/[sprintId]/route.ts',
         'app/api/v1/sprints/[sprintId]/start/route.ts',
         'app/api/v1/sprints/[sprintId]/complete/route.ts',
@@ -4562,11 +4561,6 @@ export default defineConfig({
           lines: 90,
         },
         'app/api/v1/projects/[projectKey]/backlog/work-items/route.ts': {
-          branches: 90,
-          functions: 90,
-          lines: 90,
-        },
-        'app/api/v1/projects/[projectKey]/ready/route.ts': {
           branches: 90,
           functions: 90,
           lines: 90,

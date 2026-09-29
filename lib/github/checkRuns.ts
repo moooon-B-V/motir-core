@@ -326,6 +326,9 @@ export interface ReportedCheckRun {
    *  about its failing check (MOTIR-6848). */
   url: string | null;
   completedAt: Date | null;
+  /** A suite's OWN roll-up row rather than a check (MOTIR-6274) — set only by
+   *  `readCommitActionsSuites`, never by the check-run read. Omitted = a check. */
+  suiteAggregate?: boolean;
 }
 
 function completedAtOf(raw: unknown): Date | null {
@@ -431,4 +434,113 @@ export async function readCommitCheckRuns(
   }
 
   return collected;
+}
+
+// ── READING THE COMMIT'S ACTIONS WORKFLOW RUNS (MOTIR-6946) ─────────────────
+//
+// The check-run read above cannot see a workflow run that GitHub has CREATED but
+// that has not created a job yet — and that state is not rare. motir-core's
+// `ci.yml` carries a workflow-level `concurrency` group, so every push to an open
+// pull request queues the new CI run behind the cancellation of the previous
+// head's run; on moooon-B-V/motir-core#3261 @ `688ce704` the CI run existed for
+// 86 s with ZERO check runs, the acceptance lane settled green inside that gap,
+// and the recorded set's claim to be whole was confirmed by a host read that
+// could not see the missing workflow. The approve-to-merge question was raised
+// over commits whose test suite had not started.
+//
+// GitHub DID know: the run's check SUITE exists from the moment the run is
+// created. So this reads the commit's check suites and reports every GitHub
+// Actions one as a suite roll-up row — the SAME row a `check_suite` delivery
+// records (`checkName` = the App slug, the suite id, `suiteAggregate`), so a
+// row written from here is indistinguishable from the delivery that settles it
+// and the ordinary `check_suite` `completed` webhook upserts it terminal.
+//
+// ⚠️ ONLY THE `github-actions` APP, deliberately. Third-party Apps (Vercel,
+// Sentry, Claude on the very commit above) create a suite on every push and
+// leave it `queued` for ever with no runs; counting them would hold every card.
+// An Actions suite exists only for a workflow that TRIGGERED — motir-core has
+// ~20 workflows and that commit carried three Actions suites — so a suite here
+// is a workflow run that will report.
+//
+// ⚠️ AND WHY NOT `GET /actions/runs?head_sha=`, which names the workflow. The
+// user-facing App (`motir-integration`) holds `checks: read` and NOT
+// `actions: read` (`docs/decisions/unlinked-pull-request-check.md`), so that
+// read is refused on exactly the repositories this defect was seen on — and a
+// refusal here degrades to "no answer", which would have made the fix inert
+// while every test that stubs the read stayed green. `checks: read` covers
+// `/commits/{sha}/check-suites`.
+
+/** The App slug GitHub Actions reports its check suites under. */
+export const ACTIONS_APP_SLUG = 'github-actions';
+
+/** Every GitHub Actions check suite GitHub holds for one commit, as suite
+ *  roll-up rows — or `null` when the set could not be established (the same
+ *  `null`-is-not-empty contract as `readCommitCheckRuns`). A suite that is not
+ *  `completed` is `pending`, whatever conclusion the payload carries: the rule
+ *  the `check_suite` webhook parser applies. */
+export async function readCommitActionsSuites(
+  installationId: string,
+  owner: string,
+  name: string,
+  headSha: string,
+): Promise<ReportedCheckRun[] | null> {
+  let token: string;
+  const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+  try {
+    ({ token } = await mintInstallationToken(installationId, role));
+  } catch {
+    return null;
+  }
+
+  const base = repoUrl(owner, name);
+  if (base === null || !COMMIT_SHA.test(headSha)) return null;
+
+  let res: Response;
+  try {
+    // One page: a commit carries one suite per triggered workflow run plus one per
+    // App — a handful, never a hundred. More than one page is "no answer", like
+    // the check-run cap, rather than a truncated set.
+    res = await fetch(`${base}/commits/${headSha}/check-suites?per_page=${PER_PAGE}`, {
+      headers: headers(token),
+    });
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+
+  let body: GithubJson | null;
+  try {
+    body = (await res.json()) as GithubJson;
+  } catch {
+    return null;
+  }
+  const totalCount = body?.['total_count'];
+  if (typeof totalCount !== 'number' || totalCount > PER_PAGE) return null;
+
+  const suites = Array.isArray(body?.['check_suites']) ? (body['check_suites'] as unknown[]) : [];
+  const rows: ReportedCheckRun[] = [];
+  for (const raw of suites) {
+    const suite = raw as GithubJson | null;
+    if (!suite || typeof suite !== 'object') continue;
+    const app = suite['app'];
+    const slug = typeof app === 'object' && app !== null ? (app as GithubJson)['slug'] : null;
+    if (slug !== ACTIONS_APP_SLUG) continue;
+    const id = suite['id'];
+    if (typeof id !== 'number' && typeof id !== 'string') continue;
+    const status = typeof suite['status'] === 'string' ? suite['status'] : null;
+    const conclusion = typeof suite['conclusion'] === 'string' ? suite['conclusion'] : null;
+    rows.push({
+      checkName: ACTIONS_APP_SLUG,
+      checkSuiteId: String(id),
+      conclusion:
+        status !== 'completed' ? 'pending' : mapGithubCiConclusion(conclusion ?? 'neutral'),
+      // A roll-up is never a merge-queue exit's failing CHECK, which is what the
+      // raw conclusion is read for (`pickFailingCheck` skips a null one).
+      rawConclusion: null,
+      url: null,
+      completedAt: null,
+      suiteAggregate: true,
+    });
+  }
+  return rows;
 }

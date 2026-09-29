@@ -383,21 +383,18 @@ describe('workspaceMembershipRepository — the workspace-role writers and reade
     expect(statements).toEqual(['update']);
   });
 
-  it('countManagers counts workspace_role = manager rows only — never the legacy owner', async () => {
+  it('countManagers counts workspace_role = manager rows only', async () => {
     const fx = await makeTenants();
     // The creator is written as a Manager since MOTIR-6462; demote W1's rows to
-    // Member while the legacy column still says `owner`.
+    // Member.
     await adminDb.workspaceMembership.updateMany({
       where: { workspaceId: fx.w1 },
       data: { workspaceRole: 'member' },
     });
-    // The legacy value, written raw — nothing in the app writes it (MOTIR-6562).
-    await adminDb.$executeRaw`
-      UPDATE "workspace_membership" SET "role" = 'owner' WHERE "workspaceId" = ${fx.w1}`;
     const before = await adminDb.$transaction((tx) =>
       workspaceMembershipRepository.countManagers(fx.w1, tx),
     );
-    // The W1 owner is `role = 'owner'` with `workspace_role = 'member'`: not counted.
+    // The W1 founder is `workspace_role = 'member'` now: not counted.
     expect(before).toBe(0);
     await adminDb.$transaction(async (tx) => {
       await workspaceMembershipRepository.setWorkspaceRole(

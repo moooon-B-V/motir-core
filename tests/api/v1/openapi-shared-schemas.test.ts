@@ -432,7 +432,6 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     ['moveWorkItemsToBacklog', 'move_to_backlog'],
     ['listProjects', 'list_projects'],
     ['listProjectSprints', 'list_sprints'],
-    ['getProjectReadySet', 'list_ready'],
     // MOTIR-6832 — the lanes serve the same set the tool's `lane` argument reads.
     ['getProjectReadyLeaves', 'list_ready'],
     ['getProjectReadyContainers', 'list_ready'],
@@ -489,8 +488,9 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     // `POST …/work-items/{key}/continue` (`claimWorkItemContinue`), both
     // `work_item:edit`. 69 with MOTIR-6832's THREE ready lanes
     // (`getProjectReadyLeaves`, `getProjectReadyContainers`,
-    // `getProjectReadyBugs`), all `project:browse` like `getProjectReadySet`.
-    expect(V1_OPERATIONS.length).toBe(69);
+    // `getProjectReadyBugs`), all `project:browse`. 68 once MOTIR-6841 deleted
+    // the flat `GET …/ready` the lanes replaced.
+    expect(V1_OPERATIONS.length).toBe(68);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

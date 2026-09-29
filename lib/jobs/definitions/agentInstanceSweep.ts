@@ -1,17 +1,17 @@
 import { defineJob } from '../defineJob';
 
 // THE AGENT-INSTANCE SWEEP (Story MOTIR-6860 · MOTIR-6873) — a thin caller over
-// `agentInstanceSweepService.sweep`, whose header carries the argument and the
-// one deviation from `docs/decisions/agent-instances.md`: §2 names a 5-minute
-// sweep, and this runs on the clustered 30-minute cadence the job substrate
-// enforces, with the latency-critical half (the idle window) moved onto the
-// per-instance `agent-instance/idle-check` timer.
+// `agentInstanceSweepService.sweep`, whose header carries the argument. The
+// latency-critical half (the idle window) rides the per-instance
+// `agent-instance/idle-check` timer instead. `docs/decisions/agent-instances.md` §2
+// names a 5-minute sweep, which is what this runs since MOTIR-6932 retired the
+// :00/:30 cluster (AMENDMENT 1 had moved it to 30 minutes for that cluster).
 
 /**
- * Every 30 minutes, ON the cluster (`SCHEDULE_CLUSTER_MINUTES`, `[0, 30]`), so it
- * opens no new wake-minute.
+ * Every 5 minutes — the sub-hourly cadence every `system.*` job shares
+ * (`tests/jobs/schedule-cadence.test.ts`).
  */
-export const AGENT_INSTANCE_SWEEP_CRON = '0,30 * * * *';
+export const AGENT_INSTANCE_SWEEP_CRON = '*/5 * * * *';
 
 export const agentInstanceSweep = defineJob(
   {

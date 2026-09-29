@@ -48,9 +48,11 @@ const CONTRACT_VERSION_FILE = join('lib', 'api', 'v1', 'contractVersion.ts');
  * introducing log entry names it by PATH or by field rather than by
  * `operationId`, because the id-naming convention starts here.
  *
- * FROZEN. It grows only when an operation is REMOVED from it, which §8 forbids
- * without a new major, so in practice it never grows at all: a new operation is
- * named in a version entry instead. `uploadWorkItemAttachment` is deliberately
+ * FROZEN. It changes only when an operation is REMOVED, which §8 forbids
+ * without a new major, so in practice it never changes at all: a new operation is
+ * named in a version entry instead. The ONE removal is the flat ready set
+ * (`GET …/ready`), deleted by MOTIR-6841 on the user's 2026-09-28 decision once
+ * the released CLI read only the lanes — recorded in the `1.55.0` entry. `uploadWorkItemAttachment` is deliberately
  * ABSENT — it is this card's own subject, and proving it through the log is the
  * point.
  */
@@ -70,7 +72,6 @@ const OPERATIONS_PREDATING_THE_GUARD: readonly string[] = [
   'getPlanStatus',
   'getProject',
   'getProjectBacklog',
-  'getProjectReadySet',
   'getSprint',
   'getWorkItem',
   'getWorkItemActivity',

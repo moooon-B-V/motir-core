@@ -8,7 +8,6 @@ import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
 import { ensureWorkWaitsOn } from '@/tests/helpers/designWaits';
 import { truncateAuthTables } from './helpers/db';
-import { legacyToWorkspaceRole } from '@/lib/workspaces/roles';
 
 // THE AUDIT SET IS WRITTEN (Story MOTIR-4778 · Bug MOTIR-5046; ADR
 // docs/decisions/approval-gates.md §6a), against a REAL Postgres.
@@ -147,7 +146,7 @@ async function member(role: 'member' | 'admin') {
     data: {
       userId: user.id,
       workspaceId: fx.workspaceId,
-      workspaceRole: legacyToWorkspaceRole(role),
+      workspaceRole: role === 'admin' ? 'manager' : 'member',
     },
   });
   return user;

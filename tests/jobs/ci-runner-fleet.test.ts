@@ -175,34 +175,29 @@ describe('all three fleet jobs are REGISTERED and reach the service through the 
 });
 
 describe('the schedules say what they can and cannot promise', () => {
-  it('the provision sweep is a BACKSTOP on the cluster, and says so (§6, MOTIR-3314)', () => {
+  it('the provision sweep is a BACKSTOP every 5 minutes, and says so (§6, MOTIR-6932)', () => {
     // §6 budgets p50 ≤ 30s webhook-to-start, and no cron can meet that — which is
     // why the hot path is the `workflow_job` webhook (MOTIR-1996) and a DEFERRED
     // intent is dispatched by the admission wake (MOTIR-2852). This schedule
-    // covers only a dispatch dropped in transit, so its cadence is priced against
-    // the wake bill rather than against admission latency.
-    expect(CI_RUNNER_PROVISION_SWEEP_CRON).toBe('0,30 * * * *');
+    // covers only a dispatch dropped in transit; it runs at the sub-hourly cadence
+    // every `system.*` backstop shares since the database became always-on.
+    expect(CI_RUNNER_PROVISION_SWEEP_CRON).toBe('*/5 * * * *');
     const config = configFor({
       id: 'system.ci-runner-provision-sweep',
       cron: CI_RUNNER_PROVISION_SWEEP_CRON,
       catchUp: 'latest',
       retryPolicy: 'idempotent',
     });
-    expect(config.cron).toBe('0,30 * * * *');
+    expect(config.cron).toBe('*/5 * * * *');
     expect(config.trigger).toBeUndefined();
   });
 
-  it('the reaper runs every 30 minutes, ON the cluster (MOTIR-3314)', () => {
-    // ⚠️ THIS ASSERTION IS INVERTED FROM WHAT IT WAS. It read "clear of the top of
-    // the hour" and asserted the minute field held six offsets and NOT '0' —
-    // encoding the load-spreading rationale that a suspend-when-idle compute
-    // turns into a bill. The window between an orphan appearing and being
-    // destroyed is still billed, but so is every wake spent looking for one; the
-    // trade is argued at the constant. The gap itself is asserted by
-    // `tests/jobs/schedule-cluster.test.ts` over the whole table, so what belongs
-    // here is only this job's own shape.
-    expect(CI_RUNNER_REAP_CRON).toBe('0,30 * * * *');
-    expect(CI_RUNNER_REAP_CRON.split(' ')[0]!.split(',')).toEqual(['0', '30']);
+  it('the reaper runs every 5 minutes (MOTIR-6932)', () => {
+    // It sat on the :00/:30 cluster (MOTIR-3314) while a suspend-when-idle
+    // compute made every wake a bill; the database is always on now, so an
+    // orphan is looked for every 5 minutes. The cadence invariant over the whole
+    // table is `tests/jobs/schedule-cadence.test.ts`; this is the job's own shape.
+    expect(CI_RUNNER_REAP_CRON).toBe('*/5 * * * *');
   });
 });
 

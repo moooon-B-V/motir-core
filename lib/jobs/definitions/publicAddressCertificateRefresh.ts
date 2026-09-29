@@ -10,38 +10,33 @@ import { defineJob } from '../defineJob';
 // last wrote, which is a permanent "pending" for a domain that went live an hour
 // ago and a confident "live" for one that expired last week.
 //
-// ── ⚠️ THE CADENCE IS NOT THE CARD'S RECOMMENDATION, AND THAT IS DELIBERATE ──
+// ── THE CADENCE IS THE CARD'S RECOMMENDATION ─────────────────────────────
 //
 // MOTIR-4219 recommends "every 5 minutes for pending_certificate / verifying,
-// hourly for issued". That is not available here, and the constraint is a
-// shipped one rather than a preference: `lib/jobs/schedules.ts` clusters every
-// `system.*` cron onto `SCHEDULE_CLUSTER_MINUTES` — [0, 30] — because this
-// deployment's compute SUSPENDS WHEN IDLE, so each distinct wake-minute is a
-// cost paid whether or not the handler does anything. Its own words: "A job
-// needing finer granularity than 30 minutes is a decision to bring back to
-// [`application-hosting.md`] §21, not a minute to pick." That decision is above
-// this card, and `tests/jobs/schedule-cluster.test.ts` fails the build for
-// anyone who takes it by accident.
+// hourly for issued", and since MOTIR-6932 that is what runs: the sweep fires
+// every 5 minutes, the in-flight statuses are re-checked on every sweep and
+// `issued` hourly (the staleness windows in `publicAddressCertificatesService`).
+// Until then it sat on the :00/:30 cluster, which existed so a suspend-when-idle
+// database could sleep between ticks; MOTIR-6893 retired that constraint, because
+// the database is always on (`docs/decisions/always-on-database-job-cadence.md`).
 //
-// So: BOTH clustered minutes, which is the finest granularity the constraint
-// allows — a domain reaches `issued` within thirty minutes of the platform
-// issuing it, rather than five. The customer-visible cost is bounded and small:
-// the pane's *Check again* control (MOTIR-4229) drives the lifecycle's own
+// So a domain reaches `issued` within five minutes of the platform issuing it.
+// The pane's *Check again* control (MOTIR-4229) still drives the lifecycle's own
 // verify path on demand, so a customer watching their domain does not wait for
 // this sweep at all. This job is the BACKSTOP — for the customer who closed the
 // tab, and for the renewal and expiry nobody is watching.
 //
 // ── One cadence, not two ─────────────────────────────────────────────────
 //
-// The card splits the statuses across two cadences. With a single allowed
-// granularity that split buys nothing, so the job sweeps every status it owns on
+// The card splits the statuses across two cadences. With one schedule that
+// split buys nothing, so the job sweeps every status it owns on
 // one schedule and the `staleness` window per status is what separates them:
 // a `pending_certificate` row is re-checked whenever it is older than the
 // sweep interval, an `issued` row only hourly. The cost is one query per status,
 // not one wake per cadence.
 
-/** Both clustered minutes — the finest cadence `schedules.ts` permits. */
-export const PUBLIC_ADDRESS_CERTIFICATE_REFRESH_CRON = '0,30 * * * *';
+/** Every 5 minutes — the recommended cadence for the in-flight statuses. */
+export const PUBLIC_ADDRESS_CERTIFICATE_REFRESH_CRON = '*/5 * * * *';
 
 export const publicAddressCertificateRefresh = defineJob(
   {

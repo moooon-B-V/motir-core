@@ -103,7 +103,7 @@ function absolutizeRefs(node: Json): Json {
  * `v1` and obliges a client to tolerate unknown fields. Compiled closed, every
  * published CLI rejected every response shape that had grown a field since it
  * was generated. `@motir/cli@0.5.0` (contract `1.25.0`) failed on
- * `getProjectReadySet` the day `ReadyItem.difficulty` shipped in `1.38.0`.
+ * the ready set (`GET …/ready`, since deleted) the day `ReadyItem.difficulty` shipped in `1.38.0`.
  *
  * Only the boolean `false` goes. A schema-valued `additionalProperties` (a
  * record's value type) still validates, and required fields, types and enums

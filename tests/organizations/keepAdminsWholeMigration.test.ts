@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ensureLegacyRoleStorage } from '../helpers/legacyRoleStorage';
 import { adminDb } from '../helpers/adminDb';
 import {
   relaxWorkspaceRoleNotNull,
@@ -35,6 +36,9 @@ const MIGRATION = readFileSync(
 
 beforeEach(async () => {
   await truncateAuthTables();
+  // The migration under test reads the legacy role storage MOTIR-6569 dropped;
+  // rebuild it for the test (tests/helpers/legacyRoleStorage.ts).
+  await ensureLegacyRoleStorage();
 });
 
 afterEach(restoreWorkspaceRoleNotNull);
@@ -44,6 +48,8 @@ afterAll(async () => {
 });
 
 async function replay(): Promise<void> {
+  // The restore below drops the legacy storage again, so each replay rebuilds it.
+  await ensureLegacyRoleStorage();
   await relaxWorkspaceRoleNotNull();
   await adminDb.$executeRawUnsafe(MIGRATION);
   await restoreWorkspaceRoleNotNull();

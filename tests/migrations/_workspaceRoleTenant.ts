@@ -3,7 +3,11 @@ import path from 'node:path';
 import { Client } from 'pg';
 import { adminDb } from '../helpers/adminDb';
 import { dropLegacyAccessLevel, ensureLegacyAccessLevel } from '../helpers/legacyProjectAccess';
-import { insertLegacyProjectRole } from '../helpers/legacyProjectRoles';
+import {
+  dropLegacyRoleStorage,
+  ensureLegacyRoleStorage,
+  insertLegacyProjectRole,
+} from '../helpers/legacyRoleStorage';
 import { currentWorkerAdminUrl } from '../helpers/parallelDb';
 
 // The fixture tenant the workspace-role migrations are proven over (Story
@@ -37,9 +41,14 @@ export async function runMigrationFile(dir: string, transform: (sql: string) => 
 // then SET NOT NULL) — so the next file on this worker gets the real schema back
 // even when a test fails, and that migration is exercised on every restore.
 //
+// They also ran over the LEGACY role storage MOTIR-6569 has since dropped — the
+// legacy columns are what they read — so `makeTenant` rebuilds it
+// (`ensureLegacyRoleStorage`), and the restore drops it again after the NOT NULL
+// migration, which reads the legacy column too, has run.
+//
 // The never-wider check also reads `project."accessLevel"`, which MOTIR-6694 has
-// since dropped, so `makeTenant` rebuilds it (`ensureLegacyAccessLevel`) and the
-// restore drops it again (`dropLegacyAccessLevel`).
+// since dropped, so `makeTenant` rebuilds that too (`ensureLegacyAccessLevel`) and
+// the restore drops it again (`dropLegacyAccessLevel`).
 const NOT_NULL_MIGRATION = '20260927090000_workspace_role_not_null';
 
 /** Drop MOTIR-6561's NOT NULL on this worker's database, so pre-migration rows can be written. */
@@ -50,11 +59,14 @@ export async function relaxWorkspaceRoleNotNull(): Promise<void> {
 }
 
 /**
- * Put MOTIR-6561's NOT NULL back, and MOTIR-6694's drop of the legacy access
- * level after it — call it from an `afterEach` in every file using `makeTenant`.
+ * Put MOTIR-6561's NOT NULL back, then MOTIR-6569's drop of the legacy role
+ * storage and MOTIR-6694's drop of the legacy access level after it — call it
+ * from an `afterEach` in every file using `makeTenant`.
  */
 export async function restoreWorkspaceRoleNotNull(): Promise<void> {
+  await ensureLegacyRoleStorage();
   await runMigrationFile(NOT_NULL_MIGRATION);
+  await dropLegacyRoleStorage();
   await dropLegacyAccessLevel();
 }
 
@@ -127,6 +139,7 @@ export async function makeTenant(): Promise<Tenant> {
     admin: 'admin',
     viewer: 'viewer',
   };
+  await ensureLegacyRoleStorage();
   await ensureLegacyAccessLevel();
   await relaxWorkspaceRoleNotNull();
   for (const [label, id] of Object.entries(people)) {

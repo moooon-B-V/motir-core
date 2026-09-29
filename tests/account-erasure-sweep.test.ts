@@ -4,7 +4,6 @@ import { db } from '@/lib/db';
 import { JobTestEngine } from './helpers/jobs';
 import { jobDefinitions } from '@/lib/jobs/registry';
 import { jobSchedules } from '@/lib/jobs/schedules';
-import { SCHEDULE_CLUSTER_MINUTES } from '@/lib/jobs/schedules';
 import {
   ACCOUNT_ERASURE_SWEEP_CRON,
   accountErasureSweep,
@@ -196,12 +195,11 @@ describe('the sweep is a registered cron job on a clustered minute', () => {
     expect(schedule?.cron).toBe(ACCOUNT_ERASURE_SWEEP_CRON);
   });
 
-  it('fires on a CLUSTERED minute, so it opens no new wake-minute', () => {
-    // `lib/jobs/schedules.ts`'s cluster invariant: the bill is a property of the
-    // SET of schedules, and a job on a fresh minute splits a quiet gap. Asserted
-    // here as well as in the cluster suite so this job's own file carries it.
-    const minute = Number(ACCOUNT_ERASURE_SWEEP_CRON.split(' ')[0]);
-    expect(SCHEDULE_CLUSTER_MINUTES).toContain(minute);
+  it('fires once a day, at 03:00', () => {
+    // A daily job, so outside the sub-hourly cadence invariant
+    // (`tests/jobs/schedule-cadence.test.ts`); pinned here so this job's own file
+    // carries its actual cadence.
+    expect(ACCOUNT_ERASURE_SWEEP_CRON).toBe('0 3 * * *');
   });
 });
 

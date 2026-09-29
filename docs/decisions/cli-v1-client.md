@@ -468,6 +468,24 @@ differently:
   here: the lazy probe is correct on its own, and the header, when it lands,
   becomes a fast path in front of it rather than a replacement for it.
 
+## Amendment 1 — the flat ready read is deleted; the CLI reads the three lanes (MOTIR-6841)
+
+`getProjectReadySet` (`GET /api/v1/projects/{projectKey}/ready`), which Q1 and the
+generated client above name, no longer exists. Story MOTIR-6829 replaced it with
+three lane operations — `getProjectReadyLeaves`, `getProjectReadyContainers` and
+`getProjectReadyBugs` — and the CLI moved every ready read onto them
+(MOTIR-6835). `@motir/cli` 0.8.0 and the `cli-v0.8.0` sandbox images released that
+move (MOTIR-6840), after which MOTIR-6841 deleted the operation, its route and its
+run-token grant (contract `1.55.0`), and regenerated `packages/cli/src/api/` without
+it.
+
+The user decided on 2026-09-28 that it is deleted rather than deprecated, because
+no remaining caller reads it. That overrides `public-api-conventions.md` §8's
+additive-only promise for this one operation. Q3's skew table is unchanged by it: a
+CLI older than 0.8.0 talking to a `1.55.0` server has its ready read answered
+404 and must be upgraded. Q1's sentence about `@motir/cli@0.5.0` stays as
+the history it records.
+
 ## Context refs
 
 - `docs/decisions/public-api-conventions.md` — §5 pagination, §6 rate-limit

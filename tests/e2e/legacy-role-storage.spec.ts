@@ -20,7 +20,8 @@ import { INVITE_IDENTIFIER_PREFIX } from '@/lib/services/workspaceInvitesService
 //
 //   1. an org Admin creates a workspace from the product's own control → Manager;
 //   2. an invite minted by THIS build, accepted → Member;
-//   3. an invite minted BEFORE the release (legacy `role` key only) → Member;
+//   3. an invite minted BEFORE MOTIR-6562 (legacy `role` key only) → refused,
+//      since MOTIR-6569 retired the fallback that mapped it;
 //   4. the Manager makes the invitee a Viewer and adds them to a private project:
 //      it opens for them, read-only, and a direct write is refused;
 //   5. an unknown / expired token and an outsider get the app's refused states.
@@ -185,7 +186,7 @@ test('2 · an invite minted by this build, accepted, lands a Member', async ({ p
   await expect(picker(page, seed.iris.name)).toContainText('Member');
 });
 
-test('3 · an invite minted BEFORE the release (legacy `role` only) still lands a Member', async ({
+test('3 · an invite minted BEFORE MOTIR-6562 (legacy `role` only) is refused, and lands nobody', async ({
   page,
 }) => {
   const token = `lrs-pre-release-${Date.now().toString(36)}`;
@@ -203,13 +204,16 @@ test('3 · an invite minted BEFORE the release (legacy `role` only) still lands 
     },
   });
 
+  // Every such token lapsed after 7 days (`INVITE_EXPIRY_MS`), so MOTIR-6569
+  // retired the fallback: the payload no longer parses, and the page shows the
+  // same invalid-invite state as an unknown token.
   await signInAs(page, seed.pip.email);
-  await acceptInvite(page, token);
-  await expect.poll(() => committedRole(seed.pip.id)).toBe('member');
-
-  await signInAs(page, seed.maya.email);
-  await openMembers(page);
-  await expect(picker(page, seed.pip.name)).toContainText('Member');
+  const res = await page.goto(`/invite/accept?token=${encodeURIComponent(token)}`);
+  expect(res?.status()).toBeLessThan(500);
+  await expect(
+    page.getByRole('heading', { name: 'This invite has already been used' }),
+  ).toBeVisible();
+  expect(await committedRole(seed.pip.id)).toBeUndefined();
 });
 
 test('4 · made a Viewer and added to a private project, the invitee reads it and cannot write', async ({
@@ -297,7 +301,6 @@ test('5 · an unknown or expired token shows the invalid-invite state, never a 5
         workspaceId: harborId,
         email: seed.oscar.email,
         workspaceRole: 'member',
-        role: 'member',
         inviterUserId: seed.maya.id,
       }),
       expiresAt: new Date(Date.now() - 60 * 1000),
