@@ -49,11 +49,11 @@ describe('assignableMembersService.list — a private project', () => {
       actorUserId: manager.id,
       name: 'Vault',
     });
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: project.identifier,
       actorUserId: manager.id,
       ctx,
-      level: 'private',
+      mode: 'members',
     });
     // Going private adds nobody (Story MOTIR-6169): the viewer is ADDED to the
     // project explicitly.

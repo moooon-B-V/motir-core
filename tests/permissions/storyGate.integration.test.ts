@@ -158,11 +158,11 @@ const DOMAIN_WRITES: {
     domain: 'access level',
     key: 'project:manage_access',
     write: (s, ctx) =>
-      projectMembersService.setAccessLevel({
+      projectMembersService.setAccessMode({
         key: s.projectKey,
         actorUserId: ctx.userId,
         ctx,
-        level: 'private',
+        mode: 'members',
       }),
   },
   {

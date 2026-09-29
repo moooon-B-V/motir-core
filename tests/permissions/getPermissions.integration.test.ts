@@ -22,7 +22,7 @@ import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { grantablePermissionKeys } from '@/lib/permissions/grantable';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { setProjectAccess } from '@/tests/helpers/projectAccess';
+import { modeForLegacyLevel, setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // `projectAccessService.getPermissions` / `getRoleCatalog` (Story MOTIR-2255 ·
 // Subtask MOTIR-2262) against REAL Postgres — real membership rows, resolved
@@ -88,11 +88,11 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
     // it at the data layer exactly as the sibling suite does.
     await setProjectAccess(adminDb, project.id, 'public');
   } else {
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level,
+      mode: modeForLegacyLevel(level),
     });
   }
 

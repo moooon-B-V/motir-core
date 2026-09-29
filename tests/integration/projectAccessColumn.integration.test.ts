@@ -1,7 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { Prisma, type ProjectAccessLevel, type ProjectAccessMode } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { levelForMode } from '@/lib/projects/accessMode';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectTagRepository } from '@/lib/repositories/projectTagRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -15,6 +14,7 @@ import { adminDb } from '../helpers/adminDb';
 import { runAsCloudBuild } from '../helpers/cloudBuild';
 import { truncateAuthTables } from '../helpers/db';
 import { projectAccessData } from '../helpers/projectAccess';
+import { readLegacyAccessLevel } from '../helpers/legacyProjectAccess';
 
 // THE ACCESS-COLUMN INTEGRATION GATE (Story MOTIR-6554 · Subtask MOTIR-6688).
 //
@@ -250,7 +250,10 @@ describe('creation', () => {
       name: 'Created unset',
     });
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: dto.id } });
-    expect([row.accessMode, row.accessLevel]).toEqual(['workspace', 'open']);
+    expect([row.accessMode, await readLegacyAccessLevel(adminDb, row.id)]).toEqual([
+      'workspace',
+      'open',
+    ]);
     expect(
       await projectAccessService.getCapabilities(row.id, {
         userId: full.id,
@@ -265,8 +268,9 @@ describe('creation', () => {
 });
 
 describe('the setter', () => {
-  it('public → members → workspace shows at once on the listings and the policies, writing levelForMode beside each', async () => {
+  it('public → members → workspace shows at once on the listings and the policies, and never writes the retired level (MOTIR-6692)', async () => {
     const s = await seedSurface('workspace');
+    const levelBefore = await readLegacyAccessLevel(adminDb, s.projectId);
     const ctx = { userId: s.ownerId, workspaceId: s.workspaceId };
     for (const [mode, visible] of [
       ['public', true],
@@ -280,7 +284,8 @@ describe('the setter', () => {
         mode,
       });
       const row = await adminDb.project.findUniqueOrThrow({ where: { id: s.projectId } });
-      expect([row.accessMode, row.accessLevel], mode).toEqual([mode, levelForMode(mode)]);
+      expect(row.accessMode, mode).toBe(mode);
+      expect(await readLegacyAccessLevel(adminDb, s.projectId), mode).toBe(levelBefore);
       expect(await publicPaths(s), mode).toEqual(visible ? VISIBLE : HIDDEN);
       expect(await policyReads(s), mode).toEqual(ALL_SEVEN(visible ? 1 : 0));
     }

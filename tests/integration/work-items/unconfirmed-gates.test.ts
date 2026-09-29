@@ -58,11 +58,11 @@ async function makeFixture(label: string): Promise<Fixture> {
   const workspaceId = ws.workspace.id;
   const project = await createTestProject({ workspaceId, actorUserId: owner.id });
   const ownerCtx: ServiceContext = { userId: owner.id, workspaceId };
-  await projectMembersService.setAccessLevel({
+  await projectMembersService.setAccessMode({
     key: project.identifier,
     actorUserId: owner.id,
     ctx: ownerCtx,
-    level: 'private',
+    mode: 'members',
   });
 
   async function actor(slug: string, role: 'member' | null): Promise<ServiceContext> {

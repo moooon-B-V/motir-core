@@ -423,11 +423,11 @@ describe('labelsService.resolveByIds — the filter-builder referenced-label rea
 
   it('hides a PRIVATE project from a non-member as 404 (browse-gated, not edit-gated)', async () => {
     const s = await buildScenario();
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,
       ctx: s.fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     const outsider = await createTestUser({ email: 'late-resolve@ex.com', name: 'Late Joiner' });
     await workspacesService.addMember({ userId: outsider.id, workspaceId: s.fx.workspaceId });
@@ -475,11 +475,11 @@ describe('labelsService — the permission matrix', () => {
     const s = await buildScenario();
     // Flip private, then add the late joiner — going private adds nobody
     // (Story MOTIR-6169), so they are not a project member.
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,
       ctx: s.fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     const outsider = await createTestUser({ email: 'late@ex.com', name: 'Late Joiner' });
     await workspacesService.addMember({ userId: outsider.id, workspaceId: s.fx.workspaceId });

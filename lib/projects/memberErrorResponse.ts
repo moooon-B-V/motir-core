@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import {
   AlreadyProjectMemberError,
-  InvalidAccessLevelError,
   InvalidAccessModeError,
   NotAProjectMemberError,
   NotProjectAdminError,
@@ -24,8 +23,7 @@ import {
 //       arrives as PermissionDeniedError carrying the key. NotProjectAdminError
 //       stays mapped: `assertPermission` still throws it for `project:administer`,
 //       and other callers of this mapper may raise it.)
-//   TargetNotWorkspaceMemberError / InvalidAccessLevelError
-//       / InvalidAccessModeError
+//   TargetNotWorkspaceMemberError / InvalidAccessModeError
 //       / PublicAccessUnavailableError                   → 400
 //   AlreadyProjectMemberError                            → 409
 //
@@ -46,12 +44,11 @@ export function projectMemberErrorResponse(err: unknown): NextResponse | null {
   }
   if (
     err instanceof TargetNotWorkspaceMemberError ||
-    err instanceof InvalidAccessLevelError ||
     err instanceof InvalidAccessModeError ||
     // MOTIR-4035 — `public` is not an assignable level on a self-hosted build.
     // 400 rather than 404, and the difference is the SUBJECT: the public READ
     // surface is absent, so it answers 404 (there is no door); this route is
-    // present and still sets open / limited / private, and refuses ONE argument.
+    // present and still sets `workspace` / `members`, and refuses ONE argument.
     // A 404 here would say the project does not exist to a caller who is looking
     // at it, which is a worse lie than the one it would be avoiding.
     err instanceof PublicAccessUnavailableError

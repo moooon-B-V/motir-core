@@ -17,6 +17,7 @@ import {
   runMigrationFile,
   type Tenant,
 } from './_workspaceRoleTenant';
+import { writeLegacyAccessLevel } from '../helpers/legacyProjectAccess';
 
 // The never-wider CHECK (Story MOTIR-6168 · Subtask MOTIR-6461) — the second
 // migration, run over the mapping's fixture tenant exactly as `migrate deploy`
@@ -106,12 +107,10 @@ describe('the literal sets', () => {
 /** The fixture tenant with a limited and a private project beside the two open ones. */
 async function tenantWithLevels(): Promise<Tenant & { p3: { id: string; identifier: string } }> {
   const t = await makeTenant();
-  await adminDb.project.update({
-    where: { id: t.p2.id },
-    // The mode beside the level is the one the mapping migration gives it (MOTIR-6686).
-    // legacy-access-level: the role migration under test reads `limited` and `private` apart.
-    data: { accessLevel: 'limited', accessMode: 'members' },
-  });
+  // The mode beside the level is the one the mapping migration gives it (MOTIR-6686).
+  await adminDb.project.update({ where: { id: t.p2.id }, data: { accessMode: 'members' } });
+  // legacy-access-level: the role migration under test reads `limited` and `private` apart.
+  await writeLegacyAccessLevel(adminDb, t.p2.id, 'limited');
   const p3 = await adminDb.project.create({
     data: {
       name: 'P3',
@@ -119,11 +118,11 @@ async function tenantWithLevels(): Promise<Tenant & { p3: { id: string; identifi
       identifier: `${t.p1.identifier}P`,
       workspaceId: t.wsId,
       // The mode beside the level is the one the mapping migration gives it (MOTIR-6686).
-      // legacy-access-level: the role migration under test reads `limited` and `private` apart.
-      accessLevel: 'private',
       accessMode: 'members',
     },
   });
+  // legacy-access-level: the role migration under test reads `limited` and `private` apart.
+  await writeLegacyAccessLevel(adminDb, p3.id, 'private');
   // Only the plain member is added to the private project.
   await adminDb.projectMembership.create({
     data: { workspaceId: t.wsId, projectId: p3.id, userId: t.people.member! },

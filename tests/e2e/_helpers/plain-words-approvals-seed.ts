@@ -285,11 +285,11 @@ export async function seedPlainWordsApprovals(slug: string): Promise<PlainWordsS
     { projectId: vault.id, kind: 'task', title: HIDDEN_TITLE, type: 'design' },
     ctx,
   );
-  await projectMembersService.setAccessLevel({
+  await projectMembersService.setAccessMode({
     key: vault.identifier,
     actorUserId: owner.userId,
     ctx,
-    level: 'private',
+    mode: 'members',
   });
   // `addMember` enrolled the reviewer in every project that existed then; this one
   // is newer, but the delete makes "not a member" true whichever order ran.

@@ -6,22 +6,31 @@ import {
   asAccessScope,
   levelForMode,
 } from '@/lib/projects/accessMode';
-import { PROJECT_ACCESS_LEVELS } from '@/lib/projects/roles';
+import type { ProjectDTO } from '@/lib/dto/projects';
 
 // The pure mappers of the access storage (Story MOTIR-6169 · MOTIR-6541): the
-// level written beside a mode while both columns are written, and the narrowing
-// guards. The mode itself is stored, never derived (MOTIR-6686).
+// DERIVED level a mode is published as on `ProjectDTO`, API v1 and MCP (nothing
+// writes the column since MOTIR-6692), and the narrowing guards. The mode itself
+// is stored, never derived (MOTIR-6686).
+
+/** Every value the DTO's derived `accessLevel` may take. */
+const DTO_ACCESS_LEVELS = [
+  'open',
+  'limited',
+  'private',
+  'public',
+] as const satisfies readonly ProjectDTO['accessLevel'][];
 
 describe('levelForMode', () => {
-  it('writes open / private / public beside workspace / members / public', () => {
+  it('derives open / private / public from workspace / members / public', () => {
     expect(levelForMode('workspace')).toBe('open');
     expect(levelForMode('members')).toBe('private');
     expect(levelForMode('public')).toBe('public');
   });
 
-  it('is total over the modes, and never writes the retired `limited`', () => {
+  it('is total over the modes, and never answers the retired `limited`', () => {
     for (const mode of PROJECT_ACCESS_MODES) {
-      expect(PROJECT_ACCESS_LEVELS).toContain(levelForMode(mode));
+      expect(DTO_ACCESS_LEVELS).toContain(levelForMode(mode));
       expect(levelForMode(mode)).not.toBe('limited');
     }
   });

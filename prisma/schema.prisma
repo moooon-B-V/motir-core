@@ -1357,11 +1357,10 @@ model Project {
   /// would overwrite a person's choice (§7's 2026-09-13 amendment).
   prMergeModeDecidedAt             DateTime?             @map("pr_merge_mode_decided_at")
   /// The RETIRED browse-access level (Story 6.4) — superseded by `accessMode`.
-  /// Still WRITTEN beside the mode by `projectRepository.setAccessMode` (through
-  /// `levelForMode`), because the previous image, serving during this release's
-  /// deploy window, still reads it. Nothing reads it once MOTIR-6687 lands; the
-  /// writes stop in phase 2 (MOTIR-6692) and the column is dropped in phase 3.
-  accessLevel                      ProjectAccessLevel    @default(open)
+  /// Neither read (MOTIR-6687) nor written (MOTIR-6692); the column stays in the
+  /// database for one more release, and its default fills it on insert.
+  // ⚠️ `@ignore`d so the generated client stops selecting it, pending the phase-3 drop (MOTIR-6692 → MOTIR-6694).
+  accessLevel                      ProjectAccessLevel    @default(open) @ignore
   /// The project's ACCESS MODE (Story MOTIR-6169 · MOTIR-6541) — who may ENTER
   /// it: `workspace` (every Full-scope workspace member, plus the people added),
   /// `members` (only the people added) or `public` (as `workspace`, plus anyone
@@ -1370,8 +1369,7 @@ model Project {
   /// every NULL and made it NOT NULL). A project created without choosing one is
   /// Open to the workspace.
   ///
-  /// ⚠️ `projectRepository.setAccessMode` is its only writer, and still writes
-  /// `accessLevel` beside it until phase 2 (MOTIR-6692).
+  /// ⚠️ `projectRepository.setAccessMode` is its only writer.
   accessMode                       ProjectAccessMode     @default(workspace) @map("access_mode")
   /// Public Overview / README (Story 6.12 · Subtask 6.12.3) — the authored
   /// Markdown body shown on the DEFAULT public Overview tab (6.12.4), edited by
