@@ -95,6 +95,8 @@ export const SIGNED_IN_SEGMENTS = [
   'filters',
   'invite',
   'items',
+  // MOTIR-6874 — My agents, the agent instances a person owns.
+  'my-agents',
   // The no-project landing (MOTIR-6548).
   'no-project',
   'onboarding',

@@ -89,7 +89,7 @@ test.describe('My agents', () => {
 
     await chapter('My agents is in the sidebar, right after Runs, and starts empty', async () => {
       await goToMyAgents(page);
-      await expect(page.getByText(copy.emptyTitle)).toBeVisible();
+      await expect(page.getByRole('heading', { name: copy.emptyTitle })).toBeVisible();
     });
     await beat();
 

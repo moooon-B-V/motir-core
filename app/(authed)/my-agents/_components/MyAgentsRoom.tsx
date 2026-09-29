@@ -190,7 +190,7 @@ export function MyAgentsRoom({
           <h2 className="m-0 font-serif text-lg font-semibold text-(--el-text)">
             {t('emptyTitle')}
           </h2>
-          <p className="m-0 max-w-xl text-sm text-(--el-text-secondary)">{t('emptyBody')}</p>
+          <p className="m-0 max-w-[36rem] text-sm text-(--el-text-secondary)">{t('emptyBody')}</p>
           {newAgent}
         </div>
       ) : (
