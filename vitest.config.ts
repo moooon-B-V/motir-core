@@ -1441,6 +1441,7 @@ export default defineConfig({
         // Story MOTIR-6906 · MOTIR-6910 — CI debited while it runs.
         'lib/services/ciLiveChargeService.ts',
         'lib/repositories/ciLiveAccrualRepository.ts',
+        'lib/jobs/definitions/ciLiveCharge.ts',
         // Story MOTIR-6906 · MOTIR-6925 — the fleet-attribution reconciler.
         'lib/services/fleetAttributionService.ts',
         'lib/repositories/fleetMachineKillRepository.ts',
@@ -4659,6 +4660,7 @@ export default defineConfig({
         'lib/services/aiPlanGateService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/ciLiveChargeService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/ciLiveAccrualRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/jobs/definitions/ciLiveCharge.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/fleetAttributionService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/fleetMachineKillRepository.ts': {
           branches: 90,

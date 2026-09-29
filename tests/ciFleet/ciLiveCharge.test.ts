@@ -15,7 +15,8 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { jobSchedules } from '@/lib/jobs/schedules';
-import { CI_LIVE_CHARGE_CRON } from '@/lib/jobs/definitions/ciLiveCharge';
+import { CI_LIVE_CHARGE_CRON, ciLiveCharge } from '@/lib/jobs/definitions/ciLiveCharge';
+import { JobTestEngine } from '../helpers/jobs';
 import type { NormalizedWorkflowRunEvent } from '@/lib/git/types';
 import { stubBothAppCredentials } from '../helpers/appCredentials';
 import { adminDb } from '../helpers/adminDb';
@@ -622,5 +623,14 @@ describe('the job', () => {
     expect(schedule).toBeDefined();
     expect(schedule!.cron).toBe('*/5 * * * *');
     expect(CI_LIVE_CHARGE_CRON).toBe('*/5 * * * *');
+  });
+
+  it('delegates one tick to the service, through its memoized step', async () => {
+    const tick = vi.spyOn(ciLiveChargeService, 'tick').mockResolvedValue({ outcome: 'disabled' });
+
+    const { result } = await new JobTestEngine({ function: ciLiveCharge }).execute();
+
+    expect(tick).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ outcome: 'disabled' });
   });
 });

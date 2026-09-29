@@ -1,5 +1,8 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
+import {
+  fleetAttributionService,
+  FLEET_ATTRIBUTION_GRACE_MS,
+} from '@/lib/services/fleetAttributionService';
 import { join } from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
 import { Prisma } from '@/generated/prisma/client';
@@ -19,7 +22,7 @@ import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunne
 import { ciFleetAdmissionLockRepository } from '@/lib/repositories/ciFleetAdmissionLockRepository';
 import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
-import { fakeOrchestrator } from '@motir/orchestrator';
+import { fakeOrchestrator, FLEET_CONTAINER_SIZE } from '@motir/orchestrator';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { MOTIR_FLEET_RUNNER_FAMILY } from '@/lib/ciMetering/runnerRates';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
@@ -1343,5 +1346,58 @@ describe('§3.8 — the REGISTRATION-TOKEN path is not merely unused, it is abse
 
     expect(mintCalls()).toHaveLength(1);
     expect(githubCalls.some((c) => c.url.includes('registration-token'))).toBe(false);
+  });
+});
+
+// ── MOTIR-6912 · the seam from ADMISSION to ATTRIBUTION ──────────────────────
+
+describe('seam: what the real admission path boots, the reconciler attributes (MOTIR-6912)', () => {
+  const PAST_GRACE_MS = FLEET_ATTRIBUTION_GRACE_MS + 60_000;
+
+  it('every container two orgs booted survives the pass, and a machine booted with no record dies', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const a = await seedTenant();
+    const b = await seedTenant();
+    await handle(delivery(a, { jobId: 58_001, runId: 68_001 }));
+    await handle(delivery(b, { jobId: 58_002, runId: 68_002 }));
+    const [intentA, intentB] = dispatchedIntentIds();
+
+    // The REAL step 1 — admission, claim, mint, boot — for each org.
+    const bootedA = await ciRunnerBootService.bootIntent(intentA!, FAST);
+    const bootedB = await ciRunnerBootService.bootIntent(intentB!, FAST);
+    expect(bootedA).toMatchObject({ phase: 'supervising' });
+    expect(bootedB).toMatchObject({ phase: 'supervising' });
+    const booted = fakeOrchestrator.liveContainerIds();
+    expect(booted).toHaveLength(2);
+
+    // A machine nobody recorded — the leak the reconciler exists for.
+    const stray = await fakeOrchestrator.provision({
+      orgId: a.organizationId,
+      workspaceId: a.workspaceId,
+      projectId: a.projectId,
+      repoFullName: `${MOTIR_ORG}/acme-web`,
+      workload: 'ci_runner',
+      workflowJobId: 58_999,
+      image: 'motir/runner@sha256:stray',
+      size: FLEET_CONTAINER_SIZE,
+      env: {},
+      timeoutSeconds: 3600,
+      region: 'iad',
+    });
+
+    const pass = await fleetAttributionService.reconcile({
+      now: () => new Date(Date.now() + PAST_GRACE_MS),
+    });
+
+    expect(pass).toMatchObject({
+      outcome: 'reconciled',
+      killed: [{ machineId: stray.id, reason: 'no_record', action: 'destroyed' }],
+    });
+    // Both admitted containers are still running, attributed to their own org.
+    expect(fakeOrchestrator.liveContainerIds().sort()).toEqual([...booted].sort());
+    const kills = await adminDb.fleetMachineKill.findMany();
+    expect(kills).toEqual([
+      expect.objectContaining({ machineId: stray.id, reason: 'no_record', organizationId: null }),
+    ]);
   });
 });
