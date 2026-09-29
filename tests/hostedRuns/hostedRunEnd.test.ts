@@ -1,4 +1,5 @@
 import { generateKeyPairSync } from 'node:crypto';
+import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FLEET_CONTAINER_SIZE, fakeOrchestrator } from '@motir/orchestrator';
 import type { Prisma } from '@/generated/prisma/client';
@@ -12,7 +13,6 @@ import { encryptToken } from '@/lib/github/tokenCrypto';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
 import { jobSupervisionRepository } from '@/lib/repositories/jobSupervisionRepository';
-import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import {
   HOSTED_AGENT_MAX_TIMEOUT_MS,
@@ -676,7 +676,7 @@ describe('the backstop and a lost supervision chain take the same path', () => {
   });
 });
 
-describe('the CI orphan reaper spares a hosted run that still holds its fleet slot', () => {
+describe('the attribution reconciler spares a hosted run that still holds its fleet slot', () => {
   /** Supervise far enough that the container has accrued a live usage row. */
   async function liveRun(): Promise<Started> {
     const started = await startRun();
@@ -693,17 +693,20 @@ describe('the CI orphan reaper spares a hosted run that still holds its fleet sl
     return started;
   }
 
-  it('AC9 — a long run holding its slot survives `reapOrphans`', async () => {
+  it('AC9 — a long run holding its slot survives the reconciler', async () => {
     const { handleId } = await liveRun();
-    const reaped = await ciRunnerBootService.reapOrphans();
-    expect(reaped.reaped).toBe(0);
+    const reaped = await fleetAttributionService.reconcile({
+      now: () => new Date(Date.now() + 20 * MINUTE),
+    });
+    expect(reaped).toMatchObject({ killed: [] });
     expect(fakeOrchestrator.liveContainerIds()).toContain(handleId);
   });
 
   it('AC9 — the same machine with no slot is an orphan, and is reaped', async () => {
     const { handleId } = await liveRun();
     await adminDb.fleetInFlightSlot.deleteMany({});
-    await ciRunnerBootService.reapOrphans();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await fleetAttributionService.reconcile({ now: () => new Date(Date.now() + 20 * MINUTE) });
     expect(fakeOrchestrator.liveContainerIds()).not.toContain(handleId);
   });
 });
@@ -729,9 +732,14 @@ describe('a hosted run whose container the REAPER destroys is settled, charged a
     const { data, handleId, cardId } = await orphanedRun();
     const card = await cardOf(cardId);
 
-    const reaped = await ciRunnerBootService.reapOrphans();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const reaped = await fleetAttributionService.reconcile({
+      now: () => new Date(Date.now() + 20 * MINUTE),
+    });
 
-    expect(reaped.reaped).toBe(1);
+    expect(reaped).toMatchObject({
+      killed: [{ machineId: handleId, reason: 'record_ended', workload: 'hosted_agent' }],
+    });
     expect(fakeOrchestrator.liveContainerIds()).not.toContain(handleId);
     // The container's row is SETTLED, still naming its run — which is what makes
     // the run read as settled to the charge.
@@ -762,9 +770,10 @@ describe('a hosted run whose container the REAPER destroys is settled, charged a
 
   it('AC3 — a run charged elsewhere too is debited once: every charge carries the run as `externalRef`', async () => {
     const { data } = await orphanedRun();
-    await ciRunnerBootService.reapOrphans();
-    // A second reap finds nothing left to charge.
-    await ciRunnerBootService.reapOrphans();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await fleetAttributionService.reconcile({ now: () => new Date(Date.now() + 20 * MINUTE) });
+    // A second pass finds nothing left to charge.
+    await fleetAttributionService.reconcile({ now: () => new Date(Date.now() + 20 * MINUTE) });
     expect(chargesFor(data.dispatchRunId)).toHaveLength(1);
 
     // The run's own pass or the sweep charging the same run afterwards asks
@@ -795,7 +804,7 @@ describe('a hosted run whose container the REAPER destroys is settled, charged a
     fakeOrchestrator.backdate(handle.id, new Date(Date.now() - 5 * 60 * MINUTE));
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    await ciRunnerBootService.reapOrphans();
+    await fleetAttributionService.reconcile({ now: () => new Date(Date.now() + 20 * MINUTE) });
 
     expect(fakeOrchestrator.liveContainerIds()).not.toContain(handle.id);
     expect(machineCharges).toEqual([]);

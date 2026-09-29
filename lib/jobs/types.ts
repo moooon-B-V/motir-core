@@ -373,8 +373,8 @@ export type CodeGraphRefreshData = CodeGraphIndexData;
  * that exists for a genuinely vanished tenant (MOTIR-1545). The result was NO
  * ledger row at all for the one job in the system that spends real money per
  * invocation. `null` is the honest value: the fleet is cross-tenant, the ledger's
- * `workspace_id` is nullable, and `system.ci-runner-reap` already lands
- * untenanted rows the same way.
+ * `workspace_id` is nullable, and `system.fleet-attribution` (which
+ * replaced `system.ci-runner-reap`) lands untenanted rows the same way.
  *
  * The type is the literal `null` rather than `string | null` ON PURPOSE — it is
  * what makes `''` (and any other string) a COMPILE error at the one call site
@@ -551,7 +551,7 @@ export interface JobEventDataMap {
    *  trigger, the per-intent boot, and the crash-backstop reaper. */
   'system.ci-runner-provision-sweep': SystemScheduledData;
   'system.ci-runner-boot': CiRunnerBootData;
-  'system.ci-runner-reap': SystemScheduledData;
+  'system.fleet-attribution': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   'system.code-graph-index': CodeGraphIndexData;
   'system.code-graph-refresh': CodeGraphRefreshData;

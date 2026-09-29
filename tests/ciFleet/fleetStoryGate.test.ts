@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
 import { join } from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
 import { Prisma } from '@/generated/prisma/client';
@@ -816,8 +817,12 @@ describe('§3.2 — EXACTLY ONE usage row per provisioned handle, on every path'
     );
     fakeOrchestrator.backdate(handleRef.id, new Date(Date.now() - 60 * 60_000));
 
-    const reap = await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
-    expect(reap.reaped).toBe(1);
+    // The reconciler kills it once its intent's end is a grace behind (MOTIR-6925).
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const reap = await fleetAttributionService.reconcile({
+      now: () => new Date(Date.now() + 3 * 3_600_000),
+    });
+    expect(reap).toMatchObject({ killed: [{ machineId: handleRef.id }] });
 
     const rows = await adminDb.ciContainerUsage.findMany();
     expect(rows).toHaveLength(1);
@@ -825,7 +830,8 @@ describe('§3.2 — EXACTLY ONE usage row per provisioned handle, on every path'
 
     // …and a SECOND reap of the same container adds nothing. Both the `finally`
     // and the reaper can reach one handle; the row is per handle, not per call.
-    await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
+    await ciRunnerBootService.reapContainer(handleRef);
+    await fleetAttributionService.reconcile({ now: () => new Date(Date.now() + 3 * 3_600_000) });
     const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
     expect(ciContainerUsageCount).toBe(1);
   });
@@ -838,8 +844,10 @@ describe('§3.2 — EXACTLY ONE usage row per provisioned handle, on every path'
     expect(ciContainerUsageCount).toBe(1);
 
     // Nothing is left to reap, and the sweep is inert rather than duplicating.
-    const reap = await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
-    expect(reap.reaped).toBe(0);
+    const reap = await fleetAttributionService.reconcile({
+      now: () => new Date(Date.now() + 3 * 3_600_000),
+    });
+    expect(reap).toMatchObject({ killed: [] });
     const ciContainerUsageCount2 = await adminDb.ciContainerUsage.count();
     expect(ciContainerUsageCount2).toBe(1);
   });

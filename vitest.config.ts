@@ -1441,6 +1441,12 @@ export default defineConfig({
         // Story MOTIR-6906 · MOTIR-6910 — CI debited while it runs.
         'lib/services/ciLiveChargeService.ts',
         'lib/repositories/ciLiveAccrualRepository.ts',
+        // Story MOTIR-6906 · MOTIR-6925 — the fleet-attribution reconciler.
+        'lib/services/fleetAttributionService.ts',
+        'lib/repositories/fleetMachineKillRepository.ts',
+        'lib/ciFleet/attributionErrors.ts',
+        'lib/monitoring/fleetAttributionAlert.ts',
+        'lib/jobs/definitions/fleetAttribution.ts',
         'lib/repositories/ciRunnerProvisioningIntentRepository.ts',
         'lib/repositories/ciFleetAdmissionLockRepository.ts',
         'lib/repositories/fleetInFlightSlotRepository.ts',
@@ -4659,6 +4665,15 @@ export default defineConfig({
         'lib/services/aiPlanGateService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/ciLiveChargeService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/ciLiveAccrualRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/fleetAttributionService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/fleetMachineKillRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/ciFleet/attributionErrors.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/monitoring/fleetAttributionAlert.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/jobs/definitions/fleetAttribution.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/ciRunnerProvisioningIntentRepository.ts': {
           branches: 90,
           functions: 90,

@@ -142,6 +142,18 @@ export interface LiveAgentUsage {
 
 /** One repository's container totals for a period — the fleet reconciliation's
  *  own side of the comparison (`ci-minutes-allowance.md` §Q.2). */
+/** A handle's newest usage row, narrowed to what attribution reads (MOTIR-6925). */
+export interface HandleUsage {
+  id: string;
+  workload: string;
+  organizationId: string;
+  projectId: string | null;
+  repoFullName: string | null;
+  dispatchRunId: string | null;
+  containerCreatedAt: Date;
+  containerStoppedAt: Date | null;
+}
+
 export interface RepoContainerTotal {
   repoName: string;
   billableSeconds: number;
@@ -365,6 +377,33 @@ export const ciContainerUsageRepository = {
     });
     if (!row?.dispatchRunId) return null;
     return { ...row, dispatchRunId: row.dispatchRunId };
+  },
+
+  /**
+   * The NEWEST usage row for a handle, of any workload, live or settled — the
+   * attribution reconciler's read (MOTIR-6925). A live checkpoint (no
+   * `container_stopped_at`) is a container still in flight; a settled row is a
+   * container whose record has ended.
+   */
+  async findLatestByHandle(
+    containerProvider: string,
+    handleId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<HandleUsage | null> {
+    return tx.ciContainerUsage.findFirst({
+      where: { containerProvider, handleId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        workload: true,
+        organizationId: true,
+        projectId: true,
+        repoFullName: true,
+        dispatchRunId: true,
+        containerCreatedAt: true,
+        containerStoppedAt: true,
+      },
+    });
   },
 
   /**

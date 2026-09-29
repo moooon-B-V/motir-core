@@ -94,40 +94,9 @@ import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
  */
 export const CI_RUNNER_PROVISION_SWEEP_CRON = '0,30 * * * *';
 
-/** Every 30 minutes, ON the cluster. The reaper only ever finds something when a
- *  supervisor died, so it is almost always a single provider list call that
- *  returns nothing actionable.
- *
- *  ⚠️ THE OFFSET RATIONALE WAS INVERTED, AND THIS COMMENT NOW DESCRIBES THE SHAPE
- *  THAT REPLACED IT (MOTIR-2853 diagnosed it, MOTIR-3314 acted on it). Two
- *  superseded forms, kept in order because the second is the one a reader is
- *  likeliest to re-derive:
- *
- *  1. It first read "offset off the hour so it never lines up with the other
- *     `system.*` schedules". That is textbook load-spreading and it is correct on
- *     a machine that is always on. On a compute that SUSPENDS WHEN IDLE it is
- *     exactly inverted: the only quantity billed is how often the thing wakes,
- *     and every distinct offset is another wake.
- *  2. It then read "running often is the point: the window between an orphan
- *     appearing and being destroyed is billed" — true, and it prices only ONE of
- *     the two bills. An orphaned container is rare and costs container-minutes
- *     while it survives; the wake it takes to look for one is charged every 10
- *     minutes forever, whether or not anything is there. The cadence was set
- *     against the cost of finding something and never against the cost of
- *     looking.
- *
- *  WHAT IT GAVE UP: an orphan now survives up to 30 minutes instead of 10 — at
- *  most 20 extra container-minutes, and only in the rare case where a supervisor
- *  actually died. WHAT IT BOUGHT: five of the fourteen old wake-minutes, this job
- *  being the single largest contributor to the spread after the provision sweep.
- *  The trade is roughly 20 container-minutes per orphan against ~$14/mo of
- *  always-awake Neon compute, which is not close.
- *
- *  Measured (MOTIR-2853): the old schedule's fourteen distinct wake-minutes left
- *  a longest gap of 7 minutes, under the ~9 min suspend delay, so the compute
- *  never slept — 100% duty cycle over 6 h 12 m. The spreading is what cost the
- *  money; `lib/jobs/schedules.ts` now asserts the gap so it cannot re-open. */
-export const CI_RUNNER_REAP_CRON = '0,30 * * * *';
+// The reaper's schedule (`system.ci-runner-reap`) is gone: the attribution
+// reconciler replaced it (MOTIR-6925, `fleet-per-org-pool.md` §5–§6) — see
+// `./fleetAttribution.ts`, which also runs the stale-claim sweep it carried.
 
 /** How many pending intents one sweep will fan out. A ceiling rather than
  *  "everything", so a backlog drains at a predictable rate instead of firing
@@ -276,26 +245,5 @@ export const ciRunnerBoot = defineJob(
           ctx.step.run(id, fn as () => Promise<T>) as unknown as Promise<T>,
       },
     });
-  },
-);
-
-export const ciRunnerReap = defineJob(
-  {
-    id: 'system.ci-runner-reap',
-    cron: CI_RUNNER_REAP_CRON,
-    // `latest`, not `skip` like the provision sweep above, and the ten-minute
-    // cadence is not what decides it: an orphaned container bills for every
-    // minute it survives, so an immediate reap on restart reclaims spend the next
-    // fire would not. One pass suffices — it reads the CURRENT orphan set.
-    catchUp: 'latest',
-    // `idempotent`: destroying an already-destroyed container is a no-op at every
-    // provider the port targets, and the port requires teardown to be idempotent
-    // anyway.
-    retryPolicy: 'idempotent',
-  },
-  async (ctx, services) => {
-    return ctx.step.run('reap-orphaned-containers', async () =>
-      services.ciRunnerBoot.reapOrphans(),
-    );
   },
 );

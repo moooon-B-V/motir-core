@@ -72,7 +72,7 @@ export interface RetiredStepId {
 /**
  * Every live memoized step, by id.
  *
- * 59 entries over 67 call sites: an id used at several sites in one handler is
+ * 61 entries over 69 call sites: an id used at several sites in one handler is
  * pinned once, and the guard requires those sites to agree.
  *
  * ⚠️ MOTIR-6448 KEPT SEVEN IDS ON PURPOSE. `ContainerUsage` / `ContainerAccrual`
@@ -85,6 +85,13 @@ export interface RetiredStepId {
  * `dispatchRunId`, and its one reader (`ciFleetCostMeterService`'s usage
  * mapping) reads it as `record.dispatchRunId ?? null` — a row naming no run,
  * which is exactly what every pre-change row is.
+ *
+ * ⚠️ MOTIR-6925 KEPT `sweep-agent-instances` ON PURPOSE. Its `orphans` lost the
+ * `machines` count when orphaned machines moved to the fleet-attribution
+ * reconciler, which NARROWS the shape. The sweep hibernates and charges, so a
+ * new id would re-run it on a resumed run. A memo written before the change
+ * carries `orphans: { machines, volumes }` — a superset of what is pinned — and
+ * its one reader is the job's own return value, which nothing destructures.
  */
 export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   '`index-admit:${subject}`': {
@@ -314,10 +321,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/jobRunReap.ts',
     shape: '{ abandoned: number; scanned: number; stillLive: number }',
   },
-  'reap-orphaned-containers': {
-    file: 'lib/jobs/definitions/ciRunnerFleet.ts',
+  'reconcile-fleet-attribution': {
+    file: 'lib/jobs/definitions/fleetAttribution.ts',
     shape:
-      '{ reaped: number; staleClaims: number; usages: Array<{ billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string }> }',
+      '{ apps: number; failures: number; killed: Array<{ action: "destroyed" | "stopped"; app: string; machineId: string; reason: "no_record" | "org_stopped" | "record_ended"; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent" | null }>; listed: number; matched: number; outcome: "reconciled"; spared: number; unavailableApps: Array<string>; undated: number } | { detail: string; outcome: "inventory_unavailable" } | { outcome: "disabled" }',
   },
   'recompute-code-graph-drift': {
     file: 'lib/jobs/definitions/codeGraphDriftSweep.ts',
@@ -467,10 +474,19 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/agentInstanceIdleCheck.ts',
     shape: '"active" | "backstop" | "idle" | "noop"',
   },
+  'sweep-stale-claims': {
+    file: 'lib/jobs/definitions/fleetAttribution.ts',
+    shape: 'number',
+  },
+  'ci-live-charge': {
+    file: 'lib/jobs/definitions/ciLiveCharge.ts',
+    shape:
+      '{ accrued: number; containers: number; failures: number; organizations: Array<{ accruedMinutes: number; charge: string; organizationId: string }>; outcome: "ticked"; tickStart: string } | { outcome: "disabled" }',
+  },
   'sweep-agent-instances': {
     file: 'lib/jobs/definitions/agentInstanceSweep.ts',
     shape:
-      '{ charges: { charged: number; notCharged: number; refused: number; retryable: number }; errors: number; hibernated: { backstop: number; credits: number; idle: number }; orphans: { machines: number; volumes: number }; reconciled: number; rolled: number; settled: number }',
+      '{ charges: { charged: number; notCharged: number; refused: number; retryable: number }; errors: number; hibernated: { backstop: number; credits: number; idle: number }; orphans: { volumes: number }; reconciled: number; rolled: number; settled: number }',
   },
   'reap-lapsed-runs': {
     file: 'lib/jobs/definitions/runLivenessSweep.ts',
@@ -539,6 +555,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  'reap-orphaned-containers': {
+    shape:
+      '{ reaped: number; staleClaims: number; usages: Array<{ billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string }> }',
+    supersededBy: 'reconcile-fleet-attribution',
+    reason:
+      'MOTIR-6925 replaced the tag-scoped orphan reaper with the fleet-attribution reconciler, which lists every machine in the fleet organisation and matches each to a record (`docs/decisions/fleet-per-org-pool.md` §5). The `system.ci-runner-reap` job that carried this step is gone; its stale-claim half is the new `sweep-stale-claims` step.',
+  },
   '`recompute-parent-v3-${i}`': {
     shape:
       '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',

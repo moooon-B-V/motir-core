@@ -32,3 +32,5 @@ export * from './adapters/fly/indexImage';
 export * from './adapters/fake';
 export * from './adapters/fly/persistent';
 export * from './adapters/fake/persistent';
+export * from './adapters/fly/inventory';
+export * from './adapters/fake/inventory';

@@ -635,3 +635,51 @@ export interface PersistentExecResult {
   readonly stdout: string;
   readonly stderr: string;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE FLEET INVENTORY — what the PROVIDER says is running (Story MOTIR-6906 ·
+// MOTIR-6925, `docs/decisions/fleet-per-org-pool.md` §5)
+// ═══════════════════════════════════════════════════════════════════════════
+// Every read above starts from a handle Motir already holds. The attribution
+// reconciler must not: the machine it exists to find is one Motir holds NO record
+// of — a crashed boot, a failed teardown, a machine started by hand — so it asks
+// the provider for EVERY app in the fleet organisation and EVERY machine in each,
+// tagged or not, and treats Motir's own tables only as the index it attributes
+// against. Metadata is carried for the alert's context and is never attribution:
+// anyone holding the token can write it.
+
+/** One machine as the provider lists it. */
+export interface InventoryMachine {
+  readonly app: string;
+  readonly machineId: string;
+  /** The machine's name, for the alert; empty when the provider gives none. */
+  readonly name: string;
+  /** Where it runs — part of the handle a teardown of it needs. */
+  readonly region: string;
+  /** The provider's state in the instance vocabulary — `gone` is a machine that
+   *  no longer runs anything and is not judged. */
+  readonly state: PersistentContainerState;
+  /** Null when the provider omits it — such a machine cannot be aged, and is
+   *  alerted rather than destroyed on a guess. */
+  readonly createdAt: Date | null;
+  readonly metadata: Readonly<Record<string, string>>;
+}
+
+/**
+ * The inventory half of the port. Both listings THROW on failure — a listing
+ * error is never an empty list, because the reconciler would read "nothing is
+ * running" and a leak would hide behind an outage. Both actions are IDEMPOTENT
+ * on their end state, like every other action on this port.
+ */
+export interface FleetInventory {
+  readonly provider: OrchestratorProvider;
+  /** Every app in Motir's fleet organisation — including apps no record names. */
+  listApps(): Promise<string[]>;
+  /** Every machine in one app, tagged or not. An app that no longer exists is empty. */
+  listMachines(app: string): Promise<InventoryMachine[]>;
+  /** Destroy one machine, forcibly. Idempotent on one already gone. */
+  destroyMachine(app: string, machineId: string): Promise<void>;
+  /** Stop one machine — for a PERSISTENT machine whose record owns it but says it
+   *  should be resting (§5: stopped, never destroyed). Idempotent. */
+  stopMachine(app: string, machineId: string): Promise<void>;
+}

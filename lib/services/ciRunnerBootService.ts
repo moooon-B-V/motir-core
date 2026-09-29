@@ -9,7 +9,6 @@ import {
   ciContainerUsageRepository,
   type LiveAgentUsage,
 } from '@/lib/repositories/ciContainerUsageRepository';
-import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
@@ -241,9 +240,11 @@ const MAX_CONSECUTIVE_READ_FAILURES = 3;
  *  slow-but-live provision is never swept out from under itself. */
 const STALE_CLAIM_MS = 15 * 60_000;
 
-/** How old a container must be before the reaper destroys it. Past the job
- *  timeout, so the reaper only ever sees containers supervision genuinely failed
- *  to reach — not ones it is about to. */
+/** A CI intent's OWN end: boot + the job timeout + 10 minutes. It used to be an
+ *  age cutoff on the machine (the reaper's); since MOTIR-6925 it is a property of
+ *  the RECORD, read by the attribution reconciler (`fleet-per-org-pool.md` §6).
+ *  Past the job timeout, so the reconciler only ever sees containers supervision
+ *  genuinely failed to reach — not ones it is about to. */
 const DEFAULT_REAP_AFTER_MS = DEFAULT_JOB_TIMEOUT_MS + 10 * 60_000;
 
 /**
@@ -825,145 +826,82 @@ export const ciRunnerBootService = {
   },
 
   /**
-   * THE REAPER (§4, §7.1's third guarantee). Destroy every fleet container older
-   * than `olderThan`, whatever Motir's own tables believe, and settle the intents
-   * that were holding them.
+   * TEAR DOWN ONE container the attribution reconciler has judged — the half of
+   * the old reaper that SETTLES what it destroys (§4, §7.1's third guarantee;
+   * `fleet-per-org-pool.md` §6).
    *
-   * ⚠️ IT QUERIES THE ORCHESTRATOR AGAINST THE INTENT TABLE, NEVER IN-PROCESS
-   * STATE — the card's wording, and the reason is that the case it exists for is
-   * the process that HELD that state having died. The provider is asked what
-   * exists; the intent table is consulted only to attribute what came back.
+   * The reconciler (`fleetAttributionService`) decides WHETHER a machine dies:
+   * nothing attributes it, or its record says it should have stopped. Age alone
+   * is no longer a reason (§6: `DEFAULT_REAP_AFTER_MS` survives only as a CI
+   * intent's own end instant). What stays here is what the reconciler cannot do
+   * from a provider listing: tear the container down THROUGH the port so a usage
+   * row is produced, settle the CI intent that was holding it, and — for a
+   * hosted-agent machine attributed from its own live row (MOTIR-6524) — release
+   * its slot, charge its machine time and end its run.
    *
-   * A hosted-agent machine has no intent: it is attributed from its own live
-   * usage row, and its run is settled, charged and ended here (MOTIR-6524).
+   * Answers `false` when Motir holds nothing to settle against (no intent and no
+   * live hosted row, or one it cannot attribute), leaving the plain destroy to
+   * the caller — a row attributed to nobody would pollute the meter.
    */
-  async reapOrphans(
-    options: { olderThan?: Date; now?: () => Date } = {},
-  ): Promise<{ reaped: number; staleClaims: number; usages: ContainerUsage[] }> {
-    if (!isOrchestratorConfigured()) return { reaped: 0, staleClaims: 0, usages: [] };
+  async reapContainer(
+    handle: ContainerHandle,
+    options: { now?: () => Date } = {},
+  ): Promise<boolean> {
+    if (!isOrchestratorConfigured()) return false;
     const now = options.now ?? (() => new Date());
-    const olderThan = options.olderThan ?? new Date(now().getTime() - DEFAULT_REAP_AFTER_MS);
-
     const orchestrator = getOrchestrator();
-    // ⚠️ A HOSTED RUN IS NOT AN ORPHAN FOR BEING OLD (MOTIR-6450). This cutoff is
-    // sized for a CI job; a hosted run has no wall-clock limit but its own 12-hour
-    // backstop, so a healthy one outlives it by design. It is spared while it
-    // still holds its fleet slot — the reservation its own settle releases — and a
-    // machine that has lost its slot (the slot expired, or was never taken) is an
-    // orphan like any other and is reaped.
-    const spare = async (handle: { provider: string; id: string }): Promise<boolean> => {
-      const live = await withSystemContext((tx) =>
-        ciContainerUsageRepository.findLiveAgentRunByHandle(handle.provider, handle.id, tx),
-      );
-      if (!live) return false;
-      const slot = await withSystemContext((tx) =>
-        fleetInFlightSlotRepository.findByRef(
-          HOSTED_AGENT_WORKLOAD,
-          hostedRunDispatchId(live.dispatchRunId),
-          tx,
-        ),
-      );
-      return slot !== null && slot.expiresAt.getTime() > now().getTime();
-    };
-    // ⚠️ A HOSTED-AGENT MACHINE IS ATTRIBUTED FROM ITS OWN LIVE ROW (MOTIR-6524).
-    // The resolver below was CI-intent-shaped, so a hosted machine that had lost
-    // its slot was destroyed with no usage row, no charge and no end of its run —
-    // and a run whose LAST container went that way was never charged at all (a
-    // settle defers the charge to the run's last open container). Its checkpoint
-    // row already carries the attribution; the handles it resolves are remembered
-    // here so the loop below can settle them as hosted runs rather than intents.
-    const hostedByHandle = new Map<string, LiveAgentUsage>();
-    const usages = await orchestrator.reap(
-      olderThan,
-      async (handle) => {
-        const intent = await withSystemContext((tx) =>
-          intents.findByContainerId(handle.provider, handle.id, tx),
-        );
-        if (!intent) {
-          const hosted = await withSystemContext((tx) =>
-            ciContainerUsageRepository.findLiveAgentUsageByHandle(handle.provider, handle.id, tx),
-          );
-          // A deleted project leaves nothing to attribute to — the same null an
-          // intent without one answers.
-          if (!hosted?.projectId) return null;
-          hostedByHandle.set(handle.id, hosted);
-          return {
-            orgId: hosted.organizationId,
-            workspaceId: hosted.workspaceId,
-            projectId: hosted.projectId,
-            // Overwritten with the row's own value (null for a multi-repo handle)
-            // before the usage is recorded, below.
-            repoFullName: hosted.repoFullName ?? '',
-            workload: HOSTED_AGENT_WORKLOAD,
-            workflowJobId: null,
-            size: {
-              cpuKind: hosted.cpuKind === 'performance' ? 'performance' : 'shared',
-              cpus: hosted.cpus,
-              memoryMb: hosted.memoryMb,
-            },
-            observedStartedAt: hosted.containerStartedAt,
-          };
-        }
-        if (!intent.projectId) return null;
-        const workflowJobId = Number(intent.jobId);
-        if (!Number.isInteger(workflowJobId)) return null;
-        return {
-          orgId: intent.organizationId,
-          workspaceId: intent.workspaceId,
-          projectId: intent.projectId,
-          repoFullName: `${intent.repoOwner}/${intent.repoName}`,
-          workload: CI_RUNNER_WORKLOAD,
-          workflowJobId,
-          size: FLEET_CONTAINER_SIZE,
-          // A reaped container's start instant is whatever the provider still
-          // reports; this process never observed it (that is what made it an
-          // orphan), so there is nothing honest to fall back to.
-          observedStartedAt: intent.startedAt,
-        };
-      },
-      spare,
-    );
+    if (orchestrator.provider !== handle.provider) return false;
 
-    const reapedRuns = new Set<string>();
-    for (const usage of usages) {
-      const hosted = hostedByHandle.get(usage.handleId);
-      if (hosted) {
-        await recordContainerUsage({
-          ...usage,
-          repoFullName: hosted.repoFullName,
-          dispatchRunId: hosted.dispatchRunId,
-        });
-        reapedRuns.add(hosted.dispatchRunId);
-        continue;
-      }
-      await recordContainerUsage(usage);
-      const intent = await withSystemContext((tx) =>
-        intents.findByContainerId(usage.provider, usage.handleId, tx),
-      );
-      if (!intent) continue;
-      await deregisterQuietly(intent.githubRunnerId, intent.id);
-      await settleIntent(intent.id, intent.projectId, {
-        status: CI_RUNNER_INTENT_FAILED,
-        teardownReason: 'reaped',
-        settledAt: now(),
-        failureDetail: REAPED_DETAIL,
+    const resolved = await resolveReapAttribution(handle);
+    if (!resolved) return false;
+    const usage = await orchestrator.teardown(handle, 'reaped', resolved.attribution);
+
+    if (resolved.hosted) {
+      const { hosted } = resolved;
+      await recordContainerUsage({
+        ...usage,
+        repoFullName: hosted.repoFullName,
+        dispatchRunId: hosted.dispatchRunId,
       });
+      // The terminal transition its supervisor would have taken — AFTER the usage
+      // row is written, so a run whose last container this was reads as settled
+      // and is charged once: the slot released, the machine time charged (motir-ai
+      // dedupes on the run id), then the one end path (MOTIR-6450).
+      await fleetCeilingService.release(
+        HOSTED_AGENT_WORKLOAD,
+        hostedRunDispatchId(hosted.dispatchRunId),
+      );
+      await hostedRunChargeService.chargeMachineTime(hosted.dispatchRunId, { now });
+      await hostedRunService.endHostedRun(hosted.dispatchRunId, 'lost_supervision', REAPED_DETAIL);
+      return true;
     }
 
-    // Each reaped hosted run takes the terminal transition its supervisor would
-    // have — AFTER every usage row above is written, so a run whose containers
-    // were all reaped in this pass reads as settled and is charged once:
-    // the slot released, the machine time charged (one attempt, as the sweep's;
-    // motir-ai dedupes on the run id), then the one end path (MOTIR-6450).
-    for (const dispatchRunId of reapedRuns) {
-      await fleetCeilingService.release(HOSTED_AGENT_WORKLOAD, hostedRunDispatchId(dispatchRunId));
-      await hostedRunChargeService.chargeMachineTime(dispatchRunId, { now });
-      await hostedRunService.endHostedRun(dispatchRunId, 'lost_supervision', REAPED_DETAIL);
-    }
+    await recordContainerUsage(usage);
+    const intent = await withSystemContext((tx) =>
+      intents.findByContainerId(usage.provider, usage.handleId, tx),
+    );
+    // The row vanished between the teardown and the write-back (a tenant
+    // teardown, a cascade): the container is gone, which is what mattered.
+    if (!intent) return true;
+    await deregisterQuietly(intent.githubRunnerId, intent.id);
+    await settleIntent(intent.id, intent.projectId, {
+      status: CI_RUNNER_INTENT_FAILED,
+      teardownReason: 'reaped',
+      settledAt: now(),
+      failureDetail: REAPED_DETAIL,
+    });
+    return true;
+  },
 
-    const staleClaims = await sweepStaleClaims(now);
-    // The records ride out on the return value, into the `job_run` ledger.
-    return { reaped: usages.length, staleClaims, usages };
+  /**
+   * Write off every intent claimed but never booted — the crash between the JIT
+   * mint and the boot, which leaves GitHub holding a registered runner with no
+   * machine. Runs on the attribution reconciler's schedule (MOTIR-6925), which
+   * replaced the reaper's.
+   */
+  async sweepStaleClaims(options: { now?: () => Date } = {}): Promise<number> {
+    if (!isOrchestratorConfigured()) return 0;
+    return sweepStaleClaims(options.now ?? (() => new Date()));
   },
 
   /**
@@ -1677,6 +1615,65 @@ async function settleFailed(
  *  method, so a re-queued intent looks identical whichever path re-queued it. */
 async function releaseClaim(intentId: string): Promise<void> {
   await ciRunnerAdmissionService.releaseClaim(intentId);
+}
+
+/**
+ * The attribution a torn-down container's usage row carries, recovered from the
+ * PERSISTED record — the CI intent that names it, or, for a hosted-agent machine,
+ * its own live checkpoint row (MOTIR-6524). Null when nothing owns it, or when
+ * what owns it cannot be attributed (a deleted project, a malformed job id).
+ */
+async function resolveReapAttribution(
+  handle: ContainerHandle,
+): Promise<{ attribution: UsageAttribution; hosted: LiveAgentUsage | null } | null> {
+  const intent = await withSystemContext((tx) =>
+    intents.findByContainerId(handle.provider, handle.id, tx),
+  );
+  if (!intent) {
+    const hosted = await withSystemContext((tx) =>
+      ciContainerUsageRepository.findLiveAgentUsageByHandle(handle.provider, handle.id, tx),
+    );
+    // A deleted project leaves nothing to attribute to — the same null an intent
+    // without one answers.
+    if (!hosted?.projectId) return null;
+    return {
+      hosted,
+      attribution: {
+        orgId: hosted.organizationId,
+        workspaceId: hosted.workspaceId,
+        projectId: hosted.projectId,
+        // Overwritten with the row's own value (null for a multi-repo handle)
+        // before the usage is recorded.
+        repoFullName: hosted.repoFullName ?? '',
+        workload: HOSTED_AGENT_WORKLOAD,
+        workflowJobId: null,
+        size: {
+          cpuKind: hosted.cpuKind === 'performance' ? 'performance' : 'shared',
+          cpus: hosted.cpus,
+          memoryMb: hosted.memoryMb,
+        },
+        observedStartedAt: hosted.containerStartedAt,
+      },
+    };
+  }
+  if (!intent.projectId) return null;
+  const workflowJobId = Number(intent.jobId);
+  if (!Number.isInteger(workflowJobId)) return null;
+  return {
+    hosted: null,
+    attribution: {
+      orgId: intent.organizationId,
+      workspaceId: intent.workspaceId,
+      projectId: intent.projectId,
+      repoFullName: `${intent.repoOwner}/${intent.repoName}`,
+      workload: CI_RUNNER_WORKLOAD,
+      workflowJobId,
+      size: FLEET_CONTAINER_SIZE,
+      // A reaped container's start instant is whatever the provider still
+      // reports; this process never observed it (that is what made it an orphan).
+      observedStartedAt: intent.startedAt,
+    },
+  };
 }
 
 /**

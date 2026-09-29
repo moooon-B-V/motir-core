@@ -1015,6 +1015,9 @@ model Organization {
   ciWorkflowRunUsages         CiWorkflowRunUsage[]
   ciPeriodUsages              CiPeriodUsage[]
   ciLiveAccruals              CiLiveAccrual[]
+  // The attribution reconciler's kills (MOTIR-6925) — SetNull: an audit row
+  // outlives the org it named.
+  fleetMachineKills           FleetMachineKill[]
   // Runner-fleet provisioning intents (Story MOTIR-1916 · MOTIR-1920) — the
   // queued fleet jobs attributed to this org. Cascade for the same reason: an
   // intent is a request to spend on the org's behalf, meaningless without it.
@@ -9400,6 +9403,50 @@ model CiLiveAccrual {
   @@index([organizationId])
   @@index([workspaceId])
   @@map("ci_live_accrual")
+}
+
+/// THE KILL RECORD (Story MOTIR-6906 · MOTIR-6925, `fleet-per-org-pool.md` §5) —
+/// one row per machine the attribution reconciler destroyed or stopped, for the
+/// platform admin's list (MOTIR-6905) and the audit of what the reconciler did.
+///
+/// ⚠️ WRITTEN BEFORE THE DESTROY. The decision commits first and the provider
+/// call follows (`docs/jobs.md`'s commit-then-effect rule), so a destroy that
+/// throws leaves a row with no `completedAt` and its `failureDetail` — never a
+/// machine killed with no record of why. The next pass decides again and writes
+/// a new row; a machine that keeps failing to die shows up as several.
+model FleetMachineKill {
+  id          String @id @default(cuid())
+  /// The provider app and machine, as the provider listed them.
+  app         String
+  machineId   String @map("machine_id")
+  machineName String @default("") @map("machine_name")
+
+  /// `no_record` · `record_ended` · `org_stopped` — the alert's own words.
+  reason String
+  /// `destroyed`, or `stopped` for an agent instance's persistent machine whose
+  /// record says it should be resting.
+  action String
+
+  /// What matched it, when anything did: the workload and its record's id.
+  /// Null for `no_record`.
+  workload       String?
+  recordRef      String? @map("record_ref")
+  /// The organisation of the matched record — null for `no_record`, and after
+  /// the organisation is deleted (the row outlives it: it is an audit).
+  organizationId String? @map("organization_id")
+
+  machineCreatedAt DateTime? @map("machine_created_at")
+  ageSeconds       Int       @map("age_seconds")
+
+  decidedAt     DateTime  @default(now()) @map("decided_at")
+  completedAt   DateTime? @map("completed_at")
+  failureDetail String?   @map("failure_detail")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, decidedAt])
+  @@index([decidedAt])
+  @@map("fleet_machine_kill")
 }
 
 /// The CONTAINER-SECONDS RECORD (Story MOTIR-1916 · MOTIR-1924) — what ONE fleet

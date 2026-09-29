@@ -16,11 +16,11 @@ import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import {
   CI_RUNNER_PROVISION_SWEEP_CRON,
-  CI_RUNNER_REAP_CRON,
   ciRunnerBoot,
   ciRunnerProvisionSweep,
-  ciRunnerReap,
 } from '@/lib/jobs/definitions/ciRunnerFleet';
+import { FLEET_ATTRIBUTION_CRON, fleetAttribution } from '@/lib/jobs/definitions/fleetAttribution';
+import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { createStepApi } from '@/lib/jobs/engine/step';
@@ -155,10 +155,11 @@ afterAll(async () => {
 });
 
 describe('all three fleet jobs are REGISTERED and reach the service through the injected bag', () => {
-  it('the sweep, the boot and the reaper are all served', () => {
+  it('the sweep, the boot and the attribution reconciler are all served', () => {
     expect(jobDefinitions).toContain(ciRunnerProvisionSweep);
     expect(jobDefinitions).toContain(ciRunnerBoot);
-    expect(jobDefinitions).toContain(ciRunnerReap);
+    // The reaper's schedule became the reconciler's (MOTIR-6925).
+    expect(jobDefinitions).toContain(fleetAttribution);
   });
 
   it('the service in the bag IS the exported singleton, not a lookalike', () => {
@@ -170,7 +171,7 @@ describe('all three fleet jobs are REGISTERED and reach the service through the 
     // from it is a cron nothing is watching.
     const ids = jobSchedules().map((s) => s.functionId);
     expect(ids).toContain('system.ci-runner-provision-sweep');
-    expect(ids).toContain('system.ci-runner-reap');
+    expect(ids).toContain('system.fleet-attribution');
   });
 });
 
@@ -192,17 +193,11 @@ describe('the schedules say what they can and cannot promise', () => {
     expect(config.trigger).toBeUndefined();
   });
 
-  it('the reaper runs every 30 minutes, ON the cluster (MOTIR-3314)', () => {
-    // ⚠️ THIS ASSERTION IS INVERTED FROM WHAT IT WAS. It read "clear of the top of
-    // the hour" and asserted the minute field held six offsets and NOT '0' —
-    // encoding the load-spreading rationale that a suspend-when-idle compute
-    // turns into a bill. The window between an orphan appearing and being
-    // destroyed is still billed, but so is every wake spent looking for one; the
-    // trade is argued at the constant. The gap itself is asserted by
-    // `tests/jobs/schedule-cluster.test.ts` over the whole table, so what belongs
-    // here is only this job's own shape.
-    expect(CI_RUNNER_REAP_CRON).toBe('0,30 * * * *');
-    expect(CI_RUNNER_REAP_CRON.split(' ')[0]!.split(',')).toEqual(['0', '30']);
+  it('the attribution reconciler runs every 5 minutes (MOTIR-6925)', () => {
+    // It replaced the reaper's 30-minute schedule: with the 10-minute grace a
+    // leaked machine lives at most grace + cadence = 15 minutes
+    // (`fleet-per-org-pool.md` §5).
+    expect(FLEET_ATTRIBUTION_CRON).toBe('*/5 * * * *');
   });
 });
 
@@ -226,8 +221,8 @@ describe('the retry budgets are correctness decisions, not defaults', () => {
       retryPolicy: 'idempotent',
     });
     const reap = configFor({
-      id: 'system.ci-runner-reap',
-      cron: CI_RUNNER_REAP_CRON,
+      id: 'system.fleet-attribution',
+      cron: FLEET_ATTRIBUTION_CRON,
       catchUp: 'latest',
       retryPolicy: 'idempotent',
     });
@@ -342,50 +337,50 @@ describe('the boot and reap handlers DELEGATE', () => {
     ).toBeDefined();
   });
 
-  it('the reaper handler delegates and returns the sweep counts', async () => {
-    const reap = vi
-      .spyOn(ciRunnerBootService, 'reapOrphans')
-      .mockResolvedValue({ reaped: 2, staleClaims: 1, usages: [] });
+  it('the attribution reconciler delegates, then sweeps stale claims (MOTIR-6925)', async () => {
+    const reconcile = vi
+      .spyOn(fleetAttributionService, 'reconcile')
+      .mockResolvedValue({ outcome: 'disabled' });
+    const sweep = vi.spyOn(ciRunnerBootService, 'sweepStaleClaims').mockResolvedValue(1);
 
-    const engine = new JobTestEngine({ function: ciRunnerReap });
+    const engine = new JobTestEngine({ function: fleetAttribution });
     const { result } = await engine.execute();
 
-    expect(reap).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ reaped: 2, staleClaims: 1, usages: [] });
+    expect(reconcile).toHaveBeenCalledTimes(1);
+    expect(sweep).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ reconciled: { outcome: 'disabled' }, staleClaims: 1 });
   });
 
-  it('the reaper runs end to end against a real (empty) database', async () => {
-    // No spy: the REAL service runs. With no orchestrator configured it is inert,
-    // which is the assertion — a self-hosted deployment must not error every ten
+  it('the reconciler runs end to end against a real (empty) database', async () => {
+    // No spy: the REAL service runs. With no fleet configured it is inert, which
+    // is the assertion — a self-hosted deployment must not error every five
     // minutes for want of a Fly token.
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     vi.stubEnv('FLY_FLEET_API_TOKEN', '');
+    vi.stubEnv('FLY_INVENTORY_API_TOKEN', '');
     vi.stubEnv('FLY_FLEET_APP', '');
     vi.stubEnv('MOTIR_RUNNER_IMAGE', '');
     try {
-      const engine = new JobTestEngine({ function: ciRunnerReap });
+      const engine = new JobTestEngine({ function: fleetAttribution });
       const { result } = await engine.execute();
-      expect(result).toEqual({ reaped: 0, staleClaims: 0, usages: [] });
+      expect(result).toEqual({ reconciled: { outcome: 'disabled' }, staleClaims: 0 });
     } finally {
       vi.unstubAllEnvs();
     }
   });
 
-  it('a reaper run lands one succeeded, UNTENANTED ledger row', async () => {
-    vi.spyOn(ciRunnerBootService, 'reapOrphans').mockResolvedValue({
-      reaped: 0,
-      staleClaims: 0,
-      usages: [],
-    });
+  it('a reconciler run lands one succeeded, UNTENANTED ledger row', async () => {
+    vi.spyOn(fleetAttributionService, 'reconcile').mockResolvedValue({ outcome: 'disabled' });
+    vi.spyOn(ciRunnerBootService, 'sweepStaleClaims').mockResolvedValue(0);
 
-    const engine = new JobTestEngine({ function: ciRunnerReap });
+    const engine = new JobTestEngine({ function: fleetAttribution });
     await engine.execute();
 
     const runs = await adminDb.jobRun.findMany();
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({
-      functionId: 'system.ci-runner-reap',
-      eventName: 'scheduled.system.ci-runner-reap',
+      functionId: 'system.fleet-attribution',
+      eventName: 'scheduled.system.fleet-attribution',
       status: 'succeeded',
       workspaceId: null,
       failure: null,
