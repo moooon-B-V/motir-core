@@ -9219,3 +9219,116 @@ link in `--el-text-strong` with an `--el-border-strong` underline; the CI badge'
 - **The review-agent variant** of a dead run (MOTIR-6817).
 - **The run-died marker and Continue hosted** — pointed at, not redrawn.
 - **The tag's form or placement, the Status track's width, the banner's slot** — MOTIR-6608's, unchanged.
+
+## ⭐ Design review without a babysitter — the SYSTEM-APPROVED record, the AUTOMATIC RE-RUN line, and the design-approval switch (Story MOTIR-693 · MOTIR-694 — `design-result--system-approved.mock.html` + `design-result--auto-rerun.mock.html`, and `design/projects/approvals--design-gate.mock.html`, DATED 2026-09-29)
+
+**The decision these draw is `docs/decisions/hosted-design-rerun-and-design-approval-switch.md`** (MOTIR-695). Three deltas, in two areas:
+
+| delta mock                                                   | amends                                                                                     | area         |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------ | ------------ |
+| `design/projects/approvals--design-gate.mock.html`           | `design/projects/approvals.mock.html` — the Approvals room (see that area's notes section) | `projects`   |
+| `design/work-items/design-result--system-approved.mock.html` | `design-result.mock.html` — the DECIDED state of its approval frame                        | `work-items` |
+| `design/work-items/design-result--auto-rerun.mock.html`      | `design-result.mock.html` — the REFUSED state of its approval frame                        | `work-items` |
+
+Each was drawn against what ships, read from source: the room's `page.tsx` and `AcceptanceVideoGateCard`, and the
+approval frame's record band (`ApprovalGateControl`'s `RecordStrip`). None of the older mocks is edited.
+
+### 1 · The design-approval switch — `approvals--design-gate.mock.html`
+
+- **Reached from:** Project settings → **Approvals** (`/settings/project/approvals`), the room guarded by
+  `workflow:manage`. The card's anchor is `#design-approval`, which the system-approved record links to.
+- **Composes:** `Card` (the `header` slot: an `h2` title + a description), then the state row: the state NAME and a
+  one-line CONSEQUENCE beside a `Switch`. The same grammar as `AcceptanceVideoGateCard`, minus its entitlement footer
+  (this switch needs no plan).
+- **Placement:** between _Acceptance video approval_ and _Merging pull requests_ — the two approval switches together,
+  then the merge setting that follows every approval.
+- **No read-only state.** The card asked for one, and the room has none: it is manage-only (`design/projects/design-notes.md`
+  § ⭐ Approvals §6, 2026-09-13; `lib/approvalGates/settingsDoor.ts`; the sibling card's own header). An actor without
+  `workflow:manage` never renders this card, so a read-only variant would draw a surface nobody can reach.
+
+| element           | copy (`en`)                                                                                                          | token                       |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| title             | **Design approval**                                                                                                  | `--el-text`, 16px semibold  |
+| description       | A published design result waits for a person to approve it. The work built on the design cannot start until they do. | `--el-text-secondary`       |
+| state name — on   | **On**                                                                                                               | `--el-text`, 14px medium    |
+| consequence — on  | Every published design waits for a person to approve it.                                                             | `--el-text-secondary`, 12px |
+| state name — off  | **Off**                                                                                                              | `--el-text`                 |
+| consequence — off | Published designs are approved automatically, and each approval says this setting made it.                           | `--el-text-secondary`       |
+| switch            | `aria-label` = the title                                                                                             | the shipped `Switch` tokens |
+| toasts            | `Saved` · `Couldn't save — try again.` (the sibling's keys, reused)                                                  | the shipped `Toast`         |
+
+Suggested keys: `approvals.designApproval.{title,desc,on,off,onWhat,offWhat,saved,saveError}` with `zh` twins.
+The write is `PATCH /api/projects/[key]/approval-gates` with `{ designApprovalGate }` (MOTIR-697), optimistic and
+reconciled from the response exactly as the sibling does.
+
+### 2 · A design result approved by the SYSTEM — `design-result--system-approved.mock.html`
+
+- **Where:** the decided state of the design result's approval frame — on the item page, in the approval overlay, and
+  in the Development block when the card has pull requests (every place the record band renders).
+- **When:** a `design_result` gate with `decisionSource = system` (and `decidedUnderAuthority = project_setting`). No
+  other kind is decided by the system.
+- **Why it must be drawn:** the shipped band prints its null-label fallback, **"No longer attributable"**, for such a
+  row — which says somebody decided and the name was lost. The opposite is true (ADR §6a), so this line REPLACES the
+  fallback for a system row.
+
+| element                       | copy (`en`)                                                                                       | token                                                |
+| ----------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| lead (the WHO slot)           | **Approved automatically**                                                                        | `--el-text`, medium — the slot a person's name takes |
+| why — holds `workflow:manage` | Design approval is off for this project (a link to `/settings/project/approvals#design-approval`) | `--el-link`, underlined                              |
+| why — everyone else           | Design approval is off for this project (plain text)                                              | `--el-text-secondary`                                |
+| time                          | the decision time (= the publish time)                                                            | `--el-text-secondary`                                |
+| version                       | `version <8 chars>` (unchanged)                                                                   | `--el-text-identifier`, mono                         |
+| Approvals-room record row     | Approved automatically · design approval off                                                      | `--el-text-secondary`                                |
+
+Suggested keys: `approvalGate.record.systemApproved`, `approvalGate.record.systemApprovedWhy`, and the room's
+`approvals.records.systemApproved`. **The band never shows an empty actor** for a system row, and never "No longer
+attributable": a `system` source is the discriminator, read before the label fallback.
+
+### 3 · The automatic re-run line — `design-result--auto-rerun.mock.html`
+
+- **Where:** the LAST line of a refused design gate's record band — after the verdict chip and the reason quote, on
+  its own full-width row. One line per Revise, read from that refusal's `design_auto_rerun` row (MOTIR-700).
+- **When there is NO row, there is NO line** — a card last run BYOK or by hand, every Re-plan, and every GitHub-synced
+  refusal. Nothing was attempted, so nothing is said (panel 3).
+- **Composes:** an inline glyph (`RefreshCw` started, `CirclePause` skipped; `lucide-react`, `aria-hidden`), a lead in
+  `--el-text` medium, the detail in `--el-text-secondary`, and at most ONE link in `--el-link`.
+
+| stored outcome · reason               | detail (`en`)                                                       | next step (link)                                    |
+| ------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------- |
+| `started`                             | lead **Re-running on the hosted agent** · automatic re-run {n} of 3 | **View run** → `/runs?run={dispatchRunId}`          |
+| `skipped` · `cap_reached`             | this design has been sent back 3 times.                             | **Run on the hosted agent** (the card's Run hosted) |
+| `skipped` · `dispatcher_gone`         | the person who last ran it is no longer here.                       | **Run on the hosted agent**                         |
+| `skipped` · `no_project_access`       | {name}, who last ran it, can no longer edit this project.           | **Run on the hosted agent**                         |
+| `skipped` · `ci_credits_exhausted`    | the organisation’s CI credits are used up.                          | **Billing** → `/settings/organization/billing`      |
+| `skipped` · `model_not_offered`       | {model}, the model it last ran on, is no longer offered.            | **Choose a model and run** (Run hosted's picker)    |
+| `skipped` · `models_unavailable`      | the list of models could not be read.                               | **Run on the hosted agent**                         |
+| `skipped` · `out_of_credits`          | the organisation is out of credits.                                 | **Buy credits** → `/settings/organization/billing`  |
+| `skipped` · `credits_unavailable`     | the credit balance could not be read.                               | **Run on the hosted agent**                         |
+| `skipped` · `repository_not_writable` | Motir cannot write to {repository}.                                 | **Repositories** → `/settings/project/repositories` |
+| `skipped` · `card_not_ready`          | someone picked the card up first.                                   | none — nobody can act on it                         |
+
+Every skipped line leads **Automatic re-run skipped**. Suggested keys: `approvalGate.autoRerun.{started,
+startedCount, viewRun, skipped}` and `approvalGate.autoRerun.reason.<reason>` / `.next.<reason>`, total over
+`DesignAutoRerunSkipReason`, with `zh` twins.
+
+### Tokens and a11y
+
+Colour only through `--el-*` and shape through the element-semantic tokens (`--radius-card`, `--radius-badge`,
+`--spacing-card-padding`, `--spacing-chip-*`, `--spacing-control-y`). All text on the page / card surfaces is
+`--el-text` or `--el-text-secondary`; no `--el-text-muted` or `--el-text-faint` carries text. The glyphs are
+`aria-hidden`; the lead carries the meaning. The dashed outline on the approvals board marks what is new and is not
+part of the design.
+
+### GIVES / TAKES
+
+| card                                           | GIVES                                                                                                                                                    | TAKES   |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| **MOTIR-702** (the build)                      | ELEMENT: the switch card, the system-approved record line (both link states), the re-run line and its eleven variants, every copy string above.          | Nothing |
+| **MOTIR-6417** (the E2E)                       | The words it asserts: _Approved automatically_, _Design approval is off for this project_, _Re-running on the hosted agent_, _Automatic re-run skipped_. | Nothing |
+| **MOTIR-6420 / MOTIR-6427** (the refused band) | Nothing — the chip, the quote and the band are pointed at, not redrawn.                                                                                  | Nothing |
+
+### What this does NOT decide
+
+- **The approval frame, the verdict pair and the reason field** — MOTIR-4789 / MOTIR-6073's, unchanged.
+- **Whether the cap is ever per-project** — the record keeps it a constant.
+- **The Run hosted control itself** — the skipped lines link to it; it is 9.1's.

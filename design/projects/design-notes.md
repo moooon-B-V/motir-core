@@ -4380,3 +4380,17 @@ confirm is a `dialog` whose initial focus is Cancel.
 Who may be added (every workspace member, as today); whether a project can be switched to Public by
 anyone but a Manager (it cannot — `project:manage_access`); the Visitor's own chrome (MOTIR-6170); and
 dropping `access_level` from the schema (MOTIR-6554).
+
+## ⭐ The DESIGN APPROVAL switch — a third card in the Approvals room (Story MOTIR-693 · MOTIR-694 — `approvals--design-gate.mock.html`, DATED 2026-09-29)
+
+Amends § ⭐ Approvals and `approvals.mock.html` (not edited). The decision is
+`docs/decisions/hosted-design-rerun-and-design-approval-switch.md` §2 (MOTIR-695).
+
+- **Reached from:** Project settings → Approvals (`/settings/project/approvals`), manage-only; anchor `#design-approval`.
+- **Placement:** between _Acceptance video approval_ and _Merging pull requests_.
+- **Grammar:** the sibling `AcceptanceVideoGateCard`'s — a `Card` header (title + description), then the state NAME and
+  its one-line CONSEQUENCE beside a `Switch`. No entitlement footer: this switch needs no plan.
+- **No read-only state:** the room is manage-only (§6 above, 2026-09-13), so no actor below `workflow:manage` renders it.
+
+The full spec — every copy string, token and suggested key, and the two item-page deltas the same story draws — is
+`design/work-items/design-notes.md` § ⭐ Design review without a babysitter.
