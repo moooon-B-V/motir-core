@@ -8,6 +8,16 @@ import type {
 } from '@/lib/dto/approvalGateSettings';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
+function toSettingsDto(project: {
+  acceptanceVideoEnabled: boolean;
+  designApprovalGate: boolean;
+}): ApprovalGateSettingsDTO {
+  return {
+    acceptanceVideoEnabled: project.acceptanceVideoEnabled,
+    designApprovalGate: project.designApprovalGate,
+  };
+}
+
 /**
  * The project's APPROVAL-GATE switches (Story MOTIR-4925 · Subtask MOTIR-5170) —
  * which gates `Project settings ▸ Approvals` raises. Read by that room; written
@@ -50,7 +60,7 @@ export const approvalGateSettingsService = {
     const project = await withSystemContext((tx) => projectRepository.findById(projectId, tx));
     if (!project) throw new ProjectNotFoundError(projectId);
 
-    return { acceptanceVideoEnabled: project.acceptanceVideoEnabled };
+    return toSettingsDto(project);
   },
 
   /**
@@ -68,22 +78,33 @@ export const approvalGateSettingsService = {
     // An empty patch is a no-op READ rather than an error: the route forwards only
     // the keys the body carried, and a caller sending none has asked for nothing.
     // Returning the current state keeps the client's reconcile honest either way.
-    if (patch.acceptanceVideoEnabled === undefined) {
+    if (patch.acceptanceVideoEnabled === undefined && patch.designApprovalGate === undefined) {
       const project = await withSystemContext((tx) => projectRepository.findById(projectId, tx));
       if (!project) throw new ProjectNotFoundError(projectId);
-      return { acceptanceVideoEnabled: project.acceptanceVideoEnabled };
+      return toSettingsDto(project);
     }
 
+    // ⚠️ ONLY THE KEYS THE BODY CARRIED. The design switch is read at RAISE time
+    // (MOTIR-697), so writing it never decides a gate already waiting — flipping it
+    // off leaves an in-progress review to its reviewer, and flipping it back on
+    // affects only gates raised afterwards (§2f).
     const updated = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       (tx) =>
         projectRepository.updateApprovalGateSettings(
           projectId,
-          { acceptanceVideoEnabled: patch.acceptanceVideoEnabled },
+          {
+            ...(patch.acceptanceVideoEnabled === undefined
+              ? {}
+              : { acceptanceVideoEnabled: patch.acceptanceVideoEnabled }),
+            ...(patch.designApprovalGate === undefined
+              ? {}
+              : { designApprovalGate: patch.designApprovalGate }),
+          },
           tx,
         ),
     );
 
-    return { acceptanceVideoEnabled: updated.acceptanceVideoEnabled };
+    return toSettingsDto(updated);
   },
 };

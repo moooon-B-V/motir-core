@@ -437,7 +437,7 @@ describe('decision_source accepts `github` with an UNRESOLVABLE actor', () => {
     });
   });
 
-  it('the enum holds exactly the four surfaces the ADR names', async () => {
+  it('the enum holds the four surfaces a PERSON decides through, plus `system`', async () => {
     const values = await adminDb.$queryRaw<Array<{ enumlabel: string }>>`
       SELECT e."enumlabel"
       FROM pg_enum e
@@ -445,10 +445,15 @@ describe('decision_source accepts `github` with an UNRESOLVABLE actor', () => {
       WHERE t."typname" = 'approval_gate_decision_source'
       ORDER BY e."enumsortorder"
     `;
-    expect(values.map((v) => v.enumlabel)).toEqual(['ui', 'api', 'mcp', 'github']);
+    // ⚠️ `system` IS NOT A SURFACE, and the title changed rather than the list growing
+    // quietly (MOTIR-697; `hosted-design-rerun-and-design-approval-switch.md` §2c). Its
+    // answer to *"was a human in the loop?"* is NO: a project setting decided the gate.
+    // The decide door's `source` input excludes it by type, and its one writer is the
+    // publish path's system decision.
+    expect(values.map((v) => v.enumlabel)).toEqual(['ui', 'api', 'mcp', 'github', 'system']);
   });
 
-  it('the authority enum holds §2’s three rungs, plus the TWO values that are not rungs', async () => {
+  it('the authority enum holds §2’s three rungs, plus the THREE values that are not rungs', async () => {
     const values = await adminDb.$queryRaw<Array<{ enumlabel: string }>>`
       SELECT e."enumlabel"
       FROM pg_enum e
@@ -477,6 +482,10 @@ describe('decision_source accepts `github` with an UNRESOLVABLE actor', () => {
       'admin',
       'github_review',
       'plan_permission',
+      // ⚠️ `project_setting` IS NOT A §2 RUNG — nobody decided it (MOTIR-697; §2c). The
+      // design gate of a project with design approval off is approved by the SETTING,
+      // and the row names the setting rather than borrowing a person's rung.
+      'project_setting',
     ]);
   });
 });

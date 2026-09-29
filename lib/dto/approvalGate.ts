@@ -194,13 +194,20 @@ export type ApprovalGateAuthorityDTO =
   | 'github_review'
   /** `ai:decide_plan` alone — the `plan_approval` kind has no work item, so no §2
    *  relationship rung is true of its decider (ADR §11.6). */
-  | 'plan_permission';
+  | 'plan_permission'
+  /** A PROJECT SETTING, not a person: the design gate a project with design
+   *  approval switched off approves at raise time (MOTIR-697;
+   *  `hosted-design-rerun-and-design-approval-switch.md` §2c). Written only by the
+   *  publish path's system decision; `resolveGateAuthority` never returns it. */
+  | 'project_setting';
 
 /** Through which surface the decision arrived (ADR §6a, with `github` added by
  *  §6b's amendment). Mirrors the `ApprovalGateDecisionSource` Prisma enum. A
  *  human click, a token's API call, an agent's MCP call and a review synced out
- *  of GitHub are four different answers to *"was a human in the loop?"*. */
-export type ApprovalGateDecisionSourceDTO = 'ui' | 'api' | 'mcp' | 'github';
+ *  of GitHub are four different answers to *"was a human in the loop?"*. `system`
+ *  is the fifth, and its answer is NO: a project setting decided it (MOTIR-697;
+ *  `hosted-design-rerun-and-design-approval-switch.md` §2c). */
+export type ApprovalGateDecisionSourceDTO = 'ui' | 'api' | 'mcp' | 'github' | 'system';
 
 /**
  * WHAT A PERSON MEANT BY "NO" on a refused `design_result` gate (Story MOTIR-6070 ·

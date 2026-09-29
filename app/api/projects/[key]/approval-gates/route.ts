@@ -83,6 +83,15 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
     }
     patch.acceptanceVideoEnabled = raw.acceptanceVideoEnabled;
   }
+  if ('designApprovalGate' in raw) {
+    if (typeof raw.designApprovalGate !== 'boolean') {
+      return NextResponse.json(
+        { code: 'BAD_REQUEST', error: '`designApprovalGate` must be a boolean.' },
+        { status: 400 },
+      );
+    }
+    patch.designApprovalGate = raw.designApprovalGate;
+  }
 
   try {
     const project = await projectsService.getByKey(key, ctx);

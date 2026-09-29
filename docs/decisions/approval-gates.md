@@ -2517,6 +2517,8 @@ An approval that does not merge is a note, not a gate.
 
 **9.2's review UI COMPOSES this record's control rather than drawing its own.**
 
+**Amended by [`hosted-design-rerun-and-design-approval-switch.md`](hosted-design-rerun-and-design-approval-switch.md) (MOTIR-695).**
+
 > **⚠️ RE-DRAWN BY §10g (MOTIR-6072, 2026-09-23).** Returning a sent-back card to
 > To do, handing its reason to the next run, and opening the planner on a refusal
 > are now Epic MOTIR-6010's. The table above keeps the HOSTED, automatic
@@ -4973,6 +4975,8 @@ publish supersedes nothing that was approved.
 
 9.2 may later make the run after a Revise automatic. It does not own the
 hand-back, which is this epic's.
+
+**Amended by [`hosted-design-rerun-and-design-approval-switch.md`](hosted-design-rerun-and-design-approval-switch.md) (MOTIR-695).**
 
 #### 10h. THE FOLLOW-UP TABLE — one row per kind × case
 

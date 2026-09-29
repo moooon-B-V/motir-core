@@ -969,6 +969,7 @@ export const projectRepository = {
     id: string,
     data: {
       acceptanceVideoEnabled?: boolean;
+      designApprovalGate?: boolean;
     },
     tx: Prisma.TransactionClient,
   ): Promise<Project> {

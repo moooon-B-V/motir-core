@@ -92,6 +92,8 @@ import { planGateStampInputs, planSubjectVersion } from '@/lib/approvalGates/pla
 import { readPlanGateHeld } from '@/lib/approvalGates/planApprovalHandler';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
+import { resolveStatusIntent } from '@/lib/workflows/statusIntent';
 
 // THE DECIDE DOOR (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
 // docs/decisions/approval-gates.md).
@@ -172,8 +174,12 @@ export interface DecideGateInput {
    * review approved in GitHub's own UI, where nobody clicked in Motir. It is not
    * reachable from this build's two callers, both of which have a human or a
    * token behind them.
+   *
+   * `system` is NOT accepted here, and the type is what refuses it (MOTIR-697): no
+   * caller of the door may claim that nobody pressed. Its one writer is
+   * {@link approvalGatesService.approveBySystem}, on the publish path.
    */
-  source: ApprovalGateDecisionSourceDTO;
+  source: Exclude<ApprovalGateDecisionSourceDTO, 'system'>;
   /**
    * WHAT THE READER WAS SHOWN — the `stamp` the render read handed them
    * (`WorkItemGateRead.stamp`), handed back with the press (Story MOTIR-5232 ·
@@ -2333,5 +2339,118 @@ export const approvalGatesService = {
         companionSubjectVersion: companionVersion,
       };
     }
+  },
+
+  /**
+   * APPROVE A GATE ON BEHALF OF A PROJECT SETTING — the design gate of a project whose
+   * design approval is switched OFF (Story MOTIR-693 · MOTIR-697;
+   * `docs/decisions/hosted-design-rerun-and-design-approval-switch.md` §2).
+   *
+   * ⚠️ IT RUNS IN THE CALLER'S TRANSACTION, which is the whole reason it is not
+   * {@link approvalGatesService.decide}. The gate it decides was created a few statements
+   * earlier in the PUBLISH's own transaction and is not visible to any other connection,
+   * so the door — which opens its own — would not find it. §2b asks for the gate to be
+   * raised and approved in the same transaction, so a rollback never leaves one without
+   * the other.
+   *
+   * ⚠️ AND IT IS THE SAME DECISION, NOT A SECOND ONE. It takes the door's steps 1, 4, 5
+   * and 6 through the door's own parts, in the door's order: lock and re-read the gate,
+   * PIN the version (§6c), run the kind's `approve` EFFECT (so §3's status effect is a
+   * person's approval's exactly), then write the decision LAST with the whole audit set.
+   * What it skips is what has no subject here — step 2's actor gate (nobody pressed),
+   * step 3b's stale check (nobody was shown anything) and 3c's verb check (the verb is
+   * `approve`, which every kind but a choice offers; only `design_result` calls this).
+   *
+   * THE ROW (§2c): no actor and no label — `decidedById` / `decidedByLabel` null, which
+   * §6a warns reads as *nobody decided* ONLY when nothing else says who did; here
+   * `decisionSource = system` and `decidedUnderAuthority = project_setting` say it.
+   *
+   * The status key is resolved from statuses read ON `tx` through the pure
+   * `resolveStatusIntent` — never `workflowsService.resolveStatusKey`, which opens a
+   * second connection while this one holds the gate lock (the shape
+   * `applyStatusTransition` warns about).
+   */
+  async approveBySystem(
+    gateId: string,
+    ctx: ServiceContext,
+    tx: Prisma.TransactionClient,
+  ): Promise<DecideGateResult> {
+    // 1 · LOCK AND RE-READ.
+    const locked = await approvalGateRepository.lockById(gateId, tx);
+    if (!locked || locked.workItemId === null) throw new ApprovalGateNotFoundError(gateId);
+    // The door's two refusals, split as its own step 3 splits them (§6b): a withdrawn
+    // question is never reported as somebody's answer.
+    if (locked.state === 'superseded') {
+      throw new ApprovalGateSupersededError(gateId, locked.supersededCause);
+    }
+    if (locked.state !== 'awaiting') {
+      throw new ApprovalGateAlreadyDecidedError(
+        gateId,
+        locked.state,
+        locked.decidedById,
+        locked.decidedAt,
+        locked.decidedByLabel,
+      );
+    }
+    const item = await workItemRepository.findById(locked.workItemId, tx);
+    if (!item || item.workspaceId !== ctx.workspaceId) throw new ApprovalGateNotFoundError(gateId);
+
+    const handler = handlerFor(locked.kind);
+    const statuses = await workflowsRepository.findStatuses(item.projectId, ctx.workspaceId, tx);
+    const resolvedStatusKey = handler.statusIntent
+      ? resolveStatusIntent(statuses, handler.statusIntent)
+      : null;
+    const args = {
+      gate: {
+        id: locked.id,
+        workspaceId: locked.workspaceId,
+        projectId: locked.projectId,
+        workItemId: locked.workItemId,
+        subjectId: locked.subjectId,
+      },
+      item,
+      ctx,
+      tx,
+      resolvedStatusKey,
+      prepared: undefined,
+      effectOptions: undefined,
+      refusalVerdict: null,
+    };
+    const decidedVersion = await handler.subjectVersion(args);
+
+    // 4 · THE PIN — an approval keeps the bytes it was given on (§6c).
+    const pinnedId = await designEvidenceService.pinCurrentForWorkItem(locked.workItemId, tx);
+    const filesKept = locked.kind === 'design_result' ? pinnedId === locked.subjectId : null;
+
+    // 5 · THE KIND'S EFFECT — the same `approve` a person's press runs.
+    const effect = await handler.approve(args);
+
+    // 6 · THE DECISION, LAST, with the §2c markers.
+    const decided = await approvalGateRepository.decide(
+      locked.id,
+      {
+        state: 'approved',
+        decidedById: null,
+        decidedAt: new Date(),
+        noteMd: null,
+        subjectVersion: decidedVersion,
+        decidedByLabel: null,
+        decidedUnderAuthority: 'project_setting',
+        decisionSource: 'system',
+        outcomeRef: effect.statusWritten,
+        chosenOption: null,
+        confirmedRecord: null,
+        refusalVerdict: null,
+      },
+      tx,
+    );
+    await recomputeWorkItemFixReason(item.id, tx);
+
+    return {
+      gate: toApprovalGateDto(decided, item.descriptionMd),
+      effect,
+      filesKept,
+      companionSubjectVersion: null,
+    };
   },
 };

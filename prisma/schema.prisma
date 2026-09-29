@@ -1341,6 +1341,14 @@ model Project {
   /// organisation's value, because an org that had deliberately turned acceptance
   /// video OFF must not find every project under it turned back on.
   acceptanceVideoEnabled           Boolean               @default(true) @map("acceptance_video_enabled")
+  /// Whether a published design result WAITS for a person (Story MOTIR-693 ·
+  /// MOTIR-697; `docs/decisions/hosted-design-rerun-and-design-approval-switch.md`
+  /// §2). `true` — the default, and every existing project's value — raises an
+  /// `awaiting` `design_result` gate exactly as before. `false` raises the SAME gate
+  /// and approves it in the publish's own transaction, on the record: no actor,
+  /// `decisionSource = system`, `decidedUnderAuthority = project_setting`. Read at
+  /// RAISE time only, so flipping it never decides a gate already waiting.
+  designApprovalGate               Boolean               @default(true) @map("design_approval_gate")
   /// How this project's pull requests are merged (MOTIR-4880 ·
   /// `docs/decisions/approval-gates.md` §7). PROJECT-scoped because a merge
   /// policy is a property of a codebase and its team, and the merge gate that
@@ -4915,6 +4923,12 @@ enum ApprovalGateAuthority {
   /// `plan_approval` kind has no work item, so §2's relationship rungs are not true
   /// of its decider (ADR `approval-gates.md` §11.6).
   plan_permission
+  /// Authority conferred by a PROJECT SETTING rather than by any person — the
+  /// design gate a project with design approval switched OFF approves at raise
+  /// time (MOTIR-697; `hosted-design-rerun-and-design-approval-switch.md` §2c).
+  /// ⚠️ NEVER RESOLVED BY `resolveGateAuthority` and unreachable from a route, a
+  /// press or the MCP: its ONE writer is the publish path's system decision.
+  project_setting
 
   @@map("approval_gate_authority")
 }
@@ -4938,6 +4952,13 @@ enum ApprovalGateDecisionSource {
   /// agent called the MCP — and the approving identity may not resolve to a
   /// member at all, which is why `decidedByLabel` is not optional context.
   github
+  /// NOBODY pressed anything: a project setting decided it (MOTIR-697;
+  /// `hosted-design-rerun-and-design-approval-switch.md` §2c). Read with
+  /// `decidedUnderAuthority = project_setting`. "The decisions people made" is every
+  /// row whose source is one of the four above — a `system` row is never in it.
+  /// ⚠️ Never accepted from a caller: the decide door's `source` input excludes it,
+  /// and its ONE writer is the publish path's system decision.
+  system
 
   @@map("approval_gate_decision_source")
 }

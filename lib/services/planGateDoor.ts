@@ -48,7 +48,7 @@ export interface DecidePlanInput {
    *  no question (a `generating` plan's discard, a plan with no gate). */
   stamp: DecisionStamp | null;
   /** Through which surface the decision arrived (ADR §6a) — required, no default. */
-  source: ApprovalGateDecisionSourceDTO;
+  source: Exclude<ApprovalGateDecisionSourceDTO, 'system'>;
   /** Optional on both verbs (§11.4 — a decline's reason is optional by design). */
   noteMd?: string | null;
 }
