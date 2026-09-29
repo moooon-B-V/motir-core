@@ -685,6 +685,21 @@ describe('continue hosted — a leaf whose run died', () => {
     });
   });
 
+  it('takes the card off To fix — the claim clears the stored run_died (Story MOTIR-6590 · MOTIR-6883, case 2)', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card, deadRunId } = await deadCard();
+    // Recorded dead, so the card's stored reason says so before the press.
+    await dispatchRunService.close(deadRunId, { stopReason: 'interrupted' }, fx.ctx);
+    const reasonOf = async () =>
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).fixReason;
+    expect(await reasonOf()).toBe('run_died');
+
+    const started = await startContinue(card.identifier);
+
+    expect(started.created).toBe(true);
+    expect(await reasonOf()).toBeNull();
+  });
+
   it('the same key twice answers one run and boots one container', async () => {
     await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
     const { card } = await deadCard();

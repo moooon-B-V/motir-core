@@ -2877,3 +2877,237 @@ No `--el-text-muted` or `--el-text-faint` carries text anywhere on the row, beca
 - **What `motir fix` claims**, a workspace-wide list, and notifications.
 - **The Development section's own fix part** (`RepairFixPart`) on the item page. This tab borrows its
   glyphs and inks and does not change it.
+
+## 31 · TO FIX · RUN DIED — the fifth reason, sorted first — MOTIR-6878
+
+**Asset:** `design/workbench/workbench--to-fix--run-died.mock.html`, a new delta mock (card
+MOTIR-6878). No existing mock is edited.
+
+**It AMENDS § 30** (`design/workbench/workbench--to-fix.mock.html`, MOTIR-6599's approved To fix tab):
+the tab gains a fifth `fixReason`, **`run_died`**, and the empty state's body names five causes. Line 1
+of the row, the strip, the cascade, the pager, the held-row rule and the four shipped reasons are
+unchanged. The sheet's stylesheet is § 30's three style blocks verbatim plus one delta block.
+
+**It POINTS AT, and redraws neither:**
+
+- the **run-died marker** — MOTIR-6529, `design/runs/run-section--run-died.mock.html`,
+  `design/runs/design-notes.md` § _Run died_ (D1–D8). The row's words come from it, and the row opens
+  the card, where the marker is.
+- the **Continue hosted control** — MOTIR-6789, `design/runs/development--continue-hosted.mock.html`
+  panels C1–C7, § _Continue hosted_. The row places the shipped control (`ContinueHostedDoor` =
+  `HostedModelPicker` + a primary `Button` with `Cloud`) as it renders today; its `cc-` rules are copied
+  verbatim from that sheet. Starting and every refusal are C4–C5's own states; this section only says
+  where they sit in a row.
+
+**States drawn:** 1 pushed, own run · 2 pushed, several repositories (and the worst-case truncation) ·
+3 a child of a parent run · 4 nothing pushed · 5 the viewer may not edit · 6 Continue hosted starting,
+refused before it starts, refused because somebody else took it · 7 continued → HELD, the count
+dropping · 8 died again during a continue · the empty tab (en + zh) · the six ways a run dies · zh.
+
+### Where it sorts — FIRST
+
+**`FIX_REASON_PRIORITY` becomes `run_died` → `queue_failed` → `conflicted` → `ci_failed` →
+`changes_requested`.** The To fix list therefore sorts a dead-run card ABOVE all four pull-request
+reasons, the stored reason is `run_died` whenever it holds alongside any of them, and the filter editor
+(which maps over the same tuple) lists _Run died_ first.
+
+**Why first:** nothing else on the card can be repaired until somebody owns its branch again. A
+dead run leaves the card In Progress, assigned to someone who is no longer working on it, with its work
+on a branch no agent holds. `motir fix` and `motir run` both need that branch owned; a red check or a
+conflict on it is fixed BY the continue, which merges the latest `main` and finishes the work in one
+pull request. Repairing the pull-request reason first would put a second agent on a branch the dead run
+may still have unpushed intent for. So the dead run is the first thing to repair, and the one a reader
+should meet first.
+
+### The row's facts — `getContinueView`, exactly
+
+The row reads the view the marker and the claim read (`lib/services/workItemContinueService.ts`), so the
+row never offers a repair the claim would refuse:
+
+| row element                    | field                                                                                                                             |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| _last heard from &lt;when&gt;_ | `deadRun.lastHeardAt` — relative (`relativeLabel`), the instant (`formatRunInstant`) in `title`                                   |
+| _&lt;who&gt;_                  | `deadRun.dispatcher.name`; the `…NoName` sentence when it is null (a deleted account)                                             |
+| _branch &lt;branch&gt;_        | `branch` (= `branches[0]`, the primary repository's)                                                                              |
+| _+ N more repositories_        | `branches.length − 1`, drawn only when `branches.length > 1`; the clause's `title` lists each `repository · branch`               |
+| _nothing was pushed_           | `branches` empty (`refusal === 'no_branch'`)                                                                                      |
+| the card to continue           | the row's own key, or `parentKey` when `refusal === 'continue_the_parent'`                                                        |
+| whether the control shows      | the door rule (`_view.tsx`'s `hostedDoor`: edit permission, not archived, not done) and `refusal ∈ {null, 'continue_the_parent'}` |
+
+**When the reason holds (the premise given to MOTIR-6880):** the view is `died` and its `refusal` is
+`null`, `continue_the_parent` or `no_branch`. `use_fix` (the card is Implemented or later: a pull request
+is open and its checks decide) and `not_in_progress` are NOT `run_died` — the first falls to the four
+pull-request reasons, the second has nothing to repair. `alive`, `none` and `continuing` clear it.
+
+### The glyph — lucide `TriangleAlert`, in `--el-icon-muted`
+
+The reason glyph for `run_died` is **`TriangleAlert`** (lucide-react, already shipped in
+`ContinuePart.tsx`), **14px, `--el-icon-muted`, `aria-hidden`**.
+
+- It is **the marker's own glyph**: the marker's _Run died_ pill and its reason line both wear
+  `TriangleAlert`, and the reason line's ink is `--el-icon-muted`. The row opens the card on exactly
+  that marker, so the two read as one signal.
+- It is **not `CircleX`**, which § 30 gives to the three failing pull-request reasons. Nothing about the
+  work failed: the run stopped and the work is kept (the run area's _unknown is not failed_ tone). A red
+  cross would say the opposite.
+- It is **not `Undo2`**: nobody refused anything.
+- `--el-icon-muted`, not `--el-warning`, because the row never rests on colour (§ 30): the sentence
+  starts with the words _Run died_, and priority, not ink, puts the row first.
+
+### Which repair leads — Continue hosted, and the command keeps the right edge
+
+The fix line carries both repairs, in this order: **the Continue hosted control first, the copyable
+command `motir continue <KEY>` second, at the right edge.**
+
+- **Continue hosted leads.** It is first in reading order and the row's only filled control — C1's
+  decision (_the story exists for the person with no terminal_) carried onto the row.
+- **The command keeps the right edge.** Every other To fix row ends in its command chip and copy
+  button; keeping `motir continue` there keeps that column scannable down the whole list.
+- **The command is the fix line's own command part** — § 30's chip (`--el-code-bg` / `--el-code-text`)
+  and always-visible copy icon-button, with the same `copyAria`, `copyTooltip` and _Copied_ toast. It is
+  the row-sized form of `RepairFixPart`'s command part; the full `CopyableCodeBlock`, with its language
+  bar, is the marker's.
+- **Width.** Measured against the 894px content box: the reason (~500px at 12px) plus the picker
+  (15rem), the button (~140px) and the command (~200px) do not fit one line, so the repairs WRAP onto a
+  third line, right-aligned — the fix line's shipped `flex-wrap`, no new rule. Both sit in one
+  `relative z-10` group above the row's stretched link, so pressing either does not open the card. Below
+  ~620px the door wraps once more inside itself (its own `flex-wrap`: the button drops under the
+  picker), as C1's ~400px panel shows.
+
+### The eight states
+
+| state                          | line 2 reads                                                                                                                          | repairs                                                                              |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 1 pushed, own run              | _Run died · last heard from 12 min ago · Mara S. · branch `subtask/ACME-14-throttle`_                                                 | Continue hosted · `motir continue ACME-14`                                           |
+| 2 several repositories         | the primary branch, then _+ 2 more repositories_ (secondary, never truncates); the branch cuts at 32ch, then the sentence as one span | the same two — a continue resumes every repository's branch                          |
+| 3 child of a parent run        | the parent's session branch, then _Part of **ACME-12**’s run — both repairs continue the whole run_                                   | **Continue ACME-12 hosted** (`hosted.buttonParent`) · `motir continue ACME-12`       |
+| 4 nothing pushed               | _… · nothing was pushed_                                                                                                              | neither; the marker's own **start-over** line in the command's place                 |
+| 5 viewer may not edit          | the reason, unchanged                                                                                                                 | neither; _You can’t edit this work item, so someone who can has to continue it._     |
+| 6 starting / refused           | unchanged                                                                                                                             | C4a in place of the door; C5c's notice under the repairs; C5a's notice on a HELD row |
+| 7 continued → held             | the reason in `--el-text-secondary`, no glyph                                                                                         | `Cleared` (§ 26 / § 30); the count drops at once                                     |
+| 8 died again during a continue | the same sentence, naming the **continuing** run's dispatcher and its last-heard time                                                 | the same two; the row arrives with § 26's `New` chip, first                          |
+
+- **State 4 reuses MOTIR-6529's copy, not new copy:** `github.development.continue.startOver` —
+  _Start over instead: set **ACME-16** to To Do and run it again._ — in the marker's `Note` ink
+  (`text-xs`, `--el-text-secondary`). A command the claim would refuse (`no_branch`) is a trap.
+- **State 5 offers no command either.** `claimContinue` runs `assertCanEdit` first, so
+  `motir continue` would be refused for a reader who may only browse; Continue hosted is not mounted for
+  a non-editor (C6). The row keeps its reason and says who can act. It still opens the card.
+- **State 6 — where C4–C5 sit.** Starting replaces the door in place (picker disabled, the button's
+  `loading` with _Starting…_); the command stays. A notice takes a full-width slot under the repairs, on
+  the fix line's 40px indent, above the row's bottom border. A pre-flight refusal (C5c — out of credits,
+  unavailable, not writable, model not offered) leaves the row as it was: nothing was locked. A refusal
+  that means the state MOVED (C5a — _taken_, _run alive_) means the reason has cleared: the row is HELD
+  (state 7) and the notice stays with it, because it answers the press.
+- **State 7 — § 26, unchanged in wording: a nudge adds and updates; it never removes.** A continue claim
+  opens the `continue` run, the view becomes `continuing`, the reason clears. The row keeps its place,
+  goes `--el-text-secondary`, drops its glyph and both repairs, and wears **Cleared**; the strip count
+  drops at once (4 → 3 while four rows show). The next load omits it. _Cleared_, not _Continued_: the
+  nudge does not say why the card left the set.
+- **State 8 does not read differently in form.** When a continue run itself dies, the view is `died`
+  again and its `deadRun` IS the continue run: _last heard from_ is its time and _&lt;who&gt;_ is its
+  dispatcher (**Lee K.**, not Mara S. whose run died first). No _died again_ wording: what the reader
+  must do is the same, and the history is the marker's (_Run by Lee K. with `motir continue`_).
+
+### The six ways a run dies — what the row shows
+
+The row names **none** of them. Each is folded into _Run died · last heard from &lt;when&gt;_, because all
+six share one repair; the ending is the marker's reason line (D3), one click away.
+
+| `RunDiedReason` | the marker says (D3)                                    | the row                                                     |
+| --------------- | ------------------------------------------------------- | ----------------------------------------------------------- |
+| `lapsed`        | The run stopped reporting — last heard from …           | folded — _last heard from_ IS the fact (its last heartbeat) |
+| `interrupted`   | The run was stopped from its terminal …                 | folded into _last heard from_ (its end)                     |
+| `failed`        | The agent exited with an error …                        | folded into _last heard from_ (its end)                     |
+| `cancelled`     | The run was cancelled …                                 | folded into _last heard from_ (its end)                     |
+| `stalled`       | The hosted agent stalled — no output for 15 minutes — … | folded into _last heard from_ (its end)                     |
+| `backstop`      | The hosted run reached its 12-hour limit …              | folded into _last heard from_ (its end)                     |
+
+The tag and the banner fold them the same way (`design/work-items/design-notes.md` § _The TO FIX tag and
+banner: RUN DIED_).
+
+### The empty state — five causes
+
+Unchanged but for the body, which now names five causes, the dead run first (the priority order):
+_When a run that died, a merge queue, a conflict, a failing check or a reviewer stops one of your work
+items, it shows up here with what repairs it._ _With what repairs it_, not _with the command that
+repairs it_: a dead run with nothing pushed carries a start-over line, not a command.
+
+### Strings — every new key, `en` and `zh`
+
+New keys sit under the shipped namespaces. `<when></when>` is the shipped rich-text time tag the continue
+part already uses (a `<time>` with `relativeLabel`); `<d>` is the row's mono-bold part, as § 30's
+`<d>{base}</d>`.
+
+| key                                                 | `en`                                                                                                                                                | `zh`                                                                                                 |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `workbench.toFix.reason.runDied`                    | Run died · last heard from <when></when> · {name} · branch <d>{branch}</d>                                                                          | 运行已中断 · 最后一次联系在<when></when> · {name} · 分支 <d>{branch}</d>                             |
+| `workbench.toFix.reason.runDiedNoName`              | Run died · last heard from <when></when> · branch <d>{branch}</d>                                                                                   | 运行已中断 · 最后一次联系在<when></when> · 分支 <d>{branch}</d>                                      |
+| `workbench.toFix.reason.runDiedNothingPushed`       | Run died · last heard from <when></when> · {name} · nothing was pushed                                                                              | 运行已中断 · 最后一次联系在<when></when> · {name} · 未推送任何内容                                   |
+| `workbench.toFix.reason.runDiedNothingPushedNoName` | Run died · last heard from <when></when> · nothing was pushed                                                                                       | 运行已中断 · 最后一次联系在<when></when> · 未推送任何内容                                            |
+| `workbench.toFix.reason.runDiedBare`                | Run died                                                                                                                                            | 运行已中断                                                                                           |
+| `workbench.toFix.reason.runDiedMoreRepositories`    | + {count, plural, one {# more repository} other {# more repositories}}                                                                              | 另有 {count} 个代码仓库                                                                              |
+| `workbench.toFix.reason.runDiedParent`              | Part of <b>{parent}</b>’s run — both repairs continue the whole run                                                                                 | 属于 <b>{parent}</b> 的运行——两种方式都会继续整个运行                                                |
+| `workbench.toFix.reason.runDiedCannotEdit`          | You can’t edit this work item, so someone who can has to continue it.                                                                               | 你无法编辑此工作项，因此需要由有编辑权限的人来继续。                                                 |
+| `workbench.empty.toFix.body` (**changed**)          | When a run that died, a merge queue, a conflict, a failing check or a reviewer stops one of your work items, it shows up here with what repairs it. | 当中断的运行、合并队列、冲突、未通过的检查或审阅者卡住你的某个工作项时，它会带着修复方法显示在这里。 |
+| `toFix.tagName.run_died`                            | To fix · run died                                                                                                                                   | 待修复 · 运行已中断                                                                                  |
+| `toFix.banner.runDied`                              | This needs a fix: its run died, last heard from <when></when>, and its work is kept on its branch.                                                  | 需要修复：它的运行已中断，最后一次联系在<when></when>，其工作保留在分支上。                          |
+| `toFix.banner.runDiedNothingPushed`                 | This needs a fix: its run died, last heard from <when></when>, before it pushed anything.                                                           | 需要修复：它的运行已中断，最后一次联系在<when></when>，且未推送任何内容。                            |
+| `toFix.banner.runDiedParent`                        | This needs a fix: the run of <b>{parent}</b> it was part of died, last heard from <when></when>.                                                    | 需要修复：它所属的 <b>{parent}</b> 运行已中断，最后一次联系在<when></when>。                         |
+| `toFix.banner.toContinue`                           | See how to continue it                                                                                                                              | 查看如何继续                                                                                         |
+| `toFix.banner.toStartOver`                          | See how to start over                                                                                                                               | 查看如何重新开始                                                                                     |
+| `toFix.banner.openingDevelopment`                   | Opening Development…                                                                                                                                | 正在打开“开发”…                                                                                      |
+
+**The filter value adds no key.** `FIX_REASON_VALUE_KEYS` (`advancedFilterLabels.ts`) gains
+`run_died: 'runDiedBare'`, so the _To fix_ value editor and its summary chip read
+`workbench.toFix.reason.runDiedBare` — the same reuse the four shipped values make.
+
+**Reused by name, unchanged:** `github.development.continue.startOver` (state 4) ·
+`github.development.continue.hosted.button` / `.buttonParent` · `github.development.continue.hosted.refused.*`
+and `.refused.outOfCredits.body` · `runs.hosted.door.starting` · `runs.hosted.picker.*` ·
+`runs.hosted.refused.outOfCredits.title` · `workbench.toFix.copyAria` / `.copyTooltip` / `.toast.*` ·
+`workbench.live.cleared` / `.new` · `workbench.empty.toFix.title`. Commands, branch names, keys and model
+ids are never translated.
+
+### Token map — this section's own elements
+
+| element                            | colour                                                                                                                                | shape                                                         |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| run-died glyph (`TriangleAlert`)   | `--el-icon-muted` (decorative, `aria-hidden`)                                                                                         | 14px                                                          |
+| reason text                        | `--el-text`; the branch mono and bold                                                                                                 | `text-xs`                                                     |
+| the clauses (repositories, parent) | `--el-text-secondary`; the parent key `--el-text`                                                                                     | `text-xs`                                                     |
+| start-over / cannot-edit line      | `--el-text-secondary`, the key `--el-text`                                                                                            | `text-xs`                                                     |
+| model picker                       | `--el-border` on `--el-page-bg`; the default's secondary `--el-text-identifier`; disabled `--el-surface-soft` / `--el-text-secondary` | `--height-control` · `--radius-input` · `--spacing-control-x` |
+| Continue hosted                    | `--el-accent` / `--el-accent-text`; disabled at 50%                                                                                   | `--height-btn-sm` · `--radius-btn` · `--spacing-btn-x-sm`     |
+| command chip · copy button         | § 30's, unchanged                                                                                                                     | § 30's                                                        |
+| refusal notice                     | `--el-warning-surface`, `--el-text-strong` ink, `--el-warning` glyph                                                                  | `--radius-control` · `--spacing-control-x/y`                  |
+| In Progress pill                   | `--el-tint-sky`, `--el-text-strong`                                                                                                   | `--radius-badge` · `--spacing-chip-x/y`                       |
+
+No `--el-text-muted` or `--el-text-faint` carries text on the row (its hover fill is `--el-surface`). No
+raw hue, no raw shape utility.
+
+### GIVES / TAKES
+
+| card                                            | GIVES                                                                                                                                                                                                                                                                            | TAKES                                                                                                                       |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-6882** (the Workbench row, code)        | ELEMENT: the row's repairs — the Continue hosted control and `motir continue <KEY \| PARENT>` on the fix line — every variant (states 1–6, 8), the start-over and cannot-edit lines, and the HELD state (7). STRUCTURE: the door first, the command at the right edge, the wrap. | Nothing.                                                                                                                    |
+| **MOTIR-6880** (the stored reason)              | PREMISE: `run_died` first in `FIX_REASON_PRIORITY`; when it holds (`died` with `refusal ∈ {null, continue_the_parent, no_branch}`). ELEMENT: the words — every string in the table above, in both catalogues.                                                                    | Nothing.                                                                                                                    |
+| **MOTIR-6879** (Continue hosted, placeable)     | Nothing new: the row places the shipped control and needs it mountable outside the item page's provider, which is that card's job.                                                                                                                                               | Nothing.                                                                                                                    |
+| **the four shipped reasons** (§ 30, MOTIR-6599) | Nothing.                                                                                                                                                                                                                                                                         | Nothing — their glyphs, sentences, commands and order among themselves are unchanged; `run_died` is inserted ahead of them. |
+| **MOTIR-6529** (the run-died marker)            | Nothing.                                                                                                                                                                                                                                                                         | Nothing — pointed at, not redrawn; its `startOver` line is reused by name.                                                  |
+| **MOTIR-6789** (Continue hosted)                | Nothing.                                                                                                                                                                                                                                                                         | Nothing — its control and its C4–C5 states are placed, not redrawn.                                                         |
+
+### What this does NOT decide
+
+- **The review-agent variant** of a dead run (MOTIR-6817) — nothing is drawn for it.
+- **The run-died marker and the Continue hosted control themselves** — redrawn nowhere here.
+- **Whether the row's facts are stored in `fixDetail` or read per row** — MOTIR-6880's and MOTIR-6882's
+  call; the row needs exactly the fields in the facts table above.
+- **The tag, banner and filter** — `design/work-items/design-notes.md` § _The TO FIX tag and banner: RUN
+  DIED_ (the same card).
+
+### Flag for the planner — the marker offers a non-editor the command
+
+§ _Run died_ (D1) and C6 keep `motir continue <KEY>` on the marker for a viewer who cannot edit the
+project, while `claimContinue` refuses that viewer (`assertCanEdit`). This row does not repeat that
+(state 5 offers no command); the marker itself is shipped and is out of this card's scope.

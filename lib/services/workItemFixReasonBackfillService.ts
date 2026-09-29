@@ -88,7 +88,11 @@ export interface FixReasonBackfillOptions {
 /**
  * The candidate set, paired with the workspace to bind for each: every card in an
  * `in_progress`-category status (archived included, to be counted as skipped), plus
- * any card still carrying a reason — see the repository read. One workspace at a
+ * any card still carrying a reason — see the repository read.
+ *
+ * A card whose run DIED before `run_died` existed (MOTIR-6880) needs no wider read:
+ * `run_died` holds only at In Progress, which is in the category, so every such card
+ * is already a candidate, and the recompute is what decides it. One workspace at a
  * time, because `work_item` has no system arm and an unbound read of it would come
  * back EMPTY rather than refused.
  */
@@ -110,7 +114,14 @@ async function collectCandidates(
 }
 
 function emptyByReason(): FixReasonBackfillReport['byReason'] {
-  return { queue_failed: 0, conflicted: 0, ci_failed: 0, changes_requested: 0, none: 0 };
+  return {
+    run_died: 0,
+    queue_failed: 0,
+    conflicted: 0,
+    ci_failed: 0,
+    changes_requested: 0,
+    none: 0,
+  };
 }
 
 export const workItemFixReasonBackfillService = {

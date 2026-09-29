@@ -12,6 +12,8 @@ import { Avatar, StatusValue } from '../../items/_components/issueCellPrimitives
 import { usePeekRowClick } from '../../items/_components/IssueQuickView';
 import { IssueListPager } from '../../items/_components/IssueListPager';
 import { workbenchTabHref, type WorkbenchTab } from '@/lib/workbench/tab';
+import { HostedModelsProvider } from '@/components/hosted/HostedModelsProvider';
+import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
 import { useLiveRows } from './useLiveRows';
 import { WorkbenchFixLine } from './WorkbenchFixLine';
 import type { WorkbenchRowView } from './workbenchRows';
@@ -138,6 +140,8 @@ function WorkbenchRow({
   arrived = false,
   withFixLine = false,
   held = false,
+  viewerId = null,
+  onContinueStarted,
 }: {
   row: WorkbenchRowView;
   showFinished: boolean;
@@ -147,6 +151,10 @@ function WorkbenchRow({
   withFixLine?: boolean;
   /** It left the tab's set while the reader looked, and is HELD (§ 30 Panel 3). */
   held?: boolean;
+  /** The session's user, for a Continue hosted refusal that names them. */
+  viewerId?: string | null;
+  /** A Continue hosted press started, or found the row stale: re-read the page. */
+  onContinueStarted?: () => void;
 }) {
   const t = useTranslations('workbench');
   const finishedLabel = useFinishedLabel();
@@ -264,6 +272,10 @@ function WorkbenchRow({
           reason={row.fix.reason}
           detail={row.fix.detail}
           held={held}
+          canContinueHosted={row.canContinueHosted}
+          viewerId={viewerId}
+          onStarted={onContinueStarted}
+          onStateMoved={onContinueStarted}
         />
       </div>
     );
@@ -342,6 +354,7 @@ export function WorkbenchList({
   tab,
   pagination,
   empty,
+  viewerId = null,
 }: {
   rows: WorkbenchRowView[];
   label: string;
@@ -356,9 +369,12 @@ export function WorkbenchList({
    * surface could never mark.
    */
   empty: ReactNode;
+  /** The session's user — a Continue hosted `taken` refusal naming them reads *you*. */
+  viewerId?: string | null;
 }) {
   const t = useTranslations('workbench');
   const router = useRouter();
+  const refresh = useCoordinatedRefresh();
   const showFinished = tab === 'finished';
   // TO FIX (§ 30) draws the fix line, and it is the one work tab that marks a HELD
   // row: it names something the READER must do, like To approve, so it takes To
@@ -388,8 +404,15 @@ export function WorkbenchList({
   // lists answer *am I empty?* the same way.
   if (live.rows.length === 0) return <>{empty}</>;
 
+  // CONTINUE HOSTED ON A DEAD-RUN ROW (§ 31, MOTIR-6882). The page makes ONE models
+  // request however many rows place the control — and NONE when no row does, so a
+  // tab of pull-request reasons never asks for a list it will not draw.
+  const hosted =
+    isToFix &&
+    live.rows.some((row) => row.canContinueHosted && row.fix?.detail.repair === 'continue');
+
   const groups = tab === 'watching' ? splitWatchingGroups(live.rows) : null;
-  return (
+  const list = (
     <div
       data-surface="card"
       className="overflow-hidden rounded-(--radius-card) border border-(--el-border)"
@@ -457,6 +480,8 @@ export function WorkbenchList({
                 arrived={live.arrivedIds.has(row.id)}
                 withFixLine={isToFix}
                 held={isToFix && live.heldIds.has(row.id)}
+                viewerId={viewerId}
+                onContinueStarted={refresh}
               />
             ))}
           </div>
@@ -487,4 +512,5 @@ export function WorkbenchList({
       />
     </div>
   );
+  return hosted ? <HostedModelsProvider>{list}</HostedModelsProvider> : list;
 }

@@ -1,19 +1,18 @@
 'use client';
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import type { DispatchRunOrigin, DispatchRunStatus } from '@/lib/dto/dispatchRuns';
-import type { ClaimActorDto } from '@/lib/dto/claim';
 import type { WorkItemContinueViewDto } from '@/lib/dto/workItemContinue';
+import { HostedModelsProvider, useHostedModels } from '@/components/hosted/HostedModelsProvider';
+import { useContinueHosted } from '@/components/hosted/useContinueHosted';
+import {
+  refusalOf,
+  type ContinueHostedRefusal,
+  type HostedModelsState,
+  type HostedRunRefusal,
+} from '@/components/hosted/hostedModels';
 
 // THE HOSTED-RUN DOOR'S STATE on a work item (Story MOTIR-683 · MOTIR-691;
 // `design/runs/design-notes.md` § Hosted runs).
@@ -38,41 +37,17 @@ import type { WorkItemContinueViewDto } from '@/lib/dto/workItemContinue';
 // section's body. The continue view it is handed decides both where the door is
 // offered and, on a died card, that Run hosted is not (C7).
 
-/** The offered-model read, as the picker draws it: three faces, never one. */
-export type HostedModelsState =
-  | { state: 'loading' }
-  | { state: 'unavailable' }
-  | { state: 'ok'; models: { id: string; provider: string }[]; default: string | null };
-
-/** One repository a run's App cannot write — the start route's 409 body, verbatim. */
-export interface HostedRepositoryRefusal {
-  repository: string;
-  reason: string;
-  fix: string;
-  fixUrl: string | null;
-}
-
-/** Why a start did not start — drawn on the door, never in the timeline. */
-export type HostedRunRefusal =
-  | { kind: 'notReady' }
-  | { kind: 'outOfCredits' }
-  | { kind: 'modelNotOffered'; model: string }
-  | { kind: 'notWritable'; repositories: HostedRepositoryRefusal[]; total: number | null }
-  | { kind: 'unavailable' }
-  | { kind: 'bootFailed' }
-  | { kind: 'failed' };
-
-/** Why a Continue hosted did not start — Run hosted's answers, less `notReady`
- *  (a continue has no readiness), plus the continue claim's own (MOTIR-6792). */
-export type ContinueHostedRefusal =
-  | Exclude<HostedRunRefusal, { kind: 'notReady' }>
-  | { kind: 'taken'; holder: ClaimActorDto | null; startedAt: string | null }
-  | { kind: 'runAlive'; holder: ClaimActorDto | null }
-  | { kind: 'nothingPushed' }
-  | { kind: 'useFix' }
-  | { kind: 'notInProgress' }
-  | { kind: 'noDeadRun' }
-  | { kind: 'theParent'; parentKey: string | null };
+export type {
+  ContinueHostedRefusal,
+  HostedModelsState,
+  HostedRepositoryRefusal,
+  HostedRunRefusal,
+} from '@/components/hosted/hostedModels';
+export {
+  continueRefusalOf,
+  continueStateMoved,
+  preselectedModel,
+} from '@/components/hosted/hostedModels';
 
 /** The run the door is about: the section's current run, as the section reports it. */
 export interface HostedDoorRun {
@@ -119,28 +94,6 @@ export function useHostedRun(): HostedRunContextValue | null {
   return useContext(HostedRunContext);
 }
 
-/** The model preselected from a list: the default, else the first offered. */
-export function preselectedModel(models: HostedModelsState): string | null {
-  if (models.state !== 'ok' || models.models.length === 0) return null;
-  if (models.default && models.models.some((m) => m.id === models.default)) return models.default;
-  return models.models[0]!.id;
-}
-
-async function readModels(): Promise<HostedModelsState> {
-  try {
-    const res = await fetch('/api/hosted-runs/models', { headers: { Accept: 'application/json' } });
-    if (!res.ok) return { state: 'unavailable' };
-    const body = (await res.json()) as {
-      models?: { id: string; provider: string }[];
-      default?: string | null;
-    };
-    if (!Array.isArray(body.models)) return { state: 'unavailable' };
-    return { state: 'ok', models: body.models, default: body.default ?? null };
-  } catch {
-    return { state: 'unavailable' };
-  }
-}
-
 /** Where the continue view leaves the two doors (design § Continue hosted, C6/C7). */
 export function continueDoorOf(view: WorkItemContinueViewDto | null | undefined): {
   continueTarget: (itemKey: string) => string | null;
@@ -158,91 +111,6 @@ export function continueDoorOf(view: WorkItemContinueViewDto | null | undefined)
           : null,
     runDoorHidden: view.refusal !== 'not_in_progress',
   };
-}
-
-const CONTINUE_REFUSALS: Record<string, ContinueHostedRefusal['kind']> = {
-  hosted_continue_nothing_pushed: 'nothingPushed',
-  hosted_continue_use_fix: 'useFix',
-  hosted_continue_not_in_progress: 'notInProgress',
-  hosted_continue_no_dead_run: 'noDeadRun',
-};
-
-function actorOf(v: unknown): ClaimActorDto | null {
-  const o = v as { id?: unknown; name?: unknown } | null;
-  return o && typeof o.id === 'string' && typeof o.name === 'string'
-    ? { id: o.id, name: o.name }
-    : null;
-}
-
-/** The start route's answer to a CONTINUE → the continue door's refusal. */
-export function continueRefusalOf(
-  status: number,
-  body: Record<string, unknown>,
-  model: string,
-): ContinueHostedRefusal {
-  const code = typeof body.code === 'string' ? body.code : '';
-  if (code === 'hosted_continue_taken') {
-    return {
-      kind: 'taken',
-      holder: actorOf(body.holder),
-      startedAt: typeof body.startedAt === 'string' ? body.startedAt : null,
-    };
-  }
-  if (code === 'hosted_continue_run_alive')
-    return { kind: 'runAlive', holder: actorOf(body.holder) };
-  if (code === 'hosted_continue_the_parent') {
-    return {
-      kind: 'theParent',
-      parentKey: typeof body.parentKey === 'string' ? body.parentKey : null,
-    };
-  }
-  const kind = CONTINUE_REFUSALS[code];
-  if (kind) return { kind } as ContinueHostedRefusal;
-  const run = refusalOf(status, body, model);
-  // A continue has no readiness: a `not ready` answer would be a stale page, and the
-  // nearest true sentence for it is that nothing was started.
-  return run.kind === 'notReady' ? { kind: 'failed' } : run;
-}
-
-/** A continue refusal that means the page is STALE — its view is re-read (C5a). */
-export function continueStateMoved(refusal: ContinueHostedRefusal): boolean {
-  return (
-    refusal.kind === 'taken' ||
-    refusal.kind === 'runAlive' ||
-    refusal.kind === 'nothingPushed' ||
-    refusal.kind === 'useFix' ||
-    refusal.kind === 'notInProgress' ||
-    refusal.kind === 'noDeadRun' ||
-    refusal.kind === 'theParent' ||
-    refusal.kind === 'bootFailed'
-  );
-}
-
-/** One idempotency key per PRESS: a retried request of the same press replays. */
-function pressKey(): string {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `press-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-/** The start route's refusal body → the door's refusal. */
-function refusalOf(status: number, body: Record<string, unknown>, model: string): HostedRunRefusal {
-  const code = typeof body.code === 'string' ? body.code : '';
-  if (code === 'hosted_model_not_offered') return { kind: 'modelNotOffered', model };
-  if (status === 402) return { kind: 'outOfCredits' };
-  if (code === 'hosted_repository_not_writable') {
-    return {
-      kind: 'notWritable',
-      repositories: Array.isArray(body.repositories)
-        ? (body.repositories as HostedRepositoryRefusal[])
-        : [],
-      total: typeof body.totalRepositories === 'number' ? body.totalRepositories : null,
-    };
-  }
-  if (code === 'hosted_run_card_not_ready') return { kind: 'notReady' };
-  if (code === 'hosted_run_boot_failed') return { kind: 'bootFailed' };
-  if (status === 503) return { kind: 'unavailable' };
-  return { kind: 'failed' };
 }
 
 export function HostedRunProvider({
@@ -263,43 +131,48 @@ export function HostedRunProvider({
   viewerId?: string | null;
   children: ReactNode;
 }) {
+  // ⚠️ THE MODEL LIST IS ITS OWN CONTEXT (MOTIR-6879): both doors read the one list
+  // `HostedModelsProvider` fetches, so the state below is mounted INSIDE it.
+  return (
+    <HostedModelsProvider>
+      <HostedRunState
+        itemKey={itemKey}
+        ready={ready}
+        openBlockers={openBlockers}
+        continueView={continueView}
+        viewerId={viewerId}
+      >
+        {children}
+      </HostedRunState>
+    </HostedModelsProvider>
+  );
+}
+
+function HostedRunState({
+  itemKey,
+  ready,
+  openBlockers,
+  continueView,
+  viewerId,
+  children,
+}: {
+  itemKey: string;
+  ready: boolean;
+  openBlockers: number;
+  continueView: WorkItemContinueViewDto | null;
+  viewerId: string | null;
+  children: ReactNode;
+}) {
   const router = useRouter();
-  const [models, setModels] = useState<HostedModelsState>({ state: 'loading' });
-  const [chosen, setChosen] = useState<string | null>(null);
+  // Always mounted: `HostedRunProvider` renders this inside `HostedModelsProvider`.
+  const hosted = useHostedModels()!;
+  const { models, selectedModel, setChosen, reloadModels } = hosted;
   const [refusal, setRefusal] = useState<HostedRunRefusal | null>(null);
   const [starting, setStarting] = useState(false);
   const [currentRun, setCurrentRun] = useState<HostedDoorRun | null>(null);
   const [runsChangedAt, setRunsChangedAt] = useState(0);
-  const [continueRefusal, setContinueRefusal] = useState<ContinueHostedRefusal | null>(null);
-  const [continueStarting, setContinueStarting] = useState(false);
   const doors = continueDoorOf(continueView);
   const continueTarget = doors.continueTarget(itemKey);
-  // A reload that resolves after a newer one must not win (CLAUDE.md § the app side).
-  const loadSeq = useRef(0);
-
-  const loadModels = useCallback(async (): Promise<void> => {
-    const seq = ++loadSeq.current;
-    const read = await readModels();
-    if (seq !== loadSeq.current) return;
-    setModels(read);
-    // A model the new list no longer offers is dropped; the preselection takes over.
-    setChosen((prev) =>
-      prev && read.state === 'ok' && read.models.some((m) => m.id === prev) ? prev : null,
-    );
-  }, []);
-
-  useEffect(() => {
-    void (async () => {
-      await loadModels();
-    })();
-  }, [loadModels]);
-
-  const reloadModels = useCallback(() => {
-    setModels({ state: 'loading' });
-    void loadModels();
-  }, [loadModels]);
-
-  const selectedModel = chosen ?? preselectedModel(models);
 
   const notifyRunsChanged = useCallback(() => {
     setRunsChangedAt((n) => n + 1);
@@ -335,36 +208,13 @@ export function HostedRunProvider({
     }
   }, [itemKey, notifyRunsChanged, reloadModels, selectedModel, starting]);
 
-  const startContinue = useCallback(async (): Promise<void> => {
-    if (!selectedModel || continueStarting || !continueTarget) return;
-    setContinueStarting(true);
-    setContinueRefusal(null);
-    try {
-      const res = await fetch(`/api/work-items/${encodeURIComponent(continueTarget)}/hosted-runs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          model: selectedModel,
-          mode: 'continue',
-          idempotencyKey: pressKey(),
-        }),
-      });
-      if (res.ok) {
-        // The part is a SERVER read and the run history a client island: both.
-        notifyRunsChanged();
-        return;
-      }
-      const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-      const refused = continueRefusalOf(res.status, body, selectedModel);
-      setContinueRefusal(refused);
-      if (refused.kind === 'modelNotOffered') reloadModels();
-      if (continueStateMoved(refused)) notifyRunsChanged();
-    } catch {
-      setContinueRefusal({ kind: 'failed' });
-    } finally {
-      setContinueStarting(false);
-    }
-  }, [continueStarting, continueTarget, notifyRunsChanged, reloadModels, selectedModel]);
+  // The continue press is the shared control's (`useContinueHosted`). A start
+  // changes a SERVER read (the part) and a client island (the run history), so
+  // both a start and a stale-page refusal re-read both.
+  const continuePress = useContinueHosted(continueTarget, {
+    onStarted: notifyRunsChanged,
+    onStateMoved: notifyRunsChanged,
+  });
 
   const value = useMemo<HostedRunContextValue>(
     () => ({
@@ -385,22 +235,23 @@ export function HostedRunProvider({
       continueTarget,
       viewerId,
       runDoorHidden: doors.runDoorHidden,
-      continueRefusal,
-      continueStarting,
-      startContinue,
+      continueRefusal: continuePress.refusal,
+      continueStarting: continuePress.starting,
+      startContinue: continuePress.start,
     }),
     [
       continueTarget,
       viewerId,
       doors.runDoorHidden,
-      continueRefusal,
-      continueStarting,
-      startContinue,
+      continuePress.refusal,
+      continuePress.starting,
+      continuePress.start,
       itemKey,
       ready,
       openBlockers,
       models,
       selectedModel,
+      setChosen,
       reloadModels,
       refusal,
       starting,

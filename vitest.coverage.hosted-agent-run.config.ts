@@ -48,6 +48,9 @@ export default defineConfig({
       'tests/components/ContinueHostedDoor.test.tsx',
       'tests/components/continue-part.test.tsx',
       'tests/components/RunHostedDoor.test.tsx',
+      // Story MOTIR-6590 · MOTIR-6879 — Continue hosted lifted into a control any
+      // surface can place; the door's floor follows the code it moved.
+      'tests/components/continue-hosted-control.test.tsx',
     ],
     coverage: {
       provider: 'v8',
@@ -71,6 +74,7 @@ export default defineConfig({
         'components/github/ContinuePart.tsx',
         'app/**/_components/ContinueHostedDoor.tsx',
         'app/**/_components/HostedRunProvider.tsx',
+        'components/hosted/**',
       ],
       thresholds: {
         perFile: true,
@@ -93,6 +97,12 @@ export default defineConfig({
           lines: 90,
         },
         'app/**/_components/HostedRunProvider.tsx': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'components/hosted/**': {
           statements: 90,
           functions: 90,
           branches: 90,

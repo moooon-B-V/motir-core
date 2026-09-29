@@ -1,12 +1,15 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { WorkItemFixReason } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { recomputeWorkItemFixReason } from '@/lib/services/fixReasonService';
+import { workItemContinueService } from '@/lib/services/workItemContinueService';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import {
   FIX_NOTE_PREVIEW_MAX,
   FIX_REASON_PRIORITY,
+  deadRunReasonOf,
   notePreviewOf,
   reviewerNameOf,
   sameFixReason,
@@ -126,6 +129,17 @@ async function requestChanges(
   });
 }
 
+/** The dead-run fields, null on every pull-request reason (MOTIR-6880). */
+const NO_DEAD_RUN = {
+  lastHeardAt: null,
+  ranByName: null,
+  branch: null,
+  branches: null,
+  pushed: null,
+  continueKey: null,
+  diedReason: null,
+} as const;
+
 const versionOf = (repoName: string, number: number, head = HEAD) =>
   `acme/${repoName}#${number}@${head}`;
 
@@ -164,6 +178,7 @@ describe('the pure half', () => {
       reviewerName: null,
       notePreview: null,
       gate: null,
+      ...NO_DEAD_RUN,
       affected: 1,
       total: 1,
     };
@@ -220,6 +235,7 @@ describe('each reason alone', () => {
         reviewerName: null,
         notePreview: null,
         gate: null,
+        ...NO_DEAD_RUN,
         affected: 1,
         total: 1,
       },
@@ -270,6 +286,7 @@ describe('each reason alone', () => {
         reviewerName: fx.owner.name,
         notePreview: 'Rename the export button.',
         gate: 'pull_request_approval',
+        ...NO_DEAD_RUN,
         affected: 1,
         total: 1,
       },
@@ -654,5 +671,250 @@ describe('the write', () => {
     const serial = await recompute(fx, card.id);
     expect(serial.fixReason).toBe('conflicted');
     expect(await stored(card.id)).toEqual(serial);
+  });
+});
+
+// ── `run_died` (Story MOTIR-6590 · MOTIR-6880) ─────────────────────────────────
+// The reason is READ through the continue claim's own evaluation, so what is under
+// test is agreement: the stored detail equals what the continue VIEW says about the
+// same card, each refusal the view can give lands where § 31 puts it, and the reasons
+// `motir fix` owns are left exactly as they were.
+
+/** A local run over `card` that recorded `branch` and then went silent 10 minutes ago. */
+async function deadRunOn(
+  fx: WorkItemFixture,
+  card: { id: string; identifier: string },
+  opts: { branch?: string | null } = {},
+) {
+  const { run } = await dispatchRunService.open(
+    {
+      projectKey: fx.projectIdentifier,
+      command: 'run',
+      cards: [{ key: card.identifier, disposition: 'queued' }],
+    },
+    fx.ctx,
+  );
+  const branch = opts.branch === undefined ? `subtask/${card.identifier}-work` : opts.branch;
+  await dispatchRunService.appendEvents(
+    run.id,
+    [
+      {
+        kind: 'checkout_ready',
+        workItemKey: card.identifier,
+        disposition: 'running',
+        data: { branch },
+      },
+    ],
+    fx.ctx,
+  );
+  await adminDb.dispatchRun.update({
+    where: { id: run.id },
+    data: { lastHeartbeatAt: new Date(Date.now() - 10 * 60_000) },
+  });
+  return { runId: run.id, branch };
+}
+
+async function inProgressCard(fx: WorkItemFixture) {
+  const card = await createTestWorkItem(fx, { kind: 'task', title: `card ${randomToken(4)}` });
+  await setStatus(card.id, 'in_progress');
+  return card;
+}
+
+describe('run_died — the pure half', () => {
+  const verdict = {
+    key: 'ACME-14',
+    refusal: null,
+    parentKey: null,
+    branch: 'subtask/ACME-14-work',
+    branches: [{ repository: 'web', branch: 'subtask/ACME-14-work' }],
+    lastHeardAt: '2026-09-28T10:00:00.000Z',
+    ranByName: 'Mara S.',
+    diedReason: 'lapsed',
+  } as const;
+
+  it('a refusal `motir continue` does not own is no dead-run reason', () => {
+    expect(deadRunReasonOf({ ...verdict, refusal: 'use_fix' })).toBeNull();
+    expect(deadRunReasonOf({ ...verdict, refusal: 'not_in_progress' })).toBeNull();
+    // `continue_the_parent` without a parent is no producer's — and is no command either.
+    expect(deadRunReasonOf({ ...verdict, refusal: 'continue_the_parent' })).toBeNull();
+  });
+
+  it('two stored details differing only in their branch list are different answers', () => {
+    const a = deadRunReasonOf(verdict)!;
+    const b = deadRunReasonOf({
+      ...verdict,
+      branches: [...verdict.branches, { repository: 'api', branch: 'subtask/ACME-14-work' }],
+    })!;
+    expect(sameFixReason(a, a)).toBe(true);
+    expect(sameFixReason(a, b)).toBe(false);
+    expect(sameFixReason(b, a)).toBe(false);
+    // jsonb hands each entry back with its keys in its own order — still the same.
+    const reordered = {
+      ...a.fixDetail,
+      branches: a.fixDetail!.branches!.map((x) => ({ branch: x.branch, repository: x.repository })),
+    };
+    expect(sameFixReason({ fixReason: 'run_died', fixDetail: reordered }, a)).toBe(true);
+    expect(
+      sameFixReason({ fixReason: 'run_died', fixDetail: { ...a.fixDetail, branches: null } }, a),
+    ).toBe(false);
+  });
+});
+
+describe('run_died — read through the continue claim’s own evaluation', () => {
+  it('a pushed dead run is run_died, repaired by `motir continue` on its own key, naming what the continue view names', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await inProgressCard(fx);
+    const { branch } = await deadRunOn(fx, card);
+
+    const value = await recompute(fx, card.id);
+    const view = await workItemContinueService.getContinueView(card.id, fx.ctx);
+
+    expect(view.state).toBe('died');
+    if (view.state !== 'died') return;
+    expect(value).toEqual({
+      fixReason: 'run_died',
+      fixDetail: {
+        repair: 'continue',
+        check: null,
+        queueReason: null,
+        base: null,
+        reviewerName: null,
+        notePreview: null,
+        gate: null,
+        lastHeardAt: view.deadRun.lastHeardAt,
+        ranByName: view.deadRun.dispatcher?.name ?? null,
+        branch: view.branch,
+        branches: view.branches.map((b) => ({ repository: b.repository, branch: b.branch })),
+        pushed: true,
+        continueKey: card.identifier,
+        diedReason: view.reason,
+        affected: 0,
+        total: 0,
+      },
+    });
+    expect(value.fixDetail).toMatchObject({
+      branch,
+      ranByName: fx.owner.name,
+      diedReason: 'lapsed',
+    });
+    expect(await stored(card.id)).toEqual(value);
+    // Idempotent: the same answer writes nothing, whatever order jsonb kept the keys in.
+    const before = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    await recompute(fx, card.id);
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    expect(after.updatedAt).toEqual(before.updatedAt);
+  });
+
+  it('a leg of a dead PARENT run is continued with its parent — continueKey is the parent’s', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'the story' });
+    const child = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'a child',
+      parentId: story.id,
+    });
+    await setStatus(child.id, 'in_progress');
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run_scope',
+        scopeKey: story.identifier,
+        cards: [{ key: child.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    await dispatchRunService.close(run.id, { stopReason: 'halted' }, fx.ctx);
+
+    expect(await recompute(fx, child.id)).toMatchObject({
+      fixReason: 'run_died',
+      fixDetail: { repair: 'continue', continueKey: story.identifier },
+    });
+  });
+
+  it('a dead run that pushed nothing is run_died with no command — the card starts over', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await inProgressCard(fx);
+    await deadRunOn(fx, card, { branch: null });
+
+    expect(await recompute(fx, card.id)).toMatchObject({
+      fixReason: 'run_died',
+      fixDetail: { repair: 'none', pushed: false, branch: null, branches: [], continueKey: null },
+    });
+  });
+
+  it('outranks a failing check on a card still at In Progress', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await cardWith(fx, 'in_progress', { Vitest: 'failure' });
+    await deadRunOn(fx, card);
+
+    expect((await recompute(fx, card.id)).fixReason).toBe('run_died');
+  });
+
+  it.each(['implemented', 'in_review', 'approved'])(
+    'use_fix — a dead run on a card at %s falls through: the pull-request answer is exactly what it was',
+    async (status) => {
+      const fx = await makeWorkItemFixture();
+      const { card } = await cardWith(fx, status, { Vitest: 'failure' });
+      const before = await recompute(fx, card.id);
+      await deadRunOn(fx, card);
+
+      expect(await recompute(fx, card.id)).toEqual(before);
+      if (status === 'implemented') {
+        expect(before).toMatchObject({
+          fixReason: 'ci_failed',
+          fixDetail: { repair: 'fix', check: 'Vitest', ...NO_DEAD_RUN },
+        });
+      }
+    },
+  );
+
+  it('not_in_progress — a dead run on a card at Planning reads nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'planning' });
+    await setStatus(card.id, 'planning');
+    await deadRunOn(fx, card);
+
+    expect(await recompute(fx, card.id)).toEqual({ fixReason: null, fixDetail: null });
+  });
+
+  it('a run that is alive, succeeded, continuing or absent is no run_died — nor is a CLI that never heartbeats, inside its window', async () => {
+    const fx = await makeWorkItemFixture();
+
+    const none = await inProgressCard(fx);
+    expect((await recompute(fx, none.id)).fixReason).toBeNull();
+
+    const alive = await inProgressCard(fx);
+    const live = await deadRunOn(fx, alive);
+    await adminDb.dispatchRun.update({
+      where: { id: live.runId },
+      data: { lastHeartbeatAt: new Date() },
+    });
+    expect((await recompute(fx, alive.id)).fixReason).toBeNull();
+
+    const silent = await inProgressCard(fx);
+    const legacy = await deadRunOn(fx, silent);
+    await adminDb.dispatchRun.update({
+      where: { id: legacy.runId },
+      data: { lastHeartbeatAt: null, startedAt: new Date(Date.now() - 60 * 60_000) },
+    });
+    expect((await recompute(fx, silent.id)).fixReason).toBeNull();
+
+    const done = await inProgressCard(fx);
+    const ok = await deadRunOn(fx, done);
+    await adminDb.dispatchRun.update({
+      where: { id: ok.runId },
+      data: { status: 'succeeded', endedAt: new Date() },
+    });
+    expect((await recompute(fx, done.id)).fixReason).toBeNull();
+
+    const taken = await inProgressCard(fx);
+    await deadRunOn(fx, taken);
+    const claimed = await workItemContinueService.claimContinue(
+      fx.projectId,
+      taken.identifier,
+      fx.ctx,
+    );
+    expect(claimed.outcome).toBe('claimed');
+    expect((await recompute(fx, taken.id)).fixReason).toBeNull();
   });
 });

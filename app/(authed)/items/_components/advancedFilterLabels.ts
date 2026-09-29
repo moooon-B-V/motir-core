@@ -123,6 +123,7 @@ export const FIELD_EMPTY_OPERATOR_KEYS: Partial<
  * a new reason fails the type check here until it has a label.
  */
 export const FIX_REASON_VALUE_KEYS: Record<WorkItemFixReasonDto, string> = {
+  run_died: 'runDiedBare',
   queue_failed: 'queueFailedBare',
   conflicted: 'conflictedNoBase',
   ci_failed: 'ciFailedBare',

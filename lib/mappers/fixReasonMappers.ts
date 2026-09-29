@@ -1,4 +1,10 @@
-import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
+import type {
+  FixBranchDto,
+  FixDetailDto,
+  FixRepairCommandDto,
+  WorkItemFixReasonDto,
+} from '@/lib/dto/fixReason';
+import type { RunDiedReason } from '@/lib/dto/workItemContinue';
 
 // `WorkItem.fixDetail` → its DTO (Story MOTIR-6588 · MOTIR-6600).
 //
@@ -10,6 +16,46 @@ import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 
 function str(v: unknown): string | null {
   return typeof v === 'string' ? v : null;
+}
+
+const REPAIRS: ReadonlySet<string> = new Set<FixRepairCommandDto>([
+  'fix',
+  'run',
+  'continue',
+  'none',
+]);
+
+/** Unknown repair → `fix`, the shipped default for the four pull-request reasons. */
+function repair(v: unknown): FixRepairCommandDto {
+  return typeof v === 'string' && REPAIRS.has(v) ? (v as FixRepairCommandDto) : 'fix';
+}
+
+const DIED_REASONS: ReadonlySet<string> = new Set<RunDiedReason>([
+  'lapsed',
+  'interrupted',
+  'failed',
+  'cancelled',
+  'stalled',
+  'backstop',
+]);
+
+function diedReason(v: unknown): RunDiedReason | null {
+  return typeof v === 'string' && DIED_REASONS.has(v) ? (v as RunDiedReason) : null;
+}
+
+function bool(v: unknown): boolean | null {
+  return typeof v === 'boolean' ? v : null;
+}
+
+/** A dead run's branch list — an entry without a branch name is dropped, not guessed. */
+function branches(v: unknown): FixBranchDto[] | null {
+  if (!Array.isArray(v)) return null;
+  return v.flatMap((entry): FixBranchDto[] => {
+    const e = entry as { repository?: unknown; branch?: unknown } | null;
+    return e && typeof e.branch === 'string'
+      ? [{ repository: str(e.repository), branch: e.branch }]
+      : [];
+  });
 }
 
 function count(v: unknown): number {
@@ -25,13 +71,20 @@ export function toFixDetailDto(
   }
   const d = raw as Record<string, unknown>;
   return {
-    repair: d.repair === 'run' ? 'run' : 'fix',
+    repair: repair(d.repair),
     check: str(d.check),
     queueReason: str(d.queueReason),
     base: str(d.base),
     reviewerName: str(d.reviewerName),
     notePreview: str(d.notePreview),
     gate: d.gate === 'pull_request_approval' || d.gate === 'acceptance_result' ? d.gate : null,
+    lastHeardAt: str(d.lastHeardAt),
+    ranByName: str(d.ranByName),
+    branch: str(d.branch),
+    branches: branches(d.branches),
+    pushed: bool(d.pushed),
+    continueKey: str(d.continueKey),
+    diedReason: diedReason(d.diedReason),
     affected: count(d.affected),
     total: count(d.total),
   };
