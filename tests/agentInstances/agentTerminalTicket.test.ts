@@ -12,6 +12,9 @@ import {
   agentTerminalClock,
   agentTerminalRelayService as relayService,
 } from '@/lib/services/agentTerminalRelayService';
+import { relayMachineId } from '@/lib/agentTerminal/relay/machineId';
+import { agentTerminalConnectionRepository } from '@/lib/repositories/agentTerminalConnectionRepository';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
 import { clock, fleet, fx, setUpHarness, tearDownHarness } from './_harness';
@@ -278,11 +281,18 @@ describe('the connection record and the sweep (Q3, Q8)', () => {
       workspaceId: fx.workspaceId,
       instanceId: id,
       userId: fx.ownerId,
+      relayMachineId: 'relay-a',
     });
     const opened = await adminDb.agentTerminalConnection.findUniqueOrThrow({
       where: { id: rowId },
     });
-    expect(opened).toMatchObject({ openedAt: clock.now(), closedAt: null, closeReason: null });
+    expect(opened).toMatchObject({
+      openedAt: clock.now(),
+      lastSeenAt: clock.now(),
+      relayMachineId: 'relay-a',
+      closedAt: null,
+      closeReason: null,
+    });
     clock.advance(90_000);
     const close = {
       id: rowId,
@@ -305,7 +315,9 @@ describe('the connection record and the sweep (Q3, Q8)', () => {
         'createdAt',
         'id',
         'instanceId',
+        'lastSeenAt',
         'openedAt',
+        'relayMachineId',
         'userId',
         'workspaceId',
       ].sort(),
@@ -330,10 +342,137 @@ describe('the connection record and the sweep (Q3, Q8)', () => {
       { step } as never,
       jobServices as never,
     );
-    expect(steps).toEqual(['sweep-agent-instances', 'sweep-agent-terminal-tickets']);
+    expect(steps).toEqual([
+      'sweep-agent-instances',
+      'sweep-agent-terminal-tickets',
+      'sweep-lost-terminal-connections',
+    ]);
     expect(await adminDb.agentTerminalTicket.count()).toBe(1);
     clock.advance(60_000);
     expect(await relayService.sweepExpiredTickets()).toEqual({ deleted: 1 });
     expect(await relayService.sweepExpiredTickets()).toEqual({ deleted: 0 });
+  });
+});
+
+describe('a relay that dies leaves no row open for ever (MOTIR-6959)', () => {
+  const open = (instanceId: string, relayMachineId: string) =>
+    relayService.openConnection({
+      workspaceId: fx.workspaceId,
+      instanceId,
+      userId: fx.ownerId,
+      relayMachineId,
+    });
+  const row = (id: string) => adminDb.agentTerminalConnection.findUniqueOrThrow({ where: { id } });
+  const ref = (id: string) => ({ id, workspaceId: fx.workspaceId });
+
+  it('the heartbeat moves only this relay’s own OPEN rows', async () => {
+    const id = await running();
+    const t0 = clock.now();
+    const mine = await open(id, 'relay-a');
+    const theirs = await open(id, 'relay-b');
+    const mineClosed = await open(id, 'relay-a');
+    await relayService.closeConnection({
+      ...ref(mineClosed),
+      closeCode: 1000,
+      closeReason: 'browser_closed',
+    });
+    clock.advance(60_000);
+    // Handed every id, it still touches only relay-a's open row.
+    const result = await relayService.heartbeatConnections({
+      relayMachineId: 'relay-a',
+      connections: [ref(mine), ref(theirs), ref(mineClosed)],
+    });
+    expect(result).toEqual({ touched: 1 });
+    expect((await row(mine)).lastSeenAt).toEqual(clock.now());
+    expect((await row(theirs)).lastSeenAt).toEqual(t0);
+    expect((await row(mineClosed)).lastSeenAt).toEqual(t0);
+    expect(
+      await relayService.heartbeatConnections({ relayMachineId: 'relay-a', connections: [] }),
+    ).toEqual({ touched: 0 });
+  });
+
+  it('the sweep job closes a row not seen for 5 minutes at its last heartbeat, and leaves a fresh one', async () => {
+    const id = await running();
+    const staleSeenAt = clock.now();
+    const stale = await open(id, 'relay-dead');
+    const fresh = await open(id, 'relay-live');
+    clock.advance(4 * 60_000);
+    await relayService.heartbeatConnections({
+      relayMachineId: 'relay-live',
+      connections: [ref(fresh)],
+    });
+    clock.advance(2 * 60_000); // stale: 6 minutes unseen; fresh: 2
+    vi.spyOn(agentInstanceSweepService, 'sweep').mockResolvedValue({ settled: 0 } as never);
+    const results: Record<string, unknown> = {};
+    const step = {
+      run: async <T>(name: string, fn: () => Promise<T>) => {
+        const value = await fn();
+        results[name] = value;
+        return value;
+      },
+    };
+    await engineJob('system.agent-instance-sweep')!.handler(
+      { step } as never,
+      jobServices as never,
+    );
+    expect(results['sweep-lost-terminal-connections']).toEqual({ closed: 1 });
+    expect(await row(stale)).toMatchObject({
+      closedAt: staleSeenAt,
+      closeReason: 'relay_lost',
+      closeCode: null,
+    });
+    expect(await row(fresh)).toMatchObject({ closedAt: null, closeReason: null });
+    // Exactly at the 5-minute line it is lost; a minute short, it is not.
+    expect(await relayService.sweepLostConnections()).toEqual({ closed: 0 });
+    clock.advance(2 * 60_000);
+    expect(await relayService.sweepLostConnections()).toEqual({ closed: 0 });
+    clock.advance(60_000);
+    expect(await relayService.sweepLostConnections()).toEqual({ closed: 1 });
+  });
+
+  it('a heartbeat landing between the sweep’s read and its close wins', async () => {
+    const id = await running();
+    const rowId = await open(id, 'relay-a');
+    const seen = await row(rowId);
+    clock.advance(60_000);
+    await relayService.heartbeatConnections({
+      relayMachineId: 'relay-a',
+      connections: [ref(rowId)],
+    });
+    const closed = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      agentTerminalConnectionRepository.closeLost(seen, 'relay_lost', tx),
+    );
+    expect(closed).toBe(0);
+    expect((await row(rowId)).closedAt).toBeNull();
+  });
+
+  it('a relay’s boot closes its own machine’s leftovers, and nobody else’s', async () => {
+    const id = await running();
+    const leftoverSeenAt = clock.now();
+    const leftover = await open(id, 'relay-a');
+    const other = await open(id, 'relay-b');
+    const done = await open(id, 'relay-a');
+    clock.advance(30_000);
+    await relayService.closeConnection({
+      ...ref(done),
+      closeCode: 1000,
+      closeReason: 'browser_closed',
+    });
+    clock.advance(30_000);
+    expect(await relayService.closeOwnLeftovers('relay-a')).toEqual({ closed: 1 });
+    expect(await row(leftover)).toMatchObject({
+      closedAt: leftoverSeenAt,
+      closeReason: 'relay_lost',
+      closeCode: null,
+    });
+    expect(await row(other)).toMatchObject({ closedAt: null });
+    expect(await row(done)).toMatchObject({ closeCode: 1000, closeReason: 'browser_closed' });
+    expect(await relayService.closeOwnLeftovers('relay-a')).toEqual({ closed: 0 });
+  });
+
+  it('names the relay by FLY_MACHINE_ID, else by host and process', () => {
+    expect(relayMachineId({ FLY_MACHINE_ID: ' 148e21 ' }, () => 'h', 7)).toBe('148e21');
+    expect(relayMachineId({}, () => 'host', 42)).toBe('host-42');
+    expect(relayMachineId({ FLY_MACHINE_ID: '' }, () => 'host', 42)).toBe('host-42');
   });
 });

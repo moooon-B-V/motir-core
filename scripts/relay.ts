@@ -10,7 +10,9 @@
  * It does four things: initialise monitoring, build the relay over the real
  * services, listen, and drain on SIGTERM (a deploy drops only the transport —
  * the shell and its replay live on the agent, Q5 — and every open connection's
- * row is closed `relay_shutdown` first).
+ * row is closed `relay_shutdown` first). Before it listens it closes, `relay_lost`,
+ * any row its own machine left open when it was last killed, and while it runs it
+ * refreshes its open rows' `lastSeenAt` once a minute (MOTIR-6959).
  *
  * ⚠️ IT IS BUNDLED, NOT RUN FROM SOURCE — `pnpm build:relay` esbuilds this file
  * into `.relay/relay.mjs`, which the Dockerfile stages at `/app/relay/`, for the
@@ -18,7 +20,8 @@
  * standalone output and `lib/` is not in it.
  *
  * Environment: DATABASE_URL, MOTIR_TERMINAL_MASTER_KEY, MOTIR_BASE_URL (the one
- * Origin a browser may connect from), SENTRY_DSN, PORT (default 8080). It holds
+ * Origin a browser may connect from), SENTRY_DSN, PORT (default 8080), and Fly's own
+ * FLY_MACHINE_ID (which relay holds a row; hostname+pid off Fly). It holds
  * NO Fly token: it never starts, stops or execs a machine.
  */
 import * as Sentry from '@sentry/nextjs';
@@ -26,7 +29,8 @@ import { db } from '@/lib/db';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { terminalMasterKey } from '@/lib/agentInstances/terminal';
 import { createTerminalRelay } from '@/lib/agentTerminal/relay/terminalRelay';
-import { relaySentryInitOptions } from '@/lib/agentTerminal/relay/monitoring';
+import { relayMachineId } from '@/lib/agentTerminal/relay/machineId';
+import { relaySentryInitOptions, scrubbedError } from '@/lib/agentTerminal/relay/monitoring';
 import { agentTerminalRelayService } from '@/lib/services/agentTerminalRelayService';
 import { agentInstanceActivityService } from '@/lib/services/agentInstanceActivityService';
 
@@ -42,7 +46,7 @@ function initMonitoring(): void {
   console.info(`[relay] error monitoring on (environment: ${options.environment ?? 'unset'})`);
 }
 
-function main(): void {
+async function main(): Promise<void> {
   initMonitoring();
   // Refuse to start without the master key: every connection would need it, and
   // a relay that accepts sockets it can never authenticate reads as an outage of
@@ -51,13 +55,32 @@ function main(): void {
     throw new Error('MOTIR_TERMINAL_MASTER_KEY is not set — the relay cannot sign a relay token');
   }
   const allowedOrigin = new URL(resolveBaseUrl()).origin;
+  const machineId = relayMachineId();
+
+  // A relay killed without shutting down (OOM, a host failure, `fly machine
+  // kill`) left its rows open; on the same machine, close them now. A failure
+  // here is reported, not fatal: the sweep closes them anyway.
+  try {
+    const { closed } = await agentTerminalRelayService.closeOwnLeftovers(machineId);
+    if (closed > 0) console.info(`[relay] closed ${closed} connection(s) a previous run left open`);
+  } catch (err) {
+    console.error('[relay] closing leftover connections failed');
+    Sentry.captureException(scrubbedError('relay: closing leftover connections failed', err));
+  }
 
   const relay = createTerminalRelay({
     allowedOrigin,
     authorize: (ticket) => agentTerminalRelayService.authorizeConnection(ticket),
-    openConnection: (input) => agentTerminalRelayService.openConnection(input),
+    openConnection: (input) =>
+      agentTerminalRelayService.openConnection({ ...input, relayMachineId: machineId }),
     closeConnection: (input) => agentTerminalRelayService.closeConnection(input),
     touchActivity: (instanceId) => agentInstanceActivityService.touchActivity(instanceId),
+    heartbeat: async (connections) => {
+      await agentTerminalRelayService.heartbeatConnections({
+        relayMachineId: machineId,
+        connections,
+      });
+    },
     log: (line) => console.info(line),
     reportError: (err) => {
       console.error(`[relay] ${err.message}`);
@@ -68,7 +91,7 @@ function main(): void {
 
   const port = Number(process.env['PORT'] ?? 8080);
   relay.server.listen(port, '0.0.0.0', () => {
-    console.info(`[relay] listening on :${port} (origin ${allowedOrigin})`);
+    console.info(`[relay] listening on :${port} (origin ${allowedOrigin}, machine ${machineId})`);
   });
 
   let draining = false;
@@ -88,9 +111,7 @@ function main(): void {
   process.on('SIGINT', () => drain('SIGINT'));
 }
 
-try {
-  main();
-} catch (err) {
+main().catch((err: unknown) => {
   console.error('[relay] failed to start', err instanceof Error ? err.message : String(err));
   process.exit(1);
-}
+});

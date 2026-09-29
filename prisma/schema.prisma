@@ -11630,18 +11630,25 @@ model AgentTerminalTicket {
 /// it closed. Deliberately NOTHING about what flowed — no bytes, no counts, no
 /// frames: the terminal's stream is stored nowhere (Q9 condition 4).
 model AgentTerminalConnection {
-  id          String    @id @default(cuid())
-  workspaceId String    @map("workspace_id")
-  instanceId  String    @map("instance_id")
-  userId      String    @map("user_id")
-  openedAt    DateTime  @map("opened_at")
+  id             String    @id @default(cuid())
+  workspaceId    String    @map("workspace_id")
+  instanceId     String    @map("instance_id")
+  userId         String    @map("user_id")
+  openedAt       DateTime  @map("opened_at")
   /// Null while the connection is open.
-  closedAt    DateTime? @map("closed_at")
+  closedAt       DateTime? @map("closed_at")
   /// The WebSocket close code the browser's socket ended with.
-  closeCode   Int?      @map("close_code")
+  closeCode      Int?      @map("close_code")
   /// The relay's word for why (`AgentTerminalCloseReason`).
-  closeReason String?   @map("close_reason")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  closeReason    String?   @map("close_reason")
+  /// The relay process holding this connection (MOTIR-6959): `FLY_MACHINE_ID`, or
+  /// hostname+pid off Fly. Its boot closes its own leftovers by it.
+  relayMachineId String?   @map("relay_machine_id")
+  /// Refreshed by the holding relay about once a minute while the row is open
+  /// (MOTIR-6959). An open row not seen for 5 minutes is closed `relay_lost` by
+  /// `system.agent-instance-sweep`, with `closedAt = lastSeenAt`.
+  lastSeenAt     DateTime  @default(now()) @map("last_seen_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   instance  AgentInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
@@ -11651,6 +11658,10 @@ model AgentTerminalConnection {
   @@index([instanceId, openedAt(sort: Desc)])
   @@index([userId])
   @@index([workspaceId])
+  /// The sweep's discovery: open rows (`closed_at IS NULL`) not seen lately.
+  @@index([closedAt, lastSeenAt])
+  /// A relay's boot: its own machine's open rows.
+  @@index([relayMachineId, closedAt])
   @@map("agent_terminal_connection")
 }
 

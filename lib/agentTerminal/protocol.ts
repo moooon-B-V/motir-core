@@ -21,6 +21,20 @@ export const TERMINAL_PING_INTERVAL_MS = 20_000;
 export const TERMINAL_ACTIVITY_THROTTLE_MS = 60_000;
 
 /**
+ * MOTIR-6959: how often a relay refreshes `lastSeenAt` on the connection rows it
+ * holds — one timer per relay process, not per connection.
+ */
+export const TERMINAL_HEARTBEAT_INTERVAL_MS = 60_000;
+
+/**
+ * MOTIR-6959: an open connection row whose relay has not refreshed it for this
+ * long belongs to a relay that died without shutting down; the sweep closes it
+ * `relay_lost`. Five missed heartbeats, so a slow database write is never mistaken
+ * for a dead relay.
+ */
+export const TERMINAL_CONNECTION_LOST_AFTER_MS = 5 * 60_000;
+
+/**
  * Q3's refusal table — the close codes the panel maps to words. The numbers are
  * the contract with MOTIR-6941; never renumber one.
  */
@@ -55,7 +69,12 @@ export type AgentTerminalCloseReason =
   /** The relay is shutting down (a deploy). */
   | 'relay_shutdown'
   /** The browser broke the protocol (a frame too large, too many before the dial). */
-  | 'protocol_error';
+  | 'protocol_error'
+  /**
+   * The relay holding the connection died without shutting down (MOTIR-6959):
+   * closed by the sweep or by that machine's next boot, at its last heartbeat.
+   */
+  | 'relay_lost';
 
 /** The relay URL the ticket route hands out: `MOTIR_RELAY_URL`, read at call time. */
 export function terminalRelayUrl(): string {

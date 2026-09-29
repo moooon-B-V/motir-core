@@ -3,6 +3,7 @@ import { AgentInstancesUnavailableError } from '@/lib/agentInstances/errors';
 import { terminalMasterKey } from '@/lib/agentInstances/terminal';
 import {
   TERMINAL_CLOSE,
+  TERMINAL_CONNECTION_LOST_AFTER_MS,
   type AgentTerminalCloseReason,
   type TerminalRefusalCode,
 } from '@/lib/agentTerminal/protocol';
@@ -10,7 +11,10 @@ import { relayAuthorization } from '@/lib/agentTerminal/relayToken';
 import { hashTerminalTicket } from '@/lib/agentTerminal/ticket';
 import { persistentTerminalEndpoint, selectedOrchestratorProvider } from '@/lib/orchestrator';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
-import { agentTerminalConnectionRepository } from '@/lib/repositories/agentTerminalConnectionRepository';
+import {
+  agentTerminalConnectionRepository,
+  type LostConnectionRef,
+} from '@/lib/repositories/agentTerminalConnectionRepository';
 import { agentTerminalTicketRepository } from '@/lib/repositories/agentTerminalTicketRepository';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
@@ -23,6 +27,9 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
 //     user's, not deleted, serving a terminal, running) and answer Q3's close
 //     code, or where to dial with the one-shot relay token already signed.
 //   * `openConnection` / `closeConnection` — the one row per connection (Q8).
+//   * `heartbeatConnections` / `closeOwnLeftovers` / `sweepLostConnections` —
+//     the row's liveness (MOTIR-6959): a relay killed without shutting down
+//     leaves no row open for ever.
 //   * `sweepExpiredTickets` — `system.agent-instance-sweep`'s ticket step.
 //
 // ⚠️ THIS FILE'S IMPORT GRAPH IS THE RELAY APP'S. `motir-relay` holds only
@@ -70,6 +77,39 @@ function connectionRefusal(row: AgentInstance, userId: string): TerminalRefusalC
     return TERMINAL_CLOSE.notRunning;
   }
   return null;
+}
+
+/** Rows by the workspace they live in — every write is bound to one. */
+function groupByWorkspace<T extends { workspaceId: string }>(rows: T[]): Map<string, T[]> {
+  const byWorkspace = new Map<string, T[]>();
+  for (const r of rows) {
+    const group = byWorkspace.get(r.workspaceId) ?? [];
+    group.push(r);
+    byWorkspace.set(r.workspaceId, group);
+  }
+  return byWorkspace;
+}
+
+const idsOf = (rows: { id: string }[]): string[] => rows.map((r) => r.id);
+
+/**
+ * Close lost rows, each in its own workspace: `closedAt = lastSeenAt`, reason
+ * `relay_lost`, and NO close code — the relay observed no socket close, and the
+ * code the browser saw (most likely 1006) is not something it reported, so a
+ * code here would be invented. Returns how many were closed.
+ */
+async function closeLostRows(rows: LostConnectionRef[]): Promise<number> {
+  const reason: AgentTerminalCloseReason = 'relay_lost';
+  let closed = 0;
+  for (const [workspaceId, lost] of groupByWorkspace(rows)) {
+    closed += await withWorkspaceServiceContext(workspaceId, async (tx) => {
+      let n = 0;
+      for (const row of lost)
+        n += await agentTerminalConnectionRepository.closeLost(row, reason, tx);
+      return n;
+    });
+  }
+  return closed;
 }
 
 export const agentTerminalRelayService = {
@@ -128,16 +168,76 @@ export const agentTerminalRelayService = {
     };
   },
 
-  /** Record a connection the relay just opened (Q8). Returns the row's id. */
+  /**
+   * Record a connection the relay just opened (Q8), held by `relayMachineId`
+   * and seen now (MOTIR-6959). Returns the row's id.
+   */
   async openConnection(input: {
     workspaceId: string;
     instanceId: string;
     userId: string;
+    relayMachineId: string;
   }): Promise<string> {
+    const now = agentTerminalClock.now();
     const row = await withWorkspaceServiceContext(input.workspaceId, (tx) =>
-      agentTerminalConnectionRepository.open({ ...input, openedAt: agentTerminalClock.now() }, tx),
+      agentTerminalConnectionRepository.open({ ...input, openedAt: now, lastSeenAt: now }, tx),
     );
     return row.id;
+  },
+
+  /**
+   * THE RELAY'S HEARTBEAT (MOTIR-6959): refresh `lastSeenAt` on the rows this
+   * relay holds open. The relay names its live rows, so a row whose close write
+   * failed is not kept alive by a relay that has already let it go; and the
+   * update is guarded on `relayMachineId` and `closedAt IS NULL`, so it never
+   * touches another relay's row or a closed one. One write per workspace — the
+   * table has no system write arm. Returns how many rows moved.
+   */
+  async heartbeatConnections(input: {
+    relayMachineId: string;
+    connections: { id: string; workspaceId: string }[];
+  }): Promise<{ touched: number }> {
+    if (input.connections.length === 0) return { touched: 0 };
+    const now = agentTerminalClock.now();
+    let touched = 0;
+    for (const [workspaceId, rows] of groupByWorkspace(input.connections)) {
+      touched += await withWorkspaceServiceContext(workspaceId, (tx) =>
+        agentTerminalConnectionRepository.touchLastSeen(idsOf(rows), input.relayMachineId, now, tx),
+      );
+    }
+    return { touched };
+  },
+
+  /**
+   * A RELAY'S BOOT (MOTIR-6959): close, `relay_lost`, every row its own machine
+   * left open — a relay that was killed and came back on the same Fly machine.
+   * Returns how many were closed.
+   */
+  async closeOwnLeftovers(relayMachineId: string): Promise<{ closed: number }> {
+    let closed = 0;
+    for (;;) {
+      const rows = await withSystemContext((tx) =>
+        agentTerminalConnectionRepository.listOpenByRelayMachine(relayMachineId, SWEEP_BATCH, tx),
+      );
+      const pass = await closeLostRows(rows);
+      closed += pass;
+      // A short page is the last; a page that closed nothing would repeat itself.
+      if (rows.length < SWEEP_BATCH || pass === 0) return { closed };
+    }
+  },
+
+  /**
+   * `system.agent-instance-sweep`'s connection step (MOTIR-6959): close,
+   * `relay_lost`, every open row no relay has vouched for in 5 minutes — a relay
+   * machine that died and never came back. `closedAt` is the row's last
+   * heartbeat, the last moment it was known open. Bounded per pass.
+   */
+  async sweepLostConnections(): Promise<{ closed: number }> {
+    const cutoff = new Date(agentTerminalClock.now().getTime() - TERMINAL_CONNECTION_LOST_AFTER_MS);
+    const rows = await withSystemContext((tx) =>
+      agentTerminalConnectionRepository.listLost(cutoff, SWEEP_BATCH, tx),
+    );
+    return { closed: await closeLostRows(rows) };
   },
 
   /** Close a connection's row with the browser's close code and the relay's reason. Once. */
@@ -169,16 +269,10 @@ export const agentTerminalRelayService = {
     const expired = await withSystemContext((tx) =>
       agentTerminalTicketRepository.listExpired(now, SWEEP_BATCH, tx),
     );
-    const byWorkspace = new Map<string, string[]>();
-    for (const t of expired) {
-      const ids = byWorkspace.get(t.workspaceId) ?? [];
-      ids.push(t.id);
-      byWorkspace.set(t.workspaceId, ids);
-    }
     let deleted = 0;
-    for (const [workspaceId, ids] of byWorkspace) {
+    for (const [workspaceId, tickets] of groupByWorkspace(expired)) {
       deleted += await withWorkspaceServiceContext(workspaceId, (tx) =>
-        agentTerminalTicketRepository.deleteExpired(ids, now, tx),
+        agentTerminalTicketRepository.deleteExpired(idsOf(tickets), now, tx),
       );
     }
     return { deleted };

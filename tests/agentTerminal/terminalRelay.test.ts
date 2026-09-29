@@ -26,6 +26,7 @@ import { clock, fleet, fx, setUpHarness, tearDownHarness } from '../agentInstanc
 const MASTER = 'm'.repeat(48);
 const ORIGIN = 'https://motir.test';
 const MARKER = 'MARKER-6940-never-logged-7f3a';
+const RELAY_ID = 'relay-test-machine';
 
 // ── The fake terminal server ────────────────────────────────────────────────
 
@@ -129,21 +130,29 @@ let nowMs = 0;
 const logs: string[] = [];
 const reported: Error[] = [];
 const touches: string[] = [];
+const heartbeats: { id: string; workspaceId: string }[][] = [];
 let failTouch = false;
 
-async function startRelay(overrides: { pingIntervalMs?: number } = {}): Promise<void> {
+async function startRelay(
+  overrides: { pingIntervalMs?: number; heartbeatIntervalMs?: number } = {},
+): Promise<void> {
   relay = createTerminalRelay({
     allowedOrigin: ORIGIN,
     authorize: (ticket) => relayService.authorizeConnection(ticket),
-    openConnection: (input) => relayService.openConnection(input),
+    openConnection: (input) => relayService.openConnection({ ...input, relayMachineId: RELAY_ID }),
     closeConnection: (input) => relayService.closeConnection(input),
     touchActivity: async (instanceId) => {
       touches.push(instanceId);
       if (failTouch) throw new Error(`touch failed while carrying ${MARKER}`);
     },
+    heartbeat: async (held) => {
+      heartbeats.push(held);
+      await relayService.heartbeatConnections({ relayMachineId: RELAY_ID, connections: held });
+    },
     log: (line) => logs.push(line),
     reportError: (err) => reported.push(err),
     now: () => nowMs,
+    heartbeatIntervalMs: overrides.heartbeatIntervalMs ?? 60_000,
     authTimeoutMs: 300,
     pingIntervalMs: overrides.pingIntervalMs ?? 60_000,
     dialTimeoutMs: 2_000,
@@ -159,6 +168,7 @@ beforeEach(async () => {
   logs.length = 0;
   reported.length = 0;
   touches.length = 0;
+  heartbeats.length = 0;
   failTouch = false;
   nowMs = 1_000_000;
   fake = await startFakeTerminal();
@@ -560,5 +570,31 @@ describe('nothing that flows is logged or reported (Q8)', () => {
     }
     // And the database holds nothing that flowed.
     expect(JSON.stringify(await connections())).not.toContain(MARKER);
+  });
+});
+
+describe('liveness — one heartbeat for the whole relay (MOTIR-6959)', () => {
+  it('refreshes lastSeenAt on the rows it holds, and lets a row go when it closes', async () => {
+    await relay.close();
+    await startRelay({ heartbeatIntervalMs: 40 });
+    const id = await runningAgent();
+    const b = await openTerminal(id);
+    // `ready` comes from the machine; the row's insert may still be in flight.
+    await until(async () => (await connections()).length === 1);
+    const [row] = await connections();
+    expect(row).toMatchObject({ relayMachineId: RELAY_ID, lastSeenAt: row!.openedAt });
+
+    clock.advance(60_000);
+    await until(
+      async () => (await connections())[0]!.lastSeenAt.getTime() === clock.now().getTime(),
+    );
+    expect(heartbeats.at(-1)).toEqual([{ id: row!.id, workspaceId: fx.workspaceId }]);
+
+    b.ws.close(1000);
+    await until(async () => (await connections())[0]?.closedAt != null);
+    const after = heartbeats.length;
+    await new Promise((r) => setTimeout(r, 200));
+    // Nothing held: the timer keeps ticking and writes nothing.
+    expect(heartbeats.slice(after).flat()).toEqual([]);
   });
 });

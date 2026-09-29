@@ -40,6 +40,14 @@ export const agentInstanceSweep = defineJob(
     await ctx.step.run('sweep-agent-terminal-tickets', () =>
       services.agentTerminalRelay.sweepExpiredTickets(),
     );
+    // MOTIR-6959: the terminal connections a relay stopped vouching for — it was
+    // killed without shutting down — closed `relay_lost` at their last heartbeat.
+    // On this 30-minute cadence a lost row closes within ~35 minutes; its
+    // recorded `closedAt` is the heartbeat, not the sweep, so the lag never
+    // inflates a duration. Its own step, for the same memoized-shape reason.
+    await ctx.step.run('sweep-lost-terminal-connections', () =>
+      services.agentTerminalRelay.sweepLostConnections(),
+    );
     return summary;
   },
 );

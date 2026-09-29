@@ -5,6 +5,7 @@ import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import {
   TERMINAL_AUTH_TIMEOUT_MS,
   TERMINAL_CLOSE,
+  TERMINAL_HEARTBEAT_INTERVAL_MS,
   TERMINAL_PATH,
   TERMINAL_PING_INTERVAL_MS,
   type AgentTerminalCloseReason,
@@ -41,6 +42,11 @@ import { scrubbedError } from './monitoring';
 //   8. Either side closing closes the other; the row is closed with the
 //      browser's close code and the relay's reason. Nothing else is kept.
 //
+// LIVENESS (MOTIR-6959): ONE timer per relay process — not per connection —
+// hands `heartbeat` the rows this relay holds open, about once a minute, so
+// their `lastSeenAt` moves. A relay killed without shutting down stops moving
+// them, and `system.agent-instance-sweep` closes them `relay_lost`.
+//
 // ⚠️ WHAT IS NEVER LOGGED OR REPORTED (Q8): a frame, a ticket, a token. Log
 // lines carry ids, codes and durations only, and every reported error is
 // rebuilt by `scrubbedError` from a fixed context and the original's NAME.
@@ -61,6 +67,11 @@ export interface TerminalRelayDeps {
     closeReason: AgentTerminalCloseReason;
   }): Promise<void>;
   touchActivity(instanceId: string): Promise<void>;
+  /**
+   * Refresh `lastSeenAt` on the rows this relay holds open (MOTIR-6959). Called
+   * by one per-process timer, never with an empty list.
+   */
+  heartbeat(connections: { id: string; workspaceId: string }[]): Promise<void>;
   /** A lifecycle line (ids only). */
   log(line: string): void;
   /** Report an unexpected failure (already scrubbed). */
@@ -72,6 +83,7 @@ export interface TerminalRelayDeps {
   throttleMs?: number;
   /** How long the dial to the machine may take before 4502. */
   dialTimeoutMs?: number;
+  heartbeatIntervalMs?: number;
 }
 
 export interface TerminalRelay {
@@ -135,6 +147,24 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
   const live = new Map<string, (code: number, reason: AgentTerminalCloseReason) => Promise<void>>();
   /** Close records still being written — a shutdown waits for them. */
   const recording = new Set<Promise<void>>();
+  /** The rows this relay holds open, by connection — what the heartbeat refreshes. */
+  const openRows = new Map<string, { id: string; workspaceId: string }>();
+
+  let heartbeating = false;
+  const heartbeatTimer = setInterval(() => {
+    // One write at a time: a slow database must not stack heartbeats.
+    if (heartbeating || openRows.size === 0) return;
+    heartbeating = true;
+    deps
+      .heartbeat([...openRows.values()])
+      .catch((err: unknown) => {
+        deps.reportError(scrubbedError('relay: heartbeat failed', err));
+      })
+      .finally(() => {
+        heartbeating = false;
+      });
+  }, deps.heartbeatIntervalMs ?? TERMINAL_HEARTBEAT_INTERVAL_MS);
+  heartbeatTimer.unref();
 
   const wss = new WebSocketServer({
     noServer: true,
@@ -229,6 +259,7 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
       phase = 'closed';
       stopTimers();
       live.delete(conn);
+      openRows.delete(conn);
       if (browser.readyState === WebSocket.OPEN || browser.readyState === WebSocket.CONNECTING) {
         browser.close(sendableCode(code) ? code : 1011);
       }
@@ -338,6 +369,10 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
           deps.reportError(scrubbedError('relay: recording an open failed', err));
           return null;
         });
+      void rowId.then((id) => {
+        // Held from the moment its row exists until `finish` lets it go.
+        if (id && phase !== 'closed') openRows.set(conn, { id, workspaceId: t.workspaceId });
+      });
       deps.log(`relay: connection ${conn} opened instance=${t.instanceId} user=${t.userId}`);
       bump(t.instanceId);
 
@@ -395,6 +430,7 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
       return live.size;
     },
     async close() {
+      clearInterval(heartbeatTimer);
       const closing = [...live.values()].map((finish) => finish(1012, 'relay_shutdown'));
       await Promise.all(closing);
       await Promise.all([...recording]);

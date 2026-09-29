@@ -154,7 +154,8 @@ export const jobServices = {
   // the sweep that reconciles, hibernates, cleans orphans and charges.
   agentInstanceSweep: agentInstanceSweepService,
   // The agent terminal (Story MOTIR-6861 · MOTIR-6940): the sweep's second step
-  // deletes terminal tickets past their 60-second life.
+  // deletes terminal tickets past their 60-second life; the third (MOTIR-6959)
+  // closes connections a dead relay left open.
   agentTerminalRelay: agentTerminalRelayService,
 };
 
