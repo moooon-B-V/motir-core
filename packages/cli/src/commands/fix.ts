@@ -7,8 +7,10 @@ import {
   queueReasonInWords,
   renderAcceptanceRecordPrompt,
   renderAcceptanceRerunPrompt,
+  renderReviewFixPrompt,
   runCiWatchPhase,
   type AcceptanceRerunInput,
+  type ReviewFixInput,
   type CiWatchOutcome,
   type FixCheckout,
 } from '../ciWatch.js';
@@ -58,6 +60,14 @@ import { CI_WATCH_EVENT, CI_WATCH_STOP_REASON } from './dispatch.js';
 // runs unchanged; and once it is green, a CLOSING turn re-records and publishes the
 // acceptance video, which asks the question again (`acceptance-refusal-verdict.md` §4).
 // The `ci` class is byte for byte what it was.
+//
+// ── A card a REVIEW SENT BACK is a repair too (MOTIR-6822) ────────────────────
+// The review agent's findings, or a person's Request changes on the approve-and-merge
+// gate, still standing over the current version, is claimed as a `review`: its checks are
+// usually green, and the claim hands over every open member with the findings. Before the
+// CI loop the agent runs ONCE on the review-fix prompt (every finding, in full, push to the
+// same branches); the loop then runs unchanged. There is no closing turn — the push
+// withdraws the review, and the next green version is reviewed again (§12.4, §12.5).
 //
 // ── What it never does ────────────────────────────────────────────────────────
 // It writes no status (the build moves the card, through `ciPromotion`), opens
@@ -346,6 +356,42 @@ async function repair(input: {
           }
         : null;
 
+    const review: ReviewFixInput | null =
+      claim.repairClass === 'review' && claim.reviewRefusal !== null
+        ? {
+            key,
+            title: claim.title,
+            refusal: claim.reviewRefusal,
+            pullRequests: claim.pullRequests,
+            checkouts: prepared.checkouts,
+          }
+        : null;
+
+    // THE REVIEW TURN — the findings, once, before the CI loop (MOTIR-6822). A failed
+    // agent is a stop, as on the re-run: nothing was pushed, so CI has nothing to judge.
+    if (review) {
+      info(
+        `${key}: answering the review sent back by ${review.refusal.reviewerName ?? 'the reviewer'}.`,
+      );
+      const ran = await runAgentStep(runAgentFn, {
+        reporter,
+        key,
+        step: 'review_fix',
+        command: agent.parsed,
+        prompt: renderReviewFixPrompt(review),
+        cwd: prepared.checkouts[0]!.path,
+      });
+      if (!ran.ok) {
+        info(
+          `${key}: the review-fix agent failed — ${ran.detail}. Nothing was pushed by this step.`,
+        );
+        reporter.event({ kind: 'card_settled', workItemKey: key, disposition: 'failed' });
+        process.exitCode = 1;
+        await close('halted');
+        return;
+      }
+    }
+
     // THE RE-RUN TURN — the reviewer's reason, once, before the CI loop. A failed agent
     // is a stop: nothing was pushed, so there is nothing for CI to judge.
     if (rerun) {
@@ -430,14 +476,14 @@ async function repair(input: {
   }
 }
 
-/** One agent turn outside the CI loop (the re-run and its closing record), reported
- *  into the run as a started / exited pair. */
+/** One agent turn outside the CI loop (the re-run and its closing record, the review
+ *  fix), reported into the run as a started / exited pair. */
 async function runAgentStep(
   runAgentFn: NonNullable<FixDeps['runAgentFn']>,
   input: {
     reporter: ReturnType<typeof createDispatchRunReporter>;
     key: string;
-    step: 'acceptance_rerun' | 'acceptance_record';
+    step: 'acceptance_rerun' | 'acceptance_record' | 'review_fix';
     command: ParsedAgentCommand;
     prompt: string;
     cwd: string;

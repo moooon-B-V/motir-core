@@ -198,11 +198,15 @@ export const REVIEW_AGENT_REVIEWER_NAME = 'Review agent';
  * A REFUSAL the card is still waiting on — `changes_requested`, from the gate the
  * reviewer decided.
  *
- * `repair` follows what `motir fix` would do with it: an acceptance Re-run is a repair
- * class of its own (`acceptance_rerun`), so it is `fix`; so is the REVIEW AGENT's refusal
- * (`approval-gates.md` §12.4 — *the repair is `motir fix <KEY>`*, MOTIR-6822 builds its
- * class); an approve-to-merge Request changes is not claimable at all, so it is `run`,
- * whose prompt carries the note (§12.7 corrects that to `fix`; not this card's).
+ * `repair` follows what `motir fix` would do with it, and it is `fix` for EVERY gate: an
+ * acceptance Re-run is a repair class of its own (`acceptance_rerun`), and so is a card a
+ * REVIEW sent back — the review agent's refusal (`approval-gates.md` §12.4) or a person's
+ * approve-and-merge Request changes (§12.7) — the `review` class (MOTIR-6822), whose
+ * prompt carries the findings in full.
+ *
+ * ⚠️ NEVER `run` AGAIN. It was `run` for the approve-and-merge gate until §12.7, and `run`
+ * cannot repair it: a sent-back card sits in the in-progress category, and both claim
+ * doors take only the to-do category (`lib/workItems/claimOutcome.ts`).
  */
 export function changesRequestedOf(
   refusal: {
@@ -217,7 +221,7 @@ export function changesRequestedOf(
     fixReason: 'changes_requested',
     fixDetail: {
       ...EMPTY_DETAIL,
-      repair: refusal.gate === 'pull_request_approval' ? 'run' : 'fix',
+      repair: 'fix',
       reviewerName: refusal.reviewerName,
       notePreview: notePreviewOf(refusal.noteMd),
       gate: refusal.gate,

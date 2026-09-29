@@ -50,9 +50,11 @@ export interface FixBranchDto {
 export interface FixDetailDto {
   /**
    * The repair command. Decided by what `motir fix` would CLAIM, not by the reason:
-   * the three pull-request reasons and an acceptance Re-run are `fix`, an
-   * approve-to-merge Request changes is `run` — its re-run's prompt carries the note.
-   * A dead run is `continue`, or `none` when it pushed nothing.
+   * the three pull-request reasons, an acceptance Re-run and a card a review sent back
+   * (the review agent's refusal or an approve-to-merge Request changes — the `review`
+   * repair class, MOTIR-6822; `approval-gates.md` §12.7) are `fix`. A dead run is
+   * `continue`, or `none` when it pushed nothing. `run` is no longer derived; it stays in
+   * the type for a row stored before §12.7 until its next recompute.
    */
   repair: FixRepairCommandDto;
   /**

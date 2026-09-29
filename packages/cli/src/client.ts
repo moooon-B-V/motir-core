@@ -717,9 +717,23 @@ export interface RepairQueueExit {
 /**
  * Which repair a claim hands over (MOTIR-6502). `ci` — make the build pass.
  * `acceptance_rerun` — the story's acceptance video was sent back with Re-run: fix what
- * the reviewer saw, on the same pull requests, then re-record the video.
+ * the reviewer saw, on the same pull requests, then re-record the video. `review` — a
+ * review sent the card back (MOTIR-6822): the review agent's findings, or a person's
+ * Request changes on the approve-and-merge gate — address each one on the same pull
+ * requests and push.
  */
-export type WorkItemRepairClass = 'ci' | 'acceptance_rerun';
+export type WorkItemRepairClass = 'ci' | 'acceptance_rerun' | 'review';
+
+/** What the review said, on a `review` (MOTIR-6822). */
+export interface ReviewRefusal {
+  /** Which review sent it back — the review agent, or the approve-and-merge gate. */
+  gate: 'agent_review' | 'pull_request_approval';
+  /** The findings, verbatim and in full. */
+  findingsMd: string | null;
+  /** `Review agent` for the review agent; the person's name otherwise. */
+  reviewerName: string | null;
+  decidedAt: string;
+}
 
 /** What the reviewer said, on an `acceptance_rerun`. */
 export interface AcceptanceRefusal {
@@ -818,6 +832,8 @@ export interface WorkItemRepairClaim {
   repairClass: WorkItemRepairClass;
   /** Set on an `acceptance_rerun` the caller holds; null otherwise. */
   acceptanceRefusal: AcceptanceRefusal | null;
+  /** Set on a `review` the caller holds; null otherwise (MOTIR-6822). */
+  reviewRefusal: ReviewRefusal | null;
   /** Non-empty on `claimed` and `mine` only. */
   pullRequests: RepairPullRequest[];
 }
@@ -1137,7 +1153,10 @@ export type DispatchEventKind =
   | 'plan_submitted'
   // The run-found report's conclusion (MOTIR-6282) — appended by the report
   // SERVICE on the leg, refused by the ingest like the two above.
-  | 'unbuildable_reported';
+  | 'unbuildable_reported'
+  // A review run's verdict (MOTIR-6821) — appended by the verdict route's SERVICE,
+  // refused by the ingest like the three above.
+  | 'review_verdict';
 
 export interface DispatchRunOpened {
   runId: string;
@@ -1209,7 +1228,7 @@ export interface DispatchRunAppended {
 
 /**
  * The kinds this CLI may REPORT — every member of {@link DispatchEventKind}
- * except the three the server writes.
+ * except the four the server writes (`review_verdict`, MOTIR-6821, the fourth).
  *
  * ⚠️ THE EXCLUSION IS THE POINT (MOTIR-3981, `run-findings-protocol.md` Q5).
  * `bug_filed`, `plan_submitted` and `unbuildable_reported` (MOTIR-6282) carry
@@ -1221,7 +1240,7 @@ export interface DispatchRunAppended {
  */
 export type ReportableEventKind = Exclude<
   DispatchEventKind,
-  'bug_filed' | 'plan_submitted' | 'unbuildable_reported'
+  'bug_filed' | 'plan_submitted' | 'unbuildable_reported' | 'review_verdict'
 >;
 
 /** One event on the wire. `body` is the OPT-IN log payload — default OFF. */

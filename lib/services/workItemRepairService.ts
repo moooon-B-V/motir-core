@@ -69,6 +69,7 @@ function refused(
     startedAt: null,
     repairClass: 'ci',
     acceptanceRefusal: null,
+    reviewRefusal: null,
     pullRequests: [],
   };
 }
@@ -171,7 +172,7 @@ export const workItemRepairService = {
         );
         if (!verdict.ok) return refused(item, verdict.reason, verdict.runTargetKey);
         const pullRequests = verdict.pullRequests;
-        const { repairClass, acceptanceRefusal } = verdict;
+        const { repairClass, acceptanceRefusal, reviewRefusal } = verdict;
 
         const held = await dispatchRunRepository.findRunningByCommandForWorkItem(
           item.id,
@@ -192,6 +193,7 @@ export const workItemRepairService = {
             repairClass,
             // The holder is handed the reason and the branches again; a rival nothing.
             acceptanceRefusal: mine ? acceptanceRefusal : null,
+            reviewRefusal: mine ? reviewRefusal : null,
             pullRequests: mine ? pullRequests : [],
           };
         }
@@ -222,6 +224,7 @@ export const workItemRepairService = {
           startedAt: opened.startedAt.toISOString(),
           repairClass,
           acceptanceRefusal,
+          reviewRefusal,
           pullRequests,
         };
       },
@@ -348,8 +351,22 @@ export const workItemRepairService = {
               }
             : { state: 'hidden' };
         }
-        const failing = verdict.pullRequests.map(refOf);
-        const { repairClass, acceptanceRefusal } = verdict;
+        // ⚠️ A `review` CLAIM IS NOT DRAWN AS ITS OWN PART HERE (MOTIR-6822). The
+        // sent-back surface — the findings, the reviewer, `motir fix` — is the review
+        // frame's (MOTIR-6825), and this part's only sent-back copy is the acceptance
+        // video's. So the part reads the class as the red work it hands over: the
+        // members that are failing, as the `ci` class names them, and nothing at all —
+        // as before this class existed — when every member is green.
+        const asReview = verdict.repairClass === 'review';
+        const handed = asReview
+          ? verdict.pullRequests.filter(
+              (pr) => pr.ci === 'failing' || pr.queueExit !== null || pr.conflicted,
+            )
+          : verdict.pullRequests;
+        if (handed.length === 0) return { state: 'hidden' };
+        const failing = handed.map(refOf);
+        const repairClass = asReview ? 'ci' : verdict.repairClass;
+        const { acceptanceRefusal } = verdict;
 
         const latest = await dispatchRunRepository.findLatestByCommandForWorkItem(
           item.id,

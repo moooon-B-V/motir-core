@@ -673,8 +673,11 @@ export const workItemRepairClaimSchema = z.object({
   /** WHICH REPAIR this is (MOTIR-6502). `ci` — make the build pass. `acceptance_rerun`
    *  — the story's acceptance video was sent back with Re-run: fix what the reviewer
    *  saw (`acceptanceRefusal`), on the same pull requests, then re-record the video.
-   *  `ci` on every refusal. */
-  repairClass: z.enum(['ci', 'acceptance_rerun']),
+   *  `review` — a REVIEW sent the card back (MOTIR-6822): the review agent's
+   *  `changes_requested`, or a person's Request changes on the approve-and-merge gate,
+   *  still standing over the current version. Address every finding (`reviewRefusal`)
+   *  on the same pull requests and push. `ci` on every refusal. */
+  repairClass: z.enum(['ci', 'acceptance_rerun', 'review']),
   /** What the reviewer said — set exactly on an `acceptance_rerun` with `claimed` or
    *  `mine`, null otherwise. */
   acceptanceRefusal: z
@@ -686,9 +689,22 @@ export const workItemRepairClaimSchema = z.object({
       decidedAt: z.string().datetime(),
     })
     .nullable(),
+  /** What the review said — set exactly on a `review` with `claimed` or `mine`, null
+   *  otherwise (MOTIR-6822). */
+  reviewRefusal: z
+    .object({
+      /** Which review sent it back: the review agent, or the approve-and-merge gate. */
+      gate: z.enum(['agent_review', 'pull_request_approval']),
+      /** The findings, verbatim and in full. */
+      findingsMd: z.string().nullable(),
+      /** Who sent it back — `Review agent` for the review agent, else the person. */
+      reviewerName: z.string().nullable(),
+      decidedAt: z.string().datetime(),
+    })
+    .nullable(),
   /** The failing OPEN pull requests — non-empty on `claimed` and `mine`, empty on
-   *  every other outcome. On an `acceptance_rerun`, EVERY open member, green ones
-   *  included: the fix is to the delivered work, not to a red check. */
+   *  every other outcome. On an `acceptance_rerun` or a `review`, EVERY open member,
+   *  green ones included: the fix is to the delivered work, not to a red check. */
   pullRequests: z.array(repairPullRequestSchema),
 });
 export type V1WorkItemRepairClaim = z.infer<typeof workItemRepairClaimSchema>;
@@ -712,6 +728,15 @@ export function presentWorkItemRepairClaim(dto: WorkItemRepairClaimDto): V1WorkI
             reasonMd: dto.acceptanceRefusal.reasonMd,
             decidedByLabel: dto.acceptanceRefusal.decidedByLabel,
             decidedAt: dto.acceptanceRefusal.decidedAt,
+          },
+    reviewRefusal:
+      dto.reviewRefusal === null
+        ? null
+        : {
+            gate: dto.reviewRefusal.gate,
+            findingsMd: dto.reviewRefusal.findingsMd,
+            reviewerName: dto.reviewRefusal.reviewerName,
+            decidedAt: dto.reviewRefusal.decidedAt,
           },
     pullRequests: dto.pullRequests.map((pr) => ({
       repo: pr.repo,

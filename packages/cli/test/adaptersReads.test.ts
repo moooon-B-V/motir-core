@@ -337,5 +337,29 @@ describe('toWorkItemRepairClaim — the acceptance Re-run class (MOTIR-6502)', (
 
     expect(claim.repairClass).toBe('ci');
     expect(claim.acceptanceRefusal).toBeNull();
+    expect(claim.reviewRefusal).toBeNull();
+  });
+
+  it('carries the REVIEW class and its findings through, field by field (MOTIR-6822)', () => {
+    const claim = toWorkItemRepairClaim({
+      ...base,
+      repairClass: 'review',
+      acceptanceRefusal: null,
+      reviewRefusal: {
+        gate: 'agent_review',
+        findingsMd: '1. The route has no tenant check.\n2. The empty list drops its header.',
+        reviewerName: 'Review agent',
+        decidedAt: '2026-09-29T10:00:00.000Z',
+        surprise: 'should not survive',
+      },
+    } as never);
+
+    expect(claim.repairClass).toBe('review');
+    expect(claim.reviewRefusal).toEqual({
+      gate: 'agent_review',
+      findingsMd: '1. The route has no tenant check.\n2. The empty list drops its header.',
+      reviewerName: 'Review agent',
+      decidedAt: '2026-09-29T10:00:00.000Z',
+    });
   });
 });

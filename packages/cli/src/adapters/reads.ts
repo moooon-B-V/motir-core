@@ -733,6 +733,15 @@ export function toWorkItemRepairClaim(
           decidedAt: body.acceptanceRefusal.decidedAt,
         }
       : null,
+    // A server older than contract 1.57.0 sends no `reviewRefusal` (MOTIR-6822).
+    reviewRefusal: body.reviewRefusal
+      ? {
+          gate: body.reviewRefusal.gate,
+          findingsMd: body.reviewRefusal.findingsMd,
+          reviewerName: body.reviewRefusal.reviewerName,
+          decidedAt: body.reviewRefusal.decidedAt,
+        }
+      : null,
     pullRequests: body.pullRequests.map((pr) => ({
       repo: pr.repo,
       number: pr.number,

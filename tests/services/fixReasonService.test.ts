@@ -279,7 +279,7 @@ describe('each reason alone', () => {
     expect(await recompute(fx, card.id)).toEqual({
       fixReason: 'changes_requested',
       fixDetail: {
-        repair: 'run',
+        repair: 'fix',
         check: null,
         queueReason: null,
         base: null,
