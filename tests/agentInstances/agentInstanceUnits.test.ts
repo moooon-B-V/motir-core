@@ -12,6 +12,7 @@ import {
 } from '@/lib/agentInstances/errors';
 import { mapAgentInstanceError } from '@/lib/agentInstances/errorResponse';
 import { imageDigestResolver, pinnedImageReference } from '@/lib/agentInstances/imageDigest';
+import { toAgentInstanceIntervalDto } from '@/lib/mappers/agentInstanceMappers';
 import {
   isOfferedProfile,
   NOT_OFFERED_AGENT_PROFILES,
@@ -100,6 +101,40 @@ describe('the digest pin', () => {
     }
   });
 
+  it('on Fly, pins the digest the registry names', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('{}', {
+            status: 200,
+            headers: { 'docker-content-digest': 'sha256:feed' },
+          }),
+      ),
+    );
+    try {
+      expect(await imageDigestResolver.resolve(sandboxImageTag('claude'))).toBe('sha256:feed');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('on Fly, refuses an image the registry serves with no digest', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 200 })),
+    );
+    try {
+      await expect(imageDigestResolver.resolve(sandboxImageTag('claude'))).rejects.toThrow(
+        /the registry named no digest/,
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('pins a tag to repository@digest', () => {
     expect(pinnedImageReference('ghcr.io/moooon-b-v/motir-sandbox:claude', 'sha256:abc')).toBe(
       'ghcr.io/moooon-b-v/motir-sandbox@sha256:abc',
@@ -131,5 +166,41 @@ describe('profiles and caps', () => {
     expect(INSTANCE_NAME_PATTERN.test('Yue Claude')).toBe(false);
     expect(INSTANCE_NAME_PATTERN.test('-leading')).toBe(false);
     expect(INSTANCE_NAME_PATTERN.test('a'.repeat(41))).toBe(false);
+  });
+});
+
+describe('the interval mapper', () => {
+  it('maps an open and a closed interval', () => {
+    const base = {
+      id: 'i',
+      workspaceId: 'w',
+      organizationId: 'o',
+      agentInstanceId: 'a',
+      runId: 'i',
+      runStartedAt: new Date('2026-09-29T10:00:00.000Z'),
+      startedAt: new Date('2026-09-29T10:00:00.000Z'),
+      endedAt: null,
+      endReason: null,
+      billableSeconds: null,
+      credits: null,
+      chargeReference: 'agent-instance-interval:i',
+      chargeOutcome: null,
+      chargeDetail: null,
+      chargeAttempts: 0,
+      chargedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    expect(toAgentInstanceIntervalDto(base)).toMatchObject({ endedAt: null, endReason: null });
+    expect(
+      toAgentInstanceIntervalDto({
+        ...base,
+        endedAt: new Date('2026-09-29T10:05:00.000Z'),
+        endReason: 'rolled',
+        billableSeconds: 300,
+        credits: 5,
+        chargeOutcome: 'charged',
+      }),
+    ).toMatchObject({ endedAt: '2026-09-29T10:05:00.000Z', endReason: 'rolled', credits: 5 });
   });
 });

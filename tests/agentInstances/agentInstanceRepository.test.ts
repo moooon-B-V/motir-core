@@ -339,6 +339,14 @@ describe('agentInstanceRepository', () => {
           tx,
         ),
       ).toBe(3);
+      // Without a project, the owner's agents across every project.
+      expect(
+        await agentInstanceRepository.listLiveForOwner(
+          { ownerId: f.ownerId, take: 10, skip: 0 },
+          tx,
+        ),
+      ).toHaveLength(3);
+      expect(await agentInstanceRepository.countLiveForOwner({ ownerId: f.ownerId }, tx)).toBe(3);
       expect(await agentInstanceRepository.findLiveForOwner(theirs.id, f.ownerId, tx)).toBeNull();
       expect(
         await agentInstanceRepository.findLiveForOwner(mine[0]!.id, f.ownerId, tx),

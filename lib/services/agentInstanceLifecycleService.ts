@@ -615,7 +615,11 @@ export const agentInstanceLifecycleService = {
     if (row.state !== 'running') {
       throw new AgentInstanceStateConflictError(row.id, row.state, 'hibernated');
     }
-    await this.beginHibernate(row.id, 'hibernated');
+    // The loser of a race (another hibernate, the sweep) read `running` too, but its
+    // guarded transition moved nothing: it is refused, never told it succeeded.
+    if (!(await this.beginHibernate(row.id, 'hibernated'))) {
+      throw new AgentInstanceStateConflictError(row.id, (await reload(row)).state, 'hibernated');
+    }
     return toAgentInstanceDto(await reload(row));
   },
 

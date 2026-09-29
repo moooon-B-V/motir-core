@@ -224,6 +224,8 @@ export const agentInstanceRepository = {
       select: { flyApp: true },
       orderBy: { flyApp: 'asc' },
     });
+    // The `where` already excludes null; the narrowing is for the type, not the data.
+    /* v8 ignore next */
     return rows.flatMap((r) => (r.flyApp ? [r.flyApp] : []));
   },
 };
