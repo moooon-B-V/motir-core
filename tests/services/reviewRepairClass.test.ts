@@ -66,7 +66,12 @@ async function sentBack(
   workItemId: string,
   subjectVersion: string,
   kind: 'agent_review' | 'pull_request_approval',
-  opts: { decidedAt?: Date; state?: 'changes_requested' | 'approved' } = {},
+  opts: {
+    decidedAt?: Date;
+    state?: 'changes_requested' | 'approved';
+    /** Write the gate with no audit label and no recorded authority. */
+    unlabelled?: boolean;
+  } = {},
 ) {
   const byAgent = kind === 'agent_review';
   return adminDb.approvalGate.create({
@@ -80,9 +85,9 @@ async function sentBack(
       state: opts.state ?? 'changes_requested',
       decidedById: fx.ownerId,
       decidedAt: opts.decidedAt ?? new Date('2026-09-29T10:00:00Z'),
-      decidedByLabel: 'Yue Zhu <yue@example.com>',
+      decidedByLabel: opts.unlabelled ? null : 'Yue Zhu <yue@example.com>',
       decisionSource: 'ui',
-      decidedUnderAuthority: byAgent ? 'review_agent' : 'assignee',
+      decidedUnderAuthority: opts.unlabelled ? null : byAgent ? 'review_agent' : 'assignee',
       noteMd: FINDINGS,
     },
   });
@@ -416,5 +421,145 @@ describe('the Development block’s fix part — the sent-back part (MOTIR-6930)
       byViewer: true,
       holder: { id: fx.ctx.userId },
     });
+  });
+});
+
+// THE HOSTED OPENING, AT THE SERVICE (MOTIR-6928). `hostedRunStartFix.test.ts` drives it
+// through the hosted start, which only ever opens the `review` class; these pin what the
+// claim itself records for the classes the start never hands it, and that `admit` is asked
+// under the lock BEFORE anything is written.
+const OPENING = {
+  origin: 'hosted' as const,
+  agent: 'opencode' as const,
+  model: 'anthropic/claude-test',
+  idempotencyKey: 'press-1',
+};
+
+describe('claimRepair with a hosted opening', () => {
+  it('a `ci` claim records the class with no findings, and a head no check row names as null', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'conflicted' });
+    await setStatus(card.id, 'implemented');
+    const repo = await connectRepairRepo(fx, `web-${randomToken(4)}`);
+    // Conflicted with NO check rows: a failing member whose head nothing names.
+    const pr = await deliveredPr(fx, card.id, repo, { headRef: 'subtask/conflict' });
+    await adminDb.githubPullRequest.update({
+      where: { id: pr.id },
+      data: { mergeableState: 'dirty', mergeableStateHeadSha: HEAD },
+    });
+    const seen: string[] = [];
+
+    const claim = await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx, {
+      opening: OPENING,
+      admit: (repairClass) => seen.push(repairClass),
+    });
+
+    expect(seen).toEqual(['ci']);
+    expect(claim).toMatchObject({ outcome: 'claimed', repairClass: 'ci', reviewRefusal: null });
+    const run = await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: claim.runId! } });
+    expect(run).toMatchObject({ command: 'fix', origin: 'hosted', model: OPENING.model });
+    const events = await adminDb.dispatchRunEvent.findMany({ where: { dispatchRunId: run.id } });
+    expect(events).toHaveLength(1);
+    expect(events[0]!.data).toMatchObject({
+      command: 'fix',
+      key: card.identifier,
+      repairClass: 'ci',
+      findings: null,
+      acceptanceRefusal: null,
+      pullRequests: [
+        {
+          number: pr.number,
+          branch: 'subtask/conflict',
+          headRef: 'subtask/conflict',
+          headSha: null,
+        },
+      ],
+    });
+    // The Development block names the conflict and the base it is against.
+    expect(await workItemRepairService.getRepairView(card.id, fx.ctx)).toMatchObject({
+      state: 'in_progress',
+      repairClass: 'ci',
+      failing: [{ number: pr.number, conflict: { baseRef: 'main' } }],
+      run: { id: run.id, hosted: true },
+    });
+  });
+
+  it('a review recorded by a gate with no label or authority reads those as null, not a guess', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, repo, pr } = await cardWith(fx, 'in_review');
+    const gate = await sentBack(fx, card.id, versionOf(repo.name, pr.number), 'agent_review', {
+      unlabelled: true,
+    });
+
+    const claim = await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx, {
+      opening: OPENING,
+    });
+
+    const opened = await adminDb.dispatchRunEvent.findFirstOrThrow({
+      where: { dispatchRunId: claim.runId!, kind: 'run_opened' },
+    });
+    expect(opened.data).toMatchObject({
+      repairClass: 'review',
+      pullRequests: [{ number: pr.number, headSha: HEAD }],
+      findings: {
+        gate: 'agent_review',
+        gateId: gate.id,
+        subjectVersion: versionOf(repo.name, pr.number),
+        findingsMd: FINDINGS,
+        reviewerName: REVIEW_AGENT_REVIEWER_NAME,
+        decidedByLabel: null,
+        decidedUnderAuthority: null,
+      },
+    });
+  });
+
+  it('an `admit` that refuses the class aborts the claim with nothing written', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await cardWith(fx, 'implemented', { Vitest: 'failure' });
+
+    await expect(
+      workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx, {
+        opening: OPENING,
+        admit: (repairClass) => {
+          if (repairClass !== 'review') throw new Error(`not sent back: ${repairClass}`);
+        },
+      }),
+    ).rejects.toThrow('not sent back: ci');
+
+    expect(await adminDb.dispatchRun.count()).toBe(0);
+    expect(await adminDb.dispatchRunEvent.count()).toBe(0);
+  });
+
+  it('a LOCAL claim writes no `run_opened` — `motir fix` appends its own', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await cardWith(fx, 'implemented', { Vitest: 'failure' });
+
+    const claim = await claimOf(fx, card.identifier);
+
+    expect(claim.outcome).toBe('claimed');
+    expect(
+      await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: claim.runId! } }),
+    ).toMatchObject({ origin: 'local' });
+    expect(await adminDb.dispatchRunEvent.count({ where: { dispatchRunId: claim.runId! } })).toBe(
+      0,
+    );
+
+    // A run that never beat reads its heartbeat as null once it is closed.
+    expect(
+      await workItemRepairService.closeRepair(
+        fx.projectId,
+        card.identifier,
+        claim.runId!,
+        'green',
+        fx.ctx,
+      ),
+    ).toMatchObject({ runId: claim.runId, open: false, lastHeartbeatAt: null });
+  });
+});
+
+describe('findOpenRepairRuns', () => {
+  it('no cards: an empty map, with no read', async () => {
+    const fx = await makeWorkItemFixture();
+    expect((await workItemRepairService.findOpenRepairRuns([], fx.ctx)).size).toBe(0);
   });
 });

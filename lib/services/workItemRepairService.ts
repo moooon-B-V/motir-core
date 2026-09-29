@@ -632,6 +632,8 @@ export const workItemRepairService = {
         // sit, so a green sent-back card must not read `hidden` (MOTIR-6822 drew it so
         // only while no frame could say who sent it back).
         const failing = verdict.pullRequests.map(refOf);
+        /* v8 ignore next -- NO PRODUCER: an `ok` verdict always hands over a member —
+           `ci` only when one is failing, `acceptance_rerun` / `review` only over open rows. */
         if (failing.length === 0) return { state: 'hidden' };
         const { repairClass, acceptanceRefusal } = verdict;
 

@@ -11,6 +11,7 @@ import {
   FIX_REASON_PRIORITY,
   deadRunReasonOf,
   notePreviewOf,
+  REVIEW_AGENT_REVIEWER_NAME,
   reviewerNameOf,
   sameFixReason,
 } from '@/lib/workItems/fixReason';
@@ -104,7 +105,8 @@ async function requestChanges(
     noteMd?: string | null;
     decidedAt?: Date;
     state?: 'changes_requested' | 'approved';
-    kind?: 'pull_request_approval' | 'design_result';
+    kind?: 'pull_request_approval' | 'agent_review' | 'design_result';
+    decidedById?: string | null;
   } = {},
 ) {
   return adminDb.approvalGate.create({
@@ -116,11 +118,11 @@ async function requestChanges(
       subjectId: workItemId,
       subjectVersion,
       state: opts.state ?? 'changes_requested',
-      decidedById: fx.ownerId,
+      decidedById: opts.decidedById === undefined ? fx.ownerId : opts.decidedById,
       decidedAt: opts.decidedAt ?? new Date('2026-09-26T10:00:00Z'),
       decidedByLabel: 'Yue Zhu <yue@example.com>',
       decisionSource: 'ui',
-      decidedUnderAuthority: 'assignee',
+      decidedUnderAuthority: opts.kind === 'agent_review' ? 'review_agent' : 'assignee',
       noteMd:
         opts.noteMd === undefined
           ? '\n  Rename the export button.  \nAnd the tooltip.'
@@ -616,6 +618,75 @@ describe('each clearing condition', () => {
 
     expect((await recompute(fx, card.id)).fixReason).toBeNull();
   });
+});
+
+// A standing review refusal on a card the `review` repair class does NOT admit (MOTIR-6822):
+// a rung other than Implemented / In Review, or a set with no open member left. The claim
+// refuses it, so the reason is read straight off the refusal (`readStandingReviewRefusal`)
+// — and the review AGENT is named as the agent, never as the person its run is attributed to.
+describe('a standing review refusal the repair claim does not admit', () => {
+  it('the review agent’s refusal on a card at Approved is changes_requested on agent_review, naming the agent', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, repo, pr } = await cardWith(fx, 'approved');
+    await requestChanges(fx, card.id, versionOf(repo.name, pr.number), { kind: 'agent_review' });
+    // The claim refuses the card, so this is the not-claimable arm.
+    expect(
+      await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx),
+    ).toMatchObject({ outcome: 'not_repairable', reason: 'not_implemented' });
+
+    expect(await recompute(fx, card.id)).toEqual({
+      fixReason: 'changes_requested',
+      fixDetail: {
+        repair: 'fix',
+        check: null,
+        queueReason: null,
+        base: null,
+        // The decider row is the workspace owner, but the agent decided — not a person.
+        reviewerName: REVIEW_AGENT_REVIEWER_NAME,
+        notePreview: 'Rename the export button.',
+        gate: 'agent_review',
+        ...NO_DEAD_RUN,
+        affected: 1,
+        total: 1,
+      },
+    });
+  });
+
+  it.each([
+    ['their live name', true, (fx: WorkItemFixture) => fx.owner.name],
+    // A reviewer whose user row is gone is named by the audit label, email stripped.
+    ['the audit label once the user row is gone', false, () => 'Yue Zhu'],
+  ] as const)(
+    'a person’s Request changes over a set with no open member names the person by %s',
+    async (_label, withUser, nameOf) => {
+      const fx = await makeWorkItemFixture();
+      const card = await createTestWorkItem(fx, { kind: 'task', title: 'merged already' });
+      await setStatus(card.id, 'in_review');
+      const repo = await connectRepairRepo(fx, `web-${randomToken(4)}`);
+      const pr = await deliveredPr(fx, card.id, repo, {
+        headRef: `subtask/${randomToken(4)}`,
+        checks: { Vitest: 'success' },
+        state: 'closed',
+        merged: true,
+      });
+      await requestChanges(fx, card.id, versionOf(repo.name, pr.number), {
+        decidedById: withUser ? fx.ownerId : null,
+      });
+
+      expect(await recompute(fx, card.id)).toMatchObject({
+        fixReason: 'changes_requested',
+        fixDetail: {
+          repair: 'fix',
+          gate: 'pull_request_approval',
+          reviewerName: nameOf(fx),
+          notePreview: 'Rename the export button.',
+          // Nothing open is left to repair; the reason still stands until a head moves.
+          affected: 0,
+          total: 0,
+        },
+      });
+    },
+  );
 });
 
 describe('the write', () => {
