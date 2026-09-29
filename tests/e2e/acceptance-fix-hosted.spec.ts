@@ -4,6 +4,7 @@ import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { ingestContext } from './_helpers/agent-run-seed';
 import {
+  fakeContainerCount,
   readFakeContainers,
   resetHostedRunJournal,
   writeHostedRunFixture,
@@ -35,7 +36,7 @@ import en from '@/messages/en.json';
 //     MOTIR-6929's, not this spec's.
 //   * The refusal — seeded (`fix-hosted-seed.ts`); how a review decides is MOTIR-6827's.
 //
-// ⚠️ EVERY WAIT IS AUTHORITATIVE: the start's own response (status and body), the fake
+// ⚠️ EVERY WAIT IS AUTHORITATIVE: the start's own response (its status), the fake
 // orchestrator's record, the part's `data-state` after the refresh the start triggers,
 // and Ben's claim's own 200. No timed wait anywhere; the holds are `chapter()` / `beat()`'s.
 
@@ -128,13 +129,27 @@ test.describe('Fix on the hosted agent', () => {
       const res = await started;
       expect(res.status()).toBe(201);
       expect(res.request().postDataJSON()).toMatchObject({ mode: 'fix', model: DEFAULT_MODEL });
-      const { dispatchRunId } = (await res.json()) as { dispatchRunId: string };
-
-      // The container the press booted is a REPAIR — the fake orchestrator's own record.
-      const machine = Object.values(readFakeContainers()).find(
-        (m) => m.spec.env?.['MOTIR_DISPATCH_RUN_ID'] === dispatchRunId,
-      );
-      expect(machine?.spec.env?.['MOTIR_RUN_MODE']).toBe('fix');
+      // The container the press booted is a REPAIR — the fake orchestrator's own record,
+      // written before the start answered (`hosted-run-boundary.ts`), so this read is
+      // authoritative once the 201 is in.
+      //
+      // ⚠️ NEVER `res.json()` HERE. The door does not read a successful start's body (it
+      // only refreshes on it), and Chrome then never reports that chunked 201 body
+      // finished — `response.json()` hangs until the test times out, while the page
+      // itself is fine. `acceptance-hosted-agent-run.spec.ts`'s `startedRunId` records the
+      // same trap; the run id comes from the container the start booted instead.
+      // ⚠️ THE NEWEST such record: the fake orchestrator's state outlives a test (the
+      // server's own memory re-writes it), and a project key can repeat across runs.
+      const machine = Object.values(readFakeContainers())
+        .filter(
+          (m) =>
+            m.spec.env?.['MOTIR_WORK_ITEM_KEY'] === agentCard.identifier &&
+            m.spec.env?.['MOTIR_RUN_MODE'] === 'fix',
+        )
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+      expect(machine, `a fix container was booted for ${agentCard.identifier}`).toBeDefined();
+      const dispatchRunId = machine!.spec.env!['MOTIR_DISPATCH_RUN_ID']!;
+      expect(dispatchRunId).toBeTruthy();
 
       // The start refreshed the page (a server-derived state): the part is now Fixing,
       // told it is hosted, with the run's link — and neither repair is offered.
@@ -169,6 +184,7 @@ test.describe('Fix on the hosted agent', () => {
 
     await chapter('The press is refused, naming Ben — nothing started', async () => {
       const part = fixPart(page);
+      const containersBefore = fakeContainerCount();
       const refused = startResponse(page, personCard.identifier);
       await part.getByTestId('fix-hosted').click();
       const res = await refused;
@@ -181,11 +197,9 @@ test.describe('Fix on the hosted agent', () => {
       await expect(notice).toContainText('Not started — a repair is already running, started by');
       await expect(notice).toContainText(s.ben.name);
       await expect(notice).toContainText(en.runs.hosted.refused.notReady.body);
-      // No second container was booted for this card.
-      const booted = Object.values(readFakeContainers()).filter(
-        (m) => m.spec.env?.['MOTIR_RUN_MODE'] === 'fix',
-      );
-      expect(booted).toHaveLength(1);
+      // Nothing was booted by the refused press — counted against the state before it, since
+      // the fake orchestrator's record outlives a test.
+      expect(fakeContainerCount()).toBe(containersBefore);
     });
     await beat();
 
