@@ -206,7 +206,8 @@ describe('an agent row', () => {
     expect(screen.getByText("The agent's step")).toBeTruthy();
 
     // Asserted NEGATIVELY — the promise the data model makes is that the field
-    // describes and does not dispatch, and MOTIR-3809 has not shipped.
+    // describes and does not dispatch. There is no run control until Motir AI can
+    // run a step (MOTIR-3809, the hosted-agent dispatch, is cancelled).
     const names = screen
       .getAllByRole('button')
       .map((b) => `${b.getAttribute('aria-label') ?? ''} ${b.textContent ?? ''}`.toLowerCase());

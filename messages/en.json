@@ -646,6 +646,16 @@
       "workItemsAction": "Go to work items",
       "homeAction": "Go to Motir"
     },
+    "serverError": {
+      "pageTitle": "This page couldn’t load",
+      "pageBody": "Something went wrong on Motir’s side while loading it — nothing you did caused this. Try again; if it keeps happening, include the reference below when you contact support.",
+      "appTitle": "Motir couldn’t load",
+      "appBody": "Something went wrong on our side before this page could open — nothing you did caused this. Try again, or go back to Motir’s home. If it keeps happening, include the reference below when you contact support.",
+      "retrying": "Trying again…",
+      "reference": "Reference",
+      "copyReference": "Copy reference",
+      "copied": "Copied"
+    },
     "actions": {
       "pickProjectFirst": "Pick a project first.",
       "unknownRelationship": "Unknown relationship.",

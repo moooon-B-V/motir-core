@@ -71,7 +71,8 @@ test('a person works a manual card’s to-do list end to end', async ({
     const agentRow = rows(page).filter({ has: page.getByTestId('todo-executor-agent') });
     await expect(agentRow).toHaveCount(1);
     // …and — asserted NEGATIVELY, which is the whole point of the seam this
-    // story ships — offers nothing that runs it. MOTIR-3809 is where that lives.
+    // story ships — offers nothing that runs it. No run control comes until Motir AI
+    // can run a step (MOTIR-3809, the hosted-agent dispatch, is cancelled).
     await expect(
       page.getByTestId('todo-list').getByRole('button', { name: /run|dispatch/i }),
     ).toHaveCount(0);

@@ -40,10 +40,29 @@ export interface ErrorStateProps extends HTMLAttributes<HTMLDivElement> {
    * (motir-core wires it from its `common.retry`).
    */
   retryLabel?: string;
+  /**
+   * The retry is IN FLIGHT: the button takes `Button`'s `loading` state
+   * (Spinner, `disabled`, `aria-busy`) and shows `retryPendingLabel`. For a
+   * retry that re-requests something slow — a route segment's server render
+   * (motir-core's error boundaries, MOTIR-6855 · design MOTIR-6854 panel 1a).
+   */
+  retryPending?: boolean;
+  /** Label while `retryPending`. Defaults to `retryLabel` — i18n, as above, is the app's. */
+  retryPendingLabel?: string;
 }
 
 export const ErrorState = forwardRef<HTMLDivElement, ErrorStateProps>(function ErrorState(
-  { title, description, error, retry, className, retryLabel = 'Try again', ...rest },
+  {
+    title,
+    description,
+    error,
+    retry,
+    className,
+    retryLabel = 'Try again',
+    retryPending = false,
+    retryPendingLabel,
+    ...rest
+  },
   ref,
 ) {
   const showErrorDetail = error && process.env.NODE_ENV !== 'production';
@@ -73,8 +92,8 @@ export const ErrorState = forwardRef<HTMLDivElement, ErrorStateProps>(function E
       ) : null}
       {retry ? (
         <div className="mt-(--spacing-md)">
-          <Button variant="secondary" onClick={retry}>
-            {retryLabel}
+          <Button variant="secondary" onClick={retry} loading={retryPending}>
+            {retryPending ? (retryPendingLabel ?? retryLabel) : retryLabel}
           </Button>
         </div>
       ) : null}
