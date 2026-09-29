@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -251,6 +252,49 @@ describe('MCP ready tools — the `lane` argument (MOTIR-6833)', () => {
     expect(keys(containers.items)).toEqual(keys(svcContainers.items));
     expect(containers.items[0]).toMatchObject({ readyLeafCount: 2 });
     expect(containers.items[0]!.runCommand).toBe(`motir run ${containers.items[0]!.key}`);
+  });
+
+  it('list_ready { lane: container } says so when empty, then names each container, its assignee and its run', async () => {
+    const fx = await makeWorkItemFixture();
+    const text = (res: CallToolResult) => (res.content[0] as { text: string }).text;
+    const empty = await runListReady({ projectKey: 'PROD', lane: 'container' }, fx.ctx);
+    expect(text(empty)).toBe('No ready work in the container lane.');
+    const noBugs = await runListReady({ projectKey: 'PROD', lane: 'bug' }, fx.ctx);
+    expect(text(noBugs)).toBe('No ready work in the bug lane.');
+
+    const t = await laneTree(fx);
+    const owned = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Owned', assigneeId: fx.ownerId },
+      fx.ctx,
+    );
+    await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'subtask',
+        title: 'o1',
+        parentId: owned.id,
+        assigneeId: fx.ownerId,
+      },
+      fx.ctx,
+    );
+    const first = await runListReady({ projectKey: 'PROD', lane: 'container', limit: 1 }, fx.ctx);
+    const cursor = (first.structuredContent as { nextCursor: string | null }).nextCursor;
+    expect(cursor).not.toBeNull();
+    expect(text(first)).toMatch(/^1 runnable container:\n/);
+    expect(text(first)).toContain(`More available — pass cursor: ${cursor}`);
+
+    const all = text(await runListReady({ projectKey: 'PROD', lane: 'container' }, fx.ctx));
+    expect(all).toMatch(/^2 runnable containers:\n/);
+    expect(all).toContain(
+      `${t.S.identifier} [story/medium] S — 2 of 2 ready — unassigned — run: motir run ${t.S.identifier}`,
+    );
+    expect(all).toMatch(
+      new RegExp(`${owned.identifier} \\[story/\\w+\\] Owned — 1 of 1 ready — \\S`),
+    );
+    expect(all).not.toContain(`Owned — 1 of 1 ready — unassigned`);
+    // …and an assigned LEAF names its assignee in the leaf lane's line.
+    const leaves = text(await runListReady({ projectKey: 'PROD' }, fx.ctx));
+    expect(leaves).toMatch(new RegExp(`o1 \\(in ${owned.identifier}\\) — (?!unassigned)`));
   });
 
   it('next_ready never hands out a bug by default; lane bug and lane container take theirs', async () => {
