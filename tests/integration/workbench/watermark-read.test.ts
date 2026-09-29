@@ -279,11 +279,11 @@ describe('THE ACCESS FIXTURE — a reader who may not browse their own active pr
     await watch(theirs.id, outsider);
     await gateOn({ title: 'Genuinely their decision', assigneeId: outsider });
 
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     // Joining a workspace enrols a user in its projects, so the revocation is
     // what actually creates the state the scope resolver is written for.

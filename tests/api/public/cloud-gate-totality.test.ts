@@ -227,11 +227,10 @@ describe('the publish path cannot be reached without the gate', () => {
   it('exactly ONE service method writes the public access level, and it is gated', () => {
     // The repository write is the narrow waist: everything that can publish a
     // project goes through it. A second caller added later lands here.
-    // Since Story MOTIR-6169 the write is the ACCESS MODE (`setAccessMode`, which
-    // writes the legacy level beside it); the level-only writer is gone.
+    // Since Story MOTIR-6169 the write is the ACCESS MODE (`setAccessMode`); the
+    // level writer and its request arm are gone (MOTIR-6692).
     const writers = filesMatching('projectRepository.setAccessMode(', 'app', 'lib');
     expect(writers).toEqual(['lib/services/projectMembersService.ts']);
-    expect(filesMatching('projectRepository.setAccessLevel(', 'app', 'lib')).toEqual([]);
 
     const service = stripSourceComments(
       readFileSync(join(REPO_ROOT, 'lib/services/projectMembersService.ts'), 'utf8'),

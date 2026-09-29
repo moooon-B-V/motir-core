@@ -189,11 +189,11 @@ describe('notificationFanInService.fanIn — comment mentions', () => {
     // Going private adds nobody (Story MOTIR-6169): the member who keeps their
     // view is ADDED explicitly; a user added to the workspace AFTER the flip has
     // no project access — "lost view access between write and fan-in".
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,
       ctx: s.fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     await adminDb.projectMembership.create({
       data: {

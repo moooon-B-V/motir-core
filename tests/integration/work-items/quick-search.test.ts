@@ -266,11 +266,11 @@ describe('workItemsService.quickSearch — permission scope (Story 6.4)', () => 
     });
     // Make PRIV private; going private adds nobody (Story MOTIR-6169), so the
     // outsider below is not a project member (the owner enters as a Manager).
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: priv.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level: 'private',
+      mode: 'members',
     });
 
     // A plain workspace member with no role in PRIV.

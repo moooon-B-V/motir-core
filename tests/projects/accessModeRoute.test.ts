@@ -5,6 +5,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { runAsCloudBuild } from '../helpers/cloudBuild';
 
 // PATCH /api/projects/[key]/access and GET …/access/preview (Story MOTIR-6169 ·
 // MOTIR-6544) through the shipped route handlers. The session is the one thing
@@ -95,27 +96,30 @@ describe('PATCH /api/projects/[key]/access', () => {
       access: { key: f.key, accessMode: 'members', accessLevel: 'private' },
     });
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: f.project.id } });
-    expect([row.accessMode, row.accessLevel]).toEqual(['members', 'private']);
+    expect(row.accessMode).toBe('members');
     expect(await adminDb.projectMembership.count({ where: { projectId: f.project.id } })).toBe(
       before,
     );
   });
 
-  it('still accepts the legacy { accessLevel: limited } and lands it at members', async () => {
+  it('refuses the retired { accessLevel } body — 400 naming accessMode, nothing written (MOTIR-6692)', async () => {
     const f = await fixture('route-legacy');
     f.as(f.owner.id);
-    const res = await patch(f.key, { accessLevel: 'limited' });
-    expect(res.status).toBe(200);
+    const res = await patch(f.key, { accessLevel: 'public' });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: 'An "accessMode" is required.',
+      code: 'BAD_REQUEST',
+    });
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: f.project.id } });
-    expect(row.accessMode).toBe('members');
+    expect(row.accessMode).toBe('workspace');
   });
 
-  it('refuses an unknown mode, a body with both fields, and a body with neither — 400', async () => {
+  it('refuses an unknown mode, a non-string mode and a body with neither — 400', async () => {
     const f = await fixture('route-bad');
     f.as(f.owner.id);
     expect((await patch(f.key, { accessMode: 'x' })).status).toBe(400);
-    const both = await patch(f.key, { accessMode: 'members', accessLevel: 'private' });
-    expect(both.status).toBe(400);
+    expect((await patch(f.key, { accessMode: 1 })).status).toBe(400);
     expect((await patch(f.key, {})).status).toBe(400);
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: f.project.id } });
     expect(row.accessMode).toBe('workspace');
@@ -136,6 +140,22 @@ describe('PATCH /api/projects/[key]/access', () => {
     const res = await patch(f.key, { accessMode: 'public' });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { code: string }).code).toBe('PUBLIC_ACCESS_UNAVAILABLE');
+  });
+
+  describe('on a CLOUD build', () => {
+    runAsCloudBuild();
+
+    it('{ accessMode: public } by a Manager lands at public', async () => {
+      const f = await fixture('route-public-cloud');
+      f.as(f.owner.id);
+      const res = await patch(f.key, { accessMode: 'public' });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        access: { key: f.key, accessMode: 'public', accessLevel: 'public' },
+      });
+      const row = await adminDb.project.findUniqueOrThrow({ where: { id: f.project.id } });
+      expect(row.accessMode).toBe('public');
+    });
   });
 });
 

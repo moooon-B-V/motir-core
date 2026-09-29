@@ -163,11 +163,11 @@ describe('GET /api/work-items/mention-search — candidate read', () => {
     });
     // Make PRIV private; going private adds nobody (Story MOTIR-6169), so the
     // outsider below is not a member.
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: priv.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level: 'private',
+      mode: 'members',
     });
 
     const outsider = await usersService.createUser({

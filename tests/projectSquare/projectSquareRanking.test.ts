@@ -275,7 +275,7 @@ describe('projectRepository.listPublicDirectoryRanked — keyset determinism', (
   );
 });
 
-describe('projectMembersService.setAccessLevel — madePublicAt stamp', () => {
+describe('projectMembersService.setAccessMode — madePublicAt stamp', () => {
   it(
     'stamps madePublicAt on the transition INTO public and keeps it on re-save',
     { timeout: DB_TEST_TIMEOUT_MS },
@@ -285,22 +285,22 @@ describe('projectMembersService.setAccessLevel — madePublicAt stamp', () => {
         (await adminDb.project.findUnique({ where: { id: fx.projectId } }))!.madePublicAt,
       ).toBeNull();
 
-      await projectMembersService.setAccessLevel({
+      await projectMembersService.setAccessMode({
         key: fx.projectIdentifier,
         actorUserId: fx.ownerId,
         ctx: fx.ctx,
-        level: 'public',
+        mode: 'public',
       });
       const first = (await adminDb.project.findUnique({ where: { id: fx.projectId } }))!
         .madePublicAt;
       expect(first).not.toBeNull();
 
       // Re-saving an already-public project keeps the original go-public moment.
-      await projectMembersService.setAccessLevel({
+      await projectMembersService.setAccessMode({
         key: fx.projectIdentifier,
         actorUserId: fx.ownerId,
         ctx: fx.ctx,
-        level: 'public',
+        mode: 'public',
       });
       const second = (await adminDb.project.findUnique({ where: { id: fx.projectId } }))!
         .madePublicAt;

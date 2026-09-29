@@ -202,11 +202,11 @@ describe('link candidate search — permission scope inherited (Story 6.4)', () 
       name: 'Private',
       identifier: 'PRIV',
     });
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: priv.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
-      level: 'private',
+      mode: 'members',
     });
 
     const outsider = await usersService.createUser({

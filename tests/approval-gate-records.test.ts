@@ -353,11 +353,11 @@ describe('one window over two sections', () => {
 describe('the browse floor', () => {
   it('a reader who may not browse the active project reads nothing, and no full view', async () => {
     await seedPopulation();
-    await projectMembersService.setAccessLevel({
+    await projectMembersService.setAccessMode({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
-      level: 'private',
+      mode: 'members',
     });
     // Make sure this reader holds no project membership (going private adds
     // nobody since Story MOTIR-6169), so they genuinely may not browse it.

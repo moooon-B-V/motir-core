@@ -7,7 +7,7 @@ import { BuildInPublicDialog } from '@/app/(authed)/settings/project/members/_co
 
 // BuildInPublicDialog (Subtask 6.17.2) — the reusable "Start building in public?"
 // explainer/confirm Modal (design/public-projects Panel 11). It is presentational
-// + controlled: it does NOT mutate access; the owner runs setAccessLevel on the
+// + controlled: it does NOT mutate access; the owner runs setAccessMode on the
 // confirm callback. These cover the centralized `settings.buildInPublic.*` copy
 // (en + zh), the confirm/cancel wiring, and the pending state.
 
