@@ -102,6 +102,23 @@ describe('the /ready filter vocabularies (MOTIR-2458)', () => {
     }
   });
 
+  // The route-level cases that pinned these went with `ready-route.test.ts`
+  // (MOTIR-6841); the parse is shared by every lane, so it is pinned here.
+  it('reads `ancestor` as a de-duplicated any-of set, and 422s a MALFORMED key', () => {
+    expect(parse('?ancestor=motir-7&ancestor=MOTIR-7&ancestor=MOTIR-8')).toEqual({
+      ancestorKeys: ['MOTIR-7', 'MOTIR-8'],
+    });
+    // Empty is omitted, the same wire accident as an empty `sprintId`.
+    expect(parse('?ancestor=&sprintId=')).toEqual({});
+    expect(() => parse('?ancestor=not-a-key-at-all')).toThrow(InvalidRequestError);
+    try {
+      parse('?ancestor=not-a-key-at-all');
+      expect.unreachable('a malformed ancestor key must throw');
+    } catch (err) {
+      expect((err as InvalidRequestError).code).toBe('INVALID_READY_FILTER');
+    }
+  });
+
   it('the OpenAPI document lists `allowSoftBlock` on the leaves lane as an optional true/false', () => {
     const doc = emitOpenApiDocument() as {
       paths: Record<
