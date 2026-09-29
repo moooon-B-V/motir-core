@@ -431,6 +431,15 @@ changes**.
   In a project that merges automatically, the same row and a **Merge queue**
   note appear without a gate, and anyone who may edit the work item can press
   **Queue again**.
+- **If the pull request is put back into the queue on GitHub** — with _Merge when
+  ready_, _Add to merge queue_, `gh pr merge --auto` or another tool — Motir sees
+  it. Its row stops reading **Left the queue** or **Removed from the queue**, the
+  work item stops reading as failing, and `motir fix` does not claim it. Nothing
+  else changes: the work item keeps its status, and a question already waiting on
+  it stays open, because a queue action on GitHub is not an answer to it (only a
+  review is, see [Approving on GitHub](#approving-on-github)). The work item moves
+  to **Done** when the queue merges the pull request. If the queue takes it out
+  again, that is handled like any other removal.
 - **If a check in the merge queue was cancelled or timed out** (a job that hung,
   not one that failed), nothing failed in the code, so the work item goes back to
   **In Review** with one new approval instead of to **Implemented**. The row reads

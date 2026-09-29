@@ -113,6 +113,42 @@ describe('GitHub’s parseMergeQueueExitEvent, over the captured deliveries', ()
   });
 });
 
+// `enqueued` — the delivery that answers a standing exit (MOTIR-6903). GitHub sends it
+// with the same three fields `dequeued` carries, so the captured body with its action
+// swapped is the fixture.
+describe('GitHub’s parseMergeQueueEntryEvent', () => {
+  const github = getGitProvider('github');
+  const enqueued = () => {
+    const body = fixture('dequeued-ci-failure');
+    delete body['reason'];
+    return { ...body, action: 'enqueued' };
+  };
+
+  it('normalises the pull request the queue took in', () => {
+    expect(github.parseMergeQueueEntryEvent!(enqueued())).toEqual({
+      providerRepoId: '1246103300',
+      number: 2830,
+      headSha: '3b59a33bcb2a1012a0008073d96db51ec8b9438a',
+    });
+  });
+
+  it.each([
+    ['a dequeued delivery', (b: Record<string, unknown>) => ({ ...b, action: 'dequeued' })],
+    ['no repository id', (b: Record<string, unknown>) => ({ ...b, repository: {} })],
+    [
+      'no head sha',
+      (b: Record<string, unknown>) => ({ ...b, pull_request: { number: 1, head: {} } }),
+    ],
+    ['a non-object body', () => 'enqueued' as unknown as Record<string, unknown>],
+  ])('%s → null', (_label, mutate) => {
+    expect(github.parseMergeQueueEntryEvent!(mutate(enqueued()))).toBeNull();
+  });
+
+  it('GitLab does not declare the capability', () => {
+    expect(getGitProvider('gitlab').parseMergeQueueEntryEvent).toBeUndefined();
+  });
+});
+
 // THE CLASS MAP (§4 FOURTH AMENDMENT, point 2; MOTIR-5802) — what a person can DO about
 // an un-landed merge, which is a different question from what the removal did to the card.
 // Stated here row for row, from the record rather than from the module under test. The

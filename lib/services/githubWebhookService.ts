@@ -47,7 +47,11 @@ import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPull
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { evaluateForPullRequest } from './pullRequestReviewSync';
 import { ProviderPermissionReadError } from '@/lib/git/errors';
-import { mergeQueueExitService, type MergeQueueExitResult } from './mergeQueueExitService';
+import {
+  mergeQueueExitService,
+  type MergeQueueEntryResult,
+  type MergeQueueExitResult,
+} from './mergeQueueExitService';
 import { mergeQueueCheckService, type MergeGroupResult } from './mergeQueueCheckService';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
@@ -227,6 +231,8 @@ export type GithubWebhookResult =
   | CiFeedbackResult
   // A merge queue removed a pull request (MOTIR-5632).
   | MergeQueueExitResult
+  // …or took one back in (MOTIR-6903).
+  | MergeQueueEntryResult
   // A merge queue started testing a group (MOTIR-5633).
   | MergeGroupResult;
 
@@ -670,6 +676,19 @@ export const githubWebhookService = {
         installationId: readInstallationId(body),
         exit,
         deliveryId,
+      });
+    }
+
+    // …AND ONE PUT IT BACK (MOTIR-6903; §4 SEVENTH AMENDMENT). `enqueued` arrives for
+    // every enqueue, from Motir or from GitHub itself, and answers an exit still
+    // standing at the head it names. Not a lifecycle either, and out of
+    // `HANDLED_PR_ACTIONS` for the same reason as `dequeued`.
+    if (body['action'] === 'enqueued') {
+      const entry = getGitProvider(PROVIDER).parseMergeQueueEntryEvent?.(body) ?? null;
+      if (!entry) return { event: 'pull_request', outcome: 'malformed' };
+      return mergeQueueExitService.recordEntry({
+        installationId: readInstallationId(body),
+        entry,
       });
     }
 
