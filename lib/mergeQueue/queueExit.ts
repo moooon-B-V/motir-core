@@ -116,15 +116,85 @@ const QUEUE_EXIT_CLASSES = {
 } as const satisfies Record<KnownQueueExitReason, LandingClass>;
 
 /**
- * Classify one raw removal reason by what can be DONE about it. TOTAL: an unrecognised
- * string is `retryable`, which is the safe default — a person is asked and can still
- * reach for `motir fix`, where `cant_land` would silently offer them nothing.
+ * The raw GitHub check conclusions that say a job was STOPPED rather than that it
+ * FAILED (§4 SIXTH AMENDMENT, MOTIR-6844): cancelled by a person or by its own time
+ * limit, before it could say anything about the commits. A `CI_FAILURE` /
+ * `CI_TIMEOUT` exit whose recorded failing check concluded one of these is `neutral`
+ * and `retryable` — the fixture is MOTIR-6765's `TypeScript` job, which hung for 19
+ * minutes and was cancelled at its timeout.
  */
-export function classOfQueueExit(rawReason: string | null | undefined): LandingClass {
+export const HUNG_CHECK_CONCLUSIONS: readonly string[] = ['cancelled', 'timed_out'];
+
+/** The two queue-failure reasons whose meaning depends on HOW their check ended. */
+const CHECK_JUDGED_REASONS: ReadonlySet<string> = new Set(['CI_FAILURE', 'CI_TIMEOUT']);
+
+export interface QueueExitJudgement {
+  disposition: QueueExitDisposition;
+  landingClass: LandingClass;
+}
+
+/**
+ * THE JUDGE (§4 SIXTH AMENDMENT's table). TOTAL over every key of
+ * `QUEUE_EXIT_REASONS` and any other string. Only `CI_FAILURE` and `CI_TIMEOUT` read
+ * the conclusion:
+ *
+ *  · `CI_FAILURE` — neutral + retryable when its check was `cancelled` / `timed_out`;
+ *    a genuine failure, or no check recorded YET, stays failure + can't-land (a late
+ *    conclusion re-judges it, `mergeQueueExitService.resettleStandingExit`).
+ *  · `CI_TIMEOUT` — the timeout is itself the statement that the checks did not
+ *    finish, so it is neutral + retryable unless a check that GENUINELY failed was
+ *    recorded first.
+ *
+ * Every other reason answers exactly what the reason table does.
+ */
+export function judgeQueueExit(exit: {
+  rawReason: string | null | undefined;
+  failingCheckConclusion: string | null | undefined;
+}): QueueExitJudgement {
+  const { rawReason, failingCheckConclusion } = exit;
+  if (rawReason && CHECK_JUDGED_REASONS.has(rawReason)) {
+    const hung =
+      failingCheckConclusion != null && HUNG_CHECK_CONCLUSIONS.includes(failingCheckConclusion);
+    const unknown = failingCheckConclusion == null;
+    if (hung || (rawReason === 'CI_TIMEOUT' && unknown)) {
+      return { disposition: 'neutral', landingClass: 'retryable' };
+    }
+    return { disposition: 'failure', landingClass: 'cant_land' };
+  }
+  return {
+    disposition: classifyQueueExit(rawReason).disposition,
+    landingClass: baseClassOf(rawReason),
+  };
+}
+
+function baseClassOf(rawReason: string | null | undefined): LandingClass {
   if (rawReason && Object.hasOwn(QUEUE_EXIT_CLASSES, rawReason)) {
     return QUEUE_EXIT_CLASSES[rawReason as KnownQueueExitReason];
   }
   return 'retryable';
+}
+
+/**
+ * Classify one RECORDED exit by what can be DONE about it. It reads the exit, not the
+ * reason, because since the SIXTH AMENDMENT the reason alone no longer answers: a
+ * `CI_FAILURE` / `CI_TIMEOUT` exit is `retryable` exactly when its STORED disposition
+ * is `neutral` (the judge wrote it so, from its check's conclusion), and `cant_land`
+ * otherwise. One stored fact is what keeps the class, the promotion hold and the CI
+ * state from disagreeing about one exit — and it is what leaves `auto` mode, whose
+ * exits keep `failure` (§4 SIXTH AMENDMENT, point 2), exactly as it was.
+ *
+ * TOTAL: an unrecognised string is `retryable`, which is the safe default — a person
+ * is asked and can still reach for `motir fix`, where `cant_land` would silently offer
+ * them nothing.
+ */
+export function classOfQueueExit(exit: {
+  rawReason: string | null | undefined;
+  disposition: string;
+}): LandingClass {
+  if (exit.rawReason && CHECK_JUDGED_REASONS.has(exit.rawReason)) {
+    return exit.disposition === 'neutral' ? 'retryable' : 'cant_land';
+  }
+  return baseClassOf(exit.rawReason);
 }
 
 /**

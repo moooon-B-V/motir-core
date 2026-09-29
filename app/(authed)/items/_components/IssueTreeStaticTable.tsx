@@ -10,6 +10,7 @@ import { buildIssueColumns } from './issueColumns';
 import { IssueInlineEditProvider } from './IssueInlineEdit';
 import { usePeekRowClick } from './IssueQuickView';
 import type { IssueRowData } from './issueRows';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The STATIC (non-lazy) /items tree — used ONLY for the FILTERED view, where
 // the read is the context-preserving `getProjectTree` (already bounded by the
@@ -28,6 +29,7 @@ export interface IssueTreeStaticTableProps {
 }
 
 export function IssueTreeStaticTable({ rows, workflow, members }: IssueTreeStaticTableProps) {
+  const routes = useReaderRoutes();
   const t = useTranslations();
   // A plain row click opens the quick-view peek (the per-row eye was removed in
   // MOTIR-1306); ⌘/ctrl/middle-click still opens the detail page via the href.
@@ -60,7 +62,7 @@ export function IssueTreeStaticTable({ rows, workflow, members }: IssueTreeStati
       rows={rows}
       expandedIds={expandedIds}
       onExpandedChange={setExpandedIds}
-      getRowHref={(r) => `/items/${r.identifier}`}
+      getRowHref={(r) => routes.item(r.identifier)}
       getRowLabel={(r) => `${r.identifier} ${r.title}`}
       onRowLinkClick={(e, r) => onPeekClick(e, r.identifier)}
       getRowTestId={(r) => `issue-row-${r.identifier}`}

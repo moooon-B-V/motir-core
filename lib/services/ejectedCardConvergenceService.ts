@@ -213,7 +213,7 @@ export const ejectedCardConvergenceService = {
             const cantLand = deliveries.flatMap((d) => {
               const exit = latestExits.get(d.githubPullRequestId);
               if (!exit || exit.requeuedAt !== null) return [];
-              if (classOfQueueExit(exit.rawReason) !== 'cant_land') return [];
+              if (classOfQueueExit(exit) !== 'cant_land') return [];
               const head = liveRowsAtLatestSha([...d.pullRequest.checkRuns])[0]?.commitSha;
               return [{ standing: queueExitStandsAtHead(exit, head) }];
             });
@@ -254,7 +254,7 @@ export const ejectedCardConvergenceService = {
             const head = liveRowsAtLatestSha([...d.pullRequest.checkRuns])[0]?.commitSha;
             const exit = latestExits.get(d.githubPullRequestId);
             return queueExitStandsAtHead(exit, head)
-              ? [{ exit: exit!, landingClass: classOfQueueExit(exit!.rawReason) }]
+              ? [{ exit: exit!, landingClass: classOfQueueExit(exit!) }]
               : [];
           });
           // POPULATION B: a can't-land outcome already holds the card at `implemented`,

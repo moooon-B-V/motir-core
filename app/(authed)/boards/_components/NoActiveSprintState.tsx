@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { ArrowRight, Flag } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // NoActiveSprintState (Subtask 4.5.3) — the board area for a SCRUM board whose
 // 4.5.2 projection returned `sprint: null` (the common pre-start / post-complete
@@ -16,17 +17,21 @@ import { buttonVariants } from '@/components/ui/Button';
 // 4.4); it only links there. Reuses the shipped `EmptyState` + `buttonVariants`
 // (a `Link` styled as the primary button), so there is no hand-rolled surface.
 export function NoActiveSprintState() {
+  const backlogHref = useReaderRoutes().path('/backlog');
   const t = useTranslations('boards');
   return (
     <EmptyState
       icon={<Flag className="h-6 w-6" aria-hidden />}
       title={t('noActiveSprintTitle')}
       description={t('noActiveSprintDescription')}
+      // A Visitor has no backlog to plan a sprint in (MOTIR-6888): no door.
       action={
-        <Link href="/backlog" className={buttonVariants({ variant: 'primary' })}>
-          {t('noActiveSprintCta')}
-          <ArrowRight className="h-4 w-4" aria-hidden />
-        </Link>
+        backlogHref === null ? undefined : (
+          <Link href={backlogHref} className={buttonVariants({ variant: 'primary' })}>
+            {t('noActiveSprintCta')}
+            <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
+        )
       }
     />
   );

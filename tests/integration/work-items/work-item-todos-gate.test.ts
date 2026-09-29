@@ -28,7 +28,8 @@ import { adminDb } from '../../helpers/adminDb';
 //   toWorkItemTodoListDto                → lib/mappers/workItemTodoMappers.ts
 //   WorkItemTodoDto / WorkItemTodoListDto → lib/dto/workItemTodos.ts
 //   listByWorkItem / countByWorkItem      → lib/repositories/workItemTodoRepository.ts
-// Nothing here anticipates MOTIR-3809's dispatch or MOTIR-1344's assistant.
+// Nothing here anticipates a runner for an agent step (Motir AI, later; MOTIR-3809's
+// hosted-agent dispatch is cancelled) or MOTIR-1344's assistant.
 
 async function truncateAll(): Promise<void> {
   await adminDb.$executeRawUnsafe(

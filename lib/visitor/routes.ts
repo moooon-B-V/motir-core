@@ -127,6 +127,9 @@ export function visitorPathForMemberPath(
   if (sub !== undefined && decodedSub === undefined) return null;
   switch (head) {
     case 'items': {
+      // `/items/archived` is the member ARCHIVE, not a work item keyed `archived`:
+      // the Visitor has no archive (MOTIR-6888).
+      if (decodedSub === 'archived') return null;
       if (decodedSub) return withQuery(visitorViewPath(identifier, 'items', decodedSub), params);
       const tree = params.get('view') === 'tree';
       params.delete('view');
@@ -144,4 +147,76 @@ export function visitorPathForMemberPath(
     default:
       return null;
   }
+}
+
+/**
+ * Where a READER follows a MEMBER route (MOTIR-6888). The eight page bodies are
+ * shared with the member app (MOTIR-6643), so every href they build names a
+ * member route; on the Visitor route tree that route is the wrong project — the
+ * member page reads the reader's OWN active project. `identifier` is the public
+ * project the body is being served for, or null on a member page.
+ *
+ * - null identifier → the member path, unchanged;
+ * - otherwise → its Visitor path inside `identifier`'s views (a `#fragment`
+ *   kept), or null where the Visitor has none (an edit page, the archive, a
+ *   sprint report), which the caller renders as no link at all.
+ *
+ * `proxy.ts`'s `visitorLinkRedirect` stays as a safety net, but it needs the
+ * `motir_visitor` cookie, and a body that already emits the Visitor path needs
+ * nothing.
+ */
+export function readerPath(identifier: string | null, memberPath: string): string | null {
+  if (identifier === null) return memberPath;
+  const hashAt = memberPath.indexOf('#');
+  const hash = hashAt < 0 ? '' : memberPath.slice(hashAt);
+  const path = hashAt < 0 ? memberPath : memberPath.slice(0, hashAt);
+  const queryAt = path.indexOf('?');
+  const pathname = queryAt < 0 ? path : path.slice(0, queryAt);
+  const search = queryAt < 0 ? '' : path.slice(queryAt);
+  const visitor = visitorPathForMemberPath(identifier, pathname, search);
+  return visitor === null ? null : `${visitor}${hash}`;
+}
+
+/** The addresses a shared page body builds, for whichever reader it serves. */
+export interface ReaderRoutes {
+  /** The public project the body is served for, or null on a member page. */
+  readonly identifier: string | null;
+  /** A work item's page — every Visitor can read one, so never null. */
+  item(key: string, hash?: string): string;
+  /** A plan's page — every Visitor can read one, so never null. */
+  plan(id: string): string;
+  /**
+   * One of the eight views' own lists, with its query (`/runs?scope=…`,
+   * `/boards?…`, `/approvals?page=2`) — every Visitor has these, so never null.
+   * An address the Visitor may have NO view of goes through {@link path}.
+   */
+  view(memberPath: string): string;
+  /** Any other member route — null where the Visitor has no view of it. */
+  path(memberPath: string): string | null;
+}
+
+/**
+ * {@link ReaderRoutes} for a body served under `identifier` (null on a member
+ * page). A Server Component takes the identifier from its page scope
+ * (`pageScope(ctx).visitor?.project.identifier`); a client component uses
+ * `useReaderRoutes`, which reads it from the pathname.
+ */
+export function readerRoutes(identifier: string | null): ReaderRoutes {
+  return {
+    identifier,
+    item: (key, hash) =>
+      `${
+        identifier === null
+          ? `/items/${encodeURIComponent(key)}`
+          : visitorViewPath(identifier, 'items', key)
+      }${hash ? `#${hash}` : ''}`,
+    plan: (id) =>
+      identifier === null
+        ? `/plans/${encodeURIComponent(id)}`
+        : visitorViewPath(identifier, 'plans', id),
+    // A list address always maps (`visitorPathForMemberPath` answers every view
+    // with any query); the member path is only a type-level fallback.
+    view: (memberPath) => readerPath(identifier, memberPath) ?? memberPath,
+    path: (memberPath) => readerPath(identifier, memberPath),
+  };
 }

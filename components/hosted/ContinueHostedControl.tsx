@@ -12,6 +12,7 @@ import { HostedModelPicker } from './HostedModelPicker';
 import { useHostedModels } from './HostedModelsProvider';
 import { useContinueHosted } from './useContinueHosted';
 import type { ContinueHostedRefusal } from './hostedModels';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // CONTINUE HOSTED, AS A CONTROL ANY SURFACE CAN PLACE (MOTIR-6879), built to
 // `design/runs/design-notes.md` § Continue hosted, Panels C1–C5
@@ -185,6 +186,7 @@ function Refusal({
   refusal: ContinueHostedRefusal;
   viewerId: string | null;
 }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('github.development.continue.hosted.refused');
   const tRun = useTranslations('runs.hosted.refused');
   const nothing = tRun('notReady.body');
@@ -255,7 +257,7 @@ function Refusal({
         key,
         link: (chunks) => (
           <Link
-            href={`/items/${encodeURIComponent(key)}`}
+            href={routes.item(key)}
             className="font-medium text-(--el-link) underline-offset-2 hover:underline"
           >
             {chunks}

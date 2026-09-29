@@ -1365,6 +1365,7 @@ export const githubProvider: GitProvider = {
       name,
       url,
       completedAt: Number.isNaN(completedAt.getTime()) ? new Date() : completedAt,
+      conclusion,
     };
   },
 

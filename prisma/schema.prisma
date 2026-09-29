@@ -7445,31 +7445,36 @@ model GithubPullRequest {
 /// that table is the pull request's OWN CI state at its head, and a queue failure
 /// written there would turn a green pull request red.
 model GithubPullRequestQueueExit {
-  id               String               @id @default(cuid())
+  id                     String               @id @default(cuid())
   /// FK → GithubPullRequest.id (internal cuid).
-  pullRequestId    String               @map("pull_request_id")
+  pullRequestId          String               @map("pull_request_id")
   /// The delivery's `X-GitHub-Delivery` GUID — the idempotency key (decision 9). A
   /// hand REDELIVERY repeats it (measured, MOTIR-5627), so a replayed exit writes
   /// nothing; a genuine second exit is a new event with a new GUID.
-  deliveryId       String               @unique @map("delivery_id")
+  deliveryId             String               @unique @map("delivery_id")
   /// The host's reason, VERBATIM (`CI_FAILURE`, `MANUAL`, …, or a string nobody has
   /// mapped yet).
-  rawReason        String               @map("raw_reason")
-  disposition      QueueExitDisposition
+  rawReason              String               @map("raw_reason")
+  disposition            QueueExitDisposition
   /// The pull request's head when it left the queue — what *Queue again* and the
   /// promotion hold compare the current head against.
-  headSha          String               @map("head_sha")
-  exitedAt         DateTime             @map("exited_at")
+  headSha                String               @map("head_sha")
+  exitedAt               DateTime             @map("exited_at")
   /// Stamped by *Queue again* (MOTIR-5634) when the pull request was put back.
   /// Null while the exit still stands.
-  requeuedAt       DateTime?            @map("requeued_at")
+  requeuedAt             DateTime?            @map("requeued_at")
   /// The merge-queue check that failed, copied from the pull request's latest
   /// queue attempt (MOTIR-5633; decision 8) — or filled later, when that check
   /// completes after the exit. Null when no check is known: a conflict has no merge
   /// group, and an installation without the `merge_group` event records no attempt.
-  failingCheckName String?              @map("failing_check_name")
-  failingCheckUrl  String?              @map("failing_check_url")
-  createdAt        DateTime             @default(now()) @map("created_at")
+  failingCheckName       String?              @map("failing_check_name")
+  failingCheckUrl        String?              @map("failing_check_url")
+  /// That check's RAW GitHub conclusion (`failure`, `cancelled`, `timed_out`, …),
+  /// VERBATIM — the difference `mapConclusion` folds away (§4 SIXTH AMENDMENT,
+  /// MOTIR-6846). `cancelled` / `timed_out` make a `CI_FAILURE` / `CI_TIMEOUT` exit
+  /// NEUTRAL. Null while no check is named, and on every exit recorded before it.
+  failingCheckConclusion String?              @map("failing_check_conclusion")
+  createdAt              DateTime             @default(now()) @map("created_at")
 
   pullRequest GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
 
@@ -7612,19 +7617,22 @@ model GithubPullRequestReview {
 /// wins). Like the exit row, deliberately NOT `github_check_run`: the group's checks
 /// say nothing about the pull request's own head.
 model GithubMergeQueueAttempt {
-  id               String    @id @default(cuid())
+  id                     String    @id @default(cuid())
   /// FK → GithubPullRequest.id (internal cuid).
-  pullRequestId    String    @map("pull_request_id")
+  pullRequestId          String    @map("pull_request_id")
   /// FK → GithubRepo.id — the lookup a check run makes, by repository and sha.
-  repoId           String    @map("repo_id")
+  repoId                 String    @map("repo_id")
   /// The merge group's commit — every check the queue runs is reported against it.
-  headSha          String    @map("head_sha")
+  headSha                String    @map("head_sha")
   /// `refs/heads/gh-readonly-queue/<base>/pr-<n>-<base sha>`, verbatim.
-  headRef          String    @map("head_ref")
-  failingCheckName String?   @map("failing_check_name")
-  failingCheckUrl  String?   @map("failing_check_url")
-  failedAt         DateTime? @map("failed_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
+  headRef                String    @map("head_ref")
+  failingCheckName       String?   @map("failing_check_name")
+  failingCheckUrl        String?   @map("failing_check_url")
+  /// The failing check's RAW GitHub conclusion, verbatim (§4 SIXTH AMENDMENT,
+  /// MOTIR-6846). Written beside the name, by the same first-failure-wins write.
+  failingCheckConclusion String?   @map("failing_check_conclusion")
+  failedAt               DateTime? @map("failed_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
 
   pullRequest GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
   repo        GithubRepo        @relation(fields: [repoId], references: [id], onDelete: Cascade)

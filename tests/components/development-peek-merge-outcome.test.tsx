@@ -74,6 +74,7 @@ const exited = (disposition: 'failure' | 'neutral', atHead: boolean) =>
         requeuedAt: null,
         failingCheckName: null,
         failingCheckUrl: null,
+        failingCheckConclusion: null,
       },
     },
   ] satisfies PullRequestApprovalMemberDTO[];
@@ -194,6 +195,7 @@ describe('persistedRowOutcome — by class, over every queue reason', () => {
       requeuedAt: null,
       failingCheckName: null,
       failingCheckUrl: null,
+      failingCheckConclusion: null,
     },
   });
   const EXPECTED: Record<string, string> = {

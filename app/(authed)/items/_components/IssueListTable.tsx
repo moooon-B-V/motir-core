@@ -21,6 +21,7 @@ import { IssueInlineEditProvider } from './IssueInlineEdit';
 import { IssueListPager } from './IssueListPager';
 import { usePeekRowClick } from './IssueQuickView';
 import type { IssueRowData } from './issueRows';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The flat, sortable LIST table (Subtask 2.5.8) — the `view=list` rendering the
 // [Tree ▾] switcher toggles to, per design/work-items/list.mock.html. Same
@@ -58,6 +59,7 @@ export function IssueListTable({
   workflow,
   members,
 }: IssueListTableProps) {
+  const routes = useReaderRoutes();
   const router = useRouter();
   const pathname = usePathname();
   const t = useTranslations();
@@ -200,7 +202,7 @@ export function IssueListTable({
                       shape TreeTable uses for its first gridcell. */}
                   {i === 0 ? (
                     <Link
-                      href={`/items/${row.identifier}`}
+                      href={routes.item(row.identifier)}
                       aria-label={`${row.identifier} ${row.title}`}
                       onClick={(e) => onPeekClick(e, row.identifier)}
                       className="absolute inset-0 z-0 focus:outline-none"

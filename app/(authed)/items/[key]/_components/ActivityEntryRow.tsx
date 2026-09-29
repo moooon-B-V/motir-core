@@ -13,6 +13,7 @@ import type { Locale } from '@/lib/i18n/locales';
 import type { ActivityEntryDto, ActivityEntryPartDto, ActivityValueDto } from '@/lib/dto/activity';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import { StatusPill } from '@/components/issues/StatusPill';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // One History feed row (Story 5.5 · Subtask 5.5.4), per
 // `design/work-items/activity-history.mock.html` panels 1–2: comment-row-
@@ -109,6 +110,7 @@ export function ActivityEntryRow({
   /** Status key → lifecycle category (the project workflow) — the Pill tint. */
   statusCategories: Readonly<Record<string, StatusCategoryDto>>;
 }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('activity');
   const format = useFormatter();
   const locale = useLocale() as Locale;
@@ -163,7 +165,7 @@ export function ActivityEntryRow({
   function issueSide(value: Extract<ActivityValueDto, { type: 'issue' }>): ReactNode {
     return value.identifier ? (
       <Link
-        href={`/items/${value.identifier}`}
+        href={routes.item(value.identifier)}
         className="text-(--el-link) rounded-(--radius-control) font-mono text-xs hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         {value.identifier}

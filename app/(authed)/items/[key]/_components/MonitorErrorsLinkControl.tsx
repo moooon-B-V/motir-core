@@ -17,6 +17,7 @@ import type {
 } from '@/lib/dto/monitorIssueLink';
 import { linkMonitorIssueAction, searchMonitorIssuesAction } from '../actions';
 import { levelPillProps } from './MonitorErrorsSection';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // LINK an error from the work-item page (Story MOTIR-4932 · Subtask MOTIR-5744),
 // drawn by `design/monitoring/work-item-errors.mock.html` §14 panels 5b–5c, 6
@@ -258,6 +259,7 @@ export function LinkErrorForm() {
 }
 
 function OpenLinkErrorForm() {
+  const routes = useReaderRoutes();
   const t = useTranslations('monitorErrors');
   const tc = useTranslations('common');
   const format = useFormatter();
@@ -399,7 +401,7 @@ function OpenLinkErrorForm() {
                     // decides whether to take the error off that work item.
                     link: (chunks) => (
                       <Link
-                        href={`/items/${moveFrom.identifier}`}
+                        href={routes.item(moveFrom.identifier)}
                         className="font-mono text-(--el-link) hover:underline"
                       >
                         {chunks}

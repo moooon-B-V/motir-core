@@ -1,0 +1,2406 @@
+<!doctype html>
+<!--
+  THE SERVER-ERROR PAGE — what a reader sees when a page fails to render on the server
+  (MOTIR-6854 · bug MOTIR-6776). A NEW surface: motir-core had no error boundary outside two
+  settings panes, so a server render failure reached Next's onUncaughtError and left an empty tab.
+  Three depths, three boundaries, three amounts of chrome:
+    1 · app/(authed)/error.tsx  — a PAGE failed; the shell survived around it
+    2 · app/error.tsx           — app/(authed)/layout.tsx itself failed; root layout only
+    3 · app/global-error.tsx    — app/layout.tsx failed; the boundary renders its own <html>
+  Composes the shipped ErrorState / Card / Button (packages/design-system) and the shell as
+  design/shell/no-project--limited.mock.html draws it, read at origin/main @ 4495c493f.
+  Spec: design/shell/design-notes.md § "The server-error page (MOTIR-6854)".
+-->
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The server-error page (MOTIR-6854)</title>
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — app/globals.css (light) ─────────── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-pressed: #4534b3;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --color-link-pressed: #005bab;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-control-x: 10px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+        --height-input: 44px;
+        --spacing-control-y: 6px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+      }
+
+      /* Tier 3 — the semantic element layer components consume.
+         ⚠️ DECLARED ON `:root, [data-appearance-scope]`, which is
+         packages/design-system/theme.css's own selector and is what makes the
+         nested dark panel (6) actually recompute: a custom property's `var()` is
+         substituted where the property is DECLARED, so a Tier-3 layer declared
+         on `:root` alone inherits its LIGHT literal into a nested
+         `data-theme="dark"` subtree and the panel renders light under a dark
+         caption (MOTIR-3592 · tests/design-dark-parity.test.ts). */
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        /* the app-shell RAIL — theme.css's values verbatim; the hover shade is a
+           concrete hex there too and so carries its own dark value below. */
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+        /* the member-role hues — packages/design-system/theme.css verbatim */
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-card: var(--color-background);
+        /* the build-in-public hues — packages/design-system/theme.css verbatim */
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        /* neutral chip + muted glyph + warning tint — theme.css verbatim */
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-danger-surface: var(--color-tint-rose);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --el-sidebar-item-bg-hover: #222222;
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── tokens this delta consumes that the base block above does not carry —
+         packages/design-system/theme.css verbatim ─────────────────────────── */
+      :root,
+      [data-appearance-scope] {
+        --el-button-border: var(--color-hairline-strong);
+        --el-text-subtitle: var(--color-slate);
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+      }
+
+      /* ── Mock chrome ───────────────────────────────────────────────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      html[lang='en'] .zh,
+      html[lang='zh'] .en {
+        display: none;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 86ch;
+        line-height: 1.55;
+      }
+      .toggles {
+        display: flex;
+        gap: 8px;
+        flex: none;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .panel[data-appearance-scope] {
+        background: var(--el-surface);
+        color: var(--el-text);
+        padding: 16px;
+        border-radius: var(--radius-card);
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+        line-height: 1.55;
+      }
+      .panel-note {
+        max-width: 1180px;
+        margin: 14px auto 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .panel-note b {
+        color: var(--el-text);
+      }
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+
+      /* ── The shipped shell, as no-project--limited.mock.html draws it ──── */
+      .rail {
+        flex: none;
+        width: 252px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .ico {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .ico.xs {
+        width: 12px;
+        height: 12px;
+      }
+      .chev {
+        width: 14px;
+        height: 14px;
+        color: var(--el-icon-muted);
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 56px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .brand {
+        flex: none;
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        color: var(--el-accent-on-surface);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-serif);
+        font-weight: 700;
+      }
+      .crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-family: var(--font-serif);
+        font-size: 15px;
+        color: var(--el-text);
+      }
+      .crumb-sep {
+        color: var(--el-icon-muted);
+      }
+      .bar-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .bar-ico {
+        width: 36px;
+        height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-secondary);
+      }
+      .me {
+        width: 34px;
+        height: 34px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .app {
+        display: flex;
+        min-height: 460px;
+      }
+      .home {
+        flex: 1;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 72px 36px;
+      }
+
+      /* ── Card + Button + Spinner — packages/design-system, as they render ── */
+      .card {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+        border: 1px solid transparent;
+        cursor: pointer;
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-button-border);
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .btn-sm {
+        height: 32px;
+        padding: 0 var(--spacing-btn-x-sm);
+        font-size: 13px;
+      }
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* ── ErrorState — packages/design-system/src/components/ui/ErrorState.tsx ── */
+      .err-col {
+        width: 480px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+      .error-card {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .es-ico {
+        width: 48px;
+        height: 48px;
+        margin-bottom: var(--spacing-md);
+      }
+      .es-ico.danger {
+        color: var(--el-danger);
+      }
+      .es-title {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 20px;
+        line-height: 1.4;
+        font-weight: 400;
+        color: var(--el-text);
+      }
+      .es-desc {
+        margin: var(--spacing-sm) 0 0;
+        max-width: 65ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+      }
+      .es-act {
+        margin-top: var(--spacing-md);
+      }
+
+      /* ── NEW in this delta: the way out, and the reference line ─────────── */
+      .way-out {
+        margin: 4px 0 0;
+        font-size: 14px;
+      }
+      .link {
+        color: var(--el-link);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .ref {
+        margin: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .ref-label {
+        font-family: var(--font-sans);
+      }
+      .ref-code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        user-select: all;
+      }
+      .ref-copy {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        height: 28px;
+        min-width: 28px;
+        padding: 0 6px;
+        border-radius: var(--radius-control);
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .ref-copy.is-done {
+        color: var(--el-text-secondary);
+        cursor: default;
+      }
+
+      /* ── States 2 and 3: no shell — the root layout's ground only ──────── */
+      .addr {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 34px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface);
+      }
+      .addr-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 9999px;
+        background: var(--el-border-strong);
+      }
+      .addr-url {
+        margin-left: 10px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .bare {
+        min-height: 520px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 16px;
+        background: var(--el-page-bg);
+      }
+    </style>
+  </head>
+  <body>
+    <header class="review-head">
+      <div>
+        <h1>
+          The server-error page — a page, the signed-in shell, or the root failed (MOTIR-6854)
+        </h1>
+        <p>
+          Three boundaries, one voice. Toggle Theme and Language at the top right; D1–D3 are the
+          dark board.
+        </p>
+      </div>
+      <div class="toggles">
+        <button
+          class="toggle"
+          type="button"
+          onclick="
+            document.documentElement.dataset.theme =
+              document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+          "
+        >
+          Theme
+        </button>
+        <button
+          class="toggle"
+          type="button"
+          onclick="
+            document.documentElement.lang = document.documentElement.lang === 'zh' ? 'en' : 'zh'
+          "
+        >
+          Language · 语言
+        </button>
+      </div>
+    </header>
+
+    <div class="panel-label">1 · A page failed; the shell survived — app/(authed)/error.tsx</div>
+    <div class="panel">
+      <div class="stage">
+        <div class="topbar">
+          <span class="brand" aria-hidden="true">M</span
+          ><span class="crumb"
+            >moooon<svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="crumb-sep">›</span
+          ><span class="crumb"
+            >Motir<svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="bar-right"
+            ><span class="btn btn-secondary btn-sm"
+              ><svg
+                class="ico xs"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m21 21-4.34-4.34" />
+                <circle cx="11" cy="11" r="8" /></svg
+              ><span class="en">Shortcut</span><span class="zh">快捷键</span></span
+            ><span class="bar-ico"
+              ><svg
+                class="ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                <path
+                  d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                /></svg></span
+            ><span class="me" aria-hidden="true">E</span></span
+          >
+        </div>
+        <div class="app">
+          <aside class="rail">
+            <div class="grp">
+              <span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Workbench</span><span class="zh">工作台</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Work Items</span><span class="zh">工作项</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" x2="12" y1="8" y2="12" />
+                  <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                ><span class="en">Ready</span><span class="zh">就绪</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg
+                ><span class="en">Runs</span><span class="zh">运行</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"
+                  />
+                  <path d="M8 10v4" />
+                  <path d="M12 10v2" />
+                  <path d="M16 10v6" /></svg
+                ><span class="en">Boards</span><span class="zh">看板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" /></svg
+                ><span class="en">Roadmap</span><span class="zh">路线图</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Plans</span><span class="zh">计划</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Backlog</span><span class="zh">待办</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Dashboard</span><span class="zh">仪表板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                  <path
+                    d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                  /></svg
+                ><span class="en">Triage</span><span class="zh">分诊</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  /></svg
+                ><span class="en">Reports</span><span class="zh">报表</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                  />
+                  <path d="m9 12 2 2 4-4" /></svg
+                ><span class="en">Approval records</span><span class="zh">审批记录</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Codebase</span><span class="zh">代码库</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                  />
+                  <circle cx="12" cy="12" r="3" /></svg
+                ><span class="en">Settings</span><span class="zh">设置</span></span
+              >
+            </div>
+          </aside>
+          <div class="home">
+            <div class="err-col">
+              <section class="card error-card" role="alert">
+                <svg
+                  class="es-ico danger"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                  />
+                  <path d="M12 9v4" />
+                  <path d="M12 17h.01" />
+                </svg>
+                <h2 class="es-title">
+                  <span class="en">This page couldn’t load</span
+                  ><span class="zh">此页面无法加载</span>
+                </h2>
+                <p class="es-desc">
+                  <span class="en"
+                    >Something went wrong on Motir’s side while loading it — nothing you did caused
+                    this. Try again; if it keeps happening, include the reference below when you
+                    contact support.</span
+                  ><span class="zh"
+                    >加载此页面时 Motir
+                    这边出现了问题，这不是你的操作导致的。请重试；如果问题持续出现，联系支持时请附上下方的参考编号。</span
+                  >
+                </p>
+                <div class="es-act">
+                  <button class="btn btn-secondary" type="button">
+                    <span><span class="en">Try again</span><span class="zh">重试</span></span>
+                  </button>
+                </div>
+              </section>
+              <p class="ref">
+                <span class="ref-label"
+                  ><span class="en">Reference</span><span class="zh">参考编号</span></span
+                ><code class="ref-code">3a91f0c2</code
+                ><button class="ref-copy" type="button" aria-label="Copy reference">
+                  <svg
+                    class="ico xs"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                  </svg>
+                </button>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="panel-note">
+        The page under <span class="mono">(authed)</span> threw during its server render;
+        <span class="mono">app/(authed)/layout.tsx</span> rendered, so the top bar and rail are
+        there. The content area holds the shipped <b>ErrorState</b> exactly as it composes today —
+        <b>Card</b> with <span class="mono">role="alert"</span>,
+        <span class="mono">AlertTriangle</span> 48px in <span class="mono">--el-danger</span>, serif
+        title, <span class="mono">--el-text-muted</span> body on the white card, and its secondary
+        <b>Try again</b> (<span class="mono">common.retry</span>).
+        <b>There is no second door on this state</b>: the rail and the top bar ARE the way out, the
+        reasoning <span class="mono">app/(authed)/not-found.tsx</span> already rests on. Below the
+        card, the <b>reference</b>: the error’s <span class="mono">digest</span>, selectable, with a
+        copy button. Placement: centred in the content column at the width and top padding the
+        no-project shell’s home area uses.
+      </p>
+    </div>
+
+    <div class="panel-label">1a · Retry pending</div>
+    <div class="panel">
+      <div class="stage">
+        <div class="topbar">
+          <span class="brand" aria-hidden="true">M</span
+          ><span class="crumb"
+            >moooon<svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="crumb-sep">›</span
+          ><span class="crumb"
+            >Motir<svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="bar-right"
+            ><span class="btn btn-secondary btn-sm"
+              ><svg
+                class="ico xs"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m21 21-4.34-4.34" />
+                <circle cx="11" cy="11" r="8" /></svg
+              ><span class="en">Shortcut</span><span class="zh">快捷键</span></span
+            ><span class="bar-ico"
+              ><svg
+                class="ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                <path
+                  d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                /></svg></span
+            ><span class="me" aria-hidden="true">E</span></span
+          >
+        </div>
+        <div class="app">
+          <aside class="rail">
+            <div class="grp">
+              <span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Workbench</span><span class="zh">工作台</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Work Items</span><span class="zh">工作项</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" x2="12" y1="8" y2="12" />
+                  <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                ><span class="en">Ready</span><span class="zh">就绪</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg
+                ><span class="en">Runs</span><span class="zh">运行</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"
+                  />
+                  <path d="M8 10v4" />
+                  <path d="M12 10v2" />
+                  <path d="M16 10v6" /></svg
+                ><span class="en">Boards</span><span class="zh">看板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" /></svg
+                ><span class="en">Roadmap</span><span class="zh">路线图</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Plans</span><span class="zh">计划</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Backlog</span><span class="zh">待办</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Dashboard</span><span class="zh">仪表板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                  <path
+                    d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                  /></svg
+                ><span class="en">Triage</span><span class="zh">分诊</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  /></svg
+                ><span class="en">Reports</span><span class="zh">报表</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                  />
+                  <path d="m9 12 2 2 4-4" /></svg
+                ><span class="en">Approval records</span><span class="zh">审批记录</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Codebase</span><span class="zh">代码库</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                  />
+                  <circle cx="12" cy="12" r="3" /></svg
+                ><span class="en">Settings</span><span class="zh">设置</span></span
+              >
+            </div>
+          </aside>
+          <div class="home">
+            <div class="err-col">
+              <section class="card error-card" role="alert">
+                <svg
+                  class="es-ico danger"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                  />
+                  <path d="M12 9v4" />
+                  <path d="M12 17h.01" />
+                </svg>
+                <h2 class="es-title">
+                  <span class="en">This page couldn’t load</span
+                  ><span class="zh">此页面无法加载</span>
+                </h2>
+                <p class="es-desc">
+                  <span class="en"
+                    >Something went wrong on Motir’s side while loading it — nothing you did caused
+                    this. Try again; if it keeps happening, include the reference below when you
+                    contact support.</span
+                  ><span class="zh"
+                    >加载此页面时 Motir
+                    这边出现了问题，这不是你的操作导致的。请重试；如果问题持续出现，联系支持时请附上下方的参考编号。</span
+                  >
+                </p>
+                <div class="es-act">
+                  <button class="btn btn-secondary" type="button" disabled aria-busy="true">
+                    <span class="spinner" aria-hidden="true"></span
+                    ><span
+                      ><span class="en">Trying again…</span><span class="zh">正在重试…</span></span
+                    >
+                  </button>
+                </div>
+              </section>
+              <p class="ref">
+                <span class="ref-label"
+                  ><span class="en">Reference</span><span class="zh">参考编号</span></span
+                ><code class="ref-code">3a91f0c2</code
+                ><button class="ref-copy" type="button" aria-label="Copy reference">
+                  <svg
+                    class="ico xs"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                  </svg>
+                </button>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="panel-note">
+        Pressing <b>Try again</b> puts the shipped Button into its
+        <span class="mono">loading</span> state — Spinner, <span class="mono">disabled</span>,
+        <span class="mono">aria-busy</span> — and the label reads <b>Trying again…</b> while the
+        segment is re-requested. Nothing else on the page moves.
+      </p>
+    </div>
+
+    <div class="panel-label">1b · Retry failed again — the same page, a new reference</div>
+    <div class="panel">
+      <div class="stage">
+        <div class="topbar">
+          <span class="brand" aria-hidden="true">M</span
+          ><span class="crumb"
+            >moooon<svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="crumb-sep">›</span
+          ><span class="crumb"
+            >Motir<svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="bar-right"
+            ><span class="btn btn-secondary btn-sm"
+              ><svg
+                class="ico xs"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m21 21-4.34-4.34" />
+                <circle cx="11" cy="11" r="8" /></svg
+              ><span class="en">Shortcut</span><span class="zh">快捷键</span></span
+            ><span class="bar-ico"
+              ><svg
+                class="ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                <path
+                  d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                /></svg></span
+            ><span class="me" aria-hidden="true">E</span></span
+          >
+        </div>
+        <div class="app">
+          <aside class="rail">
+            <div class="grp">
+              <span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Workbench</span><span class="zh">工作台</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Work Items</span><span class="zh">工作项</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" x2="12" y1="8" y2="12" />
+                  <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                ><span class="en">Ready</span><span class="zh">就绪</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg
+                ><span class="en">Runs</span><span class="zh">运行</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"
+                  />
+                  <path d="M8 10v4" />
+                  <path d="M12 10v2" />
+                  <path d="M16 10v6" /></svg
+                ><span class="en">Boards</span><span class="zh">看板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" /></svg
+                ><span class="en">Roadmap</span><span class="zh">路线图</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Plans</span><span class="zh">计划</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Backlog</span><span class="zh">待办</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Dashboard</span><span class="zh">仪表板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                  <path
+                    d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                  /></svg
+                ><span class="en">Triage</span><span class="zh">分诊</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  /></svg
+                ><span class="en">Reports</span><span class="zh">报表</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                  />
+                  <path d="m9 12 2 2 4-4" /></svg
+                ><span class="en">Approval records</span><span class="zh">审批记录</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Codebase</span><span class="zh">代码库</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                  />
+                  <circle cx="12" cy="12" r="3" /></svg
+                ><span class="en">Settings</span><span class="zh">设置</span></span
+              >
+            </div>
+          </aside>
+          <div class="home">
+            <div class="err-col">
+              <section class="card error-card" role="alert">
+                <svg
+                  class="es-ico danger"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                  />
+                  <path d="M12 9v4" />
+                  <path d="M12 17h.01" />
+                </svg>
+                <h2 class="es-title">
+                  <span class="en">This page couldn’t load</span
+                  ><span class="zh">此页面无法加载</span>
+                </h2>
+                <p class="es-desc">
+                  <span class="en"
+                    >Something went wrong on Motir’s side while loading it — nothing you did caused
+                    this. Try again; if it keeps happening, include the reference below when you
+                    contact support.</span
+                  ><span class="zh"
+                    >加载此页面时 Motir
+                    这边出现了问题，这不是你的操作导致的。请重试；如果问题持续出现，联系支持时请附上下方的参考编号。</span
+                  >
+                </p>
+                <div class="es-act">
+                  <button class="btn btn-secondary" type="button">
+                    <span><span class="en">Try again</span><span class="zh">重试</span></span>
+                  </button>
+                </div>
+              </section>
+              <p class="ref">
+                <span class="ref-label"
+                  ><span class="en">Reference</span><span class="zh">参考编号</span></span
+                ><code class="ref-code">b07e4d19</code
+                ><span class="ref-copy is-done" role="status"
+                  ><svg
+                    class="ico xs"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 6 9 17l-5-5" /></svg
+                  ><span class="en">Copied</span><span class="zh">已复制</span></span
+                >
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="panel-note">
+        A retry that fails lands on <b>this same page</b>: no second card, no stacked message, no
+        count of attempts, no loop — the reader presses again when they choose. The one thing that
+        changes is the <b>reference</b>, because a new failure carries a new digest; the old one is
+        gone. Shown here just after <b>Copy reference</b>: the button becomes a quiet
+        <b>Copied</b> for 2 s (<span class="mono">role="status"</span>), then returns.
+      </p>
+    </div>
+
+    <div class="panel-label">
+      2 · The signed-in shell failed — app/error.tsx (today’s /workbench event), on a cold load
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="addr" aria-hidden="true">
+          <span class="addr-dot"></span><span class="addr-dot"></span><span class="addr-dot"></span
+          ><span class="addr-url">app.motir.co/workbench</span>
+        </div>
+        <main class="bare bare-app">
+          <div class="err-col">
+            <section class="card error-card" role="alert">
+              <svg
+                class="es-ico danger"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                />
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+              </svg>
+              <h2 class="es-title">
+                <span class="en">Motir couldn’t load</span><span class="zh">Motir 无法加载</span>
+              </h2>
+              <p class="es-desc">
+                <span class="en"
+                  >Something went wrong on our side before this page could open — nothing you did
+                  caused this. Try again, or go back to Motir’s home. If it keeps happening, include
+                  the reference below when you contact support.</span
+                ><span class="zh"
+                  >页面打开之前，我们这边出现了问题，这不是你的操作导致的。请重试，或返回 Motir
+                  首页。如果问题持续出现，联系支持时请附上下方的参考编号。</span
+                >
+              </p>
+              <div class="es-act">
+                <button class="btn btn-secondary" type="button">
+                  <span><span class="en">Try again</span><span class="zh">重试</span></span>
+                </button>
+              </div>
+            </section>
+            <p class="way-out">
+              <a class="link" href="/"
+                ><span class="en">Go to Motir</span><span class="zh">前往 Motir</span></a
+              >
+            </p>
+            <p class="ref">
+              <span class="ref-label"
+                ><span class="en">Reference</span><span class="zh">参考编号</span></span
+              ><code class="ref-code">3a91f0c2</code
+              ><button class="ref-copy" type="button" aria-label="Copy reference">
+                <svg
+                  class="ico xs"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                </svg>
+              </button>
+            </p>
+          </div>
+        </main>
+      </div>
+      <p class="panel-note">
+        <span class="mono">app/(authed)/layout.tsx</span> threw — at line 227,
+        <span class="mono">projectsService.listProjects</span> hit the P2028 stall (MOTIR-6780). A
+        segment’s boundary does not wrap its own layout, so
+        <span class="mono">app/error.tsx</span> catches it and renders under the ROOT layout alone:
+        appearance tokens and the locale, no rail, no top bar. Drawn as a full page, the way
+        <span class="mono">app/not-found.tsx</span> is — centred, max 48rem. With no shell, the page
+        owes a door of its own: <b>Go to Motir</b> (<span class="mono"
+          >errors.notFound.homeAction</span
+        >, reused) links to <span class="mono">/</span>, which already sends a signed-in reader to
+        its landing, <span class="mono">/workbench</span>, and anyone else to
+        <span class="mono">/sign-in</span>. The address strip shows the arrival that is not a click:
+        a hard reload of a URL whose render fails lands here on the first paint, not only after a
+        client navigation.
+      </p>
+    </div>
+
+    <div class="panel-label">
+      3 · The root failed — app/global-error.tsx, on the default appearance
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="addr" aria-hidden="true">
+          <span class="addr-dot"></span><span class="addr-dot"></span><span class="addr-dot"></span
+          ><span class="addr-url">app.motir.co/items</span>
+        </div>
+        <main class="bare bare-root">
+          <div class="err-col">
+            <section class="card error-card" role="alert">
+              <svg
+                class="es-ico danger"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                />
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+              </svg>
+              <h2 class="es-title">
+                <span class="en">Motir couldn’t load</span><span class="zh">Motir 无法加载</span>
+              </h2>
+              <p class="es-desc">
+                <span class="en"
+                  >Something went wrong on our side before this page could open — nothing you did
+                  caused this. Try again, or go back to Motir’s home. If it keeps happening, include
+                  the reference below when you contact support.</span
+                ><span class="zh"
+                  >页面打开之前，我们这边出现了问题，这不是你的操作导致的。请重试，或返回 Motir
+                  首页。如果问题持续出现，联系支持时请附上下方的参考编号。</span
+                >
+              </p>
+              <div class="es-act">
+                <button class="btn btn-secondary" type="button">
+                  <span><span class="en">Try again</span><span class="zh">重试</span></span>
+                </button>
+              </div>
+            </section>
+            <p class="way-out">
+              <a class="link" href="/"
+                ><span class="en">Go to Motir</span><span class="zh">前往 Motir</span></a
+              >
+            </p>
+            <p class="ref">
+              <span class="ref-label"
+                ><span class="en">Reference</span><span class="zh">参考编号</span></span
+              ><code class="ref-code">3a91f0c2</code
+              ><button class="ref-copy" type="button" aria-label="Copy reference">
+                <svg
+                  class="ico xs"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                </svg>
+              </button>
+            </p>
+          </div>
+        </main>
+      </div>
+      <p class="panel-note">
+        <span class="mono">app/layout.tsx</span> threw (it reads
+        <span class="mono">appearancePreferenceService.getApplied</span> from the database for every
+        signed-in request). <span class="mono">global-error.tsx</span> replaces the root layout, so
+        it renders its own <span class="mono">&lt;html&gt;</span> /
+        <span class="mono">&lt;body&gt;</span>: <b>the same page as state 2</b>, drawn here on the
+        DEFAULT appearance. The server preference, the fonts and the
+        <span class="mono">next-intl</span> provider the root layout supplies are all absent — the
+        notes say how each is replaced. Ink and ground both come from
+        <span class="mono">--el-*</span> under ONE <span class="mono">data-theme</span>, so the
+        MOTIR-4708 split (ink from the OS, ground from the app) cannot occur.
+        <b>Go to Motir</b> still goes to <span class="mono">/</span>: this page cannot know whether
+        the reader has a session, and <span class="mono">/</span> is the one address that decides
+        it.
+      </p>
+    </div>
+
+    <div class="panel-label">D1 · Dark — a page failed inside the shell</div>
+    <div class="panel" data-theme="dark" data-appearance-scope>
+      <div class="stage">
+        <div class="topbar">
+          <span class="brand" aria-hidden="true">M</span
+          ><span class="crumb"
+            >moooon<svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="crumb-sep">›</span
+          ><span class="crumb"
+            >Motir<svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="bar-right"
+            ><span class="btn btn-secondary btn-sm"
+              ><svg
+                class="ico xs"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m21 21-4.34-4.34" />
+                <circle cx="11" cy="11" r="8" /></svg
+              ><span class="en">Shortcut</span><span class="zh">快捷键</span></span
+            ><span class="bar-ico"
+              ><svg
+                class="ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                <path
+                  d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                /></svg></span
+            ><span class="me" aria-hidden="true">E</span></span
+          >
+        </div>
+        <div class="app">
+          <aside class="rail">
+            <div class="grp">
+              <span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Workbench</span><span class="zh">工作台</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Work Items</span><span class="zh">工作项</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" x2="12" y1="8" y2="12" />
+                  <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                ><span class="en">Ready</span><span class="zh">就绪</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg
+                ><span class="en">Runs</span><span class="zh">运行</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"
+                  />
+                  <path d="M8 10v4" />
+                  <path d="M12 10v2" />
+                  <path d="M16 10v6" /></svg
+                ><span class="en">Boards</span><span class="zh">看板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" /></svg
+                ><span class="en">Roadmap</span><span class="zh">路线图</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Plans</span><span class="zh">计划</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Backlog</span><span class="zh">待办</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Dashboard</span><span class="zh">仪表板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                  <path
+                    d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                  /></svg
+                ><span class="en">Triage</span><span class="zh">分诊</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  /></svg
+                ><span class="en">Reports</span><span class="zh">报表</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                  />
+                  <path d="m9 12 2 2 4-4" /></svg
+                ><span class="en">Approval records</span><span class="zh">审批记录</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Codebase</span><span class="zh">代码库</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                  />
+                  <circle cx="12" cy="12" r="3" /></svg
+                ><span class="en">Settings</span><span class="zh">设置</span></span
+              >
+            </div>
+          </aside>
+          <div class="home">
+            <div class="err-col">
+              <section class="card error-card" role="alert">
+                <svg
+                  class="es-ico danger"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                  />
+                  <path d="M12 9v4" />
+                  <path d="M12 17h.01" />
+                </svg>
+                <h2 class="es-title">
+                  <span class="en">This page couldn’t load</span
+                  ><span class="zh">此页面无法加载</span>
+                </h2>
+                <p class="es-desc">
+                  <span class="en"
+                    >Something went wrong on Motir’s side while loading it — nothing you did caused
+                    this. Try again; if it keeps happening, include the reference below when you
+                    contact support.</span
+                  ><span class="zh"
+                    >加载此页面时 Motir
+                    这边出现了问题，这不是你的操作导致的。请重试；如果问题持续出现，联系支持时请附上下方的参考编号。</span
+                  >
+                </p>
+                <div class="es-act">
+                  <button class="btn btn-secondary" type="button">
+                    <span><span class="en">Try again</span><span class="zh">重试</span></span>
+                  </button>
+                </div>
+              </section>
+              <p class="ref">
+                <span class="ref-label"
+                  ><span class="en">Reference</span><span class="zh">参考编号</span></span
+                ><code class="ref-code">3a91f0c2</code
+                ><button class="ref-copy" type="button" aria-label="Copy reference">
+                  <svg
+                    class="ico xs"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                  </svg>
+                </button>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="panel-note">
+        State 1 on the dark board. The triangle stays <span class="mono">--el-danger</span> (a
+        graphic, 3:1 is its bar); the body ink stays on the card.
+      </p>
+    </div>
+
+    <div class="panel-label">D2 · Dark — the signed-in shell failed</div>
+    <div class="panel" data-theme="dark" data-appearance-scope>
+      <div class="stage">
+        <div class="addr" aria-hidden="true">
+          <span class="addr-dot"></span><span class="addr-dot"></span><span class="addr-dot"></span
+          ><span class="addr-url">app.motir.co/workbench</span>
+        </div>
+        <main class="bare bare-app">
+          <div class="err-col">
+            <section class="card error-card" role="alert">
+              <svg
+                class="es-ico danger"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                />
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+              </svg>
+              <h2 class="es-title">
+                <span class="en">Motir couldn’t load</span><span class="zh">Motir 无法加载</span>
+              </h2>
+              <p class="es-desc">
+                <span class="en"
+                  >Something went wrong on our side before this page could open — nothing you did
+                  caused this. Try again, or go back to Motir’s home. If it keeps happening, include
+                  the reference below when you contact support.</span
+                ><span class="zh"
+                  >页面打开之前，我们这边出现了问题，这不是你的操作导致的。请重试，或返回 Motir
+                  首页。如果问题持续出现，联系支持时请附上下方的参考编号。</span
+                >
+              </p>
+              <div class="es-act">
+                <button class="btn btn-secondary" type="button">
+                  <span><span class="en">Try again</span><span class="zh">重试</span></span>
+                </button>
+              </div>
+            </section>
+            <p class="way-out">
+              <a class="link" href="/"
+                ><span class="en">Go to Motir</span><span class="zh">前往 Motir</span></a
+              >
+            </p>
+            <p class="ref">
+              <span class="ref-label"
+                ><span class="en">Reference</span><span class="zh">参考编号</span></span
+              ><code class="ref-code">3a91f0c2</code
+              ><button class="ref-copy" type="button" aria-label="Copy reference">
+                <svg
+                  class="ico xs"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                </svg>
+              </button>
+            </p>
+          </div>
+        </main>
+      </div>
+      <p class="panel-note">State 2 on the dark board.</p>
+    </div>
+
+    <div class="panel-label">D3 · Dark — the root failed</div>
+    <div class="panel" data-theme="dark" data-appearance-scope>
+      <div class="stage">
+        <div class="addr" aria-hidden="true">
+          <span class="addr-dot"></span><span class="addr-dot"></span><span class="addr-dot"></span
+          ><span class="addr-url">app.motir.co/items</span>
+        </div>
+        <main class="bare bare-root">
+          <div class="err-col">
+            <section class="card error-card" role="alert">
+              <svg
+                class="es-ico danger"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                />
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+              </svg>
+              <h2 class="es-title">
+                <span class="en">Motir couldn’t load</span><span class="zh">Motir 无法加载</span>
+              </h2>
+              <p class="es-desc">
+                <span class="en"
+                  >Something went wrong on our side before this page could open — nothing you did
+                  caused this. Try again, or go back to Motir’s home. If it keeps happening, include
+                  the reference below when you contact support.</span
+                ><span class="zh"
+                  >页面打开之前，我们这边出现了问题，这不是你的操作导致的。请重试，或返回 Motir
+                  首页。如果问题持续出现，联系支持时请附上下方的参考编号。</span
+                >
+              </p>
+              <div class="es-act">
+                <button class="btn btn-secondary" type="button">
+                  <span><span class="en">Try again</span><span class="zh">重试</span></span>
+                </button>
+              </div>
+            </section>
+            <p class="way-out">
+              <a class="link" href="/"
+                ><span class="en">Go to Motir</span><span class="zh">前往 Motir</span></a
+              >
+            </p>
+            <p class="ref">
+              <span class="ref-label"
+                ><span class="en">Reference</span><span class="zh">参考编号</span></span
+              ><code class="ref-code">3a91f0c2</code
+              ><button class="ref-copy" type="button" aria-label="Copy reference">
+                <svg
+                  class="ico xs"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                </svg>
+              </button>
+            </p>
+          </div>
+        </main>
+      </div>
+      <p class="panel-note">
+        State 3 on the dark board — the device’s stored dark appearance, or the OS when nothing is
+        stored.
+      </p>
+    </div>
+  </body>
+</html>

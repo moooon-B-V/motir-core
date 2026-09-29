@@ -431,6 +431,13 @@ changes**.
   In a project that merges automatically, the same row and a **Merge queue**
   note appear without a gate, and anyone who may edit the work item can press
   **Queue again**.
+- **If a check in the merge queue was cancelled or timed out** (a job that hung,
+  not one that failed), nothing failed in the code, so the work item goes back to
+  **In Review** with one new approval instead of to **Implemented**. The row reads
+  **Removed from the queue**, names the stopped check, and **Queue again** is the
+  new approval. `motir fix` does not claim it. When GitHub reports how the check
+  ended only after the pull request left the queue, or that report is lost, Motir
+  settles the work item as soon as it learns, within about half an hour.
 - **Request changes** records your note and moves nothing, as on every gate but a
   design's (see [Sending back a design](#sending-back-a-design-revise-or-re-plan)).
 

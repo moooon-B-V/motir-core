@@ -71,6 +71,7 @@ import { StatusPill } from '@/components/issues/StatusPill';
 import { useDisplayedStatus } from './OptimisticStatusProvider';
 import { usePlacement, usePlacementReporter } from './PlacementProvider';
 import { QuickViewFolderControl } from '../../_components/QuickViewFolderField';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The issue detail metadata rail (Story 2.4 · Subtasks 2.4.2 + 2.4.4). Per the
 // mockup `design/work-items/detail.png`: a stack of field cards that DISPLAY the
@@ -201,6 +202,7 @@ export function CoreFieldsPanel({
   heldTransitions,
   planHold,
 }: CoreFieldsPanelProps) {
+  const routes = useReaderRoutes();
   const router = useRouter();
   const t = useTranslations('issueViews');
   const tl = useTranslations('labels');
@@ -768,7 +770,7 @@ export function CoreFieldsPanel({
           />
         ) : effParent ? (
           <Link
-            href={`/items/${effParent.identifier}`}
+            href={routes.item(effParent.identifier)}
             className="flex items-center gap-1.5 hover:underline"
           >
             <span className="text-(--el-text-secondary) font-mono text-xs">

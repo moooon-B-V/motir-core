@@ -200,7 +200,16 @@ describe('the seam reads the captured deliveries', () => {
       name: VITEST,
       url: 'https://github.com/moooon-B-V/motir-core/actions/runs/34760457676/job/103732354674',
       completedAt: new Date('2026-09-13T14:27:21Z'),
+      conclusion: 'failure',
     });
+  });
+
+  it('keeps the RAW conclusion the fold loses — cancelled and timed out stay themselves (MOTIR-6846)', () => {
+    for (const conclusion of ['cancelled', 'timed_out', 'startup_failure', 'action_required']) {
+      expect(github.parseUnlinkedCheckFailure(failedCheck({ conclusion }))).toMatchObject({
+        conclusion,
+      });
+    }
   });
 
   it('reads every `pr-<n>` a group ref names, and none from a ref that is not a queue', () => {
@@ -332,6 +341,50 @@ describe('a failed merge-group check names the exit', () => {
 
     expect(await latestExit(11)).toMatchObject({ failingCheckName: VITEST });
     expect((await attempts(11)).map((a) => a.failingCheckName)).toEqual(['late', VITEST]);
+  });
+});
+
+describe("the check's RAW conclusion is recorded beside its name (§4 SIXTH AMENDMENT; MOTIR-6846)", () => {
+  it('before the exit: the attempt keeps it and the exit copies it', async () => {
+    await makeScenario('raw-before@example.com', [11]);
+    await deliver('merge_group', checksRequested([11]));
+    await deliver('check_run', failedCheck({ conclusion: 'cancelled' }));
+    expect((await attempts(11))[0]).toMatchObject({
+      failingCheckName: VITEST,
+      failingCheckConclusion: 'cancelled',
+    });
+    await eject(11, 'sha-a');
+    expect(await latestExit(11)).toMatchObject({
+      failingCheckName: VITEST,
+      failingCheckConclusion: 'cancelled',
+    });
+  });
+
+  it('after the exit: the late check writes it onto the exit already recorded', async () => {
+    await makeScenario('raw-after@example.com', [11]);
+    await deliver('merge_group', checksRequested([11]));
+    await eject(11, 'sha-a');
+    expect(await latestExit(11)).toMatchObject({ failingCheckConclusion: null });
+    await deliver('check_run', failedCheck({ conclusion: 'failure' }));
+    expect(await latestExit(11)).toMatchObject({
+      failingCheckName: VITEST,
+      failingCheckConclusion: 'failure',
+    });
+  });
+
+  it('the FIRST failure wins its conclusion too — a later cancellation does not rewrite it', async () => {
+    await makeScenario('raw-first@example.com', [11]);
+    await deliver('merge_group', checksRequested([11]));
+    await deliver('check_run', failedCheck({ conclusion: 'failure' }));
+    await deliver(
+      'check_run',
+      failedCheck({ name: 'CI complete', id: 5, conclusion: 'cancelled' }),
+    );
+    await eject(11, 'sha-a');
+    expect(await latestExit(11)).toMatchObject({
+      failingCheckName: VITEST,
+      failingCheckConclusion: 'failure',
+    });
   });
 });
 

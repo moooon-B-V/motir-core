@@ -108,6 +108,9 @@ export interface RepairPullRequestDto {
 export interface RepairQueueExitDto {
   /** GitHub's own reason string — `CI_FAILURE`, `MERGE_CONFLICT`, … */
   rawReason: string;
+  /** The exit's STORED disposition — `neutral` for a check that hung (§4 SIXTH
+   *  AMENDMENT), which the fix part never names as a failure. */
+  disposition: 'failure' | 'neutral' | 'landed';
   /** When the queue removed it, ISO-8601. */
   exitedAt: string;
   /** The head the queue tested — the pull request's current head. */
@@ -155,7 +158,12 @@ export interface RepairPullRequestRefDto {
    *  With `ci`, it is what the Development block's which-to-use line reads: *a
    *  failing member whose own `ci` is not `failing` and which carries a standing
    *  queue exit* (`design/github/design-notes.md` § 26, MOTIR-5718). */
-  queueExit: { rawReason: string; failingCheckName: string | null } | null;
+  queueExit: {
+    rawReason: string;
+    /** `neutral` for a check that hung (§4 SIXTH AMENDMENT) — never named as a failure. */
+    disposition: 'failure' | 'neutral' | 'landed';
+    failingCheckName: string | null;
+  } | null;
   /** Set when the host reports the pull request conflicted at its head (MOTIR-5916; design
    *  § 30's fix part) — the line then says it conflicts with `baseRef` and cannot be merged,
    *  never *Checks are failing*, which would be false. */

@@ -671,6 +671,7 @@ describe('claimRepair — a standing merge-queue failure (MOTIR-5719)', () => {
         failingChecks: [],
         queueExit: {
           rawReason: 'CI_FAILURE',
+          disposition: 'failure',
           exitedAt: '2026-09-18T10:00:00.000Z',
           headSha: HEAD,
           failingCheckName: 'Merge queue / e2e',

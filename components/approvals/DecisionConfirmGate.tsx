@@ -22,6 +22,7 @@ import {
   type ApprovalGateControlProps,
   type GateVerb,
 } from '@/components/approvals/ApprovalGateControl';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // THE CONFIRM PORT (Story MOTIR-5871 · Subtask MOTIR-5960; design
 // `design/work-items/approval-control--decision-confirm.mock.html` + `design-notes.md`
@@ -63,6 +64,7 @@ function ChangeChip({ change }: { change: DecisionChange }) {
 /** A work-item chip: the key in mono and its title, linked — or plain mono text for a
  *  key that names nothing (a removed item is what a less-requirement decision drops). */
 export function SupersededChip({ item }: { item: SupersededItemDTO }) {
+  const routes = useReaderRoutes();
   const key = <span className="font-mono text-xs text-(--el-text-identifier)">{item.key}</span>;
   if (item.title === null) {
     return (
@@ -73,7 +75,7 @@ export function SupersededChip({ item }: { item: SupersededItemDTO }) {
   }
   return (
     <Link
-      href={`/items/${item.key}`}
+      href={routes.item(item.key)}
       className="inline-flex max-w-full items-center gap-1.5 rounded-(--radius-badge) border border-(--el-border) px-(--spacing-chip-x) py-(--spacing-chip-y) hover:bg-(--el-surface)"
     >
       {key}

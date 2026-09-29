@@ -261,13 +261,9 @@ afterAll(async () => {
 });
 
 describe('1 · a queue FAILURE is held at Implemented until a green push asks ONCE', () => {
-  it.each([
-    'CI_FAILURE',
-    'CI_TIMEOUT',
-    'INVALID_MERGE_COMMIT',
-    'GIT_TREE_INVALID',
-    'MERGE_CONFLICT',
-  ])(
+  // `CI_TIMEOUT` with no check named re-asks since the SIXTH AMENDMENT (MOTIR-6847) —
+  // see section 2 — and `tests/github/queueExitHungCheck.test.ts` for a named check.
+  it.each(['CI_FAILURE', 'INVALID_MERGE_COMMIT', 'GIT_TREE_INVALID', 'MERGE_CONFLICT'])(
     '%s: exit → implemented, no gate; green at the same head → still none; push + green → ONE gate at in_review',
     async (reason) => {
       const { s, item, approved } = await approvedIntoTheQueue(
@@ -298,7 +294,7 @@ describe('1 · a queue FAILURE is held at Implemented until a green push asks ON
 });
 
 describe('2 · NEUTRAL and SETTING still re-ask — unchanged by the FIFTH AMENDMENT', () => {
-  it.each(['MANUAL', 'QUEUE_CLEARED', 'BRANCH_PROTECTIONS'])(
+  it.each(['MANUAL', 'QUEUE_CLEARED', 'BRANCH_PROTECTIONS', 'CI_TIMEOUT'])(
     '%s: exit → in_review with ONE fresh gate, and the row press decides it and re-queues',
     async (reason) => {
       const { s, item, approved } = await approvedIntoTheQueue(

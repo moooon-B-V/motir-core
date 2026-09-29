@@ -29,6 +29,7 @@ export const STRUCTURAL_GUARD_SPECS = [
   // compiler API and asserts none reaches a Visitor entrance. Its own
   // `readdirSync`, no database, nothing imported from `lib/` or `app/`.
   'tests/visitor/visitorWriteDoorGuard.test.ts',
+  'tests/visitor/visitorReaderRoutesGuard.test.ts',
   'tests/rls/bare-transaction-guard.test.ts',
   'tests/rls/ratchet-staleness-guard.test.ts',
   'tests/rls/singleton-read-guard.test.ts',

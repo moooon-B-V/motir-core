@@ -26,7 +26,9 @@ import { themeInitScript } from '@/lib/theme/init-script';
 const GLOBALS_CSS =
   readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8') +
   readFileSync(join(process.cwd(), 'packages/design-system/theme.css'), 'utf8');
-const LAYOUT_TSX = readFileSync(join(process.cwd(), 'app/layout.tsx'), 'utf8');
+// The next/font declarations moved out of app/layout.tsx into app/fonts.ts, which the
+// root layout AND app/global-error.tsx both import (MOTIR-6855).
+const FONTS_TS = readFileSync(join(process.cwd(), 'app/fonts.ts'), 'utf8');
 
 describe('typography registry', () => {
   it('registers the v1 base trio + the new-typeface pairings (Grotesk 7.3.54, Editorial 7.3.55, Mono-Technical 7.3.56)', () => {
@@ -132,14 +134,14 @@ describe('runtime contract in globals.css', () => {
 
   it('re-points the Editorial serif role at the LOADED Fraunces -source face', () => {
     // The editorial block must drive --font-serif off `--font-editorial-source`,
-    // the variable next/font binds to Fraunces in app/layout.tsx — so the
+    // the variable next/font binds to Fraunces in app/fonts.ts — so the
     // headline actually renders Fraunces (the -source indirection the type axis
     // requires; a role pointed at an unbacked -source falls back to a system face).
     expect(GLOBALS_CSS).toMatch(
       /\[data-type='editorial'\][^{}]*\{[^}]*--font-serif:[^}]*--font-editorial-source/,
     );
-    expect(LAYOUT_TSX).toContain("variable: '--font-editorial-source'");
-    expect(LAYOUT_TSX).toContain('Fraunces');
+    expect(FONTS_TS).toContain("variable: '--font-editorial-source'");
+    expect(FONTS_TS).toContain('Fraunces');
   });
 
   it('keeps the type axis disjoint — a [data-type] block sets only font tokens, never colour or shape', () => {

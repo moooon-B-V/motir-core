@@ -14,6 +14,7 @@ import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClie
 import { buildBoardFilterHref } from '@/lib/boards/boardFilterHref';
 import { IssueAppliedFilterBar } from '../../items/_components/IssueAppliedFilterBar';
 import { AdvancedFilterSummary } from '../../items/_components/AdvancedFilterSummary';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The board's applied-filter SUMMARY row (Story 6.15 · Subtask 6.15.3), per
 // design/boards/board-filter.mock.html panel 3: the SAME shipped /items
@@ -55,9 +56,11 @@ export function BoardAppliedFilterBar({
   components,
   referencedLabels,
 }: BoardAppliedFilterBarProps) {
+  const routes = useReaderRoutes();
   const buildHref = useCallback(
-    (next: IssueFilter) => buildBoardFilterHref({ boardId: selectedBoardId, filter: next }),
-    [selectedBoardId],
+    (next: IssueFilter) =>
+      routes.view(buildBoardFilterHref({ boardId: selectedBoardId, filter: next })),
+    [selectedBoardId, routes],
   );
 
   return (

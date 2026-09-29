@@ -19,6 +19,9 @@
 //   - GET  /repos/{owner}/{name}/pulls/{number}/files   → the pull request's paths (empty, or
 //                                                         the head's files the control names)
 //   - GET  /repos/{owner}/{name}/contents/{path}?ref=   → a file's raw text (MOTIR-5681)
+//   - GET  /repos/{owner}/{name}/commits/{sha}/check-runs
+//                                                       → a commit's check runs, ONLY for a
+//                                                         commit the control names (MOTIR-6851)
 //   - GET  /repos/{owner}/{name}/collaborators/{login}/permission
 //                                                       → whether a REVIEWER can write (MOTIR-5595)
 //   - POST /app/installations/{id}/access_tokens        → ONLY when E2E_TEST_GITHUB_REPOS is
@@ -107,6 +110,20 @@ export interface GithubMergeControl {
   /** `owner/name:path` → the file's text, served RAW at any ref (MOTIR-5681) — what the
    *  decision port reads through the resolver. A path with no entry is GitHub's 404. */
   fileContents?: Record<string, string>;
+  /** `owner/name@sha` → the check runs GitHub reports for that commit (Story MOTIR-6843 ·
+   *  MOTIR-6851) — what the reconcile tick reads for a merge group whose `check_run`
+   *  delivery never came. ⚠️ ONLY a commit named here is answered: a check-runs read for
+   *  any other commit is not claimed, so the shared agent refuses it BY NAME
+   *  (`lib/test-mock-agent.ts`) and the caller sees "no answer", exactly as it would for a
+   *  host that could not be reached. */
+  commitCheckRuns?: Record<string, GithubCommitCheckRun[]>;
+}
+
+/** One check run as the host reports it on a commit. `status` defaults to `completed`. */
+export interface GithubCommitCheckRun {
+  name: string;
+  conclusion: string | null;
+  status?: string;
 }
 
 /** What the fake host says about one reviewer. The six real permissions, plus the two
@@ -201,6 +218,7 @@ const MERGE_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/merge$/;
 const RULES_PATH = /^\/repos\/([^/]+)\/([^/]+)\/rules\/branches\/[^?]+$/;
 const FILES_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/files(?:\?.*)?$/;
 const CONTENTS_PATH = /^\/repos\/([^/]+)\/([^/]+)\/contents\/([^?]+)(?:\?.*)?$/;
+const CHECK_RUNS_PATH = /^\/repos\/([^/]+)\/([^/]+)\/commits\/([0-9a-fA-F]+)\/check-runs(?:\?.*)?$/;
 const PERMISSION_PATH = /^\/repos\/([^/]+)\/([^/]+)\/collaborators\/([^/?]+)\/permission(?:\?.*)?$/;
 
 /** A permission path's repository and username, when this seam answers for that repository. */
@@ -219,6 +237,18 @@ function scoped(pattern: RegExp, path: string): { repository: string; key: strin
   const repository = `${m[1]}/${m[2]}`;
   if (!answersFor(readControl(), repository)) return null;
   return { repository, key: m[3] ? `${repository}#${m[3]}` : null };
+}
+
+/** The check runs the control names for a check-runs path's commit, or null when it names
+ *  none — in which case the path is not this seam's to answer. */
+function scopedCheckRuns(path: string): { commit: string; runs: GithubCommitCheckRun[] } | null {
+  const m = CHECK_RUNS_PATH.exec(path);
+  if (!m) return null;
+  const commit = `${m[1]}/${m[2]}@${m[3]}`;
+  const runs = Object.entries(readControl().commitCheckRuns ?? {}).find(([k]) =>
+    same(k, commit),
+  )?.[1];
+  return runs ? { commit, runs } : null;
 }
 
 /** The permission this seam reports for `username`, defaulting to `write`. */
@@ -429,6 +459,34 @@ export function installGithubMergeMock(agent: MockAgent): void {
       const number = key ? key.slice(key.lastIndexOf('#') + 1) : '0';
       return reply(200, {
         data: { enqueuePullRequest: { mergeQueueEntry: { id: `MQE_e2e_${number}` } } },
+      });
+    })
+    .persist();
+
+  // ── A commit's check runs (Story MOTIR-6843 · MOTIR-6851) ──────────────────
+  // The reconcile tick reads a merge group's check runs when the group's `check_run`
+  // delivery never arrived. Answered ONLY for a commit the control names; every other
+  // commit falls through to the shared agent's refusal.
+  pool
+    .intercept({ path: (p) => scopedCheckRuns(p) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const { commit, runs } = scopedCheckRuns(path)!;
+      journal({ method: 'GET', path, body: null, pullRequest: null });
+      const repository = commit.slice(0, commit.lastIndexOf('@'));
+      return reply(200, {
+        total_count: runs.length,
+        check_runs: runs.map((run, i) => {
+          const status = run.status ?? 'completed';
+          return {
+            name: run.name,
+            status,
+            conclusion: status === 'completed' ? run.conclusion : null,
+            check_suite: { id: 6851 },
+            html_url: `https://github.com/${repository}/actions/runs/6851/job/${i + 1}`,
+            completed_at: status === 'completed' ? new Date().toISOString() : null,
+          };
+        }),
       });
     })
     .persist();

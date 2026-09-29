@@ -73,6 +73,7 @@ function exit(over: Partial<PullRequestQueueExitDTO> = {}): PullRequestQueueExit
     requeuedAt: null,
     failingCheckName: 'CI complete',
     failingCheckUrl: CHECK_URL,
+    failingCheckConclusion: 'failure',
     ...over,
   };
 }
@@ -519,7 +520,7 @@ describe('an EJECTED card offers `motir fix` beside Queue again (MOTIR-5721)', (
     repo: 'moooon/motir-gateway',
     number: 57,
     ci: 'passing' as const,
-    queueExit: { rawReason, failingCheckName: 'CI complete' },
+    queueExit: { rawReason, disposition: 'failure' as const, failingCheckName: 'CI complete' },
     conflict: null,
   });
   const offer = (rawReason?: string): WorkItemRepairViewDto => ({

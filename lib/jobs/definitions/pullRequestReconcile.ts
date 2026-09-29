@@ -38,7 +38,11 @@ export const pullRequestReconcile = defineJob(
     // The summary IS the return value, persisted on the run's `job_run` ledger
     // row — the durable record of a replay, and of a row that failed, since a
     // per-row failure is counted rather than thrown.
-    // ⚠️ THE ID IS `-v3` BECAUSE THE RESULT SHAPE CHANGED AGAIN (Bug
+    // ⚠️ THE ID IS `-v4` BECAUSE THE RESULT SHAPE CHANGED AGAIN (MOTIR-6848): the
+    // summary gained `queueExitsResolved`. Before that it was `-v3`, for the reason
+    // below.
+    //
+    // It was `-v3` BECAUSE THE RESULT SHAPE CHANGED AGAIN (Bug
     // MOTIR-5838): the summary gained `promoted`. It was `-v2` for exactly the
     // same reason one repair earlier (MOTIR-5671 added `gatesRaised`), and the
     // argument is unchanged — a memo written under the old id carries the
@@ -52,7 +56,7 @@ export const pullRequestReconcile = defineJob(
     // a read; `settlePending` is guarded on the row still reading `pending`, so a
     // second pass matches nothing; and `promoteIfCiAlreadyGreen` moves only a card
     // at `implemented`, so a card the first pass promoted is no longer a candidate.
-    return ctx.step.run('reconcile-open-deliveries-v3', () =>
+    return ctx.step.run('reconcile-open-deliveries-v4', () =>
       services.pullRequestReconcile.reconcileOpenDeliveries(),
     );
   },

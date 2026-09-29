@@ -37,6 +37,8 @@ import {
   isLiveRun,
   type CardStep,
 } from '@/lib/runs/timeline';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import type { ReaderRoutes } from '@/lib/visitor/routes';
 
 // THE RUN SECTION on a work item (Story MOTIR-1789 · MOTIR-1796) — what the
 // agent did to THIS card, live while it happens and afterwards as history.
@@ -63,7 +65,8 @@ import {
  * agree on it, with `RunsIndex` (which writes it) and `RunModal` (which reads it).
  * Spelled by `lib/runs/runsAddress.ts`, which also carries the `?scope=` half.
  */
-const runHref = (runId: string): string => runsHref({ run: runId });
+const runHref = (routes: ReaderRoutes, runId: string): string =>
+  routes.view(runsHref({ run: runId }));
 
 export interface RunSectionProps {
   /** This card's runs, newest first. The FIRST row is the current run. */
@@ -91,6 +94,7 @@ export function RunSection({
   scopeRun = null,
   scopeRunTime = null,
 }: RunSectionProps) {
+  const routes = useReaderRoutes();
   const t = useTranslations('runs');
   const locale = useLocale();
   const [runs, setRuns] = useState(initialRuns);
@@ -344,7 +348,7 @@ export function RunSection({
               position: current.cards.findIndex((c) => c.key === itemKey) + 1,
               total: otherCards,
             })}{' '}
-            <Link className="text-(--el-link) underline" href={runHref(current.id)}>
+            <Link className="text-(--el-link) underline" href={runHref(routes, current.id)}>
               {t('seeWholeRun')}
             </Link>
           </span>
@@ -436,7 +440,10 @@ export function RunSection({
                   {t(`runStatus.${run.status}`)}
                 </RunTonePill>
               )}
-              <Link className="min-w-0 truncate text-(--el-link) underline" href={runHref(run.id)}>
+              <Link
+                className="min-w-0 truncate text-(--el-link) underline"
+                href={runHref(routes, run.id)}
+              >
                 {t(`command.${run.command}`)}
               </Link>
               <span className="ml-auto shrink-0 font-sans text-xs text-(--el-text-secondary)">
@@ -568,6 +575,7 @@ function ScopeBlock({
   t: ReturnType<typeof useTranslations>;
   divided?: boolean;
 }) {
+  const routes = useReaderRoutes();
   const agent = [run.agent, run.model].filter(Boolean).join(' · ');
   const detail = [agent, legSummary(run, t)].filter(Boolean).join(' · ');
   return (
@@ -583,7 +591,7 @@ function ScopeBlock({
         <RunTonePill tone={RUN_STATUS_TONE[run.status]}>{t(`runStatus.${run.status}`)}</RunTonePill>
         <Link
           className="shrink-0 text-(--el-link) underline"
-          href={runsHref({ scope: itemKey, run: run.id })}
+          href={routes.view(runsHref({ scope: itemKey, run: run.id }))}
         >
           {t(`command.${run.command}`)}
         </Link>
@@ -596,7 +604,7 @@ function ScopeBlock({
       </div>
       <Link
         className="self-start font-sans text-sm text-(--el-link) underline"
-        href={runsHref({ scope: itemKey })}
+        href={routes.view(runsHref({ scope: itemKey }))}
       >
         {t('scope.door', { key: itemKey })}
       </Link>
