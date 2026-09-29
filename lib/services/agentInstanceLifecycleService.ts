@@ -109,7 +109,17 @@ export interface AgentInstanceListItemDto extends AgentInstanceDto {
   machineSecondsThisMonth: number;
   /** The credits those seconds come to — each interval rounded up once, like its charge (§5). */
   creditsThisMonth: number;
+  /**
+   * Why Motir stopped a `hibernated` instance, when Motir did — out of credits, idle,
+   * or the 12-hour backstop (AMENDMENT 2; the page's line under the name). Null for
+   * any other state, and for a hibernate the person asked for.
+   */
+  stopReason: AgentInstanceStopReason | null;
 }
+
+/** The hibernations Motir makes on its own, which the page explains. */
+export type AgentInstanceStopReason = 'credits' | 'idle' | 'backstop';
+const STOP_REASONS: readonly string[] = ['credits', 'idle', 'backstop'];
 
 export interface AgentInstanceListPageDto {
   instances: AgentInstanceListItemDto[];
@@ -174,6 +184,14 @@ function handleOf(row: AgentInstance): PersistentContainerHandle | null {
     region: row.region,
     createdAt: row.createdAt,
   };
+}
+
+function stopReasonOf(
+  endReason: AgentInstanceIntervalEndReason | null,
+): AgentInstanceStopReason | null {
+  return endReason !== null && STOP_REASONS.includes(endReason)
+    ? (endReason as AgentInstanceStopReason)
+    : null;
 }
 
 function describeError(err: unknown): string {
@@ -372,6 +390,14 @@ export const agentInstanceLifecycleService = {
         monthStart,
         tx,
       );
+      const latestClosed = new Map(
+        (
+          await agentInstanceIntervalRepository.listLatestClosedForInstances(
+            rows.filter((r) => r.state === 'hibernated').map((r) => r.id),
+            tx,
+          )
+        ).map((i) => [i.agentInstanceId, i.endReason]),
+      );
       const usage = new Map<string, { seconds: number; credits: number }>();
       for (const interval of intervals) {
         // Only the part of an interval inside this month counts; an open one runs to now.
@@ -392,6 +418,7 @@ export const agentInstanceLifecycleService = {
           profileName: profileDisplayName(row.profileId),
           machineSecondsThisMonth: usage.get(row.id)?.seconds ?? 0,
           creditsThisMonth: usage.get(row.id)?.credits ?? 0,
+          stopReason: stopReasonOf(latestClosed.get(row.id) ?? null),
         })),
       };
     });

@@ -157,4 +157,20 @@ export const agentInstanceIntervalRepository = {
       orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
     });
   },
+
+  /**
+   * Each instance's most recently CLOSED interval — the page's "why did Motir stop
+   * it" line reads its end reason (AMENDMENT 2). One row per instance at most.
+   */
+  async listLatestClosedForInstances(
+    agentInstanceIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstanceInterval[]> {
+    if (agentInstanceIds.length === 0) return [];
+    return tx.agentInstanceInterval.findMany({
+      where: { agentInstanceId: { in: [...agentInstanceIds] }, endedAt: { not: null } },
+      orderBy: [{ agentInstanceId: 'asc' }, { endedAt: 'desc' }, { id: 'desc' }],
+      distinct: ['agentInstanceId'],
+    });
+  },
 };

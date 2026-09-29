@@ -533,7 +533,26 @@ describe('list', () => {
       profileName: 'Claude Code',
       machineSecondsThisMonth: 150,
       creditsThisMonth: 3,
+      // The person hibernated it themselves: no line to explain.
+      stopReason: null,
     });
+  });
+
+  it('says why Motir stopped a hibernated agent — credits, idle or the 12 hours — and nothing else', async () => {
+    const a = await create('a');
+    const b = await create('b');
+    const c = await create('c');
+    await lifecycle.beginHibernate(a.id, 'credits');
+    await lifecycle.beginHibernate(b.id, 'idle');
+    await lifecycle.settleStop(a.id, 'credits');
+    await lifecycle.settleStop(b.id, 'idle');
+    const rows = (await lifecycle.list(KEY(), { take: 10, skip: 0 }, fx.ctx)).instances;
+    const byName = new Map(rows.map((r) => [r.name, r]));
+    expect(byName.get('a')).toMatchObject({ state: 'hibernated', stopReason: 'credits' });
+    expect(byName.get('b')).toMatchObject({ state: 'hibernated', stopReason: 'idle' });
+    // A running agent has nothing to explain.
+    expect(byName.get('c')).toMatchObject({ state: 'running', stopReason: null });
+    expect(c.id).toBeTruthy();
   });
 
   it('touchActivity bumps the idle signal', async () => {
