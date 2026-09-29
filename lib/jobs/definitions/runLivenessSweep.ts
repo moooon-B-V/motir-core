@@ -24,6 +24,13 @@ import { defineJob } from '../defineJob';
  *     = 35 minutes
  *
  * and nothing a person sees waits on it — the marker reads the rule.
+ *
+ * ⚠️ WITH ONE EXCEPTION SINCE MOTIR-6881: the Workbench To fix tab. Its `run_died`
+ * reason is recomputed when a run CLOSES, and for a local run that went silent this
+ * reap is the close — so that card reaches To fix up to 35 minutes after its last
+ * heartbeat (every other death is immediate). That lag was accepted on 2026-09-29
+ * rather than shortening this cron: a 5-minute tick would keep the database from
+ * ever suspending (the cluster invariant, `tests/jobs/schedule-cluster.test.ts`).
  */
 export const RUN_LIVENESS_SWEEP_CRON = '0,30 * * * *';
 

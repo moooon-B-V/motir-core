@@ -1880,6 +1880,21 @@ export const workItemRepository = {
   },
 
   /**
+   * {@link lockByIds} for a caller that must NEVER WAIT on a card lock — the run
+   * sweeps closing a lapsed or abandoned run (MOTIR-6881). Rows another transaction
+   * holds are SKIPPED, not waited for, so the caller compares what came back with
+   * what it asked for and backs off when they differ. Same ascending order.
+   */
+  async tryLockByIds(ids: string[], tx: Prisma.TransactionClient): Promise<Array<{ id: string }>> {
+    if (ids.length === 0) return [];
+    return tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "work_item"
+       WHERE "id" = ANY(${ids}::text[])
+       ORDER BY "id"
+       FOR UPDATE SKIP LOCKED`;
+  },
+
+  /**
    * The post-lock CLAIM STATE read for MANY rows (MOTIR-3049) — the batched
    * twin of {@link findClaimStateById}, and it carries the same two warnings
    * because it is the same statement widened.

@@ -2,12 +2,14 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { User } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
+import { recomputeWorkItemFixReason } from '@/lib/services/fixReasonService';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { usersService } from '@/lib/services/usersService';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -78,7 +80,14 @@ describe('claimRepair — the claim', () => {
   it('claims an implemented card with one failing PR, and writes neither status nor assignee', async () => {
     const fx = await makeWorkItemFixture();
     const { card, repo, pr } = await redCard(fx);
+    // Settle the stored To fix reason the way the CI event would have in production
+    // (the fixture writes the checks directly). Opening the repair run recomputes it
+    // (MOTIR-6881), and an up-to-date card is left exactly as it was.
+    await withWorkspaceContext({ userId: fx.ownerId, workspaceId: fx.workspaceId }, (tx) =>
+      recomputeWorkItemFixReason(card.id, tx),
+    );
     const before = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    expect(before.fixReason).toBe('ci_failed');
 
     const result = await claim(fx, card.identifier);
 
@@ -111,6 +120,8 @@ describe('claimRepair — the claim', () => {
     expect(after.status).toBe('implemented');
     expect(after.assigneeId).toBe(before.assigneeId);
     expect(after.updatedAt).toEqual(before.updatedAt);
+    // Still To fix while the repair runs: a running repair is not a repair made.
+    expect(after.fixReason).toBe('ci_failed');
 
     const runs = await fixRuns(card.id);
     expect(runs).toHaveLength(1);

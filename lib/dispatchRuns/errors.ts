@@ -54,6 +54,20 @@ export class DispatchRunTerminalError extends Error {
 }
 
 /**
+ * A SWEEP backed off a run because another transaction holds one of the cards it
+ * covers (MOTIR-6881) — typically a continue claim that is about to close the same
+ * run itself. Server-internal: only the run sweeps ask for this behaviour, and they
+ * count it rather than surface it. The next sweep reaps the run if nobody did.
+ */
+export class DispatchRunCardsBusyError extends Error {
+  readonly code = 'DISPATCH_RUN_CARDS_BUSY';
+  constructor(id: string) {
+    super(`Dispatch run ${id} covers a card another writer holds; skipped this pass.`);
+    this.name = 'DispatchRunCardsBusyError';
+  }
+}
+
+/**
  * 409 — two opens raced on one `idempotencyKey` and this one lost.
  *
  * ⚠️ IT EXISTS SO A `P2002` NEVER ESCAPES. The happy path for a REPEATED open is

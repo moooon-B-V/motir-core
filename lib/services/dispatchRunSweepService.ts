@@ -1,4 +1,8 @@
-import { DispatchRunEventLimitError, DispatchRunTerminalError } from '@/lib/dispatchRuns/errors';
+import {
+  DispatchRunCardsBusyError,
+  DispatchRunEventLimitError,
+  DispatchRunTerminalError,
+} from '@/lib/dispatchRuns/errors';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import {
@@ -55,7 +59,9 @@ export interface DispatchRunSweepSummary {
   runsReaped: number;
   /**
    * Runs the discovery read found and that were already terminal by the time the
-   * close ran — somebody's CLI got there first in the seconds between.
+   * close ran — somebody's CLI got there first in the seconds between — or that
+   * another writer held a covered card at that moment (MOTIR-6881), so this pass
+   * backed off; the next one reaps it if nobody closed it.
    *
    * Counted rather than swallowed, and NOT counted as reaped: a number that
    * conflated the two would report the reap doing work it did not do, on exactly
@@ -70,7 +76,9 @@ export interface DispatchRunSweepSummary {
 export interface RunLivenessSweepSummary {
   /** Local runs closed `abandoned` because their heartbeat lapsed. */
   runsReaped: number;
-  /** Runs the CLI closed first, between the discovery read and the close. */
+  /** Runs the CLI closed first, between the discovery read and the close — or
+   *  that another writer was closing at that moment, holding a card the run covers
+   *  (a continue claim; MOTIR-6881). The next pass reaps any nobody did close. */
   runsRacedByClose: number;
   /** Runs whose close failed for any other reason. Logged, never thrown. */
   runsFailed: number;
@@ -130,10 +138,13 @@ export const dispatchRunSweepService = {
           // the explanation, the close is the obligation.
           if (!(err instanceof DispatchRunEventLimitError)) throw err;
         }
-        await dispatchRunService.close(run.id, { stopReason: 'abandoned' }, ctx);
+        // `skip_if_busy` (MOTIR-6881): a card this run covers is held by another
+        // writer — a continue claim closing this very run, as a rule — so the reap
+        // backs off rather than wait on it; the next pass reaps it if nobody did.
+        await dispatchRunService.close(run.id, { stopReason: 'abandoned' }, ctx, 'skip_if_busy');
         summary.runsReaped += 1;
       } catch (err) {
-        if (err instanceof DispatchRunTerminalError) {
+        if (err instanceof DispatchRunTerminalError || err instanceof DispatchRunCardsBusyError) {
           summary.runsRacedByClose += 1;
           continue;
         }
@@ -194,10 +205,11 @@ export const dispatchRunSweepService = {
           run.id,
           { stopReason: 'abandoned' },
           { userId: run.createdById ?? '', workspaceId: run.workspaceId },
+          'skip_if_busy',
         );
         summary.runsReaped += 1;
       } catch (err) {
-        if (err instanceof DispatchRunTerminalError) {
+        if (err instanceof DispatchRunTerminalError || err instanceof DispatchRunCardsBusyError) {
           summary.runsRacedByClose += 1;
           continue;
         }
