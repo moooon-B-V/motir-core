@@ -98,6 +98,12 @@ const ALLOWED: { file: string; handler: string; hits: string[]; why: string }[] 
     hits: ['resolveActionReadActor'],
     why: 'A READ action: the folder level a Visitor view fetches (MOTIR-6647).',
   },
+  {
+    file: 'app/(authed)/plans/_actions.ts',
+    handler: 'loadMoreSessionsAction',
+    hits: ['resolveActionReadActor'],
+    why: 'A READ action: the Plans list’s next cursor page a Visitor view fetches (MOTIR-6890).',
+  },
 ];
 
 const MUTATING = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
