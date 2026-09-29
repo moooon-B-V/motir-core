@@ -4857,6 +4857,11 @@ enum ApprovalGateSupersedeCause {
   /// The CAN'T-LAND class, reached from the build rather than from the base:
   /// a red set cannot merge, so the question stops being one anybody can act on.
   ci_failed
+  /// A check at the very commits the gate asked about is `pending` again — the set left
+  /// green WITHOUT going red (MOTIR-6946, `approval-gates.md` §8's amendment, decision
+  /// 2): a workflow run the raise could not see, a re-run, an App reporting late. The
+  /// verdict is not in, so the question waits for the next green.
+  ci_rerunning
   /// The work was pulled out of review, or moved to Cancelled.
   pulled_back
   /// A person re-opened a decided design gate (AMENDMENT 6 Q3's door back).

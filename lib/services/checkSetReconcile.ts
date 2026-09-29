@@ -1,7 +1,11 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { liveRowsAtLatestSha, type PrCheckRunSlice } from '@/lib/github/prCiState';
 import { liveCheckRows } from '@/lib/github/checkSuites';
-import { readCommitCheckRuns, type ReportedCheckRun } from '@/lib/github/checkRuns';
+import {
+  readCommitActionsSuites,
+  readCommitCheckRuns,
+  type ReportedCheckRun,
+} from '@/lib/github/checkRuns';
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
 
 // THE RECORDED SET IS NOT THE WHOLE SET (MOTIR-4199).
@@ -38,10 +42,13 @@ import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepos
 // verdict, not for thirty-four.
 //
 // ── WHAT IT DOES NOT ESTABLISH ──────────────────────────────────────────────
-// It reads the runs GitHub has CREATED. A workflow that has not started yet is
-// in no snapshot and cannot be — the window narrows from "however many webhooks
-// have been processed" to "however many runs the host has created", which is the
-// whole of the improvement and the whole of the limit. And a host that cannot be
+// It reads the check runs GitHub has CREATED and — since MOTIR-6946 — every
+// GitHub Actions WORKFLOW RUN GitHub has created, as its suite's roll-up row. A
+// workflow run that has not created a job yet (queued behind a `concurrency`
+// group, say) used to be in no check-run snapshot, and this header said it
+// "cannot be"; that was false, because its check SUITE exists from the moment the
+// run does. The genuine limit is a workflow that has not been TRIGGERED at all,
+// which no read of the provider can see. And a host that cannot be
 // reached answers `null`, which is NOT "no checks": the caller then falls back
 // to the recorded set, i.e. to the behaviour that shipped before this module, so
 // a transient GitHub outage costs the sharper verdict rather than stalling every
@@ -169,6 +176,30 @@ export async function readReportedCheckSet(args: {
   name: string;
   commitSha: string;
 }): Promise<ReportedCheckRun[] | null> {
+  const runs = await readReportedCheckRuns(args);
+  if (runs === null) return null;
+  // ⚠️ THE WORKFLOW RUNS NO JOB HAS REPORTED FOR YET (MOTIR-6946). A second
+  // round trip, paid on the same claim-complete edge as the first. When THIS read
+  // has no answer the check runs alone are returned — exactly the set that
+  // shipped before it — rather than `null`, which would throw away an answer the
+  // first read did get.
+  const suites = await readCommitActionsSuites(
+    args.installationId,
+    args.owner,
+    args.name,
+    args.commitSha,
+  );
+  return suites === null ? runs : [...runs, ...suites];
+}
+
+/** The commit's CHECK RUNS alone — for a reader that wants checks and never a
+ *  suite's roll-up (the merge-queue exit naming its failing check). */
+export async function readReportedCheckRuns(args: {
+  installationId: string;
+  owner: string;
+  name: string;
+  commitSha: string;
+}): Promise<ReportedCheckRun[] | null> {
   return readCommitCheckRuns(args.installationId, args.owner, args.name, args.commitSha);
 }
 
@@ -218,8 +249,16 @@ export async function reconcileRecordedCheckSet(args: {
     args.recorded.map((row) => [identity(row.checkName, row.checkSuiteId), row]),
   );
 
+  // ⚠️ A SUITE ROLL-UP IS CREATED ONLY WHILE IT IS PENDING (MOTIR-6946). Its
+  // whole job is to make a workflow run that has no check yet VISIBLE, and a
+  // finished suite is already recorded by its own `check_suite` delivery; creating
+  // a terminal one here would make this read a second writer of a verdict the
+  // webhook owns. A finished one still SETTLES the pending row this created —
+  // the lost-completion arm below — which is why the reader reports it at all.
   const missing = args.reported.filter(
-    (run) => !recordedByIdentity.has(identity(run.checkName, run.checkSuiteId)),
+    (run) =>
+      !recordedByIdentity.has(identity(run.checkName, run.checkSuiteId)) &&
+      (run.suiteAggregate !== true || run.conclusion === 'pending'),
   );
   const created = await githubCheckRunRepository.createMissing(
     missing.map((run) => ({
@@ -227,6 +266,7 @@ export async function reconcileRecordedCheckSet(args: {
       commitSha: args.commitSha,
       checkName: run.checkName,
       checkSuiteId: run.checkSuiteId,
+      ...(run.suiteAggregate === true ? { suiteAggregate: true } : {}),
       conclusion: run.conclusion,
     })),
     args.tx,

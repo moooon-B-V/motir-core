@@ -30,6 +30,7 @@ import { resolveDeliveredWorkItems } from './changeRequestWorkItems';
 import {
   raisePullRequestApprovalGate,
   withdrawPullRequestApprovalGatesOnCiFailure,
+  withdrawPullRequestApprovalGatesOnCiRerun,
 } from './pullRequestApprovalGates';
 import { evaluateAfterRaise } from './pullRequestReviewSync';
 import { sendEvent } from '@/lib/jobs/sendEvent';
@@ -353,24 +354,67 @@ export async function withdrawDeliveredCardsOnRed(args: {
   workspaceId: string;
   actorUserId: string;
 }): Promise<{ withdrawn: number; moved: string[] }> {
+  return withdrawDeliveredCardsOffGreen(args, 'failing');
+}
+
+/**
+ * THE SAME WITHDRAWAL, FOR A SET THAT LEFT GREEN WITHOUT GOING RED (MOTIR-6946).
+ *
+ * A check at the head is `pending` again — a workflow run the raise could not see, a
+ * re-run, an App reporting late — so the approve-to-merge question was asked over a set
+ * whose verdict is not in. Everything `withdrawDeliveredCardsOnRed` says above holds, with
+ * one difference in what is retired: the gate goes only where it asked about the commits
+ * that are running now (`withdrawPullRequestApprovalGatesOnCiRerun`), and the card is
+ * held at Implemented as `cant_land` for THIS verdict only — no hold is recorded, so the
+ * next green at the same head promotes it again and raises exactly one fresh gate.
+ */
+export async function withdrawDeliveredCardsOnRerun(args: {
+  changeRequestId: string;
+  workspaceId: string;
+  actorUserId: string;
+}): Promise<{ withdrawn: number; moved: string[] }> {
+  return withdrawDeliveredCardsOffGreen(args, 'running');
+}
+
+async function withdrawDeliveredCardsOffGreen(
+  args: {
+    changeRequestId: string;
+    workspaceId: string;
+    actorUserId: string;
+  },
+  verdict: 'failing' | 'running',
+): Promise<{ withdrawn: number; moved: string[] }> {
   const ctx = { userId: args.actorUserId, workspaceId: args.workspaceId };
   const outcome = await withSystemContext(async (tx) => {
     await bindWorkspaceContext(tx, args.workspaceId);
     const pr = await githubPullRequestRepository.findByIdWithInstallation(args.changeRequestId, tx);
     // ⚠️ RE-DERIVE, never trust the delivery that woke us. The event that called this is one
-    // check; the question is whether the PULL REQUEST is red at its latest recorded sha,
-    // which is the same reading `derivePrCiState` gives the pill and the promotion. A single
-    // red check on a superseded run must retire nothing.
-    if (!pr || derivePrCiState(pr.checkRuns) !== 'failing') {
+    // check; the question is whether the PULL REQUEST is red (or running) at its latest
+    // recorded sha, which is the same reading `derivePrCiState` gives the pill and the
+    // promotion. A single red check on a superseded run must retire nothing.
+    if (!pr || derivePrCiState(pr.checkRuns) !== verdict) {
       return { withdrawn: 0, moved: [] as string[] };
     }
     const refs = await resolveDeliveredWorkItems(args.changeRequestId, tx);
     // LOCK ORDER — each card's awaiting gates, then the card (ADR §6d amendment, rule 8),
     // the order `applyStatusTransition` takes them in.
     for (const ref of refs) await queueExitCardMoves.lockCard(ref.id, tx);
-    const withdrawn = await withdrawPullRequestApprovalGatesOnCiFailure(args.changeRequestId, tx);
+    // A running set moves only the cards whose question it just retired: a card whose
+    // gate asked about OTHER commits is a head move's to retire, and a card with no merge
+    // question (an `auto` project) was never asked to approve anything.
+    let withdrawn: number;
+    let movable: readonly { id: string }[] = refs;
+    if (verdict === 'failing') {
+      withdrawn = await withdrawPullRequestApprovalGatesOnCiFailure(args.changeRequestId, tx);
+    } else {
+      const retired = new Set(
+        await withdrawPullRequestApprovalGatesOnCiRerun(args.changeRequestId, tx),
+      );
+      withdrawn = retired.size;
+      movable = refs.filter((ref) => retired.has(ref.id));
+    }
     const moved: string[] = [];
-    for (const ref of refs) {
+    for (const ref of movable) {
       const item = await workItemRepository.findById(ref.id, tx);
       // `TARGET_STATUS` — the very status the green direction moves a card TO, read back
       // here as the only status the red direction moves one FROM. One constant for both,
@@ -382,11 +426,14 @@ export async function withdrawDeliveredCardsOnRed(args: {
     return { withdrawn, moved };
   });
   if (outcome.withdrawn > 0 || outcome.moved.length > 0) {
-    console.warn('[ciPromotion] a red build withdrew the approve-to-merge question', {
-      changeRequestId: args.changeRequestId,
-      withdrawn: outcome.withdrawn,
-      heldAtImplemented: outcome.moved.length,
-    });
+    console.warn(
+      `[ciPromotion] a ${verdict === 'failing' ? 'red' : 'running'} build withdrew the approve-to-merge question`,
+      {
+        changeRequestId: args.changeRequestId,
+        withdrawn: outcome.withdrawn,
+        heldAtImplemented: outcome.moved.length,
+      },
+    );
   }
   return outcome;
 }

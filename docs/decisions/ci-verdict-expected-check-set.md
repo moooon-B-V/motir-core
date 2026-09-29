@@ -97,10 +97,13 @@ GitHub's latency.
 
 ## What it does NOT answer — the failure modes, stated
 
-1. **It is a snapshot of the runs the host has CREATED.** A workflow that has not started at all — a
-   `workflow_dispatch` nobody fired, a job queued after the call — is in no snapshot and cannot be. The
-   window narrows from _however many webhooks have been processed_ to _however many runs the host has
-   created_. That is the whole of the improvement and the whole of the limit.
+1. **It is a snapshot of the runs the host has CREATED.** ~~A workflow that has not started at all — a
+   `workflow_dispatch` nobody fired, a job queued after the call — is in no snapshot and cannot be.~~
+   **Corrected by AMENDMENT 3 (MOTIR-6946):** a workflow run GitHub has created but that has no job
+   yet IS in a snapshot — its check SUITE exists from the moment the run does — and the read now takes
+   it. The genuine limit is a workflow that has not been TRIGGERED (a `workflow_dispatch` nobody
+   fired). The window narrows from _however many webhooks have been processed_ to _however many
+   workflow runs the host has created_.
 2. **A path-filtered workflow legitimately reports fewer checks than it defines**, and this is
    invisible to the reconcile and correctly so: the host reports the runs it created for THIS commit,
    which is exactly the set the verdict should be about. A repository whose `ci.yml` skips its app
@@ -163,6 +166,60 @@ Rejected, for three reasons:
 MOTIR-3823's own criteria are unchanged and still green (`tests/github/ciGreenPromotion.test.ts`): a
 repository that CANNOT report still counts as green, and a pull request with zero rows in a repository
 that CAN report is still not promoted.
+
+## AMENDMENT 3 — a workflow run with no job yet is READ, and failure mode 1 was wrong about it (MOTIR-6946)
+
+**Failure mode 1 said a workflow that has not started "is in no snapshot and cannot be". For a
+workflow run GitHub has already CREATED, that was false**, and the error was not academic.
+
+**Observed** — moooon-B-V/motir-core#3261 @ `688ce704`, 2026-09-29. Three workflow runs were created
+at `18:39:32` (Acceptance tests, CodeQL, CI). CI's run sat for **86 s with no jobs**, held by `ci.yml`'s
+workflow-level `concurrency: ${{ github.workflow }}-${{ github.ref }}` group while the previous head's
+run was cancelled. The acceptance lane settled green at `18:40:05`; the recorded set claimed to be
+whole; the reconcile asked `/commits/{sha}/check-runs`, which held no CI row, and confirmed the prefix.
+The approve-to-merge gate was raised at `18:40:08`. CI's first job appeared at `18:40:58`. The
+concurrency group opens this window on most pushes to an open motir-core pull request.
+
+**GitHub knew.** `GET /commits/{sha}/check-suites` answered, for that commit: three third-party suites
+(`vercel`, `sentry`, `claude`) `queued` with **zero** runs — as they are on every commit, for ever —
+and three `github-actions` suites, one per workflow run, CI's `in_progress`. motir-core defines ~20
+workflows; only the three that triggered have a suite, so an Actions suite IS a workflow run that
+will report.
+
+**The decision.** `readReportedCheckSet` now also reads the commit's check suites and reports every
+**GitHub Actions** suite as its **roll-up row** — `checkName` = the App slug `github-actions`, the
+suite id, `suiteAggregate: true`, `pending` until `completed`. That is byte-for-byte the row a
+`check_suite` delivery records (`parseCiStatusEvent`), so nothing downstream learns a new concept: a
+pending roll-up folds the set to `running` and both promotion edges withhold, and the suite's own
+`completed` delivery upserts it terminal. Three rules on how it is written:
+
+1. **Only while pending is a roll-up CREATED.** A finished suite is already recorded by its own
+   delivery; creating a terminal one here would make the read a second writer of a verdict the
+   webhook owns (and would, for a run cancelled before it created a job, write a `failure` nothing
+   supersedes). A finished suite in the answer still SETTLES a pending roll-up the read created —
+   AMENDMENT 1's lost-completion arm, unchanged — which is the whole reason it is reported.
+2. **Only the `github-actions` App.** A third-party App's suite is not a workflow run and never
+   reports; counting it would hold every card on every commit.
+3. **The suites read failing is not the set failing.** When `/check-suites` answers nothing, the check
+   runs alone are returned — the set that shipped before this amendment — rather than `null`, which
+   would discard an answer the first read did get. Failure mode 3 holds for the check-run read as
+   before.
+
+**Why `/check-suites` and not `/actions/runs?head_sha=`.** The workflow-runs endpoint names the
+workflow and was the obvious read. It needs `actions: read`, which the user-facing App
+(`motir-integration`) does not hold (`unlinked-pull-request-check.md`'s permission table) — so it
+answers 403 on exactly the repositories this was observed on, the tolerant `null` arm absorbs the 403,
+and the fix would have shipped inert with every stubbed test green. `/check-suites` needs `checks: read`,
+which every installation already grants.
+
+**What it costs.** One more round trip, paid on the same edges as the first: a set claiming to be
+whole (MOTIR-4199) or claiming too long to be running (MOTIR-5838). Once a pending roll-up is
+recorded the set no longer claims to be whole, so the ordinary pull request pays for it once.
+
+**What is left.** A workflow that has not been TRIGGERED is in no snapshot, and cannot be. And the
+raise is still not the only defence: a set that leaves green without going red at the asked-about
+head now withdraws the question too (`approval-gates.md` §8's SEVENTH AMENDMENT, cause
+`ci_rerunning`), so a window this read still misses is corrected when its first check arrives.
 
 ## AMENDMENT 2 — the residual window is CORRECTED downstream, not closed here (MOTIR-6271)
 
