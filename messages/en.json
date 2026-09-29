@@ -7007,6 +7007,7 @@
       "filteredEmptyTitle": "No conversations in this state",
       "filteredEmptyDescription": "This project's other conversations are under All.",
       "loadMoreError": "Couldn’t load more conversations.",
+      "loadMoreLimited": "You’re reading a little too fast. Try again in a moment.",
       "loadMoreRetry": "Retry",
       "viewAria": "Show your conversations or the whole project's",
       "subtitleMine": "Planning conversations you started in {project}, and plans you were asked to decide",

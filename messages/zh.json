@@ -7003,6 +7003,7 @@
       "filteredEmptyTitle": "此状态下没有对话",
       "filteredEmptyDescription": "本项目的其他对话在“全部”下。",
       "loadMoreError": "无法加载更多对话。",
+      "loadMoreLimited": "你浏览得有点太快了，请稍后再试。",
       "loadMoreRetry": "重试",
       "viewAria": "显示你的对话或整个项目的对话",
       "subtitleMine": "你在 {project} 中发起的规划对话，以及请你决定的计划",

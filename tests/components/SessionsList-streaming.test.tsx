@@ -201,6 +201,34 @@ describe('a FAILED page says so, and Retry re-runs the same cursor (§19.5 panel
   });
 });
 
+describe('a Visitor past the read budget is told so, and Retry re-runs the same cursor (MOTIR-6890)', () => {
+  it('says the reader is going too fast rather than calling it a failure', async () => {
+    loadMoreSessionsAction.mockResolvedValueOnce({ ok: false, error: 'rate_limited' });
+    renderWithIntl(
+      <SessionsList
+        view="project"
+        initialViews={views(2)}
+        initialCursor="cur_1"
+        planState={null}
+      />,
+    );
+
+    await fireSentinel();
+
+    expect(screen.getByRole('alert').textContent).toContain('You’re reading a little too fast.');
+    expect(rowIds()).toEqual(['s_0', 's_1']);
+
+    loadMoreSessionsAction.mockResolvedValueOnce({ views: views(1, 2), nextCursor: null });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    });
+
+    expect(loadMoreSessionsAction).toHaveBeenLastCalledWith('cur_1', null, 'project');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(rowIds()).toEqual(['s_0', 's_1', 's_2']);
+  });
+});
+
 describe('the `?session=` landing', () => {
   it('highlights that row and scrolls it into view once', () => {
     const scroll = vi.fn();

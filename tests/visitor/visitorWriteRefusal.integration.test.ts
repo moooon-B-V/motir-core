@@ -402,5 +402,7 @@ const ACTIONS_SERVED: string[] = [
   'R2 app/(authed)/items/actions.ts#listRootIssuesAction',
   'R3 app/(authed)/items/actions.ts#listChildIssuesAction',
   'R3 app/(authed)/items/actions.ts#listRootIssuesAction',
-  'R3 app/(authed)/plans/_actions.ts#loadMoreSessionsAction',
+  // (R3's Plans load-more is no longer served its own-project empty page: since
+  // MOTIR-6890 it reads the public project as a Visitor, where the probe's body is
+  // not a cursor and the read refuses it — as it does for R2.)
 ];

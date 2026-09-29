@@ -144,14 +144,17 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
   # not decoration; what it does not do is stay up.
   #
   # COST: +$11.83/mo (a second `shared-cpu-2x` 2 GB, Fly pricing 2026-08-13),
-  # taking the running pair to $23.66/mo. And NO database cost — every
-  # `setInterval` in this repo is in a `'use client'` module, and scheduled work
-  # is claimed by the `worker` process group below rather than by these machines,
-  # so a second app machine costs no extra database traffic whether or not it is
-  # warm. Amendment 7 §21 is the standing argument against ever adding an
-  # in-process poll HERE: it would re-price this line. (Before MOTIR-3418 the same
-  # sentence read "scheduled work arrives via Inngest over HTTP, which reaches one
-  # machine" — the conclusion is unchanged; only the mechanism moved in-house.)
+  # taking the running pair to $23.66/mo. And NO database cost — but NOT because
+  # motir-core has no in-process poll. It HAS one: the `worker` process group
+  # below polls Postgres every ≤ 5 s (`IDLE_MAX_MS`, `lib/jobs/engine/worker.ts`),
+  # so the Neon compute is always on (≈ $19.50/mo, accepted in
+  # `docs/decisions/always-on-database-job-cadence.md`, MOTIR-6893). These web
+  # machines add no poll of their own — every `setInterval` here is in a
+  # `'use client'` module, and scheduled work is claimed by the worker — so a
+  # second app machine adds no database cost to a compute that is already awake.
+  # (This used to read "Amendment 7 §21 is the standing argument against ever
+  # adding an in-process poll here", and before MOTIR-3418 "scheduled work arrives
+  # via Inngest over HTTP". The worker's poll made both obsolete.)
   min_machines_running = 2
 
   # ⚠️ `requests` IS the right signal for this app and the NUMBERS ARE NOT
