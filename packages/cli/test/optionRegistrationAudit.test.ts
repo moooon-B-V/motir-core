@@ -66,6 +66,8 @@ const OPTIONS_INTERFACE: Record<string, string | null> = {
   batch: 'BatchOptions',
   plan: 'PlanOptions',
   done: 'DoneOptions',
+  'agent-terminal': null,
+  'agent-terminal serve': 'AgentTerminalServeOptions',
 };
 
 /** The help surface registers pseudo-commands that carry no options. */

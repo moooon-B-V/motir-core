@@ -112,7 +112,9 @@ export function AgentTerminal({
       ]);
       if (disposed) return;
       const style = getComputedStyle(el);
-      const ink = style.color || '#e5e7eb';
+      // The host's resolved `--el-code-text` (a computed `color` is always a
+      // concrete value in a browser); no hue is invented here.
+      const ink = style.color || 'CanvasText';
       const t = new XTerm({
         allowTransparency: true,
         cursorBlink: true,
@@ -120,7 +122,7 @@ export function AgentTerminal({
         fontSize: 12,
         lineHeight: 1.2,
         scrollback: 5_000,
-        theme: { background: '#00000000', foreground: ink, cursor: ink },
+        theme: { background: 'transparent', foreground: ink, cursor: ink },
       });
       fit = new Fit();
       t.loadAddon(fit);

@@ -102,6 +102,7 @@ export type PersonalDataDelegate =
   | 'publicFollow'
   | 'dispatchRun'
   | 'agentInstance'
+  | 'agentTerminalConnection'
   | 'comment'
   | 'workItem'
   | 'workItemRevision'
@@ -359,6 +360,18 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     where: (userId) => ({ ownerId: userId }),
   },
   {
+    // Story MOTIR-6861 · MOTIR-6940 — one row per terminal this person opened on
+    // their own agent: which agent, when it opened and closed, and why it closed.
+    // A record of the person's own action, so EXPORTED. It holds nothing about
+    // what flowed through the terminal (`agent-terminal.md` Q8), so neither does
+    // the export.
+    table: 'agent_terminal_connection',
+    model: 'agentTerminalConnection',
+    tier: 'tenant',
+    basis: 'Terminals this person opened on their own agents (when, and why they closed).',
+    where: byUserId,
+  },
+  {
     table: 'saved_filter_star',
     model: 'savedFilterStar',
     tier: 'tenant',
@@ -587,6 +600,11 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
  * between a table nobody exported and a table nobody noticed.
  */
 export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
+  AgentTerminalTicket:
+    'A 60-second, single-use connection ticket (`agent-terminal.md` Q3), stored only ' +
+    'as a hash and swept once expired. It carries no fact about the person beyond ' +
+    '"a ticket existed" and is gone before an export could describe it — the ' +
+    'terminal itself is recorded in `agent_terminal_connection`, which IS exported.',
   PlatformAuditLog:
     'The controller’s own audit of moooon B.V. operator actions across the estate. ' +
     'Its rows name OTHER tenants (`targetLabel`, `organizationId`), so exporting them ' +

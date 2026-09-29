@@ -510,7 +510,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       const env = process.env[TERMINAL_URL_ENV];
       const base = terminalBase ?? (env !== undefined && env !== '' ? env : DEFAULT_TERMINAL_BASE);
       return {
-        url: `${base.replace(/\/+$/, '')}/v1/terminal`,
+        url: `${trimTrailingSlashes(base)}/v1/terminal`,
         headers: { 'x-motir-machine-id': handle.machineId },
       };
     },
@@ -527,3 +527,10 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       save();
     },
   };
+
+/** Strip trailing `/`s without a backtracking regex (CodeQL js/polynomial-redos). */
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+}
