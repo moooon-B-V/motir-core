@@ -28,6 +28,10 @@
   `ci-minutes-allowance.md` **§1** (300 minutes per seat, 1,000 per org floor), **§2** (1 credit = 1
   minute), **§E** (Motir's own GitHub budget is a tripwire, never a valve), and `agent-instances.md`
   **§7** (one Fly app per organisation) and **AMENDMENT 2** (instances keep their own pool).
+- **Cadence rule relied on:** `application-hosting.md` §21 as amended by **MOTIR-6893**, which retires
+  the :00/:30 cluster. The job worker's ≤ 5 s poll (`IDLE_MAX_MS`, `lib/jobs/engine/worker.ts`)
+  already holds the database awake, so a sub-hourly job runs every 5 minutes by default and finer only
+  through a named exception list. MOTIR-6932 carries that into `lib/jobs/schedules.ts`.
 - **Consumed by:** the fleet per-org build story **MOTIR-6906** (MOTIR-6907, 6908, 6909, 6910, 6911,
   6912, 6913, 6925) and the platform admin's monitor story **MOTIR-6905**. §8 maps each piece.
 
@@ -160,15 +164,18 @@ overshoot  ≤  500 containers × (5 min accrued + 5 min to stop)  =  5,000 cont
 | 30 minutes | 30,000 credits    | $58.50    | ~17 / minute          |
 
 Five minutes keeps a runaway org to under $10 of compute while one full org costs motir-ai 100 debit
-calls a minute, not 500. Thirty minutes (the cadence the `system.*` crons are held to) would make the
-worst case a $58.50 event for each org that runs out.
+calls a minute, not 500. Thirty minutes (the old :00/:30 cluster's floor) would make the worst case a
+$58.50 event for each org that runs out. One minute buys $7.80 of worst case for five times the calls.
 
-**The period is not a cron.** `SCHEDULE_CLUSTER_MINUTES` (`lib/jobs/schedules.ts`) holds every
-`system.*` cron to minutes 0 and 30, because an idle database is billed by how often it wakes
-(`application-hosting.md` §21). The debit instead rides a per-organisation timer armed when the org's
-first CI container is admitted and re-armed each period while any is live. It never fires for an org
-with nothing running, so it wakes nothing that is asleep: the same argument `agent-instances.md`
-AMENDMENT 1 made for the per-instance idle timer.
+**The period came from the overshoot, and it lands on the default cadence.** The period is chosen by
+the table above, not by a schedule rule. It happens to equal the 5-minute default MOTIR-6893 sets for
+every sub-hourly job, so the debit is an ordinary `system.*` job on `*/5 * * * *` and **needs no entry
+on the sub-hourly exception list**. It is one job over every org with a live CI container, not a timer
+per org, and it is **never gated on user activity**: an org at zero matters most when nobody is
+watching it. A tick over an org with nothing running does nothing.
+
+**Until MOTIR-6932 lands**, `SCHEDULE_CLUSTER_MINUTES` and its quiet-gap test still reject a `*/5`
+schedule, so MOTIR-6910 schedules the debit after MOTIR-6932, not by adding a cluster exception.
 
 **An unreadable balance.** Admission refuses (§4). A tick that cannot reach motir-ai stops nothing
 already running, keeps the accrual, and charges it on the next tick that can. Running work is then
@@ -227,16 +234,22 @@ before its record names it:
 | Index container      | `provision` (≤ 30 s), boot up to its 120 s deadline, then the first poll that sees it running writes the checkpoint (≤ 15 s backoff) | ≤ 165 s                                    |
 | **Hosted-agent run** | the same, with a poll backoff of up to 60 s (`AGENT_MAX_POLL_INTERVAL_MS`)                                                           | **≤ 210 s (3.5 min)**                      |
 
-Ten minutes is about three times the longest window, room for a delayed poll or one worker restart,
-and a third of a cadence. The same grace applies from a record's end instant before a
+Ten minutes is about three times the longest window, room for a delayed poll or one worker restart.
+The same grace applies from a record's end instant before a
 should-have-stopped machine is destroyed, so the reconciler never races an ordinary teardown. A
 machine Fly reports without a creation instant is not destroyed, and is alerted.
 
-**The cadence is 30 minutes**, on `0,30 * * * *`, replacing `system.ci-runner-reap`'s schedule. It
-has to be a cron: a leak exists precisely when nothing in Motir is running, and 30 minutes is the
-floor `SCHEDULE_CLUSTER_MINUTES` allows. A leaked machine therefore lives at most grace + cadence =
-**40 minutes**, ≈ $0.08 for a 2-core fleet machine, against today's 70 minutes for a tagged machine and
-forever for an untagged one.
+**The cadence is 5 minutes**, on `*/5 * * * *`, replacing `system.ci-runner-reap`'s schedule. It
+has to be a scheduled job, never gated on user activity: a leak exists precisely when nothing in Motir
+is running. A leaked machine therefore lives at most grace + cadence = **15 minutes**, ≈ $0.03 for a
+2-core fleet machine at §8's $0.00195 per minute, against today's 70 minutes for a tagged machine and
+forever for an untagged one. A leak of a full org's worth, 500 machines, costs ≈ $14.60 at that bound.
+
+**Why 5 and not finer.** The grace, not the cadence, dominates the lifetime: going to 1 minute takes a
+leak from 15 to 11 minutes, saving ≈ $0.008 per machine, and puts a full provider listing of every app on
+the exception list. Going back to 30 minutes would make it 40 minutes, ≈ $0.08 per machine and
+≈ $39 for 500. So the reconciler uses the 5-minute default and **needs no entry on the sub-hourly
+exception list**. It is scheduled after MOTIR-6932, as the debit is.
 
 **A failed listing destroys nothing, and alerts.** A failed app list stops the pass. A failed machine
 list for one app skips that app and the pass continues with the rest. A listing error is never read as
@@ -276,9 +289,9 @@ cannot bound it the way it bounds CI.
 | Per-org count and reserve under the one lock; `MOTIR_FLEET_ORG_MAX_IN_FLIGHT` = 500 and the enterprise override; `org_pool`; `PROJECT_IN_FLIGHT_CAPS` removed; `MOTIR_FLEET_MAX_IN_FLIGHT` as kill switch; the per-org index share (§2, §6, §7) | motir-core                                                         | MOTIR-6907 ✓               |
 | One idempotent org stop: cancel in-flight Actions runs, destroy CI containers, settle `credits_exhausted`; called by the zero-credit stop and the admin (§4)                                                                                    | motir-core                                                         | MOTIR-6908 ✓               |
 | The paid-plan check at `establishSet` and at admission, fail-closed, enterprise by tier, `isMeta` passing (§1, §4)                                                                                                                              | motir-core                                                         | MOTIR-6909 ✓               |
-| The 5-minute per-org debit timer, idempotent on (container, period), included minutes first, end-of-run meter reduced to reconciliation (§3)                                                                                                    | motir-core (uses motir-ai's existing `ci_overage` route unchanged) | MOTIR-6910 ✓               |
+| The 5-minute debit job (`*/5`, after MOTIR-6932), idempotent on (container, period), included minutes first, end-of-run meter reduced to reconciliation (§3)                                                                                    | motir-core (uses motir-ai's existing `ci_overage` route unchanged) | MOTIR-6910 ✓               |
 | Coverage admission, `credits_insufficient`, `balance_unavailable`, and the stop at zero (§3, §4)                                                                                                                                                | motir-core                                                         | MOTIR-6911 ✓               |
-| The attribution reconciler: provider inventory over every app, the per-workload match, 10-minute grace, 30-minute cron, the two Sentry errors, the kill record (§5)                                                                             | motir-core (`packages/orchestrator` gains app and machine listing) | MOTIR-6925 ✓               |
+| The attribution reconciler: provider inventory over every app, the per-workload match, 10-minute grace, 5-minute job, the two Sentry errors, the kill record (§5)                                                                               | motir-core (`packages/orchestrator` gains app and machine listing) | MOTIR-6925 ✓               |
 | Integration gate and E2E over the above                                                                                                                                                                                                         | motir-core                                                         | MOTIR-6912 ✓, MOTIR-6913 ✓ |
 | The admin's per-org view, mismatch alert, list of kills and _Stop containers_                                                                                                                                                                   | motir-core                                                         | MOTIR-6905 (Epic 10) ✓     |
 
@@ -298,6 +311,9 @@ debit already takes an idempotency key, and this record changes neither the pric
   Motir unrecovered money, never appeared in it.
 - **A 1-minute or a 30-minute debit period.** §3's table: five times the debit calls for a $7.80 better
   worst case, or a $58.50 worst case per org.
+- **A per-organisation debit timer instead of a job.** The earlier draft of this record used one, to
+  avoid waking an idle database off the :00/:30 cluster. MOTIR-6893 removed that reason: the database
+  is always awake, so one `*/5` job is simpler and has no timer to lose on a restart.
 - **Attributing by the machine's metadata tags.** Anyone holding the Fly token writes metadata; the
   record in Motir's database is what money was charged against.
 - **Fail open on an unreadable balance** (today). It starts work nobody can be shown to pay for.
@@ -312,8 +328,10 @@ debit already takes an idempotency key, and this record changes neither the pric
 - A motir-ai outage starts no new fleet CI for any org, and stops none that is running.
 - An org on the free AI plan, or tracker-only, can no longer get a Motir-hosted repository. Its
   existing hosted repositories stop getting fleet runners.
-- Every Motir app in the fleet Fly org is inventoried every 30 minutes; nothing unattributed lives
-  past 40 minutes, and every kill reaches a person.
+- Every Motir app in the fleet Fly org is inventoried every 5 minutes; nothing unattributed lives
+  past 15 minutes, and every kill reaches a person.
+- Neither new job needs an entry on MOTIR-6893's sub-hourly exception list, and neither can run before
+  MOTIR-6932 replaces the :00/:30 cluster constants.
 - Index containers remain Motir's own cost, bounded by their own global of 6.
 
 ---
@@ -322,6 +340,7 @@ debit already takes an idempotency key, and this record changes neither the pric
 
 - **Prices and allowances.** 1 credit per minute and 300 minutes per seat (1,000 per org floor) are
   unchanged.
+- **The job cadence rule.** MOTIR-6893 owns it; this record only places its two jobs on the default.
 - **The agent-instance pool** (`agent-instances.md` AMENDMENT 2), and **agent storage and the plan
   gate for agents** (MOTIR-6902).
 - **A running debit for hosted-agent runs.** They count in the pool and in coverage, and are still
