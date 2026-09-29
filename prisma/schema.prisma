@@ -1360,18 +1360,14 @@ model Project {
   /// floor `manual` and a chosen `manual` are the same bytes, and a default
   /// would overwrite a person's choice (§7's 2026-09-13 amendment).
   prMergeModeDecidedAt             DateTime?             @map("pr_merge_mode_decided_at")
-  /// The RETIRED browse-access level (Story 6.4) — superseded by `accessMode`.
-  /// Neither read (MOTIR-6687) nor written (MOTIR-6692); the column stays in the
-  /// database for one more release, and its default fills it on insert.
-  // ⚠️ `@ignore`d so the generated client stops selecting it, pending the phase-3 drop (MOTIR-6692 → MOTIR-6694).
-  accessLevel                      ProjectAccessLevel    @default(open) @ignore
   /// The project's ACCESS MODE (Story MOTIR-6169 · MOTIR-6541) — who may ENTER
   /// it: `workspace` (every Full-scope workspace member, plus the people added),
   /// `members` (only the people added) or `public` (as `workspace`, plus anyone
   /// with the link) — `docs/decisions/role-model.md` Q1. The ONE column a
   /// project's access is read from: stored, never derived (MOTIR-6686 filled
   /// every NULL and made it NOT NULL). A project created without choosing one is
-  /// Open to the workspace.
+  /// Open to the workspace. It replaced the browse-access LEVEL (`accessLevel`,
+  /// Story 6.4), which was retired in three phases and dropped by MOTIR-6694.
   ///
   /// ⚠️ `projectRepository.setAccessMode` is its only writer.
   accessMode                       ProjectAccessMode     @default(workspace) @map("access_mode")
@@ -2064,27 +2060,6 @@ enum RoleMigrationReason {
   project_access_lost
 
   @@map("role_migration_reason")
-}
-
-/// A project's browse-access level (`project.accessLevel`, Story 6.4),
-/// mirroring Jira team-managed projects: `open` = any workspace member views +
-/// edits; `limited` = any member views + comments (no edit); `private` = only
-/// explicit project members. Defaults to `open` so existing projects backfill
-/// safely (no lockout). Closed + stable, so a Postgres enum.
-enum ProjectAccessLevel {
-  open
-  limited
-  private
-  /// `public` (Story 6.12) — the project is open for read-only VIEW to ANYONE
-  /// on the web (no sign-in), ACROSS orgs/workspaces. The openness ladder is
-  /// public > open > limited > private; `public` is the ONLY level that crosses
-  /// the org boundary for READ (the single exception the access policy carves).
-  /// The default stays `open` — a project becomes public only by an explicit
-  /// admin action (the make-public toggle, Subtask 6.12.8), so adding the value
-  /// locks nothing out.
-  public
-
-  @@map("project_access_level")
 }
 
 /// A project's ACCESS MODE (`project.accessMode`, Story MOTIR-6169 · MOTIR-6541)
@@ -5480,8 +5455,10 @@ model ProjectTag {
 /// (the set semantics the per-project tagging service relies on) AND serves the
 /// forward "tags of project Y" read as its left-prefix. The `@@index([tagId])`
 /// is the reverse edge the tag-FACET read walks — "how many PUBLIC projects
-/// carry tag X" — counting through to `project.access_level = 'public'` (the
-/// 6.13.2 filter the category counts respect), so a tag's count is its
+/// carry tag X" — counting through to the project being public (the 6.13.2
+/// filter the category counts respect; it read `project.access_level = 'public'`
+/// until the level was retired for `access_mode` and dropped by MOTIR-6694), so
+/// a tag's count is its
 /// public-project count and a tag with only non-public projects never inflates
 /// the square.
 model ProjectTagAssignment {
