@@ -13,6 +13,11 @@ import {
 import { fleetKillSwitchEngaged, fleetSlotTtlSeconds, orgPoolCap } from '@/lib/ciFleet/limits';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import {
+  aiPlanGateService,
+  AI_PLAN_REQUIRED_ADMISSION_DETAIL,
+  PLAN_UNKNOWN_ADMISSION_DETAIL,
+} from '@/lib/services/aiPlanGateService';
 
 // THE FLEET'S ADMISSION — PER ORGANISATION (Story MOTIR-6906 · MOTIR-6907,
 // re-cutting MOTIR-1916 · MOTIR-1997). `docs/decisions/fleet-per-org-pool.md`.
@@ -79,8 +84,12 @@ export type FleetSlotVerdict =
        *  (`MOTIR_FLEET_MAX_IN_FLIGHT=0`). `organization_required`: the request
        *  named no organisation, so no pool could count it. `workload_cap`
        *  (MOTIR-6872): the request's own {@link FleetSlotRequest.guard} refused —
-       *  a workload-specific cap under the same lock. */
+       *  a workload-specific cap under the same lock. `ai_plan_required` /
+       *  `plan_unknown` (MOTIR-6909): the org has no paid AI plan, or it could
+       *  not be read — a shared-pool workload is paid-AI-plan only. */
       reason:
+        | 'ai_plan_required'
+        | 'plan_unknown'
         | 'org_pool'
         | 'fleet_ceiling'
         | 'organization_required'
@@ -146,7 +155,33 @@ export function orgPoolDetail(census: FleetInFlightCensus, pool: number): string
 export const FLEET_KILL_SWITCH_DETAIL =
   'the fleet kill switch is engaged (MOTIR_FLEET_MAX_IN_FLIGHT=0): nothing boots';
 
+/** A plan-gate deferral, in the shape every fleet gate returns. */
+export type AiPlanDeferral = {
+  outcome: 'deferred';
+  reason: 'ai_plan_required' | 'plan_unknown';
+  detail: string;
+};
+
 export const fleetCeilingService = {
+  /**
+   * The paid-AI-plan gate every shared-pool admission asks FIRST (MOTIR-6909):
+   * plan, then pool, then coverage. Null when the org may proceed; otherwise the
+   * deferral to return. FAIL-CLOSED: an unreadable plan defers `plan_unknown`.
+   * Motir's own orgs (`isMeta` / `internalBilling`) always pass, with no remote
+   * read — `aiPlanGateService` says why.
+   */
+  async planDeferral(organizationId: string): Promise<AiPlanDeferral | null> {
+    const plan = await aiPlanGateService.hasPaidAiPlan(organizationId);
+    if (plan === true) return null;
+    return plan === 'unknown'
+      ? { outcome: 'deferred', reason: 'plan_unknown', detail: PLAN_UNKNOWN_ADMISSION_DETAIL }
+      : {
+          outcome: 'deferred',
+          reason: 'ai_plan_required',
+          detail: AI_PLAN_REQUIRED_ADMISSION_DETAIL,
+        };
+  },
+
   /**
    * How many containers the WHOLE FLEET is holding, across every registered
    * workload and every organisation — the OPERATOR's reading (the platform
@@ -269,6 +304,12 @@ export const fleetCeilingService = {
     }
 
     const shared = FLEET_WORKLOADS[request.workload].pool === 'shared';
+    // The shared pool is paid-AI-plan only (MOTIR-6909). An `own`-pool workload
+    // (the agent instances) asks its own plan question at create and wake.
+    if (shared) {
+      const refused = await this.planDeferral(request.organizationId);
+      if (refused) return refused;
+    }
     // An `own`-pool workload is bounded by its guard alone and never reads the
     // org's pool (AMENDMENT 2 of `agent-instances.md`).
     const pool = shared ? await this.resolveOrgPool(request.organizationId) : null;

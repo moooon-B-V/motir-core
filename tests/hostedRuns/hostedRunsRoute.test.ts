@@ -9,6 +9,7 @@ import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { adminDb } from '../helpers/adminDb';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // `POST /api/work-items/[id]/hosted-runs` (Story MOTIR-683 · MOTIR-690) — the
@@ -127,6 +128,8 @@ function post(key: string, body: unknown): Promise<Response> {
     { params: Promise.resolve({ id: key }) },
   );
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   await truncateAuthTables();

@@ -22,6 +22,7 @@ import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // THE INDEX ADMISSION CAP against real Postgres (Story MOTIR-1981 · MOTIR-1990) —
 // `docs/decisions/code-graph-index-fleet.md` §7 · §7.2.
@@ -170,6 +171,8 @@ function stubMotirAi(balance = 1_000): void {
     }),
   );
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   await truncateAuthTables();

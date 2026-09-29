@@ -478,8 +478,6 @@ describe('the FIRST settle wins', () => {
     const { intentId } = await seedIntent(fx);
     await fleetStopService.stopOrganization(fx.organizationId, 'credits_exhausted');
 
-    const { ciRunnerProvisioningIntentRepository } =
-      await import('@/lib/repositories/ciRunnerProvisioningIntentRepository');
     const settled = await withSystemContext((tx) =>
       ciRunnerProvisioningIntentRepository.settle(
         intentId,

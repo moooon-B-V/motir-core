@@ -33,6 +33,7 @@ import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // THE STORY GATE for Motir's ephemeral CI runner fleet (Story MOTIR-1916 ·
 // MOTIR-1927) — the coverage the story's SUBTASKS structurally cannot give
@@ -291,6 +292,8 @@ async function statusOf(intentId: string): Promise<string> {
   });
   return row.status;
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe(

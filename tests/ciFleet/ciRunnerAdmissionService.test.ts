@@ -15,6 +15,7 @@ import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // THE PROVISIONING GATE against real Postgres (Story MOTIR-1916 · MOTIR-1922).
 //
@@ -152,6 +153,8 @@ async function statusOf(intentId: string): Promise<string> {
   });
   return row.status;
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   await truncateAuthTables();

@@ -106,6 +106,9 @@ const SLOT_TTL_MARGIN_SECONDS = 300;
 /** Why an index container was not admitted. Every one of these means WAIT — the
  *  caller queues and asks again. None of them means "drop this index". */
 export type IndexAdmissionDeferralReason =
+  /** The organisation has no paid AI plan, or it could not be read (MOTIR-6909). */
+  | 'ai_plan_required'
+  | 'plan_unknown'
   /** ANOTHER RUN is already indexing this (repo × project) — MOTIR-2160. Not a
    *  cap at all: the unit of work is taken, and a second container for it would
    *  be waste at best and a stale pointer at worst. Waiting is exactly right —
@@ -305,6 +308,9 @@ export const codeGraphIndexAdmissionService = {
     if (fleetKillSwitchEngaged()) {
       return { outcome: 'deferred', reason: 'fleet_ceiling', detail: FLEET_KILL_SWITCH_DETAIL };
     }
+    // The shared pool is paid-AI-plan only (MOTIR-6909): plan, then pool.
+    const refused = await fleetCeilingService.planDeferral(request.organizationId);
+    if (refused) return refused;
     // Read under the org GUC, before the lock (`fleetCeilingService.resolveOrgPool`).
     const pool = await fleetCeilingService.resolveOrgPool(request.organizationId);
     if (pool === null) {

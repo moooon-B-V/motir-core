@@ -66,6 +66,11 @@ import {
 /** Why an intent was not admitted. Every one of these leaves the intent PENDING,
  *  so the provisioning sweep retries it — a deferral, never a rejection. */
 export type AdmissionDeferralReason =
+  /** The organisation has no paid AI plan (MOTIR-6909) — the fleet is
+   *  paid-AI-plan only. */
+  | 'ai_plan_required'
+  /** The organisation's AI plan could not be read. FAIL-CLOSED. */
+  | 'plan_unknown'
   /** The intent's organisation already holds its whole pool (§2). Only that org
    *  waits. */
   | 'org_pool'
@@ -122,6 +127,10 @@ export const ciRunnerAdmissionService = {
     if (fleetKillSwitchEngaged()) {
       return { outcome: 'deferred', reason: 'fleet_ceiling', detail: FLEET_KILL_SWITCH_DETAIL };
     }
+
+    // ── 1b · THE PAID-AI-PLAN GATE (MOTIR-6909) — plan, then pool, then credits ─
+    const refused = await fleetCeilingService.planDeferral(intent.organizationId);
+    if (refused) return refused;
 
     const pool = await fleetCeilingService.resolveOrgPool(intent.organizationId);
     if (pool === null) {

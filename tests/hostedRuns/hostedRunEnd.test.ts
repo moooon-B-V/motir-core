@@ -27,6 +27,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // A HOSTED RUN ENDS CLEANLY (Story MOTIR-683 · MOTIR-6450) — every way a run
@@ -271,6 +272,8 @@ async function expectNothingAlive(dispatchRunId: string): Promise<void> {
   expect(revokedGitTokens).toEqual(['ghs_run_token']);
   expect(await adminDb.dispatchRunGitCredential.count({ where: { dispatchRunId } })).toBe(0);
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   await truncateAuthTables();

@@ -26,6 +26,7 @@ import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // THE PER-ORGANISATION FLEET POOL against real Postgres (Story MOTIR-6906 ·
 // MOTIR-6907, re-cutting MOTIR-1916 · MOTIR-1997;
@@ -162,6 +163,8 @@ async function census(): Promise<FleetInFlightCensus> {
 async function orgCensus(fx: Fixture, at: Date = NOW): Promise<FleetInFlightCensus> {
   return withSystemContext((tx) => fleetCeilingService.orgCensus(fx.organizationId, at, tx));
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   await truncateAuthTables();
