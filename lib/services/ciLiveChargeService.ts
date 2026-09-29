@@ -9,8 +9,10 @@ import { ciLiveAccrualRepository } from '@/lib/repositories/ciLiveAccrualReposit
 import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
+import { fleetStopService } from '@/lib/services/fleetStopService';
 import { isCiMeteringEnabled } from '@/lib/ciMetering/config';
 import { periodStartFor } from '@/lib/ciMetering/period';
+import { CI_DEBIT_PERIOD_MINUTES } from '@/lib/ciMetering/allowance';
 
 // CI IS DEBITED WHILE IT RUNS (Story MOTIR-6906 · MOTIR-6910) —
 // `docs/decisions/fleet-per-org-pool.md` §3.
@@ -51,7 +53,7 @@ import { periodStartFor } from '@/lib/ciMetering/period';
 // and charges it on the next tick that can").
 
 /** The debit period (§3). The job's cron fires on the same boundary. */
-export const LIVE_CHARGE_PERIOD_MS = 5 * 60_000;
+export const LIVE_CHARGE_PERIOD_MS = CI_DEBIT_PERIOD_MINUTES * 60_000;
 
 /** The start of the debit period containing `at` — the idempotency key's clock. */
 export function tickStartFor(at: Date): Date {
@@ -79,6 +81,8 @@ export type LiveChargeTickResult =
       /** Containers whose accrual threw — logged, retried next tick. */
       failures: number;
       organizations: LiveChargeOrgResult[];
+      /** Organisations this tick found at zero and stopped (MOTIR-6911). */
+      stopped: string[];
     };
 
 function detailOf(err: unknown): string {
@@ -127,6 +131,15 @@ export const ciLiveChargeService = {
       });
     }
 
+    // ── AT ZERO, THE ORG STOPS (§3–§4, MOTIR-6911) — in the same tick ─────────
+    // Every org still running a container, not only those that accrued a whole
+    // minute this tick: an org already at zero with a container a few seconds old
+    // must not wait a period for its first minute.
+    const stopped: string[] = [];
+    for (const organizationId of new Set(live.map((intent) => intent.organizationId))) {
+      if (await this.stopIfAtZero(organizationId, now)) stopped.push(organizationId);
+    }
+
     return {
       outcome: 'ticked',
       tickStart: tickStart.toISOString(),
@@ -134,6 +147,7 @@ export const ciLiveChargeService = {
       accrued,
       failures,
       organizations,
+      stopped,
     };
   },
 
@@ -219,6 +233,43 @@ export const ciLiveChargeService = {
         detail: detailOf(err),
       });
       return 'charge_failed';
+    }
+  },
+
+  /**
+   * Stop ONE org's fleet if this period's debit left it at zero: its included
+   * minutes spent and its balance ≤ 0 — the shipped `ci_credits_exhausted`
+   * state, read through the same service the billing panel and the Actions pause
+   * read, so all three agree on when an org is at zero. The Actions pause
+   * (`ciActionsGateService`) converges from that same state as it does today.
+   *
+   * ⚠️ AN UNREADABLE BALANCE STOPS NOTHING (§3). `resolveState` answers a null
+   * balance as not exhausted, and that is the property wanted here: stopping
+   * every org's running CI because motir-ai is down is the outage the record
+   * refuses to cause. New work is refused at admission instead.
+   *
+   * Never throws: a failed read or a failed stop is logged and the next tick
+   * decides again — `stopOrganization` is idempotent.
+   */
+  async stopIfAtZero(organizationId: string, now: Date): Promise<boolean> {
+    try {
+      const state = await ciAllowanceService.getEntitlementState(organizationId, now);
+      if (state.state !== 'ci_credits_exhausted') return false;
+      const result = await fleetStopService.stopOrganization(organizationId, 'credits_exhausted');
+      console.warn('[ciLiveChargeService] an organization reached zero — its fleet was stopped', {
+        organizationId,
+        ...result,
+      });
+      return true;
+    } catch (err) {
+      console.error(
+        '[ciLiveChargeService] could not stop an organization at zero — retried next tick',
+        {
+          organizationId,
+          detail: detailOf(err),
+        },
+      );
+      return false;
     }
   },
 };

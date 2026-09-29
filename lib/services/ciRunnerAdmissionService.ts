@@ -6,6 +6,7 @@ import {
   FLEET_ADMISSION_SCOPE,
 } from '@/lib/repositories/ciFleetAdmissionLockRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
+import { resolveAdmissionCoverage } from '@/lib/ciMetering/allowance';
 import { fleetKillSwitchEngaged } from '@/lib/ciFleet/limits';
 import {
   fleetCeilingService,
@@ -31,10 +32,14 @@ import {
 //      and never because another org's did. It replaces MOTIR-1922's per-project
 //      tier caps, which are retired (§6): how an org shares its pool between its
 //      own projects is its own business.
-//   3. THE CREDIT REFUSAL — `ci_credits_exhausted` declines to boot. The state
-//      comes from the SHIPPED `ciAllowanceService.getEntitlementState` and is
-//      never re-derived here, so the billing panel, MOTIR-1907's Actions pause,
-//      and this gate cannot come to disagree about whether an org is exhausted.
+//   3. ADMISSION BY COVERAGE (§3, MOTIR-6911) — the org's remaining included
+//      minutes plus its balance must pay for every charged container it runs
+//      AND this one, for one debit period (`resolveAdmissionCoverage`). The
+//      numbers come from the SHIPPED `ciAllowanceService.getEntitlementState`,
+//      so the billing panel, MOTIR-1907's Actions pause and this gate read the
+//      same pool, consumption and balance. An exhausted org still defers
+//      `ci_credits_exhausted`; one that is not exhausted but cannot cover
+//      running + 1 defers `credits_insufficient`.
 //
 // ⚠️ WHY THIS EXISTS AT ALL — the safety valve that was removed. Moving off
 // GitHub-hosted runners removed the account-wide 60-concurrent-job cap, which
@@ -45,10 +50,12 @@ import {
 // what stops the spend.
 //
 // ── THE DELIBERATE ASYMMETRY ────────────────────────────────────────────────
-// Guard 3 fails OPEN today: if the entitlement read throws, BOOT and log (the
-// fail-closed credit admission of §3 is MOTIR-6911's). Guards 1–2 fail CLOSED: if
-// the org's pool or its count cannot be established, do NOT boot — a queued job
-// is recoverable while a container nothing bounds is not.
+// There is none any more (MOTIR-6911). Every guard fails CLOSED: an org's pool,
+// its count or its balance that cannot be established means do NOT boot — a
+// queued job is recoverable while a container nothing pays for is not. The
+// balance is the one that used to fail open; it now defers `balance_unavailable`
+// (§4), while the billing panel's own read keeps tolerating a null balance for
+// display. Nothing already RUNNING is stopped for an unreadable balance.
 //
 // ── WHY THE CREDIT READ IS NOT INSIDE THE LOCKED TRANSACTION ────────────────
 // It cannot be, and it should not be. `getEntitlementState` opens its own
@@ -78,6 +85,11 @@ export type AdmissionDeferralReason =
   | 'fleet_ceiling'
   /** The org is past its pool AND out of credits. */
   | 'ci_credits_exhausted'
+  /** The org's remaining minutes and credits do not cover its running charged
+   *  containers plus this one for one debit period (§3). */
+  | 'credits_insufficient'
+  /** The org's credit balance could not be read. FAIL-CLOSED (§4). */
+  | 'balance_unavailable'
   /** The gate itself could not decide. FAIL-CLOSED: an unestablished count is
    *  treated as a full pool, not an empty one. */
   | 'gate_unavailable';
@@ -97,6 +109,24 @@ export type AdmissionVerdict =
 export function orgPoolCiDetail(inFlight: number, pool: number): string {
   return `Your organization is running ${inFlight} of its ${pool} CI containers. This job starts when one finishes.`;
 }
+
+/** The words a `credits_insufficient` deferral carries (`fleet-per-org-pool.md` §4). */
+export const CREDITS_INSUFFICIENT_DETAIL =
+  "Your organization's remaining CI minutes and credits do not cover another container. Add credits to run it.";
+
+/** The words a `balance_unavailable` deferral carries (`fleet-per-org-pool.md` §4). */
+export const BALANCE_UNAVAILABLE_DETAIL =
+  "Motir could not read this organization's credit balance. The job starts as soon as it can.";
+
+/** The words a `ci_credits_exhausted` deferral carries. */
+export const CREDITS_EXHAUSTED_DETAIL = 'the org is past its included pool and out of credits';
+
+/** A credit deferral, as admission returns it. */
+export type CreditDeferral = {
+  outcome: 'deferred';
+  reason: 'ci_credits_exhausted' | 'credits_insufficient' | 'balance_unavailable';
+  detail: string;
+};
 
 function detailOf(err: unknown): string {
   return err instanceof Error ? err.message.slice(0, 300) : 'unknown';
@@ -148,6 +178,9 @@ export const ciRunnerAdmissionService = {
     }
 
     // ── 2 · The org's pool, and the claim — one locked transaction ────────────
+    // The org's CHARGED containers at the decision — its CI runners and hosted
+    // runs, which draw on the balance coverage is checked against (§3).
+    let chargedRunning = 0;
     let claimed: AdmissionVerdict;
     try {
       claimed = await withSystemContext(async (tx) => {
@@ -175,6 +208,8 @@ export const ciRunnerAdmissionService = {
         const took = await intents.claimPending(intent.id, tx);
         if (!took) return { outcome: 'already_claimed' as const };
 
+        chargedRunning = census.byWorkload.ci_runner + census.byWorkload.hosted_agent;
+
         return { outcome: 'admitted' as const, orgInFlight: census.total, orgPool: pool };
       });
     } catch (err) {
@@ -195,47 +230,83 @@ export const ciRunnerAdmissionService = {
 
     if (claimed.outcome !== 'admitted') return claimed;
 
-    // ── 3 · the credit refusal, on the claim we now hold ──────────────────────
-    const exhausted = await this.isCreditsExhausted(intent.organizationId);
-    if (exhausted) {
+    // ── 3 · admission by coverage, on the claim we now hold ───────────────────
+    const credit = await this.creditDeferral(intent.organizationId, chargedRunning);
+    if (credit) {
       // Give the slot back. A refusal must not leave the intent occupying
       // capacity it is not using.
       await this.releaseClaim(intent.id);
-      return {
-        outcome: 'deferred',
-        reason: 'ci_credits_exhausted',
-        detail: 'the org is past its included pool and out of credits',
-      };
+      return credit;
     }
 
     return claimed;
   },
 
   /**
-   * Is this org in the `ci_credits_exhausted` state?
+   * May this org start one more charged container, given `chargedRunning`
+   * already running? Null when it may; otherwise the deferral.
    *
-   * ⚠️ FAILS OPEN, and the log is the point: a false here can mean either "the
-   * org has credit" or "Motir could not tell", and only the log distinguishes
-   * them. Refusing on a failed read would turn a motir-ai blip into every
-   * tenant's CI stopping, which is precisely the outcome `getEntitlementState`'s
-   * own `balance: null` treatment exists to avoid — this gate must not undo it
-   * one layer up.
+   * ⚠️ FAILS CLOSED (§3–§4, MOTIR-6911). A null balance — motir-ai unreachable —
+   * defers `balance_unavailable`, and so does an entitlement read that throws:
+   * either way nobody can say the container will be paid for. It USED to fail
+   * open, on the argument that a motir-ai blip must not stop every tenant's CI;
+   * the record keeps that half (nothing already running is stopped) and drops
+   * the other (nothing new starts on a balance nobody could read).
    *
    * Off-cloud and the meta org need no special case HERE: the shipped service
-   * answers `bypassed` for both, which is not `ci_credits_exhausted` and
-   * therefore boots. Re-deriving either condition locally is what the card
-   * forbids ("do not re-derive the state").
+   * answers `bypassed` for both, which admits. Re-deriving either condition
+   * locally is what MOTIR-1922 forbade.
    */
-  async isCreditsExhausted(organizationId: string): Promise<boolean> {
+  async creditDeferral(
+    organizationId: string,
+    chargedRunning: number,
+  ): Promise<CreditDeferral | null> {
+    let state: Awaited<ReturnType<typeof ciAllowanceService.getEntitlementState>>;
     try {
-      const state = await ciAllowanceService.getEntitlementState(organizationId, new Date());
-      return state.state === 'ci_credits_exhausted';
+      state = await ciAllowanceService.getEntitlementState(organizationId, new Date());
     } catch (err) {
       console.error(
-        '[ciRunnerAdmissionService] could not read CI entitlement — booting anyway (fail-open)',
+        '[ciRunnerAdmissionService] could not read CI entitlement — not booting (fail-closed)',
         { organizationId, detail: detailOf(err) },
       );
-      return false;
+      return {
+        outcome: 'deferred',
+        reason: 'balance_unavailable',
+        detail: BALANCE_UNAVAILABLE_DETAIL,
+      };
+    }
+    if (state.state === 'bypassed') return null;
+
+    const coverage = resolveAdmissionCoverage({
+      consumptionMinutes: state.consumedMinutes,
+      poolMinutes: state.poolMinutes,
+      balance: state.balance,
+      chargedRunning,
+    });
+    switch (coverage) {
+      case 'covered':
+        return null;
+      case 'ci_credits_exhausted':
+        return {
+          outcome: 'deferred',
+          reason: 'ci_credits_exhausted',
+          detail: CREDITS_EXHAUSTED_DETAIL,
+        };
+      case 'credits_insufficient':
+        return {
+          outcome: 'deferred',
+          reason: 'credits_insufficient',
+          detail: CREDITS_INSUFFICIENT_DETAIL,
+        };
+      case 'balance_unavailable':
+        console.error('[ciRunnerAdmissionService] the credit balance is unreadable — not booting', {
+          organizationId,
+        });
+        return {
+          outcome: 'deferred',
+          reason: 'balance_unavailable',
+          detail: BALANCE_UNAVAILABLE_DETAIL,
+        };
     }
   },
 

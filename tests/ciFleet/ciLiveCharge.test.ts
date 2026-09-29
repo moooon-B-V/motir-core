@@ -6,6 +6,8 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { ciLiveChargeService, tickStartFor } from '@/lib/services/ciLiveChargeService';
+import { fleetStopService } from '@/lib/services/fleetStopService';
+import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { ciMinutesMeterService } from '@/lib/services/ciMinutesMeterService';
 import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -145,7 +147,7 @@ interface Boundary {
  * is) plus GitHub's token mint and jobs read, for the completion meter.
  */
 function stubBoundaries(
-  options: { debitDown?: boolean; jobMinutes?: number } = {},
+  options: { debitDown?: boolean; jobMinutes?: number; balances?: Record<string, number> } = {},
 ): Boundary & { fetchMock: ReturnType<typeof vi.fn> } {
   stubBothAppCredentials();
   const debits: Record<string, unknown>[] = [];
@@ -167,6 +169,11 @@ function stubBoundaries(
         exhausted: false,
         idempotent: replay,
       });
+    }
+    if (u.includes('/v1/usage')) {
+      // The balance read (`getEntitlementState`), per core organisation.
+      const org = new URL(u).searchParams.get('coreOrganizationId') ?? '';
+      return json({ balance: options.balances?.[org] ?? 1_000 });
     }
     if (u.includes('/access_tokens')) {
       return json({ token: 'ghs_x', expires_at: new Date(Date.now() + 3_600_000).toISOString() });
@@ -499,6 +506,82 @@ describe('the live charge — a run is charged while it runs (§3)', () => {
   it('is inert off-cloud', async () => {
     vi.stubEnv('MOTIR_CLOUD', 'false');
     expect(await ciLiveChargeService.tick(at(5))).toEqual({ outcome: 'disabled' });
+  });
+});
+
+describe('at zero, the org STOPS — in the same tick (MOTIR-6911, §3–§4)', () => {
+  async function exhaustPool(fx: Fixture): Promise<void> {
+    await withSystemContext((tx) =>
+      ciPeriodUsageRepository.incrementForPeriod(
+        {
+          workspaceId: fx.workspaceId,
+          organizationId: fx.organizationId,
+          periodStart: JULY_2026,
+          billableMinutes: POOL_MINUTES,
+          rawWallClockSeconds: POOL_MINUTES * 60,
+          linearEquivalentMinutes: POOL_MINUTES,
+        },
+        tx,
+      ),
+    );
+  }
+
+  it('stops the org the tick drives to zero, and leaves another org running', async () => {
+    const broke = await seedTenant();
+    const paying = await seedTenant();
+    await seedRunningIntent(broke);
+    await seedRunningIntent(paying);
+    await exhaustPool(broke);
+    await exhaustPool(paying);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const stop = vi
+      .spyOn(fleetStopService, 'stopOrganization')
+      .mockResolvedValue({ runsCancelled: 1, containersStopped: 1, failures: 0 });
+    stubBoundaries({ balances: { [broke.organizationId]: 0, [paying.organizationId]: 500 } });
+
+    const result = await ciLiveChargeService.tick(at(5));
+
+    expect(result).toMatchObject({ outcome: 'ticked', stopped: [broke.organizationId] });
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalledWith(broke.organizationId, 'credits_exhausted');
+  });
+
+  it('stops nothing while the org is inside its included minutes, whatever the balance', async () => {
+    const fx = await seedTenant();
+    await seedRunningIntent(fx);
+    const stop = vi.spyOn(fleetStopService, 'stopOrganization');
+    stubBoundaries({ balances: { [fx.organizationId]: 0 } });
+
+    expect(await ciLiveChargeService.tick(at(5))).toMatchObject({ stopped: [] });
+    expect(stop).not.toHaveBeenCalled();
+  });
+
+  it('an UNREADABLE balance stops nothing already running (§3)', async () => {
+    const fx = await seedTenant();
+    await seedRunningIntent(fx);
+    await exhaustPool(fx);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const stop = vi.spyOn(fleetStopService, 'stopOrganization');
+    stubBoundaries();
+    vi.spyOn(ciAllowanceService, 'getEntitlementState').mockRejectedValue(new Error('boom'));
+
+    expect(await ciLiveChargeService.tick(at(5))).toMatchObject({ stopped: [] });
+    expect(stop).not.toHaveBeenCalled();
+  });
+
+  it('a stop that throws is logged and retried next tick, never thrown out', async () => {
+    const fx = await seedTenant();
+    await seedRunningIntent(fx);
+    await exhaustPool(fx);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(fleetStopService, 'stopOrganization').mockRejectedValue('github down');
+    stubBoundaries({ balances: { [fx.organizationId]: 0 } });
+
+    expect(await ciLiveChargeService.tick(at(5))).toMatchObject({ stopped: [] });
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('could not stop an organization at zero'),
+      expect.objectContaining({ organizationId: fx.organizationId, detail: 'unknown' }),
+    );
   });
 });
 

@@ -4,7 +4,11 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { ciRunnerAdmissionService } from '@/lib/services/ciRunnerAdmissionService';
+import {
+  ciRunnerAdmissionService,
+  BALANCE_UNAVAILABLE_DETAIL,
+  CREDITS_INSUFFICIENT_DETAIL,
+} from '@/lib/services/ciRunnerAdmissionService';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageRepository';
@@ -420,9 +424,9 @@ describe('guard 3 — the ci_credits_exhausted refusal', () => {
     expect((await ciRunnerAdmissionService.admit(intent)).outcome).toBe('admitted');
   });
 
-  // FAIL-OPEN, asserted by making the read throw. Motir's own outage must never
-  // read to a user as "you are out of credits".
-  it('BOOTS AND LOGS when the entitlement read throws', async () => {
+  // FAIL-CLOSED since MOTIR-6911 (`fleet-per-org-pool.md` §3–§4): an
+  // entitlement read that throws means nobody can say the container is paid for.
+  it('DEFERS balance_unavailable AND LOGS when the entitlement read throws', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(ciAllowanceService, 'getEntitlementState').mockRejectedValue(
       new Error('motir-ai unreachable'),
@@ -430,9 +434,104 @@ describe('guard 3 — the ci_credits_exhausted refusal', () => {
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
 
-    expect((await ciRunnerAdmissionService.admit(intent)).outcome).toBe('admitted');
-    expect(await statusOf(intent.id)).toBe('provisioning');
+    expect(await ciRunnerAdmissionService.admit(intent)).toEqual({
+      outcome: 'deferred',
+      reason: 'balance_unavailable',
+      detail: BALANCE_UNAVAILABLE_DETAIL,
+    });
+    expect(await statusOf(intent.id)).toBe('pending');
     expect(error).toHaveBeenCalled();
+  });
+});
+
+// ── Admission by coverage (MOTIR-6911) ──────────────────────────────────────
+
+describe('admission by COVERAGE — running + 1 for one debit period (§3)', () => {
+  /** `n` of the org's CI runners already in flight — the charged containers. */
+  async function running(fx: Fixture, n: number): Promise<void> {
+    for (let i = 0; i < n; i += 1) await seedIntent(fx, { status: 'running' });
+  }
+
+  it('ADMITS at exactly running + 1 periods of credit, and DEFERS one credit less', async () => {
+    const fx = await seedTenant();
+    await meter(fx, POOL_FLOOR_MINUTES); // no included minutes left
+    await running(fx, 2);
+
+    // (2 running + 1) × 5 minutes = 15 credits.
+    stubMotirAi(15);
+    const covered = await seedIntent(fx);
+    expect((await ciRunnerAdmissionService.admit(covered)).outcome).toBe('admitted');
+
+    // Now three run: (3 + 1) × 5 = 20 is needed, and 19 is one short.
+    stubMotirAi(19);
+    const short = await seedIntent(fx);
+    expect(await ciRunnerAdmissionService.admit(short)).toEqual({
+      outcome: 'deferred',
+      reason: 'credits_insufficient',
+      detail: CREDITS_INSUFFICIENT_DETAIL,
+    });
+    // The claim went back: the deferred intent occupies no slot.
+    expect(await statusOf(short.id)).toBe('pending');
+  });
+
+  it('counts the REMAINING included minutes before the balance', async () => {
+    const fx = await seedTenant();
+    await meter(fx, POOL_FLOOR_MINUTES - 7); // 7 included minutes left
+    await running(fx, 1);
+
+    // (1 + 1) × 5 = 10 = 7 minutes + 3 credits.
+    stubMotirAi(3);
+    expect((await ciRunnerAdmissionService.admit(await seedIntent(fx))).outcome).toBe('admitted');
+
+    const fx2 = await seedTenant();
+    await meter(fx2, POOL_FLOOR_MINUTES - 7);
+    await running(fx2, 1);
+    stubMotirAi(2);
+    expect(await ciRunnerAdmissionService.admit(await seedIntent(fx2))).toMatchObject({
+      reason: 'credits_insufficient',
+    });
+  });
+
+  it('another org’s running containers never count against this org’s coverage', async () => {
+    const busy = await seedTenant();
+    await running(busy, 5);
+    const fx = await seedTenant();
+    await meter(fx, POOL_FLOOR_MINUTES);
+
+    stubMotirAi(5); // exactly (0 + 1) × 5
+    expect((await ciRunnerAdmissionService.admit(await seedIntent(fx))).outcome).toBe('admitted');
+  });
+
+  it('DEFERS balance_unavailable when motir-ai cannot be reached — whatever the minutes left', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('ECONNREFUSED');
+      }),
+    );
+    const fx = await seedTenant();
+    await meter(fx, 10); // well inside the pool
+    const intent = await seedIntent(fx);
+
+    expect(await ciRunnerAdmissionService.admit(intent)).toEqual({
+      outcome: 'deferred',
+      reason: 'balance_unavailable',
+      detail: BALANCE_UNAVAILABLE_DETAIL,
+    });
+    expect(await statusOf(intent.id)).toBe('pending');
+
+    // ...while the billing panel's read still renders the org: a null balance,
+    // not exhausted.
+    const state = await ciAllowanceService.getEntitlementState(fx.organizationId, new Date());
+    expect(state).toMatchObject({ balance: null, state: 'within_allowance' });
+  });
+
+  it('the META org is bypassed — no coverage is asked of it', async () => {
+    const fx = await seedTenant({ isMeta: true });
+    await meter(fx, POOL_FLOOR_MINUTES + 500);
+    stubMotirAi(0);
+    expect((await ciRunnerAdmissionService.admit(await seedIntent(fx))).outcome).toBe('admitted');
   });
 });
 
