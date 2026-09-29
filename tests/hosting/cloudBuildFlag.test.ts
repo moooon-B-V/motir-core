@@ -75,6 +75,10 @@ const BILLING_SURFACES: ReadonlyArray<readonly [file: string, why: string]> = [
     'hibernates a running instance its organisation’s credits now refuse (MOTIR-6873, agent-instances.md §2) — the same pre-flight, asked by the sweep',
   ],
   [
+    'lib/services/agentInstanceStorageChargeService.ts',
+    'charges every agent instance its storage once per UTC day in credits (MOTIR-6919, agent-instance-storage.md §2) — the interval charge’s billing-build switch; a self-hosted build charges nothing',
+  ],
+  [
     'lib/services/platformOrgIndexCostService.ts',
     'the org page’s Index & fleet cost card (MOTIR-5341) — the same billing-build switch as the fleet meter it reads',
   ],
