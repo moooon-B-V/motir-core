@@ -1001,6 +1001,22 @@ export const projectRepository = {
   },
 
   /**
+   * The project's two MERGE-ASKING settings together — `prMergeMode` and the review
+   * agent's switch (Story MOTIR-1626 · MOTIR-6819; `approval-gates.md` §12.2/§12.2a). Read
+   * by the gate-set loader, which needs both to answer which question a green set asks.
+   */
+  async findMergeSettings(
+    id: string,
+
+    tx: Prisma.TransactionClient,
+  ): Promise<{ prMergeMode: PrMergeMode; reviewAgentEnabled: boolean } | null> {
+    return tx.project.findUnique({
+      where: { id },
+      select: { prMergeMode: true, reviewAgentEnabled: true },
+    });
+  },
+
+  /**
    * Write a DECIDED merge mode — a person's choice — and stamp it. Unconditional:
    * a person may change their own decision as often as they like. `tx` REQUIRED;
    * the caller has already resolved the project and asserted the permission.

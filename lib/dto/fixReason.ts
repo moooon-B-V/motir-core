@@ -71,8 +71,9 @@ export interface FixDetailDto {
    *  cut to `FIX_NOTE_PREVIEW_MAX` characters; null when the note is empty. */
   notePreview: string | null;
   /** `changes_requested`: which gate the refusal was on — the approve-to-merge question
-   *  or a story's acceptance video. Null on the pull-request reasons. */
-  gate: 'pull_request_approval' | 'acceptance_result' | null;
+   *  a story's acceptance video, or the REVIEW AGENT's review (MOTIR-6819). Null on the
+   *  pull-request reasons. */
+  gate: 'pull_request_approval' | 'acceptance_result' | 'agent_review' | null;
   /** `run_died`: when the dead run was last heard from, ISO-8601 — the continue view's
    *  `deadRun.lastHeardAt`. */
   lastHeardAt: string | null;

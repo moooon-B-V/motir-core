@@ -2,7 +2,10 @@ import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { gateSetFor, reconcileGatesFor, type GateSetSignals } from './gateSetFor';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import {
+  approvalGateRepository,
+  type LiveSupersedeCause,
+} from '@/lib/repositories/approvalGateRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 
 // RAISE and WITHDRAW the `pull_request_approval` gate (Story MOTIR-4909 · MOTIR-5482;
@@ -26,6 +29,26 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 
 const KIND = 'pull_request_approval' as const;
 const ACCEPTANCE_KIND = 'acceptance_result' as const;
+const REVIEW_KIND = 'agent_review' as const;
+
+/**
+ * Retire the card's awaiting REVIEW AGENT question with the withdrawal's own cause (Story
+ * MOTIR-1626 · MOTIR-6819; `approval-gates.md` §12.5). The review is about exactly the
+ * commits the approve-and-merge gate would be about (§12.1's one stamp), so every event
+ * that withdraws one withdraws the other, under the same cause and touching no decision
+ * field. A decided review is history and is never touched. The next green raises a fresh
+ * review at the new version (the re-ask below).
+ *
+ * The review RUN in flight for it is cancelled by MOTIR-6820 (§12.5's third bullet),
+ * which owns the run; this writes the gate only.
+ */
+async function withdrawAgentReview(
+  workItemId: string,
+  cause: LiveSupersedeCause,
+  tx: Prisma.TransactionClient,
+): Promise<number> {
+  return approvalGateRepository.supersedeAwaitingByWorkItem(workItemId, REVIEW_KIND, cause, tx);
+}
 
 /**
  * Raise the card's `awaiting` approve-and-merge gate when {@link gateSetFor} says it is
@@ -144,9 +167,27 @@ export async function withdrawPullRequestApprovalGatesOnHeadMove(
     tx,
   )) {
     const signals: GateSetSignals = { movedHead: { pullRequestId, headSha } };
-    const gate = (await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx)).find(
-      (row) => row.kind === KIND,
-    );
+    const awaitingRows = await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx);
+    const gate = awaitingRows.find((row) => row.kind === KIND);
+    // ⚠️ THE REVIEW AGENT'S QUESTION RIDES THE SAME VERSION (MOTIR-6819; §12.5). It is
+    // awaiting INSTEAD of the merge gate while the switch is on, so it is withdrawn on its
+    // own version check — before, and independently of, the merge gate's below.
+    const review = awaitingRows.find((row) => row.kind === REVIEW_KIND);
+    let reviewWithdrawn = false;
+    if (review) {
+      const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
+      const current = deliverySetVersion(
+        deliveries.map((delivery) =>
+          deliveryMemberVersion(
+            delivery,
+            delivery.githubPullRequestId === pullRequestId ? headSha : undefined,
+          ),
+        ),
+      );
+      if (current && current !== review.subjectVersion) {
+        reviewWithdrawn = (await withdrawAgentReview(workItemId, 'head_moved', tx)) > 0;
+      }
+    }
     if (!gate) {
       // No merge question to retire — but a story run's acceptance question may be
       // awaiting on its own (an `auto` project raises no merge gate), and a moved head
@@ -158,6 +199,8 @@ export async function withdrawPullRequestApprovalGatesOnHeadMove(
           'head_moved',
           tx,
         );
+        await reraiseAfterWithdrawal(workItemId, tx, signals);
+      } else if (reviewWithdrawn) {
         await reraiseAfterWithdrawal(workItemId, tx, signals);
       }
       continue;
@@ -226,6 +269,7 @@ export async function withdrawPullRequestApprovalGatesOnClose(
       'member_closed',
       tx,
     );
+    await withdrawAgentReview(workItemId, 'member_closed', tx);
     if (await acceptanceNoLongerOwed(workItemId, tx)) {
       await approvalGateRepository.supersedeAwaitingByWorkItem(
         workItemId,
@@ -261,6 +305,7 @@ export async function withdrawPullRequestApprovalGatesOnDraft(
       'member_drafted',
       tx,
     );
+    await withdrawAgentReview(workItemId, 'member_drafted', tx);
     if (await acceptanceNoLongerOwed(workItemId, tx)) {
       await approvalGateRepository.supersedeAwaitingByWorkItem(
         workItemId,
@@ -303,6 +348,7 @@ export async function withdrawPullRequestApprovalGatesOnConflict(
       'conflict',
       tx,
     );
+    await withdrawAgentReview(workItemId, 'conflict', tx);
     if (await acceptanceNoLongerOwed(workItemId, tx)) {
       await approvalGateRepository.supersedeAwaitingByWorkItem(
         workItemId,
@@ -360,6 +406,7 @@ export async function withdrawPullRequestApprovalGatesOnCiFailure(
       'ci_failed',
       tx,
     );
+    await withdrawAgentReview(workItemId, 'ci_failed', tx);
     // The acceptance question rides on the same green set (MOTIR-5903): a story run's
     // receipt is evidence for the one approve-to-merge decision, so a red build retires it
     // with the merge question under the same cause.
@@ -395,6 +442,7 @@ export async function withdrawPullRequestApprovalGateOnSetChange(
     'set_changed',
     tx,
   );
+  await withdrawAgentReview(workItemId, 'set_changed', tx);
   if (await acceptanceNoLongerOwed(workItemId, tx)) {
     await approvalGateRepository.supersedeAwaitingByWorkItem(
       workItemId,

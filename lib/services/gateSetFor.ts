@@ -27,6 +27,8 @@ import {
 } from '@/lib/mergeQueue/queueExit';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { githubPullRequestMergeRefusalRepository } from '@/lib/repositories/githubPullRequestMergeRefusalRepository';
+import { sendEvent } from '@/lib/jobs/sendEvent';
+import { deferUntilCommit } from '@/lib/workspaces/afterCommit';
 import { mergeCandidateHead } from './mergeGates';
 import { workflowsService } from './workflowsService';
 
@@ -101,6 +103,7 @@ export async function gateSetFor(
     latestAcceptanceGate,
     latestMergeGate,
     latestDecisionGate,
+    latestAgentReviewGate,
     deliveries,
     mode,
     terminalByProject,
@@ -117,8 +120,13 @@ export async function gateSetFor(
     asksDecision
       ? approvalGateRepository.findLatestByWorkItem(item.id, 'decision_approval', tx)
       : Promise.resolve(null),
+    // The review agent's question (MOTIR-6819; `approval-gates.md` §12.2) — its latest row,
+    // read beside the merge gate's so the predicate can tell a decided version from one
+    // still owed a review.
+    approvalGateRepository.findLatestByWorkItem(item.id, 'agent_review', tx),
     workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
-    projectRepository.findPrMergeMode(item.projectId, tx),
+    // The merge mode AND the review agent's switch, in one read (§12.2a).
+    projectRepository.findMergeSettings(item.projectId, tx),
     workflowsService.getTerminalStatusKeysByProjects([item.projectId], item.workspaceId, tx),
   ]);
 
@@ -240,6 +248,8 @@ export async function gateSetFor(
     latestMergeGate,
     members,
     prMergeMode: mode?.prMergeMode ?? null,
+    reviewAgentEnabled: mode?.reviewAgentEnabled ?? false,
+    latestAgentReviewGate,
     cardIsTerminal: isTerminalStatus(item, terminalByProject),
     workItemId: item.id,
     standingUnlandedOutcome,
@@ -299,7 +309,7 @@ export async function reconcileGatesFor(
     // row, so a lost race is a no-op rather than a unique-index violation that
     // would abort the caller's transaction.
     if (awaiting.some((gate) => gate.kind === owed.kind)) continue;
-    await approvalGateRepository.create(
+    const created = await approvalGateRepository.create(
       {
         workspaceId: item.workspaceId,
         projectId: item.projectId,
@@ -312,8 +322,48 @@ export async function reconcileGatesFor(
       tx,
     );
     raised.push(owed.kind);
+    if (created.kind === 'agent_review') requestAgentReviewAfterCommit(created);
   }
   return raised;
+}
+
+/**
+ * ASK FOR THE REVIEW RUN once the transaction that raised this `agent_review` gate has
+ * committed (Story MOTIR-1626 · MOTIR-6819; `approval-gates.md` §12.2,
+ * `hosted-agent-run.md` §8.1 — *one review run per awaiting gate, started by the server
+ * from the gate's raise*).
+ *
+ * ⚠️ HERE, AT THE ONE CREATOR, so every raise path emits it — the promotion, a status move
+ * into review, the reconcile tick, a queue exit, every withdrawal's re-raise — without a
+ * return value threaded out of a dozen callers' transactions. It is deferred through the
+ * transaction helpers' after-commit scope (`lib/workspaces/afterCommit.ts`): a job
+ * enqueued before the commit could look for a gate that then rolled back.
+ *
+ * ⚠️ A RAISE OUTSIDE ANY HELPER SCOPE EMITS NOTHING, and says so. Only a bare
+ * `db.$transaction` gets here unscoped (the RLS guards keep those rare, and no production
+ * raise path uses one): the gate still stands awaiting on the card, and the person it is
+ * routed to can start the review from it (§12.6's *Review again*, MOTIR-6820).
+ */
+function requestAgentReviewAfterCommit(gate: {
+  id: string;
+  workspaceId: string;
+  workItemId: string | null;
+  subjectVersion: string | null;
+}): void {
+  const { id: gateId, workspaceId, workItemId, subjectVersion } = gate;
+  // The predicate raises the review only at a named set version, on a card.
+  /* v8 ignore next */
+  if (workItemId === null || subjectVersion === null) return;
+  const deferred = deferUntilCommit(() =>
+    sendEvent('agent-review/requested', { workspaceId, gateId, workItemId, subjectVersion }),
+  );
+  if (!deferred) {
+    console.warn(
+      '[gateSetFor] an agent_review gate was raised outside a transaction scope; ' +
+        'no review run was requested for it',
+      { gateId, workItemId },
+    );
+  }
 }
 
 /**

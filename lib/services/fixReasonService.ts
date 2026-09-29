@@ -13,6 +13,7 @@ import {
 } from '@/lib/services/workItemContinueService';
 import {
   NOTHING_TO_FIX,
+  REVIEW_AGENT_REVIEWER_NAME,
   changesRequestedOf,
   deadRunReasonOf,
   pullRequestReasonOf,
@@ -154,10 +155,15 @@ export async function deriveFixReason(
   const latest = await approvalGateRepository.findLatestDecidedByWorkItem(item.id, tx);
   const currentVersion = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
   if (latest && standingMergeRefusalOf(latest, currentVersion)) {
+    // The review AGENT's refusal names the agent, never the run's attributed user (§12.3):
+    // the row must not read as a person having reviewed the code.
+    const byAgent = latest.kind === 'agent_review';
     return changesRequestedOf(
       {
-        gate: 'pull_request_approval',
-        reviewerName: await reviewerName(latest.decidedById, latest.decidedByLabel, tx),
+        gate: byAgent ? 'agent_review' : 'pull_request_approval',
+        reviewerName: byAgent
+          ? REVIEW_AGENT_REVIEWER_NAME
+          : await reviewerName(latest.decidedById, latest.decidedByLabel, tx),
         noteMd: latest.noteMd,
       },
       total,

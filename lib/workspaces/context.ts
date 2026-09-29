@@ -1,5 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import { withAfterCommitScope } from './afterCommit';
 
 // Runtime half of the workspace-RLS pair (the DB half lives in
 // prisma/migrations/.../add_workspace_rls and .../add_work_item_rls). Every
@@ -109,17 +110,21 @@ export async function withWorkspaceContext<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
   options?: TransactionBudget,
 ): Promise<T> {
-  return db.$transaction(
-    async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
-      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
-      // Always bind app.project_id (empty string when no project is active) so
-      // the work_item project-narrowing policy's `coalesce(...) = ''` branch
-      // fires cleanly — no ambiguity between "unset" and "deliberately empty".
-      await tx.$executeRaw`SELECT set_config('app.project_id', ${ctx.projectId ?? ''}, true)`;
-      return fn(tx);
-    },
-    options ? { timeout: options.timeoutMs, maxWait: options.maxWaitMs } : undefined,
+  // The after-commit scope (`./afterCommit.ts`, MOTIR-6819): work a writer deferred
+  // runs once this transaction has committed, and never when it rolled back.
+  return withAfterCommitScope(() =>
+    db.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
+        await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
+        // Always bind app.project_id (empty string when no project is active) so
+        // the work_item project-narrowing policy's `coalesce(...) = ''` branch
+        // fires cleanly — no ambiguity between "unset" and "deliberately empty".
+        await tx.$executeRaw`SELECT set_config('app.project_id', ${ctx.projectId ?? ''}, true)`;
+        return fn(tx);
+      },
+      options ? { timeout: options.timeoutMs, maxWait: options.maxWaitMs } : undefined,
+    ),
   );
 }
 
@@ -188,10 +193,14 @@ export async function withSystemContext<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
   options?: SystemTransactionOptions,
 ): Promise<T> {
-  return db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
-    return fn(tx);
-  }, options);
+  // The after-commit scope, as in `withWorkspaceContext` — the webhook and job paths
+  // that re-raise gates open THIS context.
+  return withAfterCommitScope(() =>
+    db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
+      return fn(tx);
+    }, options),
+  );
 }
 
 /**
@@ -359,12 +368,15 @@ export async function withWorkspaceServiceContext<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
   options?: TransactionBudget,
 ): Promise<T> {
-  return db.$transaction(
-    async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
-      return fn(tx);
-    },
-    options ? { timeout: options.timeoutMs, maxWait: options.maxWaitMs } : undefined,
+  // The after-commit scope, as in `withWorkspaceContext`.
+  return withAfterCommitScope(() =>
+    db.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
+        return fn(tx);
+      },
+      options ? { timeout: options.timeoutMs, maxWait: options.maxWaitMs } : undefined,
+    ),
   );
 }
 

@@ -1,5 +1,9 @@
 import { withWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { reconcileGatesFor } from '@/lib/services/gateSetFor';
+import { evaluateAfterRaise } from '@/lib/services/pullRequestReviewSync';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { ProjectNotFoundError, ReviewAgentNeedsManualMergeError } from '@/lib/projects/errors';
 import type {
@@ -7,6 +11,7 @@ import type {
   UpdateApprovalGateSettingsInput,
 } from '@/lib/dto/approvalGateSettings';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { Prisma } from '@/generated/prisma/client';
 
 /**
  * The project's APPROVAL-GATE switches (Story MOTIR-4925 · Subtask MOTIR-5170) —
@@ -39,6 +44,45 @@ function toSettingsDTO(project: {
     acceptanceVideoEnabled: project.acceptanceVideoEnabled,
     reviewAgentEnabled: project.reviewAgentEnabled,
   };
+}
+
+/**
+ * SWITCHING THE REVIEW AGENT OFF (Story MOTIR-1626 · MOTIR-6819; `approval-gates.md` §12.5)
+ * — in the switch's own transaction, after the write: every AWAITING `agent_review` in the
+ * project is superseded `review_agent_disabled`, and each such card is reconciled so the
+ * ordinary flow is raised for its current version at once (the approve-and-merge gate,
+ * when its set is green). A DECIDED review is history and stays.
+ *
+ * ⚠️ LOCK ORDER — the gates, then each card: the order a transition and the decide door
+ * take them in. `reconcileGatesFor` relies on its caller holding the card's row lock.
+ *
+ * The review RUN in flight for a retired gate is cancelled by MOTIR-6820, which owns runs
+ * (§12.5, *"reviews in progress are cancelled"*); this writes the gates only.
+ */
+async function retireAwaitingReviews(
+  projectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<string[]> {
+  const awaiting = await approvalGateRepository.lockAwaitingByProjectAndKind(
+    projectId,
+    'agent_review',
+    tx,
+  );
+  const cards = [
+    ...new Set(awaiting.flatMap((gate) => (gate.workItemId ? [gate.workItemId] : []))),
+  ];
+  for (const workItemId of cards) {
+    await workItemRepository.lockById(workItemId, tx);
+    await approvalGateRepository.supersedeAwaitingByWorkItem(
+      workItemId,
+      'agent_review',
+      'review_agent_disabled',
+      tx,
+    );
+    const item = await workItemRepository.findById(workItemId, tx);
+    if (item) await reconcileGatesFor(item, tx);
+  }
+  return cards;
 }
 
 export const approvalGateSettingsService = {
@@ -105,10 +149,17 @@ export const approvalGateSettingsService = {
           if (!mode) throw new ProjectNotFoundError(projectId);
           if (mode.prMergeMode === 'auto') throw new ReviewAgentNeedsManualMergeError(projectId);
         }
-        return projectRepository.updateApprovalGateSettings(projectId, data, tx);
+        const project = await projectRepository.updateApprovalGateSettings(projectId, data, tx);
+        const retired =
+          data.reviewAgentEnabled === false ? await retireAwaitingReviews(projectId, tx) : [];
+        return { project, retired };
       },
     );
+    // POST-COMMIT and best-effort (MOTIR-5597, decision 8), as the promotion does: a GitHub
+    // approval recorded while the agent was reviewing applies to the approve-and-merge
+    // gate the switch just raised in its place (§12.2).
+    for (const workItemId of updated.retired) await evaluateAfterRaise(workItemId, ctx.workspaceId);
 
-    return toSettingsDTO(updated);
+    return toSettingsDTO(updated.project);
   },
 };

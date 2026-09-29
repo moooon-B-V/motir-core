@@ -43,7 +43,7 @@ const ALL_KINDS = [
   // Story MOTIR-6012 · MOTIR-6032: a person approves or declines a PLAN — no card.
   'plan_approval',
   // Story MOTIR-1626 · MOTIR-6818: the REVIEW AGENT's question (ADR §12) — a NOT-YET hole
-  // until MOTIR-6819 registers its handler.
+  // until MOTIR-6819 registered its handler.
   'agent_review',
 ] as const satisfies readonly ApprovalGateKind[];
 
@@ -67,7 +67,10 @@ describe('the approval-gate registry — totality at runtime', () => {
       'decision_confirmation',
       // MOTIR-6035 (Story MOTIR-6012): the PLAN gate — Approve and Decline, no card.
       'plan_approval',
+      // MOTIR-6819 (Story MOTIR-1626): the REVIEW AGENT's gate (ADR §12).
+      'agent_review',
     ]);
+    expect(isRegisteredGateKind('agent_review')).toBe(true);
     expect(isRegisteredGateKind('design_result')).toBe(true);
     expect(isRegisteredGateKind('plan_approval')).toBe(true);
     // MOTIR-5954 (Story MOTIR-5871): the CONFIRM gate — Confirm and Overturn.
@@ -85,13 +88,12 @@ describe('the approval-gate registry — totality at runtime', () => {
     expect(isRegisteredGateKind('pull_request_merge')).toBe(false);
   });
 
-  it('leaves TWO declared holes — the RETIRED merge kind, and the review agent NOT YET built', () => {
+  it('leaves ONE declared hole — the RETIRED merge kind', () => {
     // `plan_approval` was a NOT-YET here from MOTIR-6032 until MOTIR-6035 registered its
     // handler (ADR `approval-gates.md` §11), so it left the list. `agent_review` is the
-    // same shape: MOTIR-6818 adds the enum value, MOTIR-6819 registers the handler and
-    // takes it off this list.
-    expect([...UNREGISTERED_GATE_KINDS]).toEqual(['pull_request_merge', 'agent_review']);
-    expect(isRegisteredGateKind('agent_review')).toBe(false);
+    // same shape: MOTIR-6818 added the enum value, MOTIR-6819 registered the handler and
+    // took it off this list.
+    expect([...UNREGISTERED_GATE_KINDS]).toEqual(['pull_request_merge']);
     // ⚠️ `decision_approval` WAS THE OTHER HOLE — unbuilt, owned by MOTIR-4907 — until
     // MOTIR-5676 built it. `pull_request_merge` is a different kind of hole: it was built
     // (MOTIR-4793), raised real gates, and was WITHDRAWN by MOTIR-5616 — nothing owns it

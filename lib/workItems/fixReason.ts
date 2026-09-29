@@ -187,16 +187,26 @@ export function pullRequestReasonOf(
 }
 
 /**
+ * The reviewer label a REVIEW AGENT's refusal carries on the To fix row (Story MOTIR-1626 ·
+ * MOTIR-6819; `approval-gates.md` §12.4 — *the review agent as the decider*). A constant
+ * rather than the run's attributed user: the row must not claim a person reviewed the
+ * code (§12.3). The surfaces translate it (MOTIR-6823 / MOTIR-6825 own the en/zh copy).
+ */
+export const REVIEW_AGENT_REVIEWER_NAME = 'Review agent';
+
+/**
  * A REFUSAL the card is still waiting on — `changes_requested`, from the gate the
  * reviewer decided.
  *
  * `repair` follows what `motir fix` would do with it: an acceptance Re-run is a repair
- * class of its own (`acceptance_rerun`), so it is `fix`; an approve-to-merge Request
- * changes is not claimable at all, so it is `run`, whose prompt carries the note.
+ * class of its own (`acceptance_rerun`), so it is `fix`; so is the REVIEW AGENT's refusal
+ * (`approval-gates.md` §12.4 — *the repair is `motir fix <KEY>`*, MOTIR-6822 builds its
+ * class); an approve-to-merge Request changes is not claimable at all, so it is `run`,
+ * whose prompt carries the note (§12.7 corrects that to `fix`; not this card's).
  */
 export function changesRequestedOf(
   refusal: {
-    gate: 'pull_request_approval' | 'acceptance_result';
+    gate: 'pull_request_approval' | 'acceptance_result' | 'agent_review';
     /** The reviewer as a SURFACE draws them — `reviewerNameOf`, never the audit label. */
     reviewerName: string | null;
     noteMd: string | null;
@@ -207,7 +217,7 @@ export function changesRequestedOf(
     fixReason: 'changes_requested',
     fixDetail: {
       ...EMPTY_DETAIL,
-      repair: refusal.gate === 'acceptance_result' ? 'fix' : 'run',
+      repair: refusal.gate === 'pull_request_approval' ? 'run' : 'fix',
       reviewerName: refusal.reviewerName,
       notePreview: notePreviewOf(refusal.noteMd),
       gate: refusal.gate,
@@ -253,7 +263,16 @@ export function standingMergeRefusalOf(
   latest: Pick<ApprovalGate, 'kind' | 'state' | 'subjectVersion'> | null,
   currentVersion: string | null,
 ): boolean {
-  if (latest === null || latest.kind !== 'pull_request_approval') return false;
+  // ⚠️ …OR THE REVIEW AGENT'S (MOTIR-6819; `approval-gates.md` §12.4). Its refusal is
+  // about exactly the commits the approve-and-merge gate asks about (§12.1's one stamp),
+  // moves no status, and is answered the same way — a push, which changes the version and
+  // so clears it here.
+  if (
+    latest === null ||
+    (latest.kind !== 'pull_request_approval' && latest.kind !== 'agent_review')
+  ) {
+    return false;
+  }
   if (latest.state !== 'changes_requested') return false;
   return currentVersion !== null && latest.subjectVersion === currentVersion;
 }

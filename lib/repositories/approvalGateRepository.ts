@@ -763,6 +763,29 @@ export const approvalGateRepository = {
   },
 
   /**
+   * The `awaiting` gates of one KIND across a whole PROJECT, locked in id order (Story
+   * MOTIR-1626 · MOTIR-6819; `approval-gates.md` §12.5) — what switching the review agent
+   * OFF retires: every awaiting `agent_review` in the project, each then superseded by
+   * {@link supersedeAwaitingByWorkItem} with its own cause. Locked so a decision racing the
+   * switch waits for it and then meets a withdrawn question rather than deciding one.
+   */
+  async lockAwaitingByProjectAndKind(
+    projectId: string,
+    kind: ApprovalGateKind,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workItemId: string | null }>> {
+    return tx.$queryRaw<Array<{ id: string; workItemId: string | null }>>`
+      SELECT "id", "work_item_id" AS "workItemId"
+      FROM "approval_gate"
+      WHERE "project_id" = ${projectId}
+        AND "kind" = ${kind}::"approval_gate_kind"
+        AND "state" = 'awaiting'
+      ORDER BY "id"
+      FOR UPDATE
+    `;
+  },
+
+  /**
    * RETIRE every `awaiting` gate on one work item EXCEPT ONE — the withdraw a
    * gate-owned return to To do performs (Story MOTIR-6070 · MOTIR-6423;
    * `docs/decisions/design-refusal-verdict.md` §2).
@@ -1215,6 +1238,11 @@ function awaitingRoutedToWhere(scope: AwaitingRoutingScope): Prisma.ApprovalGate
       // nothing reassigns a plan's requester, so the creation answer IS the live one.
       { workItemId: null, routedToId: scope.userId },
     ],
+    // ⚠️ THE REVIEW AGENT'S QUESTION IS NEVER ON A PERSON'S LIST (MOTIR-6819;
+    // `approval-gates.md` §12.1). It is routed by §2's rule only so the routed person can
+    // CONTINUE WITHOUT THE REVIEW on the card (§12.3); it asks the agent, not them, so it
+    // is excluded here — the list, its count, the home count and the marker all read this.
+    kind: { not: 'agent_review' },
     ...CARRIED_MERGE_GATE_EXCLUDED,
   };
 }

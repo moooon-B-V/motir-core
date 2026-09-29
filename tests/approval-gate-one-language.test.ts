@@ -274,6 +274,10 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // choice (`withdrawn`). Product-written, no actor — its one raiser owns it.
       callers: [
         'lib/services/acceptanceEvidenceService.ts',
+        // MOTIR-6819 (`approval-gates.md` §12.5): switching the review agent OFF withdraws
+        // every awaiting `agent_review` in the project, cause `review_agent_disabled` —
+        // product-written, no actor, never a decision. The switch is its one writer.
+        'lib/services/approvalGateSettingsService.ts',
         'lib/services/choiceGateService.ts',
         // MOTIR-5954: the CONFIRM question's raiser withdraws its own stale question —
         // a moved stamp, a broken body, an executor flipped off `human`.

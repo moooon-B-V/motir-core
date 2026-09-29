@@ -112,6 +112,10 @@ async function readSubject(
   // MOTIR-6035 registers the handler; forwarding such a link to the planning surface
   // is MOTIR-6037's.
   if (kind === 'plan_approval') return { state: 'kind_not_built' };
+  // ⚠️ …NOR IS THE REVIEW AGENT'S GATE (MOTIR-6819; ADR `approval-gates.md` §12.1). It is
+  // never on a To-approve row, so no overlay address names it; the person meets it on the
+  // card, in the Development frame, and only there (MOTIR-6817 / MOTIR-6825 draw it).
+  if (kind === 'agent_review') return { state: 'kind_not_built' };
   if (!gate) return { state: 'no_gate' };
   if (!isRegisteredGateKind(kind)) return { state: 'kind_not_built' };
   switch (kind) {
