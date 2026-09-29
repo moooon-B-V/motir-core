@@ -1098,6 +1098,7 @@
       "issues": "工作项",
       "ready": "就绪",
       "runs": "运行",
+      "myAgents": "我的智能体",
       "boards": "面板",
       "reports": "报表",
       "approvalRecords": "审批记录",
@@ -8689,6 +8690,99 @@
       "notesTooLong": "操作说明的上限为 {limit} 个字符。需要更多说明的步骤应当是一个独立的工作项。",
       "reorderConflict": "移动该步骤时清单已发生变化。请刷新后重试。",
       "generic": "出现问题，请重试。"
+    }
+  },
+  "myAgents": {
+    "title": "我的智能体",
+    "subtitle": "你自己的智能体，使用你自己的登录，运行在 Motir 云端 — {project}",
+    "subtitleNarrow": "你自己的智能体，使用你自己的登录 — {project}",
+    "newAgent": "新建智能体",
+    "emptyTitle": "还没有智能体",
+    "emptyBody": "每个都是你自己的编码智能体——Claude Code、Codex 等——运行在 Motir 云端自己的机器上，带着这个项目的代码，并用你自己的账号登录。Motir 只收取机器时间费用，你停止使用后它会自动休眠。",
+    "loadFailed": "无法加载你的智能体。请刷新重试——它们没有任何变化。",
+    "col": {
+      "name": "名称",
+      "codingAgent": "编码智能体",
+      "project": "项目",
+      "state": "状态",
+      "machineTime": "本月机器时间",
+      "credits": "额度",
+      "actions": "操作"
+    },
+    "rowActions": "{name} 的操作",
+    "count": "{count, plural, other {# 个智能体}}",
+    "page": "第 {page} 页，共 {pages} 页",
+    "previous": "上一页",
+    "next": "下一页",
+    "thisMonth": "本月 {time}",
+    "creditsCount": "{count, plural, other {# 额度}}",
+    "state": {
+      "starting": "启动中",
+      "running": "运行中",
+      "hibernating": "休眠中",
+      "hibernated": "已休眠",
+      "waking": "唤醒中",
+      "failed": "失败",
+      "deleting": "删除中"
+    },
+    "progress": {
+      "starting": "正在启动——把项目的仓库克隆到主目录",
+      "hibernating": "正在停止机器——你的主目录会保留",
+      "waking": "正在你的主目录上启动一台新机器",
+      "deleting": "正在销毁机器及其主目录"
+    },
+    "failedWayOut": "唤醒以重试，或将其删除。",
+    "stop": {
+      "credits": "已停止：你的组织额度已用完。请充值额度后再唤醒。",
+      "idle": "30 分钟未使用后已休眠",
+      "backstop": "已连续运行 12 小时后停止。唤醒即可继续。"
+    },
+    "menu": {
+      "wake": "唤醒",
+      "hibernate": "休眠",
+      "delete": "删除…"
+    },
+    "create": {
+      "title": "新建智能体",
+      "name": "名称",
+      "nameHint": "只有你能看到。可用字母、数字和短横线。",
+      "project": "项目",
+      "projectHint": "它关联的仓库会被克隆到智能体的主目录。",
+      "codingAgent": "编码智能体",
+      "vendorHint": "编码智能体的模型用量由其供应商向你收费，而不是 Motir。Motir 永远看不到你的登录信息。",
+      "price": "运行时 <b>每分钟 1 额度</b>。30 分钟未使用后自动休眠，休眠期间不收费。",
+      "cancel": "取消",
+      "submit": "创建智能体"
+    },
+    "profileLine": {
+      "claude": "会在它自己的终端里请你用 Claude 账号或 Anthropic API 密钥登录。",
+      "codex": "会请你用 ChatGPT 账号或 OpenAI API 密钥登录。",
+      "opencode": "使用你自己的模型服务商密钥。使用 Claude 模型时，用你的 Anthropic API 密钥。",
+      "kimi": "会请你用 Kimi 账号登录。",
+      "aider": "使用你自己的模型服务商密钥。使用 Claude 模型时，用你的 Anthropic API 密钥。",
+      "goose": "使用你自己的模型服务商密钥。使用 Claude 模型时，用你的 Anthropic API 密钥。"
+    },
+    "refusal": {
+      "credits": "你的组织额度目前无法启动机器。<link>充值额度</link>后即可创建或唤醒智能体。",
+      "creditsUnknown": "Motir 暂时无法查询你的组织额度。请稍后重试。",
+      "userCap": "你已经有 {count} 个智能体。删除一个后才能再创建。",
+      "busy": "Motir 当前运行的机器已达上限。请几分钟后重试。",
+      "notOffered": "暂不提供该编码智能体：其条款尚不允许平台托管它。请选择其他编码智能体。",
+      "nameTaken": "你在这个项目上已经有一个名为 {name} 的智能体。",
+      "nameInvalid": "请使用小写字母、数字和短横线，以字母或数字开头，最多 40 个字符。",
+      "unavailable": "此部署不提供“我的智能体”。",
+      "conflict": "该智能体在你查看时发生了变化。列表现已更新。",
+      "generic": "出错了，请重试。"
+    },
+    "delete": {
+      "title": "删除 {name}？",
+      "intro": "这会销毁该智能体的机器<b>及其主目录</b>。你将失去：",
+      "lose1": "它的编码智能体登录——在新智能体上需要重新登录；",
+      "lose2": "主目录中的所有文件，包括克隆的仓库；",
+      "lose3": "所有尚未提交并推送的工作。",
+      "irreversible": "此操作无法撤销。已使用的机器时间仍会收费。",
+      "keep": "保留",
+      "confirm": "删除智能体"
     }
   },
   "runs": {

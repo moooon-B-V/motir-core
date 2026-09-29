@@ -47,6 +47,7 @@ import {
 } from '@/lib/github/runGitCredential';
 import { machineCreditsFor } from '@/lib/hostedRuns/machineRate';
 import { toAgentInstanceDto } from '@/lib/mappers/agentInstanceMappers';
+import type { AgentInstanceListPageDto, AgentInstanceStopReason } from '@/lib/dto/agentInstances';
 import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
 import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
@@ -102,29 +103,7 @@ export const agentInstanceClock = {
   pollIntervalMs: 1_000,
 };
 
-/** One row of the Instances page: the instance plus its machine time this month. */
-export interface AgentInstanceListItemDto extends AgentInstanceDto {
-  profileName: string;
-  /** Seconds of the running intervals overlapping the current calendar month (UTC). */
-  machineSecondsThisMonth: number;
-  /** The credits those seconds come to — each interval rounded up once, like its charge (§5). */
-  creditsThisMonth: number;
-  /**
-   * Why Motir stopped a `hibernated` instance, when Motir did — out of credits, idle,
-   * or the 12-hour backstop (AMENDMENT 2; the page's line under the name). Null for
-   * any other state, and for a hibernate the person asked for.
-   */
-  stopReason: AgentInstanceStopReason | null;
-}
-
-/** The hibernations Motir makes on its own, which the page explains. */
-export type AgentInstanceStopReason = 'credits' | 'idle' | 'backstop';
 const STOP_REASONS: readonly string[] = ['credits', 'idle', 'backstop'];
-
-export interface AgentInstanceListPageDto {
-  instances: AgentInstanceListItemDto[];
-  total: number;
-}
 
 interface ResolvedProject {
   id: string;

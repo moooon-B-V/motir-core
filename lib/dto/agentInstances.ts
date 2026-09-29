@@ -47,3 +47,26 @@ export interface AgentInstanceIntervalDto {
   credits: number | null;
   chargeOutcome: AgentInstanceChargeOutcome | null;
 }
+
+/** One row of the My agents page: the instance plus its machine time this month. */
+export interface AgentInstanceListItemDto extends AgentInstanceDto {
+  profileName: string;
+  /** Seconds of the running intervals overlapping the current calendar month (UTC). */
+  machineSecondsThisMonth: number;
+  /** The credits those seconds come to — each interval rounded up once, like its charge (§5). */
+  creditsThisMonth: number;
+  /**
+   * Why Motir stopped a `hibernated` instance, when Motir did — out of credits, idle,
+   * or the 12-hour backstop (AMENDMENT 2; the page's line under the name). Null for
+   * any other state, and for a hibernate the person asked for.
+   */
+  stopReason: AgentInstanceStopReason | null;
+}
+
+/** The hibernations Motir makes on its own, which the page explains. */
+export type AgentInstanceStopReason = 'credits' | 'idle' | 'backstop';
+
+export interface AgentInstanceListPageDto {
+  instances: AgentInstanceListItemDto[];
+  total: number;
+}

@@ -18,6 +18,7 @@ import {
   Settings,
   Sparkles,
   Waypoints,
+  SquareTerminal,
   Stamp,
 } from 'lucide-react';
 import { Sidebar, type SidebarItem, type SidebarSection } from '@/components/ui/Sidebar';
@@ -445,6 +446,18 @@ export function SidebarNav({
         label: t('nav.runs'),
         href: '/runs',
         active: isActive(pathname, '/runs'),
+      },
+      {
+        // MY AGENTS (Story MOTIR-6860 · MOTIR-6874) — the reader's own agent
+        // instances, directly after Runs per `design/my-agents/design-notes.md`
+        // panel 0: Runs is where an agent works on a card, My agents is where your
+        // own agents live. `SquareTerminal` — a terminal in a frame — is unused
+        // elsewhere; not `Bot` (the run area's agent mark). Offered only to a
+        // reader holding `instance:use` (`projectNavAccess.ts`).
+        icon: <SquareTerminal />,
+        label: t('nav.myAgents'),
+        href: '/my-agents',
+        active: isActive(pathname, '/my-agents'),
       },
       {
         icon: <Columns3 />,
