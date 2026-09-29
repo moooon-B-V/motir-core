@@ -87,7 +87,7 @@ model User {
   /// Platform-staff standing — moooon B.V. operators ONLY (MOTIR-2896, the ADR
   /// `docs/decisions/platform-staff-auth.md`). NULL means "not platform staff",
   /// which is every customer account and the default for every row.
-  /// Deliberately SEPARATE from `MemberRole` (Story 6.4, workspace/project) and
+  /// Deliberately SEPARATE from `WorkspaceRole` (Story MOTIR-6168, workspace) and
   /// `OrganizationRole` (Story 6.10, org): those describe a user's standing
   /// INSIDE one tenant, this one describes standing OUTSIDE all of them, and no
   /// value of either can produce a value of this. Written only by `db:seed`
@@ -410,8 +410,8 @@ model User {
 
 /// Degrees of platform-staff access (ADR: `docs/decisions/platform-staff-auth.md`,
 /// MOTIR-729). A LADDER — each value contains the one before it. Values are
-/// deliberately disjoint from `MemberRole` / `OrganizationRole`'s (`owner` /
-/// `admin` / `member` / `viewer`) so that a log line, a test fixture or a code
+/// deliberately disjoint from the tenant roles' (`owner` / `admin` / `manager` /
+/// `member` / `viewer`) so that a log line, a test fixture or a code
 /// review can never confuse a tenant role with a platform one.
 ///
 /// An enum rather than a boolean because the three degrees are not merely
@@ -1053,8 +1053,8 @@ model Organization {
 /// Org membership + org-scoped role (Story 6.10) — the org-tier sibling of
 /// `WorkspaceMembership`. Org membership GATES workspace access (a workspace is
 /// reachable only by a member of its org; the gate + the asymmetric upward
-/// auto-join land in 6.10.4) and an org owner/admin sits ABOVE the 6.4 workspace
-/// `MemberRole`. Many-to-many User↔Organization (one account, many orgs). Both
+/// auto-join land in 6.10.4) and an org owner/admin sits ABOVE the workspace
+/// role (`WorkspaceRole`). Many-to-many User↔Organization (one account, many orgs). Both
 /// FKs Cascade — deleting the user or the org removes the row (a membership is
 /// meaningless without both), mirroring `WorkspaceMembership`. The
 /// `(organizationId, userId)` uniqueness prevents double-adds.
@@ -1139,11 +1139,6 @@ model Workspace {
   boardColumnStatuses         BoardColumnStatus[]
   sprints                     Sprint[]
   projectMemberships          ProjectMembership[]
-  // Back-relation for ProjectRoleDefinition (Story MOTIR-2257 · MOTIR-2467). A
-  // workspace holds the custom roles of all its projects; Cascade with the
-  // workspace, matching projectMemberships.
-  // ⚠️ `@ignore`d with the model it points at, pending the phase-3 drop (MOTIR-6567 → MOTIR-6569).
-  projectRoleDefinitions      ProjectRoleDefinition[]      @ignore
   workspaceRoleDefinitions    WorkspaceRoleDefinition[]
   roleMigrationReports        RoleMigrationReport[]
   // Retired project keys (Story 6.8) — workspace-scoped reservation rows.
@@ -1618,13 +1613,6 @@ model Project {
   // Its VISITOR RECORDS (Story MOTIR-6170 · MOTIR-6665). Cascades: nothing is
   // kept about the readers of a project that no longer exists.
   visitors                    ProjectVisitor[]
-  // The project's OWN roles (Story MOTIR-2257 · MOTIR-2467). Cascades with the
-  // project — a project's roles are its own and go with it. Deleting a role
-  // that a membership points at is REFUSED (the Restrict FK on
-  // ProjectMembership.roleDefinitionId), but a project delete removes both
-  // sides, so the cascade never trips it.
-  // ⚠️ `@ignore`d with the model it points at, pending the phase-3 drop (MOTIR-6567 → MOTIR-6569).
-  roleDefinitions             ProjectRoleDefinition[]      @ignore
   // Label folksonomy + component taxonomy (Subtask 5.4.1). Both cascade with
   // the project (project-scoped rows; projects are soft-archived in practice,
   // so this is the rare hard-delete path).
@@ -1792,18 +1780,13 @@ model Project {
 /// Join table — a user belongs to one-or-more workspaces. Cascades on both
 /// FKs: deleting a Workspace or a User removes the membership row. The
 /// (userId, workspaceId) uniqueness prevents accidental double-inserts.
-/// `role` is the `MemberRole` enum — Story 6.4 formalized the original free
-/// `String` column into the explicit set it now shares with `ProjectMembership`.
-/// The migration mapped existing values (owner→owner, everything else→member);
-/// the `owner` row is the workspace founder, who always has access to every
-/// project regardless of project membership.
+/// The member's role is `workspaceRole` (+ `roleDefinitionId` for a custom role,
+/// Story MOTIR-6168). The legacy `role` column (`member_role`, Story 6.4) was
+/// retired by Release A and dropped by MOTIR-6569.
 model WorkspaceMembership {
   id               String               @id @default(cuid())
   userId           String
   workspaceId      String
-  /// ⚠️ RETIRED (Release A, MOTIR-6469): nothing reads or writes it. `@ignore`d so the generated client
-  /// stops selecting it, pending the phase-3 drop (MOTIR-6567 → MOTIR-6569); the database default keeps inserts valid.
-  role             MemberRole           @default(member) @ignore
   /// The member's currently-active project within this workspace. Clears
   /// to NULL (onDelete: SetNull) — not cascades — when that project is
   /// archived/deleted, so losing a project never removes the membership.
@@ -1854,14 +1837,16 @@ model WorkspaceMembership {
 }
 
 /// A workspace's OWN role — a custom role a Manager authored (Story MOTIR-6168 ·
-/// MOTIR-6457). The workspace-tier successor of `ProjectRoleDefinition`: the three
+/// MOTIR-6457). The workspace-tier successor of the project custom role (the
+/// `project_role_definition` table, dropped by MOTIR-6569): the three
 /// BUILT-IN roles (Manager · Member · Viewer) are not rows, they live in code; a
 /// custom role is a NAME + a chosen SET over the code-owned catalog, and it
 /// applies in every project of its workspace (`role-model.md` Q2).
 ///
-/// `permissions` is a `String[]` for the reasons `ProjectRoleDefinition` records,
-/// and there is no `based_on` column for the reason it records too: provenance
-/// that never re-flowed. The editor's "Start from" seeds the grid and is not
+/// `permissions` is a `String[]` rather than a join table: the catalog is
+/// code-owned and bounded, a role's set is read whole, and no query asks which
+/// roles hold a key. There is no `based_on` column: provenance that never
+/// re-flowed. The editor's "Start from" seeds the grid and is not
 /// stored.
 ///
 /// RLS: its own `workspace_id` column and ONE `FOR ALL` policy on
@@ -1916,13 +1901,12 @@ model RoleMigrationReport {
   @@map("role_migration_report")
 }
 
-/// Per-project membership + role (Story 6.4) — the project-scoped sibling of
-/// `WorkspaceMembership`. A user is explicitly added to a project with a
-/// `MemberRole`, which (combined with `project.accessLevel`) decides browse +
-/// edit access; the computed policy lands at the service layer in 6.4.3. A
-/// `private` project is visible ONLY to its members (plus the workspace
-/// owner/admin, who always pass). The `[userId, projectId]` uniqueness prevents
-/// double-adds.
+/// Per-project membership (Story 6.4) — the project-scoped sibling of
+/// `WorkspaceMembership`: who is in a project. It carries no role since Story
+/// MOTIR-6168 put the role on the workspace; the legacy `role` /
+/// `role_definition_id` columns and the `project_role_definition` table they
+/// pointed at were dropped by MOTIR-6569. The `[userId, projectId]` uniqueness
+/// prevents double-adds.
 ///
 /// `workspaceId` is denormalized from the project — the SAME pattern
 /// `work_item` / `work_item_link` / `workflow_status` use — so the RLS gate is a
@@ -1958,102 +1942,22 @@ model ProjectVisitor {
 }
 
 model ProjectMembership {
-  id               String     @id @default(cuid())
-  workspaceId      String     @map("workspace_id")
-  projectId        String     @map("project_id")
-  userId           String     @map("user_id")
-  /// ⚠️ RETIRED (Release A, MOTIR-6469): nothing reads or writes it. `@ignore`d so the generated client
-  /// stops selecting it, pending the phase-3 drop (MOTIR-6567 → MOTIR-6569); the database default keeps inserts valid.
-  role             MemberRole @default(member) @ignore
-  /// The CUSTOM role this membership holds, or NULL (Story MOTIR-2257 ·
-  /// MOTIR-2467). NULL keeps meaning exactly what it meant before this column
-  /// existed — "this membership names a BUILT-IN role through `role`" — so every
-  /// pre-existing row backfills to NULL and nobody's access changes on deploy.
-  ///
-  /// ⚠️ `onDelete: Restrict`, and that is the load-bearing choice. `Cascade`
-  /// would delete the MEMBERSHIP when a role is deleted (the holder loses the
-  /// project); `SetNull` would silently drop every holder back to whatever their
-  /// `role` column says (a silent promotion or a silent strip). Both look like
-  /// success from the admin's side. `Restrict` makes the DATABASE refuse, so the
-  /// only route to deleting a role is the service's reassign-then-delete path.
-  ///
-  /// ⚠️ This column and `role` MOVE TOGETHER, and
-  /// `projectMembershipRepository.setRoleDefinition` / `.reassignRoleDefinition`
-  /// are the only writers. A membership on a custom role carries
-  /// `role = CUSTOM_ROLE_TIER` (`member`, `lib/permissions/builtinRoles.ts`) —
-  /// so the access-LEVEL subtraction in `lib/permissions/resolve.ts`
-  /// (`levelGrants`) takes nothing away from it, and A CUSTOM ROLE GRANTS
-  /// EXACTLY WHAT IT LISTS. `role` still has to be written, because `private`
-  /// gates on having a membership at all and the whole model reads that column.
-  /// ⚠️ RETIRED (Release A, MOTIR-6469): nothing reads or writes it. `@ignore`d so the generated client
-  /// stops selecting it, pending the phase-3 drop (MOTIR-6567 → MOTIR-6569). The text above is its history.
-  roleDefinitionId String?    @map("role_definition_id") @ignore
-  createdAt        DateTime   @default(now()) @map("created_at")
-  updatedAt        DateTime   @updatedAt @map("updated_at")
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  projectId   String   @map("project_id")
+  userId      String   @map("user_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  workspace      Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project        Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  // ⚠️ `@ignore`d: Prisma requires a relation into an `@@ignore`d model to be ignored itself (MOTIR-6567 → MOTIR-6569).
-  roleDefinition ProjectRoleDefinition? @relation(fields: [roleDefinitionId], references: [id], onDelete: Restrict) @ignore
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId])
   @@index([workspaceId])
   @@index([projectId])
   @@index([userId])
-  @@index([roleDefinitionId])
   @@map("project_membership")
-}
-
-/// A project's OWN role — a custom role an admin authored (Story MOTIR-2257 ·
-/// Subtask MOTIR-2467). The three BUILT-IN roles are NOT rows: they live in
-/// `lib/permissions/builtinRoles.ts` and are immutable, which is what makes
-/// "reset to the default" always available and what the mirror product does. A
-/// custom role is a NAME + a chosen SET over the code-owned catalog
-/// (`lib/permissions/catalog.ts`), scoped to ONE project.
-///
-/// `permissions` is a `String[]` rather than a join table on purpose: the
-/// catalog is code-owned and bounded (`ROLE_GATED_PERMISSIONS`), a role's set is
-/// read whole every time it is read at all, and no query asks "which roles hold
-/// X" — a join table would add a row set with no reader. The values are catalog
-/// keys; the SERVICE (MOTIR-2472) validates them, and the RESOLUTION (MOTIR-2470)
-/// intersects them with the catalog so a key retired after the role was authored
-/// is ignored rather than granted.
-///
-/// ⚠️ NOTHING RECORDS WHICH BUILT-IN THE AUTHOR STARTED FROM (Yue, 2026-08-09).
-/// An earlier revision carried a `based_on` column and drew a `Based on Viewer ·
-/// +2` chip from it. It was PROVENANCE that never re-flowed — a claim about how
-/// the role was once authored, not a fact about what it is, and stale the moment
-/// either side was edited. A role that lists its permissions already says
-/// everything true about itself. The editor still OFFERS a built-in to start
-/// from, but that is an authoring convenience that seeds the grid and is not
-/// stored.
-///
-/// It carries its OWN `workspace_id` column with the same
-/// `FOR ALL USING (workspace_id = current_setting('app.workspace_id', true))`
-/// policy every workspace-bearing table takes — not an RLS join through
-/// `project`. A role is a description of who may do what, so leaking one across
-/// tenants would leak the shape of somebody's organisation.
-model ProjectRoleDefinition {
-  id          String   @id @default(cuid())
-  workspaceId String   @map("workspace_id")
-  projectId   String   @map("project_id")
-  name        String
-  permissions String[]
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  memberships ProjectMembership[]
-
-  @@unique([projectId, name])
-  @@index([workspaceId])
-  @@index([projectId])
-  @@map("project_role_definition")
-  // ⚠️ RETIRED (Release A, MOTIR-6469): no code uses this model. `@@ignore`d so the generated client
-  // has no accessor for it, pending the phase-3 drop of the table (MOTIR-6567 → MOTIR-6569).
-  @@ignore
 }
 
 /// Where a user dragged each node on a project's planning canvas (Subtask 7.3.77
@@ -2115,41 +2019,22 @@ model ProjectKeyAlias {
 }
 
 /// The org-scoped role a user holds in an `Organization` (Story 6.10), DISTINCT
-/// from the workspace/project `MemberRole` (6.4) and sitting ABOVE it:
+/// from the workspace role (`WorkspaceRole`) and sitting ABOVE it:
 ///   - `owner`  — the org founder; administers every workspace under the org,
 ///                org settings + membership, and (later) billing.
 ///   - `admin`  — administers every workspace under the org + org settings/
 ///                membership; mirrors Atlassian org-admin / Linear Owner.
 ///   - `member` — org-tier presence only; no cross-workspace admin — falls back
-///                to its per-workspace `MemberRole` for in-workspace actions.
+///                to its per-workspace `WorkspaceRole` for in-workspace actions.
 /// The role-precedence composition + the access gate that reads this land in
 /// 6.10.4. Closed + stable set → a Postgres enum, the same shape as
-/// `MemberRole`.
+/// `WorkspaceRole`.
 enum OrganizationRole {
   owner
   admin
   member
 
   @@map("organization_role")
-}
-
-/// The role a user holds in a workspace or project (Story 6.4). Formalizes
-/// Story 1.2's flat `WorkspaceMembership.role` string into an explicit, closed
-/// set shared by `WorkspaceMembership.role` and `ProjectMembership.role`:
-///   - `owner`  — the workspace founder; always has access to every project.
-///   - `admin`  — can manage members + settings (workspace or project scope).
-///   - `member` — can view + edit.
-///   - `viewer` — read-only (view + comment, no edit).
-/// A Postgres enum (closed, stable set), same shape as the other role/mode
-/// enums. The migration maps the existing free-string column (owner→owner,
-/// everything else→member) so no membership is dropped on deploy.
-enum MemberRole {
-  owner
-  admin
-  member
-  viewer
-
-  @@map("member_role")
 }
 
 /// A person's ONE role in a workspace (Story MOTIR-6168 · `role-model.md` §2).

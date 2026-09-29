@@ -77,7 +77,7 @@ const COPY = enMessages.workItemTodos.errors;
 
 async function truncateAll(): Promise<void> {
   await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "work_item_todo", "work_item_revision", "work_item_link", "work_item", "project_role_definition" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "work_item_todo", "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "workspace_membership", "workspace", "session", "account", "verification", "user" RESTART IDENTITY CASCADE',
