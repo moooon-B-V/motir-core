@@ -28,6 +28,7 @@
 // synthesizes the ledger's `event_name` as `scheduled.{job_id}` (see
 // defineJob); the payload type therefore makes `workspaceId` optional.
 
+import type { DesignAutoRerunRequestedData } from '@/lib/services/designAutoRerunService';
 import type { TransactionalEmail } from '@/lib/services/emailService';
 import type { HostedAgentSession } from '@/lib/services/hostedAgentContainerService';
 
@@ -569,6 +570,9 @@ export interface JobEventDataMap {
   'work-item/derivation.requested': WorkItemDerivationRequestedData;
   'work-item/embedding.requested': WorkItemEmbeddingRequestedData;
   'pull-request/auto-merge.requested': PullRequestAutoMergeRequestedData;
+  /** A person sent a HOSTED design back with Revise (MOTIR-700): start its automatic
+   *  re-run, or record why not. Emitted by the design handler AFTER the refusal commits. */
+  'design/auto-rerun.requested': DesignAutoRerunRequestedData;
   /** A push moved a repository's DEFAULT branch (MOTIR-5914): re-read the host's
    *  mergeability of every open pull request that targets it, and withdraw the question
    *  over any that now conflict. Emitted by the push webhook after its own write. */
@@ -710,6 +714,8 @@ export type JobEventData<N extends JobEventName> = JobEventDataMap[N];
  * events never go through `sendEvent` (they are cron / harness triggered):
  * `email.send` + the `work-item/*` events.
  */
+export type { DesignAutoRerunRequestedData };
+
 export type WorkspaceScopedEventName = Exclude<JobEventName, `system.${string}`>;
 
 /**

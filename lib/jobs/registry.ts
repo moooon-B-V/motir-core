@@ -60,6 +60,7 @@ import { dispatchRunSweep } from './definitions/dispatchRunSweep';
 import { runLivenessSweep } from './definitions/runLivenessSweep';
 import { pullRequestReconcile } from './definitions/pullRequestReconcile';
 import { pullRequestAutoMerge } from './definitions/pullRequestAutoMerge';
+import { designAutoRerun } from './definitions/designAutoRerun';
 import { pullRequestBaseMoved } from './definitions/pullRequestBaseMoved';
 import {
   monitorConnectionPoll,
@@ -151,6 +152,7 @@ export const jobDefinitions = [
   organizationRetentionPurge,
   pullRequestReconcile,
   pullRequestAutoMerge,
+  designAutoRerun,
   pullRequestBaseMoved,
   // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick and
   // its per-connection fan-out.

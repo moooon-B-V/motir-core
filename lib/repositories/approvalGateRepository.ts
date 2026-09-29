@@ -388,6 +388,30 @@ export const approvalGateRepository = {
   },
 
   /**
+   * How many design refusals a PERSON sent back with **Revise** on this card, up to
+   * and including `decidedAt` (MOTIR-700; `hosted-design-rerun-and-design-approval-
+   * switch.md` §1e) — the automatic re-run's cap counts these. A GitHub-synced
+   * refusal carries no verdict, so the verdict filter already excludes it; the
+   * source filter says so rather than relying on that.
+   */
+  async countPressedRevisesUpTo(
+    workItemId: string,
+    decidedAt: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.approvalGate.count({
+      where: {
+        workItemId,
+        kind: 'design_result',
+        state: 'changes_requested',
+        refusalVerdict: 'revise',
+        decisionSource: { in: ['ui', 'api', 'mcp'] },
+        decidedAt: { lte: decidedAt },
+      },
+    });
+  },
+
+  /**
    * LOCK one gate row and return the fields a DECISION is derived from
    * (MOTIR-4790's decide door, step 1).
    *

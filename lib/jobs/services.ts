@@ -2,6 +2,7 @@ import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService'
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
 import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
+import { designAutoRerunService } from '@/lib/services/designAutoRerunService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
 import { dlqStandingDepthService } from '@/lib/services/dlqStandingDepthService';
@@ -137,6 +138,8 @@ export const jobServices = {
   // requests from GitHub and replays a close whose webhook delivery was lost.
   pullRequestReconcile: pullRequestReconcileService,
   pullRequestAutoMerge: pullRequestAutoMergeService,
+  // The automatic hosted re-run after a design Revise (MOTIR-700).
+  designAutoRerun: designAutoRerunService,
   // The base-branch mergeability re-read (MOTIR-5914): a push to a default branch
   // withdraws the approve-and-merge question over any pull request it put in conflict.
   pullRequestMergeability: pullRequestMergeabilityService,
