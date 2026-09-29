@@ -142,12 +142,12 @@ describe('the request primitive', () => {
   it('builds a query string, skipping undefined and null', async () => {
     stub.queue({ status: 200, body: { items: [], nextCursor: null } });
 
-    await transport().request('getProjectReadySet', {
+    await transport().request('getProjectReadyLeaves', {
       path: { projectKey: 'MOTIR' },
       query: { limit: 10, cursor: undefined },
     });
 
-    expect(stub.received[0]?.url).toBe('/api/v1/projects/MOTIR/ready?limit=10');
+    expect(stub.received[0]?.url).toBe('/api/v1/projects/MOTIR/ready/leaves?limit=10');
   });
 
   // MOTIR-2317. `kind` / `priority` are the only ARRAY query parameters the
@@ -158,44 +158,44 @@ describe('the request primitive', () => {
   it('spreads an ARRAY query value into repeated keys, alongside the scalars', async () => {
     stub.queue({ status: 200, body: { items: [], nextCursor: null } });
 
-    await transport().request('getProjectReadySet', {
+    await transport().request('getProjectReadyLeaves', {
       path: { projectKey: 'MOTIR' },
       query: { kind: ['epic', 'story'], priority: ['high'], limit: 10 },
     });
 
     expect(stub.received[0]?.url).toBe(
-      '/api/v1/projects/MOTIR/ready?kind=epic&kind=story&priority=high&limit=10',
+      '/api/v1/projects/MOTIR/ready/leaves?kind=epic&kind=story&priority=high&limit=10',
     );
   });
 
   it('URL-encodes each element of an array rather than the joined string', async () => {
     stub.queue({ status: 200, body: { items: [], nextCursor: null } });
 
-    await transport().request('getProjectReadySet', {
+    await transport().request('getProjectReadyLeaves', {
       path: { projectKey: 'MOTIR' },
       query: { kind: ['a b', 'c&d'] },
     });
 
     // A comma-joined encoding would put ONE key here and the route's `getAll`
     // would read a single kind named `a b,c&d` — a filter matching nothing.
-    expect(stub.received[0]?.url).toBe('/api/v1/projects/MOTIR/ready?kind=a+b&kind=c%26d');
+    expect(stub.received[0]?.url).toBe('/api/v1/projects/MOTIR/ready/leaves?kind=a+b&kind=c%26d');
   });
 
   it('sends NO key for an empty array — the same request as omitting the filter', async () => {
     stub.queue({ status: 200, body: { items: [], nextCursor: null } });
 
-    await transport().request('getProjectReadySet', {
+    await transport().request('getProjectReadyLeaves', {
       path: { projectKey: 'MOTIR' },
       query: { kind: [], limit: 5 },
     });
 
     // `?kind=` would be an empty kind, which is a 422 — not "any kind".
-    expect(stub.received[0]?.url).toBe('/api/v1/projects/MOTIR/ready?limit=5');
+    expect(stub.received[0]?.url).toBe('/api/v1/projects/MOTIR/ready/leaves?limit=5');
   });
 
   it('sends a JSON body with a content type on a write, and none on a read', async () => {
     stub.queue({ status: 200, body: { items: [], nextCursor: null } });
-    await transport().request('getProjectReadySet', { path: { projectKey: 'MOTIR' } });
+    await transport().request('getProjectReadyLeaves', { path: { projectKey: 'MOTIR' } });
     expect(stub.received[0]?.body).toBe('');
   });
 
@@ -213,7 +213,7 @@ describe('an opaque cursor passes through untouched', () => {
     const cursor = 'eyJrIjoiMjAyNi0wOC0wNVQxMjowMDowMFoifQ==';
     stub.queue({ status: 200, body: { items: [], nextCursor: cursor } });
 
-    const page = await transport().request('getProjectReadySet', {
+    const page = await transport().request('getProjectReadyLeaves', {
       path: { projectKey: 'MOTIR' },
       query: { cursor },
     });
@@ -386,7 +386,7 @@ describe('the status map', () => {
     });
 
     const error = await transport()
-      .request('getProjectReadySet', { path: { projectKey: 'MOTIR' }, query: { cursor: 'bad' } })
+      .request('getProjectReadyLeaves', { path: { projectKey: 'MOTIR' }, query: { cursor: 'bad' } })
       .catch((err: unknown) => err);
 
     expect((error as CliError).message).toBe('That cursor is not ours.');

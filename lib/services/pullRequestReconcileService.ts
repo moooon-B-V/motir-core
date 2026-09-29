@@ -14,7 +14,7 @@ import { githubWebhookService } from './githubWebhookService';
 import { workflowsService } from './workflowsService';
 import { reconcileGatesFor } from './gateSetFor';
 import { promoteIfCiAlreadyGreen } from './ciPromotion';
-import { readReportedCheckSet } from './checkSetReconcile';
+import { readReportedCheckRuns, readReportedCheckSet } from './checkSetReconcile';
 import { pullRequestMergeabilityService } from './pullRequestMergeabilityService';
 import { resettleStandingExit } from './mergeQueueExitService';
 import { githubMergeQueueAttemptRepository } from '@/lib/repositories/githubMergeQueueAttemptRepository';
@@ -528,7 +528,8 @@ async function resolveStandingQueueExit(candidate: ReconcileCandidate): Promise<
   });
   if (!target) return false;
 
-  const runs = await readReportedCheckSet({
+  // Check runs alone: a suite roll-up is never the exit's failing check.
+  const runs = await readReportedCheckRuns({
     installationId: candidate.repo.installation.installationId,
     owner: candidate.repo.owner,
     name: candidate.repo.name,

@@ -1329,8 +1329,8 @@ describe('failures', () => {
 // ─── The ready LANES (Story MOTIR-6829 · MOTIR-6835) ──────────────────────────
 //
 // Every ready read goes through the three lane operations: the leaves (what
-// `motir next` takes), the bugs, and the runnable containers. `getProjectReadySet`
-// is never called — the published CLI still reaches it until MOTIR-6841.
+// `motir next` takes), the bugs, and the runnable containers. The flat
+// `GET …/ready` they replaced was deleted from the server by MOTIR-6841.
 describe('the ready lanes', () => {
   // `scriptV1` merges, so reset after each case rather than leak a bugs lane into
   // a later test that expects the default empty one.

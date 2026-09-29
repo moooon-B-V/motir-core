@@ -35,11 +35,13 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
 //     starts running and re-armed on every activity bump. It fires once the
 //     instance has been quiet for the 30-minute window — MORE precise than a
 //     5-minute poll, and it wakes nothing while no instance exists;
-//   * THIS SWEEP runs on the cluster (`0,30 * * * *`) for everything that is not
-//     latency-critical: reconcile, orphans, the credit refusal, the charge
-//     backstop, and a catch for an idle timer that was lost.
+//   * THIS SWEEP runs every 5 minutes (`*/5 * * * *` since MOTIR-6932, which
+//     retired the cluster above) for everything that is not latency-critical:
+//     reconcile, orphans, the credit refusal, the charge backstop, and a catch
+//     for an idle timer that was lost.
 // The 12-hour backstop is enforced by the idle timer's debounce cap AND by this
-// sweep; the fleet slot's TTL is sized to the sweep's 30-minute cadence.
+// sweep; the fleet slot's TTL was sized to the old 30-minute cadence, so at 5
+// minutes it is a looser upper bound than it needs to be, never a short one.
 //
 // ⚠️ THE RUNNING CHARGE, AND WHY THE RUNNING PASS IS TWO LOOPS (AMENDMENT 2). The
 // credit pre-flight only asks "is the balance above zero?", and a machine used to

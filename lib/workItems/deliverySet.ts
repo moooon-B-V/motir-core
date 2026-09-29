@@ -555,8 +555,9 @@ export interface QueueExitFacts {
  * would promote, is a badge nobody can trust. So the rule is stated HERE, once,
  * and every reader calls it.
  *
- * It lifts in exactly two ways: *Queue again* stamps `requeuedAt`, or a PUSH moves
- * the head so the exit no longer names it. A `neutral` exit (a manual removal, a
+ * It lifts in exactly two ways: a re-queue stamps `requeuedAt` (*Queue again*, or
+ * GitHub's `enqueued` for a re-queue made outside Motir — MOTIR-6903), or a PUSH
+ * moves the head so the exit no longer names it. A `neutral` exit (a manual removal, a
  * cleared queue) says nothing about the work and never holds.
  *
  * `headSha` is the member's current head — the first live check row's commit

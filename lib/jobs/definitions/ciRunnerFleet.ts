@@ -5,12 +5,15 @@ import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
 // The runner FLEET's background jobs (Story MOTIR-1916 · MOTIR-1921) — the
 // trigger, the boot, and the backstop.
 //
-// Three functions, and the third is the one that matters most:
+// Two functions:
 //
 //   * `system.ci-runner-provision-sweep` — finds pending intents and fans out one
 //     boot event each. THE RECOVERY TRIGGER (see below).
 //   * `system.ci-runner-boot` — one intent, one runner, supervised to its end.
-//   * `system.ci-runner-reap` — destroys containers nothing is supervising.
+//
+// The third, `system.ci-runner-reap`, was replaced by the attribution
+// reconciler (`./fleetAttribution.ts`, MOTIR-6925), which destroys any machine
+// no live record owns.
 //
 // ⚠️ THE SWEEP IS NO LONGER THE PRIMARY TRIGGER, AND NEVER COULD BE.
 // `docs/decisions/ci-runner-fleet.md` §6 budgets p50 ≤ 30s from the
@@ -92,7 +95,7 @@ import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
  * WHAT IT BOUGHT: fifty-eight wake-minutes an hour, which is the difference
  * between a compute that never sleeps and one that sleeps half the hour.
  */
-export const CI_RUNNER_PROVISION_SWEEP_CRON = '0,30 * * * *';
+export const CI_RUNNER_PROVISION_SWEEP_CRON = '*/5 * * * *';
 
 // The reaper's schedule (`system.ci-runner-reap`) is gone: the attribution
 // reconciler replaced it (MOTIR-6925, `fleet-per-org-pool.md` §5–§6) — see

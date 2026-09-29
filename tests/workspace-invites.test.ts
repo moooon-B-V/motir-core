@@ -136,13 +136,11 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
     });
     expect(rows).toHaveLength(1);
     const payload = JSON.parse(rows[0]!.value);
-    // Both role keys (MOTIR-6562): `workspaceRole` for this build, the legacy
-    // `role` so a machine still on the previous image can redeem the token.
+    // `workspaceRole` alone — the legacy `role` key is retired (MOTIR-6569).
     expect(payload).toEqual({
       workspaceId: workspace.id,
       email: 'newbie@example.com',
       workspaceRole: 'member',
-      role: 'member',
       inviterUserId: user.id,
       // A Full invite naming no project — the default (Story MOTIR-6169 · MOTIR-6546).
       accessScope: 'full',
@@ -385,10 +383,11 @@ describe('POST /api/invites/[token]/accept', () => {
   });
 });
 
-describe('accept — the invite payload across the release boundary (MOTIR-6562)', () => {
-  // A pending invite is a Verification row whose `value` is the JSON payload, and
-  // it lives up to 7 days — so a token minted by the PREVIOUS build (legacy
-  // `role` only) is still redeemable, and so is one naming only `workspaceRole`.
+describe('accept — the invite payload names its `workspaceRole` (MOTIR-6569)', () => {
+  // A pending invite is a Verification row whose `value` is the JSON payload.
+  // Its role is `workspaceRole`. A token minted before MOTIR-6562 carried only
+  // the legacy `role`; every such token lapsed after 7 days, so MOTIR-6569
+  // retired the fallback and a `role`-only payload is refused.
   async function plantInvite(workspaceId: string, email: string, fields: object): Promise<string> {
     const token = `planted-${email.split('@')[0]}`;
     await adminDb.verification.create({
@@ -419,26 +418,15 @@ describe('accept — the invite payload across the release boundary (MOTIR-6562)
     return m?.workspaceRole;
   }
 
-  it('a pre-release token (legacy `role` only) lands as that role’s mapped workspace role', async () => {
+  it('a token carrying only the legacy `role` key is refused, and no membership is written', async () => {
     const { user, workspace } = await makeInviter();
-    const token = await plantInvite(workspace.id, 'legacy@example.com', {
-      role: 'viewer',
-      inviterUserId: user.id,
-    });
-    const { res, invitee } = await acceptAs('legacy@example.com', token);
-    expect(res.status).toBe(200);
-    expect(await workspaceRoleOf(invitee.id, workspace.id)).toBe('viewer');
-  });
-
-  it('a pre-release `admin` token maps to the Manager', async () => {
-    const { user, workspace } = await makeInviter();
-    const token = await plantInvite(workspace.id, 'legacy-admin@example.com', {
-      role: 'admin',
-      inviterUserId: user.id,
-    });
-    const { res, invitee } = await acceptAs('legacy-admin@example.com', token);
-    expect(res.status).toBe(200);
-    expect(await workspaceRoleOf(invitee.id, workspace.id)).toBe('manager');
+    for (const role of ['owner', 'admin', 'member', 'viewer']) {
+      const email = `legacy-${role}@example.com`;
+      const token = await plantInvite(workspace.id, email, { role, inviterUserId: user.id });
+      const { res, invitee } = await acceptAs(email, token);
+      expect(res.status, role).toBe(404);
+      expect(await workspaceRoleOf(invitee.id, workspace.id), role).toBeUndefined();
+    }
   });
 
   it('a token naming only `workspaceRole` is accepted as that role', async () => {
@@ -452,7 +440,7 @@ describe('accept — the invite payload across the release boundary (MOTIR-6562)
     expect(await workspaceRoleOf(invitee.id, workspace.id)).toBe('viewer');
   });
 
-  it('`workspaceRole` wins over the legacy `role` when a token carries both', async () => {
+  it('a stray legacy `role` beside `workspaceRole` is ignored', async () => {
     const { user, workspace } = await makeInviter();
     const token = await plantInvite(workspace.id, 'both@example.com', {
       workspaceRole: 'member',
@@ -571,7 +559,7 @@ describe('an invite carries the access scope', () => {
         value: JSON.stringify({
           workspaceId: f.workspace.id,
           email: f.contractor.email,
-          role: 'member',
+          workspaceRole: 'member',
           inviterUserId: f.manager.id,
         }),
         expiresAt: new Date(Date.now() + 60_000),

@@ -43,123 +43,61 @@ export function jobSchedules(): ReadonlyArray<JobSchedule> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// THE CLUSTER INVARIANT (MOTIR-3314) — the schedule's SHAPE is what costs money
+// THE CADENCE INVARIANT (MOTIR-6893 · MOTIR-6932) — one sub-hourly cadence
 //
-// Motir's Postgres suspends when idle, and the only quantity billed is how often
-// it WAKES. Every tick of every job here is a guaranteed database WRITE, not a
-// possible read: `defineJob` records a `job_run` row BEFORE the handler body runs
-// and flips it after, so no early return in any handler avoids the wake. That
-// makes the cost a property of the SET of schedules rather than of any one of
-// them — N jobs on N distinct minutes wake the compute N times; the same N jobs
-// aligned onto shared minutes wake it once.
+// Every `system.*` job that fires more than once an hour fires EXACTLY on
+// `SUB_HOURLY_CADENCE` — every 5 minutes — unless its id is named in
+// `SUB_HOURLY_CADENCE_EXCEPTIONS` with a reason. Hourly and slower jobs keep
+// whatever cron their own definition argues for.
 //
-// So the schedules are CLUSTERED onto `SCHEDULE_CLUSTER_MINUTES`, and what is
-// defended below is the resulting QUIET GAP — the stretches of the hour in which
-// nothing fires. That is a property no single job's comment can protect:
-// the next person adding a scheduled job picks a free-looking minute, for exactly
-// the load-spreading reasons that are correct on an always-on machine, and
-// quietly re-opens the gap. Nothing fails, nothing alerts, and the bill returns
-// months later with no diff to blame. Hence an assertion rather than a convention
-// — `tests/jobs/schedule-cluster.test.ts` walks this table and fails the build.
+// It replaced the :00/:30 CLUSTER invariant (MOTIR-3314), which spaced every
+// wake half an hour apart so a suspend-when-idle Postgres could sleep between
+// ticks. That saving stopped existing when scheduling moved onto the job worker
+// (MOTIR-3418): the worker polls the database every ≤ 5 s, so the compute never
+// suspends whatever the cron shape, and the cluster was buying nothing while
+// costing every sweep up to half an hour of latency. The decision is
+// `docs/decisions/always-on-database-job-cadence.md`.
 //
-// The measurement behind the numbers is `docs/decisions/application-hosting.md`
-// §21; the per-job trade each cadence made is in that job's own definition.
+// Why an invariant at all, once the bill is gone: one cadence is what makes the
+// schedule legible — a reader, the health check's overdue arithmetic and every
+// worst-case comment in a definition can assume it — and a job that needs a
+// different one has to SAY so, here, where the next reader will look. The
+// assertion is `tests/jobs/schedule-cadence.test.ts`.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * The minutes past the hour every `system.*` cron is allowed to fire on.
- *
- * Two slots rather than one because the daily table-walking sweeps genuinely
- * should not share a cold start, and two slots let them be separated by HOUR
- * while still landing on a clustered minute — separation that costs no extra
- * wake. A job needing finer granularity than 30 minutes is a decision to bring
- * back to §21, not a minute to pick.
- */
-export const SCHEDULE_CLUSTER_MINUTES: ReadonlyArray<number> = [0, 30];
+/** The one cadence a sub-hourly `system.*` job runs at. */
+export const SUB_HOURLY_CADENCE = '*/5 * * * *';
 
 /**
- * The floor the quiet gap may not drop below, in minutes.
- *
- * Priced against the SUSPEND DELAY, not against a documented setting: the delay
- * observed on 2026-08-20 was ~9 min, and the same method on a sibling endpoint
- * three days later gave ~5m12s (§21). It is a reading with a date on it, not a
- * threshold Neon contracts to — which is precisely why this is 30 rather than a
- * tight fit above 9. `motir-gateway` reached the same 30-minute spacing by the
- * same argument (MOTIR-3411), after 10-minute spacing cleared the then-believed
- * threshold by about a minute and cost a 77% duty cycle.
+ * Sub-hourly jobs allowed a cadence other than `SUB_HOURLY_CADENCE`, each with a
+ * one-line reason. Empty: every sub-hourly job today runs every 5 minutes. A job
+ * joins only when its own decision derives a different cadence — never to make a
+ * test pass.
  */
-export const MIN_QUIET_GAP_MINUTES = 30;
+export const SUB_HOURLY_CADENCE_EXCEPTIONS: Readonly<Record<string, string>> = {};
 
 /**
- * Every minute past the hour on which SOME registered schedule can fire, sorted.
- *
- * Deliberately reads the MINUTE field alone and ignores hour / day / month: a
- * daily job at 04:45 opens minute 45 as a wake-minute on the day it fires, and a
- * gap that only holds on the other 364 days is not a gap. Conservative in the
- * only direction that is safe to be.
+ * True when `cron` can fire more than once in some hour — i.e. its MINUTE field
+ * holds more than one value. Reads the minute field alone: a `0,30 9 * * *` job
+ * fires twice in the 09:00 hour, and that is sub-hourly for that hour.
  */
-export function wakeMinutes(schedules: ReadonlyArray<JobSchedule> = jobSchedules()): number[] {
-  const minutes = new Set<number>();
-  for (const { cron } of schedules) {
-    for (const minute of parseCron(cron).minute) minutes.add(minute);
-  }
-  return [...minutes].sort((a, b) => a - b);
+export function firesMoreThanOncePerHour(cron: string): boolean {
+  return parseCron(cron).minute.size > 1;
 }
 
 /**
- * Every gap between consecutive wake-minutes, in minutes, over one hour.
- *
- * Cyclic: the last wake-minute's gap wraps to the first of the next hour, which
- * is the stretch a compute actually gets to sleep in. An EMPTY table has no wake
- * at all, so the single gap is the whole 60 minutes.
+ * Every schedule that breaks the cadence invariant: sub-hourly, not exactly
+ * `SUB_HOURLY_CADENCE`, and not named in `SUB_HOURLY_CADENCE_EXCEPTIONS`.
+ * Empty on a conforming table.
  */
-function wakeGapsMinutes(schedules: ReadonlyArray<JobSchedule>): number[] {
-  const minutes = wakeMinutes(schedules);
-  if (minutes.length === 0) return [60];
-  return minutes.map((minute, i) =>
-    i === minutes.length - 1 ? minutes[0]! + 60 - minute : minutes[i + 1]! - minute,
+export function subHourlyCadenceViolations(
+  schedules: ReadonlyArray<JobSchedule> = jobSchedules(),
+  exceptions: Readonly<Record<string, string>> = SUB_HOURLY_CADENCE_EXCEPTIONS,
+): JobSchedule[] {
+  return schedules.filter(
+    ({ functionId, cron }) =>
+      firesMoreThanOncePerHour(cron) &&
+      cron !== SUB_HOURLY_CADENCE &&
+      !Object.hasOwn(exceptions, functionId),
   );
-}
-
-/**
- * The LONGEST stretch of an hour in which no schedule fires.
- *
- * The number this schedule is discussed in, and the one directly comparable to
- * MOTIR-2853's finding that the old shape left a longest gap of 7 minutes against
- * a ~9 min suspend delay. Reported, quoted in §21 — and NOT the thing asserted;
- * `shortestWakeGapMinutes` is. See the warning on that function.
- */
-export function longestQuietGapMinutes(
-  schedules: ReadonlyArray<JobSchedule> = jobSchedules(),
-): number {
-  return Math.max(...wakeGapsMinutes(schedules));
-}
-
-/**
- * The SHORTEST gap between two consecutive wake-minutes — THE INVARIANT.
- *
- * ⚠️ WHY THIS AND NOT THE LONGEST GAP, WHICH IS THE NUMBER EVERYTHING ELSE
- * QUOTES. Because the longest gap does not defend the bill, and the test that
- * demonstrates it is in `tests/jobs/schedule-cluster.test.ts`. Add one job at :17
- * to a `{0, 30}` schedule and the minutes become `{0, 17, 30}`: the :17 job
- * splits ONE of the two half-hours, the OTHER is untouched, so the longest gap is
- * still 30 and a longest-gap assertion passes. The compute meanwhile stops
- * sleeping in the first half-hour entirely — duty cycle roughly doubles, for one
- * added job, under a green test.
- *
- * The economics are why: a compute sleeps in a gap only for the part of it
- * exceeding the suspend delay, so total awake time is driven by EVERY gap, and
- * the SMALLEST one is the binding constraint. A schedule is only as clustered as
- * its tightest pair.
- *
- * (MOTIR-3314's acceptance criterion asks for "the longest gap … fail if it drops
- * below the target". That wording is right for DIAGNOSING the old shape — 7
- * minutes was the honest summary of a set with no gap wide enough to sleep in —
- * and wrong as a guard, for the reason above. Both are computed; the reading is
- * reported and the invariant is asserted.)
- */
-export function shortestWakeGapMinutes(
-  schedules: ReadonlyArray<JobSchedule> = jobSchedules(),
-): number {
-  return Math.min(...wakeGapsMinutes(schedules));
 }

@@ -191,7 +191,7 @@ describe('the SAME row through BOTH surfaces carries the same values under the s
 
     const client = await mcpClient();
     const viaMcp = await callTool(client, 'list_ready', { projectKey: caller.projectKey });
-    const viaRest = await restGet(`/api/v1/projects/${caller.projectKey}/ready`);
+    const viaRest = await restGet(`/api/v1/projects/${caller.projectKey}/ready/leaves`);
     await client.close();
 
     const mcpRows = viaMcp.items as Record<string, unknown>[];

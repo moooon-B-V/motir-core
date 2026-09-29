@@ -138,6 +138,12 @@
   webhook, or read by the reconcile tick) re-settles a still-standing exit. The
   FIFTH AMENDMENT's affected sentences carry narrowed notes; none is struck.
 
+- **AMENDED 2026-09-29 (MOTIR-6903), at §4 — a re-queue made OUTSIDE Motir.**
+  §4's SEVENTH AMENDMENT handles GitHub's `enqueued` delivery: an exit still
+  standing at the head it names is stamped re-queued, so the card's red, the
+  promotion hold and `motir fix`'s claim lift. It moves no status and decides no
+  gate; the merge moves the card. Nothing earlier is struck.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -566,7 +572,10 @@ in_progress` through its own path, so an acceptance decision is invisible to
 > The question rides on the green set, so every event that takes the set out of
 > green withdraws it WITH the merge question, under the same cause: a head move
 > (`head_moved`), a close (`member_closed`), a draft (`member_drafted`) and a set
-> change (`set_changed`) (`lib/services/pullRequestApprovalGates.ts`). The next
+> change (`set_changed`) (`lib/services/pullRequestApprovalGates.ts`) — joined since by
+> a conflict (`conflict`, MOTIR-5914), a red build (`ci_failed`, §8's SIXTH AMENDMENT)
+> and a check at the asked-about commits running again (`ci_rerunning`, §8's SEVENTH
+> AMENDMENT). The next
 > green asks both again. **This reverses MOTIR-5787 point 5's _"a PUSH does not by
 > itself re-ask acceptance"_ for an AWAITING question**: an unanswered question
 > about a set that is no longer green is not a question anybody can act on. A
@@ -2427,6 +2436,76 @@ An approval that does not merge is a note, not a gate.
 > | 1, 2, 4       | MOTIR-6847 — the disposition, the class, and the late re-settle            |
 > | 4 (backstop)  | MOTIR-6848 — the reconcile tick reads the conclusion from GitHub           |
 > | 1 (surface)   | MOTIR-6845 — the design delta · MOTIR-6849 — the row, the overlay and copy |
+>
+> ### §4 — SEVENTH AMENDMENT (MOTIR-6903, 2026-09-29): a re-queue made OUTSIDE Motir clears the exit and nothing else — GitHub's `enqueued` stamps a standing exit re-queued, the red, the hold and the repair claim lift, and no status moves and no gate is decided
+>
+> **DECIDED BY THE IMPLEMENTING RUN (MOTIR-6903, 2026-09-29)**, which the card asked
+> to choose between two answers and say which; the requester confirms or reverses it
+> on the pull request. It amends no earlier decision. It adds a THIRD writer of
+> `requeuedAt` beside the two presses (_Queue again_ in `auto`, and the re-asked
+> gate's approve in `manual`), and says what that writer does and does not do.
+>
+> **What was OPEN.** An exit stops standing when `requeuedAt` is stamped or a push
+> moves the head (`queueExitStandsAtHead`). Only Motir's own presses stamped it, and
+> the webhook read `dequeued` but not `enqueued`. So a pull request put back into
+> the queue anywhere else — GitHub's _Merge when ready_ / _Add to merge queue_,
+> `gh pr merge --auto`, another integration — sat in the queue on GitHub while its
+> card read _Left the queue_, folded `ciState: failing`, held the promotion, and was
+> claimable by `motir fix`. **The fixture:** MOTIR-6829 / `motir-core` PR #3235,
+> 2026-09-29 — ejected `CI_FAILURE` at 09:04:27 UTC, re-added on GitHub by a person
+> at 09:28:07, and still red on the card while queued at position 5.
+>
+> **1. THE EXIT.** A `pull_request` `enqueued` delivery whose pull request's LATEST
+> exit still stands at the head the delivery names stamps that exit's `requeuedAt`
+> (`githubPullRequestQueueExitRepository.claimRequeue`, the claim the presses make),
+> and recomputes every delivered card's `ciState` and fix reason in the same
+> transaction, exactly as a press does. The row stops reading _Left the queue_ /
+> _Removed from the queue_, the card stops reading red, the promotion hold lifts, and
+> `motir fix` stops claiming it. Every disposition is answered, a `neutral` exit as
+> well as a `failure`: both stood, and both are what the queue now contradicts.
+>
+> - **At another head** it changes nothing. A pull request whose head moved since
+>   the exit is already past it (the push ended the exit), and the queue is testing
+>   commits the exit says nothing about.
+> - **Twice** it changes nothing: the claim writes only while `requeuedAt` is null.
+>   So a redelivery, and the `enqueued` GitHub sends after Motir's own _Queue again_,
+>   are no-ops, and a press racing this delivery enqueues once. Whichever claims
+>   first wins, and the other finds the exit already re-queued.
+> - **Motir's first enqueue** has no exit to answer and changes nothing.
+>
+> **2. NO STATUS MOVES AND NO GATE IS DECIDED.** A queue action taken on GitHub is
+> not an answer to the question Motir asks. Point 1 of the FOURTH AMENDMENT (_one
+> approval = one merge or enqueue_) is about Motir's approval, and a GitHub-side
+> enqueue is not one; treating it as one would write a decision into the gate table
+> that nobody made in Motir, from a delivery whose sender Motir does not read. So:
+>
+> - A card held at `implemented` by a can't-land exit (the FIFTH) stays at
+>   `implemented`, with no gate. It is no longer red and no longer on To fix.
+> - A card at `in_review` with the re-asked gate (a neutral or setting exit, the
+>   FOURTH and SIXTH) keeps that gate awaiting. Answering it is harmless: the enqueue
+>   finds the pull request already queued and records that entry.
+> - An `auto` card stays where the exit put it.
+> - **The merge is what moves the card.** When the queue lands the pull request, the
+>   merge webhook writes `done` and withdraws any awaiting merge question, as for any
+>   merge. When the queue ejects it again, the new exit is recorded and settled like
+>   any exit.
+> - Because the hold has lifted, a check that goes green at that head afterwards is
+>   promoted by the ordinary CI path and may ask the merge question; answering it is
+>   the same harmless enqueue.
+>
+> _Why not the other answer:_ reading the enqueue as the approval would give a person
+> with merge rights on GitHub a way to decide a Motir gate that _Approving on GitHub_
+> deliberately limits to reviews at the current commit. Clearing only the red keeps
+> the one fact the card was wrong about — whether the pull request is out of the
+> queue — and leaves the question of who approved it where it was.
+>
+> **3. THE APP SUBSCRIPTION IS UNCHANGED.** `enqueued` is an action of the
+> `pull_request` event, which the Motir GitHub App already receives for `dequeued`;
+> no permission and no event is added.
+>
+> **What this does NOT decide:** recording a GitHub-side enqueue as Motir's merge
+> record (`mergeOutcomeRef` stays written only by Motir's own merge paths); reading
+> who enqueued; GitLab merge trains (MOTIR-4608).
 
 ### 5. The line against Story 9.2 — DECIDED BY THE PLANNER (rung 3, and it re-scopes existing cards)
 
@@ -2580,7 +2659,9 @@ has several open pull requests and therefore several simultaneous awaiting gates
 > value per writing path and **no value meaning _unsaid_**: `republished` ·
 > `withdrawn` · `head_moved` · `member_closed` · `member_drafted` · `set_changed` ·
 > `pulled_back` (`member_drafted` added by MOTIR-5699; **`ci_failed` by MOTIR-6271** —
-> a terminal CI failure at the commits the gate asked about, §8's SIXTH AMENDMENT).
+> a terminal CI failure at the commits the gate asked about, §8's SIXTH AMENDMENT;
+> **`ci_rerunning` by MOTIR-6946** — a check at those commits `pending` again, the set
+> leaving green without going red, §8's SEVENTH AMENDMENT).
 > The full table, with which path writes each, is `design-result.md`
 > AMENDMENT 6 Q5. (A seventh, `reopened_by_hand`, was named here when the
 > amendment was written and removed before it shipped — MOTIR-5661 found that a
@@ -4477,6 +4558,62 @@ repositories produce no preview has two paths rather than three, and says so.
 > and the hold at Implemented, the cause, the no-actor invariant (§6b) re-asserted
 > for the new path, the fresh gate on the next green, a decided gate untouched by a
 > later red, and a card not at In Review losing its gate without being dragged.
+
+> ### §8 — SEVENTH AMENDMENT (MOTIR-6946, 2026-09-29): a set that leaves green WITHOUT going red withdraws the question too — `ci_rerunning` joins the cause vocabulary
+>
+> **Again this adds no rule; it adds the second writing path the SIXTH AMENDMENT's
+> own principle required and its enumeration left out.** The SIXTH closed the RED
+> arm of _every event that takes the set out of green_. The other arm is green →
+> `running` at an UNCHANGED head: none of the causes — no head moved, no member
+> closed, nothing failed — so the gate stood `awaiting` for the whole run that
+> followed, and a person could press _Approve and merge_ over commits whose tests
+> had not finished.
+>
+> **Observed.** `moooon-B-V/motir-core#3261` @ `688ce704` (2026-09-29): the gate was
+> raised at `18:40:08` over a set only the acceptance lane had made green, because
+> CI's workflow run was queued behind its `concurrency` group with no jobs
+> (`ci-verdict-expected-check-set.md` AMENDMENT 3). CI's checks began arriving
+> `pending` at the SAME head from `18:40:58`, and nothing withdrew the question.
+>
+> #### 1 — the cause: `ci_rerunning`
+>
+> A new value, for the SIXTH AMENDMENT's reason: one value per writing path and
+> none meaning _unsaid_. `ci_failed` would be the nearest lie — nothing failed; the
+> verdict is simply not in. Its sentence says the checks started running again and
+> the question waits for them to pass; its cite is the re-ask, and that promise is
+> exact — the next green at the SAME commits raises a fresh gate, no push needed.
+>
+> #### 2 — only at the gate's OWN version
+>
+> A delivery that takes the pull request's live set at its head to `running`
+> (`derivePrCiState`) withdraws the awaiting merge gate ONLY where the set's
+> current version (`deliverySetVersion`) still equals the gate's `subjectVersion`.
+> A pending row at a NEW head is a push, which the same delivery already retired as
+> `head_moved` (`withdrawPullRequestApprovalGatesOnHeadMove` runs first); this path
+> never relabels it. A story run's acceptance question goes with it through the
+> ordinary predicate (MOTIR-5903).
+>
+> It fires from BOTH doors a pending row enters by: a `pending` delivery, and a
+> terminal delivery after which the reconcile recorded a pending row the host
+> reported (the queued workflow run of AMENDMENT 3). The feedback consumer's
+> aggregate `ciState` cannot tell the second apart from green — it reads `passing`
+> while any check succeeded — so the path re-derives `running` itself, exactly as
+> the promotion re-derives `passing`.
+>
+> #### 3 — the card, and what it does NOT touch
+>
+> The composer is the SIXTH AMENDMENT's (`ciPromotion.withdrawDeliveredCardsOffGreen`),
+> with one narrowing: **only a card whose merge question this path just retired
+> moves**, from `in_review` to Implemented via `settleUnlandedOutcome(… 'cant_land')`.
+> No hold is recorded — no conflict reading, no queue exit — so the next green at
+> the same head promotes it again with exactly one fresh gate. A card with no merge
+> question (an `auto` project) is not asked to approve anything and is not moved.
+> **A DECIDED gate is untouched** (§8's decision 5), as on every path.
+>
+> **Asserted** — `tests/github/pullRequestApprovalGates.test.ts` (the withdrawal, the
+> hold, the single fresh gate on the next green at the same commits, a new head
+> staying `head_moved`, a decided gate untouched, a red check still `ci_failed`) and
+> `tests/github/ciExpectedCheckSet.test.ts` (the `688ce704` replay raising no gate).
 
 > ### 9 — AMENDMENT: HOW TO TEST is per RUN (MOTIR-4906 re-plan, 2026-09-13), DECIDED BY THE REQUESTER (Yue, 2026-09-13)
 >

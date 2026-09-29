@@ -176,20 +176,20 @@ describe('all three fleet jobs are REGISTERED and reach the service through the 
 });
 
 describe('the schedules say what they can and cannot promise', () => {
-  it('the provision sweep is a BACKSTOP on the cluster, and says so (§6, MOTIR-3314)', () => {
+  it('the provision sweep is a BACKSTOP every 5 minutes, and says so (§6, MOTIR-6932)', () => {
     // §6 budgets p50 ≤ 30s webhook-to-start, and no cron can meet that — which is
     // why the hot path is the `workflow_job` webhook (MOTIR-1996) and a DEFERRED
     // intent is dispatched by the admission wake (MOTIR-2852). This schedule
-    // covers only a dispatch dropped in transit, so its cadence is priced against
-    // the wake bill rather than against admission latency.
-    expect(CI_RUNNER_PROVISION_SWEEP_CRON).toBe('0,30 * * * *');
+    // covers only a dispatch dropped in transit; it runs at the sub-hourly cadence
+    // every `system.*` backstop shares since the database became always-on.
+    expect(CI_RUNNER_PROVISION_SWEEP_CRON).toBe('*/5 * * * *');
     const config = configFor({
       id: 'system.ci-runner-provision-sweep',
       cron: CI_RUNNER_PROVISION_SWEEP_CRON,
       catchUp: 'latest',
       retryPolicy: 'idempotent',
     });
-    expect(config.cron).toBe('0,30 * * * *');
+    expect(config.cron).toBe('*/5 * * * *');
     expect(config.trigger).toBeUndefined();
   });
 

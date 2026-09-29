@@ -184,9 +184,9 @@ describe('the jobs', () => {
     });
   });
 
-  it('the sweep is on the clustered 30-minute cadence, catches up once, and returns the summary', async () => {
+  it('the sweep runs every 5 minutes, catches up once, and returns the summary', async () => {
     expect(agentInstanceSweep.id).toBe('system.agent-instance-sweep');
-    expect(AGENT_INSTANCE_SWEEP_CRON).toBe('0,30 * * * *');
+    expect(AGENT_INSTANCE_SWEEP_CRON).toBe('*/5 * * * *');
     expect(agentInstanceSweep.catchUp).toBe('latest');
     const summary = { settled: 0 } as never;
     const spy = vi.spyOn(agentInstanceSweepService, 'sweep').mockResolvedValue(summary);

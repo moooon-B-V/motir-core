@@ -21,16 +21,42 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // The three READY-LANE handlers (Story MOTIR-6829 · MOTIR-6832) — the bodies of
 // `GET /api/v1/projects/{projectKey}/ready/{leaves,containers,bugs}`.
 //
-// They follow `…/ready/route.ts` line for line, and its header is the contract:
-// a route does not filter, re-rank or re-derive readiness. Each calls ONE lane
-// read of the service, plus — for the two row lanes — the page's batched edge
-// projection (ADR Amendment 3 Q4). The lane cursor is the service's own opaque
-// token, wrapped in v1's signed envelope under a collection name PER LANE, so a
-// cursor from one lane is refused by another at parse time.
+// They were written line for line after the flat `GET …/ready` route (MOTIR-2066),
+// which MOTIR-6841 deleted once the released CLI read only these lanes. Its
+// contract lives here now:
+//
+// ── ⚠️ READINESS IS COMPUTED, AND THESE ROUTES DO NOT COMPUTE IT ─────────────
+// An item is ready when it is a CHILDLESS LEAF, in a non-terminal status, with
+// every `is_blocked_by` blocker terminal AND EVERY ANCESTOR READY — the
+// parent-ready cascade, which the service's lane reads implement top-down by
+// layer. A flat "all its own blockers are done" check is a DIFFERENT AND WRONG
+// answer, and it is the answer a route that re-derived readiness would give. So
+// a route calls the service and does not filter, re-sort, re-rank or
+// post-process the result: an agent loop that disagrees with the board about
+// what is ready is worse than no endpoint at all. Nor does it import from
+// `lib/mcp/` — the two transports align through the service.
+//
+// ── The ORDER is the product ────────────────────────────────────────────────
+// `items[0]` is what an agent should take next, so the page cursor is the
+// service's own opaque position, wrapped in v1's signed envelope under a
+// collection name PER LANE — a cursor from one lane is refused by another at
+// parse time, never decoded into a meaningless position.
+//
+// ── The SCOPE facets are RESOLVED by the service, not here ──────────────────
+// `?ancestor=` and `?sprintId=` (MOTIR-3196) name things rather than declaring
+// values, so no parser can settle them; the service resolves both inside the
+// read it was already making and throws `InvalidReadyFilterError`, mapped below
+// to the same 422 the vocabulary facets raise.
+//
+// ── ONE lane read, then ONE batched edge read ───────────────────────────────
+// For the two row lanes, the page's `blocked_by` edges come from
+// `getDependencyEdgesForItems` over the ids the lane read returned — a bounded
+// projection (ADR Amendment 3 Q4). The per-row form is an N+1 that stays
+// invisible until a 100-row page.
 
 type Ctx = V1RouteContext<{ projectKey: string }>;
 
-/** The service's two refusals, mapped exactly as the flat ready route maps them. */
+/** The service's two refusals, each mapped to a 422. */
 function mapReadyError(err: unknown): never {
   if (err instanceof InvalidReadyCursorError) {
     throw new InvalidRequestError(

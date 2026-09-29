@@ -53,6 +53,7 @@ import type {
   MergeRefusal,
   NormalizedDeploymentStatus,
   NormalizedMergeGroupAttempt,
+  NormalizedMergeQueueEntry,
   NormalizedMergeQueueExit,
   NormalizedUnlinkedCheckFailure,
   NormalizedReviewEvent,
@@ -158,6 +159,30 @@ export function mapGithubCiConclusion(raw: string): CiConclusion {
 /** Every `pr-<n>` in a merge-queue ref's LAST segment
  *  (`gh-readonly-queue/<base>/pr-<n>-<base sha>`), in order and without repeats. A
  *  ref that is not a queue ref names none. */
+
+/** The pull request a merge-queue `pull_request` delivery (`enqueued` / `dequeued`)
+ *  names: its repository, number and head — or `null` for another action or a body
+ *  missing any of the three. */
+function readQueueMember(
+  payload: Record<string, unknown> | null,
+  action: 'enqueued' | 'dequeued',
+): NormalizedMergeQueueEntry | null {
+  if (!payload || payload['action'] !== action) return null;
+  const providerRepoId = idToString(asRecord(payload['repository'])?.['id']);
+  const pr = asRecord(payload['pull_request']);
+  const number = pr?.['number'];
+  const headSha = asRecord(pr?.['head'])?.['sha'];
+  if (
+    !providerRepoId ||
+    typeof number !== 'number' ||
+    !Number.isInteger(number) ||
+    typeof headSha !== 'string' ||
+    headSha.length === 0
+  ) {
+    return null;
+  }
+  return { providerRepoId, number, headSha };
+}
 function readQueuePrNumbers(headRef: string): number[] {
   const ref = headRef.replace(/^refs\/heads\//, '');
   if (!ref.startsWith('gh-readonly-queue/')) return [];
@@ -1281,27 +1306,22 @@ export const githubProvider: GitProvider = {
    */
   parseMergeQueueExitEvent(rawPayload: unknown): NormalizedMergeQueueExit | null {
     const payload = asRecord(rawPayload);
-    if (!payload || payload['action'] !== 'dequeued') return null;
-    const providerRepoId = idToString(asRecord(payload['repository'])?.['id']);
-    const pr = asRecord(payload['pull_request']);
-    const number = pr?.['number'];
-    const headSha = asRecord(pr?.['head'])?.['sha'];
-    if (
-      !providerRepoId ||
-      typeof number !== 'number' ||
-      !Number.isInteger(number) ||
-      typeof headSha !== 'string' ||
-      headSha.length === 0
-    ) {
-      return null;
-    }
+    const member = readQueueMember(payload, 'dequeued');
+    if (!payload || !member) return null;
     const reason = payload['reason'];
     return {
-      providerRepoId,
-      number,
-      headSha,
+      ...member,
       rawReason: typeof reason === 'string' && reason.length > 0 ? reason : null,
     };
+  },
+
+  /**
+   * `pull_request` action `enqueued` → a pull request put into the merge queue
+   * (MOTIR-6903). The same three fields the `dequeued` delivery carries, read the same
+   * way; the delivery's other fields (the queue entry, the sender) are not read.
+   */
+  parseMergeQueueEntryEvent(rawPayload: unknown): NormalizedMergeQueueEntry | null {
+    return readQueueMember(asRecord(rawPayload), 'enqueued');
   },
 
   /**

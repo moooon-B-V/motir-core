@@ -3,6 +3,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import type { WorkspaceRole } from '@/lib/workspaces/roles';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectRepoProvisioningService } from '@/lib/services/projectRepoProvisioningService';
 import { projectRepoAccessService } from '@/lib/services/projectRepoAccessService';
@@ -21,7 +22,6 @@ import {
 } from '../helpers/actionsVariableFake';
 import { spyOnJobDispatch } from '../helpers/jobs';
 import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
-import { legacyToWorkspaceRole } from '@/lib/workspaces/roles';
 import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // TEAM CODE ACCESS over real Postgres (Story MOTIR-1775 · MOTIR-1910).
@@ -177,6 +177,11 @@ async function connectGithub(userId: string, login: string, githubUserId: string
  * because WHICH memberships exist is the thing under test: the `canEdit` answer
  * turns on the interaction between the two roles and the project's access level.
  */
+/** The fixture's four role words, as the workspace role each one lands as. */
+function toWorkspaceRole(role: 'owner' | 'admin' | 'member' | 'viewer'): WorkspaceRole {
+  return role === 'owner' || role === 'admin' ? 'manager' : role;
+}
+
 async function addMember(
   fx: WorkItemFixture,
   opts: {
@@ -193,7 +198,7 @@ async function addMember(
     data: {
       userId: user.id,
       workspaceId: fx.workspaceId,
-      workspaceRole: legacyToWorkspaceRole(opts.workspaceRole ?? 'member'),
+      workspaceRole: toWorkspaceRole(opts.workspaceRole ?? 'member'),
     },
   });
   if (opts.projectRole) {

@@ -12,6 +12,7 @@ import {
 } from '@/lib/services/workspaceInvitesService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { InviteExpiredOrMissingError } from '@/lib/workspaces/errors';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { captureEmailEvents } from '../helpers/jobs';
@@ -205,8 +206,10 @@ describe('every membership-creating path writes the workspace role, and it acts 
     const row = await adminDb.verification.findFirstOrThrow({
       where: { identifier: { startsWith: INVITE_IDENTIFIER_PREFIX } },
     });
-    // The token this build mints carries both keys (MOTIR-6562).
-    expect(JSON.parse(row.value)).toMatchObject({ workspaceRole: 'member', role: 'member' });
+    // The token names its workspace role, and no legacy `role` (MOTIR-6569).
+    const payload = JSON.parse(row.value);
+    expect(payload).toMatchObject({ workspaceRole: 'member' });
+    expect(payload).not.toHaveProperty('role');
     await workspaceInvitesService.acceptInvite(
       row.identifier.slice(INVITE_IDENTIFIER_PREFIX.length),
       {
@@ -282,8 +285,10 @@ describe('the bulk edit answer reads the workspace role alone', () => {
   });
 });
 
-describe('a pre-release invite still redeems', () => {
-  it('a token carrying only the legacy `role` key, as the previous build wrote it, lands as a Member', async () => {
+describe('a pre-release invite no longer redeems (MOTIR-6569)', () => {
+  // Every token minted before MOTIR-6562 lapsed after `INVITE_EXPIRY_MS` (7 days),
+  // so MOTIR-6569 retired the fallback that mapped its legacy `role`.
+  it('a token carrying only the legacy `role` key, as the pre-MOTIR-6562 build wrote it, is refused', async () => {
     const t = await tenant();
     const invitee = await person('pre-release');
     const token = `pre-release-${seq}`;
@@ -300,7 +305,13 @@ describe('a pre-release invite still redeems', () => {
         expiresAt: new Date(Date.now() + 60 * 60 * 1000),
       },
     });
-    await workspaceInvitesService.acceptInvite(token, { id: invitee.id, email: invitee.email });
-    await expectActsAs(t, invitee.id, 'member');
+    await expect(
+      workspaceInvitesService.acceptInvite(token, { id: invitee.id, email: invitee.email }),
+    ).rejects.toBeInstanceOf(InviteExpiredOrMissingError);
+    expect(
+      await adminDb.workspaceMembership.findUnique({
+        where: { userId_workspaceId: { userId: invitee.id, workspaceId: t.workspaceId } },
+      }),
+    ).toBeNull();
   });
 });

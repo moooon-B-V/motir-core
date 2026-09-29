@@ -201,7 +201,8 @@
  *   up split across two pull requests. Additive: one new endpoint (§8's first
  *   allowed change) and one new resource (`ScopeClaim`); no declared shape
  *   changed.
- * - `1.19.0` — MOTIR-3196 adds two query parameters to `getProjectReadySet`:
+ * - `1.19.0` — MOTIR-3196 adds two query parameters to the flat ready set
+ *   (`GET …/ready`, deleted in `1.55.0`):
  *   `ancestor` (repeatable) narrows the ready set to the leaves STRICTLY
  *   BENEATH one or more containers, at any depth; `sprintId` (single-valued,
  *   with the reserved literal `active`) narrows it to the items whose OWN
@@ -584,7 +585,8 @@
  *   was `1.38.0` at `bfae2ec2b`, so this claims `1.39.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
  *
- * - `1.40.0` — MOTIR-6366 adds one query parameter to `getProjectReadySet`:
+ * - `1.40.0` — MOTIR-6366 adds one query parameter to the flat ready set
+ *   (`GET …/ready`, deleted in `1.55.0`):
  *   `allowSoftBlock` (`true` / `false`, default `false`). `true` lists a leaf
  *   held only by an ANCESTOR's block (a SOFT block) while still excluding one
  *   with its own open `blocked_by` (a HARD block). A non-boolean value is the
@@ -819,13 +821,31 @@
  *   row naming its runnable `container`, with the new `ReadyLaneItem` and
  *   `ReadyContainer` components.
  *
- *   Additive: three new READ operations (§8's allowed list). `getProjectReadySet`
+ *   Additive: three new READ operations (§8's allowed list). The flat ready set
  *   is unchanged; the user's 2026-09-28 decision deletes it in a later task, once
- *   the released CLI no longer calls it.
+ *   the released CLI no longer calls it (`1.55.0`).
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.53.0` after MOTIR-6791 (`1.52.0`) and MOTIR-6795 (`1.53.0`) merged while
  *   this branch held `1.52.0`, so it was RENUMBERED to `1.54.0`. If a sibling has
  *   taken it since, RENUMBER this entry — it names the OPERATIONS.
+ *
+ * - `1.55.0` — MOTIR-6841 DELETES the flat ready set, `GET
+ *   /api/v1/projects/{projectKey}/ready`: its operation, its route (now a 404) and
+ *   a hosted run's token grant for it. The three lanes of `1.54.0` replace it —
+ *   `getProjectReadyLeaves` plus `getProjectReadyBugs` hold exactly its rows, with
+ *   the same facets and cascade — and `@motir/cli` 0.8.0, published with the
+ *   sandbox images at `cli-v0.8.0` (MOTIR-6840), reads only the lanes.
+ *
+ *   NOT additive, and deliberately so: a removal is what §8 reserves for a new
+ *   major. The user decided on 2026-09-28 that this one operation is DELETED
+ *   rather than deprecated, because nothing else calls it; the decision is
+ *   recorded here and on MOTIR-6841, and it overrides §8 for this operation only.
+ *   A MINOR, because the path version stays `1` and every other operation is
+ *   untouched. The two lanes' descriptions also stop naming the deleted read.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: `V1_CONTRACT_VERSION` was `1.54.0`
+ *   at `58946b8a0`, so this claims `1.55.0`. If a sibling has taken it since,
+ *   RENUMBER this entry.
  */
-export const V1_CONTRACT_VERSION = '1.54.0';
+export const V1_CONTRACT_VERSION = '1.55.0';

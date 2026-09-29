@@ -537,28 +537,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectKey}/ready": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read a project’s READY set
-         * @description The work items whose every `blocked_by` dependency is done — what an agent loop claims from. Each row carries its dependency edges. Reports no total: unlike the backlog, this read has no cheap bounded count.
-         *
-         *     Requires the `project:browse` permission.
-         */
-        get: operations["getProjectReadySet"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/projects/{projectKey}/ready/leaves": {
         parameters: {
             query?: never;
@@ -568,7 +546,7 @@ export interface paths {
         };
         /**
          * Read a project’s ready LEAVES lane
-         * @description The ready set minus BUG WORK (a `bug`, or a leaf whose parent is a `bug`), each row naming the RUNNABLE CONTAINER it groups under — a `story`, `task` or `bug` whose every child is childless, the shape a parent run accepts — or `null`. ORDER is part of the contract: rows are grouped by `container ?? self`, a group ranks by its best member’s `(kind, priority, key)`, and members keep that rank inside it, so `items[0]` is the next leaf to run. Readiness is the same parent-ready cascade `getProjectReadySet` reads; this lane and `getProjectReadyBugs` together hold exactly its rows. Accepts every facet that read accepts.
+         * @description The ready set minus BUG WORK (a `bug`, or a leaf whose parent is a `bug`), each row naming the RUNNABLE CONTAINER it groups under — a `story`, `task` or `bug` whose every child is childless, the shape a parent run accepts — or `null`. ORDER is part of the contract: rows are grouped by `container ?? self`, a group ranks by its best member’s `(kind, priority, key)`, and members keep that rank inside it, so `items[0]` is the next leaf to run. Readiness is the parent-ready cascade — a childless leaf, not terminal, every `blocked_by` blocker terminal and every ancestor ready; this lane and `getProjectReadyBugs` are disjoint and together hold the whole ready set.
          *
          *     Requires the `project:browse` permission.
          */
@@ -612,7 +590,7 @@ export interface paths {
         };
         /**
          * Read a project’s ready BUGS lane
-         * @description The ready BUG WORK: a ready `bug` (its own group, `container: null`), and the ready subtasks of a bug (grouped under it, `container` = the bug). The same order, facets and cascade as `getProjectReadyLeaves`; the two lanes are disjoint and together hold exactly the rows of `getProjectReadySet`.
+         * @description The ready BUG WORK: a ready `bug` (its own group, `container: null`), and the ready subtasks of a bug (grouped under it, `container` = the bug). The same order, facets and cascade as `getProjectReadyLeaves`; the two lanes are disjoint and together hold the whole ready set.
          *
          *     Requires the `project:browse` permission.
          */
@@ -1819,7 +1797,7 @@ export interface components {
             decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission") | null;
             decisionSource: ("ui" | "api" | "mcp" | "github") | null;
             subjectVersion: string | null;
-            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed") | null;
+            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "ci_rerunning" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed") | null;
             outcomeRef: string | null;
             refusalVerdict: ("revise" | "re_plan") | null;
             offersRefusalVerdict: boolean;
@@ -5652,7 +5630,7 @@ export interface operations {
                             decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission") | null;
                             decisionSource: ("ui" | "api" | "mcp" | "github") | null;
                             subjectVersion: string | null;
-                            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed") | null;
+                            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "ci_rerunning" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed") | null;
                             outcomeRef: string | null;
                             refusalVerdict: ("revise" | "re_plan") | null;
                             offersRefusalVerdict: boolean;
@@ -7083,172 +7061,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MembershipMoveResult"];
-                };
-            };
-            /** @description Authentication required. No token, or a token that is malformed, unknown, revoked or expired — the five are deliberately undifferentiated. */
-            401: {
-                headers: {
-                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
-                    "X-Request-Id"?: string;
-                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
-                    "X-Motir-Api-Version"?: string;
-                    /** @description The number of requests this token may make in the current window. */
-                    "X-RateLimit-Limit"?: string;
-                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
-                    "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
-                    "X-RateLimit-Reset"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description The token is valid but its granted scopes do not include the one this operation requires. */
-            403: {
-                headers: {
-                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
-                    "X-Request-Id"?: string;
-                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
-                    "X-Motir-Api-Version"?: string;
-                    /** @description The number of requests this token may make in the current window. */
-                    "X-RateLimit-Limit"?: string;
-                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
-                    "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
-                    "X-RateLimit-Reset"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description The resource does not exist, or it is outside the workspace this token is bound to — deliberately the same answer. */
-            404: {
-                headers: {
-                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
-                    "X-Request-Id"?: string;
-                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
-                    "X-Motir-Api-Version"?: string;
-                    /** @description The number of requests this token may make in the current window. */
-                    "X-RateLimit-Limit"?: string;
-                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
-                    "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
-                    "X-RateLimit-Reset"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description The request is malformed in a way the caller can fix: an invalid cursor, an out-of-range `limit`, a failed body validation. */
-            422: {
-                headers: {
-                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
-                    "X-Request-Id"?: string;
-                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
-                    "X-Motir-Api-Version"?: string;
-                    /** @description The number of requests this token may make in the current window. */
-                    "X-RateLimit-Limit"?: string;
-                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
-                    "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
-                    "X-RateLimit-Reset"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
-            429: {
-                headers: {
-                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
-                    "X-Request-Id"?: string;
-                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
-                    "X-Motir-Api-Version"?: string;
-                    /** @description The number of requests this token may make in the current window. */
-                    "X-RateLimit-Limit"?: string;
-                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
-                    "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
-                    "X-RateLimit-Reset"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description An unexpected server fault. The body carries no `code`, no stack and no driver text. */
-            500: {
-                headers: {
-                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
-                    "X-Request-Id"?: string;
-                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
-                    "X-Motir-Api-Version"?: string;
-                    /** @description The number of requests this token may make in the current window. */
-                    "X-RateLimit-Limit"?: string;
-                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
-                    "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
-                    "X-RateLimit-Reset"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InternalErrorBody"];
-                };
-            };
-        };
-    };
-    getProjectReadySet: {
-        parameters: {
-            query?: {
-                /** @description An opaque page cursor from a previous response’s `nextCursor`. Omit for the first page. Cursors are signed and scoped to their own collection — one issued elsewhere is a 422, never a silent reset. */
-                cursor?: string;
-                /** @description Rows per page. Defaults to 50; a larger value is CLAMPED to 100 rather than rejected. */
-                limit?: number;
-                /** @description Narrow to one or more work-item kinds, as `?kind=epic&kind=story`. An unknown kind is a 422. */
-                kind?: string[];
-                /** @description Narrow to one or more priorities, as `?priority=high&priority=urgent`. An unknown priority is a 422. */
-                priority?: string[];
-                /** @description TRI-STATE, and all three are reachable: OMIT for any assignee, the literal `none` for the unassigned bucket, or a user id for that user's items. An empty value is treated as omitted. */
-                assigneeId?: string;
-                /** @description SCOPE the read to the ready leaves STRICTLY BENEATH one or more containers, at ANY depth, as `?ancestor=MOTIR-42&ancestor=MOTIR-43` — an any-of set, like `kind`. The named container is NOT in its own result, so a childless one returns an empty page rather than itself: that is the honest answer to “what is ready under this story” for a story nobody has decomposed. ⚠️ It NARROWS the same answer the unfaceted read gives and can never widen it — a leaf whose ancestor chain reaches the named container but is not itself all-ready stays absent, because the parent-ready cascade is computed first and this filters its result (with `allowSoftBlock=true` it narrows that widened answer in the same way). An unknown key, or one belonging to another project, is a 422 — indistinguishable from each other. */
-                ancestor?: string[];
-                /** @description SCOPE the read to the items whose OWN `sprintId` matches — a sprint id, or the reserved literal `active` for the project's active sprint. SINGLE-VALUED: membership is a scalar column, so there is no any-of question to ask. Membership is DIRECT and never inherited — an item under an in-sprint parent but not itself in the sprint is out of scope. A sprint that is not this project's, and `active` on a project between sprints, are both a 422 rather than a silently unfiltered page. An empty value is treated as omitted. */
-                sprintId?: string;
-                /** @description WIDEN the read past a SOFT block. `true` keeps the requirement that every listed leaf’s OWN `blocked_by` dependencies are done, but no longer drops a leaf because an ANCESTOR is not ready — so a leaf held only by its epic’s or story’s block is listed, while a leaf with its own open blocker (a HARD block) never is. A container whose own blockers are open counts toward its children only as an ancestor. Composes with every other parameter, `ancestor` included. Absent, empty or `false` returns exactly the parent-ready cascade described above. Any other value is a 422. */
-                allowSoftBlock?: "true" | "false";
-            };
-            header?: never;
-            path: {
-                /** @description The project’s key — the prefix of its work items’ keys, e.g. `MOTIR`. */
-                projectKey: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A page of ready work items with their dependency edges. */
-            200: {
-                headers: {
-                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
-                    "X-Request-Id"?: string;
-                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
-                    "X-Motir-Api-Version"?: string;
-                    /** @description The number of requests this token may make in the current window. */
-                    "X-RateLimit-Limit"?: string;
-                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
-                    "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
-                    "X-RateLimit-Reset"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PageEnvelope"] & {
-                        items?: components["schemas"]["ReadyItem"][];
-                    };
                 };
             };
             /** @description Authentication required. No token, or a token that is malformed, unknown, revoked or expired — the five are deliberately undifferentiated. */

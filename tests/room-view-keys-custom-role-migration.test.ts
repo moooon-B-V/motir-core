@@ -1,9 +1,14 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from './helpers/adminDb';
-import { findLegacyProjectRole, insertLegacyProjectRole } from './helpers/legacyProjectRoles';
+import {
+  dropLegacyRoleStorage,
+  ensureLegacyRoleStorage,
+  findLegacyProjectRole,
+  insertLegacyProjectRole,
+} from './helpers/legacyRoleStorage';
 import { truncateAuthTables } from './helpers/db';
 
 // MOTIR-6329 (Story MOTIR-6179) — nobody loses a room they have today. Every
@@ -77,7 +82,12 @@ async function permissionsOf(id: string): Promise<string[]> {
 
 beforeEach(async () => {
   await truncateAuthTables();
+  // The migration under test reads the legacy role storage MOTIR-6569 dropped;
+  // rebuild it for the test (tests/helpers/legacyRoleStorage.ts).
+  await ensureLegacyRoleStorage();
 });
+
+afterEach(dropLegacyRoleStorage);
 
 afterAll(async () => {
   await db.$disconnect();

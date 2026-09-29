@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET as GET_DETAIL } from '@/app/api/v1/work-items/[key]/route';
 import { GET as GET_COLLECTION } from '@/app/api/v1/projects/[projectKey]/work-items/route';
-import { GET as GET_READY } from '@/app/api/v1/projects/[projectKey]/ready/route';
+import { GET as GET_READY } from '@/app/api/v1/projects/[projectKey]/ready/leaves/route';
 import { GET as GET_COMMENTS } from '@/app/api/v1/work-items/[key]/comments/route';
 import type { V1CommentThread } from '@/lib/api/v1/workItems/schema';
 import { commentsService } from '@/lib/services/commentsService';
@@ -158,7 +158,7 @@ async function readCollection(caller: V1ProjectCaller): Promise<WorkItemSummary[
 async function readReady(caller: V1ProjectCaller): Promise<V1ReadyItem[]> {
   const key = caller.projectKey;
   const res = await GET_READY(
-    new Request(`${BASE}/projects/${key}/ready`, { headers: caller.headers }),
+    new Request(`${BASE}/projects/${key}/ready/leaves`, { headers: caller.headers }),
     { params: Promise.resolve({ projectKey: key }) },
   );
   expect(res.status).toBe(200);
@@ -371,7 +371,7 @@ describe('the shipped CLI renderers, driven from a v1 response', () => {
     expect(threads.every((t) => t.author.name === caller.user.name)).toBe(true);
   });
 
-  it('renderReadyTable prints the ASSIGNEE NAME from `GET …/ready` (Amendment 10 Q1)', async () => {
+  it('renderReadyTable prints the ASSIGNEE NAME from `GET …/ready/leaves` (Amendment 10 Q1)', async () => {
     // The regression this whole card exists to prevent. Before Amendment 10 the
     // v1 row carried `assigneeId` and no name, so this table printed
     // "unassigned" for an item that plainly has an assignee — silently, because
@@ -409,14 +409,14 @@ describe('the shipped CLI renderers, driven from a v1 response', () => {
     // Amendment 10 permits the widening because it is a mapper change. An N+1
     // here would be invisible until a 50-row page, so it is asserted rather
     // than reasoned about: two service calls for the whole page, whatever its
-    // size (`listReady`, then the bounded edge projection).
+    // size (`listReadyLeaves`, then the bounded edge projection).
     const caller = await createV1ProjectCaller({ scopes: ['read'] });
     for (let i = 0; i < 5; i += 1) {
       const made = await makeItem(caller, `assigned ${i}`);
       await workItemsService.updateWorkItem(made.id, { assigneeId: caller.user.id }, caller.ctx);
     }
 
-    const listReady = vi.spyOn(workItemsService, 'listReady');
+    const listReady = vi.spyOn(workItemsService, 'listReadyLeaves');
     const edges = vi.spyOn(workItemsService, 'getDependencyEdgesForItems');
 
     const rows = await readReady(caller);
