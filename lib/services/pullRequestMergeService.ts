@@ -42,7 +42,7 @@ import type {
   PullRequestApprovalMemberDTO,
 } from '@/lib/dto/approvalGate';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
-import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import type { GithubPullRequestQueueExit } from '@/generated/prisma/client';
@@ -420,7 +420,7 @@ export const pullRequestMergeService = {
         const exit = exits.get(pr.id);
         const open = pr.state === 'open' && !pr.merged;
         if (!exit || exit.requeuedAt !== null || !open) return [];
-        const head = liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha;
+        const head = pullRequestHead(pr) ?? undefined;
         return [
           {
             pullRequestId: pr.id,
@@ -559,7 +559,7 @@ export const pullRequestMergeService = {
           tx,
         )
       ).get(delivered.pullRequest.id);
-      const headNow = liveRowsAtLatestSha([...delivered.pullRequest.checkRuns])[0]?.commitSha;
+      const headNow = pullRequestHead(delivered.pullRequest) ?? undefined;
       return {
         member,
         workItemId: requireGateCard(approval, 'pullRequestMergeService'),
@@ -712,7 +712,7 @@ export const pullRequestMergeService = {
       ).get(pr.id);
       if (!exit) throw new QueueAgainRefusedError('no_exit', input.pullRequestId);
       if (exit.requeuedAt !== null) throw new ApprovalGateAlreadyRequeuedError(pr.id);
-      const head = liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha;
+      const head = pullRequestHead(pr) ?? undefined;
       if (head !== exit.headSha) throw new QueueAgainRefusedError('head_moved', pr.id);
       if ((await githubPullRequestQueueExitRepository.claimRequeue(exit.id, now, tx)) === 0) {
         throw new ApprovalGateAlreadyRequeuedError(pr.id);

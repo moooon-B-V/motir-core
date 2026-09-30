@@ -8,7 +8,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { githubPullRequestMergeRefusalRepository } from '@/lib/repositories/githubPullRequestMergeRefusalRepository';
-import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
 import { queueExitCardMoves, settleUnlandedOutcome } from './mergeQueueExitService';
 import { classOfMergeRefusal, classOfQueueExit } from '@/lib/mergeQueue/queueExit';
@@ -214,7 +214,7 @@ export const ejectedCardConvergenceService = {
               const exit = latestExits.get(d.githubPullRequestId);
               if (!exit || exit.requeuedAt !== null) return [];
               if (classOfQueueExit(exit) !== 'cant_land') return [];
-              const head = liveRowsAtLatestSha([...d.pullRequest.checkRuns])[0]?.commitSha;
+              const head = pullRequestHead(d.pullRequest) ?? undefined;
               return [{ standing: queueExitStandsAtHead(exit, head) }];
             });
             if (cantLand.length === 0) return skip('already_in_review');
@@ -251,7 +251,7 @@ export const ejectedCardConvergenceService = {
           // The STANDING outcome, if there is one — the rule `deliverySet.ts` owns, read
           // over every disposition (populations A, B and C).
           const standing = deliveries.flatMap((d) => {
-            const head = liveRowsAtLatestSha([...d.pullRequest.checkRuns])[0]?.commitSha;
+            const head = pullRequestHead(d.pullRequest) ?? undefined;
             const exit = latestExits.get(d.githubPullRequestId);
             return queueExitStandsAtHead(exit, head)
               ? [{ exit: exit!, landingClass: classOfQueueExit(exit!) }]
@@ -301,7 +301,7 @@ export const ejectedCardConvergenceService = {
             const pr = d.pullRequest;
             if (pr.state !== 'open' || pr.merged) return false;
             if (pr.mergeOutcomeRef !== null) return false;
-            const head = liveRowsAtLatestSha([...pr.checkRuns])[0]?.commitSha;
+            const head = pullRequestHead(pr) ?? undefined;
             if (!head) return false;
             const refusal = latestRefusals.get(d.githubPullRequestId);
             return !refusal || refusal.supersededAt !== null || refusal.headSha !== head;
@@ -311,7 +311,7 @@ export const ejectedCardConvergenceService = {
 
           const ctx = await actorFor(item, tx);
           for (const delivery of stranded) {
-            const head = liveRowsAtLatestSha([...delivery.pullRequest.checkRuns])[0]!.commitSha;
+            const head = pullRequestHead(delivery.pullRequest)!;
             await githubPullRequestMergeRefusalRepository.create(
               {
                 pullRequestId: delivery.githubPullRequestId,

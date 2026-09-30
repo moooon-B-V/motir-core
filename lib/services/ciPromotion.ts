@@ -4,7 +4,7 @@ import {
   withWorkspaceContext,
 } from '@/lib/workspaces/context';
 import type { GithubCheckRun, Prisma, WorkItem } from '@/generated/prisma/client';
-import { derivePrCiState } from '@/lib/github/prCiState';
+import { prCiStateAtHead } from '@/lib/github/pullRequestHead';
 import {
   readReportedCheckSet,
   reconcileRecordedCheckSet,
@@ -79,6 +79,12 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 // SUPERSEDED sha loses to the newer push's rows (not promoted). Re-deriving any
 // of them here would be a second opinion that could drift from the pill a person
 // reads on the Development surface.
+//
+// ⚠️ AMENDED BY MOTIR-7005: "the latest recorded sha" is now the pull request's
+// STORED head (`prCiStateAtHead`), not the newest check row's commit. A push that
+// produced no CI (every push to a conflicting pull request) left the rows at the old
+// green commit, and the latest-sha reading promoted that commit every reconcile tick.
+// A head with no rows reads `null` — not reported yet — and withholds.
 
 /**
  * The refusals a promotion TOLERATES, per card.
@@ -157,9 +163,8 @@ const REVIEW_STATUSES: readonly string[] = ['in_review', 'approved'];
  * row recorded on both sides is counted once. The union collapses when
  * MOTIR-3672 retires the parse.
  *
- * The verdict per member is `derivePrCiState` — the SAME function the
- * Development pill shows and MOTIR-3697's `deliveries` field publishes, at the
- * latest recorded sha. A second opinion here would drift from what a person
+ * The verdict per member is `prCiStateAtHead` — `derivePrCiState`'s precedence over
+ * the rows AT the pull request's stored head (MOTIR-7005). A second opinion here would drift from what a person
  * reads on the card it is deciding about.
  *
  * ── ONE AMENDMENT, AND IT IS THE PROMOTION'S ALONE (MOTIR-3823) ───────────
@@ -207,12 +212,12 @@ async function everyDeliveryIsGreen(
  * the current head and the next green verdict promotes (with ONE fresh gate over
  * the new heads); or *Queue again* stamps the exit and moves the card itself.
  *
- * "Current head" is the latest check run's commit — the rule the gate's own
- * `subjectVersion` is written with (`deliveryMemberVersion`), so the two cannot
- * disagree about which commit a member is at.
+ * "Current head" is `pullRequestHead` — the rule the gate's own `subjectVersion` is
+ * written with (`deliveryMemberVersion`), so the two cannot disagree about which
+ * commit a member is at (MOTIR-7005).
  */
 async function heldByQueueFailure(
-  byId: Map<string, { checkRuns: GithubCheckRun[] }>,
+  byId: Map<string, { headSha: string | null; checkRuns: GithubCheckRun[] }>,
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
   // The rule is `queueExitHoldsAtHead` (MOTIR-5717), shared with the card's own
@@ -273,7 +278,7 @@ export async function promoteDeliveredCardsOnGreen(args: {
     const none = { promote: [] as string[], reRaise: [] as string[] };
     const pr = await githubPullRequestRepository.findByIdWithInstallation(args.changeRequestId, tx);
     if (!pr) return none;
-    if (derivePrCiState(pr.checkRuns) !== 'passing') return none;
+    if (prCiStateAtHead(pr) !== 'passing') return none;
 
     // ⚠️ THE PULL REQUEST, NOT A CARD READ OFF IT (MOTIR-3721). This used to
     // resolve the pull request's own link column and hand the resolver a single
@@ -390,9 +395,9 @@ async function withdrawDeliveredCardsOffGreen(
     const pr = await githubPullRequestRepository.findByIdWithInstallation(args.changeRequestId, tx);
     // ⚠️ RE-DERIVE, never trust the delivery that woke us. The event that called this is one
     // check; the question is whether the PULL REQUEST is red (or running) at its latest
-    // recorded sha, which is the same reading `derivePrCiState` gives the pill and the
-    // promotion. A single red check on a superseded run must retire nothing.
-    if (!pr || derivePrCiState(pr.checkRuns) !== verdict) {
+    // head, which is the same reading `prCiStateAtHead` gives the promotion. A single red
+    // check on a superseded run must retire nothing.
+    if (!pr || prCiStateAtHead(pr) !== verdict) {
       return { withdrawn: 0, moved: [] as string[] };
     }
     const refs = await resolveDeliveredWorkItems(args.changeRequestId, tx);

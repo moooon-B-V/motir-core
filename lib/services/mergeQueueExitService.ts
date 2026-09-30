@@ -34,7 +34,7 @@ import { reconcileGatesFor } from './gateSetFor';
 import { readPlanHoldWithin } from './planTargetLockService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
-import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import {
   IllegalTransitionError,
   MarkedCardCannotReopenError,
@@ -602,7 +602,7 @@ export async function resettleStandingExit(input: {
   const pr = (await githubPullRequestRepository.findManyByIdsForSummary([pullRequestId], tx)).get(
     pullRequestId,
   );
-  const head = pr ? liveRowsAtLatestSha([...pr.checkRuns])[0]?.commitSha : undefined;
+  const head = pr ? (pullRequestHead(pr) ?? undefined) : undefined;
   if (!queueExitStandsAtHead(exit, head)) return none;
   const delivered = await resolveDeliveredWorkItems(pullRequestId, tx);
   if (await deliversIntoAutoMode(delivered, tx)) return none;

@@ -111,6 +111,16 @@ export interface NormalizedChangeRequest {
    * a fact the rest of the product reasons over.
    */
   draft: boolean;
+  /**
+   * The commit the change request's source branch is AT — GitHub's `head.sha`,
+   * GitLab's `last_commit.id` (MOTIR-7005). Persisted as `GithubPullRequest.headSha`
+   * and read by `lib/github/pullRequestHead.ts`, so "the current head" is the host's
+   * word and never the newest check run's commit: a push that produces no CI (every
+   * push to a conflicting pull request) leaves the check rows at the OLD commit.
+   *
+   * REQUIRED, for `draft`'s reason; `null` when the payload names none.
+   */
+  headSha: string | null;
 }
 
 /** The canonical, provider-agnostic lifecycle signal a change request maps to —

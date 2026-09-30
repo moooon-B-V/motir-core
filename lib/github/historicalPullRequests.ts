@@ -139,6 +139,7 @@ export function normalizeHistoricalPullRequest(
       merged: true,
       headRef,
       baseRef,
+      headSha: readString(asRecord(pr['head'])?.['sha']),
       title: readString(pr['title']),
       // A MERGED pull request is not a draft — GitHub refuses to merge one — and
       // the draft flag decides nothing here in any case: this path only ever

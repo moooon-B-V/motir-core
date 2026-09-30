@@ -52,7 +52,7 @@ import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionR
 import { userRepository } from '@/lib/repositories/userRepository';
 import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
 import { countableReviewsAtHead, type CountableReview } from '@/lib/approvalGates/reviewVerdict';
-import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import type { GithubPullRequestWithContext } from '@/lib/repositories/githubPullRequestRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -1611,7 +1611,7 @@ async function readGithubReviewsForRows(
     if (!rowReviews || rowReviews.length === 0) continue;
 
     // The row's CURRENT head, read the way the gate's own version reads it.
-    const head = liveRowsAtLatestSha(row.checkRuns)[0]?.commitSha ?? null;
+    const head = pullRequestHead(row);
 
     const decided = head ? pickReview(countableReviewsAtHead(rowReviews, head)) : null;
     if (decided) {

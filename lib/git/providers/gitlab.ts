@@ -199,6 +199,12 @@ function gitlabCompareShas(webUrl: unknown): { baseSha: string | null; headSha: 
   return { baseSha: m?.[1] ?? null, headSha: m?.[2] ?? null };
 }
 
+/** GitLab's head commit for an MR payload's `object_attributes` — `last_commit.id`. */
+function readLastCommitId(attrs: Record<string, unknown>): string | null {
+  const lastCommit = asRecord(attrs['last_commit']);
+  return typeof lastCommit?.['id'] === 'string' ? lastCommit['id'] : null;
+}
+
 export const gitlabProvider: GitProvider = {
   id: 'gitlab',
 
@@ -553,6 +559,8 @@ export const gitlabProvider: GitProvider = {
       merged: state === 'merged',
       headRef,
       baseRef,
+      // The head COMMIT (MOTIR-7005): the MR's `last_commit`.
+      headSha: readLastCommitId(attrs),
       title: typeof attrs['title'] === 'string' ? attrs['title'] : null,
       // The DRAFT flag (MOTIR-4968). GitLab carries BOTH names on
       // `object_attributes` — `draft` is the current one and `work_in_progress`
