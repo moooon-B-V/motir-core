@@ -100,7 +100,9 @@ export type SpawnChat = (options: ChatSpawnOptions) => ChatProcess;
 export const spawnChatProcess: SpawnChat = (options) => {
   const child = spawnChild(options.file, options.args, {
     cwd: options.cwd,
-    env: options.env,
+    // The app's tsconfig widens `ProcessEnv` with required keys (NODE_ENV);
+    // the CLI's does not. The record is a whole environment either way.
+    env: options.env as NodeJS.ProcessEnv,
     detached: true,
     stdio: [options.stdin === null ? 'ignore' : 'pipe', 'pipe', 'pipe'],
   });
