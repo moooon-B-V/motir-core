@@ -16,6 +16,7 @@ import {
 import { attachmentGc } from './definitions/attachmentGc';
 import { publicAddressCertificateRefresh } from './definitions/publicAddressCertificateRefresh';
 import { rateLimitSweep } from './definitions/rateLimitSweep';
+import { oauthSweep } from './definitions/oauthSweep';
 import { codeGraphOffboardSweep } from './definitions/codeGraphOffboardSweep';
 import { filterSubscriptionTick } from './definitions/filterSubscriptionTick';
 import { filterSubscriptionDeliver } from './definitions/filterSubscriptionDeliver';
@@ -105,6 +106,7 @@ export const jobDefinitions = [
   attachmentGc,
   publicAddressCertificateRefresh,
   rateLimitSweep,
+  oauthSweep,
   codeGraphOffboardSweep,
   filterSubscriptionTick,
   filterSubscriptionDeliver,

@@ -18,6 +18,7 @@ import { notificationFanInService } from '@/lib/services/notificationFanInServic
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { publicAddressCertificatesService } from '@/lib/services/publicAddressCertificatesService';
 import { rateLimitService } from '@/lib/services/rateLimitService';
+import { oauthSweepService } from '@/lib/services/oauthSweepService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
 import { publicFollowDigestService } from '@/lib/services/publicFollowDigestService';
 import { automationEngineService } from '@/lib/services/automationEngineService';
@@ -78,6 +79,8 @@ export const jobServices = {
   attachments: attachmentsService,
   publicAddressCertificates: publicAddressCertificatesService,
   rateLimit: rateLimitService,
+  // The daily OAuth sweep (MOTIR-6984).
+  oauthSweep: oauthSweepService,
   savedFilterSubscriptions: savedFilterSubscriptionsService,
   publicFollowDigest: publicFollowDigestService,
   automationEngine: automationEngineService,
