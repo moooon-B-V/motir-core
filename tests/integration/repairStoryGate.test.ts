@@ -174,6 +174,8 @@ describe('seam 1 — claim → run → page', () => {
       holder: { id: s.user.id, name: 'Owner' },
       byViewer: true,
       startedAt: run.startedAt.toISOString(),
+      // The open run itself — a local `motir fix`, so no hosted run link (MOTIR-6930).
+      run: { id: run.id, label: expect.stringMatching(/^motir fix · .+ UTC$/), hosted: false },
     });
 
     await dispatchRunService.close(claim.runId!, { stopReason: 'interrupted' }, s.ctx);

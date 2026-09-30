@@ -1,7 +1,11 @@
 import 'server-only';
 
 import { getAgentModels, type AgentModel } from '@/lib/ai/motirAiClient';
-import { HostedModelNotOfferedError, HostedModelsUnavailableError } from '@/lib/hostedRuns/errors';
+import {
+  HostedModelNotOfferedError,
+  HostedModelsUnavailableError,
+  HostedNoModelOfferedError,
+} from '@/lib/hostedRuns/errors';
 
 // THE ONE ANSWER TO "WHICH MODELS MAY A HOSTED RUN USE?" (MOTIR-6483;
 // `docs/decisions/hosted-agent-run.md` §7).
@@ -61,6 +65,24 @@ export const hostedRunModelService = {
     const read = await getAgentModels();
     if (read.state === 'unavailable') throw new HostedModelsUnavailableError(read.reason);
     if (!read.models.some((m) => m.id === model)) throw new HostedModelNotOfferedError(model);
+  },
+
+  /**
+   * The model a run with NOBODY TO CHOOSE takes — a REVIEW run (MOTIR-6820;
+   * `hosted-agent-run.md` §7's pointer): the list's default, else the first model offered.
+   * Throws `HostedModelsUnavailableError` when motir-ai cannot answer, and
+   * `HostedNoModelOfferedError` when it answers an empty list — either is a review that
+   * could not run, reason _no model_.
+   */
+  async defaultOffered(): Promise<string> {
+    const read = await getAgentModels();
+    if (read.state === 'unavailable') throw new HostedModelsUnavailableError(read.reason);
+    const chosen =
+      read.default && read.models.some((m) => m.id === read.default)
+        ? read.default
+        : read.models[0]?.id;
+    if (!chosen) throw new HostedNoModelOfferedError();
+    return chosen;
   },
 
   toOpenCodeModel,

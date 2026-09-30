@@ -5,6 +5,7 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import {
   HostedContinueRefusedError,
+  HostedFixRefusedError,
   HostedModelNotOfferedError,
   HostedModelsUnavailableError,
   HostedRunBootFailedError,
@@ -23,7 +24,10 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 // hosted run on a card: `{ model, idempotencyKey?, mode? }` → `201 { dispatchRunId }`.
 // `mode: 'continue'` (Story MOTIR-6527 · MOTIR-6792) resumes a card whose last run
 // died — Continue hosted — and adds the continue claim's refusals, each a 409
-// `hosted_continue_*` (`taken` naming its holder).
+// `hosted_continue_*` (`taken` naming its holder). `mode: 'fix'` (Story MOTIR-1626 ·
+// MOTIR-6928) repairs a card a review sent back — Fix on the hosted agent — and adds the
+// repair claim's refusals, each a 409 `hosted_fix_*` (`taken` naming its holder,
+// `not_repairable` the claim's own reason).
 // The route MOTIR-691's Run hosted control calls; `hostedRunService.start` is the
 // whole behaviour.
 //
@@ -59,8 +63,8 @@ export async function POST(
   const model = typeof body?.model === 'string' ? body.model.trim() : '';
   if (!model) return problem('BAD_REQUEST', '`model` must be a model id.', 400);
   const mode = body?.mode ?? 'run';
-  if (mode !== 'run' && mode !== 'continue') {
-    return problem('BAD_REQUEST', '`mode` must be "run" or "continue".', 400);
+  if (mode !== 'run' && mode !== 'continue' && mode !== 'fix') {
+    return problem('BAD_REQUEST', '`mode` must be "run", "continue" or "fix".', 400);
   }
   const idempotencyKey =
     typeof body?.idempotencyKey === 'string' && body.idempotencyKey.trim()
@@ -95,6 +99,14 @@ export async function POST(
       return problem(err.code, err.message, 409, {
         ...(err.holder ? { holder: err.holder, startedAt: err.startedAt } : {}),
         ...(err.parentKey ? { parentKey: err.parentKey } : {}),
+      });
+    }
+    if (err instanceof HostedFixRefusedError) {
+      return problem(err.code, err.message, 409, {
+        ...(err.holder ? { holder: err.holder, startedAt: err.startedAt } : {}),
+        ...(err.repairRefusal ? { repairRefusal: err.repairRefusal } : {}),
+        ...(err.repairClass ? { repairClass: err.repairClass } : {}),
+        ...(err.runTargetKey ? { runTargetKey: err.runTargetKey } : {}),
       });
     }
     if (err instanceof HostedRunBootFailedError) {

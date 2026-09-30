@@ -167,4 +167,16 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     'not a payload at all: `transition_status` names the allowed targets inside an ERROR ' +
     'message (`IllegalTransitionError`, enriched at the tool), so there is no success ' +
     'structuredContent for the guard to compare.',
+  ReviewPrompt:
+    'The REVIEW brief (Story MOTIR-1626 · MOTIR-6821) is read over `/api/v1` by `motir review` ' +
+    'inside a hosted review container, on the review run’s own token — the one credential the ' +
+    'route admits, and one `verifyMcpToken` refuses outright. No MCP tool returns it, and none ' +
+    'should: a tool would have no caller (`tests/api/v1/work-loop-story-gate.test.ts` records ' +
+    'the same argument for `getWorkItemReviewPrompt`).',
+  AgentReviewResult:
+    'The VERDICT result (Story MOTIR-1626 · MOTIR-6821) answers the review run’s one ' +
+    '`/api/v1` verdict, which decides the card’s `agent_review` gate as the review agent. Its ' +
+    'only caller is that run’s own token, which never reaches MCP, and a tool would put a gate ' +
+    'decision in reach of an agent credential that is not the review run’s — so there is no ' +
+    'MCP payload to compare (`submitWorkItemAgentReview`’s entry in the work-loop story gate).',
 };

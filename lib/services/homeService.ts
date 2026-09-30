@@ -18,6 +18,10 @@ import { projectAccessService, type AccessActorContext } from '@/lib/services/pr
 import { workflowsService } from '@/lib/services/workflowsService';
 import { toHomeWorkItemRowDto } from '@/lib/mappers/homeMappers';
 import type { HomePageDto, HomeTabCountsDto } from '@/lib/dto/home';
+import { isReviewSentBack } from '@/lib/workItems/reviewSentBack';
+import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
+import { toOpenRepairRuns } from '@/lib/mappers/repairRunMappers';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 
 // The Home landing surface's read layer (Story MOTIR-2649 · Subtask
 // MOTIR-2651) — the business logic behind `/home`'s two tabs. Orchestrates the
@@ -286,29 +290,53 @@ export const homeService = {
    */
   async listToFix(ctx: HomeActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
     const page = await homeService.listSlice(ctx, HOME_SLICE_TO_FIX, options);
-    // CONTINUE HOSTED ON A DEAD-RUN ROW (MOTIR-6882) — offered only where the reader
-    // may edit the card, the item page's own door rule. Decided ONCE PER DISTINCT
-    // PROJECT among the rows that could offer it, never once per row, and not at all
-    // on a page of pull-request reasons.
+    // CONTINUE HOSTED ON A DEAD-RUN ROW (MOTIR-6882) and FIX ON THE HOSTED AGENT ON A
+    // SENT-BACK ROW (MOTIR-6930) — each offered only where the reader may edit the card,
+    // the item page's own Run hosted rule. Decided ONCE PER DISTINCT PROJECT among the
+    // rows that could offer one, never once per row, and not at all on a page of
+    // pull-request reasons.
     const continuable = page.items.filter(
       (row) => row.fixReason === 'run_died' && row.fixDetail?.repair === 'continue',
     );
-    if (continuable.length === 0) return page;
+    const sentBack = page.items.filter((row) => isReviewSentBack(row.fixReason, row.fixDetail));
+    if (continuable.length === 0 && sentBack.length === 0) return page;
     const editable = new Set<string>();
-    for (const projectId of new Set(continuable.map((row) => row.project.id))) {
+    for (const projectId of new Set([...continuable, ...sentBack].map((row) => row.project.id))) {
       const held = await projectAccessService.getPermissions(projectId, {
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
       if (held.has('work_item:edit')) editable.add(projectId);
     }
+    // THE OPEN REPAIR on each sent-back row — ONE read for the page. While it runs it IS
+    // the one-repair lock (`hosted-agent-run.md` §8.6), so the row offers neither repair.
+    const openRepairs =
+      sentBack.length === 0
+        ? new Map<string, OpenRepairRunDto>()
+        : toOpenRepairRuns(
+            await withWorkspaceContext(ctx, (tx) =>
+              dispatchRunRepository.findRunningByCommandForWorkItems(
+                sentBack.map((row) => row.id),
+                'fix',
+                tx,
+              ),
+            ),
+            ctx.userId,
+          );
     return {
       ...page,
-      items: page.items.map((row) =>
-        continuable.includes(row) && editable.has(row.project.id)
-          ? { ...row, canContinueHosted: true }
-          : row,
-      ),
+      items: page.items.map((row) => {
+        const editableRow = editable.has(row.project.id);
+        if (continuable.includes(row) && editableRow) return { ...row, canContinueHosted: true };
+        if (sentBack.includes(row)) {
+          return {
+            ...row,
+            canFixHosted: editableRow,
+            repairRun: openRepairs.get(row.id) ?? null,
+          };
+        }
+        return row;
+      }),
     };
   },
 

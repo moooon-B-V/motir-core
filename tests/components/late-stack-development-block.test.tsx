@@ -160,6 +160,8 @@ function reads(): LateReads {
       movedSince: [],
       body: null,
     },
+    // No agent review on the card (MOTIR-6825).
+    agentReview: null,
   };
 }
 
@@ -203,6 +205,61 @@ describe('the late stack — How to test is part of the Development card (MOTIR-
     expect(messages.github.development.gloss).toBe(
       'Pull requests and how to test them · live PR and CI status',
     );
+  });
+});
+
+// ── THE AGENT REVIEW — the smoke (Story MOTIR-1626 · MOTIR-6825; design/github § 30) ──
+// The item page's REAL late stack over a card whose run target holds an awaiting
+// `agent_review`: the Development card IS its frame, and the Reviewing landmark is in it —
+// never the call-to-action band into the approval overlay (§12.1: it is not on To approve).
+describe('the late stack — an awaiting agent review reads Reviewing in the Development card', () => {
+  it('draws the Reviewing band and pill inside the Development card', async () => {
+    const review: ApprovalGateDTO = {
+      ...AWAITING_MERGE_GATE,
+      id: 'gate-review-smoke',
+      kind: 'agent_review',
+      subjectVersion: `moooon/motir-core#131@${CORE_PR.headSha}`,
+    };
+    const ui = await LateUpperSections({
+      reads: Promise.resolve({
+        ...reads(),
+        agentReview: {
+          gate: review,
+          canDecide: true,
+          routedToLabel: 'Ada L.',
+          stamp: 'stamp-review',
+          reviewUnavailableReason: null,
+          run: {
+            id: 'run-611',
+            label: 'motir review · 2026-09-29 09:41 UTC',
+            startedAt: '2026-09-29T09:41:00.000Z',
+          },
+          settingsDoorHref: null,
+        },
+      }),
+      itemId: 'wi-acme-12',
+      itemIdentifier: 'ACME-12',
+      currentUserId: 'user-2',
+      canEdit: true,
+      repoDelivery: [],
+      deliveries: [],
+    });
+    const { container } = render(ui);
+    const card = [...container.querySelectorAll('[data-surface="card"]')].find((c) =>
+      within(c as HTMLElement).queryByRole('heading', {
+        level: 2,
+        name: messages.github.development.title,
+      }),
+    ) as HTMLElement;
+    const landmark = within(card).getByTestId('agent-review-band');
+    expect(landmark.getAttribute('role')).toBe('status');
+    expect(landmark.textContent).toContain(messages.approvalGate.agentReview.reviewing.title);
+    expect(within(card).getByText(messages.approvalGate.agentReview.state.reviewing)).toBeTruthy();
+    expect(
+      within(card).queryByRole('link', {
+        name: messages.approvalGate.statusHeld.reviewAndApprove,
+      }),
+    ).toBeNull();
   });
 });
 

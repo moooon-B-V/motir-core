@@ -34,6 +34,21 @@ export class HostedModelsUnavailableError extends Error {
   }
 }
 
+/**
+ * motir-ai answered, and offers NO model at all (MOTIR-6820; `hosted-agent-run.md` §7's
+ * pointer). Only the REVIEW run meets it: it has no dispatcher to choose, so it takes the
+ * list's default, else the first model offered — and an empty list is a review that could
+ * not run, reason _no model_. Distinct from {@link HostedModelsUnavailableError}: motir-ai
+ * being down never reads as "no models exist".
+ */
+export class HostedNoModelOfferedError extends Error {
+  readonly code = 'hosted_no_model_offered' as const;
+  constructor() {
+    super('No model is offered for hosted runs.');
+    this.name = 'HostedNoModelOfferedError';
+  }
+}
+
 // --- The hosted-run key wiring (MOTIR-689) ---
 
 /** Why a per-run key could not be minted. Every reason means the same thing to
@@ -101,6 +116,20 @@ export class HostedRunRepositoryNotWritableError extends Error {
   ) {
     super(refusals.map((r) => r.reason).join('; '));
     this.name = 'HostedRunRepositoryNotWritableError';
+  }
+}
+
+/**
+ * A REVIEW run covers at least one repository its App cannot READ (MOTIR-6820;
+ * `hosted-agent-run.md` §8.1, §8.3). A review pushes nothing, so it needs only read
+ * access — the refusals are the write check's, asked at the read level, every refused
+ * repository named.
+ */
+export class HostedRunRepositoryNotReadableError extends Error {
+  readonly code = 'hosted_repository_not_readable' as const;
+  constructor(readonly refusals: readonly RunGitWriteRefusal[]) {
+    super(refusals.map((r) => r.reason).join('; '));
+    this.name = 'HostedRunRepositoryNotReadableError';
   }
 }
 
@@ -278,5 +307,75 @@ export class HostedContinueRefusedError extends Error {
     super(`${key} cannot be continued hosted: ${HOSTED_CONTINUE_WHY[reason]}`);
     this.name = 'HostedContinueRefusedError';
     this.code = HOSTED_CONTINUE_CODE[reason];
+  }
+}
+
+// --- Repairing a card a review sent back, hosted (Story MOTIR-1626 · MOTIR-6928) ---
+
+/**
+ * Why a *Fix on the hosted agent* was refused (`hosted-agent-run.md` §8.6,
+ * `approval-gates.md` §12.4b).
+ *
+ * - `not_sent_back` — the card is repairable, but NOT because a review sent it back: red
+ *   CI, a merge-queue failure or an acceptance Re-run. §12.4b widens the hosted repair to
+ *   a review's `changes_requested` only (§12.9 leaves the rest undecided).
+ * - `not_repairable` — the repair claim itself refuses the card; `repairRefusal` carries
+ *   its own reason (`not_implemented`, `not_failing`, `repair_on_run_target`, …).
+ * - `taken` — a `fix` run is already open on the card, local or hosted: the one-repair
+ *   lock. `holder` and `startedAt` name it.
+ */
+export type HostedFixRefusal = 'not_sent_back' | 'not_repairable' | 'taken';
+
+const HOSTED_FIX_CODE = {
+  not_sent_back: 'hosted_fix_not_sent_back',
+  not_repairable: 'hosted_fix_not_repairable',
+  taken: 'hosted_fix_taken',
+} as const satisfies Record<HostedFixRefusal, string>;
+
+const HOSTED_FIX_WHY: Record<HostedFixRefusal, string> = {
+  not_sent_back: 'only a card a review sent back can be repaired on the hosted agent',
+  not_repairable: 'there is nothing for a repair to do on it',
+  taken: 'somebody is already repairing it',
+};
+
+/**
+ * A *Fix on the hosted agent* the repair claim would refuse — or did, under its lock.
+ * Nothing was opened, minted or booted: each answers before the lock is taken, or is
+ * the lock's own refusal.
+ */
+export class HostedFixRefusedError extends Error {
+  readonly code: (typeof HOSTED_FIX_CODE)[HostedFixRefusal];
+  /** The claim's own refusal — `not_repairable` only. */
+  readonly repairRefusal: string | null;
+  /** The class the card IS repairable as — `not_sent_back` only. */
+  readonly repairClass: string | null;
+  /** Who holds the open repair — `taken` only. */
+  readonly holder: { id: string; name: string } | null;
+  readonly startedAt: string | null;
+  /** Where the repair runs instead — a `not_repairable` of `repair_on_run_target`. */
+  readonly runTargetKey: string | null;
+  constructor(
+    readonly key: string,
+    readonly reason: HostedFixRefusal,
+    detail: {
+      repairRefusal?: string | null;
+      repairClass?: string | null;
+      holder?: { id: string; name: string } | null;
+      startedAt?: string | null;
+      runTargetKey?: string | null;
+    } = {},
+  ) {
+    super(
+      `${key} cannot be repaired on the hosted agent: ${HOSTED_FIX_WHY[reason]}${
+        detail.repairRefusal ? ` (${detail.repairRefusal})` : ''
+      }`,
+    );
+    this.name = 'HostedFixRefusedError';
+    this.code = HOSTED_FIX_CODE[reason];
+    this.repairRefusal = detail.repairRefusal ?? null;
+    this.repairClass = detail.repairClass ?? null;
+    this.holder = detail.holder ?? null;
+    this.startedAt = detail.startedAt ?? null;
+    this.runTargetKey = detail.runTargetKey ?? null;
   }
 }

@@ -23,6 +23,7 @@ const CLI_COMMANDS = {
   auto: true,
   fix: true,
   continue: true,
+  review: true,
 } satisfies Record<OpenDispatchRunInput['command'], true> & Record<DispatchCommand, true>;
 
 describe('every reader of DispatchCommand handles every member', () => {

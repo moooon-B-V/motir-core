@@ -569,6 +569,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
           startedAt: '2026-09-16T10:00:00.000Z',
           repairClass: 'ci',
           acceptanceRefusal: null,
+          reviewRefusal: null,
           pullRequests: [pullRequest],
         },
       },
@@ -618,6 +619,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
           startedAt: '2026-09-16T10:00:00.000Z',
           repairClass: 'ci',
           acceptanceRefusal: null,
+          reviewRefusal: null,
           pullRequests: [pullRequest],
         },
       },
@@ -676,6 +678,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
           startedAt: null,
           repairClass: 'ci',
           acceptanceRefusal: null,
+          reviewRefusal: null,
           pullRequests: [],
         },
       },
@@ -695,6 +698,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
       startedAt: null,
       repairClass: 'ci',
       acceptanceRefusal: null,
+      reviewRefusal: null,
       pullRequests: [],
     });
   });

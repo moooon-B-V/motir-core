@@ -78,11 +78,16 @@ function pressFor(kind: ApprovalGateKind, decision: GateDecision) {
   const noteMd = 'Because the empty state is missing.';
   switch (decision) {
     case 'approve':
-      return kind === 'decision_choice' ? null : { decision, noteMd: null };
+      if (kind === 'decision_choice') return null;
+      // A person's approve on the review agent's gate is *Continue without the review*,
+      // which must say why (`override_needs_a_note`, ADR §12.3).
+      return { decision, noteMd: kind === 'agent_review' ? noteMd : null };
     case 'choose':
       return kind === 'decision_choice' ? { decision, optionId: 'no-such-option' } : null;
     case 'request_changes':
-      return kind === 'decision_confirmation' || kind === 'plan_approval'
+      // Only the review agent refuses an `agent_review` gate — a person's is
+      // `request_changes_on_agent_review` (ADR §12.3).
+      return kind === 'decision_confirmation' || kind === 'plan_approval' || kind === 'agent_review'
         ? null
         : { decision, noteMd };
     case 'overturn':
@@ -257,6 +262,22 @@ describe('the rule is TOTAL over kind × verb × source for a pressed decision',
         fx.ctx,
       ),
     ).rejects.toMatchObject({ reason: 'request_changes_on_confirmation' });
+
+    // A person's refusal of the review agent's gate — only the agent refuses one (§12.3).
+    const review = await awaitingGate('agent_review');
+    await expect(
+      approvalGatesService.decide(
+        {
+          gateId: review.id,
+          decision: 'request_changes',
+          source: 'ui',
+          noteMd: 'x',
+          refusalVerdict: 'revise',
+          stamp: DECIDED_WITHOUT_A_READER,
+        },
+        fx.ctx,
+      ),
+    ).rejects.toMatchObject({ reason: 'request_changes_on_agent_review' });
 
     // And the reason still comes before the verdict on a design refusal.
     const design = await awaitingGate('design_result');

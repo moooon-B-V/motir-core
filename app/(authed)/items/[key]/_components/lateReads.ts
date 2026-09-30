@@ -26,6 +26,8 @@ import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
 import { workItemContinueService } from '@/lib/services/workItemContinueService';
 import type { ContinuePartView } from '@/components/github/ContinuePart';
 import { monitorIssueService } from '@/lib/services/monitorIssueService';
+import { agentReviewViewService } from '@/lib/services/agentReviewViewService';
+import type { AgentReviewViewDto } from '@/lib/dto/agentReview';
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { ActivityHistoryPageDto, ActivityAllPageDto } from '@/lib/dto/activity';
@@ -221,6 +223,13 @@ export interface LateReads {
    * nothing.
    */
   monitorHasConnection: boolean;
+  /**
+   * The run target's LATEST `agent_review` gate (Story MOTIR-1626 · MOTIR-6825; design
+   * `design/github` § 30) — its state, findings, decider, could-not-run reason and review
+   * run, read beside the other gate reads. `null` for a card that never had one, and on a
+   * failed read: the block then renders as it did before the review agent existed.
+   */
+  agentReview: AgentReviewViewDto | null;
 }
 
 export interface LateReadsInput {
@@ -378,6 +387,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       decisionGate,
       choiceGate,
       confirmGate,
+      agentReview,
     ] = await Promise.all([
       workItemsService.listLinkedPullRequests(itemId, input.fullCtx),
       projectAccessService.getCommentCapabilities(projectId, ctx),
@@ -600,6 +610,13 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       readDecisionGate(input),
       readChoiceGate(input),
       readConfirmGate(input),
+      (async () => {
+        try {
+          return await agentReviewViewService.readForWorkItem(itemId, ctx);
+        } catch {
+          return null;
+        }
+      })(),
     ]);
 
     return {
@@ -629,6 +646,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       decisionGate,
       choiceGate,
       confirmGate,
+      agentReview,
     };
   })();
 }
