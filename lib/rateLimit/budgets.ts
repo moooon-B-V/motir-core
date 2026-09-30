@@ -32,6 +32,19 @@ export const DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS = 60_000;
 export const DEFAULT_PASSWORD_RESET_RATE_LIMIT = 5;
 export const DEFAULT_PASSWORD_RESET_RATE_LIMIT_WINDOW_MS = 3_600_000;
 
+/**
+ * The OAuth server's dynamic-registration and token POSTs (MOTIR-6982), per IP.
+ * Sized for a SHARED origin rather than a person: claude.ai registers and
+ * refreshes on behalf of every one of its users from a handful of egress
+ * addresses, so a person-sized ceiling would turn one busy minute into a wave of
+ * failed connections. Still far below what a registration flood needs, and each
+ * token POST must carry a live code or refresh token to do anything at all.
+ */
+export const DEFAULT_OAUTH_REGISTER_RATE_LIMIT = 60;
+export const DEFAULT_OAUTH_REGISTER_RATE_LIMIT_WINDOW_MS = 60_000;
+export const DEFAULT_OAUTH_TOKEN_RATE_LIMIT = 300;
+export const DEFAULT_OAUTH_TOKEN_RATE_LIMIT_WINDOW_MS = 60_000;
+
 /** Unauthenticated public writes: tighter than auth — no account stands behind them. */
 export const DEFAULT_PUBLIC_WRITE_RATE_LIMIT = 10;
 export const DEFAULT_PUBLIC_WRITE_RATE_LIMIT_WINDOW_MS = 60_000;
@@ -162,6 +175,26 @@ export function passwordResetBudget(): RateLimitBudget {
     'MOTIR_PASSWORD_RESET_RATE_LIMIT_WINDOW_MS',
     DEFAULT_PASSWORD_RESET_RATE_LIMIT,
     DEFAULT_PASSWORD_RESET_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
+/** OAuth dynamic client registration (RFC 7591), per IP. */
+export function oauthRegisterBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_OAUTH_REGISTER_RATE_LIMIT',
+    'MOTIR_OAUTH_REGISTER_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_OAUTH_REGISTER_RATE_LIMIT,
+    DEFAULT_OAUTH_REGISTER_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
+/** The OAuth token endpoint — code exchange and refresh — per IP. */
+export function oauthTokenBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_OAUTH_TOKEN_RATE_LIMIT',
+    'MOTIR_OAUTH_TOKEN_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_OAUTH_TOKEN_RATE_LIMIT,
+    DEFAULT_OAUTH_TOKEN_RATE_LIMIT_WINDOW_MS,
   );
 }
 

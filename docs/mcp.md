@@ -134,6 +134,40 @@ three plan-session tools, all of which spend the workspace's AI credits. Under
 the old vocabulary they travelled with _edit work items_ because nothing
 narrower existed; an agent wired only to file work items can now be denied them.
 
+## Authorization
+
+Besides a personal access token, an MCP client can connect with **OAuth 2.1** —
+the flow Claude's connectors and Claude Code use (MCP authorization spec,
+2025-06-18). Motir is the authorization server for exactly one protected
+resource, `<base>/api/mcp`. A client discovers everything from two documents:
+
+- **Protected resource metadata** (RFC 9728):
+  `<base>/.well-known/oauth-protected-resource`, also served at
+  `<base>/.well-known/oauth-protected-resource/api/mcp`. It names the resource
+  and its authorization server, `<base>/api/auth`.
+- **Authorization server metadata** (RFC 8414):
+  `<base>/.well-known/oauth-authorization-server`, also served at the
+  issuer-path form `<base>/.well-known/oauth-authorization-server/api/auth`.
+
+Both answer without a session and to any origin. From there a client:
+
+1. **Registers itself** (RFC 7591) at the advertised `registration_endpoint` —
+   a public client (`token_endpoint_auth_method: none`). A `redirect_uri` must
+   be `https`, or `http` on `localhost` / `127.0.0.1` / `[::1]` (any port: a
+   loopback redirect is matched without its port, RFC 8252). Anything else is
+   refused `invalid_redirect_uri`.
+2. **Sends the person to authorize** with PKCE (`code_challenge_method=S256`;
+   `plain` is refused) and `resource=<base>/api/mcp` (RFC 8707; any other value,
+   or none, is refused `invalid_target`). A signed-out person signs in first and
+   comes back; a signed-in one is asked for consent at `/oauth/consent`.
+3. **Exchanges the code** at `token_endpoint`, refreshes with the refresh token
+   (ask for the `offline_access` scope to receive one), and **revokes** at
+   `revocation_endpoint` (RFC 7009).
+
+Tokens are opaque and stored hashed. Registration and token requests are
+rate-limited per IP (`MOTIR_OAUTH_REGISTER_RATE_LIMIT`, default 60 a minute, and
+`MOTIR_OAUTH_TOKEN_RATE_LIMIT`, default 300 a minute).
+
 ## Rate limits
 
 `POST /api/mcp` is metered on **two** budgets, keyed on the token owner **+ the

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { resolvePostAuthDestination } from '@/lib/navigation/landing';
+import { oauthAuthorizeNext } from '@/lib/oauth/authorizeReturn';
 import { SignInCard } from './_components/SignInCard';
 
 /**
@@ -46,13 +47,25 @@ import { SignInCard } from './_components/SignInCard';
  * Component may not set a cookie during render — so bouncing first would
  * silently drop the idea somebody typed on motir.co. The card claims it and then
  * navigates on to `/onboarding` itself; see its `sessionActive` prop.
+ *
+ * ⚠️ AN OAUTH AUTHORIZE REQUEST ARRIVES HERE TOO (MOTIR-6982). The OAuth
+ * provider sends a signed-out person to `/sign-in?client_id=…&sig=…` — the
+ * request it was handling, signed. The card speaks `next=`, not the provider's
+ * resume protocol, so that arrival is re-addressed ONCE into
+ * `/sign-in?next=/api/auth/oauth2/authorize?…`: after sign-in the card's document
+ * navigation lands on the authorize endpoint, which re-validates the request
+ * with the new session and continues to consent (`lib/oauth/authorizeReturn.ts`).
  */
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string | string[]; draft?: string | string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
+
+  const oauthNext = oauthAuthorizeNext(toSearchParams(params));
+  if (oauthNext) redirect(`/sign-in?${new URLSearchParams({ next: oauthNext }).toString()}`);
+
   const session = await getSession();
   const hasDraft =
     typeof (Array.isArray(params.draft) ? params.draft[0] : params.draft) === 'string';
@@ -62,4 +75,14 @@ export default async function SignInPage({
   }
 
   return <SignInCard sessionActive={Boolean(session)} />;
+}
+
+function toSearchParams(params: Record<string, string | string[] | undefined>): URLSearchParams {
+  const out = new URLSearchParams();
+  for (const [name, value] of Object.entries(params)) {
+    for (const v of Array.isArray(value) ? value : value === undefined ? [] : [value]) {
+      out.append(name, v);
+    }
+  }
+  return out;
 }
