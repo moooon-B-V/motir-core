@@ -137,6 +137,7 @@ describe('fleet_in_flight_slot RLS — system context only', () => {
           data: {
             workload: 'hosted_agent',
             ref: 'forged',
+            organizationId: fx.organizationId,
             workspaceId: fx.workspaceId,
             expiresAt: EXPIRES_AT,
           },

@@ -5,12 +5,15 @@ import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
 // The runner FLEET's background jobs (Story MOTIR-1916 · MOTIR-1921) — the
 // trigger, the boot, and the backstop.
 //
-// Three functions, and the third is the one that matters most:
+// Two functions:
 //
 //   * `system.ci-runner-provision-sweep` — finds pending intents and fans out one
 //     boot event each. THE RECOVERY TRIGGER (see below).
 //   * `system.ci-runner-boot` — one intent, one runner, supervised to its end.
-//   * `system.ci-runner-reap` — destroys containers nothing is supervising.
+//
+// The third, `system.ci-runner-reap`, was replaced by the attribution
+// reconciler (`./fleetAttribution.ts`, MOTIR-6925), which destroys any machine
+// no live record owns.
 //
 // ⚠️ THE SWEEP IS NO LONGER THE PRIMARY TRIGGER, AND NEVER COULD BE.
 // `docs/decisions/ci-runner-fleet.md` §6 budgets p50 ≤ 30s from the
@@ -56,12 +59,9 @@ import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
  */
 export const CI_RUNNER_PROVISION_SWEEP_CRON = '*/5 * * * *';
 
-/** Every 5 minutes — the one sub-hourly cadence (`SUB_HOURLY_CADENCE`,
- *  `lib/jobs/schedules.ts`). The reaper only ever finds something when a
- *  supervisor died, so it is almost always a single provider list call that
- *  returns nothing actionable; five minutes bounds how long an orphaned container
- *  survives, and is billed, after its supervisor dies. */
-export const CI_RUNNER_REAP_CRON = '*/5 * * * *';
+// The reaper's schedule (`system.ci-runner-reap`) is gone: the attribution
+// reconciler replaced it (MOTIR-6925, `fleet-per-org-pool.md` §5–§6) — see
+// `./fleetAttribution.ts`, which also runs the stale-claim sweep it carried.
 
 /** How many pending intents one sweep will fan out. A ceiling rather than
  *  "everything", so a backlog drains at a predictable rate instead of firing
@@ -210,26 +210,5 @@ export const ciRunnerBoot = defineJob(
           ctx.step.run(id, fn as () => Promise<T>) as unknown as Promise<T>,
       },
     });
-  },
-);
-
-export const ciRunnerReap = defineJob(
-  {
-    id: 'system.ci-runner-reap',
-    cron: CI_RUNNER_REAP_CRON,
-    // `latest`, not `skip` like the provision sweep above, and the ten-minute
-    // cadence is not what decides it: an orphaned container bills for every
-    // minute it survives, so an immediate reap on restart reclaims spend the next
-    // fire would not. One pass suffices — it reads the CURRENT orphan set.
-    catchUp: 'latest',
-    // `idempotent`: destroying an already-destroyed container is a no-op at every
-    // provider the port targets, and the port requires teardown to be idempotent
-    // anyway.
-    retryPolicy: 'idempotent',
-  },
-  async (ctx, services) => {
-    return ctx.step.run('reap-orphaned-containers', async () =>
-      services.ciRunnerBoot.reapOrphans(),
-    );
   },
 );

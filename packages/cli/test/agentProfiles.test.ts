@@ -1,8 +1,13 @@
 import { basename } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   AGENT_PROFILES,
+  AGENT_RUN_WITHHELD_ENV,
+  agentProfileById,
   agentProfileIds,
+  unattendedAgentCommand,
   deriveAgentHarness,
   findAgentProfile,
   parseAgentCommand,
@@ -261,5 +266,80 @@ describe('AGENT_PROFILES', () => {
       expect(profile?.credentialPaths(DIRS), id).toEqual([]);
       expect(profile?.credentialEnv, id).toEqual([]);
     }
+  });
+});
+
+describe('agentCommand — each profile’s unattended form (MOTIR-7024)', () => {
+  it('is TOTAL over AGENT_PROFILES: a string or null, with a prompt channel exactly when it is a string', () => {
+    for (const p of AGENT_PROFILES) {
+      expect(p.agentCommand === null || typeof p.agentCommand === 'string').toBe(true);
+      expect(p.agentPrompt === null).toBe(p.agentCommand === null);
+    }
+    expect(Object.fromEntries(AGENT_PROFILES.map((p) => [p.id, p.agentCommand]))).toEqual({
+      claude: 'claude -p --dangerously-skip-permissions',
+      codex: 'codex exec --sandbox danger-full-access -',
+      opencode: 'opencode run --auto',
+      kimi: 'kimi -p',
+      antigravity: null,
+      cursor: null,
+      aider: 'aider --yes-always --message',
+      goose: 'goose run --no-session -t',
+    });
+  });
+
+  it('cites a vendor documentation URL above every non-null command', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('../src/agentProfiles.ts', import.meta.url)),
+      'utf8',
+    );
+    const lines = src.split('\n');
+    const commands = lines
+      .map((line, i) => ({ line, i }))
+      .filter(({ line }) => /^\s+agentCommand: '/.test(line));
+    expect(commands).toHaveLength(6);
+    for (const { i } of commands) {
+      const comment: string[] = [];
+      for (let j = i - 1; j >= 0 && /^\s*\/\//.test(lines[j]!); j--) comment.push(lines[j]!);
+      expect(comment.join(' ')).toMatch(/https:\/\//);
+    }
+  });
+
+  it('builds the stdin launcher on the session’s environment, minus every Motir and git credential', () => {
+    const env: NodeJS.ProcessEnv = {
+      PATH: '/bin',
+      CLAUDE_CONFIG_DIR: '/h/.claude',
+      ANTHROPIC_API_KEY: 'the developer’s own',
+      ...Object.fromEntries(AGENT_RUN_WITHHELD_ENV.map((n) => [n, `secret-${n}`])),
+    };
+    const cmd = unattendedAgentCommand('claude', env)!;
+    expect(cmd.binary).toBe('claude');
+    expect(cmd.args).toEqual(['-p', '--dangerously-skip-permissions']);
+    expect(cmd.promptOnStdin).toBeUndefined();
+    expect(cmd.promptArgs).toBeUndefined();
+    expect(cmd.env).toEqual({
+      PATH: '/bin',
+      CLAUDE_CONFIG_DIR: '/h/.claude',
+      ANTHROPIC_API_KEY: 'the developer’s own',
+    });
+    // The caller's environment is copied, never mutated.
+    expect(env['MOTIR_TOKEN']).toBe('secret-MOTIR_TOKEN');
+  });
+
+  it('puts an argv agent’s prompt on argv only, and a huge one in its file', () => {
+    const cmd = unattendedAgentCommand('goose', { PATH: '/bin' })!;
+    expect(cmd.args).toEqual(['run', '--no-session', '-t']);
+    expect(cmd.env).toEqual({ PATH: '/bin', GOOSE_MODE: 'auto' });
+    expect(cmd.promptOnStdin).toBe(false);
+    expect(cmd.promptArgs!('do it', '/tmp/p.md')).toEqual(['do it']);
+    const [huge] = cmd.promptArgs!('x'.repeat(200 * 1024), '/tmp/p.md');
+    expect(huge).toMatch(/\/tmp\/p\.md/);
+    expect(huge!.length).toBeLessThan(200);
+  });
+
+  it('answers null for a profile with no unattended form, and for an unknown id', () => {
+    expect(unattendedAgentCommand('cursor', {})).toBeNull();
+    expect(unattendedAgentCommand('antigravity', {})).toBeNull();
+    expect(unattendedAgentCommand('not-an-agent', {})).toBeNull();
+    expect(agentProfileById(' Claude ')?.id).toBe('claude');
   });
 });

@@ -116,7 +116,8 @@ export function githubMergeSeamEnv(): Record<string, string> {
  * `hostedRunService.supervise` — the durable job the fake orchestrator's
  * cancel and stall paths run through — calls `endHostedRun` from INSIDE the
  * worker: the gateway key revoke and, once the container settles, the
- * machine-time charge to motir-ai. Both are HTTP calls `instrumentation.ts`'s
+ * machine-time charge to motir-ai (and, for a run the worker itself boots, the
+ * paid-AI-plan read, through the billing seam). These are HTTP calls `instrumentation.ts`'s
  * seam table never reaches from here, exactly the shape this file's other two
  * mirrors (`monitorFakeEnv`, `githubMergeSeamEnv`) already document — a job
  * handler reaches a boundary the app server's own fake never installs itself
@@ -141,6 +142,15 @@ export function hostedRunSeamEnv(): Record<string, string> {
   return {
     E2E_TEST_HOSTED_RUN: '1',
     MOTIR_FLEET_ORCHESTRATOR: 'fake',
+    // The paid-AI-plan gate (Story MOTIR-6906 · MOTIR-6909): a hosted run the
+    // worker boots (the review agent's `agent-review/requested`) asks motir-ai for
+    // the org's subscription first. Without the billing seam that read fails, the
+    // plan reads `unknown`, and the boot defers — so the worker reads the same
+    // billing fixture the webServer does.
+    E2E_TEST_BILLING: '1',
+    ...(process.env['MOTIR_AI_BILLING_FIXTURE_PATH']
+      ? { MOTIR_AI_BILLING_FIXTURE_PATH: process.env['MOTIR_AI_BILLING_FIXTURE_PATH'] }
+      : {}),
     ...(process.env['MOTIR_GATEWAY_URL']
       ? { MOTIR_GATEWAY_URL: process.env['MOTIR_GATEWAY_URL'] }
       : {}),

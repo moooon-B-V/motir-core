@@ -5,7 +5,9 @@ import type {
   DispatchRunEvent,
   WorkItem,
 } from '@/generated/prisma/client';
+import { profileDisplayName } from '@/lib/agentInstances/profiles';
 import type {
+  DispatchRunAgentInstanceDto,
   DispatchRunCardDto,
   DispatchRunContinuesDto,
   DispatchRunDto,
@@ -62,8 +64,35 @@ export function toDispatchRunEventDto(row: DispatchRunEvent): DispatchRunEventDt
  * mapper does NOT re-sort it — the order is the run's own stored fact, and a
  * mapper that sorted would be a second opinion about it.
  */
+/** The agent a run executed in (MOTIR-7023), as the run section prints it. */
+export interface DispatchRunAgentInstanceRow {
+  id: string;
+  name: string;
+  profileId: string;
+}
+
+/**
+ * The run's agent → its DTO: the name and the coding agent, with the profile's
+ * display name resolved here so no surface keeps a second profile table.
+ */
+export function toDispatchRunAgentInstanceDto(
+  row: DispatchRunAgentInstanceRow | null | undefined,
+): DispatchRunAgentInstanceDto | null {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    profile: row.profileId,
+    profileLabel: profileDisplayName(row.profileId),
+  };
+}
+
 export function toDispatchRunDto(
-  row: DispatchRun & { cards: DispatchRunCard[] },
+  row: DispatchRun & {
+    cards: DispatchRunCard[];
+    /** Carried by every repository read that includes the legs; absent reads as none. */
+    agentInstance?: DispatchRunAgentInstanceRow | null;
+  },
   seq: number,
 ): DispatchRunDto {
   return {
@@ -81,6 +110,7 @@ export function toDispatchRunDto(
     endedAt: row.endedAt?.toISOString() ?? null,
     lastHeartbeatAt: row.lastHeartbeatAt?.toISOString() ?? null,
     createdById: row.createdById,
+    agentInstance: toDispatchRunAgentInstanceDto(row.agentInstance),
     cards: row.cards.map(toDispatchRunCardDto),
     seq,
   };
@@ -123,7 +153,10 @@ export function toDispatchRunLegCounts(cards: DispatchRunCard[]): DispatchRunLeg
  * cards it came out that way on.
  */
 export function toDispatchRunListItemDto(
-  row: DispatchRun & { cards: DispatchRunCard[] },
+  row: DispatchRun & {
+    cards: DispatchRunCard[];
+    agentInstance?: DispatchRunAgentInstanceRow | null;
+  },
 ): DispatchRunListItemDto {
   return {
     id: row.id,
@@ -138,6 +171,7 @@ export function toDispatchRunListItemDto(
     startedAt: row.startedAt.toISOString(),
     endedAt: row.endedAt?.toISOString() ?? null,
     createdById: row.createdById,
+    agentInstance: toDispatchRunAgentInstanceDto(row.agentInstance),
     cardCount: row.cards.length,
     legs: toDispatchRunLegCounts(row.cards),
   };

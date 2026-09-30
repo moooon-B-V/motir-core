@@ -336,8 +336,10 @@ export const workItemRepairService = {
           // ⚠️ A HOSTED repair is never `mine` to a claim, even the presser's own: its
           // container is working those branches, and a local `motir fix` resuming it
           // would put two agents on one pull request (§8.6 — one repair at a time).
-          // Only a local run its own operator re-claims is a resume.
-          const mine = held.createdById === ctx.userId && held.origin !== 'hosted';
+          // Only a local run its own operator re-claims is a resume. An `instance`
+          // run (MOTIR-7023) is its agent's for the same reason a hosted one is the
+          // container's, so it is never `mine` either.
+          const mine = held.createdById === ctx.userId && held.origin === 'local';
           return {
             key: item.identifier,
             title: item.title,
@@ -654,6 +656,8 @@ export const workItemRepairService = {
             run: {
               id: latest.id,
               label: dispatchRunLabel('fix', latest.startedAt),
+              // `instance` is not hosted — it is drawn as the agent's run by the
+              // card UI (MOTIR-7028), never with the hosted run link.
               hosted: latest.origin === 'hosted',
             },
           };

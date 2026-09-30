@@ -85,3 +85,109 @@ export function agentTerminalMachineConfig(instanceId: string): PersistentTermin
     },
   };
 }
+
+// ── The run launcher's commands (MOTIR-7026 · `agent-instance-run.md` §1, §4) ──
+//
+// Each is ONE synchronous Fly `exec` of a short local command the agent's
+// terminal server answers (MOTIR-7025's `motir agent-terminal run|signin`). An
+// exec runs as root; the launcher and the sign-in query must run as the agent's
+// own user with its home, exactly as the clone does (`cloneCommand.ts`), so the
+// credential paths `checkSignIn` stats and the run's state directory are node's.
+
+/** Run a `motir agent-terminal …` subcommand as `node`, with node's home. */
+const AS_NODE: readonly string[] = [
+  'runuser',
+  '-u',
+  'node',
+  '--',
+  'env',
+  'HOME=/home/node',
+  'motir',
+  'agent-terminal',
+];
+
+/** §4: the image-capability probe — `run --help` exiting 0 means the launcher is there. */
+export const AGENT_RUN_LAUNCHER_PROBE_COMMAND: readonly string[] = [
+  'motir',
+  'agent-terminal',
+  'run',
+  '--help',
+];
+
+/** §4: the sign-in query — one `{"profile","state"}` line on stdout. */
+export const AGENT_SIGN_IN_COMMAND: readonly string[] = [...AS_NODE, 'signin'];
+
+/** §1: its exec timeout, and the sign-in query's (§4: 10 seconds). */
+export const AGENT_RUN_LAUNCH_TIMEOUT_SECONDS = 30;
+export const AGENT_SIGN_IN_TIMEOUT_SECONDS = 10;
+
+/**
+ * §1: the launch. The run id and the card key are its only arguments — neither
+ * is a secret; the run's credentials travel on the exec's STDIN (§2), never here.
+ */
+export function agentRunLaunchCommand(workItemKey: string, dispatchRunId: string): string[] {
+  return [...AS_NODE, 'run', workItemKey, '--run-id', dispatchRunId];
+}
+
+/**
+ * §6: stop a run's session in the agent — `SIGTERM`, then `SIGKILL` after the
+ * launcher's 10-second grace. Answers `{"result":"stopped"|"not_found"}`; the
+ * caller reads nothing from it, because the run is already closed when it asks.
+ */
+export function agentRunStopCommand(dispatchRunId: string): string[] {
+  return [...AS_NODE, 'stop', '--run-id', dispatchRunId];
+}
+
+/** The stop's exec timeout: the launcher's grace, its own margin, and room for the exec. */
+export const AGENT_RUN_STOP_TIMEOUT_SECONDS = 30;
+
+/** The last line of an exec's stdout that parses as a JSON object, or null. */
+function lastJsonObject(stdout: string): Record<string, unknown> | null {
+  const lines = stdout.split('\n').map((l) => l.trim());
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i] as string;
+    if (!line.startsWith('{')) continue;
+    try {
+      const value: unknown = JSON.parse(line);
+      if (typeof value === 'object' && value !== null) return value as Record<string, unknown>;
+    } catch {
+      // not the answer line
+    }
+  }
+  return null;
+}
+
+/** The sign-in states `motir agent-terminal signin` answers (§4). */
+export type AgentSignInAnswer = 'signed_in' | 'signed_out' | 'unknown';
+
+/**
+ * The sign-in query's answer, or null when the exec gave none — a non-zero
+ * exit, no JSON line, or a state outside the vocabulary. Null is "no answer",
+ * which leaves the recorded value standing (§4).
+ */
+export function parseSignInAnswer(result: {
+  exitCode: number;
+  stdout: string;
+}): AgentSignInAnswer | null {
+  if (result.exitCode !== 0) return null;
+  const state = lastJsonObject(result.stdout)?.['state'];
+  return state === 'signed_in' || state === 'signed_out' || state === 'unknown' ? state : null;
+}
+
+/**
+ * The launcher's answer (§1): `{session}` on success, else the refusal code it
+ * printed (`run_active`, `server_unavailable`, …) or `launch_failed` for an
+ * exec that printed none.
+ */
+export function parseLaunchAnswer(result: {
+  exitCode: number;
+  stdout: string;
+}): { ok: true; session: string } | { ok: false; error: string } {
+  const answer = lastJsonObject(result.stdout);
+  const session = answer?.['session'];
+  if (result.exitCode === 0 && typeof session === 'string' && session.length > 0) {
+    return { ok: true, session };
+  }
+  const error = answer?.['error'];
+  return { ok: false, error: typeof error === 'string' && error ? error : 'launch_failed' };
+}

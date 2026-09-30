@@ -45,6 +45,7 @@ import { REVIEW_AGENT_REVIEWER_NAME } from '@/lib/workItems/fixReason';
 import { bearer, withTokenFor } from '../fixtures/apiV1Fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { JobTestEngine } from '../helpers/jobs';
 import { linkPr } from '../helpers/prLink';
 import { hostAnswersCleanAt } from '../helpers/hostMergeability';
@@ -631,6 +632,8 @@ async function greenToReviewRun(w: World, number: number, sha = 'sha-a') {
 }
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────────
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   await truncateAuthTables();

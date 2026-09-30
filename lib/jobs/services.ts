@@ -33,6 +33,8 @@ import { codeGraphOffboardSweepService } from '@/lib/services/codeGraphOffboardS
 import { firstAuditTriggerService } from '@/lib/services/firstAuditTriggerService';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import { ciMinutesReconciliationService } from '@/lib/services/ciMinutesReconciliationService';
+import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
+import { ciLiveChargeService } from '@/lib/services/ciLiveChargeService';
 import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
@@ -56,6 +58,7 @@ import { organizationErasureSweepService } from '@/lib/services/organizationEras
 import { organizationRetentionPurgeService } from '@/lib/services/organizationRetentionPurgeService';
 import { supervisionSweepService } from '@/lib/services/supervisionSweepService';
 import { agentInstanceSweepService } from '@/lib/services/agentInstanceSweepService';
+import { agentInstanceRunService } from '@/lib/services/agentInstanceRunService';
 import { agentTerminalRelayService } from '@/lib/services/agentTerminalRelayService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
@@ -98,6 +101,9 @@ export const jobServices = {
   firstAuditTrigger: firstAuditTriggerService,
   autoPlanCadence: autoPlanCadenceService,
   ciMinutesReconciliation: ciMinutesReconciliationService,
+  // The live CI charge (MOTIR-6910): every debit period, live CI containers are charged.
+  ciLiveCharge: ciLiveChargeService,
+  fleetAttribution: fleetAttributionService,
   ciActionsGate: ciActionsGateService,
   ciRunnerBoot: ciRunnerBootService,
   // A hosted run's supervision (Story MOTIR-683 · MOTIR-690).
@@ -163,6 +169,10 @@ export const jobServices = {
   // Agent instances (Story MOTIR-6860 · MOTIR-6873): the idle timer's check and
   // the sweep that reconciles, hibernates, cleans orphans and charges.
   agentInstanceSweep: agentInstanceSweepService,
+  // A card's run in a developer's agent (Story MOTIR-6864 · MOTIR-7026): the
+  // launch job's wait for the agent and its launcher exec; and (MOTIR-7027) the
+  // supervise job's pass.
+  agentInstanceRun: agentInstanceRunService,
   // The agent terminal (Story MOTIR-6861 · MOTIR-6940): the sweep's second step
   // deletes terminal tickets past their 60-second life; the third (MOTIR-6959)
   // closes connections a dead relay left open.

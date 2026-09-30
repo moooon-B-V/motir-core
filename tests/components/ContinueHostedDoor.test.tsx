@@ -9,6 +9,7 @@ import {
   continueRefusalOf,
 } from '@/app/(authed)/items/[key]/_components/HostedRunProvider';
 import { RunHostedButton } from '@/app/(authed)/items/[key]/_components/RunHostedButton';
+import { StartBar } from '@/app/(authed)/items/[key]/_components/StartBar';
 import {
   ContinueHostedDoor,
   ContinueHostedNotice,
@@ -111,6 +112,8 @@ async function mount(
         viewerId="usr_me"
       >
         <RunHostedButton />
+        {/* Revision 2 (MOTIR-7028): the Run door lives in the start bar. */}
+        <StartBar />
         {part}
       </HostedRunProvider>
     ) : (
@@ -127,7 +130,7 @@ const press = async () =>
   });
 
 describe('C1 — died, continuable', () => {
-  it('offers Continue hosted as the primary path, the command second, and hides Run hosted', async () => {
+  it('offers Continue hosted as the primary path, the command second, and hides Run', async () => {
     await mount(died());
     const text = screen.getByTestId('continue-part').textContent ?? '';
     expect(text).toContain('Continue it here, in a hosted container — no terminal needed:');
@@ -263,7 +266,7 @@ describe('C6 — not offered', () => {
     expect(screen.queryByTestId('continue-hosted')).toBeNull();
   });
 
-  it('a live run offers no continue and keeps Run hosted', async () => {
+  it('a live run offers no continue and keeps Run', async () => {
     await mount({ state: 'alive' });
     expect(screen.queryByTestId('continue-hosted')).toBeNull();
     expect(screen.getByTestId('run-hosted')).toBeTruthy();
@@ -289,7 +292,7 @@ describe('continuing, hosted', () => {
 });
 
 describe('the pure maps', () => {
-  it('a died card set back from In Progress keeps Run hosted', () => {
+  it('a died card set back from In Progress keeps Run', () => {
     expect(continueDoorOf(died({ refusal: 'not_in_progress' })).runDoorHidden).toBe(false);
     expect(continueDoorOf(died()).runDoorHidden).toBe(true);
   });

@@ -114,6 +114,7 @@ function run(cards: DispatchRunCardDto[]): DispatchRunDto {
     endedAt: null,
     createdById: null,
     lastHeartbeatAt: null,
+    agentInstance: null,
     cards,
     seq: 3,
   };

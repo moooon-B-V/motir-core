@@ -90,10 +90,20 @@ export interface FakePersistentControls {
   readonly persistentSpecs: PersistentContainerSpec[];
   /** Every operation, in order — how a test asserts the SEQUENCE (machine before volume). */
   readonly operations: string[];
-  /** Every `exec` command, in order, with the machine it ran on. */
-  readonly execs: Array<{ machineId: string; command: string[] }>;
+  /** Every `exec` command, in order, with the machine it ran on and its stdin (if any). */
+  readonly execs: Array<{ machineId: string; command: string[]; stdin?: string }>;
   /** What the next `exec` returns (default: exit 0, empty output). */
   setNextExecResult(result: PersistentExecResult): void;
+  /**
+   * Answer every `exec` by its command (MOTIR-7026: a boot runs several probes
+   * and a start runs its launcher, each wanting its own answer). A one-shot
+   * {@link setNextExecResult} still wins for the next call; `null` removes it.
+   */
+  setExecResponder(
+    responder:
+      | ((command: readonly string[], stdin: string | undefined) => PersistentExecResult)
+      | null,
+  ): void;
   /**
    * The base address (`ws://host:port`) every agent's terminal resolves to — a
    * terminal server the test or the E2E lane started locally. Null restores the
@@ -105,6 +115,18 @@ export interface FakePersistentControls {
 }
 
 const STATE_PATH_ENV = 'MOTIR_FAKE_PERSISTENT_STATE_PATH';
+/**
+ * THE EXEC BRIDGE (Story MOTIR-6864 · MOTIR-7031): an HTTP endpoint that runs an
+ * `exec` on the machine's stand-in and answers its result. When it is set, an
+ * `exec` nothing scripted is POSTed there as `{machineId, command, stdin?,
+ * timeoutSeconds?}` and answered `{exitCode, stdout, stderr}` — which is how the
+ * E2E lane's web server and job worker reach the terminal host the lane runs per
+ * fake machine (`tests/e2e/_helpers/agent-terminal/host.ts`), so the launcher,
+ * the sign-in query and the stop are the real commands. A scripted answer
+ * ({@link FakePersistentControls.setNextExecResult} / `setExecResponder`) still
+ * wins; absent both, an exec answers exit 0 with nothing, as before.
+ */
+const EXEC_URL_ENV = 'MOTIR_FAKE_EXEC_URL';
 /** Where agents' terminals resolve, across processes (the E2E web server and its relay). */
 const TERMINAL_URL_ENV = 'MOTIR_FAKE_TERMINAL_URL';
 const DEFAULT_TERMINAL_BASE = 'ws://127.0.0.1:7681';
@@ -112,8 +134,11 @@ const DEFAULT_TERMINAL_BASE = 'ws://127.0.0.1:7681';
 let store: FakeStore = { apps: [], machines: {}, volumes: {}, sequence: 0 };
 const persistentSpecs: PersistentContainerSpec[] = [];
 const operations: string[] = [];
-const execs: Array<{ machineId: string; command: string[] }> = [];
+const execs: Array<{ machineId: string; command: string[]; stdin?: string }> = [];
 let nextExec: PersistentExecResult | null = null;
+let execResponder:
+  | ((command: readonly string[], stdin: string | undefined) => PersistentExecResult)
+  | null = null;
 type FailureKind = 'provision' | 'machine' | 'start' | 'stop' | 'destroy';
 const failures: Record<FailureKind, string | null> = {
   provision: null,
@@ -221,8 +246,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       operations.length = 0;
       execs.length = 0;
       nextExec = null;
-      execs.length = 0;
-      nextExec = null;
+      execResponder = null;
       for (const key of Object.keys(failures) as Array<keyof typeof failures>) failures[key] = null;
       writeSharedFailures({});
       bootBehaviour = 'start';
@@ -277,6 +301,9 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
     },
     setNow(next) {
       now = next;
+    },
+    setExecResponder(responder) {
+      execResponder = responder;
     },
     setNextExecResult(result) {
       nextExec = result;
@@ -473,17 +500,27 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
     async exec(
       handle: PersistentContainerHandle,
       command: readonly string[],
+      options: { timeoutSeconds?: number; stdin?: string } = {},
     ): Promise<PersistentExecResult> {
       load();
       const machine = store.machines[handle.machineId];
       if (!machine || machine.state !== 'running') {
         throw new OrchestratorApiError('fake', 412, `machine ${handle.machineId} is not running`);
       }
-      execs.push({ machineId: handle.machineId, command: [...command] });
+      execs.push({
+        machineId: handle.machineId,
+        command: [...command],
+        ...(options.stdin !== undefined ? { stdin: options.stdin } : {}),
+      });
       operations.push(`machine:exec:${handle.machineId}`);
-      const result = nextExec ?? { exitCode: 0, stdout: '', stderr: '' };
+      const scripted = nextExec ?? execResponder?.(command, options.stdin) ?? null;
       nextExec = null;
-      return result;
+      if (scripted) return scripted;
+      const bridge = process.env[EXEC_URL_ENV];
+      if (bridge !== undefined && bridge !== '') {
+        return bridgeExec(bridge, handle.machineId, command, options);
+      }
+      return { exitCode: 0, stdout: '', stderr: '' };
     },
 
     async ensureMachineConfig(
@@ -527,6 +564,41 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       save();
     },
   };
+
+/** Run one exec on the bridge (see {@link EXEC_URL_ENV}); its failures are the provider's. */
+async function bridgeExec(
+  url: string,
+  machineId: string,
+  command: readonly string[],
+  options: { timeoutSeconds?: number; stdin?: string },
+): Promise<PersistentExecResult> {
+  const timeoutMs = ((options.timeoutSeconds ?? 60) + 5) * 1000;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        machineId,
+        command,
+        ...(options.stdin !== undefined ? { stdin: options.stdin } : {}),
+        ...(options.timeoutSeconds !== undefined ? { timeoutSeconds: options.timeoutSeconds } : {}),
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new OrchestratorApiError('fake', 502, `the exec bridge did not answer: ${detail}`);
+  }
+  const text = await res.text();
+  if (!res.ok) throw new OrchestratorApiError('fake', res.status, text.slice(0, 300));
+  const body = JSON.parse(text) as Partial<PersistentExecResult>;
+  return {
+    exitCode: typeof body.exitCode === 'number' ? body.exitCode : -1,
+    stdout: typeof body.stdout === 'string' ? body.stdout : '',
+    stderr: typeof body.stderr === 'string' ? body.stderr : '',
+  };
+}
 
 /** Strip trailing `/`s without a backtracking regex (CodeQL js/polynomial-redos). */
 function trimTrailingSlashes(value: string): string {

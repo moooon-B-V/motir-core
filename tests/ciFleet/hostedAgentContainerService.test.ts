@@ -33,6 +33,7 @@ import { rehearseHostedAgentMeter } from '../../scripts/rehearseHostedAgentMeter
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // THE HOSTED-AGENT METERING SEAM (Story MOTIR-4336 · MOTIR-4713) — its own unit
 // floor, against real Postgres with the fake orchestrator at the port.
@@ -92,6 +93,8 @@ async function seedTenant() {
     projectId: project.id,
   };
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   fakeOrchestrator.reset();

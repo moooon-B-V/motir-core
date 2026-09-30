@@ -195,3 +195,16 @@ export function setOrgBillingState(organizationId: string, entry: BillingFixture
 export function resetBillingFixture(): void {
   writeFileSync(fixturePath(), '{}', 'utf8');
 }
+
+/**
+ * Give an org a paid AI plan in the billing fixture — for a seed whose journey
+ * spends Motir's fleet (a hosted run, a hosted repository) rather than testing
+ * billing. The fleet is paid-AI-plan only (Story MOTIR-6906 · MOTIR-6909), so on
+ * a cloud-on lane an org the fixture does not name reads as free and every door
+ * that spends the fleet refuses it. A no-op on a lane with no billing fixture:
+ * there the build is not cloud-billed and the gate answers yes by itself.
+ */
+export function grantPaidAiPlanIfBilled(organizationId: string): void {
+  if (!process.env['MOTIR_AI_BILLING_FIXTURE_PATH']) return;
+  setOrgBillingState(organizationId, paidOrgState());
+}

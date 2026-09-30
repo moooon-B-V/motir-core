@@ -142,6 +142,18 @@ export interface LiveAgentUsage {
 
 /** One repository's container totals for a period — the fleet reconciliation's
  *  own side of the comparison (`ci-minutes-allowance.md` §Q.2). */
+/** A handle's newest usage row, narrowed to what attribution reads (MOTIR-6925). */
+export interface HandleUsage {
+  id: string;
+  workload: string;
+  organizationId: string;
+  projectId: string | null;
+  repoFullName: string | null;
+  dispatchRunId: string | null;
+  containerCreatedAt: Date;
+  containerStoppedAt: Date | null;
+}
+
 export interface RepoContainerTotal {
   repoName: string;
   billableSeconds: number;
@@ -309,34 +321,10 @@ export const ciContainerUsageRepository = {
   },
 
   /**
-   * The dispatch run a LIVE hosted-agent container serves, by its handle
-   * (MOTIR-6450) — the reaper's question "is this machine a hosted run still in
-   * progress?". Live = the row has no `container_stopped_at` yet (it is an
-   * accrual checkpoint, not a settle). Null for any other container.
-   */
-  async findLiveAgentRunByHandle(
-    containerProvider: string,
-    handleId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<{ dispatchRunId: string } | null> {
-    const row = await tx.ciContainerUsage.findFirst({
-      where: {
-        containerProvider,
-        handleId,
-        workload: 'agent',
-        containerStoppedAt: null,
-        dispatchRunId: { not: null },
-      },
-      select: { dispatchRunId: true },
-    });
-    return row?.dispatchRunId ? { dispatchRunId: row.dispatchRunId } : null;
-  },
-
-  /**
    * The LIVE hosted-agent row for a handle, with the attribution its checkpoint
    * already carries (MOTIR-6524) — what the reaper settles a hosted-agent machine
-   * against when no supervisor is left to. Same predicate as
-   * {@link findLiveAgentRunByHandle}; null for any other container.
+   * against when no supervisor is left to: a row with no `container_stopped_at`
+   * that names a dispatch run. Null for any other container.
    */
   async findLiveAgentUsageByHandle(
     containerProvider: string,
@@ -365,6 +353,33 @@ export const ciContainerUsageRepository = {
     });
     if (!row?.dispatchRunId) return null;
     return { ...row, dispatchRunId: row.dispatchRunId };
+  },
+
+  /**
+   * The NEWEST usage row for a handle, of any workload, live or settled — the
+   * attribution reconciler's read (MOTIR-6925). A live checkpoint (no
+   * `container_stopped_at`) is a container still in flight; a settled row is a
+   * container whose record has ended.
+   */
+  async findLatestByHandle(
+    containerProvider: string,
+    handleId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<HandleUsage | null> {
+    return tx.ciContainerUsage.findFirst({
+      where: { containerProvider, handleId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        workload: true,
+        organizationId: true,
+        projectId: true,
+        repoFullName: true,
+        dispatchRunId: true,
+        containerCreatedAt: true,
+        containerStoppedAt: true,
+      },
+    });
   },
 
   /**

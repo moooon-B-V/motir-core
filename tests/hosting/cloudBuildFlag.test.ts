@@ -52,7 +52,10 @@ const BILLING_SURFACES: ReadonlyArray<readonly [file: string, why: string]> = [
   ['lib/ciMetering/config.ts', 'the CI cost-metering configuration'],
   ['lib/services/billingService.ts', 'checkout, portal, subscriptions'],
   ['lib/services/ciFleetCostMeterService.ts', 'meters CI fleet cost against the plan'],
-  ['lib/services/ciRunnerAdmissionService.ts', 'applies the §4 in-flight cap, an entitlement'],
+  [
+    'lib/services/aiPlanGateService.ts',
+    'the paid-AI-plan gate on the fleet and on hosted repositories (MOTIR-6909, fleet-per-org-pool.md) — off a billing build there is no plan to hold, so every org passes',
+  ],
   ['lib/services/entitlementsService.ts', 'the §4 entitlement caps'],
   [
     'lib/services/platformIndexAllowanceService.ts',
