@@ -1,0 +1,4330 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · The OAuth consent screen — connect an app to Motir (MOTIR-6980)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — the OAuth CONSENT screen (MOTIR-6980, story MOTIR-6973),
+      built by MOTIR-6985. A NEW surface: no route of this family exists on origin/main
+      20903a65d, and the only precedent is the CLI device approval (app/(auth)/device/).
+
+      COMPOSED, NOT REDRAWN. Every element is a shipped primitive's markup mirrored as a
+      review class (the cli-connect asset's convention): the (auth) frame and its
+      data-auth-wide state (app/(auth)/layout.tsx), AuthShell tight / IdeaCarried /
+      CodeChip (app/(auth)/_components/AuthShell.tsx), DeviceApproval's detail box,
+      Callout, Deny composition and PermissionRow, the create-token modal's permission
+      picker rows, domain captions, rose danger card and Switch (CreateTokenModal.tsx,
+      design/settings/permission-columns.mock.html), Combobox, Segmented, Pill, Button.
+      The token block is lifted from packages/design-system/theme.css by brace-count,
+      comments stripped: Tier 0 (@theme), the Tier-1 dark block, the Tier-3 --el-* layer
+      (emitted twice — once on :root/[data-appearance-scope] and again as a separate
+      [data-theme] rule, so a nested dark panel resolves dark) and the Tier-3 dark lift.
+
+      The grant data is the shipped derivation, read not recalled: GRANTABLE_PERMISSIONS
+      (14 keys), DEFAULT_TOKEN_GRANT (13 — all but work_item:delete), grouped by catalog
+      domain and split by permissionColumnsForTokens (7 | 7). Labels/descriptions are the
+      shipped messages/en.json permissions.* copy.
+
+      PANELS — review every one:
+        0  the entrance (client → authorize → consent), from Claude Code and claude.ai
+        1  consent · one workspace · all projects · unverified app
+        2  consent · several workspaces · picker open · claude.ai
+        3  consent · one project · narrowed grant (locked rows, danger row)
+        4  the app row · unverified vs pre-registered
+        5  not signed in → sign-in hand-off → back
+        6  no workspace · none grantable → Deny only
+        7  invalid request → an error page that does not redirect
+        8  submitting
+        9  approved + the exit redirect
+        10 denied + the exit redirect
+        11 narrow viewport (375px)
+        12 dark parity
+      Toggle dark at the top to check every panel on the dark palette.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --width-rail-chrome: 20px;
+        --spacing-rail-inset: 0px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-notif-access-refused: var(--color-warning);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob: var(--color-primary-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-choice: var(--color-charcoal);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-notif-access-refused: var(--color-warning);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob: var(--color-primary-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-choice: var(--color-charcoal);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+        --el-overlay-scrim: #000000a6;
+      }
+
+      /* ── Review board chrome (NOT part of the design — just this review page) ── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 90ch;
+        line-height: 1.5;
+      }
+      .toggle {
+        flex: none;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-button-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .panel-label span {
+        text-transform: none;
+        letter-spacing: 0;
+        font-family: var(--font-sans);
+        font-weight: 400;
+        color: var(--el-text-secondary);
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .duo {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+      .duo > * {
+        min-width: 0;
+      }
+      .panel-note {
+        max-width: 1180px;
+        margin: 10px auto 0;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .panel-note b {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 0.95em;
+      }
+
+      /* ── The entrance / exit doors: browser chrome + a client stand-in ───── */
+      .door {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 18px 20px;
+      }
+      .door h4 {
+        margin: 0 0 6px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .door .dsub {
+        margin: 0 0 12px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .term {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.7;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+      }
+      .term .dim {
+        color: var(--el-text-secondary);
+      }
+      .hop {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 10px 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .hop .ic {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      /* Browser chrome — the frame the page arrives in. Not a Motir surface: it
+         exists so the ENTRY (a redirect in) and the EXIT (a redirect out) are
+         visible, which is how this page is reached — it has no door in the app. */
+      .browser {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .browser-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .dots {
+        display: inline-flex;
+        gap: 5px;
+        flex: none;
+      }
+      .dots i {
+        display: block;
+        width: 9px;
+        height: 9px;
+        border-radius: 9999px;
+        background: var(--el-border-strong);
+      }
+      .urlbar {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 10px;
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .urlbar b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .urlbar .ic {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+
+      /* ═══ The (auth) route-group FRAME — app/(auth)/layout.tsx ═════════════
+         Shipped: bg-(--el-auth-wash) page; a --el-page-bg card, --radius-card,
+         --shadow-elevated, gap-8 between the lockup row and AuthShell. The
+         consent screen renders `data-auth-wide` (the /device confirm precedent):
+         the column widens 28rem → 40rem, the card's vertical padding tightens
+         py-10 → py-5 / sm:px-8, and the brand lockup is suppressed. */
+      .authwash {
+        background: var(--el-auth-wash);
+        border-radius: var(--radius-card);
+        padding: 32px 24px;
+        display: flex;
+        justify-content: center;
+      }
+      .authcard {
+        width: 100%;
+        max-width: 28rem;
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+        background: var(--el-page-bg);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 40px 40px;
+      }
+      .authcard.wide {
+        max-width: 40rem;
+        padding: 20px 32px;
+        gap: 0;
+      }
+      /* The 28px horizontal lockup (components/brand/BrandMark) — drawn as a
+         stand-in: the mark itself is design/brand's, not this asset's. */
+      .lockup {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        align-self: flex-start;
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .lockup .mk {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+      }
+      /* AuthShell — `flex flex-col gap-8`; `tight` → gap-3 with a 2xl headline. */
+      .shell {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+      }
+      .shell.tight {
+        gap: 12px;
+      }
+      .shell-head {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .shell.tight .shell-head {
+        gap: 4px;
+      }
+      .shell-head h2 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 36px;
+        font-weight: 600;
+        line-height: 1.25;
+        letter-spacing: -0.025em;
+        color: var(--el-text);
+      }
+      .shell.tight .shell-head h2 {
+        font-size: 24px;
+      }
+      /* The subhead is `--el-text-muted` in the shipped AuthShell, and it sits on
+         the white card — the one surface muted clears AA on (4.54:1). */
+      .shell-head p {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .shell.tight .shell-head p {
+        font-size: 14px;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .stack.close {
+        gap: 14px;
+      }
+      .shell-foot {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+      .body-copy {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── The detail box — DeviceApproval's DetailColumn / DetailBlock ─────── */
+      .detail {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .dcol {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        padding: 0 16px;
+      }
+      .dcol.divided {
+        border-left: 1px solid var(--el-border-soft);
+      }
+      .dblock {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+        padding: 10px 0;
+      }
+      .dblock + .dblock {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      /* The key carries meaning → --el-text-muted on the white card (4.54:1),
+         never the decorative --el-text-faint. DeviceApproval's own rule. */
+      .dkey {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-muted);
+      }
+      .dval {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .dval .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .dsubline {
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+      .dsubline u {
+        text-underline-offset: 2px;
+      }
+      .avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .who {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .who .nm {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .who .em {
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--el-text-muted);
+      }
+      /* The app's tile — the hub/settings card-icon tile (`--el-card-icon-*`).
+         A LETTER, never the client's `logo_uri`: a self-registered app's logo is
+         as unverified as its name, and a borrowed logo is the stronger lie. */
+      .apptile {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        flex: none;
+        border-radius: var(--radius-control);
+        background: var(--el-card-icon-bg);
+        color: var(--el-card-icon-fg);
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .appname {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      /* ── Pill (components/ui/Pill) — tone="warning": peach tint + strong ink ─ */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill .ic {
+        width: 12px;
+        height: 12px;
+      }
+      .pill-warning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+
+      /* ── Section heads inside the card (the create-token modal's field labels) */
+      .fieldhead {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .flabel {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .fhelp {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      /* ── Segmented (components/ui/Segmented) — the reach choice ───────────── */
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        align-self: flex-start;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-tabnav-track);
+        padding: 2px;
+      }
+      .seg-opt {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: calc(var(--radius-btn) - 2px);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .seg-opt.on {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+
+      /* ── Combobox trigger + its Popover listbox (components/ui/Combobox) ──── */
+      .combo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .combo .val {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .combo .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .combo.open {
+        box-shadow:
+          0 0 0 var(--focus-ring-offset) var(--el-page-bg),
+          0 0 0 calc(var(--focus-ring-offset) + var(--focus-ring-width)) var(--focus-ring-color);
+      }
+      .popover {
+        margin-top: 4px;
+        padding: 4px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .opt .ic {
+        width: 16px;
+        height: 16px;
+        margin-left: auto;
+        flex: none;
+        color: var(--el-accent-on-surface);
+      }
+      .opt.hl {
+        background: var(--el-surface);
+      }
+
+      /* ── The GRANT — the token-permission picker's columns + vocabulary ───────
+         CreateTokenModal: two columns split by ROWS (permissionColumnsForTokens),
+         a mono/uppercase domain caption in --el-text-secondary, hairline-divided
+         rows, and the irreversible key as its OWN rose card. */
+      .pcols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        column-gap: 24px;
+        row-gap: 16px;
+        margin-top: 4px;
+      }
+      .pcol {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        min-width: 0;
+      }
+      .pgroup {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .pdomain {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .prows > .prow + .prow {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .prow {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 8px 0;
+      }
+      .prows > .prow:first-child {
+        padding-top: 0;
+      }
+      .prows > .prow:last-child {
+        padding-bottom: 0;
+      }
+      .prow > .ic {
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .ptext {
+        flex: 1;
+        min-width: 0;
+      }
+      .pname {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .pdesc {
+        margin: 2px 0 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      /* A permission this person does not hold in the chosen project: disabled
+         with its reason, never hidden (MOTIR-2578 1c). Faint ink is legal ONLY
+         because the element says it is disabled. */
+      .pname.locked,
+      .pdesc.locked {
+        color: var(--el-text-faint);
+      }
+      .pwhy {
+        margin: 2px 0 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      /* The compact row — the all-projects grant is FIXED, so there is no
+         switch and no description: the /device PermissionRow (name only). */
+      .prow.compact {
+        align-items: center;
+        padding: 5px 0;
+      }
+      .prow.compact .pname {
+        font-weight: 400;
+      }
+      /* The irreversible key's own card. Rose tint + Trash2 in --el-danger (a
+         glyph: 3:1 is its bar) + strong ink. The "· Danger" tag is TEXT, so it
+         takes --el-danger-on-surface (≥ 4.77:1 on --el-tint-rose in all twenty
+         palette × theme contexts) — see design-notes § The one deliberate delta. */
+      .pdanger {
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-tint-rose);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .pdanger .prow {
+        padding: 0;
+      }
+      .pdanger .prow > .ic {
+        color: var(--el-danger);
+      }
+      .pdanger .pname,
+      .pdanger .pdesc {
+        color: var(--el-text-strong);
+      }
+      .dtag {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-danger-on-surface);
+      }
+
+      /* ── Switch (components/ui/Switch) ──────────────────────────────────── */
+      .sw {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        width: 36px;
+        height: 20px;
+        flex: none;
+        border-radius: 9999px;
+        border: 1px solid var(--el-switch-off-border);
+        background: var(--el-muted);
+      }
+      .sw .knob {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        background: var(--el-switch-knob-off);
+        box-shadow: var(--shadow-subtle);
+        transform: translateX(2px);
+      }
+      .sw.on {
+        border-color: var(--el-switch-on-border);
+        background: var(--el-switch-on);
+      }
+      .sw.on .knob {
+        background: var(--el-switch-knob);
+        transform: translateX(18px);
+      }
+      .sw.dis {
+        opacity: 0.5;
+      }
+
+      /* ── The grant summary line above the actions ─────────────────────────── */
+      .summary {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px 0 0;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .summary b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .summary .ic {
+        width: 16px;
+        height: 16px;
+        margin-top: 1px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Button (components/ui/Button — buttonVariants) ─────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .btn .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .btn-lg {
+        height: var(--height-btn-lg);
+        padding: 0 24px;
+        font-size: 16px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-button-border);
+      }
+      /* DENY — DeviceApproval's shipped composition: the secondary variant with
+         the danger hue in the BORDER + glyph, the label on --el-text. Never
+         --el-danger-text (the ink FOR a danger fill — MOTIR-1553/-3663). */
+      .btn-deny {
+        border-color: var(--el-danger);
+      }
+      .btn-deny .ic {
+        color: var(--el-danger);
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+      }
+      .btn.full {
+        width: 100%;
+      }
+      .btnrow {
+        display: flex;
+        gap: 12px;
+      }
+      .btnrow > .btn {
+        flex: 1;
+      }
+      .spin {
+        width: 16px;
+        height: 16px;
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* ── Callout (DeviceApproval's page-local Callout) — hue in the tint, strong
+         ink on top, always tint + icon + copy. ───────────────────────────── */
+      .callout {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        border-radius: var(--radius-card);
+        padding: 10px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .callout .ic {
+        width: 20px;
+        height: 20px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .callout p {
+        margin: 0;
+      }
+      .callout b {
+        font-weight: 600;
+      }
+      .callout-warn {
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+      }
+      .callout-success {
+        background: var(--el-success-surface);
+        color: var(--el-text-strong);
+      }
+      .callout-danger {
+        background: var(--el-danger-surface);
+        color: var(--el-danger-surface-text);
+      }
+
+      /* ── IdeaCarried (AuthShell.tsx) — the sign-in hand-off's carried banner ─ */
+      .carried {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: var(--spacing-sm) var(--spacing-input-x);
+      }
+      .carried .clabel {
+        font-size: 12px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+      }
+      .carried .cval {
+        margin: 0;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      /* Stand-in for the shipped sign-in form — the card says it is NOT redrawn. */
+      .unchanged {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-input);
+        padding: 22px 16px;
+        text-align: center;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── CodeChip (AuthShell.tsx) ───────────────────────────────────────── */
+      .chip {
+        border-radius: var(--radius-control);
+        background: var(--el-code-bg);
+        padding: 2px 6px;
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+        color: var(--el-code-text);
+        white-space: nowrap;
+      }
+
+      /* ── The invalid-request reasons table (review board, beside the page) ── */
+      .reasons {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .reasons th {
+        text-align: left;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+        padding: 10px 12px 8px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .reasons td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text);
+        vertical-align: top;
+      }
+      .reasons tr:last-child td {
+        border-bottom: 0;
+      }
+      .reasons .code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+
+      /* ── Narrow viewport — a 375px frame ─────────────────────────────────── */
+      .phone {
+        width: 375px;
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-modal);
+        overflow: hidden;
+        background: var(--el-auth-wash);
+      }
+      .phone .authwash {
+        padding: 24px 12px;
+        border-radius: 0;
+      }
+      .phone .authcard.wide {
+        padding: 20px 16px;
+      }
+      .phone .detail,
+      .phone .pcols {
+        grid-template-columns: 1fr;
+      }
+      .phone .dcol.divided {
+        border-left: 0;
+        border-top: 1px solid var(--el-border-soft);
+      }
+
+      /* ── lucide icon slot ────────────────────────────────────────────────── */
+      .ic {
+        display: inline-block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>The OAuth consent screen — connect an app to Motir</h1>
+        <p>
+          MOTIR-6980 for MOTIR-6985. The page an MCP client’s browser redirect lands on: which app
+          is asking and where it returns, one workspace, all projects or one, the grant in the token
+          picker’s own columns and words, Approve / Deny — and every state around it. Multi-panel;
+          review each. Copy and per-element tokens are in design-notes.md § OAuth consent.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-square-pen"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path
+            d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"
+          />
+        </g>
+        <g
+          id="i-trash-2"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M3 6h18" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </g>
+        <g
+          id="i-message-square"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
+          />
+        </g>
+        <g
+          id="i-sparkles"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+          />
+          <path d="M5 3v4" />
+          <path d="M19 17v4" />
+          <path d="M3 5h4" />
+          <path d="M17 19h4" />
+        </g>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-shield-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
+        </g>
+        <g
+          id="i-circle-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="m15 9-6 6" />
+          <path d="m9 9 6 6" />
+        </g>
+        <g
+          id="i-circle-check-big"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-circle-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-globe"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+          <path d="M2 12h20" />
+        </g>
+        <g
+          id="i-laptop"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M18 5a2 2 0 0 1 2 2v8.526a2 2 0 0 0 .212.897l1.068 2.127a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45l1.068-2.127A2 2 0 0 0 4 15.526V7a2 2 0 0 1 2-2z"
+          />
+          <path d="M20.054 15.987H3.946" />
+        </g>
+        <g
+          id="i-arrow-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-loader-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </g>
+        <g
+          id="i-key-round"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="panel-label">
+      Panel 0 — the entrance
+      <span>· nobody navigates here inside Motir — the client’s browser redirect IS the door</span>
+    </div>
+
+    <div class="panel duo">
+      <div class="door">
+        <h4>From Claude Code</h4>
+        <p class="dsub">
+          The person added Motir’s MCP and asked to authenticate. Claude Code discovered Motir’s
+          sign-in from the MCP’s 401, registered itself, and opened the system browser at the
+          authorize endpoint.
+        </p>
+        <div class="term">
+          <span class="dim">$</span> claude mcp add --transport http motir
+          https://app.motir.co/api/mcp<br /><span class="dim">&gt;</span> /mcp → motir →
+          Authenticate<br /><span class="dim">Opening your browser to sign in…</span>
+        </div>
+        <div class="hop">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-down" /></svg
+          >the browser opens (authorize endpoint — MOTIR-6982 owns its exact path)
+        </div>
+        <div class="urlbar">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span
+            >app.motir.co<b>/api/auth/oauth2/authorize</b>?response_type=code&amp;client_id=mcp_7Qx…&amp;redirect_uri=http://localhost:53682/callback&amp;code_challenge=…&amp;code_challenge_method=S256&amp;resource=https://app.motir.co/api/mcp&amp;state=…</span
+          >
+        </div>
+        <div class="hop">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-down" /></svg
+          >signed in → 302 to the consent page, request intact (Panel 1). Signed out → Panel 5.
+        </div>
+        <div class="urlbar">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span>app.motir.co<b>/oauth/consent</b>?client_id=mcp_7Qx…&amp;scope=…&amp;sig=…</span>
+        </div>
+      </div>
+      <div class="door">
+        <h4>From claude.ai (and the Claude apps, Cowork)</h4>
+        <p class="dsub">
+          Settings → Connectors → Add custom connector → <b>https://app.motir.co/api/mcp</b> →
+          Connect. claude.ai opens Motir in a new tab; its callback is fixed.
+        </p>
+        <div class="term">
+          <span class="dim">Connector</span> Motir<br /><span class="dim">URL</span>
+          https://app.motir.co/api/mcp<br /><span class="dim">Status</span> Not connected [ Connect
+          ]
+        </div>
+        <div class="hop">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-down" /></svg
+          >new tab
+        </div>
+        <div class="urlbar">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span
+            >app.motir.co<b>/api/auth/oauth2/authorize</b>?…&amp;redirect_uri=https://claude.ai/api/mcp/auth_callback&amp;resource=https://app.motir.co/api/mcp</span
+          >
+        </div>
+        <div class="hop">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-down" /></svg
+          >same consent page, the app row says “Claude” and “claude.ai” (Panel 2)
+        </div>
+        <div class="urlbar">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span>app.motir.co<b>/oauth/consent</b>?client_id=mcp_c1a…&amp;sig=…</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="panel-note">
+      Illustrative only — the terminal and connector text are the clients’ own, not Motir surfaces.
+      The page has <b>no nav entry and never gets one</b>, exactly like
+      <span class="mono">/device</span>: its only door is a redirect that carries the request.
+    </p>
+
+    <div class="panel-label">
+      Panel 1 — consent · one workspace · all projects
+      <span
+        >· the default: an unverified, self-registered Claude Code on this computer, the standard
+        grant</span
+      >
+    </div>
+
+    <div class="panel">
+      <div class="browser">
+        <div class="browser-bar">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span
+          ><span class="urlbar"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+            ><span>app.motir.co<b>/oauth/consent</b>?client_id=mcp_7Qx…</span></span
+          >
+        </div>
+        <div class="authwash">
+          <div class="authcard wide" data-auth-wide>
+            <section class="shell tight">
+              <header class="shell-head">
+                <h2>Connect Claude Code to Motir?</h2>
+                <p>
+                  It will act as you, in the one workspace you choose. Check each part before you
+                  approve.
+                </p>
+              </header>
+              <div class="stack close">
+                <div class="detail">
+                  <div class="dcol">
+                    <div class="dblock">
+                      <span class="dkey">App asking</span>
+                      <span class="dval"
+                        ><span class="apptile" aria-hidden="true">C</span
+                        ><span class="appname"
+                          >Claude Code
+                          <span class="pill pill-warning"
+                            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-shield-alert" /></svg
+                            >Unverified</span
+                          ></span
+                        ></span
+                      >
+                      <span class="dsubline"
+                        >It registered itself, so this name is its own claim. Motir hasn’t reviewed
+                        this app.</span
+                      >
+                    </div>
+                    <div class="dblock">
+                      <span class="dkey">Returns you to</span>
+                      <span class="dval"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-laptop" /></svg
+                        ><span>localhost</span></span
+                      >
+                      <span class="dsubline"
+                        >An app on this computer. Approve only if you just asked Claude Code to
+                        connect.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="dcol divided">
+                    <div class="dblock">
+                      <span class="dkey">You</span>
+                      <span class="dval"
+                        ><span class="avatar" aria-hidden="true">Z</span
+                        ><span class="who"
+                          ><span class="nm">Zhu Yue</span
+                          ><span class="em">zhuyue11@gmail.com</span></span
+                        ></span
+                      >
+                      <span class="dsubline">Not you? <u>Sign out</u> and sign in as them.</span>
+                    </div>
+                    <div class="dblock">
+                      <span class="dkey">Workspace</span>
+                      <span class="dval"><span>moooon · Motir</span></span>
+                      <span class="dsubline">Your only workspace.</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <div class="fieldhead">
+                    <span class="flabel">Where it can act</span>
+                    <span class="fhelp"
+                      >Every project in moooon · Motir you can open. In each one it can also do no
+                      more than your role there allows.</span
+                    >
+                  </div>
+                  <div class="seg" role="radiogroup" aria-label="Where it can act">
+                    <span class="seg-opt on" role="radio" aria-checked="true">All projects</span>
+                    <span class="seg-opt" role="radio" aria-checked="false">One project</span>
+                  </div>
+                </div>
+                <div class="field">
+                  <div class="fieldhead">
+                    <span class="flabel">What it can do</span>
+                    <span class="fhelp"
+                      >The standard permissions every new connection gets — everything except
+                      deleting.</span
+                    >
+                  </div>
+                  <div class="pcols" role="group" aria-label="What it can do">
+                    <div class="pcol">
+                      <div class="pgroup">
+                        <div class="pdomain">Project</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">View project</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">View the lesson library</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">Change the lesson library</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">Record a lesson recurrence</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Work items</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-square-pen" /></svg
+                            ><span class="pname">Edit work items</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-square-pen" /></svg
+                            ><span class="pname">Archive work items</span>
+                          </div>
+                        </div>
+                        <div class="pdanger">
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-trash-2" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname"
+                                >Delete work items <span class="dtag">· Danger</span></span
+                              >
+                              <p class="pdesc">
+                                Not included. Pick <b>One project</b> to choose it.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="pcol">
+                      <div class="pgroup">
+                        <div class="pdomain">Comments</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-message-square" /></svg
+                            ><span class="pname">Add comments</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Plans</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">See every plan</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Agent runs</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">See every agent run</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Sprints &amp; backlog</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-zap" /></svg
+                            ><span class="pname">Manage sprints</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">AI planning</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="pname">Run AI planning</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="pname">Author AI plans</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="pname">Approve or decline AI plans</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="summary">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg
+                  ><span
+                    >Claude Code gets <b>13 of 14</b> permissions, in every project of
+                    <b>moooon · Motir</b> you can open.</span
+                  >
+                </div>
+                <div class="btnrow" role="group" aria-label="Approve or deny Claude Code">
+                  <button class="btn btn-secondary btn-lg btn-deny">
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-circle-x" /></svg
+                    >Deny
+                  </button>
+                  <button class="btn btn-primary btn-lg">Approve and connect</button>
+                </div>
+                <p class="shell-foot">
+                  Disconnect it any time in Settings → Account → Connected apps.
+                </p>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="panel-note">
+      The standard grant is <span class="mono">DEFAULT_TOKEN_GRANT</span>: every grantable
+      permission except the irreversible one. <b>Delete work items</b> is drawn WITHHELD in the
+      picker’s own rose danger card, so what is not granted is as visible as what is. Nothing to
+      choose → no switches; the names are the shipped
+      <span class="mono">permissions.*.label</span> copy, in the picker’s two columns (split by
+      rows, 7 | 7).
+    </p>
+
+    <div class="panel-label">
+      Panel 2 — consent · several workspaces
+      <span>· the workspace picker open — pick exactly one; Claude on claude.ai</span>
+    </div>
+
+    <div class="panel">
+      <div class="browser">
+        <div class="browser-bar">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span
+          ><span class="urlbar"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+            ><span>app.motir.co<b>/oauth/consent</b>?client_id=mcp_c1a…</span></span
+          >
+        </div>
+        <div class="authwash">
+          <div class="authcard wide" data-auth-wide>
+            <section class="shell tight">
+              <header class="shell-head">
+                <h2>Connect Claude to Motir?</h2>
+                <p>
+                  It will act as you, in the one workspace you choose. Check each part before you
+                  approve.
+                </p>
+              </header>
+              <div class="stack close">
+                <div class="detail">
+                  <div class="dcol">
+                    <div class="dblock">
+                      <span class="dkey">App asking</span>
+                      <span class="dval"
+                        ><span class="apptile" aria-hidden="true">C</span
+                        ><span class="appname"
+                          >Claude
+                          <span class="pill pill-warning"
+                            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-shield-alert" /></svg
+                            >Unverified</span
+                          ></span
+                        ></span
+                      >
+                      <span class="dsubline"
+                        >It registered itself, so this name is its own claim. Motir hasn’t reviewed
+                        this app.</span
+                      >
+                    </div>
+                    <div class="dblock">
+                      <span class="dkey">Returns you to</span>
+                      <span class="dval"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-globe" /></svg
+                        ><span>claude.ai</span></span
+                      >
+                      <span class="dsubline"
+                        >You’ll be sent to https://claude.ai/api/mcp/auth_callback</span
+                      >
+                    </div>
+                  </div>
+                  <div class="dcol divided">
+                    <div class="dblock">
+                      <span class="dkey">You</span>
+                      <span class="dval"
+                        ><span class="avatar" aria-hidden="true">Z</span
+                        ><span class="who"
+                          ><span class="nm">Zhu Yue</span
+                          ><span class="em">zhuyue11@gmail.com</span></span
+                        ></span
+                      >
+                      <span class="dsubline">Not you? <u>Sign out</u> and sign in as them.</span>
+                    </div>
+                    <div class="dblock">
+                      <span class="dkey">Workspace</span>
+                      <div
+                        class="combo open"
+                        role="combobox"
+                        aria-expanded="true"
+                        aria-label="Workspace Claude Code can act in"
+                      >
+                        <span class="val">moooon · Motir</span
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-chevron-down" />
+                        </svg>
+                      </div>
+                      <div
+                        class="popover"
+                        role="listbox"
+                        aria-label="Workspace Claude Code can act in"
+                      >
+                        <div class="opt hl" role="option" aria-selected="true">
+                          moooon · Motir<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-check" />
+                          </svg>
+                        </div>
+                        <div class="opt" role="option" aria-selected="false">moooon · Sandbox</div>
+                        <div class="opt" role="option" aria-selected="false">Acme · Ops</div>
+                      </div>
+                      <span class="dsubline">You belong to 3 — it acts in this one only.</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <div class="fieldhead">
+                    <span class="flabel">Where it can act</span>
+                    <span class="fhelp"
+                      >Every project in moooon · Motir you can open. In each one it can also do no
+                      more than your role there allows.</span
+                    >
+                  </div>
+                  <div class="seg" role="radiogroup" aria-label="Where it can act">
+                    <span class="seg-opt on" role="radio" aria-checked="true">All projects</span>
+                    <span class="seg-opt" role="radio" aria-checked="false">One project</span>
+                  </div>
+                </div>
+                <div class="field">
+                  <div class="fieldhead">
+                    <span class="flabel">What it can do</span>
+                    <span class="fhelp"
+                      >The standard permissions every new connection gets — everything except
+                      deleting.</span
+                    >
+                  </div>
+                  <div class="pcols" role="group" aria-label="What it can do">
+                    <div class="pcol">
+                      <div class="pgroup">
+                        <div class="pdomain">Project</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">View project</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">View the lesson library</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">Change the lesson library</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">Record a lesson recurrence</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Work items</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-square-pen" /></svg
+                            ><span class="pname">Edit work items</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-square-pen" /></svg
+                            ><span class="pname">Archive work items</span>
+                          </div>
+                        </div>
+                        <div class="pdanger">
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-trash-2" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname"
+                                >Delete work items <span class="dtag">· Danger</span></span
+                              >
+                              <p class="pdesc">
+                                Not included. Pick <b>One project</b> to choose it.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="pcol">
+                      <div class="pgroup">
+                        <div class="pdomain">Comments</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-message-square" /></svg
+                            ><span class="pname">Add comments</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Plans</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">See every plan</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Agent runs</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">See every agent run</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Sprints &amp; backlog</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-zap" /></svg
+                            ><span class="pname">Manage sprints</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">AI planning</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="pname">Run AI planning</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="pname">Author AI plans</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="pname">Approve or decline AI plans</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="summary">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg
+                  ><span
+                    >Claude gets <b>13 of 14</b> permissions, in every project of
+                    <b>moooon · Motir</b> you can open.</span
+                  >
+                </div>
+                <div class="btnrow" role="group" aria-label="Approve or deny Claude Code">
+                  <button class="btn btn-secondary btn-lg btn-deny">
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-circle-x" /></svg
+                    >Deny
+                  </button>
+                  <button class="btn btn-primary btn-lg">Approve and connect</button>
+                </div>
+                <p class="shell-foot">
+                  Disconnect it any time in Settings → Account → Connected apps.
+                </p>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="panel-note">
+      Options are <span class="mono">org · workspace</span> (the /device label), and only the
+      workspaces this person may grant anything in. It opens on the workspace they were last active
+      in. Changing it re-reads nothing else on the page in <b>All projects</b>; in
+      <b>One project</b> it resets the project picker to that workspace’s active project.
+    </p>
+
+    <div class="panel-label">
+      Panel 3 — consent · one project, a narrowed grant
+      <span>· the token picker itself, offered only what this person holds in MOTIR</span>
+    </div>
+
+    <div class="panel">
+      <div class="browser">
+        <div class="browser-bar">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span
+          ><span class="urlbar"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+            ><span>app.motir.co<b>/oauth/consent</b>?client_id=mcp_7Qx…</span></span
+          >
+        </div>
+        <div class="authwash">
+          <div class="authcard wide" data-auth-wide>
+            <section class="shell tight">
+              <header class="shell-head">
+                <h2>Connect Claude Code to Motir?</h2>
+                <p>
+                  It will act as you, in the one workspace you choose. Check each part before you
+                  approve.
+                </p>
+              </header>
+              <div class="stack close">
+                <div class="detail">
+                  <div class="dcol">
+                    <div class="dblock">
+                      <span class="dkey">App asking</span>
+                      <span class="dval"
+                        ><span class="apptile" aria-hidden="true">C</span
+                        ><span class="appname"
+                          >Claude Code
+                          <span class="pill pill-warning"
+                            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-shield-alert" /></svg
+                            >Unverified</span
+                          ></span
+                        ></span
+                      >
+                      <span class="dsubline"
+                        >It registered itself, so this name is its own claim. Motir hasn’t reviewed
+                        this app.</span
+                      >
+                    </div>
+                    <div class="dblock">
+                      <span class="dkey">Returns you to</span>
+                      <span class="dval"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-laptop" /></svg
+                        ><span>localhost</span></span
+                      >
+                      <span class="dsubline"
+                        >An app on this computer. Approve only if you just asked Claude Code to
+                        connect.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="dcol divided">
+                    <div class="dblock">
+                      <span class="dkey">You</span>
+                      <span class="dval"
+                        ><span class="avatar" aria-hidden="true">Z</span
+                        ><span class="who"
+                          ><span class="nm">Zhu Yue</span
+                          ><span class="em">zhuyue11@gmail.com</span></span
+                        ></span
+                      >
+                      <span class="dsubline">Not you? <u>Sign out</u> and sign in as them.</span>
+                    </div>
+                    <div class="dblock">
+                      <span class="dkey">Workspace</span>
+                      <div
+                        class="combo"
+                        role="combobox"
+                        aria-expanded="false"
+                        aria-label="Workspace Claude Code can act in"
+                      >
+                        <span class="val">moooon · Motir</span
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-chevron-down" />
+                        </svg>
+                      </div>
+                      <span class="dsubline">You belong to 3 — it acts in this one only.</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <div class="fieldhead">
+                    <span class="flabel">Where it can act</span>
+                    <span class="fhelp"
+                      >Only the project you pick, with the permissions you switch on.</span
+                    >
+                  </div>
+                  <div class="seg" role="radiogroup" aria-label="Where it can act">
+                    <span class="seg-opt" role="radio" aria-checked="false">All projects</span>
+                    <span class="seg-opt on" role="radio" aria-checked="true">One project</span>
+                  </div>
+                </div>
+                <div class="field">
+                  <span class="flabel">Project</span>
+                  <div class="combo" role="combobox" aria-expanded="false" aria-label="Project">
+                    <span class="val">MOTIR — Motir</span
+                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-down" />
+                    </svg>
+                  </div>
+                  <span class="fhelp">Claude Code acts in this project only.</span>
+                </div>
+                <div class="field">
+                  <div class="fieldhead">
+                    <span class="flabel">What it can do</span>
+                    <span class="fhelp"
+                      >Choose what Claude Code is allowed to do. You can grant less than your own
+                      access, never more.</span
+                    >
+                  </div>
+                  <div class="pcols" role="group" aria-label="What it can do">
+                    <div class="pcol">
+                      <div class="pgroup">
+                        <div class="pdomain">Project</div>
+                        <div class="prows">
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname">View project</span>
+                              <p class="pdesc">
+                                Open the project and read its work items, boards, backlog and
+                                reports.
+                              </p>
+                            </div>
+                            <span
+                              class="sw on"
+                              role="switch"
+                              aria-checked="true"
+                              aria-label="View project"
+                              ><span class="knob"></span
+                            ></span>
+                          </div>
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname">View the lesson library</span>
+                              <p class="pdesc">
+                                Read what the project's AI planner learned from its own planning
+                                work.
+                              </p>
+                            </div>
+                            <span
+                              class="sw on"
+                              role="switch"
+                              aria-checked="true"
+                              aria-label="View the lesson library"
+                              ><span class="knob"></span
+                            ></span>
+                          </div>
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname locked" aria-disabled="true"
+                                >Change the lesson library</span
+                              >
+                              <p class="pdesc locked" aria-disabled="true">
+                                Retire a lesson or add one — both change the standing instructions
+                                the planner is given.
+                              </p>
+                              <p class="pwhy">You do not have this in this project.</p>
+                            </div>
+                            <span
+                              class="sw dis"
+                              role="switch"
+                              aria-checked="false"
+                              aria-disabled="true"
+                              aria-label="Change the lesson library"
+                              ><span class="knob"></span
+                            ></span>
+                          </div>
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname">Record a lesson recurrence</span>
+                              <p class="pdesc">
+                                Note that a lesson's mistake happened again. It changes nothing the
+                                lesson says.
+                              </p>
+                            </div>
+                            <span
+                              class="sw on"
+                              role="switch"
+                              aria-checked="true"
+                              aria-label="Record a lesson recurrence"
+                              ><span class="knob"></span
+                            ></span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Work items</div>
+                        <div class="prows">
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-square-pen" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname">Edit work items</span>
+                              <p class="pdesc">
+                                Create, update, assign and move work items, and transition them on
+                                the board.
+                              </p>
+                            </div>
+                            <span
+                              class="sw on"
+                              role="switch"
+                              aria-checked="true"
+                              aria-label="Edit work items"
+                              ><span class="knob"></span
+                            ></span>
+                          </div>
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-square-pen" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname">Archive work items</span>
+                              <p class="pdesc">
+                                Archive a work item and restore it later. Affects that item only —
+                                its children stay.
+                              </p>
+                            </div>
+                            <span
+                              class="sw on"
+                              role="switch"
+                              aria-checked="true"
+                              aria-label="Archive work items"
+                              ><span class="knob"></span
+                            ></span>
+                          </div>
+                        </div>
+                        <div class="pdanger">
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-trash-2" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname"
+                                >Delete work items <span class="dtag">· Danger</span></span
+                              >
+                              <p class="pdesc">
+                                Permanently delete a work item and everything beneath it. Cannot be
+                                undone.
+                              </p>
+                            </div>
+                            <span
+                              class="sw"
+                              role="switch"
+                              aria-checked="false"
+                              aria-label="Delete work items"
+                              ><span class="knob"></span
+                            ></span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="pcol">
+                      <div class="pgroup">
+                        <div class="pdomain">Comments</div>
+                        <div class="prows">
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-message-square" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname">Add comments</span>
+                              <p class="pdesc">
+                                Post comments on work items, and edit or delete your own.
+                              </p>
+                            </div>
+                            <span
+                              class="sw on"
+                              role="switch"
+                              aria-checked="true"
+                              aria-label="Add comments"
+                              ><span class="knob"></span
+                            ></span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Plans</div>
+                        <div class="prows">
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname locked" aria-disabled="true">See every plan</span>
+                              <p class="pdesc locked" aria-disabled="true">
+                                See all of the project's AI plans, including other people's. Without
+                                it you see the plans you started and the ones routed to you or
+                                decided by you.
+                              </p>
+                              <p class="pwhy">You do not have this in this project.</p>
+                            </div>
+                            <span
+                              class="sw dis"
+                              role="switch"
+                              aria-checked="false"
+                              aria-disabled="true"
+                              aria-label="See every plan"
+                              ><span class="knob"></span
+                            ></span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Agent runs</div>
+                        <div class="prows">
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname">See every agent run</span>
+                              <p class="pdesc">
+                                See all of the project's agent runs, including other people's.
+                                Without it you see the runs you started.
+                              </p>
+                            </div>
+                            <span
+                              class="sw on"
+                              role="switch"
+                              aria-checked="true"
+                              aria-label="See every agent run"
+                              ><span class="knob"></span
+                            ></span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Sprints &amp; backlog</div>
+                        <div class="prows">
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-zap" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname">Manage sprints</span>
+                              <p class="pdesc">Start and complete Sprints, and rank the backlog.</p>
+                            </div>
+                            <span
+                              class="sw"
+                              role="switch"
+                              aria-checked="false"
+                              aria-label="Manage sprints"
+                              ><span class="knob"></span
+                            ></span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">AI planning</div>
+                        <div class="prows">
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname">Run AI planning</span>
+                              <p class="pdesc">
+                                Submit a planning job that spends the workspace’s AI credits and
+                                proposes plan changes.
+                              </p>
+                            </div>
+                            <span
+                              class="sw"
+                              role="switch"
+                              aria-checked="false"
+                              aria-label="Run AI planning"
+                              ><span class="knob"></span
+                            ></span>
+                          </div>
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname">Author AI plans</span>
+                              <p class="pdesc">
+                                Add proposals to a generated plan and close it for review. Reading a
+                                plan needs only project access.
+                              </p>
+                            </div>
+                            <span
+                              class="sw on"
+                              role="switch"
+                              aria-checked="true"
+                              aria-label="Author AI plans"
+                              ><span class="knob"></span
+                            ></span>
+                          </div>
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname locked" aria-disabled="true"
+                                >Approve or decline AI plans</span
+                              >
+                              <p class="pdesc locked" aria-disabled="true">
+                                Turn a plan’s proposals into real work items, or end the plan
+                                without creating any.
+                              </p>
+                              <p class="pwhy">You do not have this in this project.</p>
+                            </div>
+                            <span
+                              class="sw dis"
+                              role="switch"
+                              aria-checked="false"
+                              aria-disabled="true"
+                              aria-label="Approve or decline AI plans"
+                              ><span class="knob"></span
+                            ></span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="summary">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg
+                  ><span>Claude Code gets <b>8</b> permissions, in <b>MOTIR</b> only.</span>
+                </div>
+                <div class="btnrow" role="group" aria-label="Approve or deny Claude Code">
+                  <button class="btn btn-secondary btn-lg btn-deny">
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-circle-x" /></svg
+                    >Deny
+                  </button>
+                  <button class="btn btn-primary btn-lg">Approve and connect</button>
+                </div>
+                <p class="shell-foot">
+                  Disconnect it any time in Settings → Account → Connected apps.
+                </p>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="panel-note">
+      A member (not an admin) of MOTIR: three rows are <b>locked</b> with the picker’s reason (<span
+        class="mono"
+        >grantableFor(held)</span
+      >), never hidden. They switched off <b>Manage sprints</b> and <b>Run AI planning</b>. Delete
+      stays off by default and is theirs to switch on — in its danger card. Switching every row off
+      disables <b>Approve and connect</b> and shows the picker’s empty error: “Grant at least one
+      permission to connect.”
+    </p>
+
+    <div class="panel-label">
+      Panel 4 — the app row · unverified vs pre-registered
+      <span>· the one element that changes</span>
+    </div>
+
+    <div class="panel duo">
+      <div class="authwash">
+        <div class="authcard wide">
+          <div class="detail">
+            <div class="dcol">
+              <div class="dblock">
+                <span class="dkey">App asking</span>
+                <span class="dval"
+                  ><span class="apptile" aria-hidden="true">C</span
+                  ><span class="appname"
+                    >Claude Code
+                    <span class="pill pill-warning"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-shield-alert" /></svg
+                      >Unverified</span
+                    ></span
+                  ></span
+                >
+                <span class="dsubline"
+                  >It registered itself, so this name is its own claim. Motir hasn’t reviewed this
+                  app.</span
+                >
+              </div>
+            </div>
+            <div class="dcol divided">
+              <div class="dblock">
+                <span class="dkey">Returns you to</span>
+                <span class="dval"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-laptop" /></svg
+                  ><span>localhost</span></span
+                >
+                <span class="dsubline"
+                  >An app on this computer. Approve only if you just asked Claude Code to
+                  connect.</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="authwash">
+        <div class="authcard wide">
+          <div class="detail">
+            <div class="dcol">
+              <div class="dblock">
+                <span class="dkey">App asking</span>
+                <span class="dval"
+                  ><span class="apptile" aria-hidden="true">C</span
+                  ><span class="appname">Claude </span></span
+                >
+                <span class="dsubline"
+                  >Registered with this Motir ahead of time — not by itself.</span
+                >
+              </div>
+            </div>
+            <div class="dcol divided">
+              <div class="dblock">
+                <span class="dkey">Returns you to</span>
+                <span class="dval"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-globe" /></svg
+                  ><span>claude.ai</span></span
+                >
+                <span class="dsubline"
+                  >You’ll be sent to https://claude.ai/api/mcp/auth_callback</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="panel-note">
+      <b>Left — dynamically registered</b> (RFC 7591): the peach
+      <span class="mono">Pill tone="warning"</span> “Unverified” plus one line saying Motir did not
+      review it. <b>Right — pre-registered</b> by this deployment: no marker, and a line that says
+      who registered it. There is deliberately NO “Verified” badge: Motir has no review process, and
+      a green tick would claim one. The return host is shown in BOTH, because it is where the code
+      goes.
+    </p>
+
+    <div class="panel-label">
+      Panel 5 — not signed in
+      <span>· the (auth) sign-in, then back to the consent page with the request intact</span>
+    </div>
+
+    <div class="panel duo">
+      <div class="browser">
+        <div class="browser-bar">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span
+          ><span class="urlbar"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+            ><span
+              >app.motir.co<b>/sign-in</b>?next=%2Fapi%2Fauth%2Foauth2%2Fauthorize%3Fclient_id%3Dmcp_7Qx…</span
+            ></span
+          >
+        </div>
+        <div class="authwash">
+          <div class="authcard">
+            <span class="lockup"><span class="mk" aria-hidden="true"></span>Motir</span>
+            <section class="shell">
+              <header class="shell-head">
+                <h2>Welcome back!</h2>
+                <p>Use Motir to turn any product idea into reality.</p>
+              </header>
+              <div class="stack">
+                <div class="carried">
+                  <span class="clabel">Connecting an app</span>
+                  <p class="cval">Claude Code — you’ll pick a workspace and approve next.</p>
+                </div>
+                <div class="unchanged">
+                  The shipped sign-in form — Google · passkey · email, then password or 2FA —
+                  unchanged and not redrawn (design/auth/ 01–12, two-factor-challenge,
+                  passkey-sign-in).
+                </div>
+              </div>
+              <p class="shell-foot">
+                Only the account you sign in as can approve this — and only its workspaces can be
+                picked.
+              </p>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="door">
+        <h4>The hand-off</h4>
+        <p class="dsub">
+          The authorize endpoint, finding no session, sends the browser to the sign-in page
+          (Better-Auth’s <span class="mono">loginPage</span>). The ONLY change to sign-in is the
+          carried banner — the same <span class="mono">IdeaCarried</span> the CLI hand-off uses
+          (“Connecting the CLI”). It names the app, never the workspace: nothing about the account
+          is known yet.
+        </p>
+        <div class="hop">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-right" /></svg
+          >sign in as usual — password, Google, passkey, and the 2FA challenge if the account has it
+        </div>
+        <div class="hop">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-right" /></svg
+          >the browser returns to the authorize URL, whole query encoded into
+          <span class="mono">next</span>
+        </div>
+        <div class="hop">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-right" /></svg
+          >authorize re-validates and redirects to the consent page (Panel 1)
+        </div>
+        <p class="dsub">
+          ⚠ The <b>whole</b> authorize query rides in <span class="mono">next</span>, the /device
+          lesson: a bounce that keeps only the pathname drops <span class="mono">state</span>,
+          <span class="mono">code_challenge</span> and <span class="mono">resource</span>, and the
+          client gets nothing back.
+        </p>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      Panel 6 — no workspace · or none it could act in
+      <span>· says why, and offers only Deny</span>
+    </div>
+
+    <div class="panel duo">
+      <div class="browser">
+        <div class="browser-bar">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span
+          ><span class="urlbar"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+            ><span>app.motir.co<b>/oauth/consent</b>?client_id=mcp_7Qx…</span></span
+          >
+        </div>
+        <div class="authwash">
+          <div class="authcard">
+            <span class="lockup"><span class="mk" aria-hidden="true"></span>Motir</span>
+            <section class="shell">
+              <header class="shell-head">
+                <h2>Claude Code can’t connect yet</h2>
+                <p>You’re not in any Motir workspace.</p>
+              </header>
+              <div class="stack">
+                <div class="callout callout-warn">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-alert" />
+                  </svg>
+                  <p>
+                    A connection acts in one workspace, and your account isn’t in any yet. Create a
+                    workspace, or ask to be invited to one, then connect again from Claude Code.
+                  </p>
+                </div>
+                <button class="btn btn-secondary btn-lg btn-deny full">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-x" /></svg
+                  >Deny and return to Claude Code
+                </button>
+              </div>
+              <p class="shell-foot">
+                Deny tells Claude Code the connection was refused. Nothing is stored.
+              </p>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="browser">
+        <div class="browser-bar">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span
+          ><span class="urlbar"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+            ><span>app.motir.co<b>/oauth/consent</b>?client_id=mcp_7Qx…</span></span
+          >
+        </div>
+        <div class="authwash">
+          <div class="authcard">
+            <span class="lockup"><span class="mk" aria-hidden="true"></span>Motir</span>
+            <section class="shell">
+              <header class="shell-head">
+                <h2>Claude Code can’t connect yet</h2>
+                <p>None of your workspaces lets you grant it anything.</p>
+              </header>
+              <div class="stack">
+                <div class="callout callout-warn">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-alert" />
+                  </svg>
+                  <p>
+                    In <b>moooon · Motir</b> and <b>Acme · Ops</b> you can’t open any project, so
+                    there is nothing Claude Code could do there. Ask a workspace admin for project
+                    access, then connect again.
+                  </p>
+                </div>
+                <button class="btn btn-secondary btn-lg btn-deny full">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-x" /></svg
+                  >Deny and return to Claude Code
+                </button>
+              </div>
+              <p class="shell-foot">
+                Deny tells Claude Code the connection was refused. Nothing is stored.
+              </p>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="panel-note">
+      No Approve, no picker, no permissions list — there is nothing to approve. Deny still REDIRECTS
+      with <span class="mono">error=access_denied</span>, because the request itself was valid and
+      the client is waiting on an answer (contrast Panel 7).
+    </p>
+
+    <div class="panel-label">
+      Panel 7 — invalid request
+      <span>· an error PAGE that does not redirect — no Approve, no Deny</span>
+    </div>
+
+    <div class="panel duo">
+      <div class="browser">
+        <div class="browser-bar">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span
+          ><span class="urlbar"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-circle-alert" /></svg
+            ><span
+              >app.motir.co<b>/oauth/error</b>?error=invalid_request&amp;error_description=redirect_uri</span
+            ></span
+          >
+        </div>
+        <div class="authwash">
+          <div class="authcard">
+            <span class="lockup"><span class="mk" aria-hidden="true"></span>Motir</span>
+            <section class="shell">
+              <header class="shell-head">
+                <h2>This connection request can’t be used</h2>
+                <p>Nothing was connected, and you haven’t been sent anywhere.</p>
+              </header>
+              <div class="stack">
+                <div class="callout callout-danger">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-x" />
+                  </svg>
+                  <p>
+                    It asked to send you back to <b>http://evil.example/cb</b>, an address it never
+                    registered with Motir.
+                  </p>
+                </div>
+                <p class="body-copy">
+                  Go back to the app and start connecting again. If this keeps happening, the app is
+                  set up wrong — tell whoever makes it, and quote
+                  <span class="chip">invalid_request · redirect_uri</span>.
+                </p>
+                <button class="btn btn-secondary full">Go to Motir</button>
+              </div>
+              <p class="shell-foot">You can close this tab.</p>
+            </section>
+          </div>
+        </div>
+      </div>
+      <table class="reasons">
+        <thead>
+          <tr>
+            <th>The request</th>
+            <th>The callout sentence</th>
+            <th>Quoted code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Unknown <span class="mono">client_id</span></td>
+            <td>The app isn’t registered with Motir, or its registration has expired.</td>
+            <td class="code">invalid_client</td>
+          </tr>
+          <tr>
+            <td><span class="mono">redirect_uri</span> not registered</td>
+            <td>
+              It asked to send you back to <b>&lt;host&gt;</b>, an address it never registered with
+              Motir.
+            </td>
+            <td class="code">invalid_request · redirect_uri</td>
+          </tr>
+          <tr>
+            <td>PKCE missing, or not S256</td>
+            <td>It left out a security check Motir requires on every connection.</td>
+            <td class="code">invalid_request · code_challenge</td>
+          </tr>
+          <tr>
+            <td><span class="mono">resource</span> is not this MCP</td>
+            <td>It asked for access to something other than Motir’s MCP server.</td>
+            <td class="code">invalid_target · resource</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="panel-note">
+      It does NOT redirect because it cannot be sure where to: an unregistered
+      <span class="mono">redirect_uri</span> is exactly an attacker’s address. Whether the PKCE and
+      <span class="mono">resource</span> rows also land here, or redirect with the RFC error once
+      the redirect is proven good, is MOTIR-6982’s call — this page is drawn for every row it DOES
+      receive. The host is named in words; the code is quoted for the app’s maker, not for the
+      reader.
+    </p>
+
+    <div class="panel-label">
+      Panel 8 — submitting
+      <span>· Approve pressed: the button spins, everything else is held still</span>
+    </div>
+
+    <div class="panel">
+      <div class="browser">
+        <div class="browser-bar">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span
+          ><span class="urlbar"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+            ><span>app.motir.co<b>/oauth/consent</b>?client_id=mcp_7Qx…</span></span
+          >
+        </div>
+        <div class="authwash">
+          <div class="authcard wide" data-auth-wide>
+            <section class="shell tight">
+              <header class="shell-head">
+                <h2>Connect Claude Code to Motir?</h2>
+                <p>
+                  It will act as you, in the one workspace you choose. Check each part before you
+                  approve.
+                </p>
+              </header>
+              <div class="stack close">
+                <div class="detail">
+                  <div class="dcol">
+                    <div class="dblock">
+                      <span class="dkey">App asking</span>
+                      <span class="dval"
+                        ><span class="apptile" aria-hidden="true">C</span
+                        ><span class="appname"
+                          >Claude Code
+                          <span class="pill pill-warning"
+                            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-shield-alert" /></svg
+                            >Unverified</span
+                          ></span
+                        ></span
+                      >
+                      <span class="dsubline"
+                        >It registered itself, so this name is its own claim. Motir hasn’t reviewed
+                        this app.</span
+                      >
+                    </div>
+                    <div class="dblock">
+                      <span class="dkey">Returns you to</span>
+                      <span class="dval"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-laptop" /></svg
+                        ><span>localhost</span></span
+                      >
+                      <span class="dsubline"
+                        >An app on this computer. Approve only if you just asked Claude Code to
+                        connect.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="dcol divided">
+                    <div class="dblock">
+                      <span class="dkey">You</span>
+                      <span class="dval"
+                        ><span class="avatar" aria-hidden="true">Z</span
+                        ><span class="who"
+                          ><span class="nm">Zhu Yue</span
+                          ><span class="em">zhuyue11@gmail.com</span></span
+                        ></span
+                      >
+                      <span class="dsubline">Not you? <u>Sign out</u> and sign in as them.</span>
+                    </div>
+                    <div class="dblock">
+                      <span class="dkey">Workspace</span>
+                      <span class="dval"><span>moooon · Motir</span></span>
+                      <span class="dsubline">Your only workspace.</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <div class="fieldhead">
+                    <span class="flabel">Where it can act</span>
+                    <span class="fhelp"
+                      >Every project in moooon · Motir you can open. In each one it can also do no
+                      more than your role there allows.</span
+                    >
+                  </div>
+                  <div class="seg" role="radiogroup" aria-label="Where it can act">
+                    <span class="seg-opt on" role="radio" aria-checked="true">All projects</span>
+                    <span class="seg-opt" role="radio" aria-checked="false">One project</span>
+                  </div>
+                </div>
+                <div class="field">
+                  <div class="fieldhead">
+                    <span class="flabel">What it can do</span>
+                    <span class="fhelp"
+                      >The standard permissions every new connection gets — everything except
+                      deleting.</span
+                    >
+                  </div>
+                  <div class="pcols" role="group" aria-label="What it can do">
+                    <div class="pcol">
+                      <div class="pgroup">
+                        <div class="pdomain">Project</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">View project</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">View the lesson library</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">Change the lesson library</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">Record a lesson recurrence</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Work items</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-square-pen" /></svg
+                            ><span class="pname">Edit work items</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-square-pen" /></svg
+                            ><span class="pname">Archive work items</span>
+                          </div>
+                        </div>
+                        <div class="pdanger">
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-trash-2" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname"
+                                >Delete work items <span class="dtag">· Danger</span></span
+                              >
+                              <p class="pdesc">
+                                Not included. Pick <b>One project</b> to choose it.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="pcol">
+                      <div class="pgroup">
+                        <div class="pdomain">Comments</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-message-square" /></svg
+                            ><span class="pname">Add comments</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Plans</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">See every plan</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Agent runs</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">See every agent run</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Sprints &amp; backlog</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-zap" /></svg
+                            ><span class="pname">Manage sprints</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">AI planning</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="pname">Run AI planning</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="pname">Author AI plans</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="pname">Approve or decline AI plans</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="summary">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg
+                  ><span
+                    >Claude Code gets <b>13 of 14</b> permissions, in every project of
+                    <b>moooon · Motir</b> you can open.</span
+                  >
+                </div>
+                <div class="btnrow" role="group" aria-label="Approve or deny Claude Code">
+                  <button class="btn btn-secondary btn-lg btn-deny" disabled>
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-circle-x" /></svg
+                    >Deny
+                  </button>
+                  <button class="btn btn-primary btn-lg" aria-busy="true">
+                    <svg class="ic spin" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-loader-circle" /></svg
+                    >Connecting…
+                  </button>
+                </div>
+                <p class="shell-foot">
+                  Disconnect it any time in Settings → Account → Connected apps.
+                </p>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="panel-note">
+      <span class="mono">Button loading</span> on Approve (“Connecting…”), Deny
+      <span class="mono">disabled</span>, and the workspace / reach / switches read-only until the
+      answer. A second press is impossible, and a failure (network, the workspace no longer yours)
+      comes back as the /device <span class="mono">ErrorBanner</span> above the actions, on this
+      same screen.
+    </p>
+
+    <div class="panel-label">
+      Panel 9 — approved — and the EXIT
+      <span>· the page says so, then hands the browser back to the app</span>
+    </div>
+
+    <div class="panel duo">
+      <div class="browser">
+        <div class="browser-bar">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span
+          ><span class="urlbar"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+            ><span>app.motir.co<b>/oauth/consent</b></span></span
+          >
+        </div>
+        <div class="authwash">
+          <div class="authcard">
+            <span class="lockup"><span class="mk" aria-hidden="true"></span>Motir</span>
+            <section class="shell">
+              <header class="shell-head">
+                <h2>Claude Code is connected</h2>
+                <p>You can close this tab.</p>
+              </header>
+              <div class="stack">
+                <div class="callout callout-success">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-check-big" />
+                  </svg>
+                  <p>
+                    Claude Code can now act as you in <b>moooon · Motir</b> — every project you can
+                    open.
+                  </p>
+                </div>
+                <p class="body-copy">
+                  Returning you to Claude Code… If nothing happens, go back to it yourself — it’s
+                  already connected.
+                </p>
+                <button class="btn btn-secondary full">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-key-round" /></svg
+                  >View connected apps
+                </button>
+              </div>
+              <p class="shell-foot">
+                Disconnect it any time in Settings → Account → Connected apps.
+              </p>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="door">
+        <h4>The redirect back</h4>
+        <p class="dsub">
+          Approve records the connection, then the page shows this state and immediately sends the
+          browser to the app’s registered redirect with the code. What the person sees next is the
+          app’s own page, not Motir’s.
+        </p>
+        <div class="urlbar">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-laptop" /></svg
+          ><span><b>localhost:53682/callback</b>?code=…&amp;state=…</span>
+        </div>
+        <div class="hop">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-right" /></svg
+          >Claude Code: “Authentication successful. You can close this window.” — then
+          <span class="mono">/mcp</span> shows motir connected
+        </div>
+        <div class="urlbar">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+          ><span><b>claude.ai/api/mcp/auth_callback</b>?code=…&amp;state=…</span>
+        </div>
+        <div class="hop">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-right" /></svg
+          >claude.ai: the Motir connector reads “Connected”
+        </div>
+        <p class="dsub">
+          If the app’s page never loads (a loopback listener that already closed), the tab stays on
+          the Motir card at left — which is why it says the connection is made and the tab can be
+          closed, rather than “redirecting…” forever.
+        </p>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      Panel 10 — denied
+      <span>· nothing stored; the app is told access_denied</span>
+    </div>
+
+    <div class="panel duo">
+      <div class="browser">
+        <div class="browser-bar">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span
+          ><span class="urlbar"
+            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+            ><span>app.motir.co<b>/oauth/consent</b></span></span
+          >
+        </div>
+        <div class="authwash">
+          <div class="authcard">
+            <span class="lockup"><span class="mk" aria-hidden="true"></span>Motir</span>
+            <section class="shell">
+              <header class="shell-head">
+                <h2>Claude Code was not connected</h2>
+                <p>You can close this tab.</p>
+              </header>
+              <div class="stack">
+                <div class="callout callout-danger">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-x" />
+                  </svg>
+                  <p>Nothing was stored. Claude Code will be told you declined.</p>
+                </div>
+                <p class="body-copy">Changed your mind? Start connecting again from Claude Code.</p>
+              </div>
+              <p class="shell-foot">Nothing about your account was shared with it.</p>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="door">
+        <h4>The redirect back</h4>
+        <p class="dsub">
+          Deny writes nothing and redirects to the registered
+          <span class="mono">redirect_uri</span> with the RFC error.
+        </p>
+        <div class="urlbar">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-laptop" /></svg
+          ><span><b>localhost:53682/callback</b>?error=access_denied&amp;state=…</span>
+        </div>
+        <div class="hop">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-right" /></svg
+          >Claude Code reports that authorization was refused
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      Panel 11 — narrow viewport · 375px
+      <span>· the detail box and the grant stack to one column; the actions stay side by side</span>
+    </div>
+
+    <div class="panel">
+      <div class="phone">
+        <div class="authwash">
+          <div class="authcard wide" data-auth-wide>
+            <section class="shell tight">
+              <header class="shell-head">
+                <h2>Connect Claude Code to Motir?</h2>
+                <p>
+                  It will act as you, in the one workspace you choose. Check each part before you
+                  approve.
+                </p>
+              </header>
+              <div class="stack close">
+                <div class="detail">
+                  <div class="dcol">
+                    <div class="dblock">
+                      <span class="dkey">App asking</span>
+                      <span class="dval"
+                        ><span class="apptile" aria-hidden="true">C</span
+                        ><span class="appname"
+                          >Claude Code
+                          <span class="pill pill-warning"
+                            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-shield-alert" /></svg
+                            >Unverified</span
+                          ></span
+                        ></span
+                      >
+                      <span class="dsubline"
+                        >It registered itself, so this name is its own claim. Motir hasn’t reviewed
+                        this app.</span
+                      >
+                    </div>
+                    <div class="dblock">
+                      <span class="dkey">Returns you to</span>
+                      <span class="dval"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-laptop" /></svg
+                        ><span>localhost</span></span
+                      >
+                      <span class="dsubline"
+                        >An app on this computer. Approve only if you just asked Claude Code to
+                        connect.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="dcol divided">
+                    <div class="dblock">
+                      <span class="dkey">You</span>
+                      <span class="dval"
+                        ><span class="avatar" aria-hidden="true">Z</span
+                        ><span class="who"
+                          ><span class="nm">Zhu Yue</span
+                          ><span class="em">zhuyue11@gmail.com</span></span
+                        ></span
+                      >
+                      <span class="dsubline">Not you? <u>Sign out</u> and sign in as them.</span>
+                    </div>
+                    <div class="dblock">
+                      <span class="dkey">Workspace</span>
+                      <span class="dval"><span>moooon · Motir</span></span>
+                      <span class="dsubline">Your only workspace.</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <div class="fieldhead">
+                    <span class="flabel">Where it can act</span>
+                    <span class="fhelp"
+                      >Every project in moooon · Motir you can open. In each one it can also do no
+                      more than your role there allows.</span
+                    >
+                  </div>
+                  <div class="seg" role="radiogroup" aria-label="Where it can act">
+                    <span class="seg-opt on" role="radio" aria-checked="true">All projects</span>
+                    <span class="seg-opt" role="radio" aria-checked="false">One project</span>
+                  </div>
+                </div>
+                <div class="field">
+                  <div class="fieldhead">
+                    <span class="flabel">What it can do</span>
+                    <span class="fhelp"
+                      >The standard permissions every new connection gets — everything except
+                      deleting.</span
+                    >
+                  </div>
+                  <div class="pcols" role="group" aria-label="What it can do">
+                    <div class="pcol">
+                      <div class="pgroup">
+                        <div class="pdomain">Project</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">View project</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">View the lesson library</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">Change the lesson library</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">Record a lesson recurrence</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Work items</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-square-pen" /></svg
+                            ><span class="pname">Edit work items</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-square-pen" /></svg
+                            ><span class="pname">Archive work items</span>
+                          </div>
+                        </div>
+                        <div class="pdanger">
+                          <div class="prow">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-trash-2" />
+                            </svg>
+                            <div class="ptext">
+                              <span class="pname"
+                                >Delete work items <span class="dtag">· Danger</span></span
+                              >
+                              <p class="pdesc">
+                                Not included. Pick <b>One project</b> to choose it.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="pcol">
+                      <div class="pgroup">
+                        <div class="pdomain">Comments</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-message-square" /></svg
+                            ><span class="pname">Add comments</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Plans</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">See every plan</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Agent runs</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="pname">See every agent run</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">Sprints &amp; backlog</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-zap" /></svg
+                            ><span class="pname">Manage sprints</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pgroup">
+                        <div class="pdomain">AI planning</div>
+                        <div class="prows">
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="pname">Run AI planning</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="pname">Author AI plans</span>
+                          </div>
+                          <div class="prow compact">
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="pname">Approve or decline AI plans</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="summary">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg
+                  ><span
+                    >Claude Code gets <b>13 of 14</b> permissions, in every project of
+                    <b>moooon · Motir</b> you can open.</span
+                  >
+                </div>
+                <div class="btnrow" role="group" aria-label="Approve or deny Claude Code">
+                  <button class="btn btn-secondary btn-lg btn-deny">
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-circle-x" /></svg
+                    >Deny
+                  </button>
+                  <button class="btn btn-primary btn-lg">Approve and connect</button>
+                </div>
+                <p class="shell-foot">
+                  Disconnect it any time in Settings → Account → Connected apps.
+                </p>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="panel-note">
+      The (auth) layout’s own <span class="mono">px-6 sm:px-10</span> becomes the 12px gutter here;
+      the detail columns stack (the /device <span class="mono">sm:grid-cols-2</span>), the
+      permission columns stack in the same catalog order, and Deny | Approve keep their 50/50 row —
+      at 343px each button is still wider than its label.
+    </p>
+
+    <div class="panel-label">
+      Panel 12 — dark parity
+      <span
+        >· Panel 3 on data-theme="dark" — the switches, the locked rows and the danger card</span
+      >
+    </div>
+
+    <div class="panel" data-theme="dark">
+      <div class="authwash">
+        <div class="authcard wide" data-auth-wide>
+          <section class="shell tight">
+            <header class="shell-head">
+              <h2>Connect Claude Code to Motir?</h2>
+              <p>
+                It will act as you, in the one workspace you choose. Check each part before you
+                approve.
+              </p>
+            </header>
+            <div class="stack close">
+              <div class="detail">
+                <div class="dcol">
+                  <div class="dblock">
+                    <span class="dkey">App asking</span>
+                    <span class="dval"
+                      ><span class="apptile" aria-hidden="true">C</span
+                      ><span class="appname"
+                        >Claude Code
+                        <span class="pill pill-warning"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-shield-alert" /></svg
+                          >Unverified</span
+                        ></span
+                      ></span
+                    >
+                    <span class="dsubline"
+                      >It registered itself, so this name is its own claim. Motir hasn’t reviewed
+                      this app.</span
+                    >
+                  </div>
+                  <div class="dblock">
+                    <span class="dkey">Returns you to</span>
+                    <span class="dval"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-laptop" /></svg
+                      ><span>localhost</span></span
+                    >
+                    <span class="dsubline"
+                      >An app on this computer. Approve only if you just asked Claude Code to
+                      connect.</span
+                    >
+                  </div>
+                </div>
+                <div class="dcol divided">
+                  <div class="dblock">
+                    <span class="dkey">You</span>
+                    <span class="dval"
+                      ><span class="avatar" aria-hidden="true">Z</span
+                      ><span class="who"
+                        ><span class="nm">Zhu Yue</span
+                        ><span class="em">zhuyue11@gmail.com</span></span
+                      ></span
+                    >
+                    <span class="dsubline">Not you? <u>Sign out</u> and sign in as them.</span>
+                  </div>
+                  <div class="dblock">
+                    <span class="dkey">Workspace</span>
+                    <div
+                      class="combo"
+                      role="combobox"
+                      aria-expanded="false"
+                      aria-label="Workspace Claude Code can act in"
+                    >
+                      <span class="val">moooon · Motir</span
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-down" />
+                      </svg>
+                    </div>
+                    <span class="dsubline">You belong to 3 — it acts in this one only.</span>
+                  </div>
+                </div>
+              </div>
+              <div class="field">
+                <div class="fieldhead">
+                  <span class="flabel">Where it can act</span>
+                  <span class="fhelp"
+                    >Only the project you pick, with the permissions you switch on.</span
+                  >
+                </div>
+                <div class="seg" role="radiogroup" aria-label="Where it can act">
+                  <span class="seg-opt" role="radio" aria-checked="false">All projects</span>
+                  <span class="seg-opt on" role="radio" aria-checked="true">One project</span>
+                </div>
+              </div>
+              <div class="field">
+                <span class="flabel">Project</span>
+                <div class="combo" role="combobox" aria-expanded="false" aria-label="Project">
+                  <span class="val">MOTIR — Motir</span
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chevron-down" />
+                  </svg>
+                </div>
+                <span class="fhelp">Claude Code acts in this project only.</span>
+              </div>
+              <div class="field">
+                <div class="fieldhead">
+                  <span class="flabel">What it can do</span>
+                  <span class="fhelp"
+                    >Choose what Claude Code is allowed to do. You can grant less than your own
+                    access, never more.</span
+                  >
+                </div>
+                <div class="pcols" role="group" aria-label="What it can do">
+                  <div class="pcol">
+                    <div class="pgroup">
+                      <div class="pdomain">Project</div>
+                      <div class="prows">
+                        <div class="prow">
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-eye" />
+                          </svg>
+                          <div class="ptext">
+                            <span class="pname">View project</span>
+                            <p class="pdesc">
+                              Open the project and read its work items, boards, backlog and reports.
+                            </p>
+                          </div>
+                          <span
+                            class="sw on"
+                            role="switch"
+                            aria-checked="true"
+                            aria-label="View project"
+                            ><span class="knob"></span
+                          ></span>
+                        </div>
+                        <div class="prow">
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-eye" />
+                          </svg>
+                          <div class="ptext">
+                            <span class="pname">View the lesson library</span>
+                            <p class="pdesc">
+                              Read what the project's AI planner learned from its own planning work.
+                            </p>
+                          </div>
+                          <span
+                            class="sw on"
+                            role="switch"
+                            aria-checked="true"
+                            aria-label="View the lesson library"
+                            ><span class="knob"></span
+                          ></span>
+                        </div>
+                        <div class="prow">
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-eye" />
+                          </svg>
+                          <div class="ptext">
+                            <span class="pname locked" aria-disabled="true"
+                              >Change the lesson library</span
+                            >
+                            <p class="pdesc locked" aria-disabled="true">
+                              Retire a lesson or add one — both change the standing instructions the
+                              planner is given.
+                            </p>
+                            <p class="pwhy">You do not have this in this project.</p>
+                          </div>
+                          <span
+                            class="sw dis"
+                            role="switch"
+                            aria-checked="false"
+                            aria-disabled="true"
+                            aria-label="Change the lesson library"
+                            ><span class="knob"></span
+                          ></span>
+                        </div>
+                        <div class="prow">
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-eye" />
+                          </svg>
+                          <div class="ptext">
+                            <span class="pname">Record a lesson recurrence</span>
+                            <p class="pdesc">
+                              Note that a lesson's mistake happened again. It changes nothing the
+                              lesson says.
+                            </p>
+                          </div>
+                          <span
+                            class="sw on"
+                            role="switch"
+                            aria-checked="true"
+                            aria-label="Record a lesson recurrence"
+                            ><span class="knob"></span
+                          ></span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="pgroup">
+                      <div class="pdomain">Work items</div>
+                      <div class="prows">
+                        <div class="prow">
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-square-pen" />
+                          </svg>
+                          <div class="ptext">
+                            <span class="pname">Edit work items</span>
+                            <p class="pdesc">
+                              Create, update, assign and move work items, and transition them on the
+                              board.
+                            </p>
+                          </div>
+                          <span
+                            class="sw on"
+                            role="switch"
+                            aria-checked="true"
+                            aria-label="Edit work items"
+                            ><span class="knob"></span
+                          ></span>
+                        </div>
+                        <div class="prow">
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-square-pen" />
+                          </svg>
+                          <div class="ptext">
+                            <span class="pname">Archive work items</span>
+                            <p class="pdesc">
+                              Archive a work item and restore it later. Affects that item only — its
+                              children stay.
+                            </p>
+                          </div>
+                          <span
+                            class="sw on"
+                            role="switch"
+                            aria-checked="true"
+                            aria-label="Archive work items"
+                            ><span class="knob"></span
+                          ></span>
+                        </div>
+                      </div>
+                      <div class="pdanger">
+                        <div class="prow">
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-trash-2" />
+                          </svg>
+                          <div class="ptext">
+                            <span class="pname"
+                              >Delete work items <span class="dtag">· Danger</span></span
+                            >
+                            <p class="pdesc">
+                              Permanently delete a work item and everything beneath it. Cannot be
+                              undone.
+                            </p>
+                          </div>
+                          <span
+                            class="sw"
+                            role="switch"
+                            aria-checked="false"
+                            aria-label="Delete work items"
+                            ><span class="knob"></span
+                          ></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="pcol">
+                    <div class="pgroup">
+                      <div class="pdomain">Comments</div>
+                      <div class="prows">
+                        <div class="prow">
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-message-square" />
+                          </svg>
+                          <div class="ptext">
+                            <span class="pname">Add comments</span>
+                            <p class="pdesc">
+                              Post comments on work items, and edit or delete your own.
+                            </p>
+                          </div>
+                          <span
+                            class="sw on"
+                            role="switch"
+                            aria-checked="true"
+                            aria-label="Add comments"
+                            ><span class="knob"></span
+                          ></span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="pgroup">
+                      <div class="pdomain">Plans</div>
+                      <div class="prows">
+                        <div class="prow">
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-eye" />
+                          </svg>
+                          <div class="ptext">
+                            <span class="pname locked" aria-disabled="true">See every plan</span>
+                            <p class="pdesc locked" aria-disabled="true">
+                              See all of the project's AI plans, including other people's. Without
+                              it you see the plans you started and the ones routed to you or decided
+                              by you.
+                            </p>
+                            <p class="pwhy">You do not have this in this project.</p>
+                          </div>
+                          <span
+                            class="sw dis"
+                            role="switch"
+                            aria-checked="false"
+                            aria-disabled="true"
+                            aria-label="See every plan"
+                            ><span class="knob"></span
+                          ></span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="pgroup">
+                      <div class="pdomain">Agent runs</div>
+                      <div class="prows">
+                        <div class="prow">
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-eye" />
+                          </svg>
+                          <div class="ptext">
+                            <span class="pname">See every agent run</span>
+                            <p class="pdesc">
+                              See all of the project's agent runs, including other people's. Without
+                              it you see the runs you started.
+                            </p>
+                          </div>
+                          <span
+                            class="sw on"
+                            role="switch"
+                            aria-checked="true"
+                            aria-label="See every agent run"
+                            ><span class="knob"></span
+                          ></span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="pgroup">
+                      <div class="pdomain">Sprints &amp; backlog</div>
+                      <div class="prows">
+                        <div class="prow">
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-zap" />
+                          </svg>
+                          <div class="ptext">
+                            <span class="pname">Manage sprints</span>
+                            <p class="pdesc">Start and complete Sprints, and rank the backlog.</p>
+                          </div>
+                          <span
+                            class="sw"
+                            role="switch"
+                            aria-checked="false"
+                            aria-label="Manage sprints"
+                            ><span class="knob"></span
+                          ></span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="pgroup">
+                      <div class="pdomain">AI planning</div>
+                      <div class="prows">
+                        <div class="prow">
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkles" />
+                          </svg>
+                          <div class="ptext">
+                            <span class="pname">Run AI planning</span>
+                            <p class="pdesc">
+                              Submit a planning job that spends the workspace’s AI credits and
+                              proposes plan changes.
+                            </p>
+                          </div>
+                          <span
+                            class="sw"
+                            role="switch"
+                            aria-checked="false"
+                            aria-label="Run AI planning"
+                            ><span class="knob"></span
+                          ></span>
+                        </div>
+                        <div class="prow">
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkles" />
+                          </svg>
+                          <div class="ptext">
+                            <span class="pname">Author AI plans</span>
+                            <p class="pdesc">
+                              Add proposals to a generated plan and close it for review. Reading a
+                              plan needs only project access.
+                            </p>
+                          </div>
+                          <span
+                            class="sw on"
+                            role="switch"
+                            aria-checked="true"
+                            aria-label="Author AI plans"
+                            ><span class="knob"></span
+                          ></span>
+                        </div>
+                        <div class="prow">
+                          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkles" />
+                          </svg>
+                          <div class="ptext">
+                            <span class="pname locked" aria-disabled="true"
+                              >Approve or decline AI plans</span
+                            >
+                            <p class="pdesc locked" aria-disabled="true">
+                              Turn a plan’s proposals into real work items, or end the plan without
+                              creating any.
+                            </p>
+                            <p class="pwhy">You do not have this in this project.</p>
+                          </div>
+                          <span
+                            class="sw dis"
+                            role="switch"
+                            aria-checked="false"
+                            aria-disabled="true"
+                            aria-label="Approve or decline AI plans"
+                            ><span class="knob"></span
+                          ></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="summary">
+                <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg
+                ><span>Claude Code gets <b>8</b> permissions, in <b>MOTIR</b> only.</span>
+              </div>
+              <div class="btnrow" role="group" aria-label="Approve or deny Claude Code">
+                <button class="btn btn-secondary btn-lg btn-deny">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-x" /></svg
+                  >Deny
+                </button>
+                <button class="btn btn-primary btn-lg">Approve and connect</button>
+              </div>
+              <p class="shell-foot">
+                Disconnect it any time in Settings → Account → Connected apps.
+              </p>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

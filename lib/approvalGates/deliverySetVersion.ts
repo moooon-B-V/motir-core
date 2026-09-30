@@ -1,4 +1,4 @@
-import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { pullRequestHead, type PullRequestHeadSlice } from '@/lib/github/pullRequestHead';
 import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
 
 // THE DELIVERY SET'S VERSION — what an approve-and-merge gate names as approved (Story
@@ -12,8 +12,9 @@ import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeli
 
 /**
  * ONE MEMBER's version — `owner/name#number@headSha` — for `headSha` when a caller knows
- * it (a `pull_request` delivery carries it), else the latest check run's commit. Null when
- * neither names a head.
+ * it (a `pull_request` delivery carries it), else the pull request's head
+ * (`pullRequestHead`: the stored host head, never an older commit's check rows —
+ * MOTIR-7005). Null when neither names a head.
  *
  * ⚠️ IT MOVED HERE FROM THE MERGE HANDLER (MOTIR-5616). It was written for the
  * per-pull-request `pull_request_merge` gate, whose subject was one pull request; that kind
@@ -29,11 +30,10 @@ export function pullRequestSubjectVersion(
   pr: {
     number: number;
     repo: { owner: string; name: string };
-    checkRuns: Parameters<typeof liveRowsAtLatestSha>[0];
-  },
+  } & PullRequestHeadSlice,
   headSha?: string,
 ): string | null {
-  const head = headSha ?? liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha;
+  const head = headSha ?? pullRequestHead(pr);
   return head ? `${pr.repo.owner}/${pr.repo.name}#${pr.number}@${head}` : null;
 }
 
@@ -53,8 +53,8 @@ export function deliverySetVersion(members: readonly (string | null)[]): string 
 /**
  * One delivery row's member version — the merge handler's own spelling, so a member of the
  * set and that pull request's merge gate can never disagree about its head. `headSha` when
- * the caller knows it (a `pull_request` delivery carries it), else the latest check run's
- * commit.
+ * the caller knows it (a `pull_request` delivery carries it), else the pull request's
+ * stored head.
  */
 export function deliveryMemberVersion(
   delivery: WorkItemDeliveryWithChecks,
@@ -64,6 +64,7 @@ export function deliveryMemberVersion(
     {
       number: delivery.pullRequest.number,
       repo: delivery.repo,
+      headSha: delivery.pullRequest.headSha,
       checkRuns: delivery.pullRequest.checkRuns,
     },
     headSha,

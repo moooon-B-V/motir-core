@@ -5,6 +5,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { createTestPerson } from './testPerson';
 import { seedGithubInstallation } from './github-seed';
+import { grantPaidAiPlanIfBilled } from './billing';
 
 // THE FIXTURE FOR THE HOSTED-RUN ACCEPTANCE WALK (Story MOTIR-683 · MOTIR-6452):
 // a workspace + project owner, and — for each card the spec drives a hosted run
@@ -66,6 +67,8 @@ export async function seedHostedRun(email: string, identifier: string): Promise<
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },
   });
+  // A hosted run spends Motir's fleet, which is paid-AI-plan only.
+  grantPaidAiPlanIfBilled(workspace.organizationId);
   await seedCreatedRepo(workspace.id, workspace.organizationId, project.id, {
     owner: 'motir-projects-e2e',
     name: `hosted-${identifier.toLowerCase()}`,

@@ -1257,3 +1257,152 @@ describe('a conflict found AT THE PRESS writes nothing (MOTIR-5915)', () => {
     expect(reads).not.toHaveBeenCalled();
   });
 });
+
+// THE PRIMARY PRESS ASKS THE HOST FIRST TOO (Bug MOTIR-7006). A press on a design, decision
+// or acceptance gate decides the approve-to-merge gate beside it and merges — so MOTIR-5915's
+// read has to run on THAT press as well, before the primary is decided. Observed on
+// MOTIR-6989: its acceptance gate and its merge gate were both approved at one instant over
+// a pull request GitHub reported `dirty`, and the card read Approved. The DESIGN primary is
+// covered here; the acceptance and decision primaries in `acceptanceOnePress.test.ts` and
+// `decisionGateSet.test.ts`, where their subjects are built for real.
+describe('a conflict found at a DESIGN press writes nothing (MOTIR-7006)', () => {
+  /** A CURRENT design result and its awaiting design gate — the primary. */
+  async function withDesignGate(item: { id: string }) {
+    const evidence = await adminDb.designEvidence.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId: item.id,
+        commitSha: HEAD_WEB,
+        isCurrent: true,
+      },
+    });
+    return withWorkspaceContext(fx.ctx, (tx) =>
+      approvalGateRepository.create(
+        {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          workItemId: item.id,
+          kind: 'design_result',
+          subjectId: evidence.id,
+          subjectVersion: evidence.commitSha,
+        },
+        tx,
+      ),
+    );
+  }
+
+  function stubDirty(number: number, headSha: string) {
+    return vi
+      .spyOn(github, 'readChangeRequestMergeability')
+      .mockImplementation(async (args) =>
+        args.number === number
+          ? { mergeable: false, mergeableState: 'dirty', headSha }
+          : { mergeable: true, mergeableState: 'clean', headSha: null },
+      );
+  }
+
+  async function everStatus(workItemId: string): Promise<string[]> {
+    const revisions = await adminDb.workItemRevision.findMany({ where: { workItemId } });
+    return revisions.flatMap((r) => {
+      const to = (r.diff as { status?: { to?: string } } | null)?.status?.to;
+      return typeof to === 'string' ? [to] : [];
+    });
+  }
+
+  it('a `dirty` member refuses the press: neither gate approved, the merge gate withdrawn as `conflict`, the card at Implemented, nothing merged', async () => {
+    const { item, approval } = await pressable();
+    const design = await withDesignGate(item);
+    stubDirty(7, HEAD_WEB);
+    const merge = stubHost({
+      7: { outcome: 'merged', commitSha: 'x' },
+      12: { outcome: 'merged', commitSha: 'y' },
+    });
+
+    await expect(
+      pullRequestMergeService.approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: design.id, source: 'ui' },
+        fx.ctx,
+      ),
+    ).rejects.toMatchObject({
+      tag: 'MERGE_CONFLICT',
+      atPress: true,
+      conflicts: [{ pullRequest: 'acme/web#7', baseRef: 'main' }],
+    });
+
+    const [designRow, mergeRow] = await Promise.all([gateRow(design.id), gateRow(approval.id)]);
+    expect([designRow.state, designRow.decidedAt]).toEqual(['awaiting', null]);
+    expect([mergeRow.state, mergeRow.supersededCause, mergeRow.decidedAt]).toEqual([
+      'superseded',
+      'conflict',
+      null,
+    ]);
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await everStatus(item.id)).not.toContain('approved');
+    expect(merge).not.toHaveBeenCalled();
+  });
+
+  it('the door the item page and the REST route use (`decideGate`) refuses the same press', async () => {
+    const { item, approval } = await pressable();
+    const design = await withDesignGate(item);
+    stubDirty(12, HEAD_API);
+    const merge = stubHost({});
+
+    await expect(
+      pullRequestMergeService.decideGate(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: design.id, decision: 'approve', source: 'ui' },
+        fx.ctx,
+      ),
+    ).rejects.toMatchObject({ tag: 'MERGE_CONFLICT', atPress: true });
+    expect((await gateRow(design.id)).state).toBe('awaiting');
+    expect((await gateRow(approval.id)).supersededCause).toBe('conflict');
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(merge).not.toHaveBeenCalled();
+  });
+
+  it('with NO merge gate beside it the host is not read — the design decision stands and the merge stays held', async () => {
+    const { item } = await pressable();
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      approvalGateRepository.supersedeAwaitingByWorkItem(
+        item.id,
+        'pull_request_approval',
+        'head_moved',
+        tx,
+      ),
+    );
+    const design = await withDesignGate(item);
+    const reads = stubDirty(7, HEAD_WEB);
+    const merge = stubHost({});
+
+    const result = await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: design.id, source: 'ui' },
+      fx.ctx,
+    );
+
+    expect((await gateRow(design.id)).state).toBe('approved');
+    expect(result.members).toEqual([]);
+    expect(reads).not.toHaveBeenCalled();
+    expect(merge).not.toHaveBeenCalled();
+  });
+
+  it('clean members: the press reads every open member, then decides both gates and merges as before', async () => {
+    const { item, approval } = await pressable();
+    const design = await withDesignGate(item);
+    const reads = vi
+      .spyOn(github, 'readChangeRequestMergeability')
+      .mockResolvedValue({ mergeable: true, mergeableState: 'clean', headSha: null });
+    stubHost({
+      7: { outcome: 'merged', commitSha: 'merge-web' },
+      12: { outcome: 'merged', commitSha: 'merge-api' },
+    });
+
+    const result = await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: design.id, source: 'ui' },
+      fx.ctx,
+    );
+
+    expect(reads).toHaveBeenCalledTimes(2);
+    expect((await gateRow(design.id)).state).toBe('approved');
+    expect((await gateRow(approval.id)).state).toBe('approved');
+    expect(result.members.map((m) => m.outcome)).toEqual(['merged', 'merged']);
+  });
+});

@@ -290,6 +290,23 @@ export const agentInstanceRepository = {
   },
 
   /**
+   * The record — live OR deleted — that names this machine in this app: the
+   * attribution reconciler's read (MOTIR-6925). A deleted row still answers, so
+   * a machine that outlived its instance is told apart from one no record ever
+   * named. The newest wins when a machine id was somehow reused.
+   */
+  async findByMachine(
+    app: string,
+    machineId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance | null> {
+    return tx.agentInstance.findFirst({
+      where: { flyApp: app, machineId },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
    * Every instance app any record (live or deleted) has ever named — the
    * reconcile walks each one. Distinct, sorted for a stable pass.
    */

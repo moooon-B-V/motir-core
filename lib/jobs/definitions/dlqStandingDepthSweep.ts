@@ -20,8 +20,7 @@ import { defineJob } from '../defineJob';
 // function is disarmed under a row lock, so a retry after a partial failure files
 // only the functions that did not file.
 
-/** 07:00 every day — a clustered minute (`SCHEDULE_CLUSTER_MINUTES`), so it opens
- *  no new wake-minute, and an hour of its own after the nightly cascade
+/** 07:00 every day — an hour of its own after the nightly cascade
  *  (03:00 → 06:30). Daily is ample for a SEVEN-day threshold: a function crosses
  *  it at most a day before it is filed. */
 export const DLQ_STANDING_DEPTH_SWEEP_CRON = '0 7 * * *';

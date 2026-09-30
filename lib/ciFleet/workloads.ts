@@ -8,9 +8,12 @@ import type { FleetWorkloadKind } from '@motir/orchestrator';
 // everything that can be running a container on Motir's fleet, and where each
 // one's in-flight count comes from.
 //
-// This is the policy half of the CROSS-WORKLOAD ceiling, the way `limits.ts` is
-// the policy half of the caps: it binds counters, it does not decide anything.
-// The locking, the summing and the verdict live in `fleetCeilingService`.
+// This is the policy half of the fleet's admission, the way `limits.ts` is the
+// policy half of the caps: it binds counters, it does not decide anything. The
+// locking, the summing and the verdict live in `fleetCeilingService`. Since
+// MOTIR-6907 the sum that decides is PER ORGANISATION (`countInFlightForOrg`),
+// against the org's pool of `docs/decisions/fleet-per-org-pool.md` §2; the
+// fleet-wide `countInFlight` stays as the operator's reading.
 //
 // ⚠️ WHY A REGISTRY AT ALL. MOTIR-1922's ceiling counted
 // `ci_runner_provisioning_intent` and nothing else, and its comment was accurate
@@ -51,13 +54,15 @@ import type { FleetWorkloadKind } from '@motir/orchestrator';
 export type { FleetWorkloadKind };
 
 /**
- * Which ceiling a workload counts against.
+ * Which pool a workload counts against.
  *
- * `shared` — `MOTIR_FLEET_MAX_IN_FLIGHT`, the ceiling CI, indexing and hosted runs
- * share. `own` — a workload with a ceiling of its own, decided by its caller under
- * the same admission lock, and NOT summed into the shared total: agent instances
- * (`docs/decisions/agent-instances.md` AMENDMENT 2), whose machines are long-lived
- * and paid for per minute, so letting them fill the shared ceiling would starve CI.
+ * `shared` — the ORGANISATION's pool (`MOTIR_FLEET_ORG_MAX_IN_FLIGHT`, default
+ * 500; `docs/decisions/fleet-per-org-pool.md` §2), which CI, indexing and hosted
+ * runs share. `own` — a workload with a limit of its own, decided by its caller
+ * under the same admission lock, and NOT summed into the org's pool: agent
+ * instances (`docs/decisions/agent-instances.md` AMENDMENT 2), whose machines are
+ * long-lived and paid for per minute, so letting them fill the pool would starve
+ * CI.
  */
 export type FleetPool = 'shared' | 'own';
 
@@ -75,6 +80,15 @@ export interface FleetWorkload {
    * a `tx` for exactly that reason.
    */
   countInFlight(now: Date, tx: Prisma.TransactionClient): Promise<number>;
+  /**
+   * How many of those belong to ONE organisation — this workload's term in that
+   * org's pool (MOTIR-6907). The same locking contract as {@link countInFlight}.
+   */
+  countInFlightForOrg(
+    organizationId: string,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number>;
 }
 
 /**
@@ -95,6 +109,8 @@ function slotBackedWorkload(
     label,
     pool,
     countInFlight: (now, tx) => fleetInFlightSlotRepository.countLiveForWorkload(kind, now, tx),
+    countInFlightForOrg: (organizationId, now, tx) =>
+      fleetInFlightSlotRepository.countLiveForWorkloadInOrganization(kind, organizationId, now, tx),
   };
 }
 
@@ -115,6 +131,8 @@ export const FLEET_WORKLOADS: Record<FleetWorkloadKind, FleetWorkload> = {
     label: 'CI runners',
     pool: 'shared',
     countInFlight: (_now, tx) => ciRunnerProvisioningIntentRepository.countInFlightFleetWide(tx),
+    countInFlightForOrg: (organizationId, _now, tx) =>
+      ciRunnerProvisioningIntentRepository.countInFlightForOrganization(organizationId, tx),
   },
   code_graph_index: slotBackedWorkload('code_graph_index', 'code-graph index'),
   hosted_agent: slotBackedWorkload('hosted_agent', 'hosted agents'),

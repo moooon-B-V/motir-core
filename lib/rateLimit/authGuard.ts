@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { authBudget, passwordResetBudget } from '@/lib/rateLimit/budgets';
+import {
+  authBudget,
+  oauthRegisterBudget,
+  oauthTokenBudget,
+  passwordResetBudget,
+} from '@/lib/rateLimit/budgets';
 import { enforceRateLimit, isRateLimitExcluded, type RateLimitLimb } from '@/lib/rateLimit/guard';
 import { clientIp, rateLimitKey, type RateLimitScope } from '@/lib/rateLimit/keys';
 
@@ -40,7 +45,34 @@ const LIMITED_AUTH_PATHS: ReadonlyArray<{ suffix: string; scope: RateLimitScope 
   { suffix: '/request-password-reset', scope: 'auth:password-reset' },
   { suffix: '/forget-password', scope: 'auth:password-reset' },
   { suffix: '/reset-password', scope: 'auth:password-reset' },
+  // The OAuth server (MOTIR-6982). Registration is unauthenticated by design
+  // (RFC 7591 — an MCP client registers before anyone signs in), so it is the
+  // one write here a script can repeat without holding anything. The token POST
+  // carries a code or refresh token rather than an email, so both are keyed by
+  // IP alone. Authorize is a browser GET and revoke needs a live token: neither
+  // is limited here.
+  { suffix: '/oauth2/register', scope: 'auth:oauth-register' },
+  { suffix: '/oauth2/token', scope: 'auth:oauth-token' },
 ];
+
+/** The scopes keyed per IP only — their bodies name no person to key on. */
+const IP_ONLY_SCOPES: ReadonlySet<RateLimitScope> = new Set([
+  'auth:oauth-register',
+  'auth:oauth-token',
+]);
+
+function budgetFor(scope: RateLimitScope) {
+  switch (scope) {
+    case 'auth:password-reset':
+      return passwordResetBudget();
+    case 'auth:oauth-register':
+      return oauthRegisterBudget();
+    case 'auth:oauth-token':
+      return oauthTokenBudget();
+    default:
+      return authBudget();
+  }
+}
 
 /** The scope a request maps to, or null when this path is not limited. */
 export function classifyAuthRequest(pathname: string): RateLimitScope | null {
@@ -83,11 +115,12 @@ export async function enforceAuthRateLimit(req: Request): Promise<NextResponse |
   if (!scope) return null;
 
   // A password-reset REQUEST sends an email, so it carries the tighter budget;
-  // everything else takes the sign-in/sign-up one.
-  const budget = scope === 'auth:password-reset' ? passwordResetBudget() : authBudget();
+  // the OAuth endpoints carry their own (sized for a shared origin); everything
+  // else takes the sign-in/sign-up one.
+  const budget = budgetFor(scope);
 
   const limbs: RateLimitLimb[] = [{ scope, key: rateLimitKey(scope, clientIp(req)), budget }];
-  const identifier = await authIdentifier(req);
+  const identifier = IP_ONLY_SCOPES.has(scope) ? null : await authIdentifier(req);
   if (identifier) {
     limbs.push({ scope, key: rateLimitKey(scope, 'id', identifier), budget });
   }

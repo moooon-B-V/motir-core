@@ -36,6 +36,9 @@ export type RateLimitScope =
   | 'auth:sign-in'
   | 'auth:sign-up'
   | 'auth:password-reset'
+  // The OAuth server's registration and token POSTs (MOTIR-6982), per IP.
+  | 'auth:oauth-register'
+  | 'auth:oauth-token'
   | 'public-write'
   | 'public-submit'
   | 'public-follow'

@@ -3715,6 +3715,57 @@
         "factKeptBy": "已保留"
       }
     },
+    "connectedApps": {
+      "title": "已连接的应用",
+      "subtitle": "你用 Motir 账号登录过的应用。每个应用以你的身份，在一个工作区内，按你批准的范围操作。",
+      "columns": {
+        "app": "应用",
+        "workspace": "工作区",
+        "connected": "连接时间",
+        "lastUsed": "上次使用",
+        "actions": "操作"
+      },
+      "allProjects": "所有项目",
+      "lastUsedNever": "从未",
+      "unnamedApp": "未命名应用",
+      "unverified": "未验证",
+      "unverifiedTooltip": "此应用是自行注册的。Motir 尚未验证其发布者。",
+      "detailLead": "此应用可以：",
+      "granted": "已授予",
+      "notGranted": "未授予",
+      "showScopes": "显示 {app} 的范围",
+      "hideScopes": "隐藏 {app} 的范围",
+      "revokeAria": "撤销 {app} 在 {workspace} 中的访问",
+      "narrowDates": {
+        "connected": "连接于",
+        "lastUsed": "上次使用"
+      },
+      "empty": {
+        "body": "还没有已连接的应用。当你把 Motir 添加到 Claude，或添加其他用 Motir 账号登录的应用时，它会出现在这里。",
+        "link": "如何把 Motir 添加到 Claude"
+      },
+      "error": {
+        "title": "无法加载已连接的应用。",
+        "body": "上方的令牌不受影响。没有任何访问被撤销。"
+      },
+      "revokeConfirm": {
+        "title": "撤销“{app}”？",
+        "body": "<strong>{app}</strong> 将立即失去对 <strong>{workspace}</strong> 工作区的访问。它的下一个请求会被拒绝，并会要求你重新登录。你的令牌和其他已连接的应用不受影响。",
+        "workspace": "工作区",
+        "scopes": "范围",
+        "connected": "连接时间",
+        "cancel": "取消",
+        "confirm": "撤销访问"
+      },
+      "revoked": {
+        "title": "访问已撤销",
+        "body": "{app} 已无法在 {workspace} 中操作。从 {app} 重新连接即可恢复。"
+      },
+      "revokeError": {
+        "title": "无法撤销访问",
+        "body": "出了点问题，请重试。"
+      }
+    },
     "apiTokens": {
       "heading": "令牌",
       "subtitle": "个人访问令牌让你的编码 agent 通过 MCP 服务器连接 Motir。每个令牌都以你的身份执行——给每个 agent 单独分配一个，不再使用的随时吊销。",
@@ -10770,6 +10821,112 @@
       },
       "heldLine": "此事项已标记为<strong>{mark}</strong>。清除标记后才能重新打开此事项。",
       "openItem": "打开事项"
+    }
+  },
+  "oauthConsent": {
+    "unnamedApp": "该应用",
+    "heading": {
+      "consent": "将{app}连接到Motir？",
+      "noWorkspace": "{app}暂时无法连接",
+      "refused": "无法使用这个连接请求",
+      "approved": "{app}已连接",
+      "denied": "{app}未连接"
+    },
+    "subhead": {
+      "consent": "它将以你的身份，在你选择的那一个工作区中操作。批准前请逐项核对。",
+      "noMemberships": "你还不在任何Motir工作区中。",
+      "noGrantable": "你所在的工作区都无法授予它任何权限。",
+      "refused": "没有建立任何连接，你也没有被跳转到任何地方。",
+      "closeTab": "你可以关闭此标签页。"
+    },
+    "detail": {
+      "app": "请求的应用",
+      "returnsTo": "返回至",
+      "you": "当前账号",
+      "workspace": "工作区",
+      "unverified": "未验证",
+      "appDynamic": "它是自行注册的，所以这个名称只是它自己的说法。Motir没有审核过这个应用。",
+      "appRegistered": "由这个Motir事先注册——而不是它自行注册。",
+      "returnsLoopback": "这台电脑上的应用。只有在你刚刚让{app}连接时才批准。",
+      "returnsHttps": "你将被发送到{uri}",
+      "notYou": "不是你？<link>退出登录</link>并换个账号登录。",
+      "workspaceOnly": "你唯一的工作区。",
+      "workspaceHelp": "你共属于{count}个工作区——它只能在这一个中操作。",
+      "workspacePicker": "{app}可操作的工作区"
+    },
+    "reach": {
+      "label": "可操作范围",
+      "all": "所有项目",
+      "one": "一个项目",
+      "helpAll": "{workspace}中你能打开的每个项目。在每个项目中，它能做的也不会超过你在那里的角色允许的范围。",
+      "helpOne": "只在你选择的项目中，并且只有你开启的权限。",
+      "project": "项目",
+      "projectHelp": "{app}只在这个项目中操作。"
+    },
+    "grant": {
+      "label": "它可以做什么",
+      "helpAll": "每个新连接都会获得的标准权限——除了删除之外的一切。",
+      "helpOne": "选择{app}可以做什么。你可以授予少于你自己的权限，但不能更多。",
+      "withheld": "不包含。选择<b>一个项目</b>才能开启它。",
+      "empty": "至少授予一项权限才能连接。",
+      "locked": "你在这个项目中没有此权限。",
+      "dangerTag": "· 危险"
+    },
+    "summary": {
+      "all": "{app}获得<b>{count}/{total}</b>项权限，作用于<b>{workspace}</b>中你能打开的每个项目。",
+      "one": "{app}获得<b>{count}</b>项权限，仅作用于<b>{project}</b>。"
+    },
+    "actions": {
+      "group": "批准或拒绝{app}",
+      "deny": "拒绝",
+      "approve": "批准并连接",
+      "connecting": "正在连接…",
+      "denyReturn": "拒绝并返回{app}"
+    },
+    "foot": {
+      "disconnect": "随时可以在 设置 → 账号 → 已连接的应用 中断开连接。",
+      "denyNothingStored": "拒绝会告诉{app}连接被拒绝。不会保存任何内容。",
+      "closeTab": "你可以关闭此标签页。",
+      "nothingShared": "你账号的任何信息都没有分享给它。"
+    },
+    "noWorkspace": {
+      "noMemberships": "一个连接只在一个工作区中操作，而你的账号还不在任何工作区中。请创建一个工作区，或请人邀请你加入，然后从{app}重新连接。",
+      "noGrantable": "在{workspaces}中你无法打开任何项目，所以{app}在那里什么也做不了。请工作区管理员授予你项目访问权限，然后重新连接。"
+    },
+    "refused": {
+      "reason": {
+        "invalid_client": "该应用没有在Motir注册，或者它的注册已过期。",
+        "invalid_redirect": "它要求把你送回<b>{host}</b>，但这个地址从未在Motir注册过。",
+        "invalid_redirect_nohost": "它要求把你送回一个从未在Motir注册过的地址。",
+        "code_challenge": "它缺少Motir对每个连接都要求的一项安全检查。",
+        "invalid_target": "它请求访问的不是Motir的MCP服务器。",
+        "expired": "它已经过期——连接必须在应用发起后的几分钟内批准。",
+        "not_issued": "它不是由Motir签发的，或者在传过来的途中被改动了。",
+        "rejected": "Motir无法完成它。"
+      },
+      "next": "请回到应用中重新发起连接。如果一直出现这个问题，说明该应用配置有误——请告诉它的开发者，并附上<chip>{code}</chip>。",
+      "home": "前往Motir"
+    },
+    "approved": {
+      "bodyAll": "{app}现在可以以你的身份在<b>{workspace}</b>中操作——你能打开的每个项目。",
+      "bodyOne": "{app}现在可以以你的身份在<b>{workspace}</b>中操作——仅限<b>{project}</b>。",
+      "returning": "正在返回{app}……如果没有反应，请自己回到它那里——它已经连接好了。",
+      "viewConnected": "查看已连接的应用"
+    },
+    "denied": {
+      "body": "没有保存任何内容。{app}会被告知你拒绝了。",
+      "retry": "改主意了？请从{app}重新发起连接。"
+    },
+    "errors": {
+      "unexpected": "出了点问题，没有建立任何连接。请重试。",
+      "network": "无法连接到Motir。请检查网络后重试。",
+      "workspace": "你已无法把它连接到那个工作区。请换一个。",
+      "grant": "你在这个项目中已无法授予其中某项权限。请刷新页面查看你能授予的权限。"
+    },
+    "signIn": {
+      "carriedLabel": "正在连接应用",
+      "carriedValue": "{app}——接下来你将选择工作区并批准。",
+      "foot": "只有你登录的这个账号才能批准——也只能选择它所在的工作区。"
     }
   }
 }

@@ -59,13 +59,25 @@ import {
  * The file moved here unchanged apart from that extraction and the `sessionActive`
  * prop below — everything about the two-step flow is as it was.
  */
-export function SignInCard({ sessionActive = false }: { sessionActive?: boolean }) {
+/** An OAuth authorize request waiting on this sign-in (MOTIR-6985): the app's
+ *  registered name, or null when it registered none. */
+export interface SignInOAuthApp {
+  name: string | null;
+}
+
+export function SignInCard({
+  sessionActive = false,
+  oauthApp = null,
+}: {
+  sessionActive?: boolean;
+  oauthApp?: SignInOAuthApp | null;
+}) {
   // useSearchParams must be wrapped in Suspense for Next 16's static
   // pre-rendering — the suspense boundary lets the static shell stream
   // while the search params resolve client-side.
   return (
     <Suspense fallback={<SignInShell />}>
-      <SignInForm sessionActive={sessionActive} />
+      <SignInForm sessionActive={sessionActive} oauthApp={oauthApp} />
     </Suspense>
   );
 }
@@ -81,9 +93,16 @@ function SignInShell() {
   );
 }
 
-function SignInForm({ sessionActive }: { sessionActive: boolean }) {
+function SignInForm({
+  sessionActive,
+  oauthApp,
+}: {
+  sessionActive: boolean;
+  oauthApp: SignInOAuthApp | null;
+}) {
   const t = useTranslations('auth');
   const tDevice = useTranslations('device');
+  const tOAuth = useTranslations('oauthConsent');
   const searchParams = useSearchParams();
   const router = useRouter();
   // A cross-origin idea draft handed off from the marketing hero (Subtask 7.22.2
@@ -291,6 +310,15 @@ function SignInForm({ sessionActive }: { sessionActive: boolean }) {
             : tDevice('signInCarried.valueNoCode')}
         </IdeaCarried>
       ) : null}
+      {/* An MCP client's authorize request is waiting (MOTIR-6985, design
+          `design/auth/oauth-consent.mock.html` Panel 5) — the fourth
+          `IdeaCarried`: it names the app, so the round trip through sign-in
+          reads as one flow. */}
+      {oauthApp ? (
+        <IdeaCarried label={tOAuth('signIn.carriedLabel')}>
+          {tOAuth('signIn.carriedValue', { app: oauthApp.name ?? tOAuth('unnamedApp') })}
+        </IdeaCarried>
+      ) : null}
       {carryingOnboardingIntent ? (
         <IdeaCarried label={t('onboardingCarriedLabel')}>
           {t('onboardingCarriedSignIn')}
@@ -412,6 +440,11 @@ function SignInForm({ sessionActive }: { sessionActive: boolean }) {
           And it is NOT rendered when this card is already serving that intent:
           re-offering a door onto the surface you are standing on is how the
           original loop read as a working control. */}
+      {oauthApp ? (
+        <p className="font-sans text-xs leading-relaxed text-(--el-text-muted)">
+          {tOAuth('signIn.foot')}
+        </p>
+      ) : null}
       {carryingOnboardingIntent ? null : (
         <div className="flex flex-col gap-3 border-t border-(--el-border) pt-6">
           <p className="text-center font-sans text-sm text-(--el-text-muted)">

@@ -100,6 +100,11 @@ export const pullRequestMergeabilityService = {
    * Store a COMPUTED reading and, when it is a conflict, withdraw the question — both in
    * one transaction (the reading first, so the withdrawal's re-ask already refuses the
    * member). A `null` reading writes nothing. Returns what it did.
+   *
+   * ⚠️ THE HEAD IT WAS READ AT IS STORED EITHER WAY (MOTIR-7005). An uncomputed reading
+   * says nothing about mergeability, but it does say which commit the pull request is at,
+   * and a push that produced no CI leaves nothing else that knows: the reconcile tick's
+   * reading is how a missed `synchronize` still moves the stored head.
    */
   async settleReading(
     workspaceId: string,
@@ -112,12 +117,22 @@ export const pullRequestMergeabilityService = {
     actor: ServiceContext | null;
   }> {
     if (!isComputedReading(reading)) {
+      const headSha = reading.headSha;
+      if (headSha) {
+        await withSystemContext(async (tx) => {
+          await bindWorkspaceContext(tx, workspaceId);
+          await githubPullRequestRepository.setHeadSha(pullRequestId, headSha, tx);
+        });
+      }
       return { conflicted: false, withdrawn: 0, moved: [], actor: null };
     }
     const conflicted = isConflictReading(reading);
     const actor = await ownerContext(workspaceId);
     const outcome = await withSystemContext(async (tx) => {
       await bindWorkspaceContext(tx, workspaceId);
+      if (reading.headSha) {
+        await githubPullRequestRepository.setHeadSha(pullRequestId, reading.headSha, tx);
+      }
       await githubPullRequestRepository.setMergeability(
         pullRequestId,
         {

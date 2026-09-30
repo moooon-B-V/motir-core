@@ -20,9 +20,8 @@ import { defineJob } from '../defineJob';
 
 /** 05:30 every day. The nightly table-walk cascade already runs 03:30 → 05:00
  *  (attachment GC → rate-limit → automation retention → code-graph offboard);
- *  :30 is an already-clustered minute, so this adds no new wake on a compute
- *  that suspends when idle, and it takes the slot after the cascade rather than
- *  contending with it. */
+ *  this takes the slot after the cascade rather than contending with it. Daily
+ *  because an export link's expiry is measured in days. */
 export const DATA_EXPORT_EXPIRY_CRON = '30 5 * * *';
 
 export const dataExportExpirySweep = defineJob(

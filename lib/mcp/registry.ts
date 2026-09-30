@@ -3,6 +3,7 @@ import type { McpContextResolver, McpGrantResolver } from './context';
 import { permissionGatedServer } from './permissionGate';
 import { rateLimitedServer } from './rateLimitGate';
 import { strictInputServer } from './strictInput';
+import { annotatedServer } from './toolAnnotations';
 import { GET_WORK_ITEM_TOOL_NAME, registerGetWorkItem } from './tools/getWorkItem';
 import { GET_DESIGN_TOOL_NAME, registerGetDesign } from './tools/getDesign';
 import { LIST_DESIGNS_TOOL_NAME, registerListDesigns } from './tools/listDesigns';
@@ -136,6 +137,11 @@ import { CHANGE_KIND_TOOL_NAME, registerChangeKind } from './tools/changeKind';
 // (`lib/mcp/auth.ts`). Every tool resolves its acting `ServiceContext` through
 // the injected `resolveContext`, so auth lives in exactly one place and the
 // tools stay testable with a fixed-context resolver.
+//
+// What every registered tool is guaranteed, whatever wrappers a caller opts
+// into: its input schema is STRICT (`strictInput.ts`, MOTIR-3342), and it
+// carries a title and the `annotations` row `TOOL_ANNOTATIONS` declares for it
+// (`toolAnnotations.ts`, MOTIR-6974) — a tool with neither cannot register.
 
 /** Identifying info the MCP `initialize` handshake reports to clients. */
 export const MCP_SERVER_INFO = { name: 'motir', version: '0.1.0' } as const;
@@ -261,7 +267,14 @@ export function registerMcpTools(
   // wrappers below without ordering against them. It is not optional the way
   // they are: a tool that publishes `additionalProperties: false` and then
   // silently strips is wrong on every deployment, tests included.
-  const strict = strictInputServer(server);
+  //
+  // The HINT seam (Story MOTIR-6974) sits beside it, innermost for the same
+  // reason: it rewrites the config (`annotations` from `TOOL_ANNOTATIONS`), not
+  // the callback. It refuses, at registration, a tool with no row, no title or a
+  // title over 64 characters, and a tool that declares its own `annotations` —
+  // so every tool `tools/list` serves carries a title and an explicit
+  // read-only / destructive / idempotent / open-world verdict.
+  const strict = strictInputServer(annotatedServer(server));
   // Two wrappers, and the ORDER is the policy: the permission gate runs first,
   // so a call the token was never granted is refused BEFORE it can consume any
   // of the request budget MOTIR-2610 added. Metering a refused call would let an

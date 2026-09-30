@@ -16,6 +16,7 @@ import {
 import { attachmentGc } from './definitions/attachmentGc';
 import { publicAddressCertificateRefresh } from './definitions/publicAddressCertificateRefresh';
 import { rateLimitSweep } from './definitions/rateLimitSweep';
+import { oauthSweep } from './definitions/oauthSweep';
 import { codeGraphOffboardSweep } from './definitions/codeGraphOffboardSweep';
 import { filterSubscriptionTick } from './definitions/filterSubscriptionTick';
 import { filterSubscriptionDeliver } from './definitions/filterSubscriptionDeliver';
@@ -36,8 +37,10 @@ import { monitorBugEnrichOnCreated } from './definitions/monitorBugEnrich';
 import { monitorBugEnrichBackfill } from './definitions/monitorBugEnrichBackfill';
 import { autoPlanCadenceTick } from './definitions/autoPlanCadenceTick';
 import { ciMinutesReconcile } from './definitions/ciMinutesReconcile';
+import { ciLiveCharge } from './definitions/ciLiveCharge';
 import { ciActionsGateSweep } from './definitions/ciActionsGateSweep';
-import { ciRunnerProvisionSweep, ciRunnerBoot, ciRunnerReap } from './definitions/ciRunnerFleet';
+import { ciRunnerProvisionSweep, ciRunnerBoot } from './definitions/ciRunnerFleet';
+import { fleetAttribution } from './definitions/fleetAttribution';
 import { hostedRunSupervise } from './definitions/hostedRunSupervise';
 import {
   statusDerivationOnChildSetChanged,
@@ -109,6 +112,7 @@ export const jobDefinitions = [
   attachmentGc,
   publicAddressCertificateRefresh,
   rateLimitSweep,
+  oauthSweep,
   codeGraphOffboardSweep,
   filterSubscriptionTick,
   filterSubscriptionDeliver,
@@ -127,10 +131,11 @@ export const jobDefinitions = [
   monitorBugEnrichBackfill,
   autoPlanCadenceTick,
   ciMinutesReconcile,
+  ciLiveCharge,
   ciActionsGateSweep,
   ciRunnerProvisionSweep,
   ciRunnerBoot,
-  ciRunnerReap,
+  fleetAttribution,
   hostedRunSupervise,
   planDriftOnTransitioned,
   statusDerivationOnTransitioned,

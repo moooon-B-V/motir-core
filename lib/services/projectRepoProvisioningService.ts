@@ -1,6 +1,12 @@
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import {
+  aiPlanGateService,
+  AI_PLAN_REQUIRED_ESTABLISH_MESSAGE,
+  PLAN_UNKNOWN_ESTABLISH_MESSAGE,
+} from '@/lib/services/aiPlanGateService';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
@@ -14,6 +20,8 @@ import {
   type ProvisionedRepo,
 } from '@/lib/github/repoProvisioning';
 import {
+  AiPlanRequiredError,
+  AiPlanUnknownError,
   ProjectRepoNotFoundError,
   ProjectRepoStateTransitionError,
   RealizedRepoAlreadyClaimedError,
@@ -148,6 +156,13 @@ export const projectRepoProvisioningService = {
     const rows = await projectRepoSetService.listByProject(projectId, ctx);
     const projectName = await readProjectName(projectId, ctx);
 
+    // THE PAID-AI-PLAN GATE, BEFORE ANYTHING TOUCHES GITHUB (MOTIR-6909 ·
+    // `docs/decisions/fleet-per-org-pool.md`). A Motir-hosted repository's CI runs
+    // on Motir's fleet, and the fleet is paid-AI-plan only — so an org without a
+    // plan gets no repository to run it for. An unreadable plan refuses too: a
+    // guessed yes would hand a free fleet to whoever motir-ai cannot see.
+    await assertPaidAiPlan(ctx);
+
     // THE RUNNER GROUP FIRST, BEFORE ANY REPOSITORY EXISTS (MOTIR-1972 ·
     // `docs/decisions/ci-runner-fleet.md` §7.3).
     //
@@ -211,6 +226,18 @@ export const projectRepoProvisioningService = {
     return { projectId, rows: results };
   },
 };
+
+async function assertPaidAiPlan(ctx: ServiceContext): Promise<void> {
+  const workspace = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    (tx) => workspaceRepository.findByIdInTx(ctx.workspaceId, tx),
+  );
+  const answer = workspace
+    ? await aiPlanGateService.hasPaidAiPlan(workspace.organizationId)
+    : ('unknown' as const);
+  if (answer === 'unknown') throw new AiPlanUnknownError(PLAN_UNKNOWN_ESTABLISH_MESSAGE);
+  if (!answer) throw new AiPlanRequiredError(AI_PLAN_REQUIRED_ESTABLISH_MESSAGE);
+}
 
 /** The project's display name — it goes into the repository description, which
  *  GitHub also renders into an initialised repo's README (ADR §2's "a README

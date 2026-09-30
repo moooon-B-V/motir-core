@@ -14,6 +14,12 @@ export interface CiPeriodUsageDelta {
   billableMinutes: number;
   rawWallClockSeconds: number;
   linearEquivalentMinutes: number;
+  /**
+   * Whether this delta is a RUN (MOTIR-6910). A live-charge tick adds minutes to
+   * a run that has not finished, so it must not count one; the run is counted
+   * once, by the completion meter. Defaults to true.
+   */
+  countsRun?: boolean;
 }
 
 /** An org's consumption for one period — the meter's whole public surface to
@@ -59,6 +65,7 @@ export const ciPeriodUsageRepository = {
     delta: CiPeriodUsageDelta,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
+    const runIncrement = delta.countsRun === false ? 0 : 1;
     return tx.$executeRaw`
       INSERT INTO "ci_period_usage" (
         "id", "workspace_id", "organization_id", "period_start",
@@ -73,7 +80,7 @@ export const ciPeriodUsageRepository = {
         ${new Prisma.Decimal(delta.linearEquivalentMinutes)},
         ${delta.billableMinutes},
         ${new Prisma.Decimal(delta.rawWallClockSeconds)},
-        1,
+        ${runIncrement},
         NOW(),
         NOW()
       )
@@ -84,7 +91,7 @@ export const ciPeriodUsageRepository = {
           "ci_period_usage"."billable_minutes" + EXCLUDED."billable_minutes",
         "raw_wall_clock_seconds" =
           "ci_period_usage"."raw_wall_clock_seconds" + EXCLUDED."raw_wall_clock_seconds",
-        "run_count" = "ci_period_usage"."run_count" + 1,
+        "run_count" = "ci_period_usage"."run_count" + EXCLUDED."run_count",
         "updated_at" = NOW()
     `;
   },

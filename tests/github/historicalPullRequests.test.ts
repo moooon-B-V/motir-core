@@ -50,7 +50,7 @@ function ghPull(
     state: 'closed',
     title: opts.title === undefined ? `A change (MOTIR-${number})` : opts.title,
     merged_at: opts.mergedAt === undefined ? '2026-06-20T10:00:00Z' : opts.mergedAt,
-    head: { ref: opts.headRef ?? `subtask/MOTIR-${number}-slug` },
+    head: { ref: opts.headRef ?? `subtask/MOTIR-${number}-slug`, sha: `sha-${number}` },
     base: { ref: 'main' },
   };
 }
@@ -107,6 +107,8 @@ describe('normalizeHistoricalPullRequest', () => {
       // is reached. That is exactly the parity this test asserts, so the field
       // belongs in the expectation rather than being excluded from it.
       draft: false,
+      // MOTIR-7005 — the head commit, read off `head.sha` like the ref beside it.
+      headSha: 'sha-42',
     });
     expect(pr!.mergedAt.toISOString()).toBe('2026-06-20T10:00:00.000Z');
   });

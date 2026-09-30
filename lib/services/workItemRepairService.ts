@@ -13,7 +13,7 @@ import type {
 import type { ClaimActorDto } from '@/lib/dto/claim';
 import type { DispatchRun, DispatchStopReason, Prisma } from '@/generated/prisma/client';
 import { readStandingReviewRefusal } from '@/lib/approvalGates/reviewRefusal';
-import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import { dispatchRunLabel } from '@/lib/howToTest/author';
 import { toOpenRepairRuns } from '@/lib/mappers/repairRunMappers';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
@@ -211,7 +211,7 @@ async function hostedRepairOpenedData(
   const headOf = new Map(
     deliveries.map((d) => [
       `${d.repo.owner}/${d.repo.name}#${d.pullRequest.number}`,
-      liveRowsAtLatestSha(d.pullRequest.checkRuns)[0]?.commitSha ?? null,
+      pullRequestHead(d.pullRequest),
     ]),
   );
   const pullRequests: RecordedRepairPullRequest[] = decided.pullRequests.map((pr) => ({

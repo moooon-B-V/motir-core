@@ -295,6 +295,20 @@ export const organizationRepository = {
   },
 
   /**
+   * The org's own FLEET POOL override (`Organization.fleetPoolCap`, MOTIR-6907),
+   * or null when it has none — or when the row is absent or RLS-hidden, which
+   * reads as "the environment's number". Must run under the org GUC
+   * (`withOrgServiceWriteContext`): the org policies have no system escape.
+   */
+  async findFleetPoolCapInTx(id: string, tx: Prisma.TransactionClient): Promise<number | null> {
+    const org = await tx.organization.findUnique({
+      where: { id },
+      select: { fleetPoolCap: true },
+    });
+    return org?.fleetPoolCap ?? null;
+  },
+
+  /**
    * Read-only (db-singleton) variant of {@link findCapContextInTx} for the §4
    * upload path (8.1.11), which checks the per-file + total-storage caps as a
    * standalone read BEFORE the blob round-trip — no create transaction to thread.

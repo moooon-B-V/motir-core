@@ -35,17 +35,10 @@ import type { MonitorConnectionPollRequestedData } from '../types';
 //     filing is a database write, so there is no commit-then-effect split.
 
 /**
- * Every 30 minutes, ON the cluster (`lib/jobs/schedules.ts`'s
- * `SCHEDULE_CLUSTER_MINUTES`) — both clustered minutes, so it opens no new
- * wake-minute and the quiet gap is untouched.
- *
- * ⚠️ NOT TEN MINUTES, which is what the plan first assumed. The cluster
- * invariant is that every tick wakes the compute, and a job needing finer
- * granularity than 30 minutes is a decision to bring separately
- * (`tests/jobs/schedule-cluster.test.ts` fails the build on a new wake-minute).
- * The worst case for an error reaching the board is 30 minutes — for turning a
- * production error into PLANNED work that is not a paging SLA, and alerting is
- * MOTIR-3765's, not this story's.
+ * Every 5 minutes — the one sub-hourly cadence (`SUB_HOURLY_CADENCE`,
+ * `lib/jobs/schedules.ts`). The worst case for an error reaching the board is
+ * five minutes — for turning a production error into PLANNED work that is not a
+ * paging SLA, and alerting is MOTIR-3765's, not this story's.
  */
 export const MONITOR_ISSUE_RECONCILE_CRON = '*/5 * * * *';
 

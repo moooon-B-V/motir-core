@@ -28,6 +28,7 @@ import type { AgentReviewRequestedData } from '@/lib/jobs/types';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { linkPrByIdentifier } from '../helpers/prLink';
 
 const { usersService } = await import('@/lib/services/usersService');
@@ -288,6 +289,8 @@ async function reviewing(slug: string, number: number) {
   expect(request, 'the raise requested its review').toBeDefined();
   return { s, item, review: review!, request: request! };
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   await truncateAuthTables();

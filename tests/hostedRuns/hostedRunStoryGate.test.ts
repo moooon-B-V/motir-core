@@ -47,6 +47,7 @@ import {
   type WorkItemFixture,
 } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 import { warmPool } from '../helpers/warmPool';
@@ -494,6 +495,8 @@ async function driveCliToSuccess(
 
   return { gitCredentials: gitBody.credentials };
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   await truncateAuthTables();
