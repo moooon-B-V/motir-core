@@ -35,6 +35,7 @@ import {
 import { PASSKEY_RESIDENT_KEY, PASSKEY_RP_NAME, PASSKEY_USER_VERIFICATION } from './passkeyConfig';
 import { hash, verify } from './passwords';
 import { mcpOAuthPolicy } from './mcpOAuthPolicy';
+import { CONSENT_REQUIRED_REFERENCE, currentConsentConnection } from '@/lib/oauth/consentContext';
 import {
   mcpResourceUrl,
   OAUTH_CONSENT_PAGE,
@@ -649,6 +650,19 @@ export const authOptions: BetterAuthOptions & {
     oauthProvider({
       loginPage: OAUTH_LOGIN_PAGE,
       consentPage: OAUTH_CONSENT_PAGE,
+      // The consent decision's CONNECTION (MOTIR-6983). Every consent row, code,
+      // access token and refresh token carries the id of the `api_token` row the
+      // person approved, and the MCP gate resolves a bearer through it to that
+      // row's workspace, project and grant. The id comes from the approval in
+      // progress (`lib/oauth/consentContext.ts`); outside one it is a reference no
+      // consent carries, so every authorization goes to the consent screen, where
+      // the workspace is chosen. `shouldRedirect` is false: there is no step
+      // between signing in and consenting — the workspace picker IS the consent.
+      postLogin: {
+        page: OAUTH_CONSENT_PAGE,
+        shouldRedirect: () => false,
+        consentReferenceId: () => currentConsentConnection() ?? CONSENT_REQUIRED_REFERENCE,
+      },
       scopes: [...OAUTH_SCOPES],
       // The only audience a token may be minted for (RFC 8707). The provider
       // checks a `resource` sent to the token endpoint against this.

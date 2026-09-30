@@ -1,4 +1,3 @@
-import { createHash, randomBytes } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The OAuth authorization server, end to end against the real database
@@ -15,10 +14,22 @@ vi.hoisted(() => {
 });
 
 const { db } = await import('@/lib/db');
-const { auth } = await import('@/lib/auth');
 const { GET, POST } = await import('@/app/api/auth/[...all]/route');
 const { truncateAuthTables, truncateRateLimitCounters } = await import('../helpers/db');
-const { createTestUser, TEST_PASSWORD } = await import('../fixtures/userFixtures');
+const {
+  AUTH,
+  BASE,
+  CLAUDE_CALLBACK,
+  authorize,
+  connect,
+  consentQuery,
+  location,
+  pkce,
+  register,
+  registeredClientId,
+  signedInCookie,
+  token,
+} = await import('../helpers/oauthFlow');
 const { __resetSharedRateLimitStoreForTest } = await import('@/lib/rateLimit/store');
 const { pinSharedRateLimitStoreDeadline } = await import('../helpers/rateLimitStore');
 const { mcpResourceUrl } = await import('@/lib/oauth/config');
@@ -26,10 +37,6 @@ const { oauthAuthorizeNext } = await import('@/lib/oauth/authorizeReturn');
 const { RATE_LIMIT_DISABLE_ENV } = await import('@/lib/rateLimit/limiter');
 const { ALIGNED_HEADROOM_MS, ALIGNED_WINDOW_MS, waitForWindowHeadroom } =
   await import('../helpers/rateLimitWindow');
-
-const BASE = 'http://localhost:3000';
-const AUTH = `${BASE}/api/auth`;
-const CLAUDE_CALLBACK = 'https://claude.ai/api/mcp/auth_callback';
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -45,124 +52,14 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-// ── helpers ────────────────────────────────────────────────────────────────
+// ── helpers (the flow itself lives in tests/helpers/oauthFlow.ts) ───────────
 
-let ipCounter = 0;
-/** A distinct client IP per request, so the shared limiter never couples cases. */
-function freshIp(): string {
-  ipCounter += 1;
-  return `198.51.100.${ipCounter % 250}`;
-}
-
-async function register(redirectUris: string[], ip = freshIp()): Promise<Response> {
-  return POST(
-    new Request(`${AUTH}/oauth2/register`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
-      body: JSON.stringify({
-        client_name: 'Claude',
-        redirect_uris: redirectUris,
-        token_endpoint_auth_method: 'none',
-        grant_types: ['authorization_code', 'refresh_token'],
-        response_types: ['code'],
-      }),
-    }),
-  );
-}
-
-async function registeredClientId(redirectUri = CLAUDE_CALLBACK): Promise<string> {
-  const res = await register([redirectUri]);
-  expect(res.status, await res.clone().text()).toBe(200);
-  return ((await res.json()) as { client_id: string }).client_id;
-}
-
-function pkce(): { verifier: string; challenge: string } {
-  const verifier = randomBytes(32).toString('base64url');
-  const challenge = createHash('sha256').update(verifier).digest('base64url');
-  return { verifier, challenge };
-}
-
-interface AuthorizeParams {
-  clientId: string;
-  redirectUri?: string;
-  challenge?: string | null;
-  method?: string | null;
-  resource?: string | null;
-  scope?: string;
-}
-
-function authorizeUrl(p: AuthorizeParams): string {
-  const q = new URLSearchParams({
-    response_type: 'code',
-    client_id: p.clientId,
-    redirect_uri: p.redirectUri ?? CLAUDE_CALLBACK,
-    state: 'st-123',
-  });
-  if (p.challenge !== null) q.set('code_challenge', p.challenge ?? pkce().challenge);
-  if (p.method !== null) q.set('code_challenge_method', p.method ?? 'S256');
-  if (p.resource !== null) q.set('resource', p.resource ?? mcpResourceUrl());
-  if (p.scope) q.set('scope', p.scope);
-  return `${AUTH}/oauth2/authorize?${q.toString()}`;
-}
-
-async function authorize(p: AuthorizeParams, cookie?: string): Promise<Response> {
-  return GET(new Request(authorizeUrl(p), { headers: cookie ? { cookie } : {} }));
-}
-
-function location(res: Response): URL {
-  const at = res.headers.get('location');
-  expect(at, `expected a redirect, got ${res.status}`).toBeTruthy();
-  return new URL(at!, BASE);
-}
-
-async function signedInCookie(): Promise<string> {
-  const user = await createTestUser();
-  const res = await auth.api.signInEmail({
-    body: { email: user.email, password: TEST_PASSWORD },
-    headers: new Headers({ origin: BASE }),
-    asResponse: true,
-  });
-  expect(res.status).toBe(200);
-  return res.headers
-    .getSetCookie()
-    .map((c) => c.split(';')[0])
-    .join('; ');
-}
-
-async function token(form: Record<string, string>, ip = freshIp()): Promise<Response> {
-  return POST(
-    new Request(`${AUTH}/oauth2/token`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-forwarded-for': ip },
-      body: new URLSearchParams(form).toString(),
-    }),
-  );
-}
-
-/** Run a signed-in person through authorize + consent; return the code. */
+/** Run a signed-in person through authorize + consent; return the code. The
+ * consent is approved the way the consent page approves it — through
+ * `oauthConnectionsService` (MOTIR-6983), which records the connection the code
+ * is bound to. */
 async function codeFor(clientId: string, verifierChallenge = pkce()): Promise<string> {
-  const cookie = await signedInCookie();
-  const res = await authorize(
-    { clientId, challenge: verifierChallenge.challenge, scope: 'offline_access' },
-    cookie,
-  );
-  const consent = location(res);
-  expect(consent.pathname).toBe('/oauth/consent');
-  const accepted = await POST(
-    new Request(`${AUTH}/oauth2/consent`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie, origin: BASE },
-      body: JSON.stringify({ accept: true, oauth_query: consent.searchParams.toString() }),
-    }),
-  );
-  expect(accepted.status, await accepted.clone().text()).toBe(200);
-  const { url } = (await accepted.json()) as { url: string };
-  const back = new URL(url);
-  expect(`${back.origin}${back.pathname}`).toBe(CLAUDE_CALLBACK);
-  expect(back.searchParams.get('state')).toBe('st-123');
-  const code = back.searchParams.get('code');
-  expect(code).toBeTruthy();
-  return code!;
+  return (await connect({ clientId, keys: verifierChallenge })).code;
 }
 
 // ── discovery lives in tests/oauth/wellKnownRoutes.test.ts ─────────────────
@@ -300,6 +197,51 @@ describe('the authorize endpoint', () => {
     expect(at.host).not.toBe('attacker.example');
     expect(at.pathname).toBe('/api/auth/error');
     expect(at.searchParams.get('error')).toBe('invalid_target');
+  });
+});
+
+describe('consent is recorded only through the consent screen (MOTIR-6983)', () => {
+  async function postConsent(cookie: string, body: Record<string, unknown>): Promise<Response> {
+    return POST(
+      new Request(`${AUTH}/oauth2/consent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie, origin: BASE },
+        body: JSON.stringify(body),
+      }),
+    );
+  }
+
+  it('refuses an ACCEPTING consent posted straight to the provider — it would bind no connection', async () => {
+    const clientId = await registeredClientId();
+    const cookie = await signedInCookie();
+    const oauthQuery = await consentQuery(clientId, cookie);
+    const res = await postConsent(cookie, { accept: true, oauth_query: oauthQuery });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toBe('access_denied');
+    expect(await db.oauthConsent.count()).toBe(0);
+    expect(
+      await db.verification.count({ where: { value: { contains: 'authorization_code' } } }),
+    ).toBe(0);
+  });
+
+  it('still lets a person DECLINE directly: back to the client with access_denied, nothing stored', async () => {
+    const clientId = await registeredClientId();
+    const cookie = await signedInCookie();
+    const oauthQuery = await consentQuery(clientId, cookie);
+    const res = await postConsent(cookie, { accept: false, oauth_query: oauthQuery });
+    expect(res.status, await res.clone().text()).toBe(200);
+    const back = new URL(((await res.json()) as { url: string }).url);
+    expect(`${back.origin}${back.pathname}`).toBe(CLAUDE_CALLBACK);
+    expect(back.searchParams.get('error')).toBe('access_denied');
+    expect(await db.oauthConsent.count()).toBe(0);
+  });
+
+  it('asks again on every authorization — a remembered consent never skips the workspace choice', async () => {
+    const clientId = await registeredClientId();
+    const connected = await connect({ clientId });
+    expect(await db.oauthConsent.count()).toBe(1);
+    const again = location(await authorize({ clientId }, connected.cookie));
+    expect(again.pathname).toBe('/oauth/consent');
   });
 });
 

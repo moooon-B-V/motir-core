@@ -11,6 +11,10 @@ export const MCP_RESOURCE_PATH = '/api/mcp';
 /** Better-Auth's mount point — the provider's endpoints live beneath it. */
 export const AUTH_BASE_PATH = '/api/auth';
 
+/** The RFC 9728 protected-resource metadata document — where an MCP client is
+ * pointed by the 401's `WWW-Authenticate: … resource_metadata` (MOTIR-6983). */
+export const PROTECTED_RESOURCE_METADATA_PATH = '/.well-known/oauth-protected-resource';
+
 /** Where the provider sends a signed-in person to decide (MOTIR-6985 draws it). */
 export const OAUTH_CONSENT_PAGE = '/oauth/consent';
 

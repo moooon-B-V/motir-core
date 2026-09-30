@@ -2,6 +2,7 @@ import { APIError, createAuthMiddleware } from 'better-auth/api';
 import type { BetterAuthPlugin } from 'better-auth';
 import { mcpResourceUrl } from '@/lib/oauth/config';
 import { isAllowedRedirectUri, matchesRegisteredRedirect } from '@/lib/oauth/redirectPolicy';
+import { currentConsentConnection } from '@/lib/oauth/consentContext';
 
 // Motir's policy IN FRONT OF `@better-auth/oauth-provider` (MOTIR-6982).
 //
@@ -22,12 +23,18 @@ import { isAllowedRedirectUri, matchesRegisteredRedirect } from '@/lib/oauth/red
 //      that redirect is one the client registered (RFC 6749 §4.1.2.1), and to
 //      Better-Auth's error page otherwise — an unverified redirect is never
 //      followed, which is the open-redirect rule.
+//   3. CONSENT (MOTIR-6983) — an ACCEPTING `/oauth2/consent` is honoured only
+//      from inside `oauthConnectionsService.approveConsent`, which has recorded
+//      the connection (workspace, project, grant) the consent binds to. Posted
+//      directly, it would mint a code bound to nothing, so it is refused
+//      `access_denied`. Declining writes nothing and stays open to anyone.
 //
 // PKCE (S256 only, `plain` refused) is the provider's own: public clients always
 // require it, and its query schema rejects any method but `S256`.
 
 const REGISTER_PATH = '/oauth2/register';
 const AUTHORIZE_PATH = '/oauth2/authorize';
+const CONSENT_PATH = '/oauth2/consent';
 
 interface RegisteredClient {
   redirectUris?: string[] | null;
@@ -105,6 +112,18 @@ export function mcpOAuthPolicy(): BetterAuthPlugin {
                     error_description: description,
                   });
             throw ctx.redirect(target);
+          }),
+        },
+        {
+          matcher: (ctx) => ctx.path === CONSENT_PATH,
+          handler: createAuthMiddleware(async (ctx) => {
+            const body = (ctx.body ?? {}) as { accept?: unknown };
+            if (body.accept !== true) return; // a refusal records nothing
+            if (currentConsentConnection() !== null) return;
+            throw new APIError('FORBIDDEN', {
+              error: 'access_denied',
+              error_description: 'Consent is recorded through the Motir consent screen',
+            });
           }),
         },
       ],

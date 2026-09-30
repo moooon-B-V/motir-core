@@ -807,6 +807,8 @@ model OauthClient {
   refreshTokens OauthRefreshToken[]
   accessTokens  OauthAccessToken[]
   consents      OauthConsent[]
+  /// The connections people approved for this client (MOTIR-6983).
+  connections   ApiToken[]
 
   @@index([userId])
   @@map("oauth_client")
@@ -833,11 +835,16 @@ model OauthRefreshToken {
   client       OauthClient        @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
   session      Session?           @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The CONNECTION (an `api_token` row) whose grant this token carries — the
+  /// value the consent decision stamped (`consentReferenceId`, MOTIR-6983).
+  /// Cascade: revoking the connection deletes it.
+  connection   ApiToken?          @relation(fields: [referenceId], references: [id], onDelete: Cascade)
   accessTokens OauthAccessToken[]
 
   @@index([clientId])
   @@index([sessionId])
   @@index([userId])
+  @@index([referenceId])
   @@map("oauth_refresh_token")
 }
 
@@ -862,17 +869,24 @@ model OauthAccessToken {
   session      Session?           @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   user         User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
   refreshToken OauthRefreshToken? @relation(fields: [refreshId], references: [id], onDelete: Cascade)
+  /// The CONNECTION (an `api_token` row) whose grant this token carries — the
+  /// value the consent decision stamped (`consentReferenceId`, MOTIR-6983). The
+  /// MCP gate resolves a bearer to this row. Cascade: revoking the connection
+  /// deletes it, so the next call is a 401.
+  connection   ApiToken?          @relation(fields: [referenceId], references: [id], onDelete: Cascade)
 
   @@index([clientId])
   @@index([sessionId])
   @@index([userId])
   @@index([refreshId])
+  @@index([referenceId])
   @@map("oauth_access_token")
 }
 
 /// A person's consent to an OAuth client's scopes (MOTIR-6982). The plugin
-/// writes it when the consent page accepts; what the grant ACTS ON (workspace,
-/// permission keys) is the next card's (MOTIR-6983).
+/// writes it when the consent page accepts. What the grant ACTS ON (workspace,
+/// project, permission keys) is the CONNECTION its `referenceId` names — an
+/// `api_token` row (MOTIR-6983).
 model OauthConsent {
   id          String   @id @default(cuid())
   clientId    String   @map("client_id")
@@ -882,11 +896,15 @@ model OauthConsent {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  client OauthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
-  user   User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client     OauthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user       User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The CONNECTION (an `api_token` row) this consent was recorded for
+  /// (MOTIR-6983). Cascade: revoking the connection deletes it.
+  connection ApiToken?   @relation(fields: [referenceId], references: [id], onDelete: Cascade)
 
   @@index([clientId])
   @@index([userId])
+  @@index([referenceId])
   @@map("oauth_consent")
 }
 
@@ -6447,12 +6465,42 @@ model ApiToken {
   /// `verifyMcpToken`). NULL is every ordinary PAT and device credential.
   /// Cascade: a deleted run takes its token, which is dead by then anyway.
   dispatchRunId String?   @map("dispatch_run_id")
+  /// The OAuth CLIENT this row is a CONNECTION for, or NULL (Story MOTIR-6973 ·
+  /// Subtask MOTIR-6983). Non-null makes the row an OAUTH CONNECTION: what a
+  /// person approved on the consent screen for one app — this workspace, this
+  /// project or none, this grant. NULL is every PAT, device credential and run
+  /// token.
+  ///
+  /// ⚠️ A CONNECTION IS A TOKEN ROW, NOT A PARALLEL TABLE, deliberately. The
+  /// token already carries the whole reach model — the bound workspace, the
+  /// one-arm project binding, the grant (`scopes`), `lastUsedAt` — and every gate
+  /// downstream reads that shape. A second table would be a second reach model,
+  /// and two reach models drift: the first time one gained a check the other
+  /// lacked, a connected app could reach something a PAT with the same grant
+  /// could not. So an OAuth access token resolves (through its `reference_id`) to
+  /// THIS row, and the MCP gate hands the tools the same `AuthInfo` a PAT yields.
+  ///
+  /// A connection has no bearer secret of its own: the client holds OAuth access
+  /// and refresh tokens (`oauth_access_token` / `oauth_refresh_token`), which
+  /// point here. `tokenHash` is the hash of random bytes nobody ever held, so no
+  /// PAT can resolve to a connection, and `apiTokensService.verify` refuses one
+  /// regardless. At most one connection per (person, client, workspace, project)
+  /// — a hand-written unique index in the migration, because Prisma cannot
+  /// express its predicate. Cascade: a deleted client takes its connections, and
+  /// DELETING a connection takes its access tokens, refresh tokens and consent
+  /// rows with it — which is what revoking one is.
+  oauthClientId String?   @map("oauth_client_id")
   createdAt     DateTime  @default(now()) @map("created_at")
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   dispatchRun DispatchRun? @relation(fields: [dispatchRunId], references: [id], onDelete: Cascade)
+  oauthClient OauthClient? @relation(fields: [oauthClientId], references: [clientId], onDelete: Cascade)
+
+  oauthAccessTokens  OauthAccessToken[]
+  oauthRefreshTokens OauthRefreshToken[]
+  oauthConsents      OauthConsent[]
 
   // The settings-surface read: a user's tokens in a workspace, newest first.
   @@index([userId])
@@ -6460,6 +6508,8 @@ model ApiToken {
   @@index([projectId])
   /// The run credential's revoke (`runCredentialService.revokeRunCredential`).
   @@index([dispatchRunId])
+  /// A client's connections — the cascade from `oauth_client`.
+  @@index([oauthClientId])
   @@map("api_token")
 }
 

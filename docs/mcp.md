@@ -168,6 +168,43 @@ Tokens are opaque and stored hashed. Registration and token requests are
 rate-limited per IP (`MOTIR_OAUTH_REGISTER_RATE_LIMIT`, default 60 a minute, and
 `MOTIR_OAUTH_TOKEN_RATE_LIMIT`, default 300 a minute).
 
+### A connection is a token
+
+Consent picks **one workspace**, and either **every project** the person can
+open or **one project**. Approving records a **connection**, and a connection
+is an API token in everything but its secret: the same workspace binding, the
+same project binding, the same grant, the same "last used". An OAuth access
+token resolves to its connection, so a tool called with it runs as the person
+who approved, in that workspace, narrowed by that grant — exactly as a personal
+access token with the same grant would, down to the error a tool outside the
+grant returns.
+
+- **All projects:** the grant is the default token grant (everything a token can
+  hold except deleting work items), whatever the request asked for.
+- **One project:** the grant is chosen from what the person can confer in that
+  project, and a permission outside it is refused, as it is when creating a
+  token.
+
+Approving the same app for the same workspace and project again updates that
+connection rather than adding a second one. Disconnecting an app deletes the
+connection with every token minted from it, so its next call is refused. A
+connection whose person has left the workspace is refused too.
+
+### The 401
+
+Every MCP request without a usable bearer — none at all, an unknown or expired
+token, a disconnected app's token, a token whose person left the workspace — is
+answered **401** before any tool runs, with the pointer an MCP client follows to
+start OAuth:
+
+```
+WWW-Authenticate: Bearer error="invalid_token", error_description="…",
+  resource_metadata="<base>/.well-known/oauth-protected-resource"
+```
+
+A `motir_pat_…` bearer is checked exactly as before; anything else is checked as
+an OAuth access token.
+
 ## Rate limits
 
 `POST /api/mcp` is metered on **two** budgets, keyed on the token owner **+ the

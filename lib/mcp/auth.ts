@@ -6,6 +6,8 @@ import {
   InvalidApiTokenError,
 } from '@/lib/apiTokens/errors';
 import { TOKEN_PREFIX } from '@/lib/apiTokens/token';
+import { oauthConnectionsService } from '@/lib/services/oauthConnectionsService';
+import { OAuthAccessTokenRejectedError } from '@/lib/oauth/errors';
 import type { McpAuthExtra } from './context';
 
 // The MCP server's transport-level auth gate (Story 7.8 · Subtask 7.8.4).
@@ -32,6 +34,15 @@ import type { McpAuthExtra } from './context';
 // workspace unreachable.) The per-tool 6.4 gates still apply with this
 // `workspaceId`, so a token whose owner has lost membership simply gets the same
 // 404-not-403 the cookie path would.
+//
+// TWO BEARERS, ONE ACTOR (MOTIR-6983). A `motir_pat_…` string takes the PAT path
+// above, unchanged. Anything else is an OAuth access token from "Sign in with
+// Motir": it resolves to the CONNECTION the person approved, which is itself an
+// `api_token` row, and yields the SAME `AuthInfo.extra` — so no tool, permission
+// gate or rate limiter can tell the two apart, and none needs to. Every refusal
+// on either arm is `undefined`, which `withMcpAuth` answers 401 with
+// `WWW-Authenticate: Bearer … resource_metadata="<base>/.well-known/oauth-protected-resource"`
+// (`app/api/mcp/route.ts`), the pointer an MCP client follows to start OAuth.
 
 /** Extract the `Bearer` credential from an Authorization header value. */
 function bearerFromHeader(header: string | null): string | undefined {
@@ -59,7 +70,8 @@ export async function verifyMcpToken(
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> {
   const token = bearerToken ?? bearerFromHeader(req.headers.get('authorization'));
-  if (!token || !token.startsWith(TOKEN_PREFIX)) return undefined;
+  if (!token) return undefined;
+  if (!token.startsWith(TOKEN_PREFIX)) return verifyOAuthAccessToken(token);
 
   let user;
   let workspaceId: string;
@@ -103,6 +115,37 @@ export async function verifyMcpToken(
     token,
     clientId: user.id,
     scopes: [],
+    extra: { ...extra },
+  };
+}
+
+/**
+ * The OAuth arm (MOTIR-6983): resolve an access token to its connection and build
+ * the same {@link AuthInfo} the PAT arm does. Every refusal — unknown, expired,
+ * unbound, a person who left the workspace — is the same `undefined` (→ 401);
+ * any other error propagates, as on the PAT arm.
+ */
+async function verifyOAuthAccessToken(token: string): Promise<AuthInfo | undefined> {
+  let resolved;
+  try {
+    resolved = await oauthConnectionsService.resolveAccessToken(token);
+  } catch (err) {
+    if (err instanceof OAuthAccessTokenRejectedError) return undefined;
+    throw err;
+  }
+  const extra: McpAuthExtra = {
+    userId: resolved.user.id,
+    workspaceId: resolved.workspaceId,
+    userName: resolved.user.name,
+    projectId: resolved.projectId,
+    grant: resolved.grant,
+  };
+  return {
+    token,
+    clientId: resolved.user.id,
+    scopes: [],
+    // Seconds, as `withMcpAuth` compares it — a second check at the transport.
+    expiresAt: Math.floor(resolved.expiresAt.getTime() / 1000),
     extra: { ...extra },
   };
 }
