@@ -222,6 +222,10 @@ describe('the HEALTHY run — boot → checkpoints → settle → the question a
 describe('the LONG run — hours, supervised pass by pass (AC 3)', () => {
   it('bounds the provider reads by the cadence, and the line never lags the container by more than one interval', async () => {
     const HOURS = 3;
+    // Pinned mid-month: the line is read per MONTHLY period, so a start within
+    // HOURS of a month's end would read the next month's empty line (MOTIR-7070).
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-10T12:00:00.000Z'));
     const store = inMemorySupervisionStore();
     const memo = new Map<string, unknown>();
     const steps = {
