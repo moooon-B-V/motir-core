@@ -1312,3 +1312,105 @@ themselves — unchanged, composed; the Workbench To fix row — **MOTIR-6590**.
 
 Fixture items use `ACME-n` keys: **ACME-14** a leaf, **ACME-12** the story whose parent run it
 belonged to (in two repositories, `motir-core` and `motir-ai`), **ACME-9** ACME-12's own parent.
+
+## Run hosted — the picker says where its model came from (MOTIR-6991, 2026-09-30)
+
+**AMENDS** MOTIR-684's approved Run hosted design (the published `run-section--hosted.mock.html`,
+§ _The model picker_) and the door as § _Continue hosted — the browser resumes a dead run_ composes it
+([`development--continue-hosted.mock.html`](./development--continue-hosted.mock.html), `.cc-door`) —
+in the delta **[`run-section--from-difficulty.mock.html`](./run-section--from-difficulty.mock.html)**,
+Panels **F1–F6**, each the Run card's HEADER only. Card MOTIR-6991. **No existing mock is edited**,
+and no image export ships. Its sibling is the Hosted agent settings room,
+[`../settings/hosted-agent.mock.html`](../settings/hosted-agent.mock.html) (§ _Hosted agent room_ in
+`design/settings/design-notes.md`).
+
+**What changes.** The model Run hosted PRESELECTS is now resolved from the work item's difficulty —
+a leaf's own, a parent's highest among its leaves — through the project's Hosted agent settings (an
+override if one is stored and still offered, else that difficulty's platform default). The picker
+therefore gains **one line** saying where the preselection came from. With no difficulty there is no
+line, and today's picker stands exactly as approved: Motir AI's single default, preselected and
+marked _Default_.
+
+### Composed, not redrawn
+
+`HostedModelPicker` — the shipped `Combobox`, `searchable={false}`, the model id as label, the
+provider (or _Default · {provider}_ for Motir AI's default) as `secondary` — and the primary sm
+`Button` with the `Cloud` glyph are the approved door, unchanged. The trigger is drawn as
+`development--continue-hosted.mock.html` draws it (mono value, _Default_). The token, chrome and
+primitive layers are spliced verbatim from `design/projects/bug-destination.mock.html`. **The one
+new element is the line**; the one new use of a shipped prop is the option's `description`.
+
+### The panels
+
+| panel | state                                                                                                                               | the line                                              |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| F1    | **Leaf, difficulty High, no override** — `claude-opus-5-5`, which is also Motir AI's default, so the _Default_ label stays          | _From difficulty: High_                               |
+| F2    | **Leaf, High overridden** to `claude-fable-5-1` by the project — secondary reads the provider                                       | _Project override for High_                           |
+| F3    | **Parent work item** (a story whose leaves are Low, Medium, High)                                                                   | _Highest difficulty among its leaves: High_           |
+| F4    | **Leaf with no difficulty** — exactly the approved picker                                                                           | absent                                                |
+| F5    | **The menu, open** on F1 — the preselected option carries the line as its `description`; rows keep their shipped secondary + footer | under the option's label, and under the trigger       |
+| F6    | **After the person picks another model** (`claude-opus-5`)                                                                          | removed — it describes the preselection, not the pick |
+
+**Stated, not drawn.** A parent AND an override: _Project override for High, the highest difficulty
+among its leaves_. A parent none of whose leaves has a difficulty: no line (F4). Leaves with no
+difficulty are left out of a parent's maximum. A **withdrawn** override (the stored model is no
+longer offered) preselects the platform default, so the line reads _From difficulty: {difficulty}_
+— the room says why (its Panel 4); the picker does not repeat it. The ~400px door is the approved
+wrap (`flex-wrap`): the picker keeps 15rem, the button follows, and the line stays last.
+
+### Decisions
+
+| question                    | decision                                                                                                                                  | why                                                                                                                                                                                    |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| where the line sits         | the LAST child of `RunHostedButton`'s row, `basis-full`, under the picker and free to run under the button; the row becomes `items-start` | inside the picker's 15rem column the parent line wraps to two; the row's own width holds it on one. `items-start` keeps the button level with the TRIGGER, not with the trigger + line |
+| the trigger                 | unchanged: label + `secondary`                                                                                                            | the `Combobox` trigger never renders `description`, and the 15rem trigger has no room for a second fact                                                                                |
+| _Default_ vs the line       | **both**, never one for the other                                                                                                         | _Default_ is a fact about the MODEL (Motir AI's single default); the line is a fact about the CHOICE. F1 shows a model that is both                                                    |
+| after a manual pick         | the line goes; it comes back if the preselected model is re-picked                                                                        | a line under a model it does not explain is a false statement                                                                                                                          |
+| the override line as a link | **not** a link                                                                                                                            | the room is one rail row away for anyone who can press Run hosted (the room's view key is `work_item:edit`); a link in a 12px caption beside a primary button is a mis-tap target      |
+| accessibility               | the line has an id and is the trigger's `aria-describedby`                                                                                | a screen-reader user hears why the model was chosen when the picker is focused                                                                                                         |
+
+### Tone and tokens
+
+| element                     | primitive                    | colour (`--el-*`)                                                                                                                                                | shape                                                                                  |
+| --------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| the line                    | `<p>` in the door row        | `--el-text-secondary` (AA on every surface); the difficulty in `--el-text`, weight 600                                                                           | —                                                                                      |
+| trigger                     | `Combobox`                   | `--el-page-bg`, `--el-border`; value `--el-text`; secondary `--el-text-identifier`; chevron `--el-icon-muted`                                                    | `--radius-input`, `--height-control`, `--spacing-control-x`                            |
+| menu · option `description` | `Combobox` panel             | `--el-page-bg`, `--el-border`; active `--el-option-active-bg`; `description` `--el-text-secondary`; check `--el-accent-on-surface`; footer `--el-text-secondary` | `--radius-card`, `--shadow-elevated`; rows `--radius-control`, `--spacing-control-x/y` |
+| Run hosted                  | `Button` primary sm, `Cloud` | `--el-accent`, `--el-accent-text`                                                                                                                                | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm`                                |
+| Run card header             | `ContentSectionCard`         | `--el-card`, `--el-border`, divider `--el-border-soft`; title `--el-text`; sub `--el-text-secondary`                                                             | `--radius-card`, `--shadow-subtle`, `--spacing-card-padding`                           |
+
+### Copy — `en` (`runs.hosted.picker.*`, proposed)
+
+| key                  | string                                                                            |
+| -------------------- | --------------------------------------------------------------------------------- |
+| `fromDifficulty`     | From difficulty: <b>{difficulty}</b>                                              |
+| `override`           | Project override for <b>{difficulty}</b>                                          |
+| `fromLeaves`         | Highest difficulty among its leaves: <b>{difficulty}</b>                          |
+| `overrideFromLeaves` | Project override for <b>{difficulty}</b>, the highest difficulty among its leaves |
+
+`{difficulty}` is the shipped `labels.difficulty.*` label. The existing picker keys (`label`,
+`defaultSecondary`, `footer`, the three trigger faces) are unchanged. `zh` follows in the build
+card, in the same keys.
+
+### Fields read
+
+The door's existing read (`GET /api/hosted-runs/models` → `models[] { id, provider }`, `default`) plus,
+for the work item on the page, the resolved preselection: **the model, its source (`difficulty` ·
+`override`), the difficulty it was resolved from, and whether that difficulty is the item's own or
+its leaves' maximum** — so the line is a straight read and the client never re-derives the mapping.
+A withdrawn override resolves server-side to `source: difficulty`.
+
+### Scope
+
+**Drawn:** the line in its three wordings, its absence, its place in the open menu and its removal on
+a manual pick. **Not drawn:** the settings room (its own section, `design/settings/`); the resolution
+itself and where it is computed — the build card's; the Continue hosted door, which composes the same
+picker and inherits the line with no drawing of its own; the Workbench To fix row (MOTIR-6590), which
+reuses the control likewise.
+
+### GIVES / TAKES
+
+| to                                      | GIVES / TAKES                                                                                                                                                                                                                                                                       |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the build card(s) blocked by MOTIR-6991 | **GIVES** F1–F6, the stated cases, the decisions, the copy and the tokens. **TAKES** the resolved preselection above on the door's read, and a `provenance` prop on `HostedModelPicker` (rendered by `RunHostedButton` as the row's last child, `aria-describedby` on the trigger). |
+| MOTIR-684 / MOTIR-6789                  | **GIVES** nothing back: their door is composed unchanged except for the line. **TAKES** nothing.                                                                                                                                                                                    |

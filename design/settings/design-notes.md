@@ -18,6 +18,7 @@ the same primitives — no Pencil→code gap.
 | **Passkeys**                   | **`passkeys.mock.html`** (HTML mock)                   | The `Security` pane's PASSKEYS card — register a WebAuthn credential, see the ones you hold, rename one, remove one. Its OWN card between the two-factor state card and the methods list, never a third row inside them. Adds NO rail entry: it is a new section on a pane that already has a door. Multi-panel (zero · populated · registering · rename · remove · refusals · dark). **Gates MOTIR-3612**; the sign-in half is `../auth/passkey-sign-in.mock.html`.                                                                                                                                                                                                          |
 | **Workspace settings area**    | **`workspace-settings.mock.html`** (HTML mock)         | The FOURTH and last settings tier to become an AREA: the rail, its three-row registry, the switcher row that is its door, and — the thing no other tier has — the BELOW-THE-REVEAL arm, where all three routes `notFound()`, there is NO workspace rail, and every capability is folded into `/settings/organization`. Composes the three panes and re-specifies none (`design/workspaces/settings.pen` · `design/org-admin/security-policy.mock.html` · `design/jobs/`). Multi-panel (index · security · jobs · below-reveal · the switcher popover · dark · the registry). **Gates MOTIR-4846** (the area), **MOTIR-4847** (the entrance) **and MOTIR-4861** (the fold-in). |
 | **Arrival frame**              | **`arrival.mock.html`** (HTML mock)                    | The settings family's PENDING drawing: the pane-only frame each of the 31 `settings/**` routes renders IN-PAGE after its own gate, the width-is-a-prop rule, and the three-tier streaming allocation for all 14 heavy panes. Applies `design/shell/design-notes.md` § _The navigation-pending grammar_ (2nd revision); adds no `loading.tsx`. Multi-panel (in situ · anatomy · widths · the two superseded skeletons · mount points · dark). **Gates MOTIR-3443 and MOTIR-3448.**                                                                                                                                                                                             |
+| **Hosted agent room**          | **`hosted-agent.mock.html`** (HTML mock)               | A PROJECT-settings room (Automation group, under AI planning): the model a hosted run uses per difficulty — Trivial · Low · Medium · High — with its source (_Platform default_ / _Override_), an override select per row and _Reset to default_. Multi-panel (access path · default · choosing · overridden · withdrawn · read-only · loading · unavailable · ~400px). Sibling: `../runs/run-section--from-difficulty.mock.html`. **MOTIR-6991.**                                                                                                                                                                                                                            |
 
 ## Why the whole area (the corner that was cut, then fixed)
 
@@ -2855,3 +2856,167 @@ composition and its gates to Panel 4. So no `update_work_item` amendment is owed
   (`organizationSettingsNav.ts`'s own note: hand-written org actions would have to be retired in the
   same change), and this one inherits that disposition — the palette is not a surface this asset
   draws.
+
+---
+
+## Hosted agent room — `hosted-agent.mock.html` (MOTIR-6991)
+
+**What it is.** A project-settings room that shows which model a **hosted run** uses for each
+difficulty — **Trivial · Low · Medium · High**, easiest first — and lets a project admin override
+any of them. Each row names the model a run of that difficulty actually uses and where that comes
+from: **Platform default** (Motir AI's default for that difficulty) or **Override** (this project's
+choice). Its sibling is the Run hosted picker's delta,
+[`../runs/run-section--from-difficulty.mock.html`](../runs/run-section--from-difficulty.mock.html)
+(§ _Run hosted — the picker says where its model came from_ in `design/runs/design-notes.md`), which
+draws the line that tells the person starting a run where the preselected model came from. A new
+surface, not a delta: no existing mock draws a hosted-agent room.
+
+**Why it is owed.** Motir AI now picks a model per difficulty (platform defaults: `claude-sonnet-5-5`
+for Trivial and Low, `claude-opus-5-5` for Medium and High). Without a room, a team cannot see that
+mapping, cannot change it, and cannot find out why Run hosted preselected a given model.
+
+**Composed, not redrawn.** The area chrome (rail, groups, pane head) is
+`design/projects/settings-area.mock.html`'s; the token, chrome, primitive and room-shell layers are
+spliced verbatim from `design/projects/bug-destination.mock.html`, the nearest room of this tier. The
+card is `components/settings/SettingsCard.tsx`; the per-row select is the shipped `Combobox`, composed
+as `PlannerModelField` (the AI planning room) and `HostedModelPicker` (Run hosted) compose it; the
+callouts and the read-only banner are the AI planning room's `Callout` and `ReadOnlyBanner`; the
+footer is that room's explicit **Save changes** band. **No new primitive, no new pill variant and no
+second picker.** Icons are extracted from `lucide-react@1.16.0`.
+
+### Placement — decided, and why
+
+| question                 | decision                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| which rail group         | **Automation**, directly **under AI planning** and above Rules. Both rooms choose a model Motir runs on this project's behalf, and the group already holds "things that act on the project for you". Registry entry: `id: 'hosted-agent'`, `href: '/settings/project/hosted-agent'`, `labelKey: 'nav.hostedAgent'` (_Hosted agent_), `icon: Cloud` — the glyph the Run hosted button carries, so the row and the door read as one thing. |
+| its own room, not a card | Not a fifth card in AI planning. That room configures the PLANNER (cadence, sprint packing, planner model) and its one Save footer covers the whole page; the hosted agent is a different consumer with a different audience (below) and a different failure face (Motir AI's hosted-model read). A card there would put a second gate and a second outage state inside a page that has one of each.                                     |
+| WRITE key                | **`ai:configure`** — the key AI planning's writes assert. Only it renders the selects enabled, Reset and the footer.                                                                                                                                                                                                                                                                                                                     |
+| VIEW key                 | **`work_item:edit`** — the key the hosted start itself asserts (`projectAccessService.assertCanEdit` in `hostedRunService`). Whoever may press Run hosted may read which model it will run on; a member who sees _Project override for High_ on the picker has somewhere to find out what it means (Panel 5).                                                                                                                            |
+| where the room exists    | Only on a deployment that runs hosted agents: a second `SettingsNavAvailability` field (`hostedRunsAvailable`) beside `publicProjectsAvailable`, resolved on the server and **defaulting closed**; the route answers `notFound()` without it, as billing does off-cloud.                                                                                                                                                                 |
+| a live outage            | The row STAYS. Availability is a build fact, not a live read: a row that came and went with Motir AI's health would read as a feature being removed and would 404 a bookmark mid-outage. The room draws the outage instead (Panel 7).                                                                                                                                                                                                    |
+
+⚠️ **The view key is a product decision with a population consequence, and the build card must
+carry it knowingly.** `projectSettingsNav.ts` warns that a distinct `viewPermission` held by
+ordinary members brings the **Project settings** area door back for them (`hasVisibleSettingsArea`
+is a `some()` over view-gated rows), and falsifies every suite that pins "a member is offered no
+settings area". `work_item:edit` is such a key. The entry therefore declares
+`viewPermission: 'work_item:edit'` **with its evidence row** in
+`tests/settings/projectSettingsNav.test.ts`, and those suites are updated in the same change. **If
+that consequence is declined,** the entry keeps the single key `ai:configure`, Panel 5 becomes
+unreachable and is dropped — nothing else in this design changes.
+
+The access path is **Panel 0**: the rail with the row active, and the table of who sees it. The
+command-palette deep link `settings-hosted-agent` is lit by the same registry entry.
+
+### The panels
+
+| panel | state                                                                                                                    |
+| ----- | ------------------------------------------------------------------------------------------------------------------------ |
+| 0     | **Access path** — the Automation group with _Hosted agent_ active; who sees the row, and what the route answers          |
+| 1     | **Default** — all four rows on their platform default; no Reset; footer disabled                                         |
+| 2     | **Choosing an override** — Low's select open, `claude-opus-5` picked; the row reads _Override_; footer _Unsaved changes_ |
+| 3     | **Overridden row, saved** — Low on `claude-opus-5`, the lavender _Override_ pill and _Reset to default_                  |
+| 4     | **Withdrawn override** — Low's saved `claude-opus-5` is no longer offered; the row shows what runs use, and says so      |
+| 5     | **Read-only** — `work_item:edit` without `ai:configure`: lock banner, selects disabled, no Reset, no footer              |
+| 6     | **Loading** — selects read _Loading models…_ (disabled), the source column a skeleton block; no footer                   |
+| 7     | **Unavailable** — Motir AI did not answer: peach callout with _Try again_; selects read _Models unavailable_             |
+| 8     | **~400px** — rows stack: difficulty + source (+ Reset) on line one, the select full width on line two                    |
+
+**Not drawn, stated here:** the **empty** answer (Motir AI answered and offers no model) takes the
+unavailable panel's layout with the picker's own empty face — selects read _No model available_ and
+the callout is `plain`, not peach, because nothing is broken: _No model can run a hosted work item
+right now, so there is nothing to choose._ Dark theme is the token flip; no dark board is drawn.
+
+### The rules the rows follow
+
+- **Effective model** = the project's override for that difficulty **if Motir AI still offers it**,
+  else that difficulty's platform default. The select always shows the EFFECTIVE model — never a
+  model runs will not use.
+- **Source** = _Override_ when an override is stored and offered; _Platform default_ otherwise
+  (including the withdrawn case, Panel 4).
+- **Picking the row's platform default IS a reset.** No override is stored, so an override can never
+  name the model it overrides, and _Override_ always means "different from the default".
+- **Reset to default** appears on any row holding a stored override — offered (Panel 3) or withdrawn
+  (Panel 4). It marks the row dirty; the footer saves it with everything else.
+- **Withdrawn is not deleted.** The stored override stays until someone resets it; if Motir AI offers
+  the model again, it applies again without a re-save.
+- **The select offers exactly what Motir AI offers** (`searchable={false}`): label = model id,
+  `secondary` = provider (`anthropic`) — Run hosted's labelling. The row's own platform default is
+  marked in the open menu by the option's `description` line, _Platform default for {difficulty}_;
+  the trigger stays label + provider, and the source pill carries the source.
+- **A parent work item** uses the model of the highest difficulty among its leaves (the card
+  subtitle); **a work item with no difficulty** uses the platform default — the one Run hosted marks
+  _Default_ (the note under the rows).
+
+### Copy — `en`
+
+| key (`settings.hostedAgent.*`, proposed)                 | string                                                                                                                                             |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nav.hostedAgent` (under `settings`)                     | Hosted agent                                                                                                                                       |
+| `title`                                                  | Hosted agent                                                                                                                                       |
+| `pageDescription`                                        | Which model a hosted run uses. Run hosted preselects it from the work item's difficulty; whoever starts the run can still pick another.            |
+| `card.title`                                             | Model by difficulty                                                                                                                                |
+| `card.subtitle`                                          | Each difficulty runs on the platform default unless you override it. A parent work item uses the model of the highest difficulty among its leaves. |
+| `col.difficulty` · `col.model` · `col.source`            | Difficulty · Model · Source (shown, `aria-hidden`; each select's accessible name is `modelFor`)                                                    |
+| `modelFor`                                               | Model for {difficulty}                                                                                                                             |
+| difficulty labels                                        | the shipped `labels.difficulty.{trivial,low,medium,high}` — Trivial · Low · Medium · High                                                          |
+| `source.default`                                         | Platform default                                                                                                                                   |
+| `source.override`                                        | Override                                                                                                                                           |
+| `optionDefault`                                          | Platform default for {difficulty}                                                                                                                  |
+| `reset`                                                  | Reset to default                                                                                                                                   |
+| `withdrawn`                                              | The saved model, {model}, is no longer offered, so {difficulty} runs use the platform default. Reset to clear it.                                  |
+| `noDifficulty`                                           | A work item with no difficulty runs on the platform default, {model} — the model Run hosted marks **Default**.                                     |
+| `readOnlyBanner`                                         | Only a project admin can change hosted agent settings.                                                                                             |
+| `loadingTrigger` · `unavailableTrigger` · `emptyTrigger` | reused BY KEY from `runs.hosted.picker`: Loading models… · Models unavailable · No model available                                                 |
+| `unavailableBody`                                        | Couldn't reach Motir AI, so the hosted models can't be shown or changed right now. Hosted runs are off until it answers.                           |
+| `retry`                                                  | reused: `runs.hosted.picker.retry` — Try again                                                                                                     |
+| `emptyBody`                                              | No model can run a hosted work item right now, so there is nothing to choose.                                                                      |
+| `footer.dirtyHint` · `footer.save`                       | reused from `aiPlanning.footer`: Unsaved changes · Save changes; Cancel is the common cancel                                                       |
+| `savedTitle` · `savedDesc`                               | Hosted agent settings saved · New hosted runs use these models.                                                                                    |
+| `errorTitle` · `saveError`                               | Couldn't save · Your hosted agent settings weren't saved. Please try again.                                                                        |
+
+`zh` follows in the build card, in the same keys.
+
+### Primitives, colour tokens and shape tokens — every element
+
+| element                            | primitive                                         | colour (`--el-*`)                                                                                                                                                          | shape                                                                                  |
+| ---------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| rail row                           | `SidebarNav` row, from the registry               | `--el-text-secondary`, glyph `--el-icon-muted`; active: `--el-sidebar-item-bg-active`, `--el-text`, glyph `--el-icon-active`                                               | `--radius-control`, `--spacing-control-x/y`                                            |
+| rail group head                    | —                                                 | `--el-text-secondary`                                                                                                                                                      | —                                                                                      |
+| pane eyebrow · title · description | the area's pane head                              | `--el-text-eyebrow` · `--el-text` · `--el-text-secondary`                                                                                                                  | —                                                                                      |
+| card                               | `SettingsCard`                                    | `--el-card`, `--el-border`; head divider `--el-border-soft`; glyph `--el-icon-heading`                                                                                     | `--radius-card`, `--shadow-card`, `--spacing-card-padding`                             |
+| card subtitle                      | `SettingsCard` subtitle                           | `--el-text-secondary` (the shipped `--el-text-muted` passes only on white; the mock raises it)                                                                             | —                                                                                      |
+| column heads                       | —                                                 | `--el-text-eyebrow`; rule `--el-border`                                                                                                                                    | —                                                                                      |
+| row divider · difficulty label     | —                                                 | `--el-border-soft` · `--el-text`                                                                                                                                           | row height ≥ `--height-control`                                                        |
+| model select (trigger)             | `Combobox`, `searchable={false}`                  | `--el-page-bg`, `--el-border`; label `--el-text`; secondary `--el-text-identifier`; chevron `--el-icon-muted`; placeholder `--el-text-muted` (on the white trigger only)   | `--radius-input`, `--height-control`, `--spacing-control-x`; disabled `opacity-50`     |
+| open menu                          | `Combobox` panel                                  | `--el-page-bg`, `--el-border`; active row `--el-option-active-bg`; `description` `--el-text-secondary`; `secondary` `--el-text-identifier`; check `--el-accent-on-surface` | `--radius-card`, `--shadow-elevated`; rows `--radius-control`, `--spacing-control-x/y` |
+| _Platform default_ pill            | `Pill`, neutral                                   | `--el-chip-bg`, `--el-chip-border`, `--el-text-secondary`                                                                                                                  | `--radius-badge`, `--spacing-chip-x/y`                                                 |
+| _Override_ pill                    | `Pill`, lavender tint                             | `--el-tint-lavender`, `--el-text-strong`                                                                                                                                   | `--radius-badge`, `--spacing-chip-x/y`                                                 |
+| _Reset to default_                 | `Button` ghost sm, `RotateCcw` leftIcon           | `--el-text`; glyph `--el-icon-muted`                                                                                                                                       | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm`                                |
+| withdrawn line                     | inline note, `role="note"`                        | `--el-text`; `TriangleAlert` glyph `--el-warning` (a graphic, 3:1); the struck model `--el-text-secondary`                                                                 | —                                                                                      |
+| no-difficulty note                 | `Callout` plain, `Info`                           | `--el-surface`, `--el-border`, `--el-text-secondary`; glyph `--el-icon-muted`                                                                                              | `--radius-card`                                                                        |
+| read-only banner                   | `ReadOnlyBanner` (`Callout` plain, `Lock`)        | as the note                                                                                                                                                                | `--radius-card`                                                                        |
+| unavailable callout                | `Callout` peach, `TriangleAlert`, `role="status"` | `--el-tint-peach`, `--el-text-strong`; glyph `--el-warning`                                                                                                                | `--radius-card`                                                                        |
+| _Try again_                        | `Button` secondary sm, `RefreshCw`                | `--el-button-border`, `--el-text`                                                                                                                                          | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm`                                |
+| loading skeleton                   | the arrival frame's block                         | `--el-muted`                                                                                                                                                               | `--radius-badge` (the pill it stands in for)                                           |
+| footer band · hint                 | the AI planning room's footer                     | `--el-surface-soft`, `--el-border-soft`; hint `--el-text-secondary`                                                                                                        | `--spacing-card-padding`                                                               |
+| Cancel · Save changes              | `Button` secondary · primary                      | `--el-button-border`, `--el-text` · `--el-accent`, `--el-accent-text`                                                                                                      | `--radius-btn`, `--height-btn-md`, `--spacing-btn-x`                                   |
+
+**Contrast.** Every text ink on a non-white surface is `--el-text-secondary`, `--el-text-identifier`
+or `--el-text-strong`; `--el-text-muted` appears only as the trigger placeholder on the white
+`--el-page-bg` trigger, and `--el-text-faint` nowhere. The warning hue is carried by the glyph and
+the words by `--el-text` (the `DeviceApproval` composition).
+
+### GIVES / TAKES
+
+| to                                      | GIVES / TAKES                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the build card(s) blocked by MOTIR-6991 | **GIVES** every panel, the placement and both keys, the row rules, the copy and the tokens above. **TAKES** a read that returns, per difficulty, the platform default and the project's stored override (if any), plus the offered list and Motir AI's single default — so the room can tell _offered_ from _withdrawn_ without a second call; and a write that stores or clears one override per difficulty, asserting `ai:configure`. |
+| the Run hosted picker (this card too)   | **GIVES** the vocabulary the picker's line quotes — _Project override for {difficulty}_ is only meaningful because this room exists and is reachable by the person who reads it (the view key above).                                                                                                                                                                                                                                   |
+
+### Scope
+
+**Drawn:** the room, its eight states, the narrow layout and the rail row. **Not drawn:** how Motir
+AI chooses its platform defaults, and where the override is persisted — the build card's; the dark
+board (the token flip); the command-palette row (lit by the same registry entry, with no design of
+its own).
