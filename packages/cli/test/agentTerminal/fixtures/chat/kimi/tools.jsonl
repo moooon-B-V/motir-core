@@ -1,0 +1,10 @@
+{"fixture":"tools","cli":"kimi-code 2.1.1","source":"constructed from docs/decisions/agent-chat.md Q1 capture","exit":0}
+{"role":"meta","type":"system.version","version":"2.1.1"}
+{"role":"assistant","content":"I'll read the README first.","tool_calls":[{"type":"function","id":"call_1a2b3c4d5e6f","function":{"name":"ReadFile","arguments":"{\"path\":\"README.md\"}"}}]}
+{"role":"tool","tool_call_id":"call_1a2b3c4d5e6f","content":"# demo\nHello wrold\n"}
+{"role":"assistant","tool_calls":[{"type":"function","id":"call_2b3c4d5e6f7a","function":{"name":"StrReplaceFile","arguments":"{\"path\":\"README.md\",\"edit\":{\"old\":\"Hello wrold\",\"new\":\"Hello world\"}}"}}]}
+{"role":"tool","tool_call_id":"call_2b3c4d5e6f7a","content":"<system>File successfully edited. Applied 1 edit(s) with 1 total replacement(s).</system>"}
+{"role":"assistant","tool_calls":[{"type":"function","id":"call_43b39d940437","function":{"name":"Bash","arguments":"{\"command\":\"ls\"}"}}]}
+{"role":"tool","tool_call_id":"call_43b39d940437","content":"a.txt\nb.md\n"}
+{"role":"assistant","content":"I fixed the typo in README.md. The directory contains the files listed above."}
+{"role":"meta","type":"session.resume_hint","session_id":"session_542c66ca-c9c4-4267-ba4b-10bfab95ff91"}

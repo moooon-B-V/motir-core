@@ -9,8 +9,8 @@ import { Client, FakeChatAdapter, KEY, startHarness, type Frame, type Harness } 
 // `/v1/chat` through the REAL server (MOTIR-7012 · `docs/decisions/agent-chat.md`
 // Q4, Q6, Q10, Q11): the same upgrade and the same relay-token check as
 // `/v1/terminal`, then the chat hub, driven by a FAKE adapter and a FAKE turn
-// process. No real adapter is registered, so without a test-registered fake
-// every profile answers unsupported. `chatTurns.test.ts` holds the runner's
+// process. A test with no adapter passes an empty registry, so its profile
+// answers unsupported. `chatTurns.test.ts` holds the runner's
 // rules one by one; this file proves they hold behind the token, on a socket.
 
 let harness: Harness | null = null;
@@ -93,7 +93,7 @@ describe('the upgrade is refused EXACTLY as /v1/terminal refuses it', () => {
 
 describe('hello', () => {
   it('answers supported: false, reason unsupported, when no adapter is registered — and a prompt spawns nothing', async () => {
-    const h = await start();
+    const h = await start({ chatAdapters: [] });
     const client = await chat(h);
     expect(await client.frame('hello')).toEqual({
       t: 'hello',
