@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { TriangleAlert } from 'lucide-react';
 import { runsHref } from '@/lib/runs/runsAddress';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // EVERY REFUSAL, IN WORDS (MOTIR-6868 revision 3, panel 5). A route answers a
 // refusal as `{ code, error, reason? }`; the page renders the DESIGN's localised
@@ -60,6 +61,8 @@ export function refusalKey(body: RefusalBody | null): string {
 export function useAgentRefusal(maxPerUser: number) {
   const t = useTranslations('myAgents.refusal');
   const tRun = useTranslations('myAgents.panel.run');
+  // The Start bar shares this with the Visitor tree's item page (MOTIR-6888).
+  const routes = useReaderRoutes();
   return (
     body: RefusalBody | null,
     name?: string,
@@ -75,7 +78,10 @@ export function useAgentRefusal(maxPerUser: number) {
           name: name ?? '',
           key: body?.workItemKey ?? runId,
           link: (chunks) => (
-            <Link href={runsHref({ run: runId })} className="text-(--el-link) underline">
+            <Link
+              href={routes.view(runsHref({ run: runId }))}
+              className="text-(--el-link) underline"
+            >
               {chunks}
             </Link>
           ),
