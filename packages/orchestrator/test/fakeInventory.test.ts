@@ -39,6 +39,7 @@ async function bootPersistent() {
     region: 'iad',
     volumeSizeGb: 10,
     mountPath: '/home/node',
+    terminal: null,
   });
 }
 

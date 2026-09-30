@@ -185,6 +185,7 @@ async function bootInstance(
     region: 'iad',
     volumeSizeGb: 10,
     mountPath: '/home/node',
+    terminal: null,
   });
   const row = await adminDb.agentInstance.create({
     data: {
