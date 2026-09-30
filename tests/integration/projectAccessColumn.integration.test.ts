@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { Prisma, type ProjectAccessLevel, type ProjectAccessMode } from '@/generated/prisma/client';
+import { Prisma, type ProjectAccessMode } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectTagRepository } from '@/lib/repositories/projectTagRepository';
@@ -14,17 +14,19 @@ import { adminDb } from '../helpers/adminDb';
 import { runAsCloudBuild } from '../helpers/cloudBuild';
 import { truncateAuthTables } from '../helpers/db';
 import { projectAccessData } from '../helpers/projectAccess';
-import { readLegacyAccessLevel } from '../helpers/legacyProjectAccess';
 
 // THE ACCESS-COLUMN INTEGRATION GATE (Story MOTIR-6554 · Subtask MOTIR-6688).
 //
 // The story's single claim, against the real database: a project is public — to
 // the seven RLS public-read policies and to every public read path — exactly when
-// its MODE is `public`, and nothing reads the retired `accessLevel`.
+// its MODE is `public`. It also proved nothing read the retired `accessLevel`,
+// with two rows whose mode and level deliberately disagreed; MOTIR-6694 dropped
+// the column and its type, so that pair was retired with it — there is no level
+// left to disagree, and `tests/rls/publicReadPoliciesOnAccessMode.test.ts` keeps
+// the structural half (no policy names it).
 //
-// Two roles, deliberately. Every row is SEEDED as the owner role (`adminDb`),
-// including the two rows the product can no longer produce (the columns
-// deliberately disagreeing). Every policy read runs under the APP role
+// Two roles, deliberately. Every row is SEEDED as the owner role (`adminDb`).
+// Every policy read runs under the APP role
 // (`motir_app`) with NO workspace bound — the signed-out context the public
 // surface uses — and asserts that it IS that role before anything else, so a
 // case cannot pass vacuously as an owner that bypasses RLS. The application's
@@ -124,18 +126,6 @@ async function seedSurface(mode: ProjectAccessMode): Promise<Surface> {
   };
 }
 
-/**
- * Write the two columns directly, as the OWNER role — the only way to build a row
- * whose mode and level disagree, which the product (`setAccessMode`) never writes.
- */
-async function setColumns(projectId: string, mode: ProjectAccessMode, level: ProjectAccessLevel) {
-  await adminDb.$executeRaw`
-    UPDATE "project"
-       SET "access_mode" = ${mode}::"project_access_mode",
-           "accessLevel" = ${level}::"project_access_level"
-     WHERE "id" = ${projectId}`;
-}
-
 /** Run `fn` as the app role with NO workspace bound, and prove the role first. */
 async function signedOut<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   return db.$transaction(async (tx) => {
@@ -223,22 +213,6 @@ describe('the seven public-read policies', () => {
   );
 });
 
-describe('the two columns deliberately disagreeing — nothing reads the level', () => {
-  it('mode members with level public is refused on every public path', async () => {
-    const s = await seedSurface('public');
-    await setColumns(s.projectId, 'members', 'public');
-    expect(await policyReads(s)).toEqual(ALL_SEVEN(0));
-    expect(await publicPaths(s)).toEqual(HIDDEN);
-  });
-
-  it('mode public with level open is readable on every public path', async () => {
-    const s = await seedSurface('workspace');
-    await setColumns(s.projectId, 'public', 'open');
-    expect(await policyReads(s)).toEqual(ALL_SEVEN(1));
-    expect(await publicPaths(s)).toEqual(VISIBLE);
-  });
-});
-
 describe('creation', () => {
   it('a project created with no mode is Open to the workspace: a Full member enters, no public path lists it', async () => {
     const { workspace, owner } = await createTestWorkspace({ name: `PAC create ${seq++}` });
@@ -250,10 +224,7 @@ describe('creation', () => {
       name: 'Created unset',
     });
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: dto.id } });
-    expect([row.accessMode, await readLegacyAccessLevel(adminDb, row.id)]).toEqual([
-      'workspace',
-      'open',
-    ]);
+    expect(row.accessMode).toBe('workspace');
     expect(
       await projectAccessService.getCapabilities(row.id, {
         userId: full.id,
@@ -268,9 +239,8 @@ describe('creation', () => {
 });
 
 describe('the setter', () => {
-  it('public → members → workspace shows at once on the listings and the policies, and never writes the retired level (MOTIR-6692)', async () => {
+  it('public → members → workspace shows at once on the listings and the policies', async () => {
     const s = await seedSurface('workspace');
-    const levelBefore = await readLegacyAccessLevel(adminDb, s.projectId);
     const ctx = { userId: s.ownerId, workspaceId: s.workspaceId };
     for (const [mode, visible] of [
       ['public', true],
@@ -285,7 +255,6 @@ describe('the setter', () => {
       });
       const row = await adminDb.project.findUniqueOrThrow({ where: { id: s.projectId } });
       expect(row.accessMode, mode).toBe(mode);
-      expect(await readLegacyAccessLevel(adminDb, s.projectId), mode).toBe(levelBefore);
       expect(await publicPaths(s), mode).toEqual(visible ? VISIBLE : HIDDEN);
       expect(await policyReads(s), mode).toEqual(ALL_SEVEN(visible ? 1 : 0));
     }

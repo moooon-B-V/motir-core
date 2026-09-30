@@ -191,7 +191,7 @@ describe('workspace-role architecture guards', () => {
 
   it('1 · …and the scanner fires on a planted import', () => {
     const planted = [
-      "import type { ProjectAccessLevel } from '@/generated/prisma/client';",
+      "import type { ProjectAccessMode } from '@/generated/prisma/client';",
       "import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';",
       "import type { ProjectRole } from '@/lib/projects/roles';",
     ].join('\n');

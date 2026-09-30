@@ -7,9 +7,12 @@ import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
+import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { randomToken } from '../helpers/random';
+import { connectRepairRepo, deliveredPr, setStatus } from '../helpers/repairFixtures';
 
 // `POST /api/work-items/[id]/hosted-runs` (Story MOTIR-683 · MOTIR-690) — the
 // route Run hosted calls. The compliant-session gate is the one thing stubbed (a
@@ -387,8 +390,110 @@ describe('POST /api/work-items/[id]/hosted-runs — mode continue', () => {
     expect(((await res.json()) as { code: string }).code).toBe('hosted_continue_no_dead_run');
   });
 
-  it('400 on a mode that is neither run nor continue', async () => {
+  it('400 on a mode that is not run, continue or fix', async () => {
     const res = await post('PROD-1', { model: MODEL, mode: 'resume' });
     expect(res.status).toBe(400);
+  });
+});
+
+// Fix on the hosted agent (Story MOTIR-1626 · MOTIR-6928) — `mode: 'fix'`.
+describe('POST /api/work-items/[id]/hosted-runs — mode fix', () => {
+  /** A card In Review, one open green pull request, optionally sent back by the review agent. */
+  async function reviewedCard(sentBack: boolean, checks: 'success' | 'failure' = 'success') {
+    const card = await newCard({ kind: 'task', title: 'a reviewed card' });
+    await setStatus(card.id, checks === 'failure' ? 'implemented' : 'in_review');
+    const repo = await connectRepairRepo(fx, `web-${randomToken(4)}`);
+    const pr = await deliveredPr(fx, card.id, repo, {
+      headRef: 'subtask/reviewed',
+      checks: { Vitest: checks },
+    });
+    if (sentBack) {
+      await adminDb.approvalGate.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          workItemId: card.id,
+          kind: 'agent_review',
+          subjectId: card.id,
+          subjectVersion: `acme/${repo.name}#${pr.number}@${'c'.repeat(40)}`,
+          state: 'changes_requested',
+          decidedById: fx.ownerId,
+          decidedAt: new Date(),
+          decidedByLabel: 'Review agent',
+          decisionSource: 'ui',
+          decidedUnderAuthority: 'review_agent',
+          noteMd: 'Fix the header row.',
+        },
+      });
+    }
+    return card;
+  }
+
+  it('201 with a hosted fix run for a card a review sent back', async () => {
+    const card = await reviewedCard(true);
+
+    const res = await post(card.identifier, { model: MODEL, idempotencyKey: 'f1', mode: 'fix' });
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { dispatchRunId: string; created: boolean };
+    const run = await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: body.dispatchRunId } });
+    expect(run).toMatchObject({ origin: 'hosted', command: 'fix' });
+  });
+
+  it('409 hosted_fix_taken, naming the holder, while a repair is open', async () => {
+    const card = await reviewedCard(true);
+    const local = await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx);
+
+    const res = await post(card.identifier, { model: MODEL, mode: 'fix' });
+
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as {
+      code: string;
+      holder: { id: string };
+      startedAt: string;
+    };
+    expect(body.code).toBe('hosted_fix_taken');
+    expect(body.holder.id).toBe(fx.ownerId);
+    expect(body.startedAt).toBe(local.startedAt);
+  });
+
+  it('409 hosted_fix_not_sent_back on a card red for another reason', async () => {
+    const card = await reviewedCard(false, 'failure');
+
+    const res = await post(card.identifier, { model: MODEL, mode: 'fix' });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      code: 'hosted_fix_not_sent_back',
+      repairClass: 'ci',
+    });
+  });
+
+  it('409 hosted_fix_not_repairable with the claim’s own reason', async () => {
+    const card = await reviewedCard(false);
+
+    const res = await post(card.identifier, { model: MODEL, mode: 'fix' });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      code: 'hosted_fix_not_repairable',
+      repairRefusal: 'not_failing',
+    });
+  });
+
+  it('409 names where the repair runs instead, for a child of its run target', async () => {
+    const { HostedFixRefusedError } = await import('@/lib/hostedRuns/errors');
+    vi.spyOn(hostedRunService, 'start').mockRejectedValueOnce(
+      new HostedFixRefusedError('PROD-2', 'not_repairable', {
+        repairRefusal: 'repair_on_run_target',
+        runTargetKey: 'PROD-1',
+      }),
+    );
+    const res = await post('PROD-2', { model: MODEL, mode: 'fix' });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      repairRefusal: 'repair_on_run_target',
+      runTargetKey: 'PROD-1',
+    });
   });
 });

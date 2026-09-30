@@ -2,7 +2,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseCron } from '@/lib/jobs/cron';
-import { SCHEDULE_CLUSTER_MINUTES } from '@/lib/jobs/schedules';
+import { SUB_HOURLY_CADENCE } from '@/lib/jobs/schedules';
+import { RUN_HEARTBEAT_LAPSE_MS } from '@/lib/runs/runLiveness';
 import { RUN_LIVENESS_SWEEP_CRON, runLivenessSweep } from '@/lib/jobs/definitions/runLivenessSweep';
 
 // THE STORY'S CONTRACT GUARDS (Story MOTIR-6526 · MOTIR-6537) — three promises that
@@ -15,8 +16,9 @@ import { RUN_LIVENESS_SWEEP_CRON, runLivenessSweep } from '@/lib/jobs/definition
 //   2. `isRunAlive` IS THE ONLY LIVENESS PREDICATE. The marker, the claim and the
 //      sweep must agree on the same instant; a second `lastHeartbeatAt` comparison
 //      is how they come to disagree.
-//   3. `system.run-liveness-sweep` STAYS ON A CLUSTER MINUTE — the quiet gap the
-//      worker's compute sleeps in.
+//   3. `system.run-liveness-sweep` RUNS EVERY 5 MINUTES, so a silent run's ROW
+//      reads `abandoned` at most 10 minutes after its last heartbeat (MOTIR-6932;
+//      it was 35 while the sweep sat on the retired :00/:30 cluster).
 //
 // Each detector is a pure function of source text, and each is shown FAILING once
 // against a deliberate violation, so a green here is not the green of a scanner
@@ -142,21 +144,38 @@ describe('2 · `isRunAlive` is the only liveness predicate', () => {
   });
 });
 
-// ── 3 · the sweep stays on a cluster minute ────────────────────────────────────
+// ── 3 · the sweep runs every 5 minutes ─────────────────────────────────────────
 
-/** The minutes of the hour `cron` wakes on that are NOT cluster minutes. */
-export function offClusterMinutes(cron: string): number[] {
-  return [...parseCron(cron).minute].filter((m) => !SCHEDULE_CLUSTER_MINUTES.includes(m));
+/**
+ * The longest wait, in minutes, from any instant to `cron`'s next fire within the
+ * hour — the gap between consecutive minutes it fires on, read cyclically.
+ */
+export function longestTickGapMinutes(cron: string): number {
+  const minutes = [...parseCron(cron).minute].sort((a, b) => a - b);
+  return Math.max(
+    ...minutes.map((m, i) =>
+      i === minutes.length - 1 ? minutes[0]! + 60 - m : minutes[i + 1]! - m,
+    ),
+  );
 }
 
-describe('3 · `system.run-liveness-sweep` stays on a cluster minute', () => {
-  it('its cron wakes only on the cluster', () => {
+/** Worst case before a silent run's ROW says `abandoned`: the lapse + the tick gap. */
+export function worstCaseAbandonedMinutes(cron: string): number {
+  return RUN_HEARTBEAT_LAPSE_MS / 60_000 + longestTickGapMinutes(cron);
+}
+
+describe('3 · `system.run-liveness-sweep` runs every 5 minutes', () => {
+  it('its cron is the sub-hourly cadence, so the worst case is 5 min lapse + 5 min tick', () => {
     expect(runLivenessSweep.id).toBe('system.run-liveness-sweep');
-    expect(offClusterMinutes(RUN_LIVENESS_SWEEP_CRON)).toEqual([]);
+    expect(RUN_LIVENESS_SWEEP_CRON).toBe(SUB_HOURLY_CADENCE);
+    expect(RUN_HEARTBEAT_LAPSE_MS).toBe(5 * 60_000);
+    expect(longestTickGapMinutes(RUN_LIVENESS_SWEEP_CRON)).toBe(5);
+    expect(worstCaseAbandonedMinutes(RUN_LIVENESS_SWEEP_CRON)).toBe(10);
   });
 
   it('the detector FAILS on a deliberate violation', () => {
-    expect(offClusterMinutes('*/5 * * * *').length).toBeGreaterThan(0);
-    expect(offClusterMinutes('7,37 * * * *')).toEqual([7, 37]);
+    // The retired cluster cadence: 5 min lapse + up to 30 min to the next tick.
+    expect(worstCaseAbandonedMinutes('0,30 * * * *')).toBe(35);
+    expect(longestTickGapMinutes('7,37 * * * *')).toBe(30);
   });
 });

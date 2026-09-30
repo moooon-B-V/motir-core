@@ -1,5 +1,4 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { ProjectAccessLevel } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
@@ -22,7 +21,11 @@ import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { grantablePermissionKeys } from '@/lib/permissions/grantable';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { modeForLegacyLevel, setProjectAccess } from '@/tests/helpers/projectAccess';
+import {
+  type LegacyAccessLevel,
+  modeForLegacyLevel,
+  setProjectAccess,
+} from '@/tests/helpers/projectAccess';
 
 // `projectAccessService.getPermissions` / `getRoleCatalog` (Story MOTIR-2255 ·
 // Subtask MOTIR-2262) against REAL Postgres — real membership rows, resolved
@@ -66,7 +69,7 @@ interface Scenario {
  * is set FIRST (going `private` auto-seeds the then-current workspace members as
  * project members — at that point only the owner exists), everyone else after.
  */
-async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<Scenario> {
+async function buildScenario(level: LegacyAccessLevel, slug: string): Promise<Scenario> {
   const owner = await usersService.createUser({
     email: `owner-${slug}@ex.com`,
     password: PASSWORD,
@@ -127,10 +130,10 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
       workspaceId: workspace.id,
       workspaceRole: role === 'viewer' ? 'viewer' : 'member',
     });
-    // The LEGACY project row, written raw — the project role nothing reads now.
-    await adminDb.$executeRaw`
-      INSERT INTO "project_membership" ("id", "workspace_id", "project_id", "user_id", "role", "updated_at")
-      VALUES (gen_random_uuid()::text, ${workspace.id}, ${project.id}, ${u.id}, ${role}::"member_role", now())`;
+    // The project row carries no role: the legacy project role was dropped (MOTIR-6569).
+    await adminDb.projectMembership.create({
+      data: { workspaceId: workspace.id, projectId: project.id, userId: u.id },
+    });
     return u;
   }
   const viewer = await projectActor('viewer');
@@ -208,7 +211,7 @@ function VIEWER_SET(): PermissionKey[] {
  * `viewer` a workspace Viewer who was; `member` and `admin` workspace Members who
  * were (the `admin` actor's project admin row grants nothing).
  */
-const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], PermissionKey[]>> = {
+const EXPECTED: Record<LegacyAccessLevel, Record<keyof Scenario['ctxs'], PermissionKey[]>> = {
   open: {
     owner: [...ROLE_GATED_PERMISSIONS],
     wsAdmin: [...ROLE_GATED_PERMISSIONS],

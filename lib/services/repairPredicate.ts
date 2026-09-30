@@ -1,9 +1,11 @@
 import type { GithubCheckRun, GithubPullRequestQueueExit, Prisma } from '@/generated/prisma/client';
 import { readAcceptanceRerun } from '@/lib/approvalGates/acceptanceRefusal';
+import { readStandingReviewRefusal } from '@/lib/approvalGates/reviewRefusal';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
   AcceptanceRefusalDto,
   RepairPullRequestDto,
+  ReviewRefusalDto,
   WorkItemRepairClass,
   WorkItemRepairRefusal,
 } from '@/lib/dto/workItemRepair';
@@ -11,10 +13,12 @@ import { isConflictedAtCurrentHead } from '@/lib/github/mergeability';
 import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
 import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { standingQueueFailures } from '@/lib/services/deliveryVerdict';
 import { resolveRunTargetFor } from '@/lib/services/runTarget';
 import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
+import { REVIEW_AGENT_REVIEWER_NAME, reviewerNameOf } from '@/lib/workItems/fixReason';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
 
@@ -42,6 +46,8 @@ export type RepairEvaluation =
       pullRequests: RepairPullRequestDto[];
       repairClass: WorkItemRepairClass;
       acceptanceRefusal: AcceptanceRefusalDto | null;
+      /** Set exactly on the `review` class (MOTIR-6822). */
+      reviewRefusal: ReviewRefusalDto | null;
     }
   | {
       ok: false;
@@ -220,10 +226,56 @@ export async function evaluateRepair(
       return {
         ok: true,
         repairClass: 'acceptance_rerun',
+        reviewRefusal: null,
         acceptanceRefusal: {
           reasonMd: rerun.reasonMd,
           decidedByLabel: rerun.decidedByLabel,
           decidedAt: rerun.decidedAt.toISOString(),
+        },
+        pullRequests: openRows.map((row) =>
+          toRepairPullRequest({
+            row,
+            ci: derivePrCiState(row.pullRequest.checkRuns),
+            exit: queueHeld.get(row.pullRequest.id) ?? null,
+            conflicted: isConflictedAtCurrentHead(row.pullRequest),
+          }),
+        ),
+      };
+    }
+  }
+  // ⚠️ A CARD A REVIEW SENT BACK IS A REPAIR CLASS OF ITS OWN (MOTIR-6822;
+  // `approval-gates.md` §12.4, §12.7). The review agent's `changes_requested`, or a
+  // person's Request changes on the approve-and-merge gate, still standing over the
+  // delivery set's CURRENT version: the card sits at In Review (or Implemented) with
+  // GREEN checks, and without this arm it is refused `not_failing` below — so the To fix
+  // tab would name a repair nobody could perform. Like the re-run, it is checked BEFORE
+  // the red-work arms and hands over EVERY open member with the findings; a red member
+  // rides along and is fixed by the same CI loop. It stands until a push moves a head
+  // (the version no longer matches) or a later decision answers it, and only on the
+  // card's OWN run target: a child that shares the pull requests is pointed below.
+  const review =
+    openRows.length > 0 ? await readStandingReviewRefusal(item.id, deliveries, tx) : null;
+  if (review !== null) {
+    const target = await resolveRunTargetFor({ id: item.id, workspaceId: ctx.workspaceId }, tx);
+    if (target.kind !== 'ancestor') {
+      const byAgent = review.kind === 'agent_review';
+      const person =
+        !byAgent && review.decidedById
+          ? await userRepository.findById(review.decidedById, tx)
+          : null;
+      return {
+        ok: true,
+        repairClass: 'review',
+        acceptanceRefusal: null,
+        reviewRefusal: {
+          gate: review.kind,
+          findingsMd: review.noteMd,
+          // The agent is named as the agent, never as the run's attributed user (§12.3).
+          reviewerName: byAgent
+            ? REVIEW_AGENT_REVIEWER_NAME
+            : reviewerNameOf(person, review.decidedByLabel),
+          // `findLatestDecidedByWorkItem` reads only rows whose `decidedAt` is set.
+          decidedAt: (review.decidedAt as Date).toISOString(),
         },
         pullRequests: openRows.map((row) =>
           toRepairPullRequest({
@@ -293,5 +345,11 @@ export async function evaluateRepair(
       failing,
     };
   }
-  return { ok: true, repairClass: 'ci', acceptanceRefusal: null, pullRequests: failing };
+  return {
+    ok: true,
+    repairClass: 'ci',
+    acceptanceRefusal: null,
+    reviewRefusal: null,
+    pullRequests: failing,
+  };
 }

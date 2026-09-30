@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { dropLegacyRoleStorage, ensureLegacyRoleStorage } from '../../helpers/legacyRoleStorage';
 
 import type { Prisma } from '@/generated/prisma/client';
 import { PLANNER_BUG_HOME_STORY_TITLE } from '@/lib/ai/plannerBugHome';
@@ -52,7 +53,12 @@ async function run(sql: string): Promise<void> {
 
 beforeEach(async () => {
   await truncateAuthTables();
+  // The migration under test reads the legacy role storage MOTIR-6569 dropped;
+  // rebuild it for the test (tests/helpers/legacyRoleStorage.ts).
+  await ensureLegacyRoleStorage();
 });
+
+afterEach(dropLegacyRoleStorage);
 
 afterAll(async () => {
   await db.$disconnect();

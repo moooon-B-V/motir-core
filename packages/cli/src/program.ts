@@ -16,6 +16,7 @@ import { doctorCommand } from './commands/doctor.js';
 import { doneCommand, nextCommand, runCommand } from './commands/dispatch.js';
 import { continueCommand } from './commands/continue.js';
 import { fixCommand } from './commands/fix.js';
+import { reviewCommand } from './commands/review.js';
 import { autoCommand } from './commands/auto.js';
 import { batchCommand } from './commands/batch.js';
 import { planCommand } from './commands/plan.js';
@@ -398,6 +399,10 @@ export function buildProgram(): Command {
       'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
     )
     .action(continueCommand);
+  // `motir review <key>` (MOTIR-6824) — the hosted REVIEW agent; refuses outside a
+  // hosted review run. Only the key reaches it: commander's trailing arguments are not
+  // its seams.
+  register(program, 'review').action((key: string) => reviewCommand(key));
   register(program, 'auto')
     .option('--agent <cmd>', 'Run THIS agent command on every prompt (overrides MOTIR_AGENT).')
     .option('--kinds <list>', 'Comma-separated kinds: epic,story,task,bug,subtask.')

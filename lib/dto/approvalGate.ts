@@ -20,6 +20,7 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
+import type { AgentReviewViewDto } from '@/lib/dto/agentReview';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
@@ -58,7 +59,9 @@ export type ApprovalGateKindDTO =
   | 'decision_choice'
   | 'decision_confirmation'
   /** A PLAN, on a gate that belongs to NO work item (ADR §11, MOTIR-6032). */
-  | 'plan_approval';
+  | 'plan_approval'
+  /** The REVIEW AGENT's question over a green delivery set (ADR §12, MOTIR-6818). */
+  | 'agent_review';
 
 /**
  * WHETHER A DECISION IS WAITING ON A WORK ITEM, AND ON WHOM — the one answer the
@@ -166,6 +169,9 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'pulled_back'
   /** CI reported a terminal FAILURE at the commits the gate asked about (MOTIR-6271). */
   | 'ci_failed'
+  /** A check at the asked-about commits is pending again — the set left green without
+   *  going red (MOTIR-6946). */
+  | 'ci_rerunning'
   | 'unknown'
   /** The plan went `stale` (ADR §11.7). */
   | 'plan_stale'
@@ -173,7 +179,9 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'plan_discarded'
   /** A gate the old rule re-asked from a merge-queue FAILURE, withdrawn by the
    *  convergence (MOTIR-6595; §4 FIFTH AMENDMENT). */
-  | 'queue_failed';
+  | 'queue_failed'
+  /** The project turned its review agent OFF while the review was awaiting (ADR §12.5). */
+  | 'review_agent_disabled';
 
 /** Under which §2 authority rung the decision was made (ADR §6a). Mirrors the
  *  `ApprovalGateAuthority` Prisma enum. Frozen at decision time, so a reader can
@@ -191,7 +199,10 @@ export type ApprovalGateAuthorityDTO =
   | 'github_review'
   /** `ai:decide_plan` alone — the `plan_approval` kind has no work item, so no §2
    *  relationship rung is true of its decider (ADR §11.6). */
-  | 'plan_permission';
+  | 'plan_permission'
+  /** The review agent — a hosted review run's verdict (ADR §12.3). Never resolved
+   *  by `resolveGateAuthority`; no person's press can produce it. */
+  | 'review_agent';
 
 /** Through which surface the decision arrived (ADR §6a, with `github` added by
  *  §6b's amendment). Mirrors the `ApprovalGateDecisionSource` Prisma enum. A
@@ -1057,6 +1068,14 @@ export type ApprovalGateOverlaySubjectDTO =
        * and the claim already share.
        */
       repair?: WorkItemRepairViewDto | null;
+      /**
+       * THE AGENT REVIEW THE PORT IS ABOUT (Story MOTIR-1626; ADR `approval-gates.md` §12.3) —
+       * present exactly when the address names an `agent_review` gate: its state, the
+       * could-not-run reason and the review run, which the frame draws as its band above
+       * the delivery set. The item page reads the same DTO (`agentReviewViewService`), so the
+       * card and the overlay cannot disagree about why the review is waiting.
+       */
+      agentReview?: AgentReviewViewDto | null;
     };
 
 /** The overlay's one read. */

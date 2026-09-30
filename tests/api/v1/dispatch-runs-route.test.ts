@@ -242,7 +242,9 @@ describe('the dispatch-run ingest routes', () => {
     // report the server never recorded. Asserted through the ROUTE, not only the
     // schema, so a handler that stopped parsing through it would fail here.
     const { id, key } = await seedRun(caller);
-    for (const kind of ['bug_filed', 'plan_submitted', 'unbuildable_reported']) {
+    // …and `review_verdict` (MOTIR-6821): a review run's verdict is recorded by the verdict
+    // route's service only, never reported.
+    for (const kind of ['bug_filed', 'plan_submitted', 'unbuildable_reported', 'review_verdict']) {
       const res = await appendEvents(caller, id, {
         events: [{ kind, workItemKey: key, data: { outcome: 'filed' } }],
       });

@@ -249,3 +249,22 @@ describe('`queue_failed` — the member held by a queue failure is named (§ 31 
     );
   });
 });
+
+// `ci_rerunning` (MOTIR-6946): a check at the asked-about commits is pending again — the set
+// left green without going red. Its own sentence (never `ci_failed`'s: nothing failed), naming
+// nobody, and the re-ask cite, because the next green at these same commits asks again.
+describe('`ci_rerunning` — the set left green without going red', () => {
+  it('says what the cause records, and cites the re-ask while a member is open', () => {
+    expect(copyFor('ci_rerunning', [open(CORE), open(AI)])).toEqual({
+      meta: pra('meta.withdrawnUnknown', { count: 2 }),
+      sentence: gate('withdrawn.cause.ci_rerunning'),
+      cite: pra('withdrawn.portCite'),
+    });
+  });
+
+  it('on a done-category card the cite is the shared one', () => {
+    expect(copyFor('ci_rerunning', [open(CORE)], { terminal: true }).cite).toEqual(
+      gate('withdrawn.portCite'),
+    );
+  });
+});

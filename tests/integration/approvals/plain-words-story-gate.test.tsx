@@ -61,12 +61,19 @@ const ALL_KINDS = Object.values(ApprovalGateKind);
  *  `approval_gate_work_item_iff_not_plan` keeps card-less (Story MOTIR-6012 · MOTIR-6034).
  *  Its row is covered by `tests/approvalGates/cardlessGateReads.test.ts`. */
 const CARD_KINDS = ALL_KINDS.filter((kind) => kind !== 'plan_approval');
+/** The card kinds that NEVER reach a person's To approve read. `agent_review` (Story
+ *  MOTIR-1626; ADR `approval-gates.md` §12.1) asks the review AGENT, not the person it is
+ *  routed to: `awaitingRoutedToWhere` excludes the kind, and the person meets it on the
+ *  card only. So it owes no To-approve sentence — and SEAM 1 proves it stays off the read. */
+const OFF_THE_TO_APPROVE_READ: readonly ApprovalGateKind[] = ['agent_review'];
+/** The card kinds the To-approve read returns — the population SEAMS 1–3 are total over. */
+const QUEUED_KINDS = CARD_KINDS.filter((kind) => !OFF_THE_TO_APPROVE_READ.includes(kind));
 /** The kinds this build RENDERS with ONE `workbench.approvals.sentence.*` key — every
  *  one owes its own sentence. `plan_approval` (registered by MOTIR-6035) is not among
  *  them: its leading line has FOUR forms (design `design/ai-planning/design-notes.md`
  *  §22.3), so its row takes its own branch reading `approvalGate.planApproval.row.*`
  *  (MOTIR-6037) — asserted by its own case in SEAM 3 below. */
-const REGISTERED_KINDS = CARD_KINDS.filter(
+const REGISTERED_KINDS = QUEUED_KINDS.filter(
   (kind) => !(UNREGISTERED_GATE_KINDS as readonly string[]).includes(kind),
 );
 
@@ -157,7 +164,7 @@ describe('SEAM 1 · the To-approve read is the WHOLE set, under a ceiling it SAY
     for (let i = 0; i < 30; i += 1) {
       await gate({
         title: `Waiting ${i}`,
-        kind: CARD_KINDS[i % CARD_KINDS.length]!,
+        kind: QUEUED_KINDS[i % QUEUED_KINDS.length]!,
         assigneeId: fx.ownerId,
         createdAt: new Date(Date.UTC(2026, 8, 1, 0, i)),
       });
@@ -169,8 +176,27 @@ describe('SEAM 1 · the To-approve read is the WHOLE set, under a ceiling it SAY
     expect(queue).toMatchObject({ total: 30, truncated: false });
     expect(await approvalGatesService.countAwaitingMe(meCtx)).toBe(30);
     // Every kind is in the set — the population the seam below renders.
-    expect(new Set(queue.items.map((row) => row.kind))).toEqual(new Set(CARD_KINDS));
+    expect(new Set(queue.items.map((row) => row.kind))).toEqual(new Set(QUEUED_KINDS));
   });
+
+  it.each(OFF_THE_TO_APPROVE_READ)(
+    'an awaiting `%s` gate routed to the reader is NOT on the read (§12.1)',
+    async (kind) => {
+      // POSITIVE CONTROL — a queued kind routed the same way IS on the read.
+      const control = await gate({
+        title: 'Queued',
+        kind: 'design_result',
+        assigneeId: fx.ownerId,
+      });
+      await gate({ title: `Off the read — ${kind}`, kind, assigneeId: fx.ownerId });
+
+      const queue = await approvalGatesService.listAwaitingMe(meCtx);
+
+      expect(queue.items.map((row) => row.gateId)).toEqual([control.gate.id]);
+      expect(queue).toMatchObject({ total: 1, truncated: false });
+      expect(await approvalGatesService.countAwaitingMe(meCtx)).toBe(1);
+    },
+  );
 
   it('one more than the ceiling → exactly the ceiling, `truncated`, and the whole total', async () => {
     expect(APPROVAL_QUEUE_CEILING).toBe(500);
@@ -243,11 +269,11 @@ describe('SEAM 2 · the REAL read, rendered through the REAL row, reads the sent
     'every kind the read returns reads its sentence with that work item’s title — %s',
     async (locale) => {
       const messages = locale === 'en' ? en : zh;
-      for (const kind of CARD_KINDS) {
+      for (const kind of QUEUED_KINDS) {
         await gate({ title: `Card for ${kind}`, kind, assigneeId: fx.ownerId });
       }
       const queue = await approvalGatesService.listAwaitingMe(meCtx);
-      expect(queue.items).toHaveLength(CARD_KINDS.length);
+      expect(queue.items).toHaveLength(QUEUED_KINDS.length);
 
       for (const row of queue.items) {
         const view = renderWithIntl(<ApprovalRow record={{ section: 'awaiting', row }} />, {

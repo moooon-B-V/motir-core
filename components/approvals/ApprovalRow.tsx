@@ -110,6 +110,8 @@ const SENTENCE_KEY: Record<ApprovalGateKindDTO, SentenceKey> = {
   // Not raised by this build yet (MOTIR-6032 ships the kind UNREGISTERED); its row is
   // MOTIR-6037's to draw, from MOTIR-6033's design.
   plan_approval: 'other',
+  // Never on a To-approve row: the review AGENT answers it, not a person (ADR §12.1).
+  agent_review: 'other',
 };
 
 type SentenceKey =

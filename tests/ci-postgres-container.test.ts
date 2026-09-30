@@ -73,6 +73,9 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // off the pull-request lane. Same steps, same per-leg ephemeral database
       // — the split changed WHEN they run, not what they need.
       'ci.yml:e2e-at-scale',
+      // MOTIR-6826's review-agent coverage lane (Story MOTIR-1626): the story journeys
+      // and the per-card server suites it measures run against a real database.
+      'ci.yml:story-1626-coverage',
       // Story MOTIR-4753's per-file coverage floor (MOTIR-4761). It measures six
       // files whose specs — the substrate read, the entrance predicate's chain
       // test, the step machine — all run against a real database, per the

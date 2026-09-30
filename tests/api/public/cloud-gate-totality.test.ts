@@ -202,7 +202,7 @@ describe('every route on the public surface carries the gate', () => {
 //
 // The other half of the capability, and it is not a route tree — so it is not
 // enumerated the same way. What CAN be enumerated is its two chokepoints: the
-// one write that can set `accessLevel = 'public'`, and every render site of the
+// one write that can set `access_mode = 'public'`, and every render site of the
 // go-public components. An affordance added later fails one of the two.
 
 const AUTHED = 'app/(authed)';

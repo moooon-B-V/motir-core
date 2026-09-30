@@ -11,12 +11,15 @@ import {
   hasVisibleSettingsArea,
   visibleSettingsNav,
 } from '@/lib/settings/projectSettingsNav';
-import type { ProjectAccessLevel } from '@/generated/prisma/client';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
-import { modeForLegacyLevel, setProjectAccess } from '@/tests/helpers/projectAccess';
+import {
+  type LegacyAccessLevel,
+  modeForLegacyLevel,
+  setProjectAccess,
+} from '@/tests/helpers/projectAccess';
 
 // Story 6.5 · Subtask 6.5.4 — the settings-area role-gating matrix proven over
 // the REAL stack (Postgres + the shipped services), the DB-backed half of the
@@ -76,7 +79,7 @@ interface Scenario {
  * workspace-admin + plain-member carry NO project membership and each role is
  * set up cleanly. Mirrors `project-access-service.test.ts`'s `buildScenario`.
  */
-async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<Scenario> {
+async function buildScenario(level: LegacyAccessLevel, slug: string): Promise<Scenario> {
   const owner = await makeUser(`owner-${slug}@ex.com`, 'Owner');
   const { workspace } = await workspacesService.createWorkspace({
     name: `WS ${slug}`,
@@ -152,7 +155,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
 // 6.4.3 policy the settings area rides. `browse` decides whether ANY settings
 // entry/page is reachable (no nav leak); `manage` decides the admin-only
 // surfaces (the Details danger zone today, the Story-6.6 Automation row next).
-const EXPECTED: Record<ProjectAccessLevel, Record<Role, { browse: boolean; manage: boolean }>> = {
+const EXPECTED: Record<LegacyAccessLevel, Record<Role, { browse: boolean; manage: boolean }>> = {
   open: {
     owner: { browse: true, manage: true },
     wsAdmin: { browse: true, manage: true },
@@ -206,7 +209,7 @@ const EXPECTED: Record<ProjectAccessLevel, Record<Role, { browse: boolean; manag
 // database.
 const ON_CLOUD = { publicProjectsAvailable: true };
 
-const LEVELS: ProjectAccessLevel[] = ['open', 'limited', 'private', 'public'];
+const LEVELS: LegacyAccessLevel[] = ['open', 'limited', 'private', 'public'];
 const ROLES: Role[] = ['owner', 'wsAdmin', 'plainMember', 'viewer', 'member', 'admin', 'nonMember'];
 
 describe('settings-area role-gating matrix — capabilities ride the 6.4.3 policy', () => {

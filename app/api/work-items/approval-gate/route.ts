@@ -13,6 +13,7 @@ import { howToTestService } from '@/lib/services/howToTestService';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { agentReviewViewService } from '@/lib/services/agentReviewViewService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
@@ -59,7 +60,9 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //        `workItemsService.listLinkedPullRequests` + `getDeliveryView`,
 //        `howToTestService.getForWorkItem`, `designEvidenceService.getCurrentForWorkItem`,
 //        and — for an approved OR AWAITING gate (MOTIR-5806: the re-asked gate's members
-//        carry the row's verb) — `pullRequestMergeService.listApprovalMembers`.
+//        carry the row's verb) — `pullRequestMergeService.listApprovalMembers`;
+//      - `agent_review` — the same Development block over its delivery set, with
+//        `agentReviewViewService.readForWorkItem` beside it (the review's state).
 //
 // No `db` / no `$transaction` here.
 //
@@ -150,8 +153,28 @@ async function readSubject(
     // gave `pull_request_approval` the real port below, while keeping a merge arm that
     // returned `kind_not_built`. Both halves are kept — 5437's port, and no merge arm —
     // because the kind that arm answered for is no longer registered to reach it.
-    case 'pull_request_approval':
-      return readDevelopmentBlock(gate, item, ctx);
+    // ⚠️ AND THE REVIEW THAT PASSED THESE COMMITS (Story MOTIR-1626; `design/github`
+    // § 30 Panels 2a/2b, `approve-and-merge--agent-review.mock.html`). When the review
+    // agent passed the SAME version this gate asks about, its *Reviewed by the review
+    // agent · Passed* band sits above Approve and merge — in the overlay as on the item
+    // page, both read by `agentReviewViewService`. A review at another version, or one a
+    // person continued past, is not this gate's; the frame draws what it is handed.
+    case 'pull_request_approval': {
+      const [block, agentReview] = await Promise.all([
+        readDevelopmentBlock(gate, item, ctx),
+        agentReviewViewService.readForWorkItem(item.id, ctx),
+      ]);
+      const passedThisVersion =
+        agentReview !== null &&
+        agentReview.gate.state === 'approved' &&
+        agentReview.gate.subjectVersion !== null &&
+        agentReview.gate.subjectVersion === gate.subjectVersion;
+      return passedThisVersion &&
+        block.state === 'resolved' &&
+        block.kind === 'pull_request_approval'
+        ? { ...block, agentReview }
+        : block;
+    }
     // MOTIR-4950 — the acceptance port is the RECORDING the gate asks about, read by
     // the gate's own `subjectId` exactly as the design arm reads its evidence.
     case 'acceptance_result': {
@@ -213,6 +236,22 @@ async function readSubject(
       return confirm
         ? { state: 'resolved', kind: 'decision_confirmation', confirm }
         : { state: 'gone' };
+    }
+    // THE AGENT REVIEW'S PORT (Story MOTIR-1626; ADR `approval-gates.md` §12.3). It is never
+    // on a To-approve row (§12.1), but its ONE person's decision — *Continue without the
+    // review* — is made here, like every decision (MOTIR-6323): the item page's frame hands
+    // it over. Its subject is the approve-and-merge gate's, the delivery SET at the reviewed
+    // version (§12.1: one stamp, one function), so the port is that gate's Development
+    // block; beside it, the review's own state — why it could not run, and its run — read
+    // by the SAME service the item page reads it with.
+    case 'agent_review': {
+      const [block, agentReview] = await Promise.all([
+        readDevelopmentBlock(gate, item, ctx),
+        agentReviewViewService.readForWorkItem(item.id, ctx),
+      ]);
+      return block.state === 'resolved' && block.kind === 'pull_request_approval'
+        ? { ...block, agentReview }
+        : block;
     }
     /* v8 ignore next 4 -- unreachable by construction: `kind` is narrowed to
        `RegisteredGateKind`, and registering a second kind is a compile error

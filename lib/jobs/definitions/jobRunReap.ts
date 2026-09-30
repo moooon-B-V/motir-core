@@ -63,6 +63,17 @@ export const jobRunReap = defineJob(
     retryPolicy: 'idempotent',
   },
   async (ctx, services) => {
-    return ctx.step.run('reap-abandoned-job-runs', () => services.jobRuns.reapAbandoned());
+    const reap = await ctx.step.run('reap-abandoned-job-runs', () =>
+      services.jobRuns.reapAbandoned(),
+    );
+    // THE RETENTION PASS (Bug MOTIR-6935) — the reap above CLOSES rows and
+    // never removes one, so until this step nothing deleted a ledger row and the
+    // table grew for ever. It runs AFTER the reap so a row the reap just closed
+    // is judged as the terminal row it now is. Same daily tick, so the schedule
+    // set is unchanged; the keep rules live with `jobRunsService.purgeExpired`.
+    const purge = await ctx.step.run('purge-expired-job-runs', () =>
+      services.jobRuns.purgeExpired(),
+    );
+    return { reap, purge };
   },
 );

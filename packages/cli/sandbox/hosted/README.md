@@ -17,16 +17,30 @@ and linking one pull request per repository, and closing the run — is the CLI'
 
 Everything arrives as environment at boot. Nothing is baked into the image.
 
-| variable                | what it is                                                                    |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| `MOTIR_DISPATCH_RUN_ID` | the `DispatchRun.id` the server opened — the CLI ADOPTS it, never opens one   |
-| `MOTIR_WORK_ITEM_KEY`   | the dispatched card, e.g. `MOTIR-683` — a leaf, or a parent run as its scope  |
-| `MOTIR_API_URL`         | Motir's origin, for every call the CLI makes                                  |
-| `MOTIR_RUN_TOKEN`       | the run's Motir credential (MOTIR-688), reaching only the run's own cards     |
-| `MOTIR_GATEWAY_URL`     | the gateway's origin, no trailing `/v1` (egress contract §2)                  |
-| `MOTIR_RUN_KEY`         | the per-run gateway key (MOTIR-689) — the ONLY credential the agent ever sees |
-| `MOTIR_MODEL`           | the model in OpenCode's form, `anthropic/<bare gateway id>` (decision §7)     |
-| `MOTIR_RUN_MODE`        | optional — `run` (the default) or `continue` for a dead run's branch          |
+| variable                | what it is                                                                             |
+| ----------------------- | -------------------------------------------------------------------------------------- |
+| `MOTIR_DISPATCH_RUN_ID` | the `DispatchRun.id` the server opened — the CLI ADOPTS it, never opens one            |
+| `MOTIR_WORK_ITEM_KEY`   | the dispatched card, e.g. `MOTIR-683` — a leaf, or a parent run as its scope           |
+| `MOTIR_API_URL`         | Motir's origin, for every call the CLI makes                                           |
+| `MOTIR_RUN_TOKEN`       | the run's Motir credential (MOTIR-688), reaching only the run's own cards              |
+| `MOTIR_GATEWAY_URL`     | the gateway's origin, no trailing `/v1` (egress contract §2)                           |
+| `MOTIR_RUN_KEY`         | the per-run gateway key (MOTIR-689) — the ONLY credential the agent ever sees          |
+| `MOTIR_MODEL`           | the model in OpenCode's form, `anthropic/<bare gateway id>` (decision §7)              |
+| `MOTIR_RUN_MODE`        | optional — `run` (the default), `continue` for a dead run's branch, `review`, or `fix` |
+| `MOTIR_REVIEW_GATE_ID`  | `review` only — the `agent_review` gate the run answers (MOTIR-6820)                   |
+| `MOTIR_REVIEW_VERSION`  | `review` only — the version under review; a served prompt for another exits 0          |
+
+A `review` run (MOTIR-6824, `hosted-agent-run.md` §8) runs `motir review <KEY>`:
+it checks every pull request out detached at its reviewed head, locks the run
+read-only (every push fails, `gh` refuses), and submits the agent's ONE verdict —
+the only thing that leaves the container.
+
+A `fix` run (MOTIR-6929, `hosted-agent-run.md` §8.6) runs `motir fix <KEY>` on the
+repair the server's claim opened: it adopts the run (never claims), clones every
+repository and checks each pull request out on its OWN branch, locks pushes to
+exactly those branches (`gh` refuses), and runs the agent on the review-fix prompt
+with the recorded findings. It opens no pull request; a repair that pushes nothing
+closes and leaves the card To fix.
 
 There is no repository, base ref, git token or git author among them: the run's
 repositories come from its cards, and GitHub is reached only through the CLI's

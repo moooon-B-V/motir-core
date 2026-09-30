@@ -693,3 +693,142 @@ describe('the reconcile only ever CREATES', () => {
     expect(await statusOf(card.id)).toBe('in_review');
   });
 });
+
+// ── A WORKFLOW RUN WITH NO JOB YET IS PART OF THE SET (MOTIR-6946) ──────────
+//
+// The replay of moooon-B-V/motir-core#3261 @ 688ce704. The acceptance lane settled
+// green at 18:40:05; CI's workflow run had existed since 18:39:32 but was queued behind
+// its `concurrency` group and created its first job at 18:40:58. The check-run read saw
+// only the acceptance lane, confirmed the prefix, and the approve-to-merge gate went up at
+// 18:40:08 over commits whose suite had not started. The host now also reports every
+// GitHub Actions suite, so CI's queued run arrives as a PENDING roll-up row.
+
+const ACCEPTANCE_SUITE = '99154196040';
+const CI_SUITE = '99154198281';
+
+function acceptanceGreen(): ReportedCheckRun[] {
+  return ['Does the lane hold a spec?', 'Acceptance complete'].map((checkName) => ({
+    checkName,
+    checkSuiteId: ACCEPTANCE_SUITE,
+    conclusion: 'success' as const,
+    rawConclusion: 'success',
+    url: null,
+    completedAt: null,
+  }));
+}
+
+function actionsSuite(checkSuiteId: string, conclusion: 'success' | 'pending'): ReportedCheckRun {
+  return {
+    checkName: 'github-actions',
+    checkSuiteId,
+    conclusion,
+    rawConclusion: null,
+    url: null,
+    completedAt: null,
+    suiteAggregate: true,
+  };
+}
+
+async function mergeGatesOn(workItemId: string) {
+  return adminDb.approvalGate.findMany({
+    where: { workItemId, kind: 'pull_request_approval' },
+  });
+}
+
+describe('a workflow run GitHub has created but that has no job yet (MOTIR-6946)', () => {
+  function deliverAt(s: Scenario, prNumber: number, host: () => ReportedCheckRun[]) {
+    const resolveContext = async (): Promise<CiFeedbackContextResolution> => ({
+      kind: 'resolved',
+      installation: s.installation,
+      repo: s.repo,
+      buildChecksUrl: (n: number) => `https://github.com/moooon/acme/pull/${n}/checks`,
+      readReportedCheckSet: async () => host(),
+    });
+    return (name: string, suiteId: string) =>
+      applyCiStatusFeedback(
+        { ...event(name, 'success'), suiteId, prNumbers: [prNumber] },
+        resolveContext,
+      );
+  }
+
+  it('replaying 688ce704 raises NO gate — the promotion withholds and the card stays Implemented', async () => {
+    const s = await makeScenario('queued-ci-run@example.com');
+    const card = await cardWithPr(s, 'the card asked about too early', 201);
+
+    // What the host held at 18:40:05: the acceptance lane's checks, green — and CI's
+    // workflow run, `in_progress` with ZERO jobs, visible only as its suite.
+    const deliver = deliverAt(s, 201, () => [
+      ...acceptanceGreen(),
+      actionsSuite(ACCEPTANCE_SUITE, 'success'),
+      actionsSuite(CI_SUITE, 'pending'),
+    ]);
+    await deliver('Does the lane hold a spec?', ACCEPTANCE_SUITE);
+    const result = await deliver('Acceptance complete', ACCEPTANCE_SUITE);
+
+    expect(result.promoted).toBeUndefined();
+    expect(await statusOf(card.id)).toBe('implemented');
+    expect(await mergeGatesOn(card.id)).toHaveLength(0);
+
+    // CI's run is RECORDED as the row its own `check_suite` delivery will settle — and the
+    // acceptance lane's finished suite is not written by the read: its delivery owns it.
+    const aggregates = (await checkRowsAtHead()).filter((r) => r.suiteAggregate);
+    expect(aggregates.map((r) => [r.checkSuiteId, r.conclusion])).toEqual([[CI_SUITE, 'pending']]);
+  });
+
+  it('promotes once CI’s suite completes, with exactly ONE gate', async () => {
+    const s = await makeScenario('queued-ci-then-done@example.com');
+    const card = await cardWithPr(s, 'the card asked about in time', 202);
+    let ciDone = false;
+    const deliver = deliverAt(s, 202, () => [
+      ...acceptanceGreen(),
+      actionsSuite(ACCEPTANCE_SUITE, 'success'),
+      actionsSuite(CI_SUITE, ciDone ? 'success' : 'pending'),
+    ]);
+    await deliver('Acceptance complete', ACCEPTANCE_SUITE);
+    expect(await statusOf(card.id)).toBe('implemented');
+
+    // CI's `check_suite` `completed` delivery settles the roll-up row the read wrote.
+    ciDone = true;
+    const done = await applyCiStatusFeedback(
+      {
+        ...event('github-actions', 'success'),
+        suiteId: CI_SUITE,
+        suiteAggregate: true,
+        prNumbers: [202],
+      },
+      async () => ({
+        kind: 'resolved',
+        installation: s.installation,
+        repo: s.repo,
+        buildChecksUrl: (n: number) => `https://github.com/moooon/acme/pull/${n}/checks`,
+        readReportedCheckSet: async () => [
+          ...acceptanceGreen(),
+          actionsSuite(ACCEPTANCE_SUITE, 'success'),
+          actionsSuite(CI_SUITE, 'success'),
+        ],
+      }),
+    );
+
+    expect(done.promoted).toEqual([card.id]);
+    expect(await statusOf(card.id)).toBe('in_review');
+    expect((await mergeGatesOn(card.id)).map((g) => g.state)).toEqual(['awaiting']);
+  });
+
+  it('third-party suites that never report do not hold a card — only Actions suites are read', async () => {
+    // The reader drops every non-Actions App (`readCommitActionsSuites.test.ts`), so the host
+    // answer for a commit whose ONLY unfinished suites are Vercel's, Sentry's and Claude's is
+    // the finished Actions work alone — and it promotes on green.
+    const s = await makeScenario('third-party-suites@example.com');
+    const card = await cardWithPr(s, 'the card with bots on its commit', 203);
+    const deliver = deliverAt(s, 203, () => [
+      ...acceptanceGreen(),
+      actionsSuite(ACCEPTANCE_SUITE, 'success'),
+    ]);
+    // The first delivery already promotes: the host answer fills in the second check.
+    const first = await deliver('Does the lane hold a spec?', ACCEPTANCE_SUITE);
+
+    expect(first.promoted).toEqual([card.id]);
+    expect(await statusOf(card.id)).toBe('in_review');
+    expect((await mergeGatesOn(card.id)).map((g) => g.state)).toEqual(['awaiting']);
+  });
+});

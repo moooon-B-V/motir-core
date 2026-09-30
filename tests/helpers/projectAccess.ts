@@ -5,9 +5,8 @@ import type { ProjectAccessMode } from '@/generated/prisma/client';
 // A project's access is its MODE (`project.accessMode`), and a fixture writes
 // exactly what the product writes — `projectRepository.setAccessMode` — which
 // since phase 2 (MOTIR-6692) is the mode ALONE. The retired `accessLevel` column
-// is `@ignore`d: the client can no longer write it, and it keeps its database
-// default until the phase-3 drop. A test that must touch the column itself goes
-// through `tests/helpers/legacyProjectAccess.ts`.
+// was dropped in phase 3 (MOTIR-6694); a migration test that replays SQL which
+// read it rebuilds it through `tests/helpers/legacyProjectAccess.ts`.
 //
 // Why this exists: while `accessMode` was NULL, the retired fallback derived the
 // mode from `accessLevel`, so a fixture writing ONLY `accessLevel: 'public'` got a
@@ -23,14 +22,15 @@ export function projectAccessData(mode: ProjectAccessMode) {
   return { accessMode: mode };
 }
 
+/** The four RETIRED access levels (the dropped `project_access_level` type), for the matrices still keyed on them. */
+export type LegacyAccessLevel = 'open' | 'limited' | 'private' | 'public';
+
 /**
  * The mode a RETIRED level maps to (`docs/decisions/role-model.md` Q1) — for the
  * access matrices still keyed on the four legacy levels. `limited` and `private`
  * both land at Members only.
  */
-export function modeForLegacyLevel(
-  level: 'open' | 'limited' | 'private' | 'public',
-): ProjectAccessMode {
+export function modeForLegacyLevel(level: LegacyAccessLevel): ProjectAccessMode {
   return level === 'open' ? 'workspace' : level === 'public' ? 'public' : 'members';
 }
 

@@ -15,28 +15,22 @@ import { defineJob } from '../defineJob';
 // is the first. Neither is touched by the other.
 
 /**
- * Every 30 minutes, ON the cluster (`SCHEDULE_CLUSTER_MINUTES`, `[0, 30]`).
- *
- * ⚠️ THE MINUTE IS NOT FREE, AND THAT IS WHY THIS ONE IS NOT ITS OWN
- * (MOTIR-3314). On a compute that suspends when idle the billed quantity is how
- * often ANYTHING wakes, so a new distinct offset is a new wake, forever —
- * measured at $19.50/mo for a compute that never sleeps. A new scheduled job
- * that picks a "free-looking" minute is the exact reasoning the cluster guard
- * exists to stop, and `tests/jobs/schedule-cluster.test.ts` fails with this
- * job's name if it does.
+ * Every 5 minutes — the cadence every sub-hourly `system.*` job runs at since the
+ * database became always-on (MOTIR-6893, `docs/decisions/always-on-database-job-
+ * cadence.md`). It sat on the retired :00/:30 cluster (MOTIR-3314) until
+ * MOTIR-6932; the invariant is now `tests/jobs/schedule-cadence.test.ts`.
  *
  * THE ARITHMETIC THIS CADENCE HAS TO SATISFY, stated rather than asserted:
  *
  *   worst case before a stalled container is torn down
- *     = the 15-minute grace window + the gap to the next tick (≤ 30 min)
- *     = 45 minutes
+ *     = the 15-minute grace window + the gap to the next tick (≤ 5 min)
+ *     = 20 minutes
  *
- * against the 70-minute fleet reaper it exists to pre-empt. Twenty-five minutes
- * of headroom, and the container is metered and its slot released — which the
- * reaper's path does for neither. A tighter cadence would buy minutes of
- * container in a rare failure and cost a wake every time, for ever.
+ * against the 70-minute fleet reaper it exists to pre-empt. Fifty minutes of
+ * headroom, and the container is metered and its slot released — which the
+ * reaper's path does for neither.
  */
-export const SUPERVISION_SWEEP_CRON = '0,30 * * * *';
+export const SUPERVISION_SWEEP_CRON = '*/5 * * * *';
 
 export const supervisionSweep = defineJob(
   {

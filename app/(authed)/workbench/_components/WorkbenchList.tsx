@@ -273,6 +273,8 @@ function WorkbenchRow({
           detail={row.fix.detail}
           held={held}
           canContinueHosted={row.canContinueHosted}
+          canFixHosted={row.canFixHosted}
+          repairRun={row.repairRun}
           viewerId={viewerId}
           onStarted={onContinueStarted}
           onStateMoved={onContinueStarted}
@@ -407,9 +409,15 @@ export function WorkbenchList({
   // CONTINUE HOSTED ON A DEAD-RUN ROW (§ 31, MOTIR-6882). The page makes ONE models
   // request however many rows place the control — and NONE when no row does, so a
   // tab of pull-request reasons never asks for a list it will not draw.
+  // FIX ON THE HOSTED AGENT on a row a review sent back (§ 32, MOTIR-6930) reads the same
+  // one list.
   const hosted =
     isToFix &&
-    live.rows.some((row) => row.canContinueHosted && row.fix?.detail.repair === 'continue');
+    live.rows.some(
+      (row) =>
+        (row.canContinueHosted && row.fix?.detail.repair === 'continue') ||
+        (row.canFixHosted && row.repairRun === null),
+    );
 
   const groups = tab === 'watching' ? splitWatchingGroups(live.rows) : null;
   const list = (

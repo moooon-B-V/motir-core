@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { dropLegacyRoleStorage, ensureLegacyRoleStorage } from '../helpers/legacyRoleStorage';
 import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -32,6 +33,9 @@ const MIGRATION = '20260927000100_project_access_mapping';
 
 beforeEach(async () => {
   await truncateAuthTables();
+  // The migration under test reads the legacy role storage MOTIR-6569 dropped;
+  // rebuild it for the test (tests/helpers/legacyRoleStorage.ts).
+  await ensureLegacyRoleStorage();
   // The mapping ran over NULL-mode projects; since MOTIR-6686 that state has to be
   // rebuilt by dropping the constraint (`_projectAccessModeNotNull.ts`).
   await relaxProjectAccessModeNotNull();
@@ -42,6 +46,7 @@ afterEach(async () => {
   // which the contract migration's agreement check would refuse.
   await truncateAuthTables();
   await restoreProjectAccessModeNotNull();
+  await dropLegacyRoleStorage();
 });
 
 afterAll(async () => {
@@ -68,7 +73,7 @@ async function tenant() {
         workspaceId: ws.id,
       },
     });
-    // legacy-access-level: the mapping migration of each legacy level is what this file tests.
+    // The rebuilt legacy level (legacyProjectAccess.ts): the mapping migration of each legacy level is what this file tests.
     await writeLegacyAccessLevel(adminDb, p.id, level);
     // The mapping ran over NULL-mode rows (`_projectAccessModeNotNull.ts`).
     await nullAccessMode(p.id);
@@ -90,7 +95,8 @@ async function tenant() {
   };
   // The legacy `role` is not seeded: the mapping reads it only as the fallback of
   // `COALESCE(workspace_role, role)`, and `workspace_role` is always set (NOT NULL
-  // since MOTIR-6561; the column is `@ignore`d since MOTIR-6567).
+  // since MOTIR-6561). The column itself is dropped since MOTIR-6569 and rebuilt
+  // for this file by `ensureLegacyRoleStorage`, because the mapping names it.
   const wsMember = (userId: string, workspaceRole: 'manager' | 'member' | 'viewer') =>
     adminDb.workspaceMembership.create({
       data: { userId, workspaceId: ws.id, workspaceRole },

@@ -569,13 +569,26 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
       expect(prompt).toContain('One publish uses one form for all of its assets');
     });
 
-    it('"Stop at the asset" SURVIVES as the stopping condition, before either step 7', () => {
+    // ⚠️ RENUMBERED BY MOTIR-6963: the IDENTIFY step became step 1, so the stop is
+    // step 7 and the publish step 8 — numbered from the design list, not typed.
+    it('"Stop at the asset" SURVIVES as the stopping condition, before either step 8', () => {
       for (const keys of [['X-2'], []]) {
-        const prompt = designPrompt(keys);
-        expect(prompt).toContain(
-          'Stop at the asset. A design is reviewed before anything is built',
+        const steps = whatToDo(designPrompt(keys));
+        expect(steps).toContain(
+          '7. Stop at the asset. A design is reviewed before anything is built',
         );
-        expect(prompt.indexOf('Stop at the asset')).toBeLessThan(prompt.indexOf('7. '));
+        expect(steps.indexOf('Stop at the asset')).toBeLessThan(steps.indexOf('\n8. '));
+      }
+    });
+
+    it('the publish step is numbered DIRECTLY after the last design step, in both renders', () => {
+      expect(whatToDo(designPrompt(['X-2']))).toContain('\n8. PUBLISH the design result — X-2');
+      expect(whatToDo(designPrompt([]))).toContain('\n8. Do NOT publish a design result.');
+      for (const keys of [['X-2'], []]) {
+        const numbers = [...whatToDo(designPrompt(keys)).matchAll(/^(\d+)\. /gm)].map((m) =>
+          Number(m[1]),
+        );
+        expect(numbers, `keys=${keys.join()}`).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
       }
     });
 
@@ -604,6 +617,86 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
         expect(prompt).not.toContain('PUBLISH the design result');
         expect(prompt).not.toContain('Do NOT publish a design result');
       }
+    });
+  });
+
+  // ── MOTIR-6963: the design steps tell the two kinds of project apart.
+  //
+  // A project imported with its own component library has none of Motir's
+  // tokens, and the old step 3 said only "the real design system", which an
+  // agent filled with whatever it knew best. Step 1 now names the check, and the
+  // three branches it decides between.
+  describe('WHAT_TO_DO.design IDENTIFIES the design system first (MOTIR-6963)', () => {
+    const whatToDo = (prompt: string): string =>
+      prompt.slice(prompt.indexOf('WHAT TO DO'), prompt.indexOf('ACCEPTANCE CRITERIA'));
+    const steps = (openDependentKeys: string[] = ['X-2']): string =>
+      whatToDo(
+        assembleDispatchPrompt(
+          source({ type: 'design', executor: 'coding_agent', openDependentKeys }),
+        ).prompt,
+      );
+
+    it('step 1 is the identify step: BOTH checks, and the verdict in design-notes.md', () => {
+      for (const keys of [['X-2'], []]) {
+        const s = steps(keys);
+        const one = s.slice(s.indexOf('\n1. '), s.indexOf('\n2. '));
+        expect(one).toContain('1. IDENTIFY THE DESIGN SYSTEM before anything else.');
+        expect(one).toContain('depends on @motir/design-system, AND its global CSS imports');
+        expect(one).toContain('@motir/design-system/theme.css. Either check alone is NOT enough.');
+        expect(one).toContain('the verdict as the first lines of design-notes.md');
+        // Inventory keeps its meaning, one step later.
+        expect(s).toContain('2. Read the card description above, then INVENTORY');
+      }
+    });
+
+    it('the Motir Design branch: pinned version, own axes, renderMock or the fallback, parts order, missing parts', () => {
+      const s = steps();
+      for (const phrase of [
+        '(a) ON MOTIR DESIGN (both checks hold). Read the installed version',
+        'node_modules/@motir/design-system/package.json, else the lockfile',
+        'data-palette / data-type (or its DESIGN.md',
+        'never the',
+        '@motir/design-system/mock, build the mock with renderMock',
+        'actual markup with that version’s theme.css inlined',
+        'package’s parts first, then the project’s own local components, then new',
+        '"proposed addition to @motir/design-system" or "product-local component"',
+      ]) {
+        expect(s, `the Motir branch lost: ${phrase}`).toContain(phrase);
+      }
+    });
+
+    it('the own-system branch names no token of Motir’s, and the empty case writes a Working palette', () => {
+      const s = steps();
+      const own = s.slice(s.indexOf('(b) ON ITS OWN SYSTEM'), s.indexOf('(c) NO COHERENT SYSTEM'));
+      expect(own).toContain('its components directory, its Tailwind config or');
+      expect(own).toContain('Use no --el-* token and no @motir/design-system import.');
+      // `--el-*` appears there only to FORBID it.
+      expect(own.split('Use no --el-* token').join('')).not.toContain('--el-');
+      const none = s.slice(s.indexOf('(c) NO COHERENT SYSTEM'), s.indexOf('NEVER MIGRATE'));
+      expect(none).toContain('BEFORE drawing');
+      expect(none).toContain('"## Working palette"');
+      expect(none).toContain('each with the file it came from');
+    });
+
+    it('states NEVER MIGRATE, and no sentence tells an agent to install or adopt the package', () => {
+      const s = steps();
+      expect(s).toContain(
+        'NEVER MIGRATE: in every branch, the design never adds, installs or proposes',
+      );
+      const sentences = s.replace(/\s+/g, ' ').split(/(?<=\.) /);
+      const adopting = sentences.filter(
+        (x) =>
+          /\b(install|adopt|add|migrate)\b/i.test(x) &&
+          x.includes('@motir/design-system') &&
+          !/\bnever\b/i.test(x),
+      );
+      expect(adopting).toEqual([]);
+    });
+
+    it('the two-file step composes from the system step 1 identified', () => {
+      expect(steps()).toContain('composed from the design system');
+      expect(steps()).toContain('step 1 identified, never a raw hex colour or a fixed radius.');
+      expect(steps()).not.toContain("the real design\n   system's primitives");
     });
   });
 

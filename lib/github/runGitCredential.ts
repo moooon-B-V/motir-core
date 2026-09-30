@@ -16,7 +16,9 @@ import {
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunGitCredentialRepository } from '@/lib/repositories/dispatchRunGitCredentialRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
@@ -65,6 +67,21 @@ const APP_LABEL: Record<RunGitApp, string> = {
 /** The permissions every run token is narrowed to (§5). Never `workflows`,
  *  never `administration`. */
 export const RUN_GIT_PERMISSIONS = { contents: 'write', pull_requests: 'write' } as const;
+
+/**
+ * A REVIEW run's narrowing (MOTIR-6820; `hosted-agent-run.md` §8.3): it pushes nothing,
+ * so its installation token is requested with `contents: read` ONLY — it can fetch the
+ * pull requests at their reviewed heads and can write nothing.
+ */
+export const RUN_GIT_REVIEW_PERMISSIONS = { contents: 'read' } as const;
+
+/** What a run needs of a repository: a build writes it, a review only reads it. */
+export type RunGitNeed = 'write' | 'read';
+
+/** The permissions a run's token is narrowed to, by what its command does. */
+function permissionsFor(command: string): Record<string, string> {
+  return command === 'review' ? RUN_GIT_REVIEW_PERMISSIONS : RUN_GIT_PERMISSIONS;
+}
 
 /**
  * Which App writes a project repository. A `created` repository stays Motir's
@@ -209,6 +226,7 @@ async function installationOn(
 }
 
 const canWrite = (level: string | undefined) => level === 'write' || level === 'admin';
+const canRead = (level: string | undefined) => level === 'read' || canWrite(level);
 
 /** The two refusals, verbatim from the decision (§8). */
 const REFUSAL: Record<RunGitWriteFix, (repository: string, account: string) => string> = {
@@ -222,8 +240,13 @@ type RepoAccess =
   | { ok: true; installation: InstallationOnRepo }
   | { ok: false; refusal: RunGitWriteRefusal };
 
-/** Whether `app` can write `repository`, with the installation when it can. */
-async function accessFor(repository: string, app: RunGitApp): Promise<RepoAccess> {
+/** Whether `app` can write (or, for a review, read) `repository`, with the installation
+ *  when it can. */
+async function accessFor(
+  repository: string,
+  app: RunGitApp,
+  need: RunGitNeed = 'write',
+): Promise<RepoAccess> {
   const installation = await installationOn(app, repository);
   if (app === 'motir-studio') {
     // Motir's own App not reaching a repository Motir created is an operational
@@ -247,10 +270,12 @@ async function accessFor(repository: string, app: RunGitApp): Promise<RepoAccess
       },
     };
   }
-  if (
-    !canWrite(installation.permissions['contents']) ||
-    !canWrite(installation.permissions['pull_requests'])
-  ) {
+  const lacking =
+    need === 'read'
+      ? !canRead(installation.permissions['contents'])
+      : !canWrite(installation.permissions['contents']) ||
+        !canWrite(installation.permissions['pull_requests']);
+  if (lacking) {
     return {
       ok: false,
       refusal: {
@@ -323,7 +348,42 @@ export async function runRepositories(dispatchRunId: string): Promise<RunReposit
     const legs = await dispatchRunCardRepository.listByRun(run.id, tx);
     return legs.map((l) => l.workItemId).filter((id): id is string => id !== null);
   });
+  // A REPAIR (`hosted-agent-run.md` §8.6, MOTIR-6928) pushes to its pull requests' own
+  // branches, so its set is the repositories of those pull requests — not the card's
+  // target set, which may name a repository nothing was delivered to.
+  if (run.command === 'fix') return repositoriesForRepair(run.projectId, run.workspaceId, itemIds);
   return repositoriesForItems(run.projectId, run.workspaceId, itemIds);
+}
+
+/**
+ * The repository set a REPAIR over `itemIds` pushes to (Story MOTIR-1626 · MOTIR-6928;
+ * `hosted-agent-run.md` §8.6): the project repositories behind the cards' OPEN pull
+ * requests — the delivery set the repair claim hands over — in project repository order.
+ * A merged or closed member cannot be pushed to, so it adds nothing. Refuses, as
+ * {@link repositoriesForItems} does, a set with no repository in it.
+ */
+export async function repositoriesForRepair(
+  projectId: string,
+  workspaceId: string,
+  itemIds: readonly string[],
+): Promise<RunRepository[]> {
+  const set = await withWorkspaceServiceContext(workspaceId, async (tx) => {
+    const deliveries = await workItemDeliveryRepository.listByWorkItems([...itemIds], tx);
+    const open = new Set(
+      deliveries
+        .filter((d) => d.pullRequest.state === 'open' && !d.pullRequest.merged)
+        .map((d) => d.repoId),
+    );
+    const projectRows = await projectRepoRepository.listByProject(projectId, workspaceId, tx);
+    return projectRows.filter((row) => row.githubRepoId !== null && open.has(row.githubRepoId));
+  });
+  if (set.length === 0) {
+    throw new RunGitCredentialUnavailableError(
+      'no_repository',
+      'the repair covers no open pull request in a repository of its project',
+    );
+  }
+  return set.map(toRunRepository);
 }
 
 /**
@@ -354,20 +414,23 @@ export async function repositoriesForItems(
       'the run covers no repository of its project',
     );
   }
-  return set.map((row) => {
-    if (!row.githubRepo) {
-      throw new RunGitCredentialUnavailableError(
-        'repository_unrealized',
-        `the project repository "${row.name}" has no repository on GitHub yet`,
-      );
-    }
-    return {
-      projectRepoId: row.id,
-      repository: `${row.githubRepo.owner}/${row.githubRepo.name}`,
-      providerRepoId: row.githubRepo.repoId,
-      app: runGitAppFor(row),
-    };
-  });
+  return set.map(toRunRepository);
+}
+
+/** One project repository as a run's repository, refusing one with nothing on GitHub. */
+function toRunRepository(row: ProjectRepoWithRealized): RunRepository {
+  if (!row.githubRepo) {
+    throw new RunGitCredentialUnavailableError(
+      'repository_unrealized',
+      `the project repository "${row.name}" has no repository on GitHub yet`,
+    );
+  }
+  return {
+    projectRepoId: row.id,
+    repository: `${row.githubRepo.owner}/${row.githubRepo.name}`,
+    providerRepoId: row.githubRepo.repoId,
+    app: runGitAppFor(row),
+  };
 }
 
 // ── The check ─────────────────────────────────────────────────────────────
@@ -376,10 +439,12 @@ export async function repositoriesForItems(
  * Whether each repository can be written by its App — one answer per repository,
  * in the order given. The run can write only when every answer is ok. A pure
  * read: nothing is minted. The start path refuses on it, and the Repositories room
- * shows it.
+ * shows it. `need: 'read'` asks the same question at the read level — a REVIEW run's
+ * pre-flight (MOTIR-6820), which only needs `contents: read`.
  */
 export async function hostedRunWriteAccess(
   repos: readonly Pick<RunRepository, 'repository' | 'app'>[],
+  need: RunGitNeed = 'write',
 ): Promise<RunGitWriteAccess[]> {
   const out: RunGitWriteAccess[] = [];
   for (const { repository, app } of repos) {
@@ -388,7 +453,7 @@ export async function hostedRunWriteAccess(
       out.push({ repository, app, ok: true });
       continue;
     }
-    const access = await accessFor(repository, app);
+    const access = await accessFor(repository, app, need);
     out.push(access.ok ? { repository, app, ok: true } : { app, ok: false, ...access.refusal });
   }
   return out;
@@ -417,8 +482,9 @@ export async function mintRunGitCredentials(
   // that cannot write one repository is refused with all of them named.
   const resolved: { repo: RunRepository; installation: InstallationOnRepo }[] = [];
   const refusals: RunGitWriteRefusal[] = [];
+  const need: RunGitNeed = run.command === 'review' ? 'read' : 'write';
   for (const repo of repos) {
-    const access = await accessFor(repo.repository, repo.app);
+    const access = await accessFor(repo.repository, repo.app, need);
     if (access.ok) resolved.push({ repo, installation: access.installation });
     else refusals.push(access.refusal);
   }
@@ -449,7 +515,7 @@ export async function mintRunGitCredentials(
       body: {
         // By id, not name: a rename between resolve and mint cannot widen it.
         repository_ids: group.repos.map((r) => Number(r.providerRepoId)),
-        permissions: RUN_GIT_PERMISSIONS,
+        permissions: permissionsFor(run.command),
       },
     });
     if (!res.ok) {

@@ -71,6 +71,11 @@ const REFUSES_BY_OVERTURN: readonly ApprovalGateKind[] = ['decision_confirmation
 /** The PLAN gate's refusal is Decline, whose reason is OPTIONAL by design (ADR §11.4 —
  *  a stated departure from §10a), and it offers no `request_changes` at all (MOTIR-6035). */
 const REFUSES_BY_DECLINE: readonly ApprovalGateKind[] = ['plan_approval'];
+/** The REVIEW AGENT's gate (ADR §12.3, MOTIR-6819): only the agent refuses it, with its
+ *  findings as the note — a PERSON's `request_changes` is `request_changes_on_agent_review`,
+ *  and the person's one verb, *Continue without the review*, requires its reason
+ *  (`override_needs_a_note`). So no person's refusal reaches this rule at all. */
+const REFUSED_ONLY_BY_THE_AGENT: readonly ApprovalGateKind[] = ['agent_review'];
 
 /** A bare `awaiting` gate, and the stamp its reader would have been shown. */
 async function awaitingGate(kind: ApprovalGateKind) {
@@ -116,7 +121,14 @@ describe('the rule is TOTAL over the registry — a new kind that offers the ver
     // kind inherits it — but this spec is where that inheritance is PROVEN per kind, and
     // a kind added to the registry without a row here fails on this line first.
     const registered = Object.keys(APPROVAL_GATE_HANDLERS).sort();
-    expect(registered).toEqual([...COVERED, ...REFUSES_BY_OVERTURN, ...REFUSES_BY_DECLINE].sort());
+    expect(registered).toEqual(
+      [
+        ...COVERED,
+        ...REFUSES_BY_OVERTURN,
+        ...REFUSES_BY_DECLINE,
+        ...REFUSED_ONLY_BY_THE_AGENT,
+      ].sort(),
+    );
   });
 
   it('the typed refusal maps to a 4xx', () => {

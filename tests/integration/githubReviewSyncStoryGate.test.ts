@@ -385,12 +385,18 @@ describe('§3 guards — the ones coverage cannot see (MOTIR-5600)', () => {
     // the product is keyed on this enum's values (the audit column is read as-is), so
     // the new member leaves nothing partial; the list learns it so a THIRD addition
     // still has to come through here.
+    //
+    // `review_agent` (Story MOTIR-1626 · MOTIR-6819; ADR §12.3) — the review agent's own
+    // verdict on its `agent_review` gate. Likewise no product map is keyed on it (the
+    // column is read as-is: the DTO union and the v1 schema's list both name it), so it
+    // leaves nothing partial.
     expect(await members('approval_gate_authority')).toEqual([
       'assignee',
       'reporter',
       'admin',
       'github_review',
       'plan_permission',
+      'review_agent',
     ]);
   });
 

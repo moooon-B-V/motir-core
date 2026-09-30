@@ -373,7 +373,8 @@ describe('every projection agrees, for a card per reason reached through its eve
     });
     expect(await detailOf(cards.conflicted)).toMatchObject({ repair: 'fix', base: 'main' });
     expect(await detailOf(cards.reviewed)).toMatchObject({
-      repair: 'run',
+      // `fix`, never `run` — a sent-back card is the `review` repair class (§12.7, MOTIR-6822).
+      repair: 'fix',
       notePreview: 'Rename the export button.',
     });
   });

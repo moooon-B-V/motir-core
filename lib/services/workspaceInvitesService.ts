@@ -19,12 +19,7 @@ import { readMembership, readReachRole } from '@/lib/workspaces/membershipGate';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { asAccessScope } from '@/lib/projects/accessMode';
-import {
-  legacyToWorkspaceRole,
-  type LegacyMemberRole,
-  WORKSPACE_ROLES,
-  type WorkspaceRole,
-} from '@/lib/workspaces/roles';
+import { WORKSPACE_ROLES, type WorkspaceRole } from '@/lib/workspaces/roles';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
@@ -52,7 +47,7 @@ import {
 //
 // Tokens live in the Verification table (Subtask 1.1.3) with the
 // `workspace-invite:` identifier prefix. The `value` column carries
-// JSON `{ workspaceId, email, workspaceRole, role, inviterUserId, accessScope,
+// JSON `{ workspaceId, email, workspaceRole, inviterUserId, accessScope,
 // projectIds }` (the last two since Story MOTIR-6169 · MOTIR-6546; a payload
 // written before that parses as `full` / `[]`). The existing
 // `@@index([identifier])` makes prefix-scoped lookups (validate,
@@ -67,30 +62,19 @@ export const INVITE_RATE_LIMIT = {
 
 const TOKEN_BYTES = 24;
 
-// The payload's role, across a release boundary (MOTIR-6562). A token minted by
-// this build carries `workspaceRole` — the role the membership is created with —
-// AND the legacy `role`, so a machine still on the previous image during the
-// rollout (or after a rollback) can redeem it. A token minted BEFORE this build
-// carries `role` only; it lives at most `INVITE_EXPIRY_MS`, and accept maps it.
-// The legacy arm goes with the phase-3 DROP card (MOTIR-6569).
+// The payload's role is `workspaceRole` — the role the membership is created
+// with. Until MOTIR-6569 a token also carried the legacy `role` (and one minted
+// before MOTIR-6562 carried ONLY that). Every such token lapsed after
+// `INVITE_EXPIRY_MS`, so a payload with no `workspaceRole` is refused.
 interface InvitePayload {
   workspaceId: string;
   email: string;
-  workspaceRole?: WorkspaceRole;
-  role?: LegacyMemberRole;
+  workspaceRole: WorkspaceRole;
   inviterUserId: string;
   /** Full or Limited (Story MOTIR-6169 · MOTIR-6546). */
   accessScope: WorkspaceAccessScope;
   /** The projects a Limited invite joins on accept — empty on a Full one. */
   projectIds: string[];
-}
-
-const LEGACY_MEMBER_ROLES: readonly string[] = ['owner', 'admin', 'member', 'viewer'];
-
-/** The workspace role an invite lands as: the new key, else the pre-release token's mapped one. */
-function invitedWorkspaceRole(payload: InvitePayload): WorkspaceRole {
-  if (payload.workspaceRole) return payload.workspaceRole;
-  return legacyToWorkspaceRole(payload.role!);
 }
 
 function normalizeEmail(email: string): string {
@@ -111,19 +95,17 @@ function parsePayload(value: string): InvitePayload | null {
     ) {
       return null;
     }
-    const hasWorkspaceRole =
-      parsed.workspaceRole !== undefined &&
-      (WORKSPACE_ROLES as readonly string[]).includes(parsed.workspaceRole);
-    const hasLegacyRole = parsed.role !== undefined && LEGACY_MEMBER_ROLES.includes(parsed.role);
-    // A payload naming neither role is not an invite this build can honour.
-    if (!hasWorkspaceRole && !hasLegacyRole) return null;
-    // Keep only a role this build recognises, so accept never reads a stray value.
+    // A payload naming no workspace role this build recognises — a pre-MOTIR-6562
+    // token carrying only the legacy `role`, among others — is not an invite this
+    // build can honour.
+    if (!(WORKSPACE_ROLES as readonly string[]).includes(parsed.workspaceRole)) return null;
     // An invite sent before MOTIR-6546 carries no scope and no projects: it is a
     // FULL invite naming no project, exactly what every invite meant then.
     return {
-      ...parsed,
-      workspaceRole: hasWorkspaceRole ? parsed.workspaceRole : undefined,
-      role: hasLegacyRole ? parsed.role : undefined,
+      workspaceId: parsed.workspaceId,
+      email: parsed.email,
+      workspaceRole: parsed.workspaceRole,
+      inviterUserId: parsed.inviterUserId,
       accessScope: asAccessScope(parsed.accessScope) ?? 'full',
       projectIds: Array.isArray(parsed.projectIds)
         ? parsed.projectIds.filter((id): id is string => typeof id === 'string')
@@ -291,7 +273,6 @@ export const workspaceInvitesService = {
       workspaceId: args.workspaceId,
       email,
       workspaceRole: 'member',
-      role: 'member',
       inviterUserId: args.inviterUserId,
       accessScope,
       projectIds,
@@ -459,7 +440,7 @@ export const workspaceInvitesService = {
             workspaceId: payload.workspaceId,
             // Every invite is minted `member` (`invite` above), so an accepted
             // invite lands as a workspace Member (MOTIR-6462).
-            workspaceRole: invitedWorkspaceRole(payload),
+            workspaceRole: payload.workspaceRole,
             // The scope rides the SAME insert, so a Limited invitee never exists
             // for a moment as a Full member (MOTIR-6546).
             accessScope: payload.accessScope,

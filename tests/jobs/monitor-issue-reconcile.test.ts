@@ -138,8 +138,8 @@ const connectionRow = (id: string) =>
   adminDb.monitorConnection.findUniqueOrThrow({ where: { id } });
 
 describe('the schedule', () => {
-  it('runs ON the cluster, every half hour, and is registered with its fan-out', () => {
-    expect(MONITOR_ISSUE_RECONCILE_CRON).toBe('0,30 * * * *');
+  it('runs every 5 minutes, and is registered with its fan-out', () => {
+    expect(MONITOR_ISSUE_RECONCILE_CRON).toBe('*/5 * * * *');
     expect(monitorIssueReconcileTick.cron).toBe(MONITOR_ISSUE_RECONCILE_CRON);
     expect(jobDefinitions).toContain(monitorIssueReconcileTick);
     expect(jobDefinitions).toContain(monitorConnectionPoll);

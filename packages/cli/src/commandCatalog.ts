@@ -630,6 +630,17 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
     ],
   },
   {
+    path: 'review',
+    // Story MOTIR-1626 · MOTIR-6824 (`hosted-agent-run.md` §8) — the REVIEW AGENT. Run by
+    // Motir's hosted container on the review run it opened when a card's pull requests
+    // went green with the review agent on; typed anywhere else it refuses, saying why.
+    signature: '<key>',
+    description:
+      'Hosted only: review a work item’s pull requests at the version under review and submit ONE verdict — never pushes, never posts to GitHub.',
+    helpGroup: HELP_GROUP.workLoop,
+    options: [],
+  },
+  {
     path: 'auto',
     signature: '',
     description: 'Drain the ready set unattended: one item at a time onto a session branch.',

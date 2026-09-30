@@ -969,6 +969,7 @@ export const projectRepository = {
     id: string,
     data: {
       acceptanceVideoEnabled?: boolean;
+      reviewAgentEnabled?: boolean;
     },
     tx: Prisma.TransactionClient,
   ): Promise<Project> {
@@ -993,6 +994,22 @@ export const projectRepository = {
     return client.project.findUnique({
       where: { id },
       select: { prMergeMode: true, prMergeModeDecidedAt: true },
+    });
+  },
+
+  /**
+   * The project's two MERGE-ASKING settings together — `prMergeMode` and the review
+   * agent's switch (Story MOTIR-1626 · MOTIR-6819; `approval-gates.md` §12.2/§12.2a). Read
+   * by the gate-set loader, which needs both to answer which question a green set asks.
+   */
+  async findMergeSettings(
+    id: string,
+
+    tx: Prisma.TransactionClient,
+  ): Promise<{ prMergeMode: PrMergeMode; reviewAgentEnabled: boolean } | null> {
+    return tx.project.findUnique({
+      where: { id },
+      select: { prMergeMode: true, reviewAgentEnabled: true },
     });
   },
 

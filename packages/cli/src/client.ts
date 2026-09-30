@@ -717,9 +717,23 @@ export interface RepairQueueExit {
 /**
  * Which repair a claim hands over (MOTIR-6502). `ci` — make the build pass.
  * `acceptance_rerun` — the story's acceptance video was sent back with Re-run: fix what
- * the reviewer saw, on the same pull requests, then re-record the video.
+ * the reviewer saw, on the same pull requests, then re-record the video. `review` — a
+ * review sent the card back (MOTIR-6822): the review agent's findings, or a person's
+ * Request changes on the approve-and-merge gate — address each one on the same pull
+ * requests and push.
  */
-export type WorkItemRepairClass = 'ci' | 'acceptance_rerun';
+export type WorkItemRepairClass = 'ci' | 'acceptance_rerun' | 'review';
+
+/** What the review said, on a `review` (MOTIR-6822). */
+export interface ReviewRefusal {
+  /** Which review sent it back — the review agent, or the approve-and-merge gate. */
+  gate: 'agent_review' | 'pull_request_approval';
+  /** The findings, verbatim and in full. */
+  findingsMd: string | null;
+  /** `Review agent` for the review agent; the person's name otherwise. */
+  reviewerName: string | null;
+  decidedAt: string;
+}
 
 /** What the reviewer said, on an `acceptance_rerun`. */
 export interface AcceptanceRefusal {
@@ -818,6 +832,8 @@ export interface WorkItemRepairClaim {
   repairClass: WorkItemRepairClass;
   /** Set on an `acceptance_rerun` the caller holds; null otherwise. */
   acceptanceRefusal: AcceptanceRefusal | null;
+  /** Set on a `review` the caller holds; null otherwise (MOTIR-6822). */
+  reviewRefusal: ReviewRefusal | null;
   /** Non-empty on `claimed` and `mine` only. */
   pullRequests: RepairPullRequest[];
 }
@@ -1137,7 +1153,10 @@ export type DispatchEventKind =
   | 'plan_submitted'
   // The run-found report's conclusion (MOTIR-6282) — appended by the report
   // SERVICE on the leg, refused by the ingest like the two above.
-  | 'unbuildable_reported';
+  | 'unbuildable_reported'
+  // A review run's verdict (MOTIR-6821) — appended by the verdict route's SERVICE,
+  // refused by the ingest like the three above.
+  | 'review_verdict';
 
 export interface DispatchRunOpened {
   runId: string;
@@ -1169,6 +1188,78 @@ export interface DispatchRunView {
    * server older than contract 1.53.0.
    */
   continues?: DispatchRunContinues | null;
+  /**
+   * What a HOSTED `fix` run repairs (MOTIR-6929) — what the server's repair claim
+   * decided when it opened the run. Null for any other command and for a local repair;
+   * absent from a server older than contract 1.59.0.
+   */
+  repair?: DispatchRunRepair | null;
+}
+
+/** A hosted repair's decision, read back from its run (MOTIR-6929). */
+export interface DispatchRunRepair {
+  repairClass: WorkItemRepairClass;
+  title: string | null;
+  /** Every pull request, each on its OWN branch — the only refs the repair may push. */
+  pullRequests: Array<{
+    /** `owner/name`. */
+    repo: string;
+    number: number;
+    url: string;
+    branch: string;
+    baseRef: string | null;
+    headSha: string | null;
+  }>;
+  /** The review's refusal the repair answers, the findings verbatim; null off `review`. */
+  findings:
+    | (ReviewRefusal & {
+        gateId: string | null;
+        subjectVersion: string | null;
+        decidedByLabel: string | null;
+        decidedUnderAuthority: string | null;
+      })
+    | null;
+}
+
+/** One pull request under review, at the head the review is about (MOTIR-6824). */
+export interface ReviewPullRequest {
+  /** `owner/name`. */
+  repository: string;
+  number: number;
+  /** The REVIEWED head — the gate's version, never a later commit. */
+  headSha: string;
+  baseBranch: string | null;
+  headBranch: string | null;
+  url: string;
+}
+
+/** `GET /api/v1/work-items/{key}/review-prompt` (MOTIR-6821). */
+export interface ReviewPrompt {
+  key: string;
+  gateId: string;
+  /** The version under review — the verdict names it back. */
+  subjectVersion: string;
+  pullRequests: ReviewPullRequest[];
+  /** The server-assembled brief. */
+  prompt: string;
+}
+
+/** The ONE verdict a review run submits (`POST …/agent-review`, MOTIR-6821). */
+export interface AgentReviewVerdict {
+  subjectVersion: string;
+  verdict: 'pass' | 'changes_requested';
+  summaryMd: string | null;
+  findingsMd: string | null;
+}
+
+/** What an ACCEPTED verdict did. */
+export interface AgentReviewResult {
+  key: string;
+  gateId: string;
+  verdict: 'pass' | 'changes_requested';
+  state: 'approved' | 'changes_requested';
+  subjectVersion: string;
+  decidedAt: string;
 }
 
 export interface DispatchRunContinues {
@@ -1209,7 +1300,7 @@ export interface DispatchRunAppended {
 
 /**
  * The kinds this CLI may REPORT — every member of {@link DispatchEventKind}
- * except the three the server writes.
+ * except the four the server writes (`review_verdict`, MOTIR-6821, the fourth).
  *
  * ⚠️ THE EXCLUSION IS THE POINT (MOTIR-3981, `run-findings-protocol.md` Q5).
  * `bug_filed`, `plan_submitted` and `unbuildable_reported` (MOTIR-6282) carry
@@ -1221,7 +1312,7 @@ export interface DispatchRunAppended {
  */
 export type ReportableEventKind = Exclude<
   DispatchEventKind,
-  'bug_filed' | 'plan_submitted' | 'unbuildable_reported'
+  'bug_filed' | 'plan_submitted' | 'unbuildable_reported' | 'review_verdict'
 >;
 
 /** One event on the wire. `body` is the OPT-IN log payload — default OFF. */
@@ -2248,7 +2339,7 @@ export class MotirClient {
    */
   async openDispatchRun(args: {
     projectKey: string;
-    command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto' | 'fix' | 'continue';
+    command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto' | 'fix' | 'continue' | 'review';
     idempotencyKey: string;
     cards: DispatchRunCardInput[];
     scopeKey?: string;
@@ -2325,6 +2416,55 @@ export class MotirClient {
   async workItemHowToTest(key: string): Promise<HowToTestRecord | null> {
     const body = await this.v1.request('getWorkItemHowToTest', { path: { key } });
     return body.record;
+  }
+
+  /**
+   * The REVIEW PROMPT a hosted review run is handed (MOTIR-6821 · MOTIR-6824;
+   * `hosted-agent-run.md` §8.2): the card, and every pull request of its delivery set
+   * at the REVIEWED head the card's `agent_review` gate names. Answers only a `review`
+   * run's own credential, for its own card. A read.
+   */
+  async reviewPrompt(key: string): Promise<ReviewPrompt> {
+    const body = await this.v1.request('getWorkItemReviewPrompt', { path: { key } });
+    return {
+      key: body.key,
+      gateId: body.gateId,
+      subjectVersion: body.subjectVersion,
+      pullRequests: body.pullRequests.map((pr) => ({
+        repository: pr.repository,
+        number: pr.number,
+        headSha: pr.headSha,
+        baseBranch: pr.baseBranch,
+        headBranch: pr.headBranch,
+        url: pr.url,
+      })),
+      prompt: body.prompt,
+    };
+  }
+
+  /**
+   * SUBMIT a hosted review run's ONE verdict (MOTIR-6821 · MOTIR-6824; §8.4). A late
+   * verdict — the code moved, the review was withdrawn or decided — throws
+   * `ReviewStaleError` (409 `REVIEW_STALE`): recorded on the run, deciding nothing.
+   */
+  async submitAgentReview(key: string, verdict: AgentReviewVerdict): Promise<AgentReviewResult> {
+    const body = await this.v1.request('submitWorkItemAgentReview', {
+      path: { key },
+      body: {
+        subjectVersion: verdict.subjectVersion,
+        verdict: verdict.verdict,
+        summaryMd: verdict.summaryMd,
+        findingsMd: verdict.findingsMd,
+      },
+    });
+    return {
+      key: body.key,
+      gateId: body.gateId,
+      verdict: body.verdict,
+      state: body.state,
+      subjectVersion: body.subjectVersion,
+      decidedAt: body.decidedAt,
+    };
   }
 
   /**
