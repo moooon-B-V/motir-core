@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { fakePersistentOrchestrator as fleet } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
+import { _resetAiPlanCache } from '@/lib/services/aiPlanGateService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import {
   AgentInstanceNameInvalidError,
@@ -48,6 +49,8 @@ interface Call {
 }
 let calls: Call[] = [];
 let mayRun: boolean | 'unanswerable' = true;
+/** The org's AI subscription status as motir-ai reports it; `'unanswerable'` is a 503. */
+let plan: string | null = 'active';
 let tokenSeq = 0;
 
 function stubFetch(): void {
@@ -69,6 +72,10 @@ function stubFetch(): void {
       if (url === `${AI}/v1/credits/agent-run-check`) {
         if (mayRun === 'unanswerable') return json(503, { code: 'internal_error' });
         return json(200, { balanceCredits: mayRun ? 100 : 0, mayRun });
+      }
+      if (url.startsWith(`${AI}/v1/stripe/subscription?`)) {
+        if (plan === 'unanswerable') return json(503, { code: 'internal_error' });
+        return json(200, { status: plan, currentPeriodEnd: null, priceId: null, planTier: null });
       }
       if (/\/repos\/[^/]+\/[^/]+\/installation$/.test(url)) {
         return json(200, {
@@ -167,6 +174,8 @@ beforeEach(async () => {
   fleet.reset();
   fx = await makeWorkItemFixture();
   mayRun = true;
+  plan = 'active';
+  _resetAiPlanCache();
   vi.stubEnv('MOTIR_CLOUD', 'true');
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
   vi.stubEnv('MOTIR_AI_URL', `${AI}/`);
@@ -395,6 +404,107 @@ describe('create', () => {
     vi.spyOn(imageDigestResolver, 'resolve').mockRejectedValueOnce(new Error('ghcr down'));
     await expect(create()).rejects.toThrow(/ghcr down/);
     await expectNothingStarted();
+  });
+});
+
+describe('a paid AI plan comes first (MOTIR-6918, agent-instance-storage.md §1)', () => {
+  const asked = (path: string) => calls.filter((c) => c.url.includes(path));
+
+  /** Motir's own organisations, flagged on their own row. */
+  const flagOrg = (data: { isMeta?: boolean; internalBilling?: boolean }) =>
+    adminDb.organization.update({ where: { id: fx.workspace.organizationId }, data });
+
+  it('an org without a paid plan is refused `ai_plan_required` at create — before the per-user cap, the credits or Fly', async () => {
+    for (const status of [null, 'trialing', 'canceled']) {
+      _resetAiPlanCache();
+      plan = status;
+      calls = [];
+      await expect(create()).rejects.toMatchObject({
+        reason: 'ai_plan_required',
+        message: expect.stringContaining('Agents need a paid AI plan'),
+      });
+      expect(asked('agent-run-check')).toEqual([]);
+    }
+    await expectNothingStarted();
+    expect(fleet.operations).toEqual([]);
+  });
+
+  it('an org without a paid plan is refused at the ten-per-user cap too: the plan is asked first', async () => {
+    for (let i = 0; i < 10; i++) {
+      await adminDb.agentInstance.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          organizationId: fx.workspace.organizationId,
+          projectId: fx.projectId,
+          ownerId: fx.ownerId,
+          name: `seeded-${i}`,
+          profileId: 'claude',
+          imageTag: 't',
+          imageDigest: 'sha256:x',
+          region: 'iad',
+          state: 'hibernated',
+        },
+      });
+    }
+    plan = 'canceled';
+    await expect(create()).rejects.toMatchObject({ reason: 'ai_plan_required' });
+  });
+
+  it('a plan that cannot be read refuses `ai_plan_unknown` (fail closed), asking nothing further', async () => {
+    plan = 'unanswerable';
+    await expect(create()).rejects.toMatchObject({
+      reason: 'ai_plan_unknown',
+      message: expect.stringContaining('could not check your organization’s AI plan'),
+    });
+    expect(asked('agent-run-check')).toEqual([]);
+    await expectNothingStarted();
+  });
+
+  it('a wake is refused the same way, before the credit check: the agent stays hibernated', async () => {
+    const dto = await create();
+    await lifecycle.hibernate(KEY(), dto.id, fx.ctx);
+    const opsBefore = fleet.operations.length;
+    for (const [status, reason] of [
+      ['canceled', 'ai_plan_required'],
+      ['unanswerable', 'ai_plan_unknown'],
+    ] as const) {
+      _resetAiPlanCache();
+      plan = status;
+      calls = [];
+      await expect(lifecycle.wake(KEY(), dto.id, fx.ctx)).rejects.toMatchObject({ reason });
+      expect(asked('agent-run-check')).toEqual([]);
+    }
+    expect((await instances())[0]!.state).toBe('hibernated');
+    expect(await slots()).toEqual([]);
+    expect(await intervals()).toHaveLength(1);
+    expect(fleet.operations).toHaveLength(opsBefore);
+  });
+
+  it('a paid org (active or past_due) proceeds to the credit check and boots', async () => {
+    plan = 'past_due';
+    const dto = await create('paid-one');
+    expect(dto.state).toBe('running');
+    expect(asked('agent-run-check')).toHaveLength(1);
+  });
+
+  it('the meta org and an internal org pass without asking motir-ai for a plan — even while it is unreachable', async () => {
+    plan = 'unanswerable';
+    await flagOrg({ isMeta: true });
+    expect((await create('meta-one')).state).toBe('running');
+    _resetAiPlanCache();
+    await flagOrg({ isMeta: false, internalBilling: true });
+    const dto = await create('internal-one');
+    expect(dto.state).toBe('running');
+    await lifecycle.hibernate(KEY(), dto.id, fx.ctx);
+    expect((await lifecycle.wake(KEY(), dto.id, fx.ctx)).state).toBe('running');
+    expect(asked('/v1/stripe/subscription')).toEqual([]);
+  });
+
+  it('a self-hosted build checks no plan', async () => {
+    vi.stubEnv('MOTIR_CLOUD', '');
+    plan = 'unanswerable';
+    expect((await create('self-hosted')).state).toBe('running');
+    expect(asked('/v1/stripe/subscription')).toEqual([]);
   });
 });
 

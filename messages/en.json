@@ -8833,6 +8833,7 @@
     "newAgent": "New agent",
     "emptyTitle": "No agents yet",
     "emptyBody": "Each is your own coding agent — Claude Code, Codex and others — on its own machine in Motir’s cloud, with this project’s code and signed in with your own account. Motir charges only its machine time, and it sleeps when you stop using it.",
+    "emptyBodyWithStorage": "Each is your own coding agent — Claude Code, Codex and others — on its own machine in Motir’s cloud, with this project’s code and signed in with your own account. Motir charges its machine time while it runs and its storage every day, and it sleeps when you stop using it.",
     "loadFailed": "We couldn’t load your agents. Refresh to try again — nothing about them has changed.",
     "col": {
       "name": "Name",
@@ -8881,6 +8882,7 @@
       "codingAgent": "Coding agent",
       "vendorHint": "The coding agent’s model usage is billed to you by its vendor, not by Motir. Motir never sees your sign-in.",
       "price": "<b>1 credit per minute</b> while it runs. It hibernates after 30 minutes without use and costs nothing while hibernated.",
+      "priceWithStorage": "<b>1 credit per minute</b> while it runs, and <b>{perDay} credits a day</b> for its storage, running or hibernated. It hibernates after 30 minutes without use.",
       "cancel": "Cancel",
       "submit": "Create agent"
     },
@@ -8893,9 +8895,11 @@
       "goose": "Uses your own model provider key. For Claude models, your Anthropic API key."
     },
     "refusal": {
-      "credits": "Your organization’s credits can’t start a machine right now. <link>Add credits</link> to create or wake an agent.",
+      "aiPlanRequired": "Agents need a paid AI plan (Standard, Pro, Max or Enterprise). <link>Choose an AI plan</link> to create or wake one.",
+      "aiPlanUnknown": "Motir could not check your organization’s AI plan just now. Try again in a moment.",
+      "credits": "Your organization is out of credits. Agents use credits while they run and for their storage every day, asleep or not. <link>Add credits</link> to create or wake an agent.",
       "creditsUnknown": "Motir could not check your organization’s credits just now. Try again in a moment.",
-      "userCap": "You already have {count} agents. Delete one to create another.",
+      "userCap": "You already have {count} agents. Each one is charged for its storage every day, even asleep. Delete one to create another.",
       "busy": "Motir is running as many machines as it can right now. Try again in a few minutes.",
       "notOffered": "That coding agent isn’t offered: its terms don’t yet allow a platform to host it. Choose another coding agent.",
       "nameTaken": "You already have an agent called {name} on this project.",
@@ -8903,6 +8907,12 @@
       "unavailable": "My agents aren’t available on this deployment.",
       "conflict": "That agent changed while you were looking. The list is up to date now.",
       "generic": "Something went wrong. Try again."
+    },
+    "refusalTitle": {
+      "aiPlanRequired": "Needs an AI plan",
+      "aiPlanUnknown": "Couldn’t check your AI plan",
+      "credits": "Out of credits",
+      "userCap": "Your limit"
     },
     "delete": {
       "title": "Delete {name}?",

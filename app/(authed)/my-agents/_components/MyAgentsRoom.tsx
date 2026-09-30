@@ -62,6 +62,7 @@ export function MyAgentsRoom({
   initial,
   profiles,
   maxPerUser,
+  storageCreditsPerDay = null,
   openAgentId = null,
 }: {
   projectKey: string;
@@ -70,6 +71,8 @@ export function MyAgentsRoom({
   initial: AgentInstanceListPageDto | null;
   profiles: readonly OfferedProfile[];
   maxPerUser: number;
+  /** The daily storage rate on a cloud build, `null` where storage is free (self-hosted). */
+  storageCreditsPerDay?: number | null;
   /** The agent the address names (`?agent=`), read by the page; null when none. */
   openAgentId?: string | null;
 }) {
@@ -259,7 +262,7 @@ export function MyAgentsRoom({
       <EmptyState
         icon={<SquareTerminal className="h-12 w-12" aria-hidden="true" />}
         title={t('emptyTitle')}
-        description={t('emptyBody')}
+        description={t(storageCreditsPerDay === null ? 'emptyBody' : 'emptyBodyWithStorage')}
         action={newAgent}
       />
     ) : openId ? (
@@ -324,6 +327,7 @@ export function MyAgentsRoom({
         profiles={profiles}
         pending={pending?.kind === 'create'}
         refusal={createRefusal}
+        storageCreditsPerDay={storageCreditsPerDay}
         onCreate={(input) => void onCreate(input)}
       />
       <DeleteAgentDialog

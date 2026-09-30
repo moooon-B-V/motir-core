@@ -4,6 +4,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { createTestPerson } from './testPerson';
 import { writeHostedRunFixture } from './hosted-run-boundary';
+import { grantPaidAiPlanIfBilled } from './billing';
 
 // MY AGENTS — the acceptance seed (Story MOTIR-6860 · MOTIR-6877).
 //
@@ -38,6 +39,8 @@ export async function seedMyAgents(tag: string): Promise<MyAgentsSeed> {
     name: 'Agents',
     ownerUserId: owner.id,
   });
+  // Agents are an AI-plan feature (MOTIR-6918): create and wake ask the plan first.
+  grantPaidAiPlanIfBilled(workspace.organizationId);
   const identifier = `AG${tag.slice(-4).toUpperCase()}`;
   const project = await projectsService.createProject({
     workspaceId: workspace.id,

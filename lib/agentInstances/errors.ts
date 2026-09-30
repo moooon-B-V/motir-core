@@ -44,8 +44,18 @@ export class AgentProfileNotOfferedError extends Error {
   }
 }
 
-/** Which rule refused a start (§5, §6). */
-export type AgentInstanceRefusalReason = 'credits' | 'credits_unknown' | 'user_cap' | 'fleet_busy';
+/**
+ * Which rule refused a start (§5, §6). `ai_plan_required` / `ai_plan_unknown` are
+ * `agent-instance-storage.md` §1 and §4's: no paid AI plan, or one that could not
+ * be read — asked before every other rule (MOTIR-6918).
+ */
+export type AgentInstanceRefusalReason =
+  | 'ai_plan_required'
+  | 'ai_plan_unknown'
+  | 'credits'
+  | 'credits_unknown'
+  | 'user_cap'
+  | 'fleet_busy';
 
 /** A create or wake refused BEFORE anything was booted (§5, §6). */
 export class AgentInstanceStartRefusedError extends Error {

@@ -8829,6 +8829,7 @@
     "newAgent": "新建智能体",
     "emptyTitle": "还没有智能体",
     "emptyBody": "每个都是你自己的编码智能体——Claude Code、Codex 等——运行在 Motir 云端自己的机器上，带着这个项目的代码，并用你自己的账号登录。Motir 只收取机器时间费用，你停止使用后它会自动休眠。",
+    "emptyBodyWithStorage": "每个都是你自己的编码智能体——Claude Code、Codex 等——运行在 Motir 云端的独立机器上，带有本项目的代码，并使用你自己的账号登录。Motir 在它运行时收取机器时间费用，每天收取存储费用；你停止使用后它会休眠。",
     "loadFailed": "无法加载你的智能体。请刷新重试——它们没有任何变化。",
     "col": {
       "name": "名称",
@@ -8877,6 +8878,7 @@
       "codingAgent": "编码智能体",
       "vendorHint": "编码智能体的模型用量由其供应商向你收费，而不是 Motir。Motir 永远看不到你的登录信息。",
       "price": "运行时 <b>每分钟 1 额度</b>。30 分钟未使用后自动休眠，休眠期间不收费。",
+      "priceWithStorage": "运行时<b>每分钟 1 额度</b>，存储<b>每天 {perDay} 额度</b>，无论运行还是休眠。闲置 30 分钟后自动休眠。",
       "cancel": "取消",
       "submit": "创建智能体"
     },
@@ -8889,9 +8891,11 @@
       "goose": "使用你自己的模型服务商密钥。使用 Claude 模型时，用你的 Anthropic API 密钥。"
     },
     "refusal": {
-      "credits": "你的组织额度目前无法启动机器。<link>充值额度</link>后即可创建或唤醒智能体。",
+      "aiPlanRequired": "智能体需要付费 AI 套餐（Standard、Pro、Max 或 Enterprise）。<link>选择 AI 套餐</link>后即可创建或唤醒智能体。",
+      "aiPlanUnknown": "Motir 暂时无法查询你的组织的 AI 套餐。请稍后重试。",
+      "credits": "你的组织额度已用完。智能体运行时消耗额度，其存储每天也消耗额度，无论是否休眠。<link>充值额度</link>后即可创建或唤醒智能体。",
       "creditsUnknown": "Motir 暂时无法查询你的组织额度。请稍后重试。",
-      "userCap": "你已经有 {count} 个智能体。删除一个后才能再创建。",
+      "userCap": "你已经有 {count} 个智能体。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
       "busy": "Motir 当前运行的机器已达上限。请几分钟后重试。",
       "notOffered": "暂不提供该编码智能体：其条款尚不允许平台托管它。请选择其他编码智能体。",
       "nameTaken": "你在这个项目上已经有一个名为 {name} 的智能体。",
@@ -8899,6 +8903,12 @@
       "unavailable": "此部署不提供“我的智能体”。",
       "conflict": "该智能体在你查看时发生了变化。列表现已更新。",
       "generic": "出错了，请重试。"
+    },
+    "refusalTitle": {
+      "aiPlanRequired": "需要 AI 套餐",
+      "aiPlanUnknown": "无法查询你的 AI 套餐",
+      "credits": "额度已用完",
+      "userCap": "你的上限"
     },
     "delete": {
       "title": "删除 {name}？",

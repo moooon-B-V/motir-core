@@ -63,6 +63,7 @@ import {
 } from '@/lib/services/agentInstanceActivityService';
 import { agentInstanceChargeService } from '@/lib/services/agentInstanceChargeService';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { aiPlanGateService } from '@/lib/services/aiPlanGateService';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -184,6 +185,32 @@ function describeError(err: unknown): string {
 }
 
 /**
+ * The paid-AI-plan gate (`agent-instance-storage.md` §1, MOTIR-6918): agents are an
+ * AI-plan feature, so create and wake ask it FIRST — before the per-user cap, the
+ * credits and any Fly call — and a tracker-only or Free-AI-tier organisation is
+ * told it needs a plan, never that it is out of credits. The answer is the shared
+ * gate's ({@link aiPlanGateService.hasPaidAiPlan}): it owns the paid statuses, the
+ * self-hosted pass and Motir's own organisations (`isMeta` / `internalBilling`,
+ * answered from their row without asking motir-ai), so none of that is re-derived
+ * here. An answer it could not read refuses too — "could not ask" is never "yes".
+ */
+async function assertPaidAiPlan(organizationId: string): Promise<void> {
+  const answer = await aiPlanGateService.hasPaidAiPlan(organizationId);
+  if (answer === 'unknown') {
+    throw new AgentInstanceStartRefusedError(
+      'ai_plan_unknown',
+      'Motir could not check your organization’s AI plan just now. Try again in a moment.',
+    );
+  }
+  if (!answer) {
+    throw new AgentInstanceStartRefusedError(
+      'ai_plan_required',
+      'Agents need a paid AI plan (Standard, Pro, Max or Enterprise). Choose an AI plan to create or wake one.',
+    );
+  }
+}
+
+/**
  * The credit pre-flight (§5): may this organisation start a machine? A self-hosted
  * build charges nothing and asks nothing. An answer that could not be obtained
  * refuses too, with different words — "could not ask" is never "yes".
@@ -200,7 +227,7 @@ async function assertCredits(organizationId: string): Promise<void> {
   if (!verdict.mayRun) {
     throw new AgentInstanceStartRefusedError(
       'credits',
-      'Your organization’s credits can’t start a machine right now. Add credits to create or wake an agent.',
+      'Your organization is out of credits. Agents use credits while they run and for their storage every day, asleep or not. Add credits to create or wake an agent.',
     );
   }
 }
@@ -455,13 +482,14 @@ export const agentInstanceLifecycleService = {
       throw new AgentProfileNotOfferedError(input.profileId, profileDisplayName(input.profileId));
     }
 
+    await assertPaidAiPlan(project.organizationId);
     const mine = await withSystemContext((tx) =>
       agentInstanceRepository.countLiveForOwnerEverywhere(ctx.userId, tx),
     );
     if (mine >= INSTANCE_MAX_PER_USER) {
       throw new AgentInstanceStartRefusedError(
         'user_cap',
-        `You already have ${INSTANCE_MAX_PER_USER} agents. Delete one to create another.`,
+        `You already have ${INSTANCE_MAX_PER_USER} agents. Each one is charged for its storage every day, even asleep. Delete one to create another.`,
       );
     }
     const clash = await inProject(project, ctx, async (tx) => {
@@ -584,6 +612,7 @@ export const agentInstanceLifecycleService = {
     const handle = handleOf(row);
     if (!handle) throw new AgentInstanceStateConflictError(row.id, row.state, 'woken');
 
+    await assertPaidAiPlan(project.organizationId);
     await assertCredits(project.organizationId);
     const terminal = agentTerminalMachineConfig(row.id);
     const intervalId = randomUUID();

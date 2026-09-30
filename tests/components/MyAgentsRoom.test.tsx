@@ -62,7 +62,11 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const mount = (initial: AgentInstanceListPageDto | null, messages?: Record<string, unknown>) =>
+const mount = (
+  initial: AgentInstanceListPageDto | null,
+  messages?: Record<string, unknown>,
+  storageCreditsPerDay: number | null = null,
+) =>
   render(
     <MyAgentsRoom
       projectKey="MOTIR"
@@ -70,6 +74,7 @@ const mount = (initial: AgentInstanceListPageDto | null, messages?: Record<strin
       initial={initial}
       profiles={PROFILES}
       maxPerUser={10}
+      storageCreditsPerDay={storageCreditsPerDay}
     />,
     messages ? { messages, locale: 'zh' } : {},
   );
@@ -202,7 +207,9 @@ describe('create', () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Create agent' }));
     });
     const alert = within(dialog).getByRole('alert');
-    expect(alert.textContent).toContain('Your organization’s credits can’t start a machine');
+    expect(alert.textContent).toBe(
+      'Out of creditsYour organization is out of credits. Agents use credits while they run and for their storage every day, asleep or not. Add credits to create or wake an agent.',
+    );
     expect(within(alert).getByRole('link', { name: 'Add credits' }).getAttribute('href')).toBe(
       '/settings/organization/billing',
     );
@@ -214,7 +221,7 @@ describe('create', () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Create agent' }));
     });
     expect(within(dialog).getByRole('alert').textContent).toBe(
-      'You already have 10 agents. Delete one to create another.',
+      'Your limitYou already have 10 agents. Each one is charged for its storage every day, even asleep. Delete one to create another.',
     );
 
     fetchMock.mockResolvedValueOnce(json(409, { code: 'agent_instance_name_taken' }));
@@ -225,6 +232,92 @@ describe('create', () => {
       'You already have an agent called x on this project.',
     );
     expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+});
+
+describe('a paid AI plan, and storage in the words (MOTIR-6918, the MOTIR-6916 delta)', () => {
+  async function refuseCreate(status: number, reason: string) {
+    fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Name'), {
+      target: { value: 'x' },
+    });
+    fetchMock.mockResolvedValueOnce(json(status, { code: 'agent_instance_start_refused', reason }));
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole('dialog')).getByRole('button', { name: 'Create agent' }),
+      );
+    });
+    return within(screen.getByRole('dialog')).getByRole('alert');
+  }
+
+  it('panel A: needs an AI plan, titled, with Choose an AI plan → Billing & plans — and the dialog stays open', async () => {
+    mount(page([]));
+    fireEvent.click(screen.getAllByRole('button', { name: 'New agent' })[0]!);
+    await screen.findByRole('dialog');
+    const alert = await refuseCreate(402, 'ai_plan_required');
+    expect(within(alert).getByText('Needs an AI plan').className).toContain('font-semibold');
+    expect(alert.textContent).toContain(
+      'Agents need a paid AI plan (Standard, Pro, Max or Enterprise). Choose an AI plan to create or wake one.',
+    );
+    expect(
+      within(alert).getByRole('link', { name: 'Choose an AI plan' }).getAttribute('href'),
+    ).toBe('/settings/organization/billing');
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('an AI plan that could not be checked: titled, no link', async () => {
+    mount(page([]));
+    fireEvent.click(screen.getAllByRole('button', { name: 'New agent' })[0]!);
+    await screen.findByRole('dialog');
+    const alert = await refuseCreate(503, 'ai_plan_unknown');
+    expect(alert.textContent).toBe(
+      'Couldn’t check your AI planMotir could not check your organization’s AI plan just now. Try again in a moment.',
+    );
+    expect(within(alert).queryByRole('link')).toBeNull();
+  });
+
+  it('panel B: a Wake refused for the plan shows above the list, and the row stays hibernated', async () => {
+    mount(page([agent({ state: 'hibernated' })]));
+    const menu = await openMenu('yue-claude');
+    fetchMock
+      .mockResolvedValueOnce(
+        json(402, { code: 'agent_instance_start_refused', reason: 'ai_plan_required' }),
+      )
+      .mockResolvedValueOnce(json(200, page([agent({ state: 'hibernated' })])));
+    await act(async () => {
+      fireEvent.click(within(menu).getByRole('menuitem', { name: 'Wake' }));
+    });
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain('Needs an AI plan');
+    expect(within(alert).getByRole('link', { name: 'Choose an AI plan' })).toBeTruthy();
+    expect(screen.getAllByText('Hibernated').length).toBeGreaterThan(0);
+  });
+
+  it('on a cloud build the price line and the empty state say storage is charged every day, at the rate given', async () => {
+    mount(page([]), undefined, 10);
+    expect(
+      screen.getByText(/Motir charges its machine time while it runs and its storage every day/),
+    ).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: 'New agent' })[0]!);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain(
+      '1 credit per minute while it runs, and 10 credits a day for its storage, running or hibernated. It hibernates after 30 minutes without use.',
+    );
+    expect(dialog.textContent).not.toContain('costs nothing while hibernated');
+  });
+
+  it('where storage is not charged (self-hosted) the words keep the base design', async () => {
+    mount(page([]));
+    expect(screen.getByText(/Motir charges only its machine time/)).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: 'New agent' })[0]!);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).not.toContain('for its storage');
+  });
+
+  it('the zh catalog carries every new key', async () => {
+    mount(page([]), zhMessages as Record<string, unknown>, 10);
+    fireEvent.click(screen.getAllByRole('button', { name: /智能体/ })[0]!);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('每天 10 额度');
   });
 });
 

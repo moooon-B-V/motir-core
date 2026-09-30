@@ -59,6 +59,8 @@ describe('machine time', () => {
 
 describe('every refusal maps to the design’s copy', () => {
   it.each([
+    [{ reason: 'ai_plan_required' }, 'aiPlanRequired'],
+    [{ reason: 'ai_plan_unknown' }, 'aiPlanUnknown'],
     [{ reason: 'credits' }, 'credits'],
     [{ reason: 'credits_unknown' }, 'creditsUnknown'],
     [{ reason: 'user_cap' }, 'userCap'],
