@@ -64,6 +64,7 @@ import { pullRequestAutoMerge } from './definitions/pullRequestAutoMerge';
 import { agentReviewRequested } from './definitions/agentReviewRequested';
 import { designAutoRerun } from './definitions/designAutoRerun';
 import { pullRequestBaseMoved } from './definitions/pullRequestBaseMoved';
+import { pullRequestHeadMoved } from './definitions/pullRequestHeadMoved';
 import {
   monitorConnectionPoll,
   monitorIssueReconcileTick,
@@ -159,6 +160,8 @@ export const jobDefinitions = [
   agentReviewRequested,
   designAutoRerun,
   pullRequestBaseMoved,
+  // The head-push re-read beside it (MOTIR-7063): a push onto a base already moved.
+  pullRequestHeadMoved,
   // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick and
   // its per-connection fan-out.
   monitorIssueReconcileTick,

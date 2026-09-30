@@ -87,6 +87,11 @@ export interface RetiredStepId {
  * which is exactly what every pre-change row is.
  */
 export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
+  '`head-settle-${pass}`': {
+    file: 'lib/jobs/definitions/pullRequestHeadMoved.ts',
+    shape:
+      '{ gatesRaised: number; held: number; outcome: "clean" | "conflicted" | "failed" | "skipped" | "unknown"; promoted: number; withdrawn: number }',
+  },
   '`index-admit:${subject}`': {
     file: 'lib/services/codeGraphIndexDispatchService.ts',
     shape:

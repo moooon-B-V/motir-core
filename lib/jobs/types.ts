@@ -585,6 +585,7 @@ export interface JobEventDataMap {
    *  mergeability of every open pull request that targets it, and withdraw the question
    *  over any that now conflict. Emitted by the push webhook after its own write. */
   'pull-request/base-moved': PullRequestBaseMovedData;
+  'pull-request/head-moved': PullRequestHeadMovedData;
   /** The monitor-issue reconciler's TICK (Story MOTIR-4929 · MOTIR-5581) — cron
    *  triggered and cross-tenant: it discovers every binding and fans out. */
   'system.monitor-issue-reconcile': SystemScheduledData;
@@ -651,6 +652,25 @@ export interface PullRequestBaseMovedData {
   /** The new head of that branch, when the delivery carried one. */
   baseHeadSha: string | null;
   /** `<repoId>:<baseHeadSha>` — a redelivered push for the same head enqueues nothing new. */
+  idempotencyKey: string;
+}
+
+/**
+ * The `pull-request/head-moved` event payload (MOTIR-7063) — one per `synchronize`. The
+ * base-branch push asks about every pull request on the base; a push to the pull
+ * request's OWN branch asks about that one, because a head pushed onto a base that has
+ * already moved past it conflicts with no event on the base at all.
+ */
+export interface PullRequestHeadMovedData {
+  /** The repository's tenant — `github_repo.workspace_id`. */
+  workspaceId: string;
+  /** The `github_pull_request` ROW id. */
+  pullRequestId: string;
+  /** The pull request's number on the host. */
+  number: number;
+  /** The head the push delivered — the one the pending reading is owed at. */
+  headSha: string;
+  /** `<pullRequestId>:<headSha>` — a redelivered push for the same head enqueues nothing new. */
   idempotencyKey: string;
 }
 
