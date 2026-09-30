@@ -28,13 +28,26 @@
  *   - THE PTY is node-pty when `MOTIR_TERMINAL_MODULE_DIR` holds a build (the
  *     image's own), else `pty-bridge.py` — a real pseudo-terminal via Python's
  *     `pty`, so CI needs no native build.
- *   - THE VENDOR CLI is the stub in `./bin` (`claude`), first on the shell's PATH.
- *   - THE PROFILE is Claude Code (`MOTIR_SANDBOX_AGENT=claude`): the lane's fake
- *     spec does not carry the image's profile, and every agent the spec opens is
- *     a Claude Code one.
+ *   - THE VENDOR CLIs are the stubs in `./bin` (`claude`, `codex`), first on the
+ *     shell's PATH and the chat's (Story MOTIR-6863 · MOTIR-7019): they replay the
+ *     chat adapters' recorded streams through `vendor-stub.mjs` and never reach a
+ *     vendor.
+ *   - THE PROFILE is the image's, as on a real machine: the fake fleet boots
+ *     `<repository>@<digest>`, and on the fake the digest is the SHA-256 of the
+ *     profile's tag (`lib/agentInstances/imageDigest.ts`), so the host reads the
+ *     profile back from it (`MOTIR_SANDBOX_AGENT`). An unknown image is Claude Code.
+ *   - WHAT THE SPEC SEEDS PER AGENT — the sidecar at `MOTIR_E2E_AGENT_SETUP_PATH`,
+ *     `{ [instanceId]: { env?, files?, chatServer? } }`, read on each boot: extra
+ *     machine environment (which sign-in the stub CLI reports), files on the home
+ *     volume (a credential placeholder, an older session), and `chatServer: false`
+ *     for an image from before the chat, whose server answers `/v1/chat` with 404
+ *     (`docs/decisions/agent-chat.md` Q8).
+ *   - WHAT THE STUB CLIs RECEIVED is recorded per agent at
+ *     `<homes>/.calls/<instanceId>.jsonl` (`MOTIR_E2E_STUB_CALLS`), for the spec to read.
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage } from 'node:http';
 import { constants as osConstants, tmpdir } from 'node:os';
 import path from 'node:path';
@@ -50,12 +63,15 @@ import {
   createTerminalServer,
   type TerminalServer,
 } from '../../../../packages/cli/src/agentTerminal/server';
+import { OFFERED_AGENT_PROFILES, sandboxImageTag } from '../../../../lib/agentInstances/profiles';
 
 const HERE = __dirname;
 const STUB_BIN = path.join(HERE, 'bin');
 const BRIDGE = path.join(HERE, 'pty-bridge.py');
 const PORT = Number(process.env['MOTIR_E2E_TERMINAL_HOST_PORT'] ?? 3292);
 const HOMES = process.env['MOTIR_E2E_AGENT_HOMES'] ?? path.join(tmpdir(), 'motir-e2e-agent-homes');
+const SETUP_PATH =
+  process.env['MOTIR_E2E_AGENT_SETUP_PATH'] ?? path.join(tmpdir(), 'motir-e2e-agent-setup.json');
 
 const statePath = process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH'];
 if (!statePath) {
@@ -68,6 +84,7 @@ interface FakeMachine {
   handle: { machineId: string };
   spec: {
     instanceId: string;
+    image?: string;
     env?: Record<string, string>;
     terminal?: { env?: Record<string, string> } | null;
   };
@@ -118,13 +135,50 @@ const moduleDir = process.env[TERMINAL_MODULE_DIR_ENV]?.trim() || DEFAULT_TERMIN
 const nodePty = loadNodePty(moduleDir);
 const spawnPty: SpawnPty = nodePty ?? pythonPty;
 
+/** What the spec seeded for one agent (see the header). */
+interface AgentSetup {
+  env?: Record<string, string>;
+  files?: Array<{ path: string; content: string; mtime?: string }>;
+  chatServer?: boolean;
+}
+
+function readSetup(instanceId: string): AgentSetup {
+  if (!existsSync(SETUP_PATH)) return {};
+  try {
+    const all = JSON.parse(readFileSync(SETUP_PATH, 'utf8')) as Record<string, AgentSetup>;
+    return all[instanceId] ?? {};
+  } catch {
+    return {}; // a torn read of a file the spec is writing
+  }
+}
+
+/** The image's profile: the fake digest is the SHA-256 of `<repository>:<profile>`. */
+const PROFILE_BY_DIGEST = new Map(
+  OFFERED_AGENT_PROFILES.map((p) => [
+    `sha256:${createHash('sha256').update(sandboxImageTag(p.id)).digest('hex')}`,
+    p.id,
+  ]),
+);
+function profileOf(machine: FakeMachine): string {
+  const digest = machine.spec.image?.split('@')[1];
+  return (digest && PROFILE_BY_DIGEST.get(digest)) || 'claude';
+}
+
 /** The instance's home volume: created once, kept across every run of its machine. */
-function homeFor(instanceId: string): string {
+function homeFor(instanceId: string, setup: AgentSetup): string {
   const home = path.join(HOMES, instanceId);
-  if (existsSync(home)) return home;
+  for (const file of setup.files ?? []) {
+    const target = path.join(home, file.path);
+    if (existsSync(target)) continue; // the volume keeps what it has
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, file.content);
+    if (file.mtime) utimesSync(target, new Date(file.mtime), new Date(file.mtime));
+  }
+  if (existsSync(path.join(home, '.bash_profile'))) return home;
   mkdirSync(path.join(home, 'workspace'), { recursive: true });
   // The image's one-time agent-config setup has "already run" for this home.
   mkdirSync(path.join(home, '.motir-sandbox', 'agent-config', '.claude'), { recursive: true });
+  mkdirSync(path.join(home, '.motir-sandbox', 'agent-config', '.codex'), { recursive: true });
   writeFileSync(path.join(home, '.motir-sandbox', 'agent-config', '.setup-done'), '');
   // A login shell's profile: the stub CLI first on PATH (a distribution's
   // /etc/profile may reset PATH), and a prompt that names the directory.
@@ -136,8 +190,19 @@ function homeFor(instanceId: string): string {
 }
 
 interface Booted {
-  starts: number;
+  /**
+   * Which run of which machine this server is: the instance, the run count and
+   * its terminal key. A fake machine id is a per-process sequence that restarts
+   * when a spec resets the fleet, so the id alone can name a NEW machine with a
+   * server booted for an old one (and the old key: every relay token 401s).
+   */
+  run: string;
   terminal: TerminalServer;
+}
+
+function runOf(machine: FakeMachine): string {
+  const env = { ...(machine.spec.env ?? {}), ...(machine.spec.terminal?.env ?? {}) };
+  return `${machine.spec.instanceId}#${machine.starts}#${env[TERMINAL_KEY_ENV] ?? ''}`;
 }
 const booted = new Map<string, Booted>();
 
@@ -146,15 +211,20 @@ function boot(machine: FakeMachine): TerminalServer | null {
   const key = machineEnv[TERMINAL_KEY_ENV];
   if (!key) return null; // a machine booted without the terminal config serves nothing
   const instanceId = machine.spec.instanceId;
-  const home = homeFor(instanceId);
+  const setup = readSetup(instanceId);
+  const home = homeFor(instanceId, setup);
   const env = {
     PATH: `${STUB_BIN}:${process.env['PATH'] ?? '/usr/bin:/bin'}`,
     HOME: home,
     USER: process.env['USER'] ?? 'node',
     LANG: 'C.UTF-8',
     SHELL: '/bin/bash',
-    MOTIR_SANDBOX_AGENT: 'claude',
+    MOTIR_SANDBOX_AGENT: profileOf(machine),
+    // The image entrypoint points both config homes at the agent-config dir.
     CLAUDE_CONFIG_DIR: path.join(home, '.motir-sandbox', 'agent-config', '.claude'),
+    CODEX_HOME: path.join(home, '.motir-sandbox', 'agent-config', '.codex'),
+    MOTIR_E2E_STUB_CALLS: path.join(HOMES, '.calls', `${instanceId}.jsonl`),
+    ...setup.env,
     ...machineEnv,
     MOTIR_INSTANCE_ID: instanceId,
     FLY_MACHINE_ID: machine.handle.machineId,
@@ -184,7 +254,7 @@ function onUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
     return;
   }
   let current = booted.get(machineId);
-  if (!current || current.starts !== machine.starts) {
+  if (!current || current.run !== runOf(machine)) {
     // A new run of the machine: the previous run's shells end with it.
     if (current) void current.terminal.close();
     const terminal = boot(machine);
@@ -192,8 +262,13 @@ function onUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
       refuse(socket, 502, 'Bad Gateway');
       return;
     }
-    current = { starts: machine.starts, terminal };
+    current = { run: runOf(machine), terminal };
     booted.set(machineId, current);
+  }
+  // An image from before the chat: its server 404s the path (agent-chat.md Q8).
+  if (req.url?.startsWith('/v1/chat') && readSetup(machine.spec.instanceId).chatServer === false) {
+    refuse(socket, 404, 'Not Found');
+    return;
   }
   // The real server's own upgrade handler: it verifies the relay token first.
   current.terminal.server.emit('upgrade', req, socket, head);

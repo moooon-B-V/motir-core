@@ -8,7 +8,14 @@
 # accepts a pasted code, and writes the credential file the terminal server's
 # sign-in check stats (`$CLAUDE_CONFIG_DIR/.credentials.json`,
 # docs/decisions/agent-terminal.md Q7). The file's content is a placeholder.
+#
+# With arguments it is the CHAT's binary (Story MOTIR-6863 · MOTIR-7019): the
+# headless turn and `auth status --json` that docs/decisions/agent-chat.md Q2/Q3
+# record are answered by ../vendor-stub.mjs, which refuses (exit 2) anything else.
 set -u
+if [ "$#" -gt 0 ]; then
+  exec node "$(dirname "$0")/../vendor-stub.mjs" claude "$@"
+fi
 echo "Claude Code (stub for the Motir acceptance lane)"
 echo "Type /login to sign in, /exit to leave."
 while IFS= read -r -p "> " line; do

@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { E2E_GITHUB_WEBHOOK_SECRET } from './tests/e2e/_helpers/github-const';
 import { NEXT_START_KEEP_ALIVE_FLAG } from './tests/e2e/_helpers/server-keep-alive';
 import { generateKeyPairSync } from 'node:crypto';
+import os from 'node:os';
 import path from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import {
@@ -250,6 +251,12 @@ process.env['MOTIR_TERMINAL_MASTER_KEY'] ??= 'e2e-acceptance-terminal-master-key
 process.env['MOTIR_RELAY_URL'] ??= `ws://localhost:${RELAY_PORT}/v1/terminal`;
 process.env['MOTIR_FAKE_TERMINAL_URL'] ??= `ws://127.0.0.1:${TERMINAL_HOST_PORT}`;
 process.env['MOTIR_E2E_TERMINAL_HOST_PORT'] ??= String(TERMINAL_HOST_PORT);
+// The chat (Story MOTIR-6863 · MOTIR-7019): the agents' home volumes and the
+// per-agent setup sidecar the host boots each machine with — set on the RUNNER
+// too, because the spec is the other half: it seeds the sidecar and reads what
+// the stub CLIs recorded under the homes (`_helpers/agent-terminal/host.ts`).
+process.env['MOTIR_E2E_AGENT_HOMES'] ??= path.join(os.tmpdir(), 'motir-e2e-agent-homes');
+process.env['MOTIR_E2E_AGENT_SETUP_PATH'] ??= path.join(os.tmpdir(), 'motir-e2e-agent-setup.json');
 
 /** The Studio App's credentials. The private key is GENERATED per run rather than
  *  committed: `createAppJwt` really signs RS256 with it (the shipped path runs
@@ -516,6 +523,8 @@ export default defineConfig({
       env: {
         MOTIR_E2E_TERMINAL_HOST_PORT: String(TERMINAL_HOST_PORT),
         MOTIR_FAKE_PERSISTENT_STATE_PATH: process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH']!,
+        MOTIR_E2E_AGENT_HOMES: process.env['MOTIR_E2E_AGENT_HOMES']!,
+        MOTIR_E2E_AGENT_SETUP_PATH: process.env['MOTIR_E2E_AGENT_SETUP_PATH']!,
       },
     },
   ],

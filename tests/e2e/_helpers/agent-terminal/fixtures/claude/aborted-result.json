@@ -1,0 +1,15 @@
+{
+  "type": "result",
+  "subtype": "error_during_execution",
+  "is_error": true,
+  "duration_ms": 2310,
+  "duration_api_ms": 2102,
+  "num_turns": 2,
+  "result": "",
+  "session_id": "49c4fa44-2f7e-4f0a-9d3b-5a1c0e7b2d10",
+  "total_cost_usd": 0.000796,
+  "usage": { "input_tokens": 48, "output_tokens": 42, "cache_read_input_tokens": 0 },
+  "permission_denials": [],
+  "terminal_reason": "aborted_streaming",
+  "uuid": "u-0356"
+}
