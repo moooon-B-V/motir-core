@@ -10,8 +10,12 @@ import { _resetAiPlanCache, aiPlanGateService } from '@/lib/services/aiPlanGateS
 // A `beforeEach`, not a one-off spy, because most of these suites run
 // `vi.restoreAllMocks()` in an `afterEach`.
 export function grantPaidAiPlan(): void {
-  beforeEach(() => {
-    _resetAiPlanCache();
-    vi.spyOn(aiPlanGateService, 'hasPaidAiPlan').mockResolvedValue(true);
-  });
+  beforeEach(stubPaidAiPlan);
+}
+
+/** The spy itself — for a test that runs `vi.restoreAllMocks()` mid-body and
+ *  needs the plan back before its next press. */
+export function stubPaidAiPlan(): void {
+  _resetAiPlanCache();
+  vi.spyOn(aiPlanGateService, 'hasPaidAiPlan').mockResolvedValue(true);
 }
