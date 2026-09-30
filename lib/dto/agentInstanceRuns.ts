@@ -43,6 +43,11 @@ export interface AgentRunningRunDto {
   id: string;
   /** The card it works on — its scope target, else its first leg. */
   workItemKey: string | null;
+  /**
+   * That card's title (MOTIR-7028) — the picker's busy row names the work item
+   * by key and title. Null when the key is unknown or its card was deleted.
+   */
+  workItemTitle: string | null;
 }
 
 /** One of the caller's agents on the card's project, as the picker offers it. */

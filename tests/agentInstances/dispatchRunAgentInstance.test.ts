@@ -106,7 +106,36 @@ describe('the record holds a run in an agent', () => {
     // A run in an agent has no token cost to read (§5): the hosted cost is never
     // asked for, so no `cost` key rides on the detail.
     expect(detail).not.toHaveProperty('cost');
-    expect(detail).not.toHaveProperty('hostedEnd');
+    // …but its END is read like a hosted run's (MOTIR-7028): nothing yet while live.
+    expect(detail.hostedEnd).toEqual({ outcome: null, detail: null, exitCode: null });
+  });
+
+  it('an ended `instance` run’s detail quotes the end path’s recorded reason (MOTIR-7028)', async () => {
+    const agentId = await seedAgent('yue-claude');
+    const { run } = await openIn(agentId);
+    // The agent end path's own closing line (`agentInstanceRunService.end`).
+    await dispatchRunService.appendEvents(
+      run.id,
+      [
+        {
+          kind: 'log',
+          body: '[motir] run in agent ended (stalled): stalled: no agent output for 15 minutes\n',
+          data: { end: 'stall', message: 'stalled: no agent output for 15 minutes' },
+        },
+      ],
+      fx.ctx,
+    );
+    await dispatchRunService.close(
+      run.id,
+      { stopReason: 'abandoned', status: 'timed_out' },
+      fx.ctx,
+    );
+    const detail = await dispatchRunService.getRunDetail(run.id, fx.ctx);
+    expect(detail.hostedEnd).toEqual({
+      outcome: 'stall',
+      detail: 'stalled: no agent output for 15 minutes',
+      exitCode: null,
+    });
   });
 
   it('`local` and `hosted` runs read back unchanged, with `agentInstance: null`', async () => {

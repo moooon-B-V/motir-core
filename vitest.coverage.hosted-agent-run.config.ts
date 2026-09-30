@@ -63,6 +63,11 @@ export default defineConfig({
       // Story MOTIR-6864 · MOTIR-7027 — the cancel route (measured below) also takes a
       // run in an agent; its instance arm is driven by the agent run's lifecycle suite.
       'tests/agentInstances/agentInstanceRunLifecycle.test.ts',
+      // Story MOTIR-6864 · MOTIR-7028 — Send to my agent on the item page's start bar,
+      // and a run in an agent on the Run section and the run modal.
+      'tests/components/SendToAgentDoor.test.tsx',
+      'tests/components/AgentRunSurfaces.test.tsx',
+      'tests/components/HostedRunSurfaces.test.tsx',
     ],
     coverage: {
       provider: 'v8',
@@ -87,6 +92,13 @@ export default defineConfig({
         'app/**/_components/ContinueHostedDoor.tsx',
         'app/**/_components/HostedRunProvider.tsx',
         'components/hosted/**',
+        // Story MOTIR-6864 · MOTIR-7028 — the start bar, Send to my agent and its
+        // picker, the send's press, the header's Cancel, and a run in an agent's parts.
+        'app/**/_components/StartBar.tsx',
+        'app/**/_components/SendToAgentDoor.tsx',
+        'app/**/_components/useAgentSend.ts',
+        'app/**/_components/RunHostedButton.tsx',
+        'app/**/_components/AgentRunParts.tsx',
       ],
       thresholds: {
         perFile: true,
@@ -115,6 +127,36 @@ export default defineConfig({
           lines: 90,
         },
         'components/hosted/**': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'app/**/_components/StartBar.tsx': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'app/**/_components/SendToAgentDoor.tsx': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'app/**/_components/useAgentSend.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'app/**/_components/RunHostedButton.tsx': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'app/**/_components/AgentRunParts.tsx': {
           statements: 90,
           functions: 90,
           branches: 90,

@@ -134,7 +134,7 @@ describe('the door on a ready card', () => {
       'claude-sonnet-5',
     );
     expect((screen.getByTestId('run-hosted') as HTMLButtonElement).disabled).toBe(false);
-    expect(screen.getByTestId('run-hosted').textContent).toBe('Run hosted');
+    expect(screen.getByTestId('run-hosted').textContent).toBe('Run');
   });
 
   it('with no default, the FIRST offered model is preselected', async () => {
@@ -213,7 +213,7 @@ describe('the door, disabled', () => {
     await mount({ ready: false, openBlockers: 2 });
     expect((screen.getByTestId('run-hosted') as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByTestId('hosted-not-ready').textContent).toBe(
-      'Run hosted is available once this work item is ready — it has 2 open blockers.',
+      'Run is available once this work item is ready — it has 2 open blockers.',
     );
   });
 
@@ -225,7 +225,7 @@ describe('the door, disabled', () => {
       'Models unavailable',
     );
     const notice = screen.getByTestId('hosted-models-unavailable');
-    expect(notice.textContent).toContain('Couldn’t load the models that can run hosted');
+    expect(notice.textContent).toContain('Couldn’t load the models, so Run is off');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     });
@@ -237,7 +237,7 @@ describe('the door, disabled', () => {
     await mount();
     expect((screen.getByTestId('run-hosted') as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByTestId('hosted-models-empty').textContent).toContain(
-      'No model can run a hosted work item right now',
+      'No model can run this work item right now',
     );
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
   });
@@ -251,7 +251,7 @@ describe('refusals live on the door — none of them starts anything', () => {
       fireEvent.click(screen.getByTestId('run-hosted'));
     });
     expect(screen.getByTestId('hosted-refused-modelNotOffered').textContent).toContain(
-      'claude-sonnet-5 is no longer offered for hosted runs.',
+      'claude-sonnet-5 is no longer offered.',
     );
     expect(calls(MODELS)).toHaveLength(2);
     expect(refresh).not.toHaveBeenCalled();
@@ -326,7 +326,7 @@ describe('the header holds exactly one thing', () => {
       body: { billableSeconds: 60, settled: true },
     });
     await mount({ runs: [run({ origin: 'hosted', status: 'failed' })] });
-    expect(screen.getByTestId('run-hosted').textContent).toBe('Run hosted again');
+    expect(screen.getByTestId('run-hosted').textContent).toBe('Run again');
   });
 
   it('a PARENT card whose scope run is a live hosted run offers Cancel run', async () => {
@@ -386,8 +386,6 @@ describe('cancel', () => {
     expect(calls('POST /api/dispatch-runs/run_1/cancel')).toHaveLength(1);
     expect(refresh).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(calls(HISTORY)).toHaveLength(1));
-    await waitFor(() =>
-      expect(screen.getByTestId('run-hosted').textContent).toBe('Run hosted again'),
-    );
+    await waitFor(() => expect(screen.getByTestId('run-hosted').textContent).toBe('Run again'));
   });
 });

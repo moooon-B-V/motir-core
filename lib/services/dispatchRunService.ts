@@ -353,8 +353,12 @@ async function readHostedRunCost(runId: string): Promise<DispatchRunCostDto | nu
   }
 }
 
-/** The end path's closing-line prefix: `[motir] hosted run ended (<label>): `. */
-const HOSTED_END_PREFIX = /^\[motir\] hosted run ended \([^)]*\): /;
+/**
+ * The end paths' closing-line prefix: the hosted run's `[motir] hosted run ended
+ * (<label>): `, or a run in an agent's `[motir] run in agent ended (<label>): `
+ * (`agentInstanceRunService.end`, MOTIR-7027) — both carry `data.end`.
+ */
+const HOSTED_END_PREFIX = /^\[motir\] (?:hosted run|run in agent) ended \([^)]*\): /;
 
 /**
  * How a HOSTED run ended (MOTIR-691): the end path's closing `log` line
@@ -1321,11 +1325,12 @@ export const dispatchRunService = {
 
         const base = toDispatchRunDto(run, seq);
         // A HOSTED run's reason line (MOTIR-691) — read in the same transaction,
-        // off the two events that carry it. A local run has neither to read, and
-        // neither has an `instance` run: its closing line is the agent end path's
-        // (`agent-instance-run.md` §6), not the hosted end path's.
+        // off the two events that carry it. A run in an agent has the same two
+        // (MOTIR-7028): its end path (`agent-instance-run.md` §6) writes the same
+        // `data.end` closing line, and the item page and the run modal quote it
+        // verbatim. A local run has neither to read.
         const hostedEnd =
-          base.origin === 'hosted'
+          base.origin === 'hosted' || base.origin === 'instance'
             ? await readHostedEnd(
                 runId,
                 base.cards.map((c) => c.exitCode),

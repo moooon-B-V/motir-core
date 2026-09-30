@@ -153,7 +153,10 @@ export function toDispatchRunLegCounts(cards: DispatchRunCard[]): DispatchRunLeg
  * cards it came out that way on.
  */
 export function toDispatchRunListItemDto(
-  row: DispatchRun & { cards: DispatchRunCard[] },
+  row: DispatchRun & {
+    cards: DispatchRunCard[];
+    agentInstance?: DispatchRunAgentInstanceRow | null;
+  },
 ): DispatchRunListItemDto {
   return {
     id: row.id,
@@ -168,6 +171,7 @@ export function toDispatchRunListItemDto(
     startedAt: row.startedAt.toISOString(),
     endedAt: row.endedAt?.toISOString() ?? null,
     createdById: row.createdById,
+    agentInstance: toDispatchRunAgentInstanceDto(row.agentInstance),
     cardCount: row.cards.length,
     legs: toDispatchRunLegCounts(row.cards),
   };

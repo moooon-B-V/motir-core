@@ -716,7 +716,11 @@ describe('the card’s agent picker', () => {
       state: 'running',
       runLauncher: 'present',
       signInState: 'signed_in',
-      runningRun: { id: dispatchRunId, workItemKey: busyCard.identifier },
+      runningRun: {
+        id: dispatchRunId,
+        workItemKey: busyCard.identifier,
+        workItemTitle: busyCard.title,
+      },
       refusal: 'agent_instance_run_active',
     });
     expect(agents.find((a) => a.name === 'free')).toMatchObject({

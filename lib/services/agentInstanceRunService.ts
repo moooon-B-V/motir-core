@@ -39,12 +39,12 @@ import {
   type RunGitWriteRefusal,
 } from '@/lib/hostedRuns/errors';
 import {
-  HOSTED_RUN_STALL_WINDOW_MS,
   HOSTED_RUN_TIMEOUT_MS,
   hostedRunStallWindowMs,
   latestRunCredentialExpiry,
 } from '@/lib/hostedRuns/limits';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { AGENT_RUN_END_DETAIL } from '@/lib/agentInstances/runEnd';
 import { toAgentForCardDto } from '@/lib/mappers/agentInstanceRunMappers';
 import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
 import { PermissionDeniedError } from '@/lib/projects/errors';
@@ -157,22 +157,8 @@ export const AGENT_RUN_SUPERVISE_POLL_MS = 60_000;
 /** The 12-hour backstop on a run in an agent — the hosted run's (`hosted-agent-run.md`). */
 export const AGENT_RUN_BACKSTOP_MS = HOSTED_RUN_TIMEOUT_MS;
 
-/**
- * The closing words of each end (`agent-instance-run.md` §6). The stall and the
- * backstop are the HOSTED run's words, so the item page's *run died* sentence
- * splits a timed-out run in an agent the way it splits a hosted one (the
- * `/12[- ]hour|backstop/` test in `workItemContinueService`). The design
- * (MOTIR-7022 rev 2) left the backstop's words open; these are the hosted
- * end path's own (`hostedRunService`'s `timed out at the 12-hour backstop`).
- */
-export const AGENT_RUN_END_DETAIL = {
-  stall: `stalled: no agent output for ${HOSTED_RUN_STALL_WINDOW_MS / 60_000} minutes`,
-  backstop: `timed out at the ${HOSTED_RUN_TIMEOUT_MS / 3_600_000}-hour backstop`,
-  agentStopped: 'the agent stopped',
-  machineLost: 'the agent’s machine was lost',
-  outOfCredits: 'out of credits',
-  cancelled: 'cancelled by the agent’s owner',
-} as const;
+/** The closing words of each end — `lib/agentInstances/runEnd.ts`, shared with the run surfaces. */
+export { AGENT_RUN_END_DETAIL };
 
 /**
  * How a run in an agent ends when the CLI did not close it (§6). There is no
@@ -926,7 +912,8 @@ export const agentInstanceRunService = {
           rows.map((r) => r.id),
           tx,
         );
-        const keys = await dispatchRunRepository.findTargetKeys(
+        // The busy row names the run's work item by key AND title (MOTIR-7028).
+        const targets = await dispatchRunRepository.findTargets(
           running.map((r) => r.id),
           tx,
         );
@@ -934,9 +921,16 @@ export const agentInstanceRunService = {
         return {
           agents: rows.map((row) => {
             const run = byAgent.get(row.id) ?? null;
+            const target = run ? targets.get(run.id) : undefined;
             return toAgentForCardDto(
               row,
-              run ? { id: run.id, workItemKey: keys.get(run.id) ?? null } : null,
+              run
+                ? {
+                    id: run.id,
+                    workItemKey: target?.key ?? null,
+                    workItemTitle: target?.title ?? null,
+                  }
+                : null,
               agentRefusal(row, run),
             );
           }),

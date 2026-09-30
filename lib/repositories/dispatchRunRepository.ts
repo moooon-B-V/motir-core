@@ -339,6 +339,45 @@ export const dispatchRunRepository = {
   },
 
   /**
+   * The card each of these runs works on — its KEY and its TITLE — in ONE query
+   * (MOTIR-7028): the card's agent picker names a busy agent's work item by both
+   * (`design/runs/design-notes.md` § Revision 2, the busy row). The same target
+   * rule as {@link findTargetKeys}: the scope target, else the first leg. The
+   * title is the work item's current one, or null for a leg whose card is gone
+   * (the key survives it). A run with neither is absent from the map.
+   */
+  async findTargets(
+    runIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, { key: string; title: string | null }>> {
+    if (runIds.length === 0) return new Map();
+    const rows = await tx.dispatchRun.findMany({
+      where: { id: { in: [...runIds] } },
+      select: {
+        id: true,
+        scope: { select: { identifier: true, title: true } },
+        cards: {
+          orderBy: { position: 'asc' },
+          take: 1,
+          select: { workItemKey: true, workItem: { select: { title: true } } },
+        },
+      },
+    });
+    const out = new Map<string, { key: string; title: string | null }>();
+    for (const row of rows) {
+      if (row.scope) {
+        out.set(row.id, { key: row.scope.identifier, title: row.scope.title });
+        continue;
+      }
+      const leg = row.cards[0];
+      if (leg?.workItemKey) {
+        out.set(row.id, { key: leg.workItemKey, title: leg.workItem?.title ?? null });
+      }
+    }
+    return out;
+  },
+
+  /**
    * The id of the newest RUNNING run whose SCOPE TARGET is this work item, or
    * that holds a leg for it, or null — the run a How-to-test record is
    * attributed to (MOTIR-5331). HOW TO TEST is written onto the run target, so a
