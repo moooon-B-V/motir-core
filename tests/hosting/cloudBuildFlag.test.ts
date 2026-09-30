@@ -45,6 +45,10 @@ const BILLING_SURFACES: ReadonlyArray<readonly [file: string, why: string]> = [
   ['app/(authed)/layout.tsx', 'gates the org menu’s "Billing & plans" row'],
   ['app/(authed)/settings/organization/page.tsx', 'renders the BillingCard only on cloud'],
   [
+    'app/(authed)/my-agents/page.tsx',
+    'whether an agent’s storage is charged, for the price line and the empty state (agent-instance-storage.md §2, MOTIR-6918) — a self-hosted build charges none',
+  ],
+  [
     'app/(authed)/settings/organization/billing/page.tsx',
     'the billing page itself — 404s off-cloud',
   ],
