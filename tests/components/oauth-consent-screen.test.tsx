@@ -16,6 +16,8 @@ const push = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, refresh: vi.fn() }),
 }));
+const signOut = vi.fn(async () => undefined);
+vi.mock('@/lib/auth/client', () => ({ signOut: () => signOut() }));
 
 const REQUEST: ConsentRequestDto = {
   client: { clientId: 'c1', name: 'Claude Code', unverified: true },
@@ -55,14 +57,17 @@ function stubFetch(status: number, body: unknown) {
   return calls;
 }
 
-function renderScreen(request: ConsentRequestDto = REQUEST) {
+function renderScreen(
+  request: ConsentRequestDto = REQUEST,
+  opts: { user?: { name: string; email: string }; activeWorkspaceId?: string | null } = {},
+) {
   const navigate = vi.fn();
   renderWithIntl(
     <ConsentScreen
       oauthQuery="client_id=c1&sig=x"
       request={request}
-      user={{ name: 'Zhu Yue', email: 'zhuyue11@gmail.com' }}
-      activeWorkspaceId={null}
+      user={opts.user ?? { name: 'Zhu Yue', email: 'zhuyue11@gmail.com' }}
+      activeWorkspaceId={opts.activeWorkspaceId ?? null}
       activeProjectId={null}
       signInHref="/sign-in"
       navigate={navigate}
@@ -75,6 +80,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   push.mockReset();
+  signOut.mockClear();
 });
 
 describe('ConsentScreen', () => {
@@ -180,9 +186,140 @@ describe('ConsentScreen', () => {
     expect(screen.queryByRole('button', { name: 'Approve and connect' })).toBeNull();
   });
 
+  it('a workspace with no projects offers nothing to pick under One project, and cannot approve', () => {
+    renderScreen({
+      ...REQUEST,
+      workspaces: [{ id: 'ws-1', label: 'moooon · Empty', projects: [] }],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'One project' }));
+    expect(screen.queryAllByRole('switch').every((s) => s.hasAttribute('disabled'))).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'Approve and connect' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
   it('workspaces with nothing grantable are named', () => {
     renderScreen({ ...REQUEST, workspaces: [], unusableWorkspaces: ['A · One', 'A · Two'] });
     expect(screen.getByText(/None of your workspaces lets you grant it anything/)).toBeTruthy();
     expect(screen.getByText(/A · One and A · Two/)).toBeTruthy();
+  });
+
+  describe('when the press fails', () => {
+    it.each([
+      [404, { code: 'WORKSPACE_NOT_FOUND' }, 'any more. Pick another one.'],
+      [404, { code: 'PROJECT_NOT_FOUND' }, 'any more. Pick another one.'],
+      [422, { code: 'API_TOKEN_INVALID_PERMISSION' }, 'Reload the page'],
+      [500, { code: 'BOOM' }, 'nothing was connected'],
+      [502, 'not json', 'nothing was connected'],
+    ])('a %i (%j) keeps the screen and says what to do', async (status, body, says) => {
+      stubFetch(status, body);
+      const navigate = renderScreen();
+      fireEvent.click(screen.getByRole('button', { name: 'Approve and connect' }));
+      const alert = await screen.findByRole('alert');
+      expect(alert.textContent).toContain(says);
+      expect(navigate).not.toHaveBeenCalled();
+      expect(
+        (screen.getByRole('button', { name: 'Approve and connect' }) as HTMLButtonElement).disabled,
+      ).toBe(false);
+    });
+
+    it('a network failure says so', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => {
+          throw new TypeError('offline');
+        }),
+      );
+      renderScreen();
+      fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
+      expect((await screen.findByRole('alert')).textContent).toContain('Couldn’t reach Motir');
+    });
+
+    it('a lapsed session goes back through sign-in', async () => {
+      stubFetch(401, { code: 'UNAUTHENTICATED' });
+      renderScreen();
+      fireEvent.click(screen.getByRole('button', { name: 'Approve and connect' }));
+      await waitFor(() => expect(push).toHaveBeenCalledWith('/sign-in'));
+    });
+  });
+
+  it('several workspaces: opens on the active one, and switching resets the project and grant', async () => {
+    const calls = stubFetch(200, { connectionId: 'k', redirectUrl: 'http://127.0.0.1/cb?code=1' });
+    const two: ConsentRequestDto = {
+      ...REQUEST,
+      client: { ...REQUEST.client, unverified: false },
+      workspaces: [
+        REQUEST.workspaces[0]!,
+        {
+          id: 'ws-2',
+          label: 'moooon · Labs',
+          projects: [
+            { id: 'p-2', key: 'LAB', name: 'Lab', grantable: [...GRANTABLE_PERMISSIONS] },
+            { id: 'p-3', key: 'OPS', name: 'Ops', grantable: ['project:browse'] },
+          ],
+        },
+      ],
+    };
+    const navigate = renderScreen(two, { activeWorkspaceId: 'ws-2' });
+    // A client Motir registered is said to be, and carries no Unverified pill.
+    expect(screen.getByText(/Registered with this Motir ahead of time/)).toBeTruthy();
+    expect(screen.queryByText('Unverified')).toBeNull();
+
+    const picker = screen.getByRole('combobox', { name: 'Workspace Claude Code can act in' });
+    expect(picker.textContent).toContain('Labs');
+    fireEvent.click(picker);
+    fireEvent.click(screen.getByRole('option', { name: 'moooon · Motir' }));
+    fireEvent.click(screen.getByRole('button', { name: 'One project' }));
+    expect(screen.getByRole('combobox', { name: 'Project' }).textContent).toContain('MOTIR');
+
+    fireEvent.click(picker);
+    fireEvent.click(screen.getByRole('option', { name: 'moooon · Labs' }));
+    const project = screen.getByRole('combobox', { name: 'Project' });
+    fireEvent.click(project);
+    fireEvent.click(screen.getByRole('option', { name: /OPS/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and connect' }));
+    await waitFor(() => expect(navigate).toHaveBeenCalled());
+    expect(calls[0]!.body).toMatchObject({
+      workspaceId: 'ws-2',
+      projectId: 'p-3',
+      permissions: ['project:browse'],
+    });
+  });
+
+  it('a second press while the first is in flight sends nothing more', async () => {
+    let release: (r: Response) => void = () => {};
+    const fetchMock = vi.fn(() => new Promise<Response>((r) => (release = r)));
+    vi.stubGlobal('fetch', fetchMock);
+    const navigate = renderScreen();
+    const approve = screen.getByRole('button', { name: 'Approve and connect' });
+    fireEvent.click(approve);
+    fireEvent.click(approve);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    release(
+      new Response(JSON.stringify({ connectionId: 'k', redirectUrl: 'http://127.0.0.1/cb' }), {
+        status: 200,
+      }),
+    );
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('http://127.0.0.1/cb'));
+  });
+
+  it('an app with no name, or a blank one, is still named and tiled', () => {
+    renderScreen({ ...REQUEST, client: { ...REQUEST.client, name: null } });
+    expect(screen.getAllByText(/This app/).length).toBeGreaterThan(0);
+    cleanup();
+    renderScreen({ ...REQUEST, client: { ...REQUEST.client, name: '   ' } });
+    expect(screen.getByText('?')).toBeTruthy();
+    cleanup();
+    // A person with neither a name nor a usable email still gets a tile.
+    renderScreen(REQUEST, { user: { name: '', email: ' ' } });
+    expect(screen.getAllByText('?').length).toBeGreaterThan(0);
+  });
+
+  it('Not you? signs out and goes to sign-in', async () => {
+    renderScreen(REQUEST, { user: { name: '', email: 'someone@example.com' } });
+    expect(screen.getAllByText('someone@example.com').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/sign-in'));
+    expect(signOut).toHaveBeenCalledOnce();
   });
 });

@@ -28,6 +28,7 @@ const redirect = vi.fn((to: string) => {
   throw new Error(`NEXT_REDIRECT ${to}`);
 });
 const requireCompliantSession = vi.fn();
+const workspaceContext = vi.fn(async (): Promise<unknown> => null);
 
 vi.mock('@/lib/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/auth')>()),
@@ -38,7 +39,7 @@ vi.mock('@/lib/auth/requireCompliantSession', () => ({
 }));
 vi.mock('@/lib/workspaces', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/workspaces')>()),
-  getWorkspaceContext: async () => null,
+  getWorkspaceContext: () => workspaceContext(),
 }));
 vi.mock('next/navigation', () => ({
   redirect: (to: string) => redirect(to),
@@ -73,6 +74,7 @@ beforeEach(async () => {
   getSession.mockReset();
   redirect.mockClear();
   requireCompliantSession.mockReset();
+  workspaceContext.mockReset().mockResolvedValue(null);
 });
 
 afterAll(async () => {
@@ -325,5 +327,53 @@ describe('/oauth/error — a request that never reaches consent', () => {
     expect(page).toContain(
       'It asked to send you back to <strong class="font-semibold">attacker.example</strong>',
     );
+  });
+});
+
+describe('/oauth/error — what it reads from its query', () => {
+  it.each([
+    [{ error: ['client_disabled', 'x'] }, 'The app isn’t registered with Motir'],
+    [{ error: 'something_new' }, 'It wasn’t issued by Motir'],
+    [{}, 'It wasn’t issued by Motir'],
+    [{ error: 'invalid_redirect' }, 'an address it never registered with Motir'],
+    [{ error: 'code_challenge' }, 'invalid_request · code_challenge'],
+  ])('%j reads as a refusal it can name', async (searchParams, says) => {
+    const page = html(await ErrorPage({ searchParams: Promise.resolve(searchParams) }));
+    expect(page).toContain(says);
+  });
+});
+
+describe('/oauth/consent — the page around the request', () => {
+  it('a signed-out visit with no request to return to goes to plain sign-in', async () => {
+    getSession.mockResolvedValue(null);
+    await expect(ConsentPage({ searchParams: asSearchParams('') })).rejects.toThrow(
+      'NEXT_REDIRECT /sign-in',
+    );
+  });
+
+  it('reads a repeated query parameter the way the URL carries it', async () => {
+    const { query } = await pending();
+    const params: Record<string, string | string[]> = Object.fromEntries(
+      new URLSearchParams(query),
+    );
+    params['extra'] = ['a', 'b'];
+    // The signed query no longer matches, so the page refuses it — having read it.
+    const page = html(await ConsentPage({ searchParams: Promise.resolve(params) }));
+    expect(page).toContain('This connection request can’t be used');
+  });
+
+  it('lets an unexpected failure through rather than calling the request refused', async () => {
+    const { query } = await pending();
+    vi.spyOn(oauthConnectionsService, 'describeConsentRequest').mockRejectedValueOnce(
+      new Error('db down'),
+    );
+    await expect(ConsentPage({ searchParams: asSearchParams(query) })).rejects.toThrow('db down');
+  });
+
+  it('opens on the workspace the person is working in', async () => {
+    const { query, fx, user } = await pending();
+    workspaceContext.mockResolvedValue({ userId: user.id, workspaceId: fx.workspaceId });
+    const page = html(await ConsentPage({ searchParams: asSearchParams(query) }));
+    expect(page).toContain('Approve and connect');
   });
 });

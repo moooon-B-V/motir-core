@@ -18,16 +18,14 @@ export function TerminalState({
 }: {
   headline: string;
   subhead: string;
-  foot?: ReactNode;
+  foot: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div role="status" aria-live="polite">
       <AuthShell headline={headline} subhead={subhead}>
         <div className="flex flex-col gap-5">{children}</div>
-        {foot ? (
-          <p className="text-(--el-text-muted) font-sans text-xs leading-relaxed">{foot}</p>
-        ) : null}
+        <p className="text-(--el-text-muted) font-sans text-xs leading-relaxed">{foot}</p>
       </AuthShell>
     </div>
   );

@@ -180,7 +180,10 @@ export function ConnectedAppsSection({
         </div>
 
         {/* Below sm — one block per connection (Panel 9). */}
-        <ul className="divide-y divide-(--el-border-soft) sm:hidden">
+        <ul
+          data-testid="connected-apps-narrow"
+          className="divide-y divide-(--el-border-soft) sm:hidden"
+        >
           {connections.map((c) => {
             const expanded = expandedIds.has(c.id);
             return (

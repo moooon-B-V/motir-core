@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { isOAuthAuthorizeHandoff, oauthAuthorizeNext } from '@/lib/oauth/authorizeReturn';
+import {
+  authorizeNextClientId,
+  isOAuthAuthorizeHandoff,
+  oauthAuthorizeNext,
+} from '@/lib/oauth/authorizeReturn';
 import { sanitizeNextPath } from '@/lib/navigation/nextDestination';
 import { mcpResourceUrl } from '@/lib/oauth/config';
 
@@ -50,5 +54,15 @@ describe('oauthAuthorizeNext', () => {
     const unsigned = handoff();
     unsigned.delete('sig');
     expect(isOAuthAuthorizeHandoff(unsigned)).toBe(false);
+  });
+});
+
+describe('authorizeNextClientId', () => {
+  it('reads the client from an authorize hand-back, and nothing from anything else', () => {
+    expect(authorizeNextClientId(oauthAuthorizeNext(handoff()))).toBe('abc');
+    expect(authorizeNextClientId(null)).toBeNull();
+    expect(authorizeNextClientId('')).toBeNull();
+    expect(authorizeNextClientId('/items?client_id=abc')).toBeNull();
+    expect(authorizeNextClientId('/api/auth/oauth2/authorize?state=s')).toBeNull();
   });
 });

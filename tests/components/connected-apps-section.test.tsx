@@ -206,7 +206,8 @@ describe('ConnectedAppsSection', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 5000 });
     expect(screen.getAllByTestId('connected-app-row')).toHaveLength(1);
     expect(screen.getByText('Access revoked')).toBeTruthy();
-    expect(screen.getByText(/Claude can no longer act in Motir/)).toBeTruthy();
+    // The toast renders it, and Radix's live region may announce it a second time.
+    expect(screen.getAllByText(/Claude can no longer act in Motir/).length).toBeGreaterThan(0);
   });
 
   it('a 404 (already gone) counts as revoked; the last row leaves the empty state', async () => {
@@ -235,5 +236,76 @@ describe('relativeOrDate', () => {
     expect(relativeOrDate('2026-09-30T11:58:00.000Z', now, 'en')).toBe('2 minutes ago');
     expect(relativeOrDate('2026-09-29T12:00:00.000Z', now, 'en')).toBe('yesterday');
     expect(relativeOrDate('2026-09-01T12:00:00.000Z', now, 'en')).not.toMatch(/ago/);
+  });
+});
+
+describe('ConnectedAppsSection — the edges', () => {
+  it('an app with no name or host reads as unnamed; a granted delete gets the rose row', () => {
+    render([
+      connection({
+        client: { clientId: 'x', name: null, uri: null, icon: null, unverified: true, host: null },
+        permissions: [...GRANTABLE_PERMISSIONS],
+      }),
+    ]);
+    expect(table().getByText('Unnamed app')).toBeTruthy();
+    fireEvent.click(table().getByRole('button', { name: 'Show scopes for Unnamed app' }));
+    const del = document.querySelector('table li[data-permission="work_item:delete"]')!;
+    expect(del.getAttribute('data-granted')).toBe('true');
+    expect(del.className).toContain('--el-tint-rose');
+  });
+
+  it('Last used is relative once mounted, absolute past a week, with the exact time on hover', () => {
+    const recent = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    render([
+      connection({ lastUsedAt: recent }),
+      connection({ id: 'c3', lastUsedAt: '2020-01-02T10:00:00.000Z' }),
+    ]);
+    const rows = screen.getAllByTestId('connected-app-row');
+    expect(within(rows[0]!).getByText('2 minutes ago').getAttribute('title')).toBeTruthy();
+    expect(rows[1]!.textContent).not.toMatch(/ago/);
+  });
+
+  it('the narrow list discloses and revokes the same connection', async () => {
+    stubFetch(() => ({ status: 204 }));
+    render([connection()]);
+    const list = within(screen.getByTestId('connected-apps-narrow'));
+    fireEvent.click(list.getByRole('button', { name: 'Show scopes for Claude' }));
+    expect(list.getByText('This app can:')).toBeTruthy();
+    fireEvent.click(list.getByRole('button', { name: 'Revoke Claude in Motir' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke access' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 5000 });
+    expect(screen.getByText(/No apps connected/)).toBeTruthy();
+  });
+
+  it('Cancel closes the confirm and revokes nothing', () => {
+    const calls = stubFetch(() => ({ status: 204 }));
+    render([connection()]);
+    fireEvent.click(table().getByRole('button', { name: 'Revoke Claude in Motir' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(calls).toHaveLength(0);
+    expect(screen.getAllByTestId('connected-app-row')).toHaveLength(1);
+  });
+
+  it('a Try again that fails again stays on the error line', async () => {
+    const calls = stubFetch(() => ({ status: 500 }));
+    render(null);
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(calls).toHaveLength(1));
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('button', { name: 'Try again' }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    );
+    expect(screen.getByRole('alert')).toBeTruthy();
+  });
+});
+
+describe('relativeOrDate — every unit', () => {
+  const now = Date.parse('2026-09-30T12:00:00.000Z');
+  it('seconds, hours and days', () => {
+    expect(relativeOrDate('2026-09-30T11:59:30.000Z', now, 'en')).toBe('now');
+    expect(relativeOrDate('2026-09-30T09:00:00.000Z', now, 'en')).toBe('3 hours ago');
+    expect(relativeOrDate('2026-09-27T12:00:00.000Z', now, 'en')).toBe('3 days ago');
   });
 });
