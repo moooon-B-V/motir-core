@@ -659,6 +659,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'notifications.spec.ts': 14.3,
   // MOTIR-6985: an estimate, not a measurement — sign-up, one project, one
   // authorize → consent → approve round trip. Re-measure from the first green run.
+  // MOTIR-6988: measured locally on a production build — four tests at 6.6 s,
+  // 4.5 s, 2.7 s and 3.8 s, plus each test's reset and seed. Re-measure from a
+  // green run's `e2e-harness/*.jsonl` when this table is next refreshed.
+  'oauth-connect.spec.ts': 22.0,
   'oauth-consent.spec.ts': 15.0,
   'onboarding-discovery.spec.ts': 2.6,
   'onboarding-entrance.spec.ts': 6.8,
