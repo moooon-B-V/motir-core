@@ -368,6 +368,20 @@ describe('ONE GATE — a green delivery set leaves exactly one awaiting gate on 
     }
     await greenRow(13, 'sha-p');
 
+    // MOTIR-6971: the gate is asked only of a card IN REVIEW, whatever its run target —
+    // so while the run has settled neither card, nothing is raised.
+    const unsettled = await withWorkspaceContext(s.ctx, async (tx) =>
+      raisePullRequestApprovalGate(
+        await tx.workItem.findUniqueOrThrow({ where: { id: child.id } }),
+        tx,
+      ),
+    );
+    expect(unsettled).toBe(false);
+    await adminDb.workItem.updateMany({
+      where: { id: { in: [story.id, child.id] } },
+      data: { status: 'in_review' },
+    });
+
     const raised = await withWorkspaceContext(s.ctx, async (tx) => {
       const rows = await Promise.all(
         [child.id, story.id].map((id) => tx.workItem.findUniqueOrThrow({ where: { id } })),

@@ -43,6 +43,13 @@ otherwise be approving commits that are no longer the ones that merge. Nobody
 decided it, and Motir asks again when every check is green. In a project set to
 merge automatically, no gate is raised at all.
 
+**The work item must be In Review.** Green checks alone ask nothing: any pull
+request can be linked to a work item, so what says the run finished is the work
+item's status — the run sets it to Implemented, and passing checks move it to In
+Review. A work item still In Progress is asked nothing, however green its pull
+requests are. Moving it out of In Review — to In Progress, Blocked or anywhere
+else — withdraws a question that was waiting, and moving it back asks again.
+
 A **draft** pull request is never asked about, however green its checks: its
 author has said it is not ready, and GitHub will not merge one. Motir asks when
 the pull request is marked **ready for review**, and converting it back to a
