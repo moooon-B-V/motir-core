@@ -626,3 +626,9 @@ End pills reuse `runs.runStatus.*`; the recorded reason is the record's string, 
   it to the run line's run). **From MOTIR-7027:** the Hibernate / Delete refusal carrying the run's id and
   key. **From MOTIR-7023 / MOTIR-7026:** the agent's running run (and, for _Last run_, its latest run —
   flagged in the runs notes: no sibling builds that read yet).
+
+**Revision 2 (MOTIR-7022, after review).** On the work item the door is now **Send to my agent**,
+beside **Run** (Motir works it with the model you pick), and a busy agent's picker row names the work
+item it is working on — `design/runs/design-notes.md` § _Revision 2_. This panel's delta
+(`my-agents--run.mock.html`) is unchanged: its run line already says _Running a work item_ and names
+the key, and it says "hosted" nowhere.
