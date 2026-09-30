@@ -39,3 +39,28 @@ export interface McpToolInputSchema {
   /** Whatever else the conversion emits — carried, never interpreted here. */
   [key: string]: unknown;
 }
+
+// ── A tool's HINTS (Story MOTIR-6974 · Subtask MOTIR-7002) ──────────────────
+// The `annotations` object `tools/list` serves for a tool, as the catalogue
+// carries it. The shape is `lib/mcp/toolAnnotations.ts`'s row type, RE-DECLARED
+// here rather than imported, so the catalogue's modules keep their rule of
+// reaching nothing in `lib/mcp/` beyond `toolPermissions.ts`. That the VALUES
+// agree with the server is `tests/mcp/tool-schema-truth.test.ts`'s guard, over a
+// live handshake — a drift in the shape would surface there as a value mismatch.
+
+/** A tool whose handler performs no write. */
+export interface McpToolReadHints {
+  readOnlyHint: true;
+  openWorldHint: boolean;
+}
+
+/** A tool whose handler writes — every write hint is always present. */
+export interface McpToolWriteHints {
+  readOnlyHint: false;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+}
+
+/** One tool's `annotations`, exactly as `tools/list` serves it. */
+export type McpToolHints = McpToolReadHints | McpToolWriteHints;

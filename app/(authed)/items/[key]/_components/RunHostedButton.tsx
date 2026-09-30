@@ -71,6 +71,8 @@ export function RunHostedButton() {
         onClick={() => void door.start()}
         leftIcon={<Cloud className="size-3.5" aria-hidden="true" />}
         data-testid="run-hosted"
+        // The anchor the design card's "Automatic re-run skipped" lines link to (MOTIR-702).
+        id="run-hosted"
       >
         {door.starting ? t('starting') : again ? t('runAgain') : t('run')}
       </Button>

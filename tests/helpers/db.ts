@@ -36,9 +36,13 @@ import { adminDb as db } from './adminDb';
 // `truncateAuthTables` would be the table's load-bearing property observed. Left
 // unnamed, one suite's reserved digest refuses the next suite's claim of the
 // same label, in a file that has nothing to do with either.
+//
+// `oauth_client` (MOTIR-6984) is named for the same reason: a dynamically
+// registered client carries no user, so no cascade from `user` reaches it, and a
+// client left behind would decide the next OAuth sweep suite's counts.
 export async function truncateAuthTables(): Promise<void> {
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "public_hostname_reservation", "user" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "public_hostname_reservation", "oauth_client", "user" RESTART IDENTITY CASCADE',
   );
 }
 

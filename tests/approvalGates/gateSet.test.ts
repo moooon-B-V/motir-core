@@ -41,6 +41,7 @@ const input = (over: Partial<GateSetInput> = {}): GateSetInput => ({
   members: [],
   prMergeMode: 'manual',
   cardIsTerminal: false,
+  cardInReview: true,
   primaryApprovalStandsForMerge: false,
   workItemId: WORK_ITEM,
   ...over,
@@ -845,5 +846,60 @@ describe('acceptanceRefusalHoldsMerge + resolveGateSet — MOTIR-6503: a story-r
     );
     expect(acceptanceRefusalHoldsMerge(null, refused('revise'))).toBe(false);
     expect(acceptanceRefusalHoldsMerge(RECEIPT, null)).toBe(false);
+  });
+});
+
+describe('resolveGateSet — MOTIR-6971: the merge question is asked ONLY at `in_review`', () => {
+  // Green CI is not a finished run: any pull request can be linked to a card, and a
+  // card left at `in_progress` is a DEAD run. MOTIR-6914 was asked to approve at
+  // `in_progress` and the press threw `IllegalTransitionError` (no `in_progress →
+  // approved` edge). Gate ⇔ CI all green AND the card in review.
+  const RECEIPT = { id: 'ae_1', commitSha: 'c0ffee1' };
+
+  it('asks NO merge question of a green set on a card that is not in review', () => {
+    expect(resolveGateSet(input({ members: GREEN_TWO, cardInReview: false }))).toEqual({
+      awaited: [],
+      primary: null,
+    });
+  });
+
+  it('asks exactly ONE merge question of the same set once the card is in review', () => {
+    const set = resolveGateSet(input({ members: GREEN_TWO, cardInReview: true }));
+    expect(set.awaited).toEqual([
+      {
+        kind: 'pull_request_approval',
+        subjectId: WORK_ITEM,
+        subjectVersion: deliverySetVersion(['moooon/motir-core#10@aaa1', 'moooon/motir-ai#4@bbb2']),
+      },
+    ]);
+  });
+
+  it("a STORY RUN's acceptance question takes the same condition — none while the story is out of review", () => {
+    expect(
+      resolveGateSet(input({ currentReceipt: RECEIPT, members: GREEN_ONE, cardInReview: false })),
+    ).toEqual({ awaited: [], primary: null });
+    expect(
+      resolveGateSet(
+        input({ currentReceipt: RECEIPT, members: GREEN_ONE, cardInReview: true }),
+      ).awaited.map((gate) => gate.kind),
+    ).toEqual(['acceptance_result', 'pull_request_approval']);
+  });
+
+  it("a SUBTASK-RUN story's acceptance question is untouched — its timing is the subtree, not a pull request", () => {
+    expect(
+      resolveGateSet(input({ currentReceipt: RECEIPT, subtreeSettled: true, cardInReview: false }))
+        .awaited,
+    ).toEqual([{ kind: 'acceptance_result', subjectId: 'ae_1', subjectVersion: 'c0ffee1' }]);
+  });
+
+  it('the DESIGN question does not depend on the status — it is asked on publish', () => {
+    const set = resolveGateSet(
+      input({
+        currentDesignEvidence: { id: 'de_1', commitSha: 'd351gn1' },
+        members: GREEN_ONE,
+        cardInReview: false,
+      }),
+    );
+    expect(set.awaited.map((gate) => gate.kind)).toEqual(['design_result']);
   });
 });

@@ -45,11 +45,17 @@ const REFUSING_KINDS: readonly ApprovalGateKind[] = [
   'decision_choice',
 ];
 
-async function awaitingGate(kind: ApprovalGateKind) {
+async function awaitingGate(kind: ApprovalGateKind, opts: { inReview?: boolean } = {}) {
   const item = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'task', title: `A ${kind} waiting for a person` },
     fx.ctx,
   );
+  // A merge question exists only while its card is `in_review` (MOTIR-6971): a card
+  // walked there AFTER the gate is raised withdraws it on the way.
+  if (opts.inReview) {
+    await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(item.id, 'in_review', fx.ctx);
+  }
   return adminDb.approvalGate.create({
     data: {
       workspaceId: fx.workspaceId,
@@ -128,11 +134,9 @@ describe('a refusal WITH a reason is recorded, as written', () => {
 
 describe('what the rule does NOT touch', () => {
   it('Approve keeps its OPTIONAL note — a yes needs no justification', async () => {
-    const gate = await awaitingGate('pull_request_approval');
     // Where a card waiting on this gate stands: its approval writes `approved`, which the
     // workflow reaches from review, never from To do.
-    await workItemsService.updateStatus(gate.workItemId!, 'in_progress', fx.ctx);
-    await workItemsService.updateStatus(gate.workItemId!, 'in_review', fx.ctx);
+    const gate = await awaitingGate('pull_request_approval', { inReview: true });
     const decided = await approvalGatesService.decide(
       { gateId: gate.id, decision: 'approve', source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
       fx.ctx,

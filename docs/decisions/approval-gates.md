@@ -163,6 +163,15 @@
   promotion hold and `motir fix`'s claim lift. It moves no status and decides no
   gate; the merge moves the card. Nothing earlier is struck.
 
+- **AMENDED 2026-09-30 (MOTIR-6971), at §8 — the merge question is asked ONLY at
+  `in_review`.** §8's EIGHTH AMENDMENT (Yue, 2026-09-29): the approve-to-merge
+  gate exists if and only if CI is all green AND the card is In Review. Green CI
+  alone is not a finished run, so a card the run left at `in_progress` is asked
+  nothing; leaving review — `blocked` and system writes included — withdraws the
+  question as `pulled_back`, and an `approved` card whose commits moved is asked
+  again at `in_review`. It reverses MOTIR-5652's parent-run case and narrows §6d's
+  rule 6 for the merge question; both carry a note. Nothing is struck.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -2545,6 +2554,8 @@ An approval that does not merge is a note, not a gate.
 
 **9.2's review UI COMPOSES this record's control rather than drawing its own.**
 
+**Amended by [`hosted-design-rerun-and-design-approval-switch.md`](hosted-design-rerun-and-design-approval-switch.md) (MOTIR-695).**
+
 > **⚠️ RE-DRAWN BY §10g (MOTIR-6072, 2026-09-23).** Returning a sent-back card to
 > To do, handing its reason to the next run, and opening the planner on a refusal
 > are now Epic MOTIR-6010's. The table above keeps the HOSTED, automatic
@@ -3329,7 +3340,12 @@ routedToLabel }` — with `canDecide` computed as the Approvals read computes
 > `keepPendingQuestions` and withdraws nothing here — it withdraws merge gates BY
 > SUBJECT itself (MOTIR-4882), and a blanket withdraw would take a sibling pull
 > request's question with it. **`→ blocked` does not:** blocking pauses the work, it does not abandon
-> the question. The supersede writes `state` and nothing else, exactly as §6b's
+> the question.
+> **⚠️ NARROWED by §8's EIGHTH AMENDMENT (MOTIR-6971, 2026-09-30) for the MERGE
+> question:** the approve-to-merge gate — and a story run's acceptance question
+> beside it — exists only while the card is `in_review`, so `→ blocked` withdraws
+> THAT one (`pulled_back`), and so does a system write out of review. Every other
+> kind's question is still kept through `→ blocked`, as written here. The supersede writes `state` and nothing else, exactly as §6b's
 > publish-path supersede does — no actor, no note, no `decided_at` — so the audit
 > still cannot read a withdrawn question as a decision. Who pulled the work back
 > is recorded where it already is: the work item's own status revision.
@@ -4658,6 +4674,88 @@ repositories produce no preview has two paths rather than three, and says so.
 > staying `head_moved`, a decided gate untouched, a red check still `ci_failed`) and
 > `tests/github/ciExpectedCheckSet.test.ts` (the `688ce704` replay raising no gate).
 
+> ### §8 — EIGHTH AMENDMENT (MOTIR-6971, 2026-09-30), DECIDED BY THE REQUESTER (Yue, 2026-09-29): the merge question is asked ONLY at `in_review` — CI all green AND the card in review, or no gate
+>
+> _"a CI is green doesn't mean anything, a random CI can be linked to the work
+> item, when the run is finished the agent has to make the status right, that's
+> part of the runbook. if the status is not right, the item stays in the in
+> progress column and the run is considered dead."_ — Yue, 2026-09-29. And:
+> _"a manual status flip from in review to in progress should close the gate too.
+> so there is a gate only when CI is all green, the status is in review."_
+>
+> **Observed.** MOTIR-6914 — a story at `in_progress` with five `blocked` children
+> — held an `awaiting` `pull_request_approval` gate over its two green pull
+> requests (raised 2026-09-29 23:20Z). Pressing _Approve_ threw
+> `IllegalTransitionError: "in_progress" → "approved"` (Sentry 7762359336, three
+> presses): the MOTIR workflow reaches `approved` only from `in_review`, and
+> `approved` is a container-claim status besides. The decision rolled back with the
+> transaction, so the question stood and could never be answered.
+>
+> **Why it could be asked.** Every condition `resolveGateSet` put on the merge
+> question was about the DELIVERY SET — manual mode, every member mergeable, not
+> already answered, no acceptance or can't-land hold. None was about the card.
+> MOTIR-5652 removed the one guard that had stood for the card (`resolveRunTargetFor
+… 'ancestor'`) on purpose, so that a parent run whose promotion
+> `ContainerHasOpenChildrenError` skipped would still be asked. So any reconcile —
+> the 30-minute sweep, a withdrawer's re-ask, the status funnel's re-ask — raised
+> the gate on a green set whatever status the card was in.
+>
+> #### 1 — the rule
+>
+> **`pull_request_approval` is `awaiting` if and only if the card's status is
+> `in_review` (by KEY, never by category) AND its delivery set is all green and
+> mergeable.** Leaving either condition withdraws it; only re-entering both raises
+> it. A story run's `acceptance_result`, which rides the merge question
+> (MOTIR-5903), takes the same condition; a subtask-run story's does not — it is
+> timed by the subtree. The review agent's `agent_review` question (§12, MOTIR-1626),
+> which stands in front of the merge question, takes the same condition and is
+> withdrawn with it. The design and decision questions are untouched.
+>
+> The status is the run's own statement that it followed the runbook to the end:
+> it opens its pull requests, sets the card to `implemented`, and CI's promotion
+> writes `in_review`. Green CI is not that statement — any pull request can be
+> linked to a card. A card still at `in_progress` is a DEAD run; it waits for a
+> `motir continue` to set its status right, and nothing asks anybody to approve it.
+> This REVERSES MOTIR-5652's parent-run case: a parent held below `implemented` by
+> an open child is asked nothing until a run settles its status.
+>
+> #### 2 — where it is enforced
+>
+> - **The raise** — `resolveGateSet` takes `cardInReview`, loaded by `gateSetFor`
+>   from the card read under the caller's lock. Every raiser goes through the
+>   predicate, so the sweep, the withdrawers' re-ask and the funnel's re-ask all
+>   stop asking of a card out of review at once. The funnel's re-ask reconciles
+>   against the TARGET status, because it runs before the row write in the same
+>   transaction. The CI promotion writes `implemented → in_review` before it
+>   reconciles, so the ordinary path is unchanged.
+> - **The withdrawal, on a move** — `applyStatusTransition` supersedes the awaiting
+>   merge question (`pulled_back`) on any move to an open status other than
+>   `in_review`: `blocked` included (narrowing §6d's rule 6 for this kind only) and
+>   a system write included. Not into the done category (the merge sync and
+>   Cancelled settle that), not the decide door's own write (`decidingGateId`), not
+>   the merge sync's `keepPendingQuestions` move (it withdraws by subject).
+> - **The withdrawal, on a reconcile** — `reconcileGatesFor` supersedes an awaiting
+>   merge question on a card that is not `in_review`, as `pulled_back`. It is the
+>   one exception to _it does not supersede_, and it keeps that rule's reason: the
+>   cause is the card's own status, which every caller reads under its lock. It is
+>   what retires a gate raised before this amendment (MOTIR-6914's) on the next
+>   sweep.
+> - **An `approved` card whose commits moved** (a push after the approval, then
+>   green) is moved back to `in_review` — a declared edge (§4's FOURTH AMENDMENT),
+>   as a system write — and asked there, by `ciPromotion.reRaiseMergeGates`. It was
+>   re-asked AT `approved` before, which this rule no longer allows. A late green at
+>   the SAME approved commits (MOTIR-5632) owes nothing and moves nothing.
+>
+> **No new cause.** `pulled_back` already reads as _the work left review_, which is
+> exactly what happened, so no enum value or migration is added. **A DECIDED gate is
+> untouched** (§8 decision 5).
+>
+> **Asserted** — `tests/integration/approvals/mergeGateOnlyInReview.test.ts` (a dead
+> run asked nothing by CI or the sweep; MOTIR-6914's story shape; one gate at
+> `in_review`; `→ in_progress` and `→ blocked` withdraw and nothing re-asks; a stray
+> gate withdrawn; one fresh gate on coming back; the `approved` re-ask at
+> `in_review`) and `tests/approvalGates/gateSet.test.ts` (the predicate's cases).
+
 > ### 9 — AMENDMENT: HOW TO TEST is per RUN (MOTIR-4906 re-plan, 2026-09-13), DECIDED BY THE REQUESTER (Yue, 2026-09-13)
 >
 > _"'how to test' should not be per PR, it should be per run, so the design is
@@ -5016,6 +5114,8 @@ publish supersedes nothing that was approved.
 
 9.2 may later make the run after a Revise automatic. It does not own the
 hand-back, which is this epic's.
+
+**Amended by [`hosted-design-rerun-and-design-approval-switch.md`](hosted-design-rerun-and-design-approval-switch.md) (MOTIR-695).**
 
 #### 10h. THE FOLLOW-UP TABLE — one row per kind × case
 

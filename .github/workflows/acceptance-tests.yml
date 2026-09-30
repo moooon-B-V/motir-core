@@ -579,7 +579,12 @@ jobs:
     # specs are an order of magnitude heavier than ordinary E2E per test, so
     # the number next door is not evidence about this one either way; run
     # 33217054605 is the slowest on record (11.30 min, shard 3/4).
-    timeout-minutes: 40
+    # ⚠️ RAISED 40 → 55 (MOTIR-6973): the lane has grown past that number. On
+    # `main` run 36657917540, shard 4/4 took 36.3 min end to end (33.3 min of
+    # tests); on PR #3277 it ran 37 tests in 37.2 min and was cancelled at 40
+    # while uploading its report — twice, with every test green. 55 is ~1.5x
+    # the slowest measured leg; the lasting fix is more legs, not more minutes.
+    timeout-minutes: 55
     # BOTH edges, and each is load-bearing (MOTIR-2908):
     #   · `build` publishes the `.next/` artifact every leg downloads, and it is
     #     where the MOTIR-2760 gate lives — a skipped build skips the fan-out.

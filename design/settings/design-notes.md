@@ -3020,3 +3020,364 @@ the words by `--el-text` (the `DeviceApproval` composition).
 AI chooses its platform defaults, and where the override is persisted — the build card's; the dark
 board (the token flip); the command-palette row (lit by the same registry entry, with no design of
 its own).
+
+---
+
+## Connected apps
+
+**Asset:** `design/settings/account-settings--connected-apps.mock.html` — a DELTA (MOTIR-6981, Story
+MOTIR-6973). **It amends `design/settings/account-settings.mock.html` § Panel 3** (_Security &
+access pane — the API tokens card + table_, spec'd above in _Panel 3 — Security & access pane (API
+tokens)_) by adding one card to that pane, and draws the rail as the same asset's **Panel 9** does
+(_Git accounts_ amendment, MOTIR-4675) — the shipped `ACCOUNT_SETTINGS_NAV`. **The base mock is not
+edited**; it stays the record of what it drew. This section holds only what changes.
+
+**What it is.** Every app the person has connected to Motir over OAuth — Claude on claude.ai, Claude
+Code, Cursor, any MCP client that signs in with a Motir account — listed one row per connection, with
+a Revoke that makes that app's next call fail. It is the human face of the grant MOTIR-6983 records,
+the way the tokens card is the human face of a PAT.
+
+### ⚠️ What a row IS — MOTIR-6983, _A connection IS a grant_
+
+Every fact on a row, and everything Revoke does, is read off
+[A connection IS a grant](motir:cmunc4k7k003yhvshih02on3t) (MOTIR-6983). A connection is **one
+consent record: one person, one workspace (and optionally one project), one set of permission keys,
+one OAuth client.** Two consequences the drawing depends on:
+
+- **One row per grant, not per app.** The same app connected to two workspaces is **two rows**
+  (Panel 1 draws _Claude Code_ twice, in `Client work` and in `Motir`), and each revokes alone. A
+  reader who spans workspaces does it with several connections, exactly as with several tokens.
+- **Revoke deletes the grant and every access and refresh token issued under it.** The next MCP call
+  from that app answers `401` with the `resource_metadata` pointer, so the client starts sign-in
+  again. There is therefore no "Revoked" row state to render: the row leaves the list, the same
+  disposition the tokens list has had since MOTIR-3546.
+
+**Nothing on this surface edits a grant.** Narrowing a connection is revoke, then connect again and
+approve fewer scopes on the consent screen (MOTIR-6980). That is GitHub's _Authorized OAuth Apps_ and
+Linear's _Authorized applications_ both: a list with Revoke, never an editor.
+
+### The ACCESS PATH — Settings → Account → Tokens, the last card in the pane (Panel 1)
+
+**No new rail row.** The section is reached the way tokens are: avatar menu → **Settings** → the
+account rail's **Security** group → **Tokens** (`/settings/account/tokens`, the `apiTokens` entry in
+`lib/settings/accountSettingsNav.ts`, label _Tokens_ since MOTIR-2534). The rail is drawn as it ships
+— _Profile · Language · Notifications · Appearance · Two-factor · **Tokens** · Git accounts · Data &
+privacy_ — with Tokens active.
+
+**Order in the pane** (`app/(authed)/settings/account/tokens/page.tsx`), top to bottom:
+
+| #   | section                                                 | status                                |
+| --- | ------------------------------------------------------- | ------------------------------------- |
+| 1   | page header _Tokens_                                    | unchanged (heading and subtitle both) |
+| 2   | `ApiDocsLinkPanel`                                      | unchanged                             |
+| 3   | `ConnectCliPanel`                                       | unchanged                             |
+| 4   | `ApiTokensManager` (_Your tokens_, or its `EmptyState`) | unchanged                             |
+| 5   | **Connected apps**                                      | **NEW — this card**                   |
+
+**Why LAST, below the tokens and not above them.** The pane is still the tokens pane — its heading,
+subtitle and first three sections are about tokens, and the reader who arrives here most often is
+minting one. And `ConnectCliPanel`'s tie line promises that an approved terminal _"appears below as
+`CLI · {host}`"_ — in the tokens card, which must stay the next list down for that sentence to stay
+true. Connected apps is the second kind of credential this pane holds, so it is the second list.
+
+**The card carries `id="connected-apps"`**, so `/settings/account/tokens#connected-apps` is the one
+link the docs (MOTIR-6976) and the consent screen's success copy can hand out for "manage it later".
+
+**Always rendered**, whatever the tokens card shows: with no tokens the `EmptyState` sits at #4 and
+this card still follows it.
+
+### Panels
+
+| Panel | State                       | What it shows                                                                                  |
+| ----- | --------------------------- | ---------------------------------------------------------------------------------------------- |
+| 1     | **populated** + access path | the pane in the area shell; four connections across two workspaces; row 1's scopes disclosed   |
+| 2     | **row anatomy**             | a Full-access grant with **Can delete**, its scopes disclosed, the **Unverified** tooltip open |
+| 3     | **empty**                   | the card header, then one line and one link                                                    |
+| 4     | **loading**                 | the card header, then three skeleton rows in the table's own columns                           |
+| 5     | **error**                   | the card header, then an inline error line with **Try again**                                  |
+| 6     | **revoke confirm**          | the destructive `Modal` (sm) naming the app, the workspace and the grant                       |
+| 7     | **revoking**                | the same Modal with the danger Button `loading`, Cancel and close disabled                     |
+| 8     | **revoked**                 | the list without the row + the success Toast; beside it the error Toast for a failed revoke    |
+| 9     | **narrow viewport** (375px) | below `sm` the table becomes a stacked list, one block per connection                          |
+
+### The card and its row — composed from `ApiTokensManager`, column for column
+
+The card is the tokens card's structure with one fewer column and no header action. **The row is a
+sibling of the token row**: the same `<table>` inside the same `Card` `header` slot, the same `Th`
+(`text-xs font-medium tracking-wide uppercase text-(--el-text-secondary)`), the same cell padding
+`py-(--spacing-control-y) pr-4`, the same chevron disclose and the same trash icon button. A builder
+should extract the shared pieces (`Th`, the scopes cell, the disclose sub-row) rather than copy them.
+
+| Column        | Content                                                                                                                                                                                                                                                                                                                                              |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **App**       | line 1: the client's registered name (`text-sm font-medium --el-text`), then the **Unverified** Pill when the client registered itself. Line 2: the **host** of the redirect URI the grant was issued to (`claude.ai`, `localhost`), `font-mono text-xs --el-text-secondary`.                                                                        |
+| **Scopes**    | exactly the token row's cell: `summarizeGrant(grant)` → `Pill severity="success"` _Full access_, or `Pill tone="neutral"` _Standard_ / _Read only_ / _Custom_; the rose _Can delete_ Pill (`severity="danger"` with `Trash2`) whenever `work_item:delete` is granted, never hidden behind the summary; then the chevron disclose.                    |
+| **Workspace** | line 1: the workspace name (`text-sm --el-text-secondary`), with the organisation as a prefix (`{org} · {workspace}`) only when the reader belongs to more than one organisation — the token row's `multiOrg` rule. Line 2: `All projects`, or the one project's name (`text-xs --el-text-secondary`).                                               |
+| **Connected** | the date the grant was written, `formatDate(…, locale)` — absolute, as the token row's _Created_.                                                                                                                                                                                                                                                    |
+| **Last used** | **relative** (`2 minutes ago`, `Yesterday`) up to 7 days, then the absolute date; `Never` when no call has been made. Relative, unlike the token row, because the story's verification step reads _"a last used of moments ago"_ — this is the column a person checks straight after connecting. The absolute timestamp rides in the cell's `title`. |
+| **Actions**   | the trash icon button, `aria-label` `Revoke {app} in {workspace}`. It opens Panel 6.                                                                                                                                                                                                                                                                 |
+
+**Order:** newest first by _Connected_, the order the token list uses.
+
+**The column is headed _Scopes_, not _Permissions_,** because two tables stacked in one pane must not
+name one thing twice. It reuses `settings.apiTokens.columns.scopes`.
+
+#### The host line — why it is there
+
+Every app on this list named itself. A dynamically registered client can call itself anything,
+including the name of a different app, so the name alone does not tell two rows apart — and Panel 1
+already has two _Claude Code_ rows. The host of the redirect URI is the one fact on the row that the
+app did not choose, and it is what tells a reader where the tokens went. It is drawn quiet (mono,
+secondary) because it is a disambiguator, not a headline.
+
+#### The Unverified label
+
+`Pill tone="neutral"` reading **Unverified**, beside the name, on every client that registered
+itself (RFC 7591 dynamic registration — which, at launch, is every client). Wrapped in the shipped
+`Tooltip`: _"This app registered itself. Motir hasn't verified who publishes it."_ It is the same
+label and the same words the consent screen shows for the same client (MOTIR-6980), so the person
+sees one vocabulary before and after they approve.
+
+**Neutral, not warning.** At launch every row carries it, and a peach chip on every row is noise that
+teaches the reader to ignore peach. It states a fact; it is not an alarm. A client Motir registered
+itself carries **no** pill — there is no _Verified_ badge, because its absence is the case the label
+is contrasted with.
+
+#### The disclosed scopes — the token picker's columns, read-only (Panel 2)
+
+The chevron discloses a sub-row (`colSpan` the whole table) holding the grant **in the token
+picker's two columns** (`design/settings/permission-columns.mock.html`, MOTIR-3580): every
+grantable permission, grouped by domain, split by the shipped `permissionColumnsForTokens()` — 7 / 7
+at today's 14 keys, cut after _Work items_ — and read-only.
+
+- **Box:** the token row's detail box — `rounded-(--radius-card) border border-(--el-border-soft)
+bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)`, lead line _This app
+  can:_ in `text-xs --el-text-secondary`.
+- **Domain heading:** `font-mono text-[0.625rem] tracking-wide uppercase --el-text-secondary`, the
+  picker's own; labels from `permissions.domain.*`.
+- **Row:** the domain glyph from `PERMISSION_META` (`size-4 --el-icon-muted`), the label from
+  `permissions.<slug>.label` (never new copy — `permissionMeta.tsx` writes none, and neither does
+  this), and at the right the state:
+  - **granted** — `CircleCheck` in `--el-success` (a graphic, 3:1 suffices) with a visually hidden
+    _Granted_; label `--el-text`.
+  - **not granted** — the words _Not granted_ (`text-xs --el-text-secondary`); label
+    `--el-text-secondary`. Words, not a greyed row: `--el-text-faint` fails AA on every surface and
+    this row is information, not a disabled control.
+  - **the irreversible key** (`work_item:delete`) when granted — the picker's rose row:
+    `bg-(--el-tint-rose)`, label `--el-text-strong` 500, glyph `--el-danger-on-surface`.
+- **Below `sm` the two columns become one**, in the same order (Panel 9).
+
+Showing the ungranted keys too is the point of "the picker's columns": a reader checking _what can
+this app not do_ has the answer in the same place as _what can it_.
+
+### Panel 3 — empty
+
+The card keeps its place and its header. The body is one line:
+
+- a 32px `--el-muted` disc holding `Plug` (`size-4 --el-icon-muted`, `aria-hidden`);
+- the sentence, `text-sm --el-text-secondary`, ending in a link (`--el-link`, underline, hover
+  `--el-link-pressed`) with a trailing `ArrowUpRight` (external, opens in a new tab,
+  `rel="noopener"`).
+
+**Not the `EmptyState` primitive.** That is a 48px glyph and a serif title — the treatment the tokens
+card uses because tokens are the pane's subject. This is its second section, and a full empty state
+under the tokens would out-shout them.
+
+**The link's destination** is motir.co's _Add Motir to Claude_ page, which MOTIR-6976 publishes. Its
+path is that card's to fix; the build card takes it from there (or from a constant it owns) rather
+than from this asset.
+
+### Panel 4 — loading
+
+The header renders; the body is the table's own header row and **three skeleton rows** in its six
+columns: two stacked bars for App and Workspace, a pill-shaped bar for Scopes, one bar each for the
+dates, a 28px square for the action. Bars are `bg-(--el-muted) rounded-(--radius-control)` (the pill
+bar `rounded-(--radius-badge)`), under `animate-pulse`, the whole body `aria-hidden`, with a visually
+hidden `role="status"` reading `common.loading` (_Loading…_).
+
+**It is an in-page `<Suspense>` around this card only, placed after the page's session gate** — never
+a `loading.tsx` (CLAUDE.md § _A `loading.tsx` may NOT sit above a route that decides existence_). The
+rail, the page header and the tokens above are painted when the frame shows; only the rows wait.
+
+### Panel 5 — error
+
+The header renders; the body is one inline line, `role="alert"`:
+
+- `TriangleAlert`, 20px, `--el-danger-on-surface` (the glyph carries the hue);
+- title `text-sm font-medium --el-text`; description `text-[13px] --el-text-secondary`;
+- **Try again** — `Button variant="secondary" size="sm"`, re-running the list read, with `loading`
+  while it runs.
+
+**Not the `ErrorState` card**, for Panel 3's reason: a 48px danger glyph under the tokens reads as the
+whole pane failing, and nothing else on the page did. The description says _Nothing was revoked_
+because the person who came here to revoke something needs to know the failure did not do it for
+them.
+
+### Panel 6 — revoke confirm
+
+`Modal size="sm"`, the shipped `RevokeTokenDialog` composition re-worded:
+
+- **title** (`font-serif text-xl --el-text`): names the app.
+- **callout**: `rounded-(--radius-card) bg-(--el-tint-rose) p-(--spacing-card-padding)`,
+  `TriangleAlert` `size-4 --el-danger`, sentence `text-sm --el-text-strong`, app and workspace in
+  `font-semibold`.
+- **facts** — a `<dl>` naming THIS connection among its siblings: _Workspace_ (`{workspace} ·
+{All projects | project}`), _Scopes_ (the summary word), _Connected_ (date). Terms
+  `text-[13px] --el-text-secondary`, values `--el-text`.
+- **footer** (`Modal.Footer`): `Button variant="ghost"` **Cancel** · `Button variant="danger"`
+  **Revoke access** with `Trash2`.
+
+**The callout names the workspace** because "revoke Claude" is ambiguous to someone whose Claude
+reaches two. **It does not say "can't be undone"**, unlike the token dialog: a connection IS
+recoverable — connect again from the app and approve — so it says what recovering costs instead.
+
+### Panel 7 — revoking
+
+The danger Button takes `loading` (its `Spinner` replaces `Trash2`, `aria-busy`, disabled); the label
+does not change. **Cancel and the close button are disabled, and Escape and the scrim do nothing**
+while the request runs, so the dialog cannot close on a revoke whose outcome is unknown. (The token
+dialog disables Cancel only; this is one step stricter, on purpose.)
+
+### Panel 8 — revoked
+
+On `2xx` the dialog closes, the row is **spliced out of the island's own state** — the list is a
+client island seeded from the server read, so the page-state contract's case 3 applies and
+`router.refresh()` is never the mechanism — and a success `Toast` fires. On failure the dialog stays
+open, the button returns from `loading`, the row stays, and the error `Toast` fires. Revoking the last
+row leaves Panel 3.
+
+A revoke that answers `404` (already gone — revoked from another tab, or the membership was removed)
+is treated as success: the row leaves and the success toast fires. The person's intent — that app
+cannot act — holds either way.
+
+### Panel 9 — narrow viewport
+
+Below `sm` (640px) the table becomes a `<ul>`, one block per connection, `py-3.5` with an
+`--el-border-soft` rule between blocks:
+
+1. App name + Unverified, host under it — with the trash icon button top-right (36px hit area kept);
+2. `{workspace} · {All projects | project}`, `text-[13px] --el-text-secondary`;
+3. the scopes cell (summary Pill, Can delete, chevron) — disclosed columns collapse to one;
+4. `Connected {date} · Last used {when}`, `text-xs --el-text-secondary`.
+
+The account rail is the shipped drawer at this width and is not drawn. **The tokens table above keeps
+its shipped `overflow-x-auto`** — bringing it to this list form is not this card's change.
+
+### Copy — every string, `en`
+
+A new namespace **`settings.connectedApps`**. The permission, domain and summary labels are NOT new:
+they come from `permissions.*` and `settings.apiTokens.scopes.summary.*` / `.canDelete`, so this
+surface describes a grant in the same words as the token list and the consent screen.
+
+| key                         | `en`                                                                                                                                                                                   |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`                     | Connected apps                                                                                                                                                                         |
+| `subtitle`                  | Apps you've signed into with your Motir account. Each one acts as you, in one workspace, with the scopes you approved.                                                                 |
+| `columns.app`               | App                                                                                                                                                                                    |
+| `columns.scopes`            | _(reuse `settings.apiTokens.columns.scopes`)_ Scopes                                                                                                                                   |
+| `columns.workspace`         | Workspace                                                                                                                                                                              |
+| `columns.connected`         | Connected                                                                                                                                                                              |
+| `columns.lastUsed`          | Last used                                                                                                                                                                              |
+| `columns.actions`           | Actions                                                                                                                                                                                |
+| `allProjects`               | All projects                                                                                                                                                                           |
+| `lastUsedNever`             | Never                                                                                                                                                                                  |
+| `unverified`                | Unverified                                                                                                                                                                             |
+| `unverifiedTooltip`         | This app registered itself. Motir hasn't verified who publishes it.                                                                                                                    |
+| `detailLead`                | This app can:                                                                                                                                                                          |
+| `granted`                   | Granted _(visually hidden)_                                                                                                                                                            |
+| `notGranted`                | Not granted                                                                                                                                                                            |
+| `showScopes` / `hideScopes` | Show scopes for {app} / Hide scopes for {app}                                                                                                                                          |
+| `revokeAria`                | Revoke {app} in {workspace}                                                                                                                                                            |
+| `empty.body`                | No apps connected. When you add Motir to Claude, or another app that signs in with your Motir account, it appears here.                                                                |
+| `empty.link`                | How to add Motir to Claude                                                                                                                                                             |
+| `error.title`               | Couldn't load your connected apps.                                                                                                                                                     |
+| `error.body`                | Your tokens above are unaffected. Nothing was revoked.                                                                                                                                 |
+| `error.retry`               | _(reuse `common.retry`)_ Try again                                                                                                                                                     |
+| `revokeConfirm.title`       | Revoke "{app}"?                                                                                                                                                                        |
+| `revokeConfirm.body`        | **{app}** loses access to the **{workspace}** workspace now. Its next request is refused, and it will ask you to sign in again. Your tokens and other connected apps are not affected. |
+| `revokeConfirm.workspace`   | Workspace                                                                                                                                                                              |
+| `revokeConfirm.scopes`      | Scopes                                                                                                                                                                                 |
+| `revokeConfirm.connected`   | Connected                                                                                                                                                                              |
+| `revokeConfirm.cancel`      | Cancel                                                                                                                                                                                 |
+| `revokeConfirm.confirm`     | Revoke access                                                                                                                                                                          |
+| `revoked.title`             | Access revoked                                                                                                                                                                         |
+| `revoked.body`              | {app} can no longer act in {workspace}. Connect it again from {app} to restore it.                                                                                                     |
+| `revokeError.title`         | Couldn't revoke access                                                                                                                                                                 |
+| `revokeError.body`          | Something went wrong. Please try again.                                                                                                                                                |
+
+(The mock prints the revoked toast for Panel 1's first row: _Claude can no longer act in Motir.
+Connect it again from Claude to restore it._) `zh` is owed alongside `en` by the build card, as for
+every settings namespace.
+
+### Primitives composed (no hand-rolling)
+
+| Element                           | Primitive                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------ |
+| The section                       | `Card` with the `header` slot (`ApiTokensManager`'s)                                 |
+| Row list                          | the token list's `<table>` + `Th`                                                    |
+| Summary / Can delete / Unverified | `Pill` — `severity="success"` · `tone="neutral"` · `severity="danger"`; no new tone  |
+| Unverified explanation            | `Tooltip`                                                                            |
+| Disclose · Revoke                 | the token row's two icon buttons, verbatim                                           |
+| Disclosed grant                   | `PERMISSION_META` + `permissionColumnsForTokens()` (`permissionMeta.tsx`), read-only |
+| Loading                           | in-page `<Suspense>`; bars under `animate-pulse`                                     |
+| Error retry                       | `Button variant="secondary" size="sm"`                                               |
+| Confirm                           | `Modal size="sm"` + `Modal.Footer`, `Button` ghost + danger (`loading`)              |
+| Outcome                           | `useToast()` — `success` / `error`                                                   |
+
+**No new design-system entry, no new token.**
+
+### Token roles
+
+| Element                     | Colour                                                                                                              | Shape                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Card                        | `--el-card` / `--el-border`                                                                                         | `--radius-card`, `--spacing-card-padding`, `--shadow-subtle`        |
+| Card title · subtitle       | `--el-text` · `--el-text-muted` (on the white card — 4.54:1, allowed)                                               | —                                                                   |
+| Column headers              | `--el-text-secondary`                                                                                               | `--spacing-control-y`                                               |
+| App name · host             | `--el-text` · `--el-text-secondary`                                                                                 | —                                                                   |
+| Workspace · project · dates | `--el-text-secondary`                                                                                               | —                                                                   |
+| Summary / Unverified pills  | neutral: `--el-surface` + `--el-border` + `--el-text-secondary`; mint / rose tints + `--el-text-strong`             | `--radius-badge`, `--spacing-chip-x/y`                              |
+| Tooltip                     | `--el-tooltip-bg` / `--el-tooltip-text`                                                                             | `--radius-control`, `--spacing-tooltip-x/y`                         |
+| Disclose · trash buttons    | `--el-text-secondary`; hover `--el-surface` fill (trash ink → `--el-danger-on-surface`)                             | `--height-control` square, `--radius-control`, `--spacing-icon-btn` |
+| Disclosed box               | `--el-surface-soft` + `--el-border-soft`; every ink on it `--el-text` or `--el-text-secondary`                      | `--radius-card`, `--spacing-control-x/y`                            |
+| Granted check · danger row  | `--el-success` (graphic) · `--el-tint-rose` + `--el-text-strong` + glyph `--el-danger-on-surface`                   | `--radius-control`                                                  |
+| Empty disc · link           | `--el-muted` + `--el-icon-muted` · `--el-link` / `--el-link-pressed`                                                | `rounded-full` (a disc)                                             |
+| Skeleton bars               | `--el-muted`                                                                                                        | `--radius-control` / `--radius-badge`                               |
+| Error glyph · text          | `--el-danger-on-surface` · `--el-text` / `--el-text-secondary`                                                      | —                                                                   |
+| Confirm callout             | `--el-tint-rose`, glyph `--el-danger`, text `--el-text-strong`                                                      | `--radius-card`, `--spacing-card-padding`                           |
+| Revoke access               | `Button` danger — the one element here carrying the danger FILL                                                     | `--radius-btn`, `--height-btn-md`                                   |
+| Toasts                      | `--el-page-bg` + border `--el-success` / `--el-danger`, title `--el-text`, body `--el-text-muted` (white — allowed) | `--radius-card`, `--shadow-elevated`                                |
+
+**AA, checked against the table in CLAUDE.md:** no `--el-text-muted` sits on `--el-surface`,
+`--el-surface-soft` or `--el-muted` (the disclosed box and the narrow list use `--el-text-secondary`
+throughout); no `--el-text-faint` carries text anywhere; danger ink on a page surface is
+`--el-danger-on-surface`, and the danger-fill ink appears only inside the danger Button.
+
+**The mock's own token block** is the base asset's, plus six Tier-3 tokens it did not need, verbatim
+from `packages/design-system/theme.css`: `--el-card`, `--el-link-pressed` (+ `--color-link-pressed`),
+`--el-tooltip-bg`, `--el-tooltip-text`, `--el-overlay-scrim` (light and dark values). Board chrome
+(panel labels, notes, the dashed _unchanged_ slabs, the accent outline marking the new card) is
+`--el-text-secondary` / `--el-text` on `--el-surface` and is not design.
+
+### Open questions, decided here (reverse them on this asset, not in code)
+
+1. **Section, not rail row.** Decided: a card in the Tokens pane, per the card's own access path. If
+   the pane's heading should grow to name both credentials (_Tokens & apps_), that is a rename of a
+   shipped rail label (MOTIR-2534's) and belongs to its own card.
+2. **Page subtitle untouched.** It speaks of personal access tokens only; the new card's own subtitle
+   carries its meaning. Rewriting the page subtitle is a copy change to a shipped surface outside
+   this delta.
+3. **Last used is relative, Connected absolute** — see the column table.
+4. **No bulk "Revoke all".** GitHub offers one; at one to four connections it is a destructive
+   control with little to do. Add it when a person has enough rows to want it.
+
+### GIVES / TAKES
+
+| card           | gives / takes | what                                                                                                                          |
+| -------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-6986** | **GIVES**     | The whole surface: the card's place and anchor, the row's six columns, the disclose, every state in Panels 1–9, and the copy. |
+| **MOTIR-6983** | neither       | The grant this surface renders and deletes — cited as the source of what a row shows and what Revoke does.                    |
+| **MOTIR-6980** | neither       | The consent screen. Shares the _Unverified_ label and tooltip copy and the scopes vocabulary; draws nothing here.             |
+| **MOTIR-6976** | neither       | Owns the motir.co _Add Motir to Claude_ page the empty state links to, and its path.                                          |
+| **MOTIR-4675** | neither       | The base asset's last amendment; its rail drawing is followed, not changed.                                                   |
+| **MOTIR-3580** | neither       | The picker's column rule, reused read-only in the disclosed row.                                                              |
+| **MOTIR-6981** | —             | This card.                                                                                                                    |

@@ -397,6 +397,10 @@ describe('§3 guards — the ones coverage cannot see (MOTIR-5600)', () => {
       'github_review',
       'plan_permission',
       'review_agent',
+      // `project_setting` (Story MOTIR-693 · MOTIR-697; `hosted-design-rerun-and-design-
+      // approval-switch.md` §2c) — a design gate a project with design approval off
+      // approves at raise time; nobody decided it. Written only by the publish path.
+      'project_setting',
     ]);
   });
 
