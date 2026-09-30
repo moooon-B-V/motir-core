@@ -24,10 +24,68 @@ import type {
 /** A run WITH its legs, in the run's own stored order — the read `/runs/[id]`
  *  and the ingest's own close-out both need, without a second round trip. */
 export type DispatchRunWithCards = Prisma.DispatchRunGetPayload<{
-  include: { cards: true };
+  include: {
+    cards: true;
+    agentInstance: { select: { id: true; name: true; profileId: true } };
+  };
 }>;
 
-const WITH_CARDS = { cards: { orderBy: { position: 'asc' } } } as const;
+/**
+ * The agent a run executed in (MOTIR-7023, `agent-instance-run.md` §5), as the
+ * run's reads carry it — the name and the profile the run section and the run
+ * modal print. Null for every `local` / `hosted` run, and for an `instance` run
+ * whose agent row was removed (`SET NULL`).
+ */
+export interface DispatchRunAgentInstanceRef {
+  id: string;
+  name: string;
+  profileId: string;
+}
+
+const AGENT_INSTANCE_REF = { select: { id: true, name: true, profileId: true } } as const;
+
+const WITH_CARDS = {
+  cards: { orderBy: { position: 'asc' } },
+  agentInstance: AGENT_INSTANCE_REF,
+} as const;
+
+/** A RUNNING run in one agent — the active-run read by agent (§5). */
+/**
+ * An agent's LATEST run, whatever its status — My agents' "Last run" line
+ * (MOTIR-7029). A bare row, not the model: the panel reads only these facts.
+ */
+export interface LatestDispatchRunInAgent {
+  id: string;
+  agentInstanceId: string;
+  status: DispatchRunStatus;
+  startedAt: Date;
+  endedAt: Date | null;
+}
+
+/** The card a run works on, as a panel names it: its key and its title. */
+export interface DispatchRunTargetCard {
+  workItemKey: string;
+  /** Null when the work item has since been deleted — the key the run saw stays. */
+  title: string | null;
+}
+
+export interface RunningDispatchRunInAgent {
+  id: string;
+  agentInstanceId: string;
+  projectId: string;
+  command: DispatchCommand;
+  startedAt: Date;
+  createdById: string | null;
+}
+
+const RUNNING_IN_AGENT_SELECT = {
+  id: true,
+  agentInstanceId: true,
+  projectId: true,
+  command: true,
+  startedAt: true,
+  createdById: true,
+} as const;
 
 /**
  * One page of a run listing: the cap, the opaque cursor, and — for the reads
@@ -57,6 +115,13 @@ export interface DispatchRunPage {
    * shortened after the read. Omit for a member.
    */
   withheldWorkItemIds?: readonly string[] | undefined;
+}
+
+/** A row the active-run read matched — its `agentInstanceId` is non-null by the filter. */
+function inAgent(
+  row: Omit<RunningDispatchRunInAgent, 'agentInstanceId'> & { agentInstanceId: string | null },
+): RunningDispatchRunInAgent {
+  return { ...row, agentInstanceId: row.agentInstanceId! };
 }
 
 /** The `mine` narrowing, as a `where` fragment — empty when absent. */
@@ -92,6 +157,8 @@ export interface LockedDispatchRunTerminalState {
   endedAt: Date | null;
   /** Who opened it — the heartbeat's owner check (MOTIR-6528). */
   createdById: string | null;
+  /** The agent an `instance` run is running in — whose idle signal its events bump (MOTIR-7027). */
+  agentInstanceId: string | null;
 }
 
 /** An open run and who started it — the holder a refused repair claim names. */
@@ -145,6 +212,169 @@ export const dispatchRunRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRun> {
     return tx.dispatchRun.create({ data });
+  },
+
+  /**
+   * THE ACTIVE-RUN READ BY AGENT (MOTIR-7023, `agent-instance-run.md` §5): the
+   * RUNNING run in this agent, or null. The start, Hibernate, Delete, the idle
+   * check and the image update share it. At most one row can match — the partial
+   * unique index `dispatch_run_agent_instance_running_key` guarantees it, and
+   * serves this read (its predicate is this filter).
+   */
+  async findRunningByAgentInstance(
+    agentInstanceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<RunningDispatchRunInAgent | null> {
+    const row = await tx.dispatchRun.findFirst({
+      where: { agentInstanceId, status: 'running' },
+      select: RUNNING_IN_AGENT_SELECT,
+    });
+    return row ? inAgent(row) : null;
+  },
+
+  /**
+   * {@link findRunningByAgentInstance} for a LIST of agents, in ONE query — the
+   * card's agent picker asks it for every agent it offers, so a per-agent read
+   * would be an N+1 on the picker. At most one row per agent (the index).
+   */
+  async findRunningByAgentInstances(
+    agentInstanceIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<RunningDispatchRunInAgent[]> {
+    if (agentInstanceIds.length === 0) return [];
+    const rows = await tx.dispatchRun.findMany({
+      where: { agentInstanceId: { in: [...agentInstanceIds] }, status: 'running' },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: RUNNING_IN_AGENT_SELECT,
+    });
+    return rows.map(inAgent);
+  },
+
+  /**
+   * Each agent's LATEST run, whatever its status, in ONE query (MOTIR-7029) — the
+   * My agents panel's "Last run" line after a run closes. `DISTINCT ON` keeps one
+   * row per agent, newest `started_at` first (then `id`, the total order the run
+   * listings use), and rides `dispatch_run_agent_instance_id_started_at_idx`. An
+   * agent that never ran is absent.
+   */
+  async findLatestByAgentInstances(
+    agentInstanceIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<LatestDispatchRunInAgent[]> {
+    if (agentInstanceIds.length === 0) return [];
+    return tx.$queryRaw<LatestDispatchRunInAgent[]>`
+      SELECT DISTINCT ON (agent_instance_id)
+        id,
+        agent_instance_id AS "agentInstanceId",
+        status::text AS status,
+        started_at AS "startedAt",
+        ended_at AS "endedAt"
+      FROM dispatch_run
+      WHERE agent_instance_id = ANY(${[...agentInstanceIds]}::text[])
+      ORDER BY agent_instance_id, started_at DESC, id DESC
+    `;
+  },
+
+  /**
+   * The card each of these runs works on — its KEY and TITLE — in ONE query
+   * (MOTIR-7029): a scope run's scope target, else its first leg. The My agents
+   * panel names the run by both. A run with neither is absent from the map.
+   */
+  async findTargetCards(
+    runIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, DispatchRunTargetCard>> {
+    if (runIds.length === 0) return new Map();
+    const rows = await tx.dispatchRun.findMany({
+      where: { id: { in: [...runIds] } },
+      select: {
+        id: true,
+        scope: { select: { identifier: true, title: true } },
+        cards: {
+          orderBy: { position: 'asc' },
+          take: 1,
+          select: { workItemKey: true, workItem: { select: { title: true } } },
+        },
+      },
+    });
+    const out = new Map<string, DispatchRunTargetCard>();
+    for (const row of rows) {
+      if (row.scope) {
+        out.set(row.id, { workItemKey: row.scope.identifier, title: row.scope.title });
+        continue;
+      }
+      const leg = row.cards[0];
+      if (leg?.workItemKey) {
+        out.set(row.id, { workItemKey: leg.workItemKey, title: leg.workItem?.title ?? null });
+      }
+    }
+    return out;
+  },
+
+  /**
+   * The card each of these runs works on, in ONE query (MOTIR-7026): a scope
+   * run's scope target, else its first leg — what the "already running" refusal
+   * and the card's agent picker name beside the run id. A run with neither is
+   * absent from the map.
+   */
+  async findTargetKeys(
+    runIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, string>> {
+    if (runIds.length === 0) return new Map();
+    const rows = await tx.dispatchRun.findMany({
+      where: { id: { in: [...runIds] } },
+      select: {
+        id: true,
+        scope: { select: { identifier: true } },
+        cards: { orderBy: { position: 'asc' }, take: 1, select: { workItemKey: true } },
+      },
+    });
+    const out = new Map<string, string>();
+    for (const row of rows) {
+      const key = row.scope?.identifier ?? row.cards[0]?.workItemKey ?? null;
+      if (key) out.set(row.id, key);
+    }
+    return out;
+  },
+
+  /**
+   * The card each of these runs works on — its KEY and its TITLE — in ONE query
+   * (MOTIR-7028): the card's agent picker names a busy agent's work item by both
+   * (`design/runs/design-notes.md` § Revision 2, the busy row). The same target
+   * rule as {@link findTargetKeys}: the scope target, else the first leg. The
+   * title is the work item's current one, or null for a leg whose card is gone
+   * (the key survives it). A run with neither is absent from the map.
+   */
+  async findTargets(
+    runIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, { key: string; title: string | null }>> {
+    if (runIds.length === 0) return new Map();
+    const rows = await tx.dispatchRun.findMany({
+      where: { id: { in: [...runIds] } },
+      select: {
+        id: true,
+        scope: { select: { identifier: true, title: true } },
+        cards: {
+          orderBy: { position: 'asc' },
+          take: 1,
+          select: { workItemKey: true, workItem: { select: { title: true } } },
+        },
+      },
+    });
+    const out = new Map<string, { key: string; title: string | null }>();
+    for (const row of rows) {
+      if (row.scope) {
+        out.set(row.id, { key: row.scope.identifier, title: row.scope.title });
+        continue;
+      }
+      const leg = row.cards[0];
+      if (leg?.workItemKey) {
+        out.set(row.id, { key: leg.workItemKey, title: leg.workItem?.title ?? null });
+      }
+    }
+    return out;
   },
 
   /**
@@ -559,7 +789,8 @@ export const dispatchRunRepository = {
              "status",
              "stop_reason" AS "stopReason",
              "ended_at"    AS "endedAt",
-             "created_by_id" AS "createdById"
+             "created_by_id" AS "createdById",
+             "agent_instance_id" AS "agentInstanceId"
         FROM "dispatch_run"
        WHERE "id" = ${id}
        FOR UPDATE
@@ -586,21 +817,29 @@ export const dispatchRunRepository = {
   },
 
   /**
-   * The LAPSE REAP's cross-tenant discovery read (MOTIR-6528): LOCAL runs still
-   * `running` whose last heartbeat is older than the cut-off, oldest first.
+   * The LAPSE REAP's cross-tenant discovery read (MOTIR-6528): LOCAL and
+   * INSTANCE runs still `running` whose last heartbeat is older than the cut-off,
+   * oldest first. Both heartbeat from the CLI and `isRunAlive` lapses both by the
+   * same rule; the reap closes an `instance` one through the agent's end path,
+   * which revokes its credentials and stops its session (`agent-instance-run.md`
+   * §6, MOTIR-7027).
    *
    * A null heartbeat never matches — a run opened by a CLI that never heartbeats
    * stays on the 12-hour age reap, and a HOSTED run's liveness is its
    * supervision. Same `withSystemContext` contract as
    * {@link listStaleRunningAcrossWorkspaces}: read-only, every write re-binds.
    */
-  async listLapsedLocalRunningAcrossWorkspaces(
+  async listLapsedHeartbeatingRunningAcrossWorkspaces(
     heartbeatBefore: Date,
     take: number,
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRun[]> {
     return tx.dispatchRun.findMany({
-      where: { status: 'running', origin: 'local', lastHeartbeatAt: { lt: heartbeatBefore } },
+      where: {
+        status: 'running',
+        origin: { in: ['local', 'instance'] },
+        lastHeartbeatAt: { lt: heartbeatBefore },
+      },
       orderBy: { lastHeartbeatAt: 'asc' },
       take,
     });

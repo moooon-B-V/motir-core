@@ -76,6 +76,7 @@ describe('client.getDispatchRun — the run a hosted CLI adopts', () => {
           startedAt: '2026-09-27T00:00:00.000Z',
           endedAt: null,
           createdById: 'user-1',
+          agentInstance: null,
           // Deliberately OUT of position order: the adapter owns the ordering,
           // because the run's order is what a scope drain follows.
           cards: [

@@ -47,6 +47,7 @@
     "coverage:hosted-agent-run": "vitest run --config vitest.coverage.hosted-agent-run.config.ts --coverage",
     "coverage:review-agent": "vitest run --config vitest.coverage.review-agent.config.ts --coverage",
     "coverage:agent-instances": "vitest run --config vitest.coverage.agent-instances.config.ts --coverage",
+    "coverage:agent-instance-run": "vitest run --config vitest.coverage.agent-instance-run.config.ts --coverage",
     "test:guards": "vitest run --config vitest.guards.config.ts",
     "test:docs-guards": "vitest run --config vitest.docs.config.ts",
     "test:watch": "vitest",

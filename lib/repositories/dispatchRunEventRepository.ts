@@ -160,6 +160,28 @@ export const dispatchRunEventRepository = {
   },
 
   /**
+   * The closing lines of SEVERAL runs, in ONE query (MOTIR-7029) — the `log`
+   * events an end path writes with `data.end` (see {@link findHostedEndLine}),
+   * newest first. The My agents panel quotes the latest one per run as its "Last
+   * run" reason; the caller keeps the first row it sees for each run.
+   */
+  async listEndLinesForRuns(
+    dispatchRunIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<DispatchRunEvent, 'dispatchRunId' | 'data'>>> {
+    if (dispatchRunIds.length === 0) return [];
+    return tx.dispatchRunEvent.findMany({
+      where: {
+        dispatchRunId: { in: [...dispatchRunIds] },
+        kind: 'log',
+        data: { path: ['end'], string_contains: '' },
+      },
+      orderBy: { seq: 'desc' },
+      select: { dispatchRunId: true, data: true },
+    });
+  },
+
+  /**
    * When the run's LATEST event was written, or null — the hosted stall read
    * (MOTIR-690): a run whose newest event is older than the stall window has an
    * agent that is alive and silent. Ordered by `seq`, the server-assigned order.

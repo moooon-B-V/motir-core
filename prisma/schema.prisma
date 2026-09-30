@@ -5327,7 +5327,8 @@ model ApprovalGate {
   /// MOTIR-2920's "what is on me across everything" surface, which is the
   /// caller it was added for.
   /// The automatic hosted re-run a Revise on this gate caused or skipped (MOTIR-700).
-  designAutoRerun    DesignAutoRerun?
+  designAutoRerun DesignAutoRerun?
+
   @@index([workspaceId, state])
   /// THE ROUTING READ's index (MOTIR-4791) — the Approvals tab asks for one
   /// PROJECT's `awaiting` gates, because the Workbench is active-project scoped
@@ -5378,20 +5379,20 @@ model DesignAutoRerun {
   /// one refusal, one attempt.
   gateId      String @unique @map("gate_id")
 
-  outcome    DesignAutoRerunOutcome
+  outcome       DesignAutoRerunOutcome
   /// Why nothing started. Null exactly when `outcome` is `started`.
-  skipReason DesignAutoRerunSkipReason? @map("skip_reason")
+  skipReason    DesignAutoRerunSkipReason? @map("skip_reason")
   /// The run it started. `SET NULL`: the record that a run was started outlives the run.
-  dispatchRunId String? @map("dispatch_run_id")
+  dispatchRunId String?                    @map("dispatch_run_id")
   /// Which automatic re-run of this card this was, counting Motir-pressed Revise
   /// refusals (§1e). The cap reads the same count; storing it lets the line say "2 of 3".
-  ordinal Int
+  ordinal       Int
   /// What the skipped line NAMES, captured when it was written (MOTIR-702; the design's
   /// `design-result--auto-rerun.mock.html`): the dispatcher's name for
   /// `no_project_access`, the model for `model_not_offered`, the repository for
   /// `repository_not_writable`. Null for every other outcome. A record of the moment, so
   /// the line still says who it was after that person's name changes.
-  detail  String?
+  detail        String?
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -10806,13 +10807,27 @@ model DispatchRun {
   /// each saw half the work.
   idempotencyKey String? @map("idempotency_key")
 
+  /// The developer's own agent the run executes in (`origin: instance` —
+  /// `docs/decisions/agent-instance-run.md` §5, MOTIR-7023). Null for every
+  /// `local` and `hosted` run. `SET NULL`, so removing an agent row never takes
+  /// run history with it (an agent row is soft-deleted in practice, so its name
+  /// stays readable). AT MOST ONE `running` run per agent is enforced by a
+  /// hand-written PARTIAL unique index in the migration
+  /// (`dispatch_run_agent_instance_running_key`), which the datamodel cannot
+  /// express — so NO `@@index` / `@@unique` on this model may claim the column
+  /// list `(agent_instance_id)` (CLAUDE.md, the partial-index rule). A CHECK
+  /// constraint (`dispatch_run_agent_instance_origin_check`) pins that only an
+  /// `instance` run names an agent.
+  agentInstanceId String? @map("agent_instance_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  scope     WorkItem? @relation("DispatchRunScope", fields: [scopeWorkItemId], references: [id], onDelete: SetNull)
-  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scope         WorkItem?      @relation("DispatchRunScope", fields: [scopeWorkItemId], references: [id], onDelete: SetNull)
+  createdBy     User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  agentInstance AgentInstance? @relation(fields: [agentInstanceId], references: [id], onDelete: SetNull)
 
   cards            DispatchRunCard[]
   events           DispatchRunEvent[]
@@ -10834,6 +10849,10 @@ model DispatchRun {
   @@index([projectId, startedAt(sort: Desc)])
   /// The scope's own run history.
   @@index([scopeWorkItemId, startedAt(sort: Desc)])
+  /// An agent's run history, newest first — My agents' LAST-run read per agent
+  /// (MOTIR-7029). Two columns, so it never claims the partial unique index's
+  /// `(agent_instance_id)` list (CLAUDE.md, the partial-index rule).
+  @@index([agentInstanceId, startedAt(sort: Desc)])
   /// The abandoned-run reap's discovery read (MOTIR-1792): the oldest rows still
   /// `running`. Status-first, because `running` is a tiny minority of the table
   /// — the same shape `job_run`'s reap index has.
@@ -11020,6 +11039,11 @@ enum DispatchRunOrigin {
   local
   /// 9.1.7's container, on Motir's infrastructure.
   hosted
+  /// A run inside one of the developer's own agents (MOTIR-7023,
+  /// `agent-instance-run.md` §5): started from Motir, on Motir's machine, with
+  /// the developer's own coding agent and no gateway key. `agentInstanceId`
+  /// names the agent.
+  instance
 
   @@map("dispatch_run_origin")
 }
@@ -11840,6 +11864,27 @@ enum AgentTerminalServer {
   @@map("agent_terminal_server")
 }
 
+/// Whether an agent's image carries the run launcher (`agent-instance-run.md`
+/// §4, MOTIR-7026) — `unknown` until its digest is probed.
+enum AgentRunLauncher {
+  unknown
+  present
+  absent
+
+  @@map("agent_run_launcher")
+}
+
+/// The coding agent's sign-in as `motir agent-terminal signin` answers it
+/// (`agent-instance-run.md` §4). `unknown` for a profile that cannot answer and
+/// for an agent never probed.
+enum AgentSignInState {
+  unknown
+  signed_in
+  signed_out
+
+  @@map("agent_sign_in_state")
+}
+
 /// Why a running interval ended (§4).
 enum AgentInstanceIntervalEndReason {
   hibernated
@@ -11911,6 +11956,22 @@ model AgentInstance {
   /// digest that differs from `imageDigest` is re-probed on the next boot.
   terminalServerDigest String?             @map("terminal_server_digest")
 
+  /// Can the pinned image start a card's run (`agent-instance-run.md` §4,
+  /// MOTIR-7026)? Probed with `motir agent-terminal run --help` at a boot whose
+  /// digest was not probed yet, beside `terminalServer`. An agent never probed
+  /// for its CURRENT digest reads as too old to run a card.
+  runLauncher       AgentRunLauncher @default(unknown) @map("run_launcher")
+  /// The image digest `runLauncher` was probed for; null = never probed.
+  runLauncherDigest String?          @map("run_launcher_digest")
+  /// The coding agent's sign-in as the agent's terminal server last answered
+  /// `motir agent-terminal signin` (§4): probed at every boot, by a start on a
+  /// running agent, and just before a hibernate. The credential lives on the
+  /// volume, so a hibernated agent's last answer stands. A probe that could not
+  /// answer leaves the previous value.
+  signInState       AgentSignInState @default(unknown) @map("sign_in_state")
+  /// When `signInState` was last answered; null = never.
+  signInCheckedAt   DateTime?        @map("sign_in_checked_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -11922,6 +11983,8 @@ model AgentInstance {
   /// agent-terminal.md Q3, Q8 (MOTIR-6940): its terminal tickets and connections.
   terminalTickets     AgentTerminalTicket[]
   terminalConnections AgentTerminalConnection[]
+  /// agent-instance-run.md §5 (MOTIR-7023): the runs executed in this agent.
+  dispatchRuns        DispatchRun[]
 
   /// The owner's list: newest first per project.
   @@index([ownerId, projectId, createdAt(sort: Desc)])

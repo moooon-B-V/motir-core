@@ -308,7 +308,13 @@ export async function LateUpperSections({
   /** The Run hosted door's inputs (MOTIR-691) — the card's own readiness — or
    *  null where no door is drawn: a reader who may not run the card, an archived
    *  card, or one already in the done category. */
-  hostedDoor?: { ready: boolean; openBlockers: number } | null;
+  hostedDoor?: {
+    ready: boolean;
+    openBlockers: number;
+    /** Send to my agent (MOTIR-7028): the project's name, where the reader may
+     *  also use agents on it (`instance:use`) — else null, and only Run shows. */
+    agents?: { projectName: string } | null;
+  } | null;
   /** The card's status, in words — the continue part's *nothing moved* line names it
    *  (MOTIR-6534). */
   statusLabel?: string | null;
@@ -436,6 +442,7 @@ export async function LateUpperSections({
         openBlockers={hostedDoor.openBlockers}
         continueView={r.continueView.state === 'error' ? null : r.continueView}
         viewerId={currentUserId}
+        agents={hostedDoor.agents ?? null}
       >
         {node}
       </HostedRunProvider>

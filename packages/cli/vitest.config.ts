@@ -137,11 +137,15 @@ export default defineConfig({
         'src/agentTerminal/websocket.ts': { branches: 90, functions: 90, lines: 90 },
         'src/commands/agentTerminal.ts': { branches: 90, functions: 90, lines: 90 },
         'src/agentTerminal/outputRing.ts': { branches: 90, functions: 90, lines: 90 },
-        // FUNCTIONS + LINES only (99.05 lines / 89.83 br / 95 funcs): its
-        // uncovered arms are the refusal of an upgrade racing `close()` and the
-        // defensive fallbacks on a bound address, and a 90% branch bar would
-        // fail on those alone.
-        'src/agentTerminal/server.ts': { functions: 90, lines: 90 },
+        // MOTIR-7025 (the run launcher, `agent-instance-run.md` §1) raised it to
+        // 98.74 lines / 93.45 br / 93.75 funcs with the run session's tests, so
+        // it now carries the branch bar too; its remaining arms are the
+        // refusal of an upgrade racing `close()` and the defensive fallbacks on
+        // a bound address.
+        'src/agentTerminal/server.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-7025 — the LOCAL control socket the run launcher speaks to.
+        // Measured first: 100 lines / 94.28 br / 96.29 funcs.
+        'src/agentTerminal/control.ts': { branches: 90, functions: 90, lines: 90 },
         // UNGATED: src/agentTerminal/pty.ts — the node-pty adapter. Its loader's
         // absent / unloadable arms are covered in `units.test.ts`; the adapter
         // body runs only against a real node-pty, which `realPty.test.ts` drives

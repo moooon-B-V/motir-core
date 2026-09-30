@@ -160,6 +160,65 @@ describe('dispatchRunRepository', () => {
     expect(read?.cards.map((c) => c.workItemKey)).toEqual(['P1-3', 'P1-2']);
   });
 
+  it('names each run’s target by key AND title — the scope, else the first leg (MOTIR-7028)', async () => {
+    const f = await seedFixture();
+    const { dispatchRunRepository } = await import('@/lib/repositories/dispatchRunRepository');
+    const { dispatchRunCardRepository } =
+      await import('@/lib/repositories/dispatchRunCardRepository');
+
+    const ids = await bound(f.workspaceId, async (tx) => {
+      const open = (data: Record<string, unknown> = {}) =>
+        dispatchRunRepository.create(
+          {
+            workspace: { connect: { id: f.workspaceId } },
+            project: { connect: { id: f.projectId } },
+            command: 'run',
+            ...data,
+          },
+          tx,
+        );
+      const scoped = await open({ scope: { connect: { id: f.storyId } }, scopeLabel: 'P-1' });
+      const leg = await open();
+      const gone = await open();
+      const bare = await open();
+      await dispatchRunCardRepository.createMany(
+        [
+          {
+            workspaceId: f.workspaceId,
+            dispatchRunId: leg.id,
+            workItemId: f.childAId,
+            workItemKey: 'P-2',
+            position: 0,
+          },
+          // A leg whose card was deleted keeps its key and has no title.
+          {
+            workspaceId: f.workspaceId,
+            dispatchRunId: gone.id,
+            workItemId: null,
+            workItemKey: 'P-9',
+            position: 0,
+          },
+        ],
+        tx,
+      );
+      return { scoped: scoped.id, leg: leg.id, gone: gone.id, bare: bare.id };
+    });
+
+    const targets = await bound(f.workspaceId, (tx) =>
+      dispatchRunRepository.findTargets(Object.values(ids), tx),
+    );
+    const story = await adminDb.workItem.findUniqueOrThrow({ where: { id: f.storyId } });
+    const childA = await adminDb.workItem.findUniqueOrThrow({ where: { id: f.childAId } });
+    expect(targets.get(ids.scoped)).toEqual({ key: story.identifier, title: story.title });
+    expect(targets.get(ids.leg)).toEqual({ key: 'P-2', title: childA.title });
+    expect(targets.get(ids.gone)).toEqual({ key: 'P-9', title: null });
+    expect(targets.has(ids.bare)).toBe(false);
+    // No runs, no query.
+    expect(await bound(f.workspaceId, (tx) => dispatchRunRepository.findTargets([], tx))).toEqual(
+      new Map(),
+    );
+  });
+
   it('is idempotent on the open: the same key finds the run rather than making a second', async () => {
     const f = await seedFixture();
     const { dispatchRunRepository } = await import('@/lib/repositories/dispatchRunRepository');

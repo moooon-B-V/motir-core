@@ -1,19 +1,25 @@
-import { CliError } from '../errors.js';
+import { AgentProfileCannotRunError, CliError } from '../errors.js';
 import { errVerbatim, info, outVerbatim } from '../output.js';
 import { parseKinds, refuseLaneFlagConflicts } from './read.js';
 import { withHostedProjectSession, withProjectSession, type ProjectSession } from '../session.js';
 import {
   assertAdoptsLeaf,
   hostedRunId,
+  isAgentRun,
   legAsDispatchItem,
+  SANDBOX_AGENT_ENV_VAR,
   type AdoptedRun,
 } from '../hostedMode.js';
 import { getAgentCommand } from '../config/userConfig.js';
 import {
+  agentProfileById,
+  agentProfileIds,
   deriveAgentHarness,
   parseAgentCommand,
+  unattendedAgentCommand,
   type ParsedAgentCommand,
 } from '../agentProfiles.js';
+import { hostedPromptAddendum } from '../hostedAttribution.js';
 import { runAgent } from '../agentRun.js';
 import { hostedOpenCodeAgent } from '../hostedAgent.js';
 import { prepareHostedCheckouts } from '../hostedCodegraph.js';
@@ -202,6 +208,13 @@ export function resolveAgent(
   // model through the gateway key, on an allow-listed environment. `MOTIR_AGENT`
   // and the user config are a LOCAL person's choices and are not read — only an
   // explicit `--agent`, for someone running the hosted path by hand.
+  // ⚠️ A RUN IN THE DEVELOPER'S OWN AGENT (MOTIR-7024, `agent-instance-run.md`
+  // §3) launches the coding agent the agent was created with, on the
+  // developer's own sign-in: the image's profile, with its unattended command.
+  // Not `--agent`, not `MOTIR_AGENT`, not the config — and NEVER the hosted
+  // OpenCode on Motir's gateway, whose key an agent never holds.
+  if (hostedRunId(opts, env) && isAgentRun(env))
+    return { parsed: agentModeAgent(env), source: 'agent' };
   if (hostedRunId(opts, env)) {
     const flagged = parseAgentCommand(opts.agent);
     if (flagged) return { parsed: flagged, source: 'flag' };
@@ -217,6 +230,39 @@ export function resolveAgent(
     if (parsed) return { parsed, source };
   }
   return null;
+}
+
+/**
+ * The agent-mode launcher: the `MOTIR_SANDBOX_AGENT` profile's unattended
+ * command, told how git and pull requests work in this run. Refused in words —
+ * never a fallback — when the image names no profile or one with no unattended
+ * form.
+ */
+export function agentModeAgent(env: NodeJS.ProcessEnv): ParsedAgentCommand {
+  const profileId = env[SANDBOX_AGENT_ENV_VAR]?.trim();
+  if (!profileId) {
+    throw new CliError(`An agent-mode run needs ${SANDBOX_AGENT_ENV_VAR}.`, {
+      hint: "The agent's image names its coding agent; this machine's does not.",
+    });
+  }
+  const profile = agentProfileById(profileId);
+  if (!profile) {
+    throw new CliError(`"${profileId}" is not a coding agent Motir knows.`, {
+      hint: `Known agents: ${agentProfileIds().join(', ')}.`,
+    });
+  }
+  const parsed = unattendedAgentCommand(profile.id, env);
+  if (!parsed) throw new AgentProfileCannotRunError(profile.id);
+  return { ...parsed, promptAddendum: () => hostedPromptAddendum() };
+}
+
+/**
+ * A hosted run's per-checkout preparation, or none: an agent-mode run's image
+ * already wires its own agent's code graph, and the hosted preparer registers
+ * OpenCode's MCP server GLOBALLY — in the developer's home (MOTIR-7024).
+ */
+function adoptedCheckoutPreparer(): { prepareCheckouts?: (cwds: string[]) => void } {
+  return isAgentRun() ? {} : { prepareCheckouts: hostedCheckoutPreparer };
 }
 
 // ── the shared pipeline ─────────────────────────────────────────────────────
@@ -504,7 +550,7 @@ export async function deliver(input: DeliverInput): Promise<void> {
       ...(input.continueBranches ? { branches: input.continueBranches } : {}),
       // A hosted container's checkouts are fresh clones: index them before the
       // agent starts, as the image's entrypoint used to (MOTIR-6560).
-      ...(input.adoptedRunId ? { prepareCheckouts: hostedCheckoutPreparer } : {}),
+      ...(input.adoptedRunId ? adoptedCheckoutPreparer() : {}),
     });
 
     if (verdict.kind === 'checkout_unavailable') {
@@ -976,6 +1022,9 @@ export async function runCommand(
 
   await enter(async (session, adopted) => {
     const { client } = session;
+    // An agent-mode run whose image cannot run unattended is refused HERE,
+    // before any card is claimed or cloned (MOTIR-7024) — not at the spawn.
+    if (adopted && isAgentRun()) agentModeAgent(process.env);
 
     // ── SCOPE or CARD? The SHAPE decides (MOTIR-3195 / MOTIR-3198) ──────────
     //
@@ -1094,7 +1143,7 @@ export async function runCommand(
         // A hosted workspace starts EMPTY: every repository a leg ships in is
         // cloned before its session branch is made, as `motir auto` does.
         materialize: adopted !== null,
-        ...(adopted ? { prepareCheckouts: hostedCheckoutPreparer } : {}),
+        ...(adopted ? adoptedCheckoutPreparer() : {}),
       });
       // ⚠️ THE CLOSE-OUT RE-READS THE CONTAINER'S CHILDREN FIRST (Bug
       // MOTIR-3268). The claim was taken at t=0; a bug filed mid-drain
