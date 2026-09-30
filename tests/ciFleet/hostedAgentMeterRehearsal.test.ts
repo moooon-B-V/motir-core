@@ -255,7 +255,7 @@ describe('the LONG run — hours, supervised pass by pass (AC 3)', () => {
         ).session;
         startedMs ??= new Date(session.handle.createdAt).getTime();
         // What the line says NOW, against what the container has truly accrued NOW.
-        const { agent } = await agentLineAt(new Date(clock.ms));
+        const { agent } = await agentLineAt(new Date(startedMs));
         const trueSeconds = Math.ceil((clock.ms - startedMs) / 1000);
         maxLagSeconds = Math.max(maxLagSeconds, trueSeconds - (agent?.containerSeconds ?? 0));
         // Jump to exactly the instant the pass deferred to — the queue's own wait.
