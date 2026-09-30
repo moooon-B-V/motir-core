@@ -464,6 +464,8 @@ export interface JobEventDataMap {
   /** MOTIR-4219 — the certificate sweep. Cross-tenant, cron-only. */
   'system.public-address-certificate-refresh': SystemScheduledData;
   'system.rate-limit-sweep': SystemScheduledData;
+  /** MOTIR-6984 — the daily OAuth sweep. Identity-scoped tables, cron-only. */
+  'system.oauth-sweep': SystemScheduledData;
   'system.filter-subscription-tick': SystemScheduledData;
   'system.public-follow-digest-tick': SystemScheduledData;
   'system.auto-plan-cadence-tick': SystemScheduledData;

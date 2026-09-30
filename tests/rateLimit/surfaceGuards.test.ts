@@ -129,6 +129,19 @@ describe('the auth surface', () => {
     expect(classifyAuthRequest('/api/auth/request-password-reset')).toBe('auth:password-reset');
     expect(classifyAuthRequest('/api/auth/forget-password')).toBe('auth:password-reset');
     expect(classifyAuthRequest('/api/auth/reset-password')).toBe('auth:password-reset');
+    // The OAuth server's registration and token POSTs (MOTIR-6982).
+    expect(classifyAuthRequest('/api/auth/oauth2/register')).toBe('auth:oauth-register');
+    expect(classifyAuthRequest('/api/auth/oauth2/token')).toBe('auth:oauth-token');
+  });
+
+  it('leaves the OAuth authorize, consent and revoke endpoints ALONE', () => {
+    for (const path of [
+      '/api/auth/oauth2/authorize',
+      '/api/auth/oauth2/consent',
+      '/api/auth/oauth2/revoke',
+    ]) {
+      expect(classifyAuthRequest(path)).toBeNull();
+    }
   });
 
   it('leaves sign-out, session reads, OAuth callbacks and the device poll ALONE', () => {

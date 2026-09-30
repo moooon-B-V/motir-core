@@ -501,6 +501,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/dataExportExpirySweep.ts',
     shape: '{ expired: number; failed: number; scanned: number }',
   },
+  'sweep-oauth-leftovers': {
+    file: 'lib/jobs/definitions/oauthSweep.ts',
+    shape:
+      '{ accessTokens: number; authorizationCodes: number; clients: number; refreshTokens: number }',
+  },
   'sweep-standing-dead-letters': {
     file: 'lib/jobs/definitions/dlqStandingDepthSweep.ts',
     shape:
