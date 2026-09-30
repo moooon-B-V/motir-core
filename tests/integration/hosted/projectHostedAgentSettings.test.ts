@@ -168,6 +168,29 @@ describe('projectHostedAgentSettingsService.update', () => {
     expect(levelOf(dto, 'high')).toMatchObject({ override: 'claude-sonnet-5-5' });
   });
 
+  // MOTIR-6997 coverage floor — the two patch shapes a JSON body can still carry.
+  it('reads a blank string as a reset, and trims an offered model', async () => {
+    const fx = await makeWorkItemFixture();
+    await service.update(fx.projectIdentifier, { low: 'claude-opus-5' }, ctxFor(fx));
+    const dto = await service.update(
+      fx.projectIdentifier,
+      { low: '   ', medium: ' claude-opus-5 ' },
+      ctxFor(fx),
+    );
+    expect(levelOf(dto, 'low')).toMatchObject({ override: null, source: 'platform_level' });
+    expect(levelOf(dto, 'medium')).toMatchObject({ override: 'claude-opus-5' });
+  });
+
+  it('refuses a non-string value as a model that is not offered', async () => {
+    const fx = await makeWorkItemFixture();
+    const err = await service
+      .update(fx.projectIdentifier, { high: 42 as unknown as string }, ctxFor(fx))
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HostedModelNotOfferedError);
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    expect(row.hostedModelHigh).toBeNull();
+  });
+
   it('refuses a model that is not offered and writes nothing', async () => {
     const fx = await makeWorkItemFixture();
     await expect(
@@ -262,6 +285,12 @@ describe('projectHostedAgentSettingsService.resolveForWorkItem', () => {
       model: 'claude-opus-5',
       difficulty: 'high',
     });
+  });
+
+  it('answers null for an id that names no card, without asking motir-ai', async () => {
+    const fx = await makeWorkItemFixture();
+    serveModels({}, 503);
+    expect(await service.resolveForWorkItem('no-such-work-item', ctxFor(fx))).toBeNull();
   });
 
   it('answers null when nothing is offered', async () => {
