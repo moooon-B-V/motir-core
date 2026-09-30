@@ -5,6 +5,7 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { HostedRunProvider } from '@/app/(authed)/items/[key]/_components/HostedRunProvider';
 import { RunHostedButton } from '@/app/(authed)/items/[key]/_components/RunHostedButton';
 import { RunSection } from '@/app/(authed)/items/[key]/_components/RunSection';
+import { announceRunsChanged } from '@/components/hosted/runsChangedSignal';
 import type { DispatchRunDto, DispatchRunListItemDto } from '@/lib/dto/dispatchRuns';
 
 // THE RUN HOSTED DOOR (Story MOTIR-683 · MOTIR-691) — the Run section header's
@@ -169,6 +170,39 @@ describe('the door on a ready card', () => {
     expect(refresh).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(calls(HISTORY)).toHaveLength(1));
     // The island now holds the new, live hosted run — so the header holds Cancel run.
+    await waitFor(() => expect(screen.getByTestId('hosted-run-cancel')).toBeTruthy());
+  });
+});
+
+describe('a hosted start made OUTSIDE the provider (MOTIR-6930)', () => {
+  it('an announced start on THIS card refetches the history, without a second page refresh; another card’s is ignored', async () => {
+    routes[HISTORY] = () => ({
+      status: 200,
+      body: {
+        runs: [run({ id: 'run_fix', origin: 'hosted', status: 'running', endedAt: null, seq: 0 })],
+        nextCursor: null,
+      },
+    });
+    routes['GET /api/dispatch-runs/run_fix'] = () => ({ status: 404, body: null });
+    routes['GET /api/dispatch-runs/run_fix/machine-time'] = () => ({
+      status: 200,
+      body: { billableSeconds: 0, settled: false },
+    });
+    await mount();
+
+    // Another card's start is not this Run section's business.
+    await act(async () => {
+      announceRunsChanged('PROD-7');
+    });
+    expect(calls(HISTORY)).toHaveLength(0);
+
+    // The To fix banner's start on this card: the banner refreshed the server surfaces
+    // itself, so the provider only ticks the island.
+    await act(async () => {
+      announceRunsChanged('PROD-42');
+    });
+    await waitFor(() => expect(calls(HISTORY)).toHaveLength(1));
+    expect(refresh).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByTestId('hosted-run-cancel')).toBeTruthy());
   });
 });

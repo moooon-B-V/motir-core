@@ -55,6 +55,7 @@ function claim(over: Partial<WorkItemRepairClaim> = {}): WorkItemRepairClaim {
     startedAt: '2026-09-16T10:00:00.000Z',
     repairClass: 'ci',
     acceptanceRefusal: null,
+    reviewRefusal: null,
     pullRequests: [pr()],
     ...over,
   };
@@ -456,6 +457,142 @@ describe('motir fix — an acceptance sent back with Re-run (MOTIR-6502)', () =>
 
     expect(h.agents[0]!.prompt).toContain('The reviewer sent it back on 2026-09-26');
     expect(h.agents[0]!.prompt).toContain('> (no reason was recorded)');
+  });
+});
+
+describe('motir fix — a card a REVIEW sent back (MOTIR-6822)', () => {
+  const FINDINGS = [
+    '1. `exportCsv` drops the header row when the list is empty.',
+    '2. The new route has no tenant check — read `projectAccessService.assertCanBrowse`.',
+    '',
+    'Both must be fixed before this can merge.',
+  ].join('\n');
+  const reviewClaim = (over: Partial<WorkItemRepairClaim> = {}) =>
+    claim({
+      key: 'PROD-70',
+      title: 'Export the list',
+      repairClass: 'review',
+      reviewRefusal: {
+        gate: 'agent_review',
+        findingsMd: FINDINGS,
+        reviewerName: 'Review agent',
+        decidedAt: '2026-09-29T10:00:00.000Z',
+      },
+      pullRequests: [pr({ headRef: 'subtask/PROD-70-export', ci: 'passing', failingChecks: [] })],
+      ...over,
+    });
+
+  it('claims a GREEN card, runs the agent ONCE on the full findings before the CI watch, and ends there', async () => {
+    const deps = setup({
+      claims: [reviewClaim()],
+      verdicts: [[delivery('running')], [delivery('passing')]],
+    });
+
+    await fixCommand('PROD-70', {}, deps);
+
+    // The pull request's OWN branch, never a new one.
+    const add = h.git.find((g) => g.args[0] === 'worktree')!;
+    expect(add.args).toContain('subtask/PROD-70-export');
+
+    expect(h.agents).toHaveLength(1);
+    const prompt = h.agents[0]!.prompt;
+    expect(prompt.split('\n')[0]).toBe('# Answer the code review — PROD-70 (Export the list)');
+    expect(prompt).toContain('by the REVIEW AGENT');
+    expect(prompt).toContain('Review agent sent it back on 2026-09-29T10:00:00.000Z:');
+    // EVERY line of the findings, verbatim — never a one-line preview.
+    for (const line of FINDINGS.split('\n')) expect(prompt).toContain(`> ${line}`);
+    expect(prompt).toContain('Address EVERY finding');
+    expect(prompt).toContain('branch `subtask/PROD-70-export`');
+
+    expect(events().map((e) => e.kind)).toEqual([
+      'run_opened',
+      'checkout_ready',
+      'agent_started',
+      'agent_exited',
+      'ci_verdict',
+      'card_settled',
+    ]);
+    expect(events().find((e) => e.kind === 'agent_started')?.data).toEqual({ step: 'review_fix' });
+    expect(closes()).toEqual([{ runId: 'run_fix_1', stopReason: 'completed' }]);
+    expect(tools()).not.toContain('link_pull_request');
+    expect(tools()).not.toContain('transition_status');
+    expect(tools()).not.toContain('open_run');
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('names a PERSON who sent it back on the approve-and-merge gate', async () => {
+    const deps = setup({
+      claims: [
+        reviewClaim({
+          reviewRefusal: {
+            gate: 'pull_request_approval',
+            findingsMd: 'Rename the export button.',
+            reviewerName: 'Yue Zhu',
+            decidedAt: '2026-09-29T11:00:00.000Z',
+          },
+        }),
+      ],
+      verdicts: [[delivery('passing')]],
+    });
+
+    await fixCommand('PROD-70', {}, deps);
+
+    const prompt = h.agents[0]!.prompt;
+    expect(prompt).toContain('by a PERSON, on the approve-and-merge gate');
+    expect(prompt).toContain('Yue Zhu sent it back on 2026-09-29T11:00:00.000Z:');
+    expect(prompt).toContain('> Rename the export button.');
+    expect(h.stderr).toContain('PROD-70: answering the review sent back by Yue Zhu.');
+  });
+
+  it('a red member is fixed by the shipped loop after the review turn', async () => {
+    const deps = setup({
+      claims: [reviewClaim()],
+      verdicts: [[delivery('failing')], [delivery('passing')]],
+    });
+
+    await fixCommand('PROD-70', {}, deps);
+
+    expect(h.agents.map((a) => a.prompt.split('\n')[0])).toEqual([
+      '# Answer the code review — PROD-70 (Export the list)',
+      '# Make the build pass — PROD-70 (Export the list)',
+    ]);
+  });
+
+  it('a failed review-fix agent stops before the CI watch, closes halted and exits non-zero', async () => {
+    const deps = setup({
+      claims: [reviewClaim()],
+      verdicts: [[delivery('passing')]],
+      agentExit: 3,
+    });
+
+    await fixCommand('PROD-70', {}, deps);
+
+    expect(h.agents).toHaveLength(1);
+    expect(tools()).not.toContain('get_work_item');
+    expect(h.stderr).toContain('PROD-70: the review-fix agent failed — exit 3');
+    expect(closes()).toEqual([{ runId: 'run_fix_1', stopReason: 'halted' }]);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('findings with no text still read as a refusal, never a blank quote', async () => {
+    const deps = setup({
+      claims: [
+        reviewClaim({
+          reviewRefusal: {
+            gate: 'agent_review',
+            findingsMd: '  ',
+            reviewerName: null,
+            decidedAt: '2026-09-29',
+          },
+        }),
+      ],
+      verdicts: [[delivery('passing')]],
+    });
+
+    await fixCommand('PROD-70', {}, deps);
+
+    expect(h.agents[0]!.prompt).toContain('The review agent sent it back on 2026-09-29:');
+    expect(h.agents[0]!.prompt).toContain('> (no findings were recorded)');
   });
 });
 

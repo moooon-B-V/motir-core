@@ -109,6 +109,71 @@ here, per the ADR's explicit delegation to this subtask:
 - The token CSS ships as **`theme.css`** (the ADR §2 name; the card's provisional
   `tokens.css` was reconciled to this).
 
+## Rendering a mock
+
+`@motir/design-system/mock` renders the package's OWN parts into ONE
+self-contained `.mock.html`, so a design mock is the parts as they actually
+render rather than a hand-copied stylesheet. It is **Node-only** (it reads files
+and uses `react-dom/server`), which is why it lives on its own subpath and never
+on the main entry.
+
+```ts
+renderMock({
+  title: string,
+  panels: { label: string; element: ReactElement }[],
+  axes: { styleId: string; paletteId: string; typeId: string },
+  theme?: 'light' | 'dark',   // data-theme, default 'light'
+  fontCss?: string,           // inlined verbatim (e.g. @font-face with data: URLs)
+}): Promise<string>
+```
+
+- Each panel is rendered with `renderToStaticMarkup` into a labelled board
+  section, and `<html>` carries `data-style` / `data-palette` / `data-type` /
+  `data-theme`.
+- Each axis id is checked against the package's registries. An unknown or
+  missing id falls back to that axis's default (the type axis to the pairing
+  the resolved style uses) and the fallback is named in an HTML comment at the
+  top of the document. It never throws.
+- The CSS is **compiled**, not copied: Tailwind v4 (the `tailwindcss` peer's
+  `compile()` API) runs over the rendered markup with this package's
+  `theme.css` as input, and the result is inlined in one `<style>`.
+- The document makes no network request: no stylesheet link, no script, no
+  remote `@import`. Fonts fall back to the stacks `theme.css` declares unless
+  you pass `fontCss`.
+
+A script in a consuming repository (run it with `pnpm tsx`):
+
+```tsx
+// scripts/render-settings-mock.tsx
+import { mkdir, writeFile } from 'node:fs/promises';
+import { Button, Card, Pill } from '@motir/design-system';
+import { renderMock } from '@motir/design-system/mock';
+
+const palette = process.argv[2] ?? 'amethyst';
+
+const html = await renderMock({
+  title: 'Project settings — save bar',
+  axes: { styleId: 'warm-editorial', paletteId: palette, typeId: 'motir' },
+  panels: [
+    {
+      label: 'Unsaved changes',
+      element: (
+        <Card>
+          <Pill status="in-progress">Unsaved</Pill>
+          <Button variant="primary">Save changes</Button>
+        </Card>
+      ),
+    },
+  ],
+});
+
+await mkdir('design/settings', { recursive: true });
+await writeFile('design/settings/save-bar.mock.html', html);
+```
+
+Run it again with another palette id (`pnpm tsx scripts/render-settings-mock.tsx cobalt`)
+and the same parts recolour.
+
 ## Development
 
 ```bash

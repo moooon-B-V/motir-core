@@ -1,3 +1,4 @@
+import { agentReviewStartService } from '@/lib/services/agentReviewStartService';
 import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
@@ -138,6 +139,9 @@ export const jobServices = {
   // requests from GitHub and replays a close whose webhook delivery was lost.
   pullRequestReconcile: pullRequestReconcileService,
   pullRequestAutoMerge: pullRequestAutoMergeService,
+  // The review run's start (Story MOTIR-1626 · MOTIR-6820): one hosted `review` run per
+  // request for an awaiting `agent_review` gate.
+  agentReviewStart: agentReviewStartService,
   // The automatic hosted re-run after a design Revise (MOTIR-700).
   designAutoRerun: designAutoRerunService,
   // The base-branch mergeability re-read (MOTIR-5914): a push to a default branch

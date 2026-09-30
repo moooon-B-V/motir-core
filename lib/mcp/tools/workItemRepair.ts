@@ -92,7 +92,15 @@ function summarizeClaim(claim: WorkItemRepairClaimDto): string {
     claim.repairClass === 'acceptance_rerun' && claim.acceptanceRefusal
       ? `\nThe acceptance video was sent back for a re-run` +
         (claim.acceptanceRefusal.reasonMd ? `: ${claim.acceptanceRefusal.reasonMd}` : '.')
-      : '';
+      : claim.repairClass === 'review' && claim.reviewRefusal
+        ? // A card a REVIEW sent back (MOTIR-6822): the findings IN FULL are the brief —
+          // address every one on these branches and push; the push withdraws the review.
+          `\n${claim.reviewRefusal.reviewerName ?? 'The reviewer'} sent it back ` +
+          `(${claim.reviewRefusal.gate}) on ${claim.reviewRefusal.decidedAt}. Address EVERY ` +
+          'finding on these branches and push; open no pull request, decide no approval, ' +
+          'move no status. The findings:\n' +
+          (claim.reviewRefusal.findingsMd?.trim() || '(no findings were recorded)')
+        : '';
   const keepAlive =
     `Keep it alive with touch_work_item_repair (runId ${claim.runId}) at least every two ` +
     'minutes — a run silent for five minutes is closed — and end it with ' +

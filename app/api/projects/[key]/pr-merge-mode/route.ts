@@ -3,6 +3,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { projectPrMergeModeService } from '@/lib/services/projectPrMergeModeService';
 import {
   InvalidPrMergeModeError,
+  MergeModeReviewAgentOnError,
   PermissionDeniedError,
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
@@ -27,6 +28,7 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 //   InvalidPrMergeModeError → 400  (not `auto` or `manual`)
 //   ProjectNotFoundError    → 404  (no such project, or not a browser)
 //   PermissionDeniedError   → 403  (lacks `workflow:manage`)
+//   MergeModeReviewAgentOnError → 409  (`auto` while the review agent is on, ADR §12.2a)
 
 interface RouteParams {
   params: Promise<{ key: string }>;
@@ -61,6 +63,9 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
     }
     if (err instanceof ProjectNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+    }
+    if (err instanceof MergeModeReviewAgentOnError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
     }
     if (err instanceof PermissionDeniedError) {
       return NextResponse.json(

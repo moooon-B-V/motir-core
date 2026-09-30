@@ -13,7 +13,8 @@
 // What is left here is what only the container knows:
 //
 //   1. read and validate the run's inputs, naming every missing one at once;
-//   2. exec `motir run <KEY>` in hosted mode on the run the server opened
+//   2. exec `motir run <KEY>` — or `motir continue <KEY>` / `motir review <KEY>` /
+//      `motir fix <KEY>` for `MOTIR_RUN_MODE` — in hosted mode on the run the server opened
 //      (`MOTIR_DISPATCH_RUN_ID`), passing the environment through untouched;
 //   3. forward the container's stop signal, and exit with the CLI's own code.
 //
@@ -41,8 +42,15 @@ export const REQUIRED_INPUTS = [
   'MOTIR_MODEL',
 ] as const;
 
-/** `run` starts a card; `continue` resumes a dead run on its branch (the run-dies story). */
-export type RunMode = 'run' | 'continue';
+/**
+ * `run` starts a card; `continue` resumes a dead run on its branch (the run-dies
+ * story); `review` reviews a card's pull requests at the version under review and
+ * submits ONE verdict, pushing nothing (`hosted-agent-run.md` §8.1, MOTIR-6824);
+ * `fix` repairs a card a review sent back, pushing to its pull requests' own
+ * branches only (§8.6, MOTIR-6929).
+ */
+export const RUN_MODES = ['run', 'continue', 'review', 'fix'] as const;
+export type RunMode = (typeof RUN_MODES)[number];
 
 export interface Launch {
   mode: RunMode;
@@ -59,17 +67,18 @@ export function readLaunch(env: NodeJS.ProcessEnv): Launch {
     problems.push(`MOTIR_WORK_ITEM_KEY must be a work item key (PROJECT-n), got "${key}"`);
   }
   const rawMode = env.MOTIR_RUN_MODE?.trim() || 'run';
-  if (rawMode !== 'run' && rawMode !== 'continue') {
-    problems.push(`MOTIR_RUN_MODE must be "run" or "continue", got "${rawMode}"`);
+  if (!(RUN_MODES as readonly string[]).includes(rawMode)) {
+    problems.push(
+      `MOTIR_RUN_MODE must be ${RUN_MODES.slice(0, -1)
+        .map((m) => `"${m}"`)
+        .join(', ')} or "${RUN_MODES.at(-1)}", got "${rawMode}"`,
+    );
   }
   if (problems.length > 0) throw new Error(problems.join('; '));
   return { mode: rawMode as RunMode, key };
 }
 
-/**
- * The CLI command line for a launch. `continue` is named here so the launcher
- * is ready for it; the CLI answers for whether that command exists yet.
- */
+/** The CLI command line for a launch: `motir <mode> <KEY>`, every mode alike. */
 export function cliArgs(launch: Launch): string[] {
   return [launch.mode, launch.key];
 }

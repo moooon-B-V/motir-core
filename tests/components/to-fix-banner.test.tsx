@@ -109,10 +109,48 @@ describe('the command — from `fixDetail.repair`, never from the reason', () =>
     expect(banner().textContent).toContain('Repair it with this command:');
   });
 
-  it('is `motir run <KEY>` for an approve-to-merge Request changes', () => {
+  // §12.7 (MOTIR-6822 · MOTIR-6825; `design/workbench` § 32): a person's Request changes is
+  // repaired by `motir fix`, and the lead is the same *Repair it with this command:* —
+  // `leadRun` is retired. The command still follows the STORED `repair`.
+  it("is `motir fix <KEY>` for a person's approve-to-merge Request changes", () => {
+    renderBanner('changes_requested', {
+      repair: 'fix',
+      gate: 'pull_request_approval',
+      reviewerName: 'Ana Ruiz',
+    });
+    expect(banner().querySelector('pre')?.textContent).toBe('motir fix PROD-42');
+    expect(banner().textContent).toContain('Repair it with this command:');
+    expect(banner().textContent).not.toContain('Re-run the work item.');
+  });
+
+  it('a row stored before §12.7 still prints its own command, under the one lead', () => {
     renderBanner('changes_requested', { repair: 'run', reviewerName: 'Ana Ruiz' });
     expect(banner().querySelector('pre')?.textContent).toBe('motir run PROD-42');
-    expect(banner().textContent).toContain('Re-run the work item.');
+    expect(banner().textContent).toContain('Repair it with this command:');
+  });
+
+  it('names the REVIEW AGENT and the findings first line for its refusal (§ 32)', () => {
+    renderBanner('changes_requested', {
+      repair: 'fix',
+      gate: 'agent_review',
+      reviewerName: 'Review agent',
+      notePreview: "Two of the card's acceptance criteria are not met yet.",
+    });
+    expect(banner().textContent).toContain(
+      "This needs a fix: the review agent sent it back — “Two of the card's acceptance criteria are not met yet.”",
+    );
+    expect(banner().textContent).not.toContain('Review agent requested changes');
+    expect(banner().querySelector('pre')?.textContent).toBe('motir fix PROD-42');
+    cleanup();
+    renderBanner('changes_requested', { repair: 'fix', gate: 'agent_review' });
+    expect(banner().textContent).toContain('This needs a fix: the review agent sent it back.');
+    cleanup();
+    renderBanner(
+      'changes_requested',
+      { repair: 'fix', gate: 'agent_review', notePreview: 'Criteria not met.' },
+      { locale: 'zh' },
+    );
+    expect(banner().textContent).toContain('需要修复：审查代理已将它退回——“Criteria not met.”');
   });
 
   it('is `motir fix <KEY>` for an acceptance video sent back — and says where it came from', () => {

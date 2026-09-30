@@ -26,6 +26,13 @@ export interface ApprovalGateSettingsDTO {
    */
   acceptanceVideoEnabled: boolean;
   /**
+   * Whether this project's green cards are REVIEWED by the review agent before the
+   * approve-and-merge gate is asked or anything auto-merges (Story MOTIR-1626 ·
+   * `docs/decisions/approval-gates.md` §12). Orthogonal to the merge mode; off by
+   * default.
+   */
+  reviewAgentEnabled: boolean;
+  /**
    * Whether a published DESIGN RESULT waits for a person (Story MOTIR-693 ·
    * MOTIR-697; `docs/decisions/hosted-design-rerun-and-design-approval-switch.md`
    * §2). `false` still raises the design gate, and approves it at once on behalf of
@@ -37,5 +44,6 @@ export interface ApprovalGateSettingsDTO {
 /** The PATCH body: any subset of the switches, each optional. */
 export interface UpdateApprovalGateSettingsInput {
   acceptanceVideoEnabled?: boolean;
+  reviewAgentEnabled?: boolean;
   designApprovalGate?: boolean;
 }

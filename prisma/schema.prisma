@@ -1370,6 +1370,12 @@ model Project {
   /// floor `manual` and a chosen `manual` are the same bytes, and a default
   /// would overwrite a person's choice (§7's 2026-09-13 amendment).
   prMergeModeDecidedAt             DateTime?             @map("pr_merge_mode_decided_at")
+  /// Whether this project's green cards are REVIEWED by the review agent before the
+  /// approve-and-merge gate is asked or anything auto-merges (Story MOTIR-1626 ·
+  /// ADR `approval-gates.md` §12). Orthogonal to `prMergeMode`, and OFF by default:
+  /// a review is a hosted run paid from the organisation's AI credits, so no
+  /// existing project starts paying for one. Nothing is backfilled.
+  reviewAgentEnabled               Boolean               @default(false) @map("review_agent_enabled")
   /// The project's ACCESS MODE (Story MOTIR-6169 · MOTIR-6541) — who may ENTER
   /// it: `workspace` (every Full-scope workspace member, plus the people added),
   /// `members` (only the people added) or `public` (as `workspace`, plus anyone
@@ -4772,6 +4778,12 @@ enum ApprovalGateKind {
   /// (`approval_gate_work_item_iff_not_plan`), and `subjectId` is the `Plan.id`.
   /// UNREGISTERED until its handler lands (MOTIR-6035).
   plan_approval
+  /// The REVIEW AGENT's question (Story MOTIR-1626 · MOTIR-6818; ADR `approval-gates.md`
+  /// §12) — a hosted AI reviews the run target's green delivery SET against the card
+  /// BEFORE the approve-and-merge gate is asked or anything auto-merges. Raised only
+  /// when `Project.reviewAgentEnabled`; decided by the review run (`review_agent`) or
+  /// by the routed person continuing without it (§12.3).
+  agent_review
 
   @@map("approval_gate_kind")
 }
@@ -4865,6 +4877,9 @@ enum ApprovalGateSupersedeCause {
   /// about — CAN'T-LAND since `approval-gates.md` §4's FIFTH AMENDMENT (MOTIR-6595).
   /// Only the convergence writes it, because a live failure raises no gate to withdraw.
   queue_failed
+  /// The project turned its review agent OFF while this `agent_review` gate was
+  /// awaiting (ADR `approval-gates.md` §12.5); the ordinary flow is raised instead.
+  review_agent_disabled
 
   @@map("approval_gate_supersede_cause")
 }
@@ -4903,6 +4918,12 @@ enum ApprovalGateAuthority {
   /// `plan_approval` kind has no work item, so §2's relationship rungs are not true
   /// of its decider (ADR `approval-gates.md` §11.6).
   plan_permission
+  /// The REVIEW AGENT (ADR `approval-gates.md` §12.3) — a hosted review run's verdict
+  /// on an `agent_review` gate, through the run-token verdict route. `decidedById` is
+  /// the run's attributed user; THIS column is what says a machine decided, so the row
+  /// never claims a person reviewed the code. Never resolved by
+  /// `resolveGateAuthority`, and unreachable from a person's press.
+  review_agent
   /// Authority conferred by a PROJECT SETTING rather than by any person — the
   /// design gate a project with design approval switched OFF approves at raise
   /// time (MOTIR-697; `hosted-design-rerun-and-design-approval-switch.md` §2c).
@@ -5092,6 +5113,13 @@ model ApprovalGate {
   /// (§6b). A cause says what HAPPENED to the question; it must never make a
   /// withdrawn question readable as a decision somebody made.
   supersededCause ApprovalGateSupersedeCause? @map("superseded_cause")
+
+  /// WHY an `agent_review` gate's review COULD NOT RUN (ADR `approval-gates.md` §12.6)
+  /// — the hosted start's refusal code (out of credits, no model offered, a
+  /// repository the run cannot read, …) or `no_verdict` for a run that ended without
+  /// one. Written on the AWAITING gate, never in `noteMd` (which is the decider's),
+  /// and cleared when *Review again* starts a new run. Null on every other kind.
+  reviewUnavailableReason String? @map("review_unavailable_reason")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -10653,6 +10681,10 @@ enum DispatchCommand {
   /// DIED. Opened by the server's continue claim, like `fix`: the open `continue`
   /// run IS the one-continue-at-a-time lock, and it writes no status.
   continue
+  /// A hosted REVIEW run (Story MOTIR-1626; `hosted-agent-run.md` §8) — reads a green
+  /// card's pull requests against the card and returns ONE verdict to its
+  /// `agent_review` gate. It makes no to-do claim, pushes nothing and writes no status.
+  review
 
   @@map("dispatch_command")
 }
@@ -10790,6 +10822,14 @@ enum DispatchEventKind {
   /// appends it, and the CLI reporter NEVER emits it — the v1 ingest refuses it,
   /// so a client with a run token cannot forge a report the server never made.
   unbuildable_reported
+  /// A REVIEW run's verdict (MOTIR-6821; `hosted-agent-run.md` §8.4,
+  /// `approval-gates.md` §12.5) — every verdict the run submitted, the one that
+  /// decided the `agent_review` gate AND a late one that decided nothing, naming the
+  /// verdict, the version it was about and what became of it. It is also what makes a
+  /// run's verdict ONE: a run holding one is refused a second.
+  /// ⚠️ SERVER-WRITTEN, like `unbuildable_reported`: the verdict route's service
+  /// appends it, and the v1 ingest refuses it, so a run token cannot forge one.
+  review_verdict
 
   @@map("dispatch_event_kind")
 }

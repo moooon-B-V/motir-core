@@ -44,6 +44,17 @@ export type ContinueHostedRefusal =
   | { kind: 'noDeadRun' }
   | { kind: 'theParent'; parentKey: string | null };
 
+/** Why a *Fix on the hosted agent* did not start (Story MOTIR-1626 · MOTIR-6930) — Run
+ *  hosted's answers, less `notReady` (a repair has no readiness), plus the repair claim's
+ *  `taken` naming who holds the repair (`hosted_fix_taken`). The start route's
+ *  `hosted_fix_not_sent_back` / `hosted_fix_not_repairable` mean the page is STALE — the
+ *  card is no longer a review's to repair — so they read as *not started* and the surface
+ *  re-reads its view, which then draws no door ({@link fixStateMoved}). */
+export type FixHostedRefusal =
+  | Exclude<HostedRunRefusal, { kind: 'notReady' }>
+  | { kind: 'taken'; holder: ClaimActorDto | null; startedAt: string | null }
+  | { kind: 'stale' };
+
 /** The model preselected from a list: the default, else the first offered. */
 export function preselectedModel(models: HostedModelsState): string | null {
   if (models.state !== 'ok' || models.models.length === 0) return null;
@@ -122,6 +133,35 @@ export function continueStateMoved(refusal: ContinueHostedRefusal): boolean {
     refusal.kind === 'theParent' ||
     refusal.kind === 'bootFailed'
   );
+}
+
+/** The start route's answer to a FIX → the hosted repair door's refusal (MOTIR-6930). */
+export function fixRefusalOf(
+  status: number,
+  body: Record<string, unknown>,
+  model: string,
+): FixHostedRefusal {
+  const code = typeof body.code === 'string' ? body.code : '';
+  if (code === 'hosted_fix_taken') {
+    return {
+      kind: 'taken',
+      holder: actorOf(body.holder),
+      startedAt: typeof body.startedAt === 'string' ? body.startedAt : null,
+    };
+  }
+  if (code === 'hosted_fix_not_sent_back' || code === 'hosted_fix_not_repairable') {
+    return { kind: 'stale' };
+  }
+  const run = refusalOf(status, body, model);
+  // A repair has no readiness: a `not ready` answer would be a stale page too.
+  return run.kind === 'notReady' ? { kind: 'stale' } : run;
+}
+
+/** A fix refusal that means the page is STALE — its view is re-read. NOT `taken`: its
+ *  notice names the holder under the door, and the door stays with it until a reload
+ *  draws the holder's running repair (design § 30 Panel 3c). */
+export function fixStateMoved(refusal: FixHostedRefusal): boolean {
+  return refusal.kind === 'stale' || refusal.kind === 'bootFailed';
 }
 
 /** One idempotency key per PRESS: a retried request of the same press replays. */

@@ -6760,7 +6760,29 @@
         "conflictOn": "<prs></prs> conflicts with {base} and cannot be merged.",
         "conflictOnNoBase": "<prs></prs> conflicts with its base branch and cannot be merged.",
         "howConflict": "An agent rebases or resolves on the pull request's own branch, pushes, and the checks run again.",
-        "rearm": "There is nothing to approve here. A push moves the head, which re-arms the question, and the next green raises the merge gate once — over the new commits."
+        "rearm": "There is nothing to approve here. A push moves the head, which re-arms the question, and the next green raises the merge gate once — over the new commits.",
+        "sentBackByAgent": "The review agent sent these commits back. An agent fixes them on {count, plural, one {the same pull request} other {the same pull requests}}, with its findings in the prompt.",
+        "personSentBack": "<b>{name}</b> sent these commits back. An agent fixes them on {count, plural, one {the same pull request} other {the same pull requests}}, with their reason in the prompt.",
+        "personSentBackAnon": "These commits were sent back. An agent fixes them on {count, plural, one {the same pull request} other {the same pull requests}}, with the reason in the prompt.",
+        "reviewedAgain": "The next green version is reviewed again.",
+        "hosted": {
+          "lead": "Fix it here, on the hosted agent — no terminal needed:",
+          "button": "Fix on the hosted agent",
+          "orTerminal": "Or hand the repair to an agent from your terminal:",
+          "eitherWay": "Either way, an agent works on each pull request's own branch, pushes, and the checks run again.",
+          "fixing": {
+            "byYou": "Being fixed by <b>you</b> on the hosted agent · started <when></when> · <run>{label}</run>",
+            "by": "Being fixed by <b>{name}</b> on the hosted agent · started <when></when> · <run>{label}</run>",
+            "why": "Only one repair runs at a time. When it pushes, the checks run again, and the next green version is reviewed again."
+          },
+          "refused": {
+            "taken": "Not started — a repair is already running, started by <b>{name}</b> <when></when>.",
+            "takenByYou": "Not started — you already have a repair running, started <when></when>.",
+            "outOfCredits": {
+              "body": "Nothing was booted and nothing was charged. Fix on the hosted agent works again once the organization has credits — or repair it from your terminal."
+            }
+          }
+        }
       },
       "continue": {
         "title": "Continue the work",
@@ -8108,7 +8130,8 @@
         "acceptance_result": "Acceptance video",
         "decision_choice": "Choice",
         "decision_confirmation": "Confirm decision",
-        "plan_approval": "Plan approval"
+        "plan_approval": "Plan approval",
+        "agent_review": "Agent review"
       },
       "reviewRow": "Review {key} — {sentence}",
       "pullRequest": {
@@ -8156,7 +8179,9 @@
         "runDiedBare": "Run died",
         "runDiedMoreRepositories": "+ {count, plural, one {# more repository} other {# more repositories}}",
         "runDiedParent": "Part of <b>{parent}</b>’s run — both repairs continue the whole run",
-        "runDiedCannotEdit": "You can’t edit this work item, so someone who can has to continue it."
+        "runDiedCannotEdit": "You can’t edit this work item, so someone who can has to continue it.",
+        "sentBackByAgent": "Sent back by <b>the review agent</b> — “{note}”",
+        "sentBackByAgentNoNote": "Sent back by <b>the review agent</b>"
       },
       "queueReason": {
         "CI_FAILURE": "checks failed",
@@ -8170,7 +8195,9 @@
       "toast": {
         "title": "Copied",
         "body": "Paste {command} into your terminal."
-      }
+      },
+      "fixingHosted": "Being fixed on the hosted agent by <b>{name}</b> · <run>{label}</run>",
+      "fixingHostedByYou": "Being fixed on the hosted agent by <b>you</b> · <run>{label}</run>"
     }
   },
   "approvalRecords": {
@@ -8872,7 +8899,8 @@
       "batch": "motir batch",
       "auto": "motir auto",
       "fix": "motir fix",
-      "continue": "motir continue"
+      "continue": "motir continue",
+      "review": "motir review"
     },
     "skipReason": {
       "needsPlanning": "Skipped — needs planning.",
@@ -9219,7 +9247,8 @@
       "opening": "Opening the {decision}…"
     },
     "settingsDoor": {
-      "mergeMode": "Change how this project merges pull requests →"
+      "mergeMode": "Change how this project merges pull requests →",
+      "reviewAgent": "Change whether an agent reviews this project's pull requests →"
     },
     "confirm": {
       "title": "Approving this will:",
@@ -9625,7 +9654,8 @@
         "pull_request_merge": "merge approval",
         "acceptance_result": "acceptance approval",
         "decision_choice": "choice",
-        "decision_confirmation": "decision"
+        "decision_confirmation": "decision",
+        "agent_review": "agent review"
       },
       "reviewAndApprove": "Review & approve",
       "needsApproval": "needs approval",
@@ -9928,6 +9958,67 @@
       "label": "Plan with AI",
       "aria": "Plan the follow-up to {item} with AI"
     },
+    "agentReview": {
+      "kindLabel": "Agent review",
+      "state": {
+        "reviewing": "Reviewing",
+        "couldNotRun": "Could not run"
+      },
+      "reviewing": {
+        "title": "The review agent is reviewing this version",
+        "why": "Waiting on the review agent. Nothing merges, and nobody is asked to approve, until it answers."
+      },
+      "run": {
+        "started": "<run>{label}</run> · started <when></when> · {count, plural, one {# commit} other {# commits}}",
+        "decided": "<run>{label}</run> · {when} · {count, plural, one {# commit} other {# commits}}",
+        "decidedNoRun": "{when} · {count, plural, one {# commit} other {# commits}}",
+        "commits": "{count, plural, one {# commit} other {# commits}}"
+      },
+      "passed": {
+        "title": "Reviewed by the review agent",
+        "pill": "Passed"
+      },
+      "findings": {
+        "show": "Show the findings",
+        "hide": "Hide the findings"
+      },
+      "sentBack": {
+        "title": "Sent back by the review agent",
+        "record": "Sent back by <b>the review agent</b> · {when} · {count, plural, one {# commit} other {# commits}}",
+        "why": "Nothing merges, and nobody is asked to approve. Nothing re-runs by itself."
+      },
+      "couldNotRun": {
+        "lead": "<b>Review could not run:</b> <reason></reason>",
+        "reason": {
+          "no_credits": "your organisation is out of AI credits.",
+          "no_model": "no model is available for hosted runs.",
+          "repository_unreadable": "the review cannot read one of the repositories it reviews.",
+          "no_verdict": "the review run ended without a verdict — <run>{label}</run>.",
+          "no_verdictNoRun": "the review run ended without a verdict.",
+          "boot_failed": "the hosted machine for the review could not start.",
+          "no_actor": "nobody can run it — the work item has no assignee or reporter, and the workspace has no stand-in manager.",
+          "unknown": "the review run could not start."
+        },
+        "why": "Nothing merges until the review runs, or someone continues without it.",
+        "whyNotYours": "Waiting on {name}. Nothing merges until the review runs, or they continue without it."
+      },
+      "verb": {
+        "reviewAgain": "Review again",
+        "continueWithout": "Continue without the review"
+      },
+      "override": {
+        "title": "Continuing without the review will:",
+        "records": "Record that you continued without the review — under your name, with your reason.",
+        "asks": "Ask for the ordinary approval: these pull requests wait for Approve and merge.",
+        "label": "Why continue without the review?",
+        "helper": "Required. It is recorded under your name — never as the review agent's pass.",
+        "required": "Say why — continuing without the review needs a reason.",
+        "proceed": "Yes, continue without the review",
+        "bandTitle": "Continued without the review",
+        "bandNote": "The review agent did not review these {count, plural, one {# commit} other {# commits}}.",
+        "record": "Continued without the review by <b>{name}</b> · {when}"
+      }
+    },
     "autoRerun": {
       "started": "Re-running on the hosted agent",
       "startedCount": "automatic re-run {ordinal} of {cap}",
@@ -10009,8 +10100,23 @@
       },
       "auto": {
         "label": "Merge automatically",
-        "hint": "When its checks pass, Motir merges the pull request without asking anyone. The record says this setting allowed it — not that a person approved it."
+        "hint": "When its checks pass, Motir merges the pull request without asking anyone. The record says this setting allowed it — not that a person approved it.",
+        "blockedByReviewAgent": "Turn the review agent off to merge automatically."
       },
+      "saved": "Saved",
+      "saveError": "Couldn't save — try again."
+    },
+    "reviewAgent": {
+      "title": "Review agent",
+      "desc": "When a work item's pull requests pass their checks, a Motir agent reads the change against the item — its description, acceptance criteria and How to test — <strong>before you are asked to approve it</strong>. If it finds a problem, the item goes to <strong>To fix</strong> with the agent's findings, and nobody is asked to approve it.",
+      "on": "On",
+      "off": "Off",
+      "onWhat": "Every work item is reviewed before you are asked to approve it.",
+      "offWhat": "A work item is offered for approval as soon as its checks pass.",
+      "unavailable": "Unavailable",
+      "unavailableWhat": "This project merges automatically, so nothing waits for a review. Choose <strong>Ask before merging</strong> to turn the review agent on.",
+      "billingNote": "Each review is a hosted agent run, paid from your organisation's AI credits.",
+      "offNote": "Turning this off cancels reviews in progress — those work items go straight to the ordinary flow.",
       "saved": "Saved",
       "saveError": "Couldn't save — try again."
     },
@@ -10363,7 +10469,8 @@
       "queue_failed": "To fix · failed in the merge queue",
       "conflicted": "To fix · conflicts with its base branch",
       "ci_failed": "To fix · CI failed",
-      "changes_requested": "To fix · changes requested"
+      "changes_requested": "To fix · changes requested",
+      "sent_back_by_agent": "To fix · sent back by the review agent"
     },
     "banner": {
       "queueFailed": "This needs a fix: it failed in the merge queue (check <code>{check}</code>).",
@@ -10378,7 +10485,6 @@
       "changesRequestedAnon": "This needs a fix: changes were requested.",
       "onAcceptance": "Sent back from the acceptance video.",
       "leadFix": "Repair it with this command:",
-      "leadRun": "Re-run the work item. The new run’s prompt carries the reviewer’s note:",
       "toDevelopment": "See its pull requests",
       "opening": "Opening its pull requests…",
       "runDied": "This needs a fix: its run died, last heard from <when></when>, and its work is kept on its branch.",
@@ -10386,7 +10492,13 @@
       "runDiedParent": "This needs a fix: the run of <b>{parent}</b> it was part of died, last heard from <when></when>.",
       "toContinue": "See how to continue it",
       "toStartOver": "See how to start over",
-      "openingDevelopment": "Opening Development…"
+      "openingDevelopment": "Opening Development…",
+      "sentBackByAgent": "This needs a fix: the review agent sent it back — “{note}”",
+      "sentBackByAgentNoNote": "This needs a fix: the review agent sent it back.",
+      "hostedLead": "Fix it on the hosted agent — no terminal needed:",
+      "orTerminal": "Or repair it from your terminal:",
+      "fixingHosted": "A hosted repair is running — started by <b>{name}</b> <when></when> · <run>{label}</run>",
+      "fixingHostedByYou": "A hosted repair is running — started by <b>you</b> <when></when> · <run>{label}</run>"
     }
   },
   "workItems": {

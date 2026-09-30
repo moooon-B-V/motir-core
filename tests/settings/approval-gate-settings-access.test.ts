@@ -174,13 +174,18 @@ describe('the READ takes `workflow:manage` — a member is refused it (MOTIR-539
 
     await expect(approvalGateSettingsService.getSettings(s.projectId, s.admin)).resolves.toEqual({
       acceptanceVideoEnabled: false,
+      reviewAgentEnabled: false,
       designApprovalGate: true,
     });
 
     actAs(s.admin);
     const res = await GET(new Request('https://app.motir.co/x'), params(s.projectKey));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ acceptanceVideoEnabled: false, designApprovalGate: true });
+    expect(await res.json()).toEqual({
+      acceptanceVideoEnabled: false,
+      reviewAgentEnabled: false,
+      designApprovalGate: true,
+    });
   });
 });
 
@@ -217,7 +222,11 @@ describe('the WRITE keeps `workflow:manage` (MOTIR-5278, unchanged by MOTIR-5394
     actAs(s.admin);
     const res = await PATCH(patchBody({ acceptanceVideoEnabled: true }), params(s.projectKey));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ acceptanceVideoEnabled: true, designApprovalGate: true });
+    expect(await res.json()).toEqual({
+      acceptanceVideoEnabled: true,
+      reviewAgentEnabled: false,
+      designApprovalGate: true,
+    });
     expect(await storedAcceptanceVideo(s.projectId)).toBe(true);
   });
 });
@@ -245,7 +254,11 @@ describe('the DESIGN-APPROVAL switch takes the same key (MOTIR-697)', () => {
     actAs(s.admin);
     const res = await PATCH(patchBody({ designApprovalGate: false }), params(s.projectKey));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ acceptanceVideoEnabled: false, designApprovalGate: false });
+    expect(await res.json()).toEqual({
+      acceptanceVideoEnabled: false,
+      reviewAgentEnabled: false,
+      designApprovalGate: false,
+    });
     expect(await storedDesignApproval(s.projectId)).toBe(false);
     expect(await storedAcceptanceVideo(s.projectId)).toBe(false);
   });

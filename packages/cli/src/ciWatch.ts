@@ -648,6 +648,94 @@ export function renderAcceptanceRecordPrompt(input: AcceptanceRerunInput): strin
   return lines.join('\n');
 }
 
+/** What a card SENT BACK by a review hands its agent (MOTIR-6822) — the shape `motir fix`
+ *  receives on a `review` claim, restated so this module stays free of the client's
+ *  types. */
+export interface ReviewFixInput {
+  key: string;
+  title: string | null;
+  refusal: {
+    gate: 'agent_review' | 'pull_request_approval';
+    findingsMd: string | null;
+    reviewerName: string | null;
+    decidedAt: string;
+  };
+  /** The card's open delivery — `owner/name`, number and URL. */
+  pullRequests: ReadonlyArray<{ repo: string; number: number; url: string }>;
+  checkouts: readonly FixCheckout[];
+}
+
+/**
+ * THE REVIEW-FIX PROMPT (Story MOTIR-1626 · MOTIR-6822; `approval-gates.md` §12.4, §12.7).
+ *
+ * A review of the card's pull requests asked for changes — the review agent's findings,
+ * or a person's *Request changes* on the approve-and-merge gate. The checks are usually
+ * green: the fix is to what the reviewer READ. This is the one agent turn that answers
+ * them, on the SAME pull requests; the CI loop then runs unchanged on the push.
+ *
+ * ⚠️ THE FINDINGS ARE QUOTED IN FULL, NEVER SUMMARISED. They are the brief (§10h's row:
+ * *the findings are the brief, and the repair is a fix, not a re-plan*), and a preview
+ * cut to one line would hand the agent a fraction of what it was asked to fix.
+ *
+ * ⚠️ THE PUSH IS WHAT ANSWERS THE REVIEW. It moves a head, which withdraws the refusal
+ * (§12.5), and the next green version is reviewed again. Nothing here decides a gate.
+ */
+export function renderReviewFixPrompt(input: ReviewFixInput): string {
+  const { refusal } = input;
+  const byAgent = refusal.gate === 'agent_review';
+  const who = refusal.reviewerName ?? (byAgent ? 'The review agent' : 'The reviewer');
+  const lines: string[] = [];
+  lines.push(`# Answer the code review — ${input.key}${input.title ? ` (${input.title})` : ''}`);
+  lines.push('');
+  lines.push("This card's pull requests are open and its run has ended. A review of them");
+  lines.push(
+    byAgent
+      ? 'by the REVIEW AGENT, against the card, sent the card back with findings.'
+      : 'by a PERSON, on the approve-and-merge gate, sent the card back — Request changes.',
+  );
+  lines.push('');
+  lines.push('## The findings');
+  lines.push('');
+  lines.push(`${who} sent it back on ${refusal.decidedAt}:`);
+  lines.push('');
+  const findings = refusal.findingsMd?.trim();
+  if (findings) {
+    for (const line of findings.split('\n')) lines.push(`> ${line}`);
+  } else {
+    lines.push('> (no findings were recorded)');
+  }
+  lines.push('');
+  lines.push('## The pull requests');
+  lines.push('');
+  for (const pr of input.pullRequests) lines.push(`- **${pr.repo}#${pr.number}** — ${pr.url}`);
+  lines.push('');
+  lines.push(...renderCheckoutList(input.checkouts));
+  lines.push('');
+  lines.push('## The scope');
+  lines.push('');
+  lines.push('A fix to the delivered work on these branches: what the review named, measured');
+  lines.push('against the card. **A finding that asks for a change to what the card is FOR** —');
+  lines.push('work another card owns, a new surface, a different design — is not yours to');
+  lines.push('build: leave it, and say so in one paragraph naming the finding.');
+  lines.push('');
+  lines.push('## What to do');
+  lines.push('');
+  lines.push('1. **Merge each pull request\u2019s base branch first** (a merge, never a rebase),');
+  lines.push('   so you change the tree CI will judge.');
+  lines.push('2. **Address EVERY finding**, one by one — read the code it names, confirm it, and');
+  lines.push('   change the smallest thing that answers it. A finding you judge wrong is answered');
+  lines.push('   in words, with the evidence, never by silently skipping it.');
+  lines.push('3. **Keep the tests true.** Update or add the tests that cover what you changed.');
+  lines.push('   Run ONLY the test files you touched, plus lint and typecheck — never the full');
+  lines.push('   suite: the push re-runs CI, and that is the verdict.');
+  lines.push('4. **Commit and push to the same branches.** Open no pull request, link nothing,');
+  lines.push('   decide no approval and move no status — the push withdraws the review, and the');
+  lines.push('   next green version is reviewed again.');
+  lines.push('5. If the pull request body\u2019s `## How to test` no longer matches what a person');
+  lines.push(`   does, publish it again with \`${HOW_TO_TEST_TOOL_NAME}\` on ${input.key}.`);
+  return lines.join('\n');
+}
+
 /** One failing pull request's branch, checked out where the fixing agent can
  *  reach it. */
 export interface FixCheckout {

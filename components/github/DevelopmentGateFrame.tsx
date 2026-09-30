@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, CircleX, Loader2 } from 'lucide-react';
+import type { PillProps } from '@/components/ui/Pill';
 import {
   ApprovalGateControl,
   useRefusalCopy,
@@ -18,6 +19,8 @@ import type {
   retryApproveAndMergeMemberAction,
 } from '@/app/(authed)/items/[key]/approvalGateActions';
 import { GateCallToActionBand } from '@/components/approvals/GateCallToActionBand';
+import { withApprovalOverlay } from '@/lib/approvals/overlayAddress';
+import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { announceGateDecided, useDecidedGate } from '@/lib/approvals/decidedGates';
 import { membersOf, type MemberVersion } from '@/lib/approvalGates/memberVersion';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
@@ -40,6 +43,15 @@ import { hungCheckSentenceKey, QueueExitLine } from './QueueExitLine';
 import { decisionDocumentShown } from './DecisionDocumentSlot';
 import { withdrawnMergeCopy, type WithdrawnMessage } from './withdrawnMergeCopy';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
+import type { AgentReviewViewDto } from '@/lib/dto/agentReview';
+import {
+  CouldNotRunBand,
+  OverrideBand,
+  PassedBand,
+  ReviewingBand,
+  SentBackBand,
+} from './AgentReviewBand';
+import { reviewAgainRequest, type ReviewAgainResult } from './reviewAgainRequest';
 
 // THE DEVELOPMENT BLOCK'S FRAME ARM (Story MOTIR-4906 · Subtask MOTIR-5336),
 // `design/github/design-notes.md` §20 · Panel 12c — AND ITS VERBS (Story MOTIR-4909 ·
@@ -224,6 +236,8 @@ export function DevelopmentGateFrame({
   handOver,
   canReplan = false,
   designRefusal,
+  agentReview = null,
+  reviewAgain = reviewAgainRequest,
   children,
 }: {
   read: DevelopmentGateRead;
@@ -296,6 +310,17 @@ export function DevelopmentGateFrame({
    * ask names the card itself and the tiles name no status.
    */
   designRefusal?: DesignRefusalFacts;
+  /**
+   * THE RUN TARGET'S LATEST AGENT REVIEW (Story MOTIR-1626 · MOTIR-6825; design
+   * `design/github` § 30). When it is the gate `read` leads with (`agent_review`), the frame
+   * draws its own states — Reviewing, Sent back, Could not run — with its band, verbs and
+   * record; when the approve-and-merge gate leads over the SAME version it passed or was
+   * continued without, the frame draws that record as the band above the port. Absent, the
+   * frame is exactly what it was before the review agent existed.
+   */
+  agentReview?: AgentReviewViewDto | null;
+  /** *Review again* — the start card's route (MOTIR-6820). Injected by tests. */
+  reviewAgain?: (gateId: string) => Promise<ReviewAgainResult>;
   children: ReactNode;
 }) {
   const t = useTranslations('approvalGate.pullRequestApproval');
@@ -305,6 +330,7 @@ export function DevelopmentGateFrame({
   const tDesign = useTranslations('approvalGate.designResult');
   const tAcceptance = useTranslations('approvalGate.acceptanceResult');
   const tDecision = useTranslations('approvalGate.decision');
+  const tReview = useTranslations('approvalGate.agentReview');
   const router = useRouter();
   // The in-browser path to the status rail (Bug MOTIR-5212) — a no-op outside the item page.
   const { applyOptimisticStatus, clearOptimisticStatus } = useOptimisticStatusWriter();
@@ -327,6 +353,17 @@ export function DevelopmentGateFrame({
       : handOver && read.gate.state === 'awaiting' && announced
         ? announced.gate
         : read.gate;
+  // ── THE AGENT REVIEW (MOTIR-6825; § 30) ─────────────────────────────────────────
+  const isAgentReview = gate.kind === 'agent_review';
+  // *Review again* was pressed here over the run then latest: until the re-read shows a NEWER
+  // run, the reason it cleared is not drawn, and the frame reads *Reviewing* (Panel 4a's note).
+  const [reviewRequestedOver, setReviewRequestedOver] = useState<string | null>(null);
+  const reviewReason =
+    isAgentReview &&
+    gate.state === 'awaiting' &&
+    !(reviewRequestedOver !== null && reviewRequestedOver === (agentReview?.run?.id ?? ''))
+      ? (agentReview?.reviewUnavailableReason ?? null)
+      : null;
   const [pressing, setPressing] = useState(false);
   const [outcomes, setOutcomes] = useState<ReadonlyMap<string, PressOutcome>>(new Map());
   const [retrying, setRetrying] = useState<ReadonlySet<string>>(new Set());
@@ -543,6 +580,25 @@ export function DevelopmentGateFrame({
     refusalVerdict?: ApprovalGateRefusalVerdictDTO,
   ): Promise<GateRefusal | null> {
     if (!decideActions) return null;
+    // *Continue without the review* (§12.3): the routed person APPROVES the agent review
+    // with a required reason, through the one decide door, as the pressing person — in the
+    // APPROVAL OVERLAY, the only host holding the door (MOTIR-6323; the item page hands the
+    // press over). The door then raises the ordinary approve-and-merge gate for the same
+    // version; the re-read brings it in, with this override as its record band (Panel 5).
+    if (gate.kind === 'agent_review') {
+      const result = await decideActions.decide({
+        gateId: gate.id,
+        decision,
+        identifier: itemIdentifier,
+        stamp: read.stamp ?? '',
+        noteMd,
+      });
+      if (!result.ok) return result.refusal;
+      setDecided(result.gate);
+      announceGateDecided({ gate: result.gate, filesKept: null });
+      router.refresh();
+      return null;
+    }
     if (decision === 'approve') {
       setPressing(true);
       let result: Awaited<ReturnType<typeof decideActions.approveAndMerge>>;
@@ -726,43 +782,200 @@ export function DevelopmentGateFrame({
   // merged — it is an uploaded receipt, never a file in any of these pull requests.
   const acceptanceLeads = gate.kind === 'acceptance_result';
 
+  // ── THE AGENT REVIEW'S BANDS AND VERBS (MOTIR-6825; § 30) ───────────────────────
+  /** *Review again* (§12.6): ONE new review run for the same gate and version. */
+  async function pressReviewAgain(): Promise<GateRefusal | null> {
+    const result = await reviewAgain(gate.id);
+    if (!result.ok) return result.refusal;
+    setReviewRequestedOver(agentReview?.run?.id ?? '');
+    // The block is SERVER-rendered: the re-read brings the new run (case 2).
+    router.refresh();
+    return null;
+  }
+  // *Continue without the review* is a DECISION, and every decision a person makes is made
+  // in the APPROVAL OVERLAY (MOTIR-5229, MOTIR-6323). On the item page the button HANDS OVER
+  // to it — the overlay opened on this card's `agent_review` gate, the address the frame's
+  // other hand-overs write (`lib/approvals/overlayAddress.ts`) — and nothing here decides.
+  // `shallowPush`, never `router.push`: the page is already on screen and the overlay reads
+  // its address client-side.
+  async function openOverrideInOverlay(): Promise<GateRefusal | null> {
+    const { pathname, search } = window.location;
+    shallowPush(
+      withApprovalOverlay(`${pathname}${search}`, {
+        itemKey: itemIdentifier,
+        kind: 'agent_review',
+      }),
+    );
+    return null;
+  }
+  const continueWithoutLabel = tReview('verb.continueWithout');
+  // Panel 4a: *Continue without the review* (secondary) then *Review again* (primary), only
+  // while the review could not run; Reviewing and Sent back draw no verbs at all.
+  // - IN THE OVERLAY (the decide doors are held): exactly ONE verb — the approve, with the
+  //   frame's note-required confirm (MOTIR-5960) and the line that it is recorded under the
+  //   presser's name. A person has no refusal verb on this kind (§12.3), and *Review again*
+  //   is the card's, not a decision.
+  // - ON THE ITEM PAGE (`handOver`): *Continue without the review* opens the overlay, and
+  //   *Review again* is the start card's route (§12.6) — a new run, not a gate decision.
+  const reviewVerbs: GateVerb[] =
+    isAgentReview && reviewReason !== null
+      ? decideActions
+        ? [
+            {
+              id: 'continue-without-review',
+              decision: 'approve',
+              label: continueWithoutLabel,
+              variant: 'primary',
+              confirms: true,
+              disabled: verbsDisabled,
+              note: {
+                label: tReview('override.label'),
+                helper: tReview('override.helper'),
+                required: tReview('override.required'),
+              },
+              confirm: {
+                title: tReview('override.title'),
+                consequences: [tReview('override.records'), tReview('override.asks')],
+                proceedLabel: tReview('override.proceed'),
+              },
+            },
+          ]
+        : handOver
+          ? [
+              {
+                id: 'continue-without-review',
+                decision: 'approve',
+                label: continueWithoutLabel,
+                variant: 'secondary',
+                confirms: false,
+                perform: openOverrideInOverlay,
+              },
+              {
+                id: 'review-again',
+                decision: 'approve',
+                label: tReview('verb.reviewAgain'),
+                variant: 'primary',
+                confirms: false,
+                perform: pressReviewAgain,
+              },
+            ]
+          : []
+      : [];
+  const reviewCount = count;
+  // THE BAND ABOVE THE PORT: the agent review's own state when it leads, or — on the
+  // approve-and-merge gate it handed its version to — the pass or the override (Panels 2, 5).
+  const reviewBehindMerge =
+    !isAgentReview &&
+    gate.kind === 'pull_request_approval' &&
+    gate.state !== 'superseded' &&
+    agentReview?.gate.state === 'approved' &&
+    agentReview.gate.subjectVersion !== null &&
+    agentReview.gate.subjectVersion === gate.subjectVersion
+      ? agentReview
+      : null;
+  const reviewBand: ReactNode = isAgentReview ? (
+    gate.state === 'awaiting' ? (
+      reviewReason !== null ? (
+        <CouldNotRunBand reason={reviewReason} run={agentReview?.run ?? null} />
+      ) : (
+        <ReviewingBand
+          // A press of *Review again* here has not seen its run yet: no stale link.
+          run={reviewRequestedOver !== null ? null : (agentReview?.run ?? null)}
+          count={reviewCount}
+        />
+      )
+    ) : gate.state === 'changes_requested' ? (
+      <SentBackBand
+        findingsMd={gate.noteMd}
+        run={agentReview?.run ?? null}
+        decidedAt={gate.decidedAt}
+        count={reviewCount}
+      />
+    ) : gate.state === 'approved' && gate.decidedUnderAuthority !== 'review_agent' ? (
+      // The override, as the overlay draws it right after the press (Panel 5): a person
+      // continued without the review — never *Passed*.
+      <OverrideBand
+        name={gate.decidedByLabel}
+        decidedAt={gate.decidedAt}
+        noteMd={gate.noteMd}
+        count={reviewCount}
+      />
+    ) : null
+  ) : reviewBehindMerge ? (
+    reviewBehindMerge.gate.decidedUnderAuthority === 'review_agent' ? (
+      <PassedBand
+        findingsMd={reviewBehindMerge.gate.noteMd}
+        run={reviewBehindMerge.run}
+        decidedAt={reviewBehindMerge.gate.decidedAt}
+        count={membersOf(reviewBehindMerge.gate.subjectVersion).length}
+      />
+    ) : (
+      <OverrideBand
+        name={reviewBehindMerge.gate.decidedByLabel}
+        decidedAt={reviewBehindMerge.gate.decidedAt}
+        noteMd={reviewBehindMerge.gate.noteMd}
+        count={membersOf(reviewBehindMerge.gate.subjectVersion).length}
+      />
+    )
+  ) : null;
+  // Band 1's pill in the review's own words while it awaits (Panels 1 and 4a). A reader the
+  // could-not-run question is not routed to sees the shipped neutral *Awaiting* (Panel 4d).
+  const reviewStateOverride: { label: ReactNode; pill: PillProps } | null =
+    isAgentReview && gate.state === 'awaiting'
+      ? reviewReason === null
+        ? {
+            label: (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                {tReview('state.reviewing')}
+              </>
+            ),
+            pill: { severity: 'info' },
+          }
+        : read.canDecide
+          ? { label: tReview('state.couldNotRun'), pill: { severity: 'warning' } }
+          : null
+      : null;
+
   // ── Band 3 ────────────────────────────────────────────────────────────────────
-  const verbs: GateVerb[] = decideActions
-    ? [
-        // Sending the work back moves nothing, and now CONFIRMS: the confirm band is where
-        // the REQUIRED reason is written (ADR §10a) — the press asks why, not "are you sure".
-        // A DESIGN that leads the frame is sent back WITH A VERDICT (MOTIR-6427) — the
-        // design band, not the commits' one: the door requires it on a design refusal.
-        // An ACCEPTANCE that leads it asks by RUN SHAPE (MOTIR-6506): the Re-run / Re-plan
-        // pair when the gate offers a verdict — read off the DTO, never re-derived — and
-        // never the borrowed `commits` lines (design choice 2).
-        refusalVerb(
-          isDecision
-            ? 'decision'
-            : gate.kind === 'design_result'
-              ? 'design'
-              : acceptanceLeads
-                ? 'acceptance'
-                : 'commits',
-          itemIdentifier,
-          { disabled: verbsDisabled },
-          designRefusal,
-          acceptanceLeads
-            ? { offersVerdict: gate.offersRefusalVerdict, pullRequestCount: Math.max(count, 1) }
-            : undefined,
-        ),
-        {
-          decision: 'approve',
-          label: t('verb.approveAndMerge'),
-          variant: 'primary',
-          // Merging is not reversible from here, which is what the confirm step says aloud.
-          confirms: true,
-          // A decision with no one document on screen cannot be accepted (§27 Panels 3a–3d):
-          // Approve stays drawn and disabled, with the reason as band 3's line.
-          disabled: verbsDisabled || (isDecision && !decisionShown),
-        },
-      ]
-    : [];
+  const verbs: GateVerb[] = isAgentReview
+    ? reviewVerbs
+    : decideActions
+      ? [
+          // Sending the work back moves nothing, and now CONFIRMS: the confirm band is where
+          // the REQUIRED reason is written (ADR §10a) — the press asks why, not "are you sure".
+          // A DESIGN that leads the frame is sent back WITH A VERDICT (MOTIR-6427) — the
+          // design band, not the commits' one: the door requires it on a design refusal.
+          // An ACCEPTANCE that leads it asks by RUN SHAPE (MOTIR-6506): the Re-run / Re-plan
+          // pair when the gate offers a verdict — read off the DTO, never re-derived — and
+          // never the borrowed `commits` lines (design choice 2).
+          refusalVerb(
+            isDecision
+              ? 'decision'
+              : gate.kind === 'design_result'
+                ? 'design'
+                : acceptanceLeads
+                  ? 'acceptance'
+                  : 'commits',
+            itemIdentifier,
+            { disabled: verbsDisabled },
+            designRefusal,
+            acceptanceLeads
+              ? { offersVerdict: gate.offersRefusalVerdict, pullRequestCount: Math.max(count, 1) }
+              : undefined,
+          ),
+          {
+            decision: 'approve',
+            label: t('verb.approveAndMerge'),
+            variant: 'primary',
+            // Merging is not reversible from here, which is what the confirm step says aloud.
+            confirms: true,
+            // A decision with no one document on screen cannot be accepted (§27 Panels 3a–3d):
+            // Approve stays drawn and disabled, with the reason as band 3's line.
+            disabled: verbsDisabled || (isDecision && !decisionShown),
+          },
+        ]
+      : [];
   // The members this re-asked question is actually about, and whether a SETTING is what is
   // in the way — which changes what approving promises (a merge, not a queue).
   const unlandedNames = [
@@ -774,34 +987,38 @@ export function DevelopmentGateFrame({
   // One or two pull requests are NAMED; three or more are COUNTED, because band 3 is one line
   // and an unbounded list pushes the verbs off the frame. The confirm step names every one.
   const prsNamed = nameList(members.map(nameOf));
-  const consequence = isDecision
-    ? decideActions
-      ? decisionShown
-        ? decisionPrs.length > 0
-          ? tDecision.rich('consequence', {
-              prs: nameList(decisionPrs),
-              key: itemIdentifier,
-              b,
-            })
-          : tDecision.rich('consequenceNoPrs', { key: itemIdentifier, b })
-        : tDecision('blocked')
+  const consequence = isAgentReview
+    ? gate.state === 'awaiting'
+      ? tReview(reviewReason !== null ? 'couldNotRun.why' : 'reviewing.why')
       : null
-    : // ⚠️ THE RE-ASKED GATE PROMISES SOMETHING NARROWER (§ 28 panel 1's `af-why`): the
-      // members that did not land go back where they came from — a merge queue, or the
-      // host once a setting allows it — rather than the whole set being sent for the first
-      // time. The general line is still right for every other awaiting gate.
-      decideActions && reasked && unlandedNames.length > 0
-      ? t(settingHeld ? 'reasked.whySetting' : 'reasked.why', {
-          pr: nameList(unlandedNames),
-          key: itemIdentifier,
-        })
-      : decideActions && count > 0
-        ? acceptanceLeads
-          ? tAcceptance('consequenceMerges', { key: itemIdentifier, prs: prsNamed })
-          : count <= 2
-            ? t('consequence.named', { prs: prsNamed, key: itemIdentifier })
-            : t('consequence.counted', { count, key: itemIdentifier })
-        : null;
+    : isDecision
+      ? decideActions
+        ? decisionShown
+          ? decisionPrs.length > 0
+            ? tDecision.rich('consequence', {
+                prs: nameList(decisionPrs),
+                key: itemIdentifier,
+                b,
+              })
+            : tDecision.rich('consequenceNoPrs', { key: itemIdentifier, b })
+          : tDecision('blocked')
+        : null
+      : // ⚠️ THE RE-ASKED GATE PROMISES SOMETHING NARROWER (§ 28 panel 1's `af-why`): the
+        // members that did not land go back where they came from — a merge queue, or the
+        // host once a setting allows it — rather than the whole set being sent for the first
+        // time. The general line is still right for every other awaiting gate.
+        decideActions && reasked && unlandedNames.length > 0
+        ? t(settingHeld ? 'reasked.whySetting' : 'reasked.why', {
+            pr: nameList(unlandedNames),
+            key: itemIdentifier,
+          })
+        : decideActions && count > 0
+          ? acceptanceLeads
+            ? tAcceptance('consequenceMerges', { key: itemIdentifier, prs: prsNamed })
+            : count <= 2
+              ? t('consequence.named', { prs: prsNamed, key: itemIdentifier })
+              : t('consequence.counted', { count, key: itemIdentifier })
+          : null;
   const rowPressMember = rowPress
     ? (members.find((member) => member.subjectVersion === rowPress.subjectVersion) ?? null)
     : null;
@@ -1085,8 +1302,9 @@ export function DevelopmentGateFrame({
   // approving will merge. Band 1 saying *Pull requests* over a design subject is the near
   // miss this level is about — a question that IS there, wearing the words of a different
   // one, which a reviewer would answer anyway.
-  const kindLabel =
-    gate.kind === 'design_result'
+  const kindLabel = isAgentReview
+    ? tReview('kindLabel')
+    : gate.kind === 'design_result'
       ? tDesign('kindLabel')
       : isDecision
         ? tDecision('kindLabel')
@@ -1099,12 +1317,23 @@ export function DevelopmentGateFrame({
   // and the band closes it — no frame, no port, no verb. The band names the question's own
   // kind where it is not the pull requests' (a design, decision or acceptance leading them),
   // and it opens the overlay on that kind, which is the gate the one press answers.
-  if (handOver && gate.state === 'awaiting' && read.canDecide) {
+  // ⚠️ NEVER AN AGENT REVIEW (§12.1): it is not on To approve, and its states — Reviewing,
+  // Could not run, Sent back — are the card's to show, so the page draws its frame where the
+  // card is. Its one decision still hands over: *Continue without the review* opens the
+  // overlay on the `agent_review` gate (`openOverrideInOverlay`), which decides it.
+  if (handOver && gate.state === 'awaiting' && read.canDecide && !isAgentReview) {
     const meta = isDecision ? decisionMeta() : (subjectMeta ?? t('meta.count', { count }));
     return (
       // The rows keep what a reload knows about each member — *Left the queue*, *Queued to
       // merge* — with no press: on an awaiting gate a row verb is an approval (`rowPressable`).
       <MergeOutcomeProvider value={rowOutcomes}>
+        {/* The pass or the override this question follows (Panels 2 and 5), above the rows —
+            flush to the section card, which is the one container (§ 20: no card in a card). */}
+        {reviewBand ? (
+          <div className="-mx-(--spacing-card-padding) mb-4 border-t border-(--el-border-soft)">
+            {reviewBand}
+          </div>
+        ) : null}
         {children}
         <div className="mt-4">
           <GateCallToActionBand
@@ -1151,7 +1380,9 @@ export function DevelopmentGateFrame({
           // characters of `subjectVersion`, which names a design's commit — and would print
           // `moooon/m` for a set. The set is named in band 1 and counted in `recordDetail`;
           // the audit column itself is untouched.
-          gate={{ ...gate, subjectVersion: null }}
+          // ⚠️ AN AGENT REVIEW'S NOTE IS ITS FINDINGS, drawn in full in the review band — never
+          // quoted a second time in the record strip (MOTIR-6825).
+          gate={{ ...gate, subjectVersion: null, ...(isAgentReview ? { noteMd: null } : {}) }}
           canDecide={read.canDecide}
           // What a refusal names — § 30 Panels 5a / 5b say which card did not move, and on
           // which host the conflict was reported (MOTIR-5916).
@@ -1177,13 +1408,19 @@ export function DevelopmentGateFrame({
           recordDetail={recordDetail}
           recordBand={replanAskBand}
           recordLead={
-            decisionAccepted && gate.decidedByLabel && gate.decisionSource !== 'github'
-              ? tDecision.rich('accepted', {
-                  name: gate.decidedByLabel,
+            isAgentReview && gate.state === 'changes_requested'
+              ? tReview.rich('sentBack.record', {
                   when: gate.decidedAt ? new Date(gate.decidedAt).toLocaleString() : '',
+                  count,
                   b,
                 })
-              : undefined
+              : decisionAccepted && gate.decidedByLabel && gate.decisionSource !== 'github'
+                ? tDecision.rich('accepted', {
+                    name: gate.decidedByLabel,
+                    when: gate.decidedAt ? new Date(gate.decidedAt).toLocaleString() : '',
+                    b,
+                  })
+                : undefined
           }
           withdrawnPort={
             isDecision
@@ -1222,6 +1459,30 @@ export function DevelopmentGateFrame({
           requestedVerb={requestedVerb}
           onRequestedVerbDone={() => setRowPress(null)}
           awaitingRecord={awaitingRecord}
+          leadBand={reviewBand}
+          stateOverride={reviewStateOverride}
+          waitingLine={
+            isAgentReview && gate.state === 'awaiting'
+              ? reviewReason !== null
+                ? tReview('couldNotRun.whyNotYours', {
+                    name: read.routedToLabel ?? tGate('theAssignee'),
+                  })
+                : tReview('reviewing.why')
+              : undefined
+          }
+          settingsDoor={
+            isAgentReview &&
+            gate.state === 'awaiting' &&
+            reviewReason === null &&
+            agentReview?.settingsDoorHref
+              ? { href: agentReview.settingsDoorHref, label: tGate('settingsDoor.reviewAgent') }
+              : undefined
+          }
+          changesRequestedLine={
+            isAgentReview && gate.state === 'changes_requested'
+              ? tReview('sentBack.why')
+              : undefined
+          }
         />,
       )}
     </MergeOutcomeProvider>

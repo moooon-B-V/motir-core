@@ -100,7 +100,12 @@ export const howToTestService = {
         // ⚠️ A REPAIR RUN OWES NOTHING (MOTIR-5460). `motir fix` pushes onto pull
         // requests an EARLIER run opened and wrote How to test for; naming it as the
         // run that owes a record would blame the repair for the delivering run's gap.
-        const latest = [legRuns.find((run) => run.command !== 'fix'), scopeRuns[0]]
+        // ⚠️ NOR DOES A REVIEW RUN (MOTIR-1626; `hosted-agent-run.md` §8.3): it reads the
+        // pull requests and writes nothing, How to test least of all.
+        const latest = [
+          legRuns.find((run) => run.command !== 'fix' && run.command !== 'review'),
+          scopeRuns[0],
+        ]
           .filter((run): run is NonNullable<typeof run> => run !== undefined)
           .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
         return {

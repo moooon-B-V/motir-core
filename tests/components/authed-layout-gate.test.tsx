@@ -99,7 +99,10 @@ vi.mock('@/lib/billing/availability', () => ({
   isCloud: () => false,
 }));
 vi.mock('@/lib/mappers/workspaceMappers', () => ({ toWorkspaceSummaryDTO: (w: unknown) => w }));
-vi.mock('@/lib/permissions/catalog', () => ({}));
+// `@/lib/permissions/catalog` is NOT mocked: it is pure data, and `lib/tokens/grant.ts`
+// evaluates it at IMPORT — a module the shell now reaches through the approval overlay's
+// decide action → the review agent's start service → the hosted run's credential
+// (Story MOTIR-1626), so an empty mock failed the whole file at import.
 
 vi.mock('@/components/ui/Toast', () => ({ ToastProvider: () => null }));
 vi.mock('@/components/ui/AppLayout', () => ({ AppLayout: () => null }));

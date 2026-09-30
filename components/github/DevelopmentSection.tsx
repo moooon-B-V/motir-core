@@ -22,7 +22,7 @@ import { HowToTestBlock } from '@/components/howToTest/HowToTestBlock';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
 import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import { GithubMark } from '@/components/icons/GithubMark';
-import { RepairFixPart } from './RepairFixPart';
+import { RepairFixPart, type SentBackBy } from './RepairFixPart';
 import {
   DevelopmentGateFrame,
   type DevelopmentGateActions,
@@ -31,6 +31,7 @@ import {
 import { MergeOutcomeSlot, PersistedMergeOutcomes } from './MergeOutcomeSlot';
 import { DecisionDocumentSlot } from './DecisionDocumentSlot';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
+import type { AgentReviewViewDto } from '@/lib/dto/agentReview';
 import { CI_STATE_META } from './ciStateMeta';
 import { QueueExitAutoPart, type AutoQueueExits } from './QueueExitAutoPart';
 
@@ -446,6 +447,8 @@ export function DevelopmentSectionBody({
   continuePart = null,
   autoQueueExits = null,
   decision = null,
+  agentReview = null,
+  repairHostedDoor,
 }: {
   pullRequests: LinkedPullRequestDto[];
   /** The item's `MOTIR-<n>` key — the empty-state / caption copy names it. */
@@ -610,6 +613,21 @@ export function DevelopmentSectionBody({
     document: DecisionDocumentViewDTO | null;
     gate: DevelopmentGateRead['gate'] | null;
   } | null;
+  /**
+   * THE RUN TARGET'S LATEST AGENT REVIEW (Story MOTIR-1626 · MOTIR-6825; design
+   * `design/github` § 30) — passed straight to the frame, which draws its states when it
+   * leads and its pass or override above the approve-and-merge gate. The item page passes
+   * it, and so does the approval overlay for an `agent_review` it opens on; omitted, the
+   * frame is as it was.
+   */
+  agentReview?: AgentReviewViewDto | null;
+  /**
+   * THE HOSTED REPAIR DOOR (MOTIR-6930; design § 30 Panels 3–3e): *Fix on the hosted
+   * agent*, drawn in the fix part beside the copyable `motir fix <KEY>` for a card a review
+   * sent back. The item page passes it for a viewer who may run the card hosted; every other
+   * host omits it, and the part draws the command alone.
+   */
+  repairHostedDoor?: ReactNode;
 }) {
   const t = useTranslations('github');
   const tDecision = useTranslations('approvalGate.decision');
@@ -627,6 +645,16 @@ export function DevelopmentSectionBody({
   // "No pull request yet" placeholder directly beneath the pull request it was
   // asserting it about — MOTIR-3036's defect, re-entered through the new door.
   const awaiting = awaitingRepoRows(repoDelivery, rows);
+  // WHO SENT THE COMMITS BACK (MOTIR-6825; § 30 Panels 3 and 3e) — the fix part's first line
+  // for a `review` repair: the gate the frame leads with, refused by the review agent or by
+  // a person. Read off the frame's own read; never a second one.
+  const refusedGate = mergeGate?.gate.state === 'changes_requested' ? mergeGate.gate : null;
+  const sentBackBy: SentBackBy | null =
+    refusedGate?.kind === 'agent_review'
+      ? { by: 'agent' }
+      : refusedGate?.kind === 'pull_request_approval'
+        ? { by: 'person', name: refusedGate.decidedByLabel }
+        : null;
   // The big EmptyState is for an item with NOTHING to show. An item that carries
   // repositories always has rows — the awaiting ones — so it never lands here.
   const nothingLinked = rows.length === 0 && awaiting.length === 0;
@@ -664,7 +692,14 @@ export function DevelopmentSectionBody({
           },
         )}
       </p>
-      {repair ? <RepairFixPart repair={repair} itemIdentifier={itemIdentifier} /> : null}
+      {repair ? (
+        <RepairFixPart
+          repair={repair}
+          itemIdentifier={itemIdentifier}
+          sentBackBy={sentBackBy}
+          hostedDoor={repairHostedDoor}
+        />
+      ) : null}
       {continuePart}
     </>
   );
@@ -808,6 +843,7 @@ export function DevelopmentSectionBody({
         handOver={handOver}
         canReplan={canReplan}
         designRefusal={designRefusal}
+        agentReview={agentReview}
       >
         {block}
       </DevelopmentGateFrame>
