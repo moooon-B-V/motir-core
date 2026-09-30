@@ -177,6 +177,9 @@ describe('the closed enums are the ADR vocabulary, exactly', () => {
       // `continue` — MOTIR-6532: a takeover of a card whose run died, opened by the
       // server's continue claim for `motir continue <key>`.
       'continue',
+      // `review` — MOTIR-6818: a hosted REVIEW run the server opens for an
+      // `agent_review` gate (`hosted-agent-run.md` §8).
+      'review',
     ]);
   });
 
@@ -232,7 +235,7 @@ describe('the closed enums are the ADR vocabulary, exactly', () => {
     ]);
   });
 
-  it('DispatchEventKind — six run-scoped, sixteen card-scoped', () => {
+  it('DispatchEventKind — six run-scoped, seventeen card-or-run-scoped', () => {
     const kinds = Object.keys(DispatchEventKind);
     expect(kinds).toEqual([
       'run_opened',
@@ -262,7 +265,9 @@ describe('the closed enums are the ADR vocabulary, exactly', () => {
       // The run-found report's conclusion (MOTIR-6282) — server-written too,
       // by the report service, on every arm that reaches a leg.
       'unbuildable_reported',
+      // A review run's verdict (MOTIR-6821) — server-written by the verdict route.
+      'review_verdict',
     ]);
-    expect(kinds).toHaveLength(22);
+    expect(kinds).toHaveLength(23);
   });
 });

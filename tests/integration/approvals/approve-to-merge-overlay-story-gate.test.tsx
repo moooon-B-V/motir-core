@@ -337,7 +337,9 @@ describe('GUARD · TOTAL over `ApprovalGateKind`, at BOTH ends, enumerated FROM 
         ? 'design port'
         : kind === 'acceptance_result'
           ? 'acceptance port'
-          : kind === 'pull_request_approval' || kind === 'decision_approval'
+          : kind === 'pull_request_approval' ||
+              kind === 'decision_approval' ||
+              kind === 'agent_review'
             ? 'the Development block'
             : kind === 'decision_choice' || kind === 'decision_confirmation'
               ? 'body port'
@@ -371,7 +373,13 @@ describe('GUARD · TOTAL over `ApprovalGateKind`, at BOTH ends, enumerated FROM 
 
       // ⚠️ `decision_approval` DRAWS THE BLOCK UNTIL MOTIR-5678 draws its document above
       // it (MOTIR-5676 registered the kind; the route's interim arm says why).
-      if (kind === 'pull_request_approval' || kind === 'decision_approval') {
+      // An AGENT REVIEW is ported by the same block — its subject is the delivery set at the
+      // reviewed version (§12.1) — because its one decision is made here (§12.3, MOTIR-6323).
+      if (
+        kind === 'pull_request_approval' ||
+        kind === 'decision_approval' ||
+        kind === 'agent_review'
+      ) {
         const port = within(dialog).getByRole('group', { name: en.approvalGate.port.label });
         expect(within(port).getByText('Change in web')).toBeTruthy();
       } else if (

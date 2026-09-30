@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { Wrench } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
-import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
+import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 
 // THE TO FIX TAG (Story MOTIR-6589 · MOTIR-6610) — one component, TWO forms,
@@ -49,6 +49,22 @@ export function toFixTagId(cardId: string): string {
   return `to-fix-${cardId}`;
 }
 
+/**
+ * THE TAG'S NAME KEY under `toFix.tagName` (Story MOTIR-1626 · MOTIR-6825; design
+ * `design/workbench/design-notes.md` § 32). A `changes_requested` the REVIEW AGENT wrote
+ * (`fixDetail.gate === 'agent_review'`) is named *sent back by the review agent*; every
+ * other reason — and a surface that cannot tell the decider — keeps the reason's own name,
+ * which is still true.
+ */
+export function toFixTagNameKey(
+  reason: WorkItemFixReasonDto,
+  fixGate: FixDetailDto['gate'] | null | undefined,
+): WorkItemFixReasonDto | 'sent_back_by_agent' {
+  return reason === 'changes_requested' && fixGate === 'agent_review'
+    ? 'sent_back_by_agent'
+    : reason;
+}
+
 interface ToFixTagProps {
   /** The work item's stored `WorkItem.fixReason`. */
   fixReason: WorkItemFixReasonDto | null | undefined;
@@ -61,14 +77,26 @@ interface ToFixTagProps {
   form?: 'label' | 'glyph';
   /** Label form: the id a board card's `aria-describedby` references. */
   id?: string;
+  /**
+   * Which gate a `changes_requested` was on (`fixDetail.gate`), where the surface has it —
+   * names the review agent in the tag's accessible name (MOTIR-6825). Absent, the reason's
+   * own name.
+   */
+  fixGate?: FixDetailDto['gate'] | null;
 }
 
-export function ToFixTag({ fixReason, statusCategory, form = 'label', id }: ToFixTagProps) {
+export function ToFixTag({
+  fixReason,
+  statusCategory,
+  form = 'label',
+  id,
+  fixGate = null,
+}: ToFixTagProps) {
   const t = useTranslations();
   const reason = toFixTagState(fixReason, statusCategory);
   if (!reason) return null;
 
-  const name = t(`toFix.tagName.${reason}`);
+  const name = t(`toFix.tagName.${toFixTagNameKey(reason, fixGate)}`);
 
   if (form === 'glyph') {
     // ⚠️ `shrink-0` is load-bearing, as on the CI and decision glyphs: the status

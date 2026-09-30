@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { projectsService } from '@/lib/services/projectsService';
 import { approvalGateSettingsService } from '@/lib/services/approvalGateSettingsService';
-import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  PermissionDeniedError,
+  ProjectNotFoundError,
+  ReviewAgentNeedsManualMergeError,
+} from '@/lib/projects/errors';
 import type { UpdateApprovalGateSettingsInput } from '@/lib/dto/approvalGateSettings';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
@@ -23,6 +27,7 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // Typed errors → status codes:
 //   ProjectNotFoundError    → 404  (no such project, or not a browser)
 //   PermissionDeniedError   → 403  (either verb — lacks `workflow:manage`)
+//   ReviewAgentNeedsManualMergeError → 409  (PATCH — review agent ON in an `auto` project, ADR §12.2a)
 
 interface RouteParams {
   params: Promise<{ key: string }>;
@@ -83,6 +88,15 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
     }
     patch.acceptanceVideoEnabled = raw.acceptanceVideoEnabled;
   }
+  if ('reviewAgentEnabled' in raw) {
+    if (typeof raw.reviewAgentEnabled !== 'boolean') {
+      return NextResponse.json(
+        { code: 'BAD_REQUEST', error: '`reviewAgentEnabled` must be a boolean.' },
+        { status: 400 },
+      );
+    }
+    patch.reviewAgentEnabled = raw.reviewAgentEnabled;
+  }
 
   try {
     const project = await projectsService.getByKey(key, ctx);
@@ -91,6 +105,9 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
   } catch (err) {
     if (err instanceof ProjectNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+    }
+    if (err instanceof ReviewAgentNeedsManualMergeError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
     }
     if (err instanceof PermissionDeniedError) {
       return NextResponse.json(

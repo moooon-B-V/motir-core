@@ -829,6 +829,101 @@ describe('every operation’s REAL response validates against its declared schem
       vi.unstubAllEnvs();
     }
 
+    // ── A hosted REVIEW run's prompt and verdict (MOTIR-6821) ───────────────
+    // Driven with a `review` run's OWN credential — the only caller either route answers
+    // — over a card holding an awaiting `agent_review` gate at its delivery set's version.
+    // The gate is SEEDED rather than raised by a green verdict: the raise is MOTIR-6819's
+    // and has its own suite; here only the two responses' shapes are under test. The
+    // verdict is `changes_requested` so its decision has no merge-side effect to settle.
+    const reviewCard = await createItem('An item a review run reviews');
+    {
+      const res = await handlerFor(
+        () => import('@/app/api/v1/work-items/[key]/pull-requests/route'),
+        'POST',
+        send(`/api/v1/work-items/${reviewCard}/pull-requests`, 'POST', {
+          repository: repoRef,
+          number: 4343,
+          headRef: 'subtask/drift-guard-review',
+          baseRef: 'main',
+        }),
+        { key: reviewCard },
+      );
+      expect(res.status, 'seeding the reviewed pull request').toBe(200);
+    }
+    const reviewItem = await adminDb.workItem.findFirstOrThrow({
+      where: { identifier: reviewCard, projectId: caller.fixture.projectId },
+    });
+    const reviewedPr = await adminDb.githubPullRequest.findFirstOrThrow({
+      where: { number: 4343, deliveries: { some: { workItemId: reviewItem.id } } },
+    });
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: reviewedPr.id,
+        commitSha: 'drift-review-head',
+        checkName: 'ci',
+        conclusion: 'success',
+      },
+    });
+    const reviewedVersion = `${repoRef}#4343@drift-review-head`;
+    await adminDb.approvalGate.create({
+      data: {
+        workspaceId: caller.fixture.workspace.id,
+        projectId: caller.fixture.projectId,
+        workItemId: reviewItem.id,
+        kind: 'agent_review',
+        subjectId: reviewItem.id,
+        subjectVersion: reviewedVersion,
+        routedToId: caller.fixture.owner.id,
+      },
+    });
+    const reviewRun = await adminDb.dispatchRun.create({
+      data: {
+        workspaceId: caller.fixture.workspace.id,
+        projectId: caller.fixture.projectId,
+        command: 'review',
+        origin: 'hosted',
+        createdById: caller.fixture.owner.id,
+        cards: {
+          create: [
+            {
+              workspaceId: caller.fixture.workspace.id,
+              workItemId: reviewItem.id,
+              workItemKey: reviewCard,
+              position: 0,
+            },
+          ],
+        },
+      },
+    });
+    const { token: reviewToken } = await runCredentialService.mintRunCredential({
+      dispatchRunId: reviewRun.id,
+      dispatcherUserId: caller.fixture.owner.id,
+      expiresAt: new Date(Date.now() + 60 * 60_000),
+    });
+    await drive(
+      'getWorkItemReviewPrompt',
+      () => import('@/app/api/v1/work-items/[key]/review-prompt/route'),
+      new Request(`${ORIGIN}/api/v1/work-items/${reviewCard}/review-prompt`, {
+        headers: { authorization: `Bearer ${reviewToken}` },
+      }),
+      { key: reviewCard },
+    );
+    await drive(
+      'submitWorkItemAgentReview',
+      () => import('@/app/api/v1/work-items/[key]/agent-review/route'),
+      new Request(`${ORIGIN}/api/v1/work-items/${reviewCard}/agent-review`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${reviewToken}`, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          subjectVersion: reviewedVersion,
+          verdict: 'changes_requested',
+          summaryMd: 'One criterion is unmet.',
+          findingsMd: '- `a.ts:1` — breaks the first criterion; change it.',
+        }),
+      }),
+      { key: reviewCard },
+    );
+
     // ── Session close-out (Story 11.7) ──────────────────────────────────────
     // On a DEDICATED item, and last: `recordWorkItemIntegration` moves it to
     // `in_review` and `completeSession` then closes it, so driving them on the

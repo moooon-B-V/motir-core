@@ -216,6 +216,18 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     'repair claim got its agent door from MOTIR-6807, for a published skill; nothing asks that ' +
     'of a continue). `work_item:edit` — it opens a dispatch run and ' +
     're-assigns the card, a write — and it writes no status.',
+  getWorkItemReviewPrompt:
+    'MOTIR-6821 — the REVIEW brief a hosted review run is handed. Its ONLY caller is the ' +
+    '`motir review` command inside a hosted review container, on that run’s own token — which ' +
+    'never reaches MCP (`verifyMcpToken` refuses a run-bound token) — and the service refuses ' +
+    'every other credential (`REVIEW_RUN_TOKEN_REQUIRED`), so a tool would have no caller. ' +
+    '`project:browse`, the key the build prompt’s read asserts.',
+  submitWorkItemAgentReview:
+    'MOTIR-6821 — the review run’s ONE verdict, which decides the card’s `agent_review` gate as ' +
+    'the review agent. The same argument as the review prompt, and sharper: the run’s own token ' +
+    'is its only caller, and an MCP tool would put a gate decision in reach of an agent ' +
+    'credential that is not the review run’s. `work_item:edit`, the key every other work-loop ' +
+    'write asserts.',
 };
 
 /**
@@ -277,7 +289,8 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // 22 since MOTIR-6558: the run READ a hosted run's CLI adopts its run by.
     // 23 since MOTIR-6538: a hosted run's git credentials, for its credential helper.
     // 25 since MOTIR-6526: the HEARTBEAT (MOTIR-6528) and the CONTINUE claim (MOTIR-6532).
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(25);
+    // 27 since MOTIR-6821: the hosted REVIEW run's prompt read and its verdict.
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(27);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {

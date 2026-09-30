@@ -162,6 +162,16 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // (MOTIR-688). Checked before the run is read, so it is not an existence
   // oracle: the answer is the same for a run that exists and one that does not.
   DISPATCH_RUN_TOKEN_OUT_OF_SCOPE: 403,
+  // ── MOTIR-6821, a hosted REVIEW run's prompt and verdict (`hosted-agent-run.md` §8) ──
+  // 403 — not a review run's own credential: a PAT, a device token, a BUILD run's token.
+  REVIEW_RUN_TOKEN_REQUIRED: 403,
+  // 404 — the card has no `agent_review` gate at all; nothing to review or answer.
+  REVIEW_GATE_NOT_FOUND: 404,
+  // 409 — this run already gave its ONE verdict (§8.4).
+  REVIEW_VERDICT_ALREADY_SUBMITTED: 409,
+  // 409 — a LATE verdict (`approval-gates.md` §12.5): a version the gate no longer asks
+  // about, or a gate already superseded or decided. Recorded on the run; nothing decided.
+  REVIEW_STALE: 409,
   // ── MOTIR-6538, a hosted run's git credentials ─────────────────────────────
   // 409 — the run ended between its read and the mint (a close racing the call).
   // The same fact as DISPATCH_RUN_TERMINAL, raised from the mint's own re-read.

@@ -733,6 +733,15 @@ export function toWorkItemRepairClaim(
           decidedAt: body.acceptanceRefusal.decidedAt,
         }
       : null,
+    // A server older than contract 1.58.0 sends no `reviewRefusal` (MOTIR-6822).
+    reviewRefusal: body.reviewRefusal
+      ? {
+          gate: body.reviewRefusal.gate,
+          findingsMd: body.reviewRefusal.findingsMd,
+          reviewerName: body.reviewRefusal.reviewerName,
+          decidedAt: body.reviewRefusal.decidedAt,
+        }
+      : null,
     pullRequests: body.pullRequests.map((pr) => ({
       repo: pr.repo,
       number: pr.number,
@@ -806,6 +815,22 @@ export function toDispatchRunView(body: SuccessBody<'getDispatchRun'>): Dispatch
           mode: body.continues.mode,
           landedKeys: [...body.continues.landedKeys],
           resumedKeys: [...body.continues.resumedKeys],
+        }
+      : null,
+    // A server older than contract 1.59.0 sends no `repair` (MOTIR-6929).
+    repair: body.repair
+      ? {
+          repairClass: body.repair.repairClass,
+          title: body.repair.title,
+          pullRequests: body.repair.pullRequests.map((pr) => ({
+            repo: pr.repo,
+            number: pr.number,
+            url: pr.url,
+            branch: pr.branch,
+            baseRef: pr.baseRef,
+            headSha: pr.headSha,
+          })),
+          findings: body.repair.findings ? { ...body.repair.findings } : null,
         }
       : null,
   };

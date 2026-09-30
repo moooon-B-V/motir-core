@@ -1,5 +1,5 @@
 import type { Prisma } from '@/generated/prisma/client';
-import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
+import { readStandingReviewRefusal } from '@/lib/approvalGates/reviewRefusal';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
@@ -13,12 +13,12 @@ import {
 } from '@/lib/services/workItemContinueService';
 import {
   NOTHING_TO_FIX,
+  REVIEW_AGENT_REVIEWER_NAME,
   changesRequestedOf,
   deadRunReasonOf,
   pullRequestReasonOf,
   reviewerNameOf,
   sameFixReason,
-  standingMergeRefusalOf,
   type FixReasonValue,
 } from '@/lib/workItems/fixReason';
 
@@ -145,19 +145,38 @@ export async function deriveFixReason(
         total,
       );
     }
+    if (verdict.repairClass === 'review' && verdict.reviewRefusal) {
+      // A card a REVIEW sent back (MOTIR-6822): the predicate read the standing refusal
+      // and named its reviewer — the review agent as the agent (§12.3), a person by their
+      // live name — so the row names exactly who the claim's prompt names.
+      return changesRequestedOf(
+        {
+          gate: verdict.reviewRefusal.gate,
+          reviewerName: verdict.reviewRefusal.reviewerName,
+          noteMd: verdict.reviewRefusal.findingsMd,
+        },
+        total,
+      );
+    }
     /* v8 ignore next 2 -- NO PRODUCER: an `ok` evaluation of the `ci` class hands over
-       only failing members, and `acceptance_rerun` always carries its refusal. */
+       only failing members, and `acceptance_rerun` / `review` always carry their refusal. */
     return NOTHING_TO_FIX;
   }
 
-  // Not claimable. The one reason left is a reviewer's standing Request changes.
-  const latest = await approvalGateRepository.findLatestDecidedByWorkItem(item.id, tx);
-  const currentVersion = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
-  if (latest && standingMergeRefusalOf(latest, currentVersion)) {
+  // Not claimable. The one reason left is a reviewer's standing Request changes on a card
+  // the `review` class does not admit — a rung other than Implemented / In Review, or a
+  // set with no open member. The rule is the class's own (`readStandingReviewRefusal`).
+  const latest = await readStandingReviewRefusal(item.id, deliveries, tx);
+  if (latest) {
+    // The review AGENT's refusal names the agent, never the run's attributed user (§12.3):
+    // the row must not read as a person having reviewed the code.
+    const byAgent = latest.kind === 'agent_review';
     return changesRequestedOf(
       {
-        gate: 'pull_request_approval',
-        reviewerName: await reviewerName(latest.decidedById, latest.decidedByLabel, tx),
+        gate: byAgent ? 'agent_review' : 'pull_request_approval',
+        reviewerName: byAgent
+          ? REVIEW_AGENT_REVIEWER_NAME
+          : await reviewerName(latest.decidedById, latest.decidedByLabel, tx),
         noteMd: latest.noteMd,
       },
       total,

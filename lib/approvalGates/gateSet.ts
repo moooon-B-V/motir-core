@@ -51,7 +51,10 @@ export type AwaitableGateKind =
   | 'design_result'
   | 'decision_approval'
   | 'acceptance_result'
-  | 'pull_request_approval';
+  | 'pull_request_approval'
+  /** The REVIEW AGENT's question (Story MOTIR-1626 · MOTIR-6819; `approval-gates.md` §12.2)
+   *  — asked INSTEAD of the merge question at a green version the agent has not passed. */
+  | 'agent_review';
 
 /** One member of the card's delivery set, reduced to what the answer depends on. */
 export interface GateSetMember {
@@ -202,6 +205,15 @@ export interface GateSetInput {
    * because they cannot, and a gate there would offer a button guaranteed to fail.
    */
   standingUnlandedOutcome?: { at: Date; landingClass: LandingClass } | null;
+  /**
+   * `Project.reviewAgentEnabled` (Story MOTIR-1626 · MOTIR-6819; `approval-gates.md` §12.2).
+   * Honoured in a `manual` project only — §12.2a makes the switch and `auto` exclude each
+   * other, and a legacy row holding both reads as the review agent OFF. Optional; absent
+   * reads as off, so every caller that does not load it keeps its answer byte-identical.
+   */
+  reviewAgentEnabled?: boolean;
+  /** The card's most recent `agent_review` gate, whatever its state, or null. */
+  latestAgentReviewGate?: ExistingGate | null;
 }
 
 /** One question the card should be asking. */
@@ -420,6 +432,54 @@ export function acceptanceRefusalHoldsMerge(
 }
 
 /**
+ * WHERE THE REVIEW AGENT STANDS on the merge question at the set's CURRENT version (Story
+ * MOTIR-1626 · MOTIR-6819; `approval-gates.md` §12.2, §12.2a, §12.5).
+ *
+ *  · `not_required` — the review does not stand in front of this merge question: the switch
+ *    is off, the project is not `manual` (§12.2a — a legacy row holding both reads as OFF),
+ *    the set has no version, or the merge question AT THIS VERSION has already been asked
+ *    (a merge gate at it that was not withdrawn — awaiting, approved or refused). The last
+ *    is §12.5's *switching ON asks nothing of a card already holding an awaiting
+ *    approve-and-merge gate*, and it is what keeps a re-ask after an ejection a MERGE
+ *    question rather than a second review of commits already answered.
+ *  · `passed` — the latest review at this version was approved (the agent's pass, or a
+ *    person continuing without it): the ordinary flow is asked.
+ *  · `refused` — the agent requested changes at this version: nothing further is asked
+ *    for it (§12.4). ONE REVIEW PER VERSION — a decided review is never asked again.
+ *  · `owed` — no decided review at this version (none yet, or only a WITHDRAWN one — a red
+ *    build and a green again at the same head is reviewed again): ask the review, and not
+ *    the merge.
+ *
+ * Shared by {@link resolveGateSet} (which question is asked) and the carry's settlement
+ * (`mergeGates.settleGreenVerdict` — whether a primary's carried merge may go), so the two
+ * cannot disagree about whether the review has passed.
+ */
+export type AgentReviewStanding = 'not_required' | 'passed' | 'refused' | 'owed';
+
+export function agentReviewStanding(args: {
+  reviewAgentEnabled: boolean;
+  prMergeMode: string | null;
+  workItemId: string;
+  version: string | null;
+  latestAgentReviewGate: Pick<ExistingGate, 'state' | 'subjectId' | 'subjectVersion'> | null;
+  latestMergeGate: Pick<ExistingGate, 'state' | 'subjectVersion'> | null;
+}): AgentReviewStanding {
+  if (!args.reviewAgentEnabled || args.prMergeMode !== 'manual' || args.version === null) {
+    return 'not_required';
+  }
+  const merge = args.latestMergeGate;
+  if (merge && merge.state !== 'superseded' && merge.subjectVersion === args.version) {
+    return 'not_required';
+  }
+  const review = args.latestAgentReviewGate;
+  if (review && review.subjectId === args.workItemId && review.subjectVersion === args.version) {
+    if (review.state === 'approved') return 'passed';
+    if (review.state === 'changes_requested' || review.state === 'overturned') return 'refused';
+  }
+  return 'owed';
+}
+
+/**
  * Does a decided DECISION approval already authorise this card's merge (clause 5, the
  * design gate's Q4 carry one kind over)? True only when the card's latest decision
  * gate is `approved` over the version the card's pull requests carry NOW.
@@ -485,6 +545,11 @@ export function decisionApprovalStandsForMerge(
  *     commits. The candidacy check is MOTIR-5604's and the same-commits check is
  *     MOTIR-5632's; both survive as inputs rather than as guards scattered across
  *     raisers.
+ *  3b. **The REVIEW AGENT's question** (`approval-gates.md` §12.2, MOTIR-6819) is owed
+ *     INSTEAD of the merge question when the project's review agent is on (`manual` only,
+ *     §12.2a) and no review at the current set version has been decided — see
+ *     {@link agentReviewStanding}. A pass puts the merge question back for the SAME
+ *     version; the agent's Request changes asks nothing more for it.
  *  4. **The DESIGN gate is primary** whenever both are owed (Q1). A merge gate owed
  *     alone — after an approval whose merge then failed — leads by itself (Q2).
  */
@@ -633,16 +698,37 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   // promotion writes `implemented → in_review` BEFORE it reconciles, in the same
   // transaction, so the ordinary path is unchanged; every other raiser (the sweep, the
   // post-transition re-ask, a withdrawer's re-raise) now asks nothing of a card the run
-  // has not settled.
-  if (
+  // has not settled. It gates `mergeAskable`, so the REVIEW AGENT's question, which
+  // stands in front of the merge question, is asked only there too.
+  const mergeAskable =
     input.prMergeMode === 'manual' &&
     input.cardInReview &&
-    !answered &&
     !acceptanceHolds &&
     !cantLandHolds &&
     everyMemberMergeable &&
-    version !== null
-  ) {
+    version !== null;
+  // ⚠️ THE REVIEW AGENT STANDS IN FRONT OF THE MERGE QUESTION (Story MOTIR-1626 ·
+  // MOTIR-6819; `approval-gates.md` §12.2). With the switch on, a green set asks the
+  // REVIEW instead of the merge until the review at this version has passed or been
+  // overridden — HERE, in the one rule, so every raiser (the promotion, a status move into
+  // review, the reconcile tick, a queue exit, every withdrawal's re-raise) asks the same
+  // thing. It also holds a primary's CARRIED merge: `answered` by the carry asks nothing
+  // either way, and `settleGreenVerdict` reads the same standing before it merges.
+  const review = agentReviewStanding({
+    reviewAgentEnabled: input.reviewAgentEnabled === true,
+    prMergeMode: input.prMergeMode,
+    workItemId: input.workItemId,
+    version,
+    latestAgentReviewGate: input.latestAgentReviewGate ?? null,
+    latestMergeGate: input.latestMergeGate,
+  });
+  if (mergeAskable && review === 'owed') {
+    awaited.push({
+      kind: 'agent_review',
+      subjectId: input.workItemId,
+      subjectVersion: version,
+    });
+  } else if (mergeAskable && review !== 'refused' && !answered) {
     awaited.push({
       kind: 'pull_request_approval',
       subjectId: input.workItemId,

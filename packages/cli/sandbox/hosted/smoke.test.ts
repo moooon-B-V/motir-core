@@ -14,7 +14,7 @@ import {
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cliArgs, readLaunch, REQUIRED_INPUTS, SETUP_FAILED } from './entrypoint.js';
+import { cliArgs, readLaunch, REQUIRED_INPUTS, RUN_MODES, SETUP_FAILED } from './entrypoint.js';
 
 // The hosted-agent image's smoke test (Story MOTIR-683 · MOTIR-687, rewritten
 // for the CLI-running image by MOTIR-6560).
@@ -31,6 +31,18 @@ import { cliArgs, readLaunch, REQUIRED_INPUTS, SETUP_FAILED } from './entrypoint
 //   3. a PARENT with two children in two repositories (a scope run: one session
 //      branch per repository, a DRAFT pull request per repository opened at the
 //      first child that lands, marked READY at the close-out).
+//
+// The same three shapes CONTINUED (MOTIR-6795), and a REVIEW (MOTIR-6824,
+// `hosted-agent-run.md` §8) of a one-repository and a two-repository card: every
+// pull request checked out at its reviewed head, ONE verdict POST carrying the
+// version, and nothing pushed or posted to GitHub — the harness logs every `git`
+// the CLI and the agent run, and the fake `gh`'s log stays empty.
+//
+// And a REPAIR (MOTIR-6929, `hosted-agent-run.md` §8.6) of a one-repository and a
+// two-repository card a review sent back: the run the server's repair claim opened is
+// adopted (never claimed), every pull request is checked out on its OWN branch, the
+// agent's fix is pushed to exactly those branches, and no branch, pull request or
+// `gh` call is made — an agent that tries another ref or `gh` is refused.
 //
 // What stands in for what:
 //   - a stub MOTIR answering every route the hosted CLI calls, with bodies the
@@ -129,6 +141,51 @@ const options = JSON.parse(configText).provider.anthropic.options;
   console.log('model call answered ' + res.status);
   if (prompt.includes('FAKE:fail')) { console.error('boom: the fake agent failed on purpose'); process.exit(3); }
   const root = path.dirname(process.cwd());
+  // A REPAIR (MOTIR-6929): commit in every checkout the review-fix prompt names, ON the
+  // branch it is on, and push that branch. \`FAKE:try-sneaky\` also tries another ref
+  // and \`gh pr create\` — both must be refused. \`FAKE:no-change\` changes nothing.
+  if (prompt.includes('FAKE:fix')) {
+    const attempt = (fn) => { try { fn(); return { status: 0, stderr: '' }; } catch (e) { return { status: e.status || 1, stderr: String(e.stderr || '') }; } };
+    const checkouts = [...prompt.matchAll(/branch \`([^\`]+)\` at \`([^\`]+)\`/g)].map((m) => ({ branch: m[1], dir: m[2] }));
+    const record = { checkouts, heads: {}, tried: null, prompt };
+    for (const { branch, dir } of checkouts) {
+      record.heads[dir] = git(dir, 'rev-parse', '--abbrev-ref', 'HEAD').trim();
+      if (prompt.includes('FAKE:no-change')) continue;
+      fs.writeFileSync(path.join(dir, key + '-fix.txt'), 'the fix for ' + key + ' on ' + branch + '\\n');
+      git(dir, 'add', key + '-fix.txt');
+      git(dir, 'commit', '-m', key + ': answer the review on ' + branch);
+      git(dir, ...redirect, 'push', 'origin', 'HEAD');
+    }
+    if (prompt.includes('FAKE:try-sneaky')) {
+      const dir = checkouts[0].dir;
+      record.tried = {
+        push: attempt(() => git(dir, ...redirect, 'push', 'origin', 'HEAD:refs/heads/sneaky')),
+        gh: attempt(() => execFileSync('gh', ['pr', 'create', '--title', 'x', '--body', 'y'], { cwd: dir, stdio: 'pipe' })),
+      };
+    }
+    fs.appendFileSync(path.join(process.env.HOME, 'fix-records.jsonl'), JSON.stringify(record) + '\\n');
+    process.exit(0);
+  }
+  // A REVIEW (MOTIR-6824): read each checkout's HEAD, and write the ONE verdict to
+  // the file the CLI's prompt names. \`FAKE:try-push\` is an agent that ignores its
+  // rules: it tries to push and to comment, and writes no verdict.
+  if (prompt.includes('FAKE:review')) {
+    const heads = {};
+    for (const repo of repos) heads[repo] = git(path.join(root, repo), 'rev-parse', 'HEAD').trim();
+    const attempt = (fn) => { try { fn(); return 0; } catch (e) { return e.status || 1; } };
+    const tried = prompt.includes('FAKE:try-push') ? {
+      push: attempt(() => git(process.cwd(), ...redirect, 'push', 'origin', 'HEAD:refs/heads/sneaky')),
+      gh: attempt(() => execFileSync('gh', ['pr', 'comment', '1', '--body', 'lgtm'], { stdio: 'pipe' })),
+    } : null;
+    fs.appendFileSync(path.join(process.env.HOME, 'review-records.jsonl'), JSON.stringify({ heads, tried, verdictFile: process.env.MOTIR_REVIEW_VERDICT_FILE || null }) + '\\n');
+    if (tried) process.exit(0);
+    const version = (/EXACTLY "([^"]+)"/.exec(prompt) || [])[1];
+    const verdict = marker('verdict') || 'pass';
+    fs.writeFileSync(process.env.MOTIR_REVIEW_VERDICT_FILE, JSON.stringify(verdict === 'pass'
+      ? { subjectVersion: version, verdict, summaryMd: 'Meets the card.' }
+      : { subjectVersion: version, verdict, summaryMd: 'One gap.', findingsMd: '- ' + repos[repos.length - 1] + '/README.md:1 — the criterion is not met.' }));
+    process.exit(0);
+  }
   for (const repo of repos) {
     const dir = mode === 'continue'
       ? path.join(root, repo + '-' + key.toLowerCase())
@@ -217,7 +274,7 @@ type Scenario = {
   runId: string;
   /** The card the launcher is booted with — the leaf, or the parent. */
   key: string;
-  command: 'run' | 'run_scope' | 'continue';
+  command: 'run' | 'run_scope' | 'continue' | 'review' | 'fix';
   /** The run's legs, in the run's own order. */
   legs: string[];
   cards: Record<string, Card>;
@@ -229,6 +286,20 @@ type Scenario = {
     mode: 'card' | 'parent';
     landedKeys: string[];
     resumedKeys: string[];
+  };
+  /** A `review` run (MOTIR-6824): the version under review and its pull requests. */
+  review?: {
+    subjectVersion: string;
+    verdict: 'pass' | 'changes_requested';
+    /** The served prompt's extra markers for the fake agent. */
+    markers?: string;
+    /** Each pull request; `headSha` is filled when the remotes are seeded. */
+    prs: { repo: string; number: number; headSha?: string }[];
+  };
+  /** A `fix` run (MOTIR-6929): each pull request's own branch, and the findings' markers. */
+  fix?: {
+    markers: string;
+    prs: { repo: string; number: number; branch: string; headSha?: string }[];
   };
 };
 
@@ -360,6 +431,113 @@ const CONTINUE_SCENARIOS: Scenario[] = [
   },
 ];
 
+// The REVIEW (MOTIR-6824): the server opened a `review` run on the card's green
+// delivery set; the container checks each pull request out at its reviewed head.
+const REVIEW_SCENARIOS: Scenario[] = [
+  {
+    name: 'a review of a one-repository card',
+    runId: 'run_smoke_review1',
+    key: 'ACME-20',
+    command: 'review',
+    legs: ['ACME-20'],
+    cards: { 'ACME-20': { ...leafCard('ACME-20', ['app-a']), status: 'implemented' } },
+    review: {
+      subjectVersion: 'acme/app-a#1@head',
+      verdict: 'pass',
+      prs: [{ repo: 'app-a', number: 1 }],
+    },
+  },
+  {
+    name: 'a review of a two-repository card',
+    runId: 'run_smoke_review2',
+    key: 'ACME-21',
+    command: 'review',
+    legs: ['ACME-21'],
+    cards: { 'ACME-21': { ...leafCard('ACME-21', ['app-a', 'app-b']), status: 'implemented' } },
+    review: {
+      subjectVersion: 'acme/app-a#2@head,acme/app-b#3@head',
+      verdict: 'changes_requested',
+      prs: [
+        { repo: 'app-a', number: 2 },
+        { repo: 'app-b', number: 3 },
+      ],
+    },
+  },
+  {
+    name: 'a review whose agent tries to push and comment, and writes no verdict',
+    runId: 'run_smoke_review3',
+    key: 'ACME-22',
+    command: 'review',
+    legs: ['ACME-22'],
+    cards: { 'ACME-22': { ...leafCard('ACME-22', ['app-a']), status: 'implemented' } },
+    review: {
+      subjectVersion: 'acme/app-a#4@head',
+      verdict: 'pass',
+      markers: 'FAKE:try-push',
+      prs: [{ repo: 'app-a', number: 4 }],
+    },
+  },
+];
+
+// The REPAIR (MOTIR-6929): a card a review sent back, the server's repair claim having
+// opened the `fix` run; each pull request lives on its own branch in its remote.
+const FIX_SCENARIOS: Scenario[] = [
+  {
+    name: 'a repair of a one-repository card sent back by a review',
+    runId: 'run_smoke_fix1',
+    key: 'ACME-30',
+    command: 'fix',
+    legs: ['ACME-30'],
+    cards: { 'ACME-30': { ...leafCard('ACME-30', ['app-a']), status: 'implemented' } },
+    fix: {
+      markers: 'FAKE:fix FAKE:key=ACME-30',
+      prs: [{ repo: 'app-a', number: 5, branch: 'hosted/ACME-30' }],
+    },
+  },
+  {
+    name: 'a repair of a two-repository card sent back by a review',
+    runId: 'run_smoke_fix2',
+    key: 'ACME-31',
+    command: 'fix',
+    legs: ['ACME-31'],
+    cards: { 'ACME-31': { ...leafCard('ACME-31', ['app-a', 'app-b']), status: 'implemented' } },
+    fix: {
+      markers: 'FAKE:fix FAKE:key=ACME-31 FAKE:try-sneaky',
+      prs: [
+        { repo: 'app-a', number: 6, branch: 'hosted/ACME-31' },
+        { repo: 'app-b', number: 7, branch: 'hosted/ACME-31-b' },
+      ],
+    },
+  },
+];
+
+/** What the server's repair claim recorded on the run, as `GET /dispatch-runs/{id}` answers it. */
+function repairOf(s: Scenario) {
+  if (!s.fix) return null;
+  return {
+    repairClass: 'review',
+    title: `Card ${s.key}`,
+    pullRequests: s.fix.prs.map((pr) => ({
+      repo: `acme/${pr.repo}`,
+      number: pr.number,
+      url: `https://github.com/acme/${pr.repo}/pull/${pr.number}`,
+      branch: pr.branch,
+      baseRef: 'main',
+      headSha: pr.headSha ?? null,
+    })),
+    findings: {
+      gate: 'agent_review',
+      gateId: `gate_${s.key}`,
+      subjectVersion: s.fix.prs.map((pr) => `acme/${pr.repo}#${pr.number}@${pr.headSha}`).join(','),
+      findingsMd: `- README.md:1 — the criterion is not met in ${s.key}.\n${s.fix.markers}`,
+      reviewerName: 'Review agent',
+      decidedByLabel: 'Review agent',
+      decidedUnderAuthority: 'review_agent',
+      decidedAt: NOW,
+    },
+  };
+}
+
 // ── The stub Motir (and gateway) ───────────────────────────────────────────
 
 const NOW = '2026-09-27T00:00:00Z';
@@ -377,6 +555,8 @@ type Stub = {
   modelCalls: { apiKey: string | undefined }[];
   /** Every request the stub could not answer — a route the CLI called that it lacks. */
   misses: string[];
+  /** Every verdict POSTed to `…/agent-review` (MOTIR-6824). */
+  verdicts: unknown[];
 };
 
 function workItemDetail(s: Scenario, key: string) {
@@ -487,6 +667,7 @@ function dispatchRun(s: Scenario, status: 'running' | 'succeeded') {
     })),
     seq: 0,
     continues: s.continues ?? null,
+    repair: repairOf(s),
   };
 }
 
@@ -529,6 +710,7 @@ async function startStub(): Promise<Stub> {
     scenario: null,
     modelCalls: [],
     misses: [],
+    verdicts: [],
   };
   stub.server = createServer((req, res) => {
     let raw = '';
@@ -620,6 +802,38 @@ async function startStub(): Promise<Stub> {
         if (method === 'GET' && sub === '') return json(200, workItemDetail(s, key));
         if (method === 'GET' && sub === '/designs') return json(200, { designs: [] });
         if (method === 'GET' && sub === '/how-to-test') return json(200, { key, record: null });
+        if (method === 'GET' && sub === '/review-prompt' && s.review) {
+          const r = s.review;
+          return json(200, {
+            key,
+            gateId: `gate_${key}`,
+            subjectVersion: r.subjectVersion,
+            pullRequests: r.prs.map((pr) => ({
+              repository: `acme/${pr.repo}`,
+              number: pr.number,
+              headSha: pr.headSha,
+              baseBranch: 'main',
+              headBranch: `feat/${key}`,
+              url: `https://github.com/acme/${pr.repo}/pull/${pr.number}`,
+            })),
+            prompt:
+              `You are REVIEWING ${key}. FAKE:review FAKE:key=${key} ` +
+              `FAKE:repos=${r.prs.map((pr) => pr.repo).join(',')} FAKE:verdict=${r.verdict}` +
+              `${r.markers ? ` ${r.markers}` : ''}\n`,
+          });
+        }
+        if (method === 'POST' && sub === '/agent-review' && s.review) {
+          stub.verdicts.push(body);
+          const b = body as { verdict: 'pass' | 'changes_requested'; subjectVersion: string };
+          return json(200, {
+            key,
+            gateId: `gate_${key}`,
+            verdict: b.verdict,
+            state: b.verdict === 'pass' ? 'approved' : 'changes_requested',
+            subjectVersion: b.subjectVersion,
+            decidedAt: NOW,
+          });
+        }
         if (method === 'GET' && sub === '/dispatch-prompt') {
           return json(
             200,
@@ -755,6 +969,10 @@ function makeWorld(stub: Stub): World {
   write('opencode', FAKE_OPENCODE);
   write('gh', FAKE_GH);
   write('codegraph', FAKE_CODEGRAPH);
+  // Every `git` the CLI and the agent run, logged, then the real one (MOTIR-6824's
+  // "zero pushes" is read from this log, not inferred).
+  const realGit = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
+  write('git', `#!/bin/sh\necho "$*" >> "$HOME/git-commands.log"\nexec "${realGit}" "$@"\n`);
   // The launcher execs `MOTIR_CLI_BIN`: the CLI from source, as the image runs it built.
   write('motir', `#!/bin/sh\nexec "${TSX}" "${CLI_SRC_INDEX}" "$@"\n`);
 
@@ -825,12 +1043,17 @@ describe('the hosted launcher (MOTIR-6560)', () => {
     ...over,
   });
 
-  it('runs `motir run <KEY>` by default and `motir continue <KEY>` in continue mode', () => {
+  it('runs `motir run <KEY>` by default, and `motir continue|review|fix <KEY>` in their modes', () => {
     expect(cliArgs(readLaunch(full()))).toEqual(['run', 'ACME-7']);
     expect(cliArgs(readLaunch(full({ MOTIR_RUN_MODE: 'continue' })))).toEqual([
       'continue',
       'ACME-7',
     ]);
+    // MOTIR-6824 (`hosted-agent-run.md` §8.1): the launcher's third mode.
+    expect(cliArgs(readLaunch(full({ MOTIR_RUN_MODE: 'review' })))).toEqual(['review', 'ACME-7']);
+    // MOTIR-6929 (`hosted-agent-run.md` §8.6): the fourth mode, a hosted repair.
+    expect(cliArgs(readLaunch(full({ MOTIR_RUN_MODE: 'fix' })))).toEqual(['fix', 'ACME-7']);
+    expect(RUN_MODES).toEqual(['run', 'continue', 'review', 'fix']);
   });
 
   it('names EVERY missing input at once, and refuses a bad key or mode', () => {
@@ -838,7 +1061,9 @@ describe('the hosted launcher (MOTIR-6560)', () => {
       `missing required input(s): ${REQUIRED_INPUTS.join(', ')}`,
     );
     expect(() => readLaunch(full({ MOTIR_WORK_ITEM_KEY: 'not a key' }))).toThrow(/work item key/);
-    expect(() => readLaunch(full({ MOTIR_RUN_MODE: 'retry' }))).toThrow(/"run" or "continue"/);
+    expect(() => readLaunch(full({ MOTIR_RUN_MODE: 'retry' }))).toThrow(
+      /"run", "continue", "review" or "fix", got "retry"/,
+    );
   });
 
   it('reads no repository, base ref, git token or git author', () => {
@@ -885,6 +1110,7 @@ describe('the hosted image, as processes: the launcher runs the real CLI (MOTIR-
     stub.closed.length = 0;
     stub.modelCalls.length = 0;
     stub.misses.length = 0;
+    stub.verdicts.length = 0;
     const world = makeWorld(stub);
     world.env.MOTIR_DISPATCH_RUN_ID = s.runId;
     world.env.MOTIR_WORK_ITEM_KEY = s.key;
@@ -1192,6 +1418,259 @@ describe('the hosted image, as processes: the launcher runs the real CLI (MOTIR-
     );
     expect(s.cards['ACME-12']!.status).toBe('implemented');
   }, 180_000);
+
+  // ── The REVIEW (MOTIR-6824) ──────────────────────────────────────────────
+
+  /**
+   * Seed each pull request's reviewed head as `refs/pull/<n>/head` in its remote — on
+   * no branch, as GitHub keeps a pull request's head — and boot in review mode.
+   */
+  function armReview(s: Scenario): World {
+    const world = arm(s);
+    for (const pr of s.review!.prs) {
+      const dir = tempDir('hosted-smoke-pr-');
+      git(dir, 'clone', '-q', world.remotes[pr.repo]!, 'w');
+      const w = join(dir, 'w');
+      writeFileSync(join(w, `${s.key}.txt`), `the change under review in ${pr.repo}\n`);
+      git(w, 'add', '.');
+      git(
+        w,
+        '-c',
+        'user.name=Dev',
+        '-c',
+        'user.email=dev@example.com',
+        'commit',
+        '-q',
+        '-m',
+        `${s.key} in ${pr.repo}`,
+      );
+      git(w, 'push', '-q', 'origin', `HEAD:refs/pull/${pr.number}/head`);
+      pr.headSha = git(w, 'rev-parse', 'HEAD').trim();
+    }
+    world.env.MOTIR_RUN_MODE = 'review';
+    world.env.MOTIR_REVIEW_GATE_ID = `gate_${s.key}`;
+    world.env.MOTIR_REVIEW_VERSION = s.review!.subjectVersion;
+    return world;
+  }
+
+  /** Every ref of every remote — what a push would change. */
+  const refsOf = (world: World) =>
+    Object.fromEntries(
+      Object.entries(world.remotes).map(([repo, bare]) => [repo, git(bare, 'show-ref')]),
+    );
+
+  const gitCommands = (home: string): string[] =>
+    existsSync(join(home, 'git-commands.log'))
+      ? readFileSync(join(home, 'git-commands.log'), 'utf8').trim().split('\n')
+      : [];
+
+  const readReviews = (
+    home: string,
+  ): {
+    heads: Record<string, string>;
+    tried: { push: number; gh: number } | null;
+    verdictFile: string | null;
+  }[] =>
+    readFileSync(join(home, 'review-records.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+
+  /** What every review shares: adopted, never claimed; nothing pushed; `gh` never reached. */
+  function expectReadOnly(s: Scenario, world: World, before: Record<string, string>) {
+    expectAdoptedAndClosed(s);
+    expectAgentsConfined(world.home);
+    const paths = stub.requests.map((r) => `${r.method} ${r.path}`);
+    expect(paths.some((p) => p.endsWith('/claim') || p.endsWith('/continue'))).toBe(false);
+    expect(paths.some((p) => p.endsWith('/transitions') || p.endsWith('/pull-requests'))).toBe(
+      false,
+    );
+    // Nothing reached a remote, and the fake `gh` was never invoked at all.
+    expect(refsOf(world)).toEqual(before);
+    expect(readPrs(world.home).calls).toEqual([]);
+  }
+
+  it('a review of a one-repository card: checked out at its reviewed head, ONE verdict with the version, nothing pushed', async () => {
+    const s = REVIEW_SCENARIOS[0]!;
+    const world = armReview(s);
+    const before = refsOf(world);
+    const res = await launch(world.env);
+    expect(res.code, res.stderr + res.stdout).toBe(0);
+    expectReadOnly(s, world, before);
+    expect(gitCommands(world.home).filter((c) => /(^|\s)push(\s|$)/.test(c))).toEqual([]);
+
+    const [review] = readReviews(world.home);
+    expect(review!.heads).toEqual({ 'app-a': s.review!.prs[0]!.headSha });
+    expect(stub.verdicts).toEqual([
+      {
+        subjectVersion: s.review!.subjectVersion,
+        verdict: 'pass',
+        summaryMd: 'Meets the card.',
+        findingsMd: null,
+      },
+    ]);
+    // The verdict file lived outside every checkout, and is gone.
+    expect(review!.verdictFile!.startsWith(world.workspace)).toBe(false);
+    expect(existsSync(review!.verdictFile!)).toBe(false);
+    expect(stub.closed).toEqual([{ stopReason: 'completed' }]);
+  }, 120_000);
+
+  it('a review of a two-repository card: both at their reviewed heads, ONE verdict over both, zero pushes and zero gh', async () => {
+    const s = REVIEW_SCENARIOS[1]!;
+    const world = armReview(s);
+    const before = refsOf(world);
+    const res = await launch(world.env);
+    expect(res.code, res.stderr + res.stdout).toBe(0);
+    expectReadOnly(s, world, before);
+    expect(gitCommands(world.home).filter((c) => /(^|\s)push(\s|$)/.test(c))).toEqual([]);
+
+    expect(existsSync(join(world.workspace, 'app-a', '.git'))).toBe(true);
+    expect(existsSync(join(world.workspace, 'app-b', '.git'))).toBe(true);
+    const [review] = readReviews(world.home);
+    expect(review!.heads).toEqual({
+      'app-a': s.review!.prs[0]!.headSha,
+      'app-b': s.review!.prs[1]!.headSha,
+    });
+    expect(stub.verdicts).toHaveLength(1);
+    expect(stub.verdicts[0]).toMatchObject({
+      subjectVersion: s.review!.subjectVersion,
+      verdict: 'changes_requested',
+      findingsMd: expect.stringContaining('app-b/README.md:1'),
+    });
+  }, 120_000);
+
+  it('a review whose agent tries to push and comment: both refused, nothing reaches a remote, no verdict posted, exit non-zero', async () => {
+    const s = REVIEW_SCENARIOS[2]!;
+    const world = armReview(s);
+    const before = refsOf(world);
+    const res = await launch(world.env);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toMatch(/no verdict was submitted — the agent wrote no verdict file/);
+    expectReadOnly(s, world, before);
+
+    const [review] = readReviews(world.home);
+    expect(review!.tried!.push).not.toBe(0);
+    expect(review!.tried!.gh).not.toBe(0);
+    expect(stub.verdicts).toEqual([]);
+    expect(stub.closed).toEqual([{ stopReason: 'halted' }]);
+  }, 120_000);
+
+  // ── The REPAIR (MOTIR-6929) ──────────────────────────────────────────────
+
+  /** Seed each pull request's OWN branch in its remote — the work a review sent back. */
+  function armFix(s: Scenario): World {
+    const world = arm(s);
+    for (const pr of s.fix!.prs) {
+      seedDead(world, pr.repo, pr.branch, s.key);
+      pr.headSha = git(world.remotes[pr.repo]!, 'rev-parse', `refs/heads/${pr.branch}`).trim();
+    }
+    world.env.MOTIR_RUN_MODE = 'fix';
+    return world;
+  }
+
+  const readFixes = (
+    home: string,
+  ): {
+    checkouts: { branch: string; dir: string }[];
+    heads: Record<string, string>;
+    tried: {
+      push: { status: number; stderr: string };
+      gh: { status: number; stderr: string };
+    } | null;
+    prompt: string;
+  }[] =>
+    readFileSync(join(home, 'fix-records.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+
+  /** Every branch a remote has, less `main`. */
+  const branchesOf = (bare: string) =>
+    git(bare, 'for-each-ref', '--format=%(refname)', 'refs/heads/')
+      .trim()
+      .split('\n')
+      .filter((ref) => ref && ref !== 'refs/heads/main');
+
+  /** What every repair shares: adopted, never claimed; own branches only; zero `gh pr`; no status. */
+  function expectRepaired(s: Scenario, world: World) {
+    expectAdoptedAndClosed(s);
+    expectAgentsConfined(world.home);
+    const paths = stub.requests.map((r) => `${r.method} ${r.path}`);
+    // Adopted, never claimed: the server's repair claim opened this run.
+    expect(paths.some((p) => /\/(repair|claim|continue)$/.test(p))).toBe(false);
+    // No status write, no link, no dispatch prompt — a repair moves nothing.
+    expect(
+      paths.some(
+        (p) =>
+          p.endsWith('/transitions') ||
+          p.endsWith('/pull-requests') ||
+          p.endsWith('/integration') ||
+          p.endsWith('/dispatch-prompt'),
+      ),
+    ).toBe(false);
+    expect(stub.events.map((e) => e.kind)).not.toContain('run_opened');
+    expect(stub.closed).toEqual([{ stopReason: 'completed' }]);
+
+    // Each pull request's OWN branch carries the fix on top of what it had, as the App.
+    for (const pr of s.fix!.prs) {
+      const bare = world.remotes[pr.repo]!;
+      expect(subjects(bare, pr.branch)).toEqual([
+        `${s.key}: answer the review on ${pr.branch}`,
+        `${s.key}: before the run died`,
+      ]);
+      const bot = BOTS[`acme/${pr.repo}`]!;
+      expect(authorOn(bare, pr.branch)).toBe(`${bot.name} <${bot.email}>`);
+    }
+    // ZERO new branches in any remote, zero `git switch -c`, zero `gh pr`.
+    for (const [repo, bare] of Object.entries(world.remotes)) {
+      expect(branchesOf(bare).sort()).toEqual(
+        s
+          .fix!.prs.filter((pr) => pr.repo === repo)
+          .map((pr) => `refs/heads/${pr.branch}`)
+          .sort(),
+      );
+    }
+    const commands = gitCommands(world.home);
+    expect(commands.filter((c) => /(^|\s)switch\s+(-c|-C|--create)/.test(c))).toEqual([]);
+    expect(commands.filter((c) => /(^|\s)checkout\s+-b/.test(c))).toEqual([]);
+    expect(readPrs(world.home).calls.filter((c) => c.args[0] === 'pr')).toEqual([]);
+    expect(readPrs(world.home).prs).toEqual([]);
+
+    // The agent was handed the recorded findings, verbatim, on each own-branch checkout.
+    const [fix] = readFixes(world.home);
+    expect(fix!.prompt).toContain(`- README.md:1 — the criterion is not met in ${s.key}.`);
+    expect(Object.values(fix!.heads).sort()).toEqual(s.fix!.prs.map((pr) => pr.branch).sort());
+    return fix!;
+  }
+
+  it('a repair of a one-repository card sent back by a review: its own branch, the fix pushed there, nothing else', async () => {
+    const s = FIX_SCENARIOS[0]!;
+    const world = armFix(s);
+    const res = await launch(world.env);
+    expect(res.code, res.stderr + res.stdout).toBe(0);
+    const fix = expectRepaired(s, world);
+    expect(fix.checkouts).toHaveLength(1);
+    expect(fix.tried).toBeNull();
+  }, 120_000);
+
+  it('a repair of a two-repository card: both on their own branches, each fix pushed to it; another ref and gh are refused', async () => {
+    const s = FIX_SCENARIOS[1]!;
+    const world = armFix(s);
+    const res = await launch(world.env);
+    expect(res.code, res.stderr + res.stdout).toBe(0);
+    expect(existsSync(join(world.workspace, 'app-a', '.git'))).toBe(true);
+    expect(existsSync(join(world.workspace, 'app-b', '.git'))).toBe(true);
+    const fix = expectRepaired(s, world);
+    expect(fix.checkouts.map((c) => c.branch).sort()).toEqual([
+      'hosted/ACME-31',
+      'hosted/ACME-31-b',
+    ]);
+    // The agent that tried another ref and `gh pr create` was refused both.
+    expect(fix.tried!.push.status).not.toBe(0);
+    expect(fix.tried!.push.stderr).toMatch(/pushes only to its pull requests' own branches/);
+    expect(fix.tried!.gh.status).not.toBe(0);
+    expect(fix.tried!.gh.stderr).toMatch(/`gh` is disabled in a hosted REPAIR run/);
+  }, 120_000);
 });
 
 // ── Layer 2: the image ─────────────────────────────────────────────────────
@@ -1231,5 +1710,13 @@ describe.skipIf(!IMAGE)('the hosted-agent IMAGE (MOTIR-6560)', () => {
     const res = spawnSync('docker', ['run', '--rm', image], { encoding: 'utf8' });
     expect(res.status).toBe(SETUP_FAILED);
     expect(res.stderr).toContain('missing required input(s): MOTIR_DISPATCH_RUN_ID');
+  });
+
+  it('its launcher knows every mode — `fix` included (MOTIR-6929) — and refuses an unknown one', () => {
+    const res = spawnSync('docker', ['run', '--rm', '-e', 'MOTIR_RUN_MODE=retry', image], {
+      encoding: 'utf8',
+    });
+    expect(res.status).toBe(SETUP_FAILED);
+    expect(res.stderr).toContain('"run", "continue", "review" or "fix", got "retry"');
   });
 });

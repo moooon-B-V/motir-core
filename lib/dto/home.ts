@@ -1,4 +1,5 @@
 import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
+import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
 import type {
   ExecutorDto,
   WorkItemKindDto,
@@ -73,6 +74,17 @@ export interface HomeWorkItemRowDto {
    * on every other tab's rows.
    */
   canContinueHosted: boolean;
+  /**
+   * Whether this row may OFFER *Fix on the hosted agent* (Story MOTIR-1626 · MOTIR-6930;
+   * `design/workbench` § 32): a card a REVIEW sent back — `changes_requested` on the
+   * review agent's or the approve-and-merge gate, repaired by `motir fix` — on a project
+   * where the reader holds `work_item:edit` (the Run hosted rule). Decided only by the To
+   * fix read; `false` on every other tab's rows.
+   */
+  canFixHosted: boolean;
+  /** The OPEN repair on a sent-back row — the lock that replaces both repairs while it
+   *  runs (`hosted-agent-run.md` §8.6). Read only by the To fix read; `null` elsewhere. */
+  repairRun: OpenRepairRunDto | null;
   priority: WorkItemPriorityDto;
   assigneeId: string | null;
   reporterId: string;

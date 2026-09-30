@@ -3508,8 +3508,10 @@ export const workItemsService = {
     //     subject before it moves.
     // Under the locks taken at the top, in the door's order (rule 8).
     if (
-      awaitingGates.some(
-        (gate) => gate.kind === 'pull_request_approval' || gate.kind === 'acceptance_result',
+      awaitingGates.some((gate) =>
+        (['pull_request_approval', 'agent_review', 'acceptance_result'] as const).some(
+          (kind) => gate.kind === kind,
+        ),
       ) &&
       target.category !== 'done' &&
       toStatusKey !== IN_REVIEW_STATUS_KEY &&

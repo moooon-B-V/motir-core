@@ -416,3 +416,35 @@ describe('a run that DIED (MOTIR-6534 · design `design/runs` § Run died, Panel
     expect(screen.queryByText('Run died')).toBeNull();
   });
 });
+
+describe('a REVIEW run is never the card’s current run (MOTIR-1626)', () => {
+  // A review reads the pull requests and returns a verdict; it builds nothing and holds no
+  // card (`hosted-agent-run.md` §8.1 / §8.3). So a review running on a card whose build
+  // finished opens no stream and draws no build phases — it is listed in the history,
+  // named by its own command, and the header speaks of the build.
+  const review = run({
+    id: 'run_review',
+    command: 'review',
+    origin: 'hosted',
+    status: 'running',
+    stopReason: null,
+    endedAt: null,
+    lastHeartbeatAt: new Date().toISOString(),
+    startedAt: '2026-08-29T15:00:00.000Z',
+  });
+  const build = run({ id: 'run_build', status: 'succeeded' });
+
+  it('a live review over a finished build opens nothing, and the header is the build’s', async () => {
+    mount([review, build]);
+    await Promise.resolve();
+    expect(streamCalls()).toEqual([]);
+    expect(requested().some((u) => u.includes('run_review'))).toBe(false);
+    expect(screen.getAllByText('Succeeded').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the review in the history, named as a review', () => {
+    mount([review, build]);
+    expect(screen.getByRole('link', { name: 'motir review' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'motir run' })).toBeTruthy();
+  });
+});

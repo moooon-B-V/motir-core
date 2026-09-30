@@ -1,0 +1,190 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`assembleReviewPrompt > a two-repository card: both PRs at their reviewed heads, criteria, How to test, limits, verdict 1`] = `
+"You are REVIEWING the delivered code of ACME-7 — "Show the widget count in the header and the API" (Acme).
+
+Motir asks you one question: is this code right for THIS card? Judge the change against
+what the card asked for — its description, its acceptance criteria and its How to test —
+not against what you would have built. You decide it alone, and your verdict is recorded
+as the review agent’s, before any person is asked to approve the merge.
+────────────────────────────────────────────────────────────────────────
+
+THE CARD
+
+  ACME-7 — Show the widget count in the header and the API
+
+  The header shows how many widgets the workspace holds, read from the API.
+
+ACCEPTANCE CRITERIA
+
+  - \`GET /api/widgets/count\` answers \`{ count }\`.
+  - The header renders the count; a zero renders \`0\`, never blank.
+
+WHY IT MATTERS (the card’s explanation)
+
+  People keep asking how many widgets they have.
+
+HOW TO TEST (as published for this card)
+
+  1. Open \`/\`.
+  2. The header reads **Widgets: 0**.
+
+THE CODE — 2 pull requests, ONE review over all of them
+
+  Review each pull request at its REVIEWED head below — never a later commit. If the
+  branch has moved on, that is not yours to review: review the head named here.
+
+  - moooon/acme-api #12 — The count endpoint
+      https://github.com/moooon/acme-api/pull/12
+      reviewed head: aaa111
+      base: main · branch: subtask/ACME-7-api
+      the change:    git fetch origin main aaa111 && git diff origin/main...aaa111
+  - moooon/acme-web #34 — The header count
+      https://github.com/moooon/acme-web/pull/34
+      reviewed head: bbb222
+      base: develop · branch: subtask/ACME-7-web
+      the change:    git fetch origin develop bbb222 && git diff origin/develop...bbb222
+
+HOW TO REVIEW
+
+  - Read the whole diff of every pull request above, and enough of the surrounding
+    code to judge it.
+  - Check it against EACH acceptance criterion: is it met, and is it tested?
+  - Look for defects the change introduces: wrong behaviour, a missed case the card
+    names, broken error handling, a security hole, a regression in code it touches.
+  - Report what must change for the card to be right. Style preferences that no
+    criterion or written standard asks for are not findings.
+  - If a finding relies on a written standard, QUOTE the rule it breaks.
+
+YOU ARE READ-ONLY
+
+  - Push NOTHING. Do not commit, amend, rebase or push to any branch.
+  - Post NOTHING to GitHub — no review, no comment, no check, no label.
+  - Change no status and write nothing else in Motir. Your verdict is your only output.
+
+YOUR VERDICT — submit exactly ONE
+
+  POST /api/v1/work-items/ACME-7/agent-review
+
+  {
+    "subjectVersion": "moooon/acme-api#12@aaa111,moooon/acme-web#34@bbb222",
+    "verdict": "pass" | "changes_requested",
+    "summaryMd": "<at most 500 characters: what you concluded>",
+    "findingsMd": "<Markdown findings>"
+  }
+
+  - \`subjectVersion\` is EXACTLY the string above: the version you reviewed.
+  - \`pass\` — the code meets the card. \`findingsMd\` is optional (minor notes only).
+  - \`changes_requested\` — something must change. \`findingsMd\` is REQUIRED: one
+    finding per item, each naming the FILE and LINE, the criterion (or quoted rule)
+    it breaks, and WHAT TO CHANGE.
+  - One verdict per review. A second is refused. If the code moved while you were
+    reviewing, your verdict is recorded and decides nothing — that is expected.
+"
+`;
+
+exports[`assembleReviewPrompt — CODING CONVENTIONS > a two-repository card, one present and one absent: both entries and the instruction block 1`] = `
+"You are REVIEWING the delivered code of ACME-7 — "Show the widget count in the header and the API" (Acme).
+
+Motir asks you one question: is this code right for THIS card? Judge the change against
+what the card asked for — its description, its acceptance criteria and its How to test —
+not against what you would have built. You decide it alone, and your verdict is recorded
+as the review agent’s, before any person is asked to approve the merge.
+────────────────────────────────────────────────────────────────────────
+
+THE CARD
+
+  ACME-7 — Show the widget count in the header and the API
+
+  The header shows how many widgets the workspace holds, read from the API.
+
+ACCEPTANCE CRITERIA
+
+  - \`GET /api/widgets/count\` answers \`{ count }\`.
+  - The header renders the count; a zero renders \`0\`, never blank.
+
+WHY IT MATTERS (the card’s explanation)
+
+  People keep asking how many widgets they have.
+
+HOW TO TEST (as published for this card)
+
+  1. Open \`/\`.
+  2. The header reads **Widgets: 0**.
+
+THE CODE — 2 pull requests, ONE review over all of them
+
+  Review each pull request at its REVIEWED head below — never a later commit. If the
+  branch has moved on, that is not yours to review: review the head named here.
+
+  - moooon/acme-api #12 — The count endpoint
+      https://github.com/moooon/acme-api/pull/12
+      reviewed head: aaa111
+      base: main · branch: subtask/ACME-7-api
+      the change:    git fetch origin main aaa111 && git diff origin/main...aaa111
+  - moooon/acme-web #34 — The header count
+      https://github.com/moooon/acme-web/pull/34
+      reviewed head: bbb222
+      base: develop · branch: subtask/ACME-7-web
+      the change:    git fetch origin develop bbb222 && git diff origin/develop...bbb222
+
+CODING CONVENTIONS
+
+  How code is written in each repository, as Motir has derived it. How to use them:
+  - Treat each convention below as a standard for the code the pull request CHANGES.
+    A finding that relies on one QUOTES the rule it breaks.
+  - Where the card’s acceptance criteria explicitly require something a convention
+    forbids, the card wins: say so in your summary rather than sending it back.
+  - Code the pull request did not touch is never a finding.
+  - If a repository’s checkout has a CLAUDE.md or AGENTS.md at its root, read it as
+    the same kind of standard. If it has neither, that is not a finding and is not
+    mentioned.
+  - A missing convention is never a reason to return \`changes_requested\`.
+
+  moooon/acme-api — Motir's coding convention, version 3
+
+    # House rules
+
+    - Route → Service → Repository.
+    - Errors are typed.
+
+  moooon/acme-web
+    No coding convention is recorded for this repository. Review it against the card only.
+
+HOW TO REVIEW
+
+  - Read the whole diff of every pull request above, and enough of the surrounding
+    code to judge it.
+  - Check it against EACH acceptance criterion: is it met, and is it tested?
+  - Look for defects the change introduces: wrong behaviour, a missed case the card
+    names, broken error handling, a security hole, a regression in code it touches.
+  - Report what must change for the card to be right. Style preferences that no
+    criterion or written standard asks for are not findings.
+  - If a finding relies on a written standard, QUOTE the rule it breaks.
+
+YOU ARE READ-ONLY
+
+  - Push NOTHING. Do not commit, amend, rebase or push to any branch.
+  - Post NOTHING to GitHub — no review, no comment, no check, no label.
+  - Change no status and write nothing else in Motir. Your verdict is your only output.
+
+YOUR VERDICT — submit exactly ONE
+
+  POST /api/v1/work-items/ACME-7/agent-review
+
+  {
+    "subjectVersion": "moooon/acme-api#12@aaa111,moooon/acme-web#34@bbb222",
+    "verdict": "pass" | "changes_requested",
+    "summaryMd": "<at most 500 characters: what you concluded>",
+    "findingsMd": "<Markdown findings>"
+  }
+
+  - \`subjectVersion\` is EXACTLY the string above: the version you reviewed.
+  - \`pass\` — the code meets the card. \`findingsMd\` is optional (minor notes only).
+  - \`changes_requested\` — something must change. \`findingsMd\` is REQUIRED: one
+    finding per item, each naming the FILE and LINE, the criterion (or quoted rule)
+    it breaks, and WHAT TO CHANGE.
+  - One verdict per review. A second is refused. If the code moved while you were
+    reviewing, your verdict is recorded and decides nothing — that is expected.
+"
+`;

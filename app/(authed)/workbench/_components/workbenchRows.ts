@@ -3,6 +3,7 @@ import type { HomeWorkItemRowDto } from '@/lib/dto/home';
 import type { StatusCategoryDto, WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
+import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
 
 // Pure view-shaping for `/workbench` (Story MOTIR-2649 · MOTIR-2653, renamed
 // and widened by Story MOTIR-4777 · MOTIR-4782) — the
@@ -70,6 +71,10 @@ export interface WorkbenchRowView {
   fix: { reason: WorkItemFixReasonDto; detail: FixDetailDto } | null;
   /** The row may offer Continue hosted (MOTIR-6882) — see `HomeWorkItemRowDto`. */
   canContinueHosted: boolean;
+  /** The row may offer *Fix on the hosted agent* (MOTIR-6930) — see `HomeWorkItemRowDto`. */
+  canFixHosted: boolean;
+  /** The open repair on a sent-back row, or null (MOTIR-6930). */
+  repairRun: OpenRepairRunDto | null;
 }
 
 /**
@@ -122,6 +127,8 @@ export function toWorkbenchRowViews(
           ? { reason: row.fixReason, detail: row.fixDetail }
           : null,
       canContinueHosted: row.canContinueHosted,
+      canFixHosted: row.canFixHosted,
+      repairRun: row.repairRun,
     };
   });
 }
