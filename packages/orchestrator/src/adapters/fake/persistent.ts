@@ -115,6 +115,18 @@ export interface FakePersistentControls {
 }
 
 const STATE_PATH_ENV = 'MOTIR_FAKE_PERSISTENT_STATE_PATH';
+/**
+ * THE EXEC BRIDGE (Story MOTIR-6864 · MOTIR-7031): an HTTP endpoint that runs an
+ * `exec` on the machine's stand-in and answers its result. When it is set, an
+ * `exec` nothing scripted is POSTed there as `{machineId, command, stdin?,
+ * timeoutSeconds?}` and answered `{exitCode, stdout, stderr}` — which is how the
+ * E2E lane's web server and job worker reach the terminal host the lane runs per
+ * fake machine (`tests/e2e/_helpers/agent-terminal/host.ts`), so the launcher,
+ * the sign-in query and the stop are the real commands. A scripted answer
+ * ({@link FakePersistentControls.setNextExecResult} / `setExecResponder`) still
+ * wins; absent both, an exec answers exit 0 with nothing, as before.
+ */
+const EXEC_URL_ENV = 'MOTIR_FAKE_EXEC_URL';
 /** Where agents' terminals resolve, across processes (the E2E web server and its relay). */
 const TERMINAL_URL_ENV = 'MOTIR_FAKE_TERMINAL_URL';
 const DEFAULT_TERMINAL_BASE = 'ws://127.0.0.1:7681';
@@ -501,10 +513,14 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
         ...(options.stdin !== undefined ? { stdin: options.stdin } : {}),
       });
       operations.push(`machine:exec:${handle.machineId}`);
-      const result = nextExec ??
-        execResponder?.(command, options.stdin) ?? { exitCode: 0, stdout: '', stderr: '' };
+      const scripted = nextExec ?? execResponder?.(command, options.stdin) ?? null;
       nextExec = null;
-      return result;
+      if (scripted) return scripted;
+      const bridge = process.env[EXEC_URL_ENV];
+      if (bridge !== undefined && bridge !== '') {
+        return bridgeExec(bridge, handle.machineId, command, options);
+      }
+      return { exitCode: 0, stdout: '', stderr: '' };
     },
 
     async ensureMachineConfig(
@@ -548,6 +564,41 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       save();
     },
   };
+
+/** Run one exec on the bridge (see {@link EXEC_URL_ENV}); its failures are the provider's. */
+async function bridgeExec(
+  url: string,
+  machineId: string,
+  command: readonly string[],
+  options: { timeoutSeconds?: number; stdin?: string },
+): Promise<PersistentExecResult> {
+  const timeoutMs = ((options.timeoutSeconds ?? 60) + 5) * 1000;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        machineId,
+        command,
+        ...(options.stdin !== undefined ? { stdin: options.stdin } : {}),
+        ...(options.timeoutSeconds !== undefined ? { timeoutSeconds: options.timeoutSeconds } : {}),
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new OrchestratorApiError('fake', 502, `the exec bridge did not answer: ${detail}`);
+  }
+  const text = await res.text();
+  if (!res.ok) throw new OrchestratorApiError('fake', res.status, text.slice(0, 300));
+  const body = JSON.parse(text) as Partial<PersistentExecResult>;
+  return {
+    exitCode: typeof body.exitCode === 'number' ? body.exitCode : -1,
+    stdout: typeof body.stdout === 'string' ? body.stdout : '',
+    stderr: typeof body.stderr === 'string' ? body.stderr : '',
+  };
+}
 
 /** Strip trailing `/`s without a backtracking regex (CodeQL js/polynomial-redos). */
 function trimTrailingSlashes(value: string): string {

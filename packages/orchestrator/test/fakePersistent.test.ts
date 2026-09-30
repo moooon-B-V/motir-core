@@ -221,6 +221,75 @@ describe('exec (MOTIR-6872)', () => {
     fake.destroyOutside(h.machineId);
     await expect(fake.exec(h, ['true'])).rejects.toThrow(/not running/);
   });
+
+  describe('the exec bridge (MOTIR-7031)', () => {
+    afterEach(() => vi.unstubAllEnvs());
+
+    async function withBridge(
+      answer: (body: Record<string, unknown>) => { status: number; json: unknown },
+      body: (url: string, seen: Record<string, unknown>[]) => Promise<void>,
+    ): Promise<void> {
+      const seen: Record<string, unknown>[] = [];
+      const server = createServer((req, res) => {
+        let raw = '';
+        req.on('data', (chunk: Buffer) => (raw += chunk.toString('utf8')));
+        req.on('end', () => {
+          const parsed = JSON.parse(raw) as Record<string, unknown>;
+          seen.push(parsed);
+          const { status, json } = answer(parsed);
+          res.statusCode = status;
+          res.end(JSON.stringify(json));
+        });
+      });
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const { port } = server.address() as AddressInfo;
+      try {
+        await body(`http://127.0.0.1:${port}/exec`, seen);
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      }
+    }
+
+    it('posts an unscripted exec to MOTIR_FAKE_EXEC_URL and answers its result', async () => {
+      const h = await fake.provisionPersistent(SPEC);
+      await withBridge(
+        () => ({ status: 200, json: { exitCode: 0, stdout: '{"session":"s-1"}\n', stderr: '' } }),
+        async (url, seen) => {
+          vi.stubEnv('MOTIR_FAKE_EXEC_URL', url);
+          const result = await fake.exec(h, ['motir', 'agent-terminal', 'run'], {
+            stdin: '{"token":"t"}',
+            timeoutSeconds: 30,
+          });
+          expect(result).toEqual({ exitCode: 0, stdout: '{"session":"s-1"}\n', stderr: '' });
+          expect(seen).toEqual([
+            {
+              machineId: h.machineId,
+              command: ['motir', 'agent-terminal', 'run'],
+              stdin: '{"token":"t"}',
+              timeoutSeconds: 30,
+            },
+          ]);
+          // A scripted answer still wins over the bridge.
+          fake.setNextExecResult({ exitCode: 7, stdout: '', stderr: '' });
+          expect((await fake.exec(h, ['true'])).exitCode).toBe(7);
+          expect(seen).toHaveLength(1);
+        },
+      );
+    });
+
+    it("turns the bridge's refusal, or its silence, into the provider's error", async () => {
+      const h = await fake.provisionPersistent(SPEC);
+      await withBridge(
+        () => ({ status: 409, json: { error: 'machine is not booted' } }),
+        async (url) => {
+          vi.stubEnv('MOTIR_FAKE_EXEC_URL', url);
+          await expect(fake.exec(h, ['true'])).rejects.toThrow(OrchestratorApiError);
+        },
+      );
+      vi.stubEnv('MOTIR_FAKE_EXEC_URL', 'http://127.0.0.1:1/exec');
+      await expect(fake.exec(h, ['true'])).rejects.toThrow(/exec bridge did not answer/);
+    });
+  });
 });
 
 describe('the terminal (agent-terminal.md Q2, Q8 · MOTIR-6939)', () => {
