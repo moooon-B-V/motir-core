@@ -80,3 +80,49 @@ export class AgentInstancesUnavailableError extends Error {
     this.name = 'AgentInstancesUnavailableError';
   }
 }
+
+/**
+ * The agent's image has no terminal server (`agent-terminal.md` Q3, Q8): it was
+ * made before the terminal existed. Recorded on the instance by the boot probe
+ * (`terminalServer: 'absent'` on its DTO); the terminal ticket refuses with it.
+ * The agent stays usable otherwise — moving it to a newer image is MOTIR-6862's.
+ */
+export class AgentInstanceNoTerminalServerError extends Error {
+  readonly code = 'no_terminal_server' as const;
+  constructor(readonly instanceId: string) {
+    super('This agent was made before the terminal existed, so its image has no terminal to open.');
+    this.name = 'AgentInstanceNoTerminalServerError';
+  }
+}
+
+/**
+ * The terminal ticket's ownership refusal (`agent-terminal.md` Q3, MOTIR-6940):
+ * the caller does not own this agent — whatever their role, a manager's
+ * included (`agent-instances.md` §8). ALSO the answer for an agent that does not
+ * exist or is deleted, so the refusal leaks nothing about someone else's agent:
+ * the same `not_owner` for all three, as the other instance routes answer
+ * `agent_instance_not_found` for all three.
+ */
+export class AgentTerminalNotOwnerError extends Error {
+  readonly code = 'not_owner' as const;
+  constructor(readonly instanceId: string) {
+    super('Only the person who made this agent can open its terminal.');
+    this.name = 'AgentTerminalNotOwnerError';
+  }
+}
+
+/**
+ * The terminal ticket's state refusal (`agent-terminal.md` Q3, Q6): the agent is
+ * not `running`. The panel wakes it through the existing Wake route and asks
+ * again — the relay never wakes anything, so waking stays in one place.
+ */
+export class AgentInstanceNotRunningError extends Error {
+  readonly code = 'not_running' as const;
+  constructor(
+    readonly instanceId: string,
+    readonly state: string,
+  ) {
+    super(`This agent is ${state}. Wake it to open its terminal.`);
+    this.name = 'AgentInstanceNotRunningError';
+  }
+}

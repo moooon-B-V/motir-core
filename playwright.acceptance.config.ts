@@ -230,6 +230,27 @@ process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS'] ??= '25000';
 // durable job — see `hostedRunSeamEnv` in `tests/e2e/_helpers/job-worker-process.ts`.
 process.env['E2E_JOB_WORKER_HOSTED_RUN_SEAM'] ??= '1';
 
+// ── The AGENT TERMINAL (Story MOTIR-6861 · MOTIR-6943) ───────────────────────
+//
+// A browser reaches an agent's shell through two more processes
+// (`docs/decisions/agent-terminal.md` Q1–Q4), so this lane starts both as
+// webServers below: the REAL relay (`scripts/relay.ts`, built as the image
+// builds it) and the fake fleet's terminal servers
+// (`tests/e2e/_helpers/agent-terminal/host.ts` — `packages/cli`'s real server,
+// one per fake machine, on a Python PTY so CI needs no node-pty build).
+//
+// The master key is set on the RUNNER as well as the web server: the job worker
+// inherits the runner's env, and the boot settle it runs probes the terminal
+// server only while the terminal is configured. Setting it turns the terminal ON
+// for the whole lane — machines get the terminal config, and the fake's `exec`
+// answers the probe with exit 0 — which changes nothing an older spec asserts.
+const RELAY_PORT = Number(process.env['E2E_RELAY_PORT'] ?? 3291);
+const TERMINAL_HOST_PORT = Number(process.env['MOTIR_E2E_TERMINAL_HOST_PORT'] ?? 3292);
+process.env['MOTIR_TERMINAL_MASTER_KEY'] ??= 'e2e-acceptance-terminal-master-key-0123456789';
+process.env['MOTIR_RELAY_URL'] ??= `ws://localhost:${RELAY_PORT}/v1/terminal`;
+process.env['MOTIR_FAKE_TERMINAL_URL'] ??= `ws://127.0.0.1:${TERMINAL_HOST_PORT}`;
+process.env['MOTIR_E2E_TERMINAL_HOST_PORT'] ??= String(TERMINAL_HOST_PORT);
+
 /** The Studio App's credentials. The private key is GENERATED per run rather than
  *  committed: `createAppJwt` really signs RS256 with it (the shipped path runs
  *  unchanged), and a PEM in the repo is a secret-scanner finding for no benefit.
@@ -459,6 +480,42 @@ export default defineConfig({
         E2E_TEST_OAUTH: '1',
         GITHUB_APP_CLIENT_ID: E2E_GITHUB_CLIENT_ID,
         GITHUB_APP_CLIENT_SECRET: E2E_GITHUB_CLIENT_SECRET,
+        // The agent terminal (see "The AGENT TERMINAL" above): the ticket route
+        // needs the master key, and hands the browser the lane's relay.
+        MOTIR_TERMINAL_MASTER_KEY: process.env['MOTIR_TERMINAL_MASTER_KEY']!,
+        MOTIR_RELAY_URL: process.env['MOTIR_RELAY_URL']!,
+      },
+    },
+    {
+      // The terminal relay, from the SAME bundle the `motir-relay` app runs. It
+      // dials agents through the fake adapter (MOTIR_FAKE_TERMINAL_URL) and
+      // accepts only this lane's Origin.
+      command: 'pnpm run build:relay && node .relay/relay.mjs',
+      port: RELAY_PORT,
+      reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
+      timeout: 120_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        PORT: String(RELAY_PORT),
+        MOTIR_BASE_URL: BASE_URL,
+        MOTIR_TERMINAL_MASTER_KEY: process.env['MOTIR_TERMINAL_MASTER_KEY']!,
+        MOTIR_FLEET_ORCHESTRATOR: process.env['MOTIR_FLEET_ORCHESTRATOR']!,
+        MOTIR_FAKE_TERMINAL_URL: process.env['MOTIR_FAKE_TERMINAL_URL']!,
+        MOTIR_FAKE_PERSISTENT_STATE_PATH: process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH']!,
+      },
+    },
+    {
+      // The fake fleet's terminal servers — what each agent's machine would run.
+      command: 'pnpm exec tsx tests/e2e/_helpers/agent-terminal/host.ts',
+      port: TERMINAL_HOST_PORT,
+      reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
+      timeout: 60_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        MOTIR_E2E_TERMINAL_HOST_PORT: String(TERMINAL_HOST_PORT),
+        MOTIR_FAKE_PERSISTENT_STATE_PATH: process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH']!,
       },
     },
   ],

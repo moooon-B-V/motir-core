@@ -9,6 +9,8 @@ import type {
   PersistentContainerState,
   PersistentContainerStatus,
   PersistentExecResult,
+  PersistentTerminalConfig,
+  PersistentTerminalEndpoint,
 } from '../../types';
 
 // The FAKE adapter's PERSISTENT half (Story MOTIR-6860 · MOTIR-6869) — the
@@ -37,6 +39,10 @@ interface FakePersistentMachine {
   startedAt: string | null;
   stoppedAt: string | null;
   starts: number;
+  /** The terminal machine-config version the machine was last written with; 0 = none (Q8). */
+  configVersion: number;
+  /** The key id stamped beside it. */
+  keyId?: string | null;
 }
 
 interface FakeStore {
@@ -88,9 +94,20 @@ export interface FakePersistentControls {
   readonly execs: Array<{ machineId: string; command: string[] }>;
   /** What the next `exec` returns (default: exit 0, empty output). */
   setNextExecResult(result: PersistentExecResult): void;
+  /**
+   * The base address (`ws://host:port`) every agent's terminal resolves to — a
+   * terminal server the test or the E2E lane started locally. Null restores the
+   * default: `MOTIR_FAKE_TERMINAL_URL`, else `ws://127.0.0.1:7681`.
+   */
+  setTerminalAddress(base: string | null): void;
+  /** The machine's stamped terminal config version (0 when it carries none). */
+  machineConfigVersion(machineId: string): number;
 }
 
 const STATE_PATH_ENV = 'MOTIR_FAKE_PERSISTENT_STATE_PATH';
+/** Where agents' terminals resolve, across processes (the E2E web server and its relay). */
+const TERMINAL_URL_ENV = 'MOTIR_FAKE_TERMINAL_URL';
+const DEFAULT_TERMINAL_BASE = 'ws://127.0.0.1:7681';
 
 let store: FakeStore = { apps: [], machines: {}, volumes: {}, sequence: 0 };
 const persistentSpecs: PersistentContainerSpec[] = [];
@@ -106,6 +123,7 @@ const failures: Record<FailureKind, string | null> = {
   destroy: null,
 };
 let bootBehaviour: 'start' | 'never_start' = 'start';
+let terminalBase: string | null = null;
 let now: () => Date = () => new Date();
 
 function statePath(): string | null {
@@ -208,6 +226,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       for (const key of Object.keys(failures) as Array<keyof typeof failures>) failures[key] = null;
       writeSharedFailures({});
       bootBehaviour = 'start';
+      terminalBase = null;
       now = () => new Date();
     },
     failNextProvision(detail = 'the fake refused to provision') {
@@ -261,6 +280,12 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
     },
     setNextExecResult(result) {
       nextExec = result;
+    },
+    setTerminalAddress(base) {
+      terminalBase = base;
+    },
+    machineConfigVersion(machineId) {
+      return machineOrThrow(machineId).configVersion ?? 0;
     },
     liveMachineIds() {
       load();
@@ -333,6 +358,8 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
         startedAt: boots ? createdAt.toISOString() : null,
         stoppedAt: null,
         starts: 1,
+        configVersion: spec.terminal?.version ?? 0,
+        keyId: spec.terminal?.keyId ?? null,
       };
       store.volumes[volumeId]!.attachedMachineId = machineId;
       operations.push(`machine:create:${machineId}`);
@@ -459,6 +486,35 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       return result;
     },
 
+    async ensureMachineConfig(
+      handle: PersistentContainerHandle,
+      terminal: PersistentTerminalConfig,
+    ): Promise<'updated' | 'current'> {
+      load();
+      const machine = store.machines[handle.machineId];
+      if (!machine)
+        throw new OrchestratorApiError('fake', 404, `machine ${handle.machineId} is gone`);
+      const stamped = machine.configVersion ?? 0;
+      if (stamped > terminal.version) return 'current';
+      if (stamped === terminal.version && machine.keyId === terminal.keyId) return 'current';
+      // Fly's `skip_launch`: the config changes, the machine's state does not.
+      machine.spec = { ...machine.spec, terminal };
+      machine.configVersion = terminal.version;
+      machine.keyId = terminal.keyId;
+      operations.push(`machine:update:${handle.machineId}`);
+      save();
+      return 'updated';
+    },
+
+    terminalEndpoint(handle: PersistentContainerHandle): PersistentTerminalEndpoint {
+      const env = process.env[TERMINAL_URL_ENV];
+      const base = terminalBase ?? (env !== undefined && env !== '' ? env : DEFAULT_TERMINAL_BASE);
+      return {
+        url: `${trimTrailingSlashes(base)}/v1/terminal`,
+        headers: { 'x-motir-machine-id': handle.machineId },
+      };
+    },
+
     async destroyMachine(_app: string, machineId: string): Promise<void> {
       load();
       if (store.machines[machineId]) {
@@ -471,3 +527,10 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       save();
     },
   };
+
+/** Strip trailing `/`s without a backtracking regex (CodeQL js/polynomial-redos). */
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+}

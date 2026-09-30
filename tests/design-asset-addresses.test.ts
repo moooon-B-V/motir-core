@@ -1088,6 +1088,16 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     file: 'design/platform-admin/design-notes.md',
     address: '/admin/orgs',
     why: 'The route this asset says must NOT exist — cited only to record the choice against it (the rail already reserves `/admin/tenants`, so a sibling `orgs` route would leave the reserved row pointing at nothing). PERMANENT, with no delete-me instruction: if `app/(admin)/admin/orgs/` ever lands, the asset is wrong rather than this row.',
+  }, // ── My agents (Story MOTIR-6860 · MOTIR-6868, and MOTIR-6861 · MOTIR-6937) ──
+  {
+    file: 'design/my-agents/design-notes.md',
+    address: '/instances',
+    why: 'HISTORY: the revision table records that the page was first drawn at `/instances` and renamed to `/my-agents` (revision 2, after changes were requested on the word). The row says what the address WAS, never where to go. PERMANENT: if `/instances` ever becomes a page, the table is still right about revision 1.',
+  },
+  {
+    file: 'design/my-agents/design-notes.md',
+    address: '/login',
+    why: "Not an address: Claude Code's own `/login` slash command, typed in the agent's terminal to sign in (docs/decisions/agent-terminal.md Q9: the sign-in completes through the vendor's own flow). The panel's not-signed-in line quotes it verbatim. PERMANENT.",
   },
 ];
 
@@ -2114,7 +2124,26 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   //    they carried a delete-me instruction for the moment the parent landed.
   //    The design merged first, so the assets and the ADR now sit on ONE branch
   //    and the citations resolve — `carries no KNOWN_PATHS entry that has
-  //    stopped applying` is what said so, on the run that merged them.
+  //    stopped applying` is what said so, on the run that merged them.  // ── The My agents list mock is PUBLISHED, not committed (MOTIR-6868) ─────
+  //  MOTIR-6868's design result was published from `f953bda2b` on
+  //  `parent/MOTIR-6860-agent-instances` and its two files never landed on a
+  //  branch; `docs/decisions/design-result.md` AMENDMENT 5 Q1 makes the published
+  //  result the source of truth and committing optional. MOTIR-6937's delta
+  //  amends it and must cite it BY PATH (CLAUDE.md: a delta cites the mock it
+  //  amends), and the read door (`get_design MOTIR-6868`, or `list_designs` with
+  //  `pathPrefix: design/my-agents/`) resolves that path. DELETE-ME: if the base
+  //  mock is ever committed, `carries no KNOWN_PATHS entry that has stopped
+  //  applying` turns red and these two rows go.
+  {
+    file: 'design/my-agents/design-notes.md',
+    path: 'design/my-agents/my-agents.mock.html',
+    why: "MOTIR-6868's published (never committed) list mock, which the panel delta amends and cites by path — resolved through the design-result read door, not the tree.",
+  },
+  {
+    file: 'design/my-agents/my-agents--panel.mock.html',
+    path: 'design/my-agents/my-agents.mock.html',
+    why: "MOTIR-6868's published (never committed) list mock, which the panel delta amends and cites by path — resolved through the design-result read door, not the tree.",
+  },
 ];
 
 describe('a design asset — and the sources it mirrors — cite source paths that still exist', () => {
