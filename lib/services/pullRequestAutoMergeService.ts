@@ -3,7 +3,7 @@ import { getGitProvider } from '@/lib/git';
 import { providerSupportsMerge } from '@/lib/git/provider';
 import { MergeChangeRequestError } from '@/lib/git/errors';
 import type { GitProviderId, MergeRefusal, MergeRefusalCode } from '@/lib/git/types';
-import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import { getMessagesFor } from '@/lib/i18n/messages';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import type { PullRequestAutoMergeRequestedData } from '@/lib/jobs/types';
@@ -97,7 +97,7 @@ export const pullRequestAutoMergeService = {
     );
     if (!pr) return { outcome: 'skipped', reason: 'gone' };
     if (pr.state !== 'open' || pr.merged) return { outcome: 'skipped', reason: 'not_open' };
-    if (liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha !== data.headSha) {
+    if ((pullRequestHead(pr) ?? undefined) !== data.headSha) {
       return { outcome: 'skipped', reason: 'head_moved' };
     }
     const provider = getGitProvider(pr.repo.provider as GitProviderId);

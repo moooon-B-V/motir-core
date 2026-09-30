@@ -18,8 +18,7 @@ import { defineJob } from '../defineJob';
 // next tick, which is the same retry without re-visiting every org that finished.
 
 /**
- * Hourly, on the hour — a clustered minute, so it opens no new wake-minute. Hourly
- * rather than nightly so an erasure lands within the hour of the date every member
+ * Hourly, on the hour. Hourly rather than nightly so an erasure lands within the hour of the date every member
  * was told, and so a step that failed (motir-ai unreachable, a GitHub 500) is
  * retried within the hour instead of the next day.
  */

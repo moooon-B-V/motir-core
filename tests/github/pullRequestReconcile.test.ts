@@ -15,6 +15,7 @@ import {
   pullRequestReconcileService,
 } from '@/lib/services/pullRequestReconcileService';
 import { pullRequestReconcile } from '@/lib/jobs/definitions/pullRequestReconcile';
+import { mergeCandidateHead } from '@/lib/services/mergeGates';
 import { jobDefinitions } from '@/lib/jobs/registry';
 import { JobTestEngine } from '../helpers/jobs';
 import { adminDb } from '../helpers/adminDb';
@@ -710,6 +711,162 @@ describe('the sweep settles a member the host now reports conflicted (MOTIR-5914
     expect(
       await adminDb.approvalGate.count({ where: { workItemId: card.id, state: 'awaiting' } }),
     ).toBe(0);
+  });
+});
+
+// MOTIR-7005 — A PUSH THAT PRODUCED NO CI MOVES THE HEAD ANYWAY.
+//
+// The flap, as observed: a pull request green at A (card In Review, gate @A) gets a
+// push B that conflicts with its base. GitHub builds no merge ref for a conflicting
+// pull request, so no `pull_request` workflow runs and the check rows stay at A. Every
+// reconcile tick then stored `dirty @ B`, withdrew the question (card → Implemented),
+// and promoted it straight back — because the promotion read "the head" off the check
+// rows (A), discarded the reading as older, saw green, and raised a fresh gate @A.
+//
+// The fix stores the host's head, and every reader asks `pullRequestHead`: a head with
+// no check rows is not green, so the card stays put however many ticks pass.
+describe('a push that produced no CI is not green at its old commit (MOTIR-7005)', () => {
+  const SHA_A = 'a'.repeat(40);
+  const SHA_B = 'b'.repeat(40);
+
+  /** The `synchronize` delivery GitHub sends for a push to `m`'s branch. */
+  async function pushed(card: { identifier: string }, m: Member, headSha: string) {
+    const payload = deliveryPayload(m, `subtask/${card.identifier}-${m.number}`, {
+      action: 'synchronize',
+    });
+    payload.pull_request = hostPayload({
+      number: m.number,
+      state: 'open',
+      merged: false,
+      headRef: `subtask/${card.identifier}-${m.number}`,
+      baseRef: m.baseRef,
+      headSha,
+    });
+    await githubWebhookService.handleEvent('pull_request', payload);
+  }
+
+  /** What the host reports on the next tick: open, at `headSha`, with this reading. */
+  function hostAt(
+    card: { identifier: string },
+    m: Member,
+    headSha: string,
+    mergeableState: 'clean' | 'dirty',
+  ) {
+    host.set(`${m.repo}#${m.number}`, {
+      number: m.number,
+      state: 'open',
+      merged: false,
+      headRef: `subtask/${card.identifier}-${m.number}`,
+      baseRef: m.baseRef,
+      mergeable: mergeableState === 'clean',
+      mergeableState,
+      headSha,
+    });
+  }
+
+  async function greenAt(m: Member, commitSha: string) {
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: (await prRow(m)).id,
+        commitSha,
+        checkName: 'ci / vitest',
+        conclusion: 'success',
+      },
+    });
+  }
+
+  const awaitingGates = (workItemId: string) =>
+    adminDb.approvalGate.findMany({
+      where: { workItemId, kind: 'pull_request_approval', state: 'awaiting' },
+    });
+
+  /** The row as the merge-candidate predicate reads it. */
+  const candidateRow = async (m: Member) => {
+    const row = await prRow(m);
+    const checkRuns = await adminDb.githubCheckRun.findMany({ where: { pullRequestId: row.id } });
+    return { ...row, checkRuns, repo: { provider: 'github' } };
+  };
+
+  /** Green at A, promoted by the sweep, one gate asking about A. */
+  async function greenAndAskedAtA(email: string) {
+    const s = await makeScenario(email);
+    const card = await linkedCard(s, 'green at A', [CORE]);
+    await pushed(card, CORE, SHA_A);
+    await greenAt(CORE, SHA_A);
+    hostAt(card, CORE, SHA_A, 'clean');
+
+    await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+    expect(await statusOf(card.id)).toBe('in_review');
+    const gates = await awaitingGates(card.id);
+    expect(gates.map((g) => g.subjectVersion)).toEqual([
+      `moooon/motir-core#${CORE.number}@${SHA_A}`,
+    ]);
+    return card;
+  }
+
+  it('a conflicting push holds the card at Implemented across two reconcile passes, and asks nothing', async () => {
+    const card = await greenAndAskedAtA('reconcile-7005-flap@example.com');
+
+    // The push: GitHub delivers `synchronize` @B and runs NO CI, so the rows stay at A.
+    await pushed(card, CORE, SHA_B);
+    expect((await prRow(CORE)).headSha).toBe(SHA_B);
+    expect(await awaitingGates(card.id)).toEqual([]);
+
+    // Every tick reads the host: open, `dirty`, at B.
+    hostAt(card, CORE, SHA_B, 'dirty');
+    for (const pass of [1, 2]) {
+      const summary = await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+      expect(summary, `pass ${pass}`).toMatchObject({ stillOpen: 1, promoted: 0, gatesRaised: 0 });
+      expect(await statusOf(card.id), `pass ${pass}`).toBe('implemented');
+      expect(await awaitingGates(card.id), `pass ${pass}`).toEqual([]);
+      const row = await prRow(CORE);
+      expect([row.headSha, row.mergeableState, row.mergeableStateHeadSha]).toEqual([
+        SHA_B,
+        'dirty',
+        SHA_B,
+      ]);
+      // Green at A says nothing about B: not a merge candidate.
+      expect(mergeCandidateHead(await candidateRow(CORE))).toBeNull();
+    }
+  });
+
+  it('a clean push with no checks yet is not promotable either — and the gate, once owed, names the real head', async () => {
+    const card = await greenAndAskedAtA('reconcile-7005-no-checks@example.com');
+
+    await pushed(card, CORE, SHA_B);
+    hostAt(card, CORE, SHA_B, 'clean');
+    await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+    // Mergeable, but nothing has reported at B: the push withdrew the question @A and
+    // nothing asks again — the sweep's gate repair used to re-raise it @A, green-at-A.
+    // (The card's own column waits for B's CI to move it; a push alone never has.)
+    expect(await awaitingGates(card.id)).toEqual([]);
+    expect(mergeCandidateHead(await candidateRow(CORE))).toBeNull();
+
+    // B's checks arrive green: now it is promoted, and the question names B.
+    await greenAt(CORE, SHA_B);
+    await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+    expect(await statusOf(card.id)).toBe('in_review');
+    const gates = await awaitingGates(card.id);
+    expect(gates.map((g) => g.subjectVersion)).toEqual([
+      `moooon/motir-core#${CORE.number}@${SHA_B}`,
+    ]);
+    expect(mergeCandidateHead(await candidateRow(CORE))).toBe(SHA_B);
+  });
+
+  it('a reconcile read that learns the head moves it, when the push delivery was lost', async () => {
+    const card = await greenAndAskedAtA('reconcile-7005-lost-push@example.com');
+
+    // No `synchronize` ever arrives; the host has moved to B and conflicts there.
+    hostAt(card, CORE, SHA_B, 'dirty');
+    await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+    expect((await prRow(CORE)).headSha).toBe(SHA_B);
+    expect(await statusOf(card.id)).toBe('implemented');
+    expect(await awaitingGates(card.id)).toEqual([]);
   });
 });
 

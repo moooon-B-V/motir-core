@@ -10,7 +10,8 @@ import type {
   WorkItemRepairRefusal,
 } from '@/lib/dto/workItemRepair';
 import { isConflictedAtCurrentHead } from '@/lib/github/mergeability';
-import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { derivePrCiState } from '@/lib/github/prCiState';
+import { pullRequestHead, prCiStateAtHead, checkRowsAtHead } from '@/lib/github/pullRequestHead';
 import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -75,7 +76,9 @@ function ladderKeysOf(statuses: readonly WorkflowStatusDto[]) {
  * absence to report as *nothing is failing*.
  */
 async function standingExitsAtHead(
-  openRows: ReadonlyArray<{ pullRequest: { id: string; checkRuns: readonly GithubCheckRun[] } }>,
+  openRows: ReadonlyArray<{
+    pullRequest: { id: string; headSha: string | null; checkRuns: readonly GithubCheckRun[] };
+  }>,
   tx: Prisma.TransactionClient,
 ): Promise<GithubPullRequestQueueExit[]> {
   const exits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
@@ -85,7 +88,7 @@ async function standingExitsAtHead(
   const standing: GithubPullRequestQueueExit[] = [];
   for (const row of openRows) {
     const exit = exits.get(row.pullRequest.id);
-    const head = liveRowsAtLatestSha([...row.pullRequest.checkRuns])[0]?.commitSha;
+    const head = pullRequestHead(row.pullRequest) ?? undefined;
     // The RULE is `deliverySet.ts`'s, never re-derived here — the promotion hold reads
     // its narrower twin, and the two must not drift.
     if (queueExitStandsAtHead(exit, head)) standing.push(exit!);
@@ -136,7 +139,7 @@ function toRepairPullRequest(m: {
     // judged — so a give-up can say which check is still red.
     failingChecks: [
       ...new Set(
-        liveRowsAtLatestSha(row.pullRequest.checkRuns)
+        checkRowsAtHead(row.pullRequest)
           .filter((c) => c.conclusion === 'failure')
           .map((c) => c.checkName),
       ),
@@ -235,7 +238,7 @@ export async function evaluateRepair(
         pullRequests: openRows.map((row) =>
           toRepairPullRequest({
             row,
-            ci: derivePrCiState(row.pullRequest.checkRuns),
+            ci: prCiStateAtHead(row.pullRequest),
             exit: queueHeld.get(row.pullRequest.id) ?? null,
             conflicted: isConflictedAtCurrentHead(row.pullRequest),
           }),
@@ -280,7 +283,7 @@ export async function evaluateRepair(
         pullRequests: openRows.map((row) =>
           toRepairPullRequest({
             row,
-            ci: derivePrCiState(row.pullRequest.checkRuns),
+            ci: prCiStateAtHead(row.pullRequest),
             exit: queueHeld.get(row.pullRequest.id) ?? null,
             conflicted: isConflictedAtCurrentHead(row.pullRequest),
           }),
@@ -314,7 +317,7 @@ export async function evaluateRepair(
   // first (`renderFixPrompt`), which is exactly what resolving a conflict takes.
   const open = openRows.map((d) => ({
     row: d,
-    ci: derivePrCiState(d.pullRequest.checkRuns),
+    ci: prCiStateAtHead(d.pullRequest),
     exit: queueHeld.get(d.pullRequest.id) ?? null,
     conflicted: isConflictedAtCurrentHead(d.pullRequest),
   }));

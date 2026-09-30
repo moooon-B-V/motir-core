@@ -19,8 +19,7 @@ import { defineJob } from '../defineJob';
 // request is simply considered again on the next tick.
 
 /**
- * 09:00 every day — a clustered minute (`SCHEDULE_CLUSTER_MINUTES`), so it opens
- * no new wake-minute. The hour is the one choice here that is about PEOPLE rather
+ * 09:00 every day. The hour is the one choice here that is about PEOPLE rather
  * than load: a reminder is read by a person deciding whether to cancel, so it is
  * sent in a working morning (UTC) rather than in the nightly cascade.
  */

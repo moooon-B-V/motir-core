@@ -4,7 +4,8 @@ import type {
   GithubPullRequestQueueExit,
   Prisma,
 } from '@/generated/prisma/client';
-import { derivePrCiState, liveRowsAtLatestSha, type PrCiState } from '@/lib/github/prCiState';
+import type { PrCiState } from '@/lib/github/prCiState';
+import { prCiStateAtHead, pullRequestHead } from '@/lib/github/pullRequestHead';
 import { githubPullRequestMergeRefusalRepository } from '@/lib/repositories/githubPullRequestMergeRefusalRepository';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
@@ -51,6 +52,9 @@ export interface DeliveredPullRequest {
   repoId: string;
   state: string;
   merged: boolean;
+  /** The host's head (MOTIR-7005) — `lib/github/pullRequestHead.ts` reads it with
+   *  `checkRuns`, so a member whose rows are at an older commit is not green. */
+  headSha: string | null;
   checkRuns: GithubCheckRun[];
   /** The host's stored mergeability reading and its head (MOTIR-5913) —
    *  `lib/github/mergeability.ts` reads the pair. */
@@ -113,7 +117,7 @@ export async function collectDeliveries(
  * one indexed read and returns an empty map.
  */
 export async function standingQueueFailures(
-  byId: ReadonlyMap<string, { checkRuns: readonly GithubCheckRun[] }>,
+  byId: ReadonlyMap<string, { headSha: string | null; checkRuns: readonly GithubCheckRun[] }>,
   tx: Prisma.TransactionClient,
 ): Promise<Map<string, GithubPullRequestQueueExit>> {
   const exits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
@@ -122,7 +126,7 @@ export async function standingQueueFailures(
   );
   const held = new Map<string, GithubPullRequestQueueExit>();
   for (const [pullRequestId, exit] of exits) {
-    const head = liveRowsAtLatestSha([...byId.get(pullRequestId)!.checkRuns])[0]?.commitSha;
+    const head = pullRequestHead(byId.get(pullRequestId)!);
     if (queueExitHoldsAtHead(exit, head)) held.set(pullRequestId, exit);
   }
   return held;
@@ -141,7 +145,12 @@ export async function standingQueueFailures(
 export async function standingMergeRefusals(
   byId: ReadonlyMap<
     string,
-    { state: string; merged: boolean; checkRuns: readonly GithubCheckRun[] }
+    {
+      state: string;
+      merged: boolean;
+      headSha: string | null;
+      checkRuns: readonly GithubCheckRun[];
+    }
   >,
   tx: Prisma.TransactionClient,
 ): Promise<Map<string, GithubPullRequestMergeRefusal>> {
@@ -152,9 +161,9 @@ export async function standingMergeRefusals(
   const standing = new Map<string, GithubPullRequestMergeRefusal>();
   for (const [pullRequestId, refusal] of refusals) {
     const pr = byId.get(pullRequestId)!;
-    const head = liveRowsAtLatestSha([...pr.checkRuns])[0]?.commitSha;
+    const head = pullRequestHead(pr);
     const open = pr.state === 'open' && !pr.merged;
-    if (open && refusal.supersededAt === null && head !== undefined && refusal.headSha === head) {
+    if (open && refusal.supersededAt === null && head !== null && refusal.headSha === head) {
       standing.set(pullRequestId, refusal);
     }
   }
@@ -165,7 +174,8 @@ export async function standingMergeRefusals(
  *  give, plus whether its repository is able to report a check at all. */
 export interface ClassifiedDelivery {
   repoId: string;
-  /** `derivePrCiState` at this pull request's latest recorded sha. */
+  /** `prCiStateAtHead` — the verdict over the check rows AT this pull request's head,
+   *  `null` when the head has none (MOTIR-7005). */
   state: PrCiState;
   /** True when a `null` state means "this repository has no CI" rather than
    *  "nothing has reported yet" (`repoCannotReportChecks`). */
@@ -182,9 +192,10 @@ export interface ClassifiedDelivery {
  * Classify every member of a card's delivery set — the shared read BOTH verdicts
  * are folded from.
  *
- * The per-member verdict is `derivePrCiState`, the SAME function the Development
- * pill shows, so a card's badge and its own pull-request pills can never disagree
- * about one pull request.
+ * The per-member verdict is `prCiStateAtHead` — `derivePrCiState`'s precedence over
+ * the rows AT the pull request's stored head. A member pushed past its green rows
+ * (a push to a conflicting pull request gets no CI) therefore reads `null`, which the
+ * promotion withholds on and the card reads as `running` (MOTIR-7005).
  *
  * ⚠️ THE SECOND QUESTION IS ASKED ONLY OF THE MEMBERS THAT NEED IT (MOTIR-3823).
  * `derivePrCiState` returns `null` both for a repository that has no CI and for
@@ -209,7 +220,7 @@ export async function classifyDeliveries(
   const members = [...byId.entries()].map(([id, pr]) => ({
     id,
     repoId: pr.repoId,
-    state: derivePrCiState(pr.checkRuns),
+    state: prCiStateAtHead(pr),
     lifecycle: deliveryMemberState(pr),
   }));
 

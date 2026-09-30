@@ -560,9 +560,9 @@ export interface QueueExitFacts {
  * moves the head so the exit no longer names it. A `neutral` exit (a manual removal, a
  * cleared queue) says nothing about the work and never holds.
  *
- * `headSha` is the member's current head — the first live check row's commit
- * (`liveRowsAtLatestSha`), the rule the approval gate's `subjectVersion` is
- * written with. A member with no check rows has no head, and holds nothing.
+ * `headSha` is the member's current head — `pullRequestHead` (MOTIR-7005), the rule
+ * the approval gate's `subjectVersion` is written with. A member with no known head
+ * holds nothing.
  */
 export function queueExitHoldsAtHead(
   exit: QueueExitFacts | null | undefined,

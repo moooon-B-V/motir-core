@@ -443,6 +443,9 @@ export const githubPullRequestService = {
           // arrived, so there is nothing to resync in the first place — and the
           // delivery still to come is the authority that fills it in.
           draft: undefined,
+          // Nor is it asked the head commit (MOTIR-7005): the delivery still to come
+          // writes it, and until then `pullRequestHead` falls back to the check rows.
+          headSha: undefined,
         };
         try {
           prId = (await githubPullRequestRepository.upsert(row, tx)).id;
