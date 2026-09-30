@@ -30,9 +30,8 @@ import { defineJob } from '../defineJob';
 // tomorrow, which is the same retry with none of the blast radius.
 
 /**
- * 03:00 every day — a clustered minute (`lib/jobs/schedules.ts`'s
- * `SCHEDULE_CLUSTER_MINUTES`, so it opens no new wake-minute and the quiet gap
- * is untouched) and an hour of its own at the FRONT of the nightly cascade:
+ * 03:00 every day — an erasure's deadline is days, not minutes, so once a night
+ * is enough — and an hour of its own at the FRONT of the nightly cascade:
  * 03:00 here → 03:30 `system.attachment-gc` → 04:00 `system.rate-limit-sweep` →
  * 04:30 `system.automation-retention-sweep` → 05:00
  * `system.code-graph-offboard-sweep`.

@@ -19,7 +19,7 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
 import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
-import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { prCiStateAtHead, pullRequestHead } from '@/lib/github/pullRequestHead';
 import {
   classOfMergeRefusal,
   classOfQueueExit,
@@ -163,7 +163,7 @@ export async function gateSetFor(
         pullRequestId: delivery.githubPullRequestId,
         state: delivery.pullRequest.state,
         merged: delivery.pullRequest.merged,
-        ciState: derivePrCiState(delivery.pullRequest.checkRuns),
+        ciState: prCiStateAtHead(delivery.pullRequest),
       });
     }
     members.push({
@@ -195,7 +195,7 @@ export async function gateSetFor(
     tx,
   );
   const standingOutcomes = deliveries.flatMap((delivery) => {
-    const head = liveRowsAtLatestSha([...delivery.pullRequest.checkRuns])[0]?.commitSha;
+    const head = pullRequestHead(delivery.pullRequest);
     const outcomes: { at: Date; landingClass: LandingClass }[] = [];
     const exit = latestExits.get(delivery.githubPullRequestId);
     // The RULE is `deliverySet.ts`'s `queueExitStandsAtHead` — the promotion hold's own

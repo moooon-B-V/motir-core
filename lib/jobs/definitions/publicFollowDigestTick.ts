@@ -21,9 +21,8 @@ import { defineJob } from '../defineJob';
  *
  * ONE cadence, not a per-follower choice: a build-in-public project ships
  * continuously, so a daily mail is unsubscribe bait and a monthly one is not
- * "following the build". :00 is a clustered wake-minute (`lib/jobs/schedules.ts`)
- * and this job shares it deliberately — on a compute that suspends when idle,
- * every distinct wake-minute is billed, so sharing one is the goal.
+ * "following the build". Monday morning, so it lands at the start of a working
+ * week.
  */
 export const PUBLIC_FOLLOW_DIGEST_CRON = '0 9 * * 1';
 

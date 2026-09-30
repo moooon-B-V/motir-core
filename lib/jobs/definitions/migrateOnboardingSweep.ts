@@ -53,19 +53,10 @@ import { defineJob } from '../defineJob';
 // like every `system.*` job. The handler stays tiny — two durable steps, each
 // returning its summary for the run ledger.
 
-/** Every 30 minutes, ON the cluster. The index is minutes-scale and the approve
- *  race resolves the moment the marker lands, so a wedged run is still repaired
- *  well within the window a returning user would notice.
- *
- *  ⚠️ THE "staying clear of the top-of-hour ticks" HALF IS DELETED, NOT RELAXED
- *  (MOTIR-3314). Staying clear of the other schedules is right on an always-on
- *  machine and inverted on a compute that suspends when idle, where each distinct
- *  offset is another billed wake — see `lib/jobs/schedules.ts`.
- *
- *  WHAT IT GAVE UP: the repair window widened from 15 minutes to 30. It is paid
- *  by a user whose onboarding run wedged — rare, and already a recovery path
- *  rather than the normal one. WHAT IT BOUGHT: four private wake-minutes
- *  ({7,22,37,52}) collapse onto two shared ones. */
+/** Every 5 minutes — the one sub-hourly cadence (`SUB_HOURLY_CADENCE`,
+ *  `lib/jobs/schedules.ts`). The index is minutes-scale and the approve race
+ *  resolves the moment the marker lands, so a wedged onboarding run is repaired
+ *  within five minutes, well inside the window a returning user would notice. */
 export const MIGRATE_ONBOARDING_SWEEP_CRON = '*/5 * * * *';
 
 export const migrateOnboardingSweep = defineJob(

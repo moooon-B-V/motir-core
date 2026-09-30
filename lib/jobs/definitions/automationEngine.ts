@@ -131,13 +131,9 @@ export const automationEngineOnCommented = defineJob(
 
 /** 04:30 every day — off-peak, third in the nightly table-walk cascade (03:30
  * attachment GC → 04:00 rate-limit sweep → 04:30 here → 05:00 code-graph
- * offboard).
- *
- * ⚠️ RE-TIMED :15 → :30 (MOTIR-3314). The cadence is unchanged; the minute moved
- * onto `SCHEDULE_CLUSTER_MINUTES`. It gave up fifteen minutes of when and bought
- * a full HOUR of clearance from the rate-limit sweep, which it previously missed
- * by five minutes — so the "clear of its neighbours" property this comment
- * claimed is now true by a wider margin than when it was written. */
+ * offboard). Daily because the 90-day retention window is measured in days, and
+ * an hour of its own so it does not share the table-walk slot with the
+ * rate-limit sweep. */
 export const AUTOMATION_RETENTION_SWEEP_CRON = '30 4 * * *';
 
 // The 90-day execution-audit retention sweep (the 1.6.4 system-job + 5.2.7

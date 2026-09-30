@@ -22,7 +22,7 @@ import {
   workItemDeliveryRepository,
   type WorkItemDeliveryWithChecks,
 } from '@/lib/repositories/workItemDeliveryRepository';
-import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import { decisionIdentityOf, titleFromDecisionPath } from '@/lib/approvalGates/decisionSubject';
 import { planGateHeldOf } from '@/lib/approvalGates/planApprovalHandler';
 import { planRepository } from '@/lib/repositories/planRepository';
@@ -353,7 +353,7 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
       const member = {
         repo: `${delivery.repo.owner}/${delivery.repo.name}`,
         number: pr.number,
-        headSha: liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha ?? null,
+        headSha: pullRequestHead(pr),
         state: pr.merged ? 'merged' : pr.state === 'open' ? 'open' : 'closed',
       } satisfies PullRequestApprovalSubjectSummaryDTO['members'][number];
       const members = membersByItem.get(delivery.workItemId);
