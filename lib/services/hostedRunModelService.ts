@@ -1,6 +1,10 @@
 import 'server-only';
 
-import { getAgentModels, type AgentModel } from '@/lib/ai/motirAiClient';
+import {
+  getAgentModels,
+  type AgentModel,
+  type AgentModelDefaultsByDifficulty,
+} from '@/lib/ai/motirAiClient';
 import { HostedModelNotOfferedError, HostedModelsUnavailableError } from '@/lib/hostedRuns/errors';
 
 // THE ONE ANSWER TO "WHICH MODELS MAY A HOSTED RUN USE?" (MOTIR-6483;
@@ -23,7 +27,13 @@ import { HostedModelNotOfferedError, HostedModelsUnavailableError } from '@/lib/
 
 /** What the picker is handed: the offered models and the preselected one. */
 export type OfferedModels =
-  | { state: 'ok'; models: AgentModel[]; default: string | null }
+  | {
+      state: 'ok';
+      models: AgentModel[];
+      default: string | null;
+      /** motir-ai's platform default per difficulty level (MOTIR-6993). */
+      defaultsByDifficulty: AgentModelDefaultsByDifficulty;
+    }
   | { state: 'unavailable' };
 
 /**
@@ -48,7 +58,12 @@ export const hostedRunModelService = {
   async listOfferedModels(): Promise<OfferedModels> {
     const read = await getAgentModels();
     if (read.state === 'unavailable') return { state: 'unavailable' };
-    return { state: 'ok', models: read.models, default: read.default };
+    return {
+      state: 'ok',
+      models: read.models,
+      default: read.default,
+      defaultsByDifficulty: read.defaultsByDifficulty,
+    };
   },
 
   /**

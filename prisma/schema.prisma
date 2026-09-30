@@ -1493,6 +1493,17 @@ model Project {
   /// in the settings panel means "back to the default" rather than "the empty
   /// model".
   aiPlannerModel                   String?               @map("ai_planner_model")
+  /// HOSTED-AGENT MODEL OVERRIDES per leaf DIFFICULTY (Story MOTIR-6989 ·
+  /// MOTIR-6993). NULL — the default — means "use the platform default for that
+  /// level", which motir-ai serves as `defaultsByDifficulty` on
+  /// `GET /v1/agent-models`; core keeps no copy of the model list. The same
+  /// nullable-string shape as `aiPlannerModel`, and no FK for the same reason:
+  /// the vocabulary lives in motir-ai. A saved id that motir-ai has since
+  /// withdrawn is SKIPPED by `resolveHostedModel`, never an error.
+  hostedModelTrivial               String?               @map("hosted_model_trivial")
+  hostedModelLow                   String?               @map("hosted_model_low")
+  hostedModelMedium                String?               @map("hosted_model_medium")
+  hostedModelHigh                  String?               @map("hosted_model_high")
   /// RECORD PLANNING MISTAKES — whether this project's planner writes down what
   /// it got wrong (Story MOTIR-3331 · MOTIR-3349). When enabled, a planning run
   /// that corrects itself captures a TENANT lesson for this project
