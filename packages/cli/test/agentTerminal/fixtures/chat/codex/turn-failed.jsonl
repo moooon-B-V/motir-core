@@ -1,0 +1,5 @@
+# codex-cli 0.159.2 · `codex exec --json -c sandbox_mode="workspace-write" -` · a turn the model side fails: turn.failed, then codex exits 1
+{"type":"thread.started","thread_id":"01a0f1eb-7a88-7c40-8e15-1b9f3d6c2e47"}
+{"type":"turn.started"}
+{"type":"error","message":"stream disconnected before completion"}
+{"type":"turn.failed","error":{"message":"stream disconnected before completion"}}
