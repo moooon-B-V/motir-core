@@ -80,6 +80,17 @@ export interface DispatchRunEventDto {
   createdAt: string;
 }
 
+/** The agent a run executed in (MOTIR-7023) — its name and its coding agent. */
+export interface DispatchRunAgentInstanceDto {
+  id: string;
+  /** The agent's own name (`yue-claude`). */
+  name: string;
+  /** The sandbox profile id (`claude`, `codex`, …) — the coding agent. */
+  profile: string;
+  /** The profile's display name (`Claude Code`), or the raw id for an unknown one. */
+  profileLabel: string;
+}
+
 /** The run HEADER plus its SET — what `/runs/[id]` renders. */
 export interface DispatchRunDto {
   id: string;
@@ -102,6 +113,16 @@ export interface DispatchRunDto {
    */
   lastHeartbeatAt: string | null;
   createdById: string | null;
+  /**
+   * The developer's own agent the run executed in (MOTIR-7023,
+   * `agent-instance-run.md` §5) — what lets the run section and the run modal say
+   * _"yue-claude · Claude Code"_. Null for every `local` and `hosted` run, and for
+   * an `instance` run whose agent row was removed.
+   *
+   * ⚠️ NO COST FIELD rides with it (`dispatch-run-record.md` Q3.3): a run in an
+   * agent is charged as the agent's machine time, on the agent's intervals.
+   */
+  agentInstance: DispatchRunAgentInstanceDto | null;
   /** The run's cards, in the run's own stored order. */
   cards: DispatchRunCardDto[];
   /**

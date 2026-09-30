@@ -61,6 +61,7 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
     status: 'succeeded',
     stopReason: 'completed',
     lastHeartbeatAt: null,
+    agentInstance: null,
     agent: 'opencode',
     model: 'claude-sonnet-5',
     startedAt: '2026-09-26T14:00:00.000Z',

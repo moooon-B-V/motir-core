@@ -257,6 +257,7 @@ export function RunSection({
 
   // A HOSTED current run reads its detail — cost, end, what it shipped — and
   // re-reads it as the run moves: every 20 events while live, and once at its end.
+  // Hosted only: an `instance` run (MOTIR-7023) has no hosted detail to read.
   const hostedRunId = current?.origin === 'hosted' ? current.id : null;
   const hostedRefresh =
     (current && isLiveRun(current.status) ? 0 : 1) + Math.floor(events.length / 20) * 2;
@@ -323,6 +324,7 @@ export function RunSection({
     if (leg.endedAt) reached.add('settled');
   }
 
+  // Hosted only: an `instance` run (MOTIR-7023) draws no hosted cost or phase.
   const hosted = current?.origin === 'hosted';
   const runTone = current ? RUN_STATUS_TONE[current.status] : 'queued';
   const legTone = leg ? DISPOSITION_TONE[leg.disposition] : 'queued';

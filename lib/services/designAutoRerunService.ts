@@ -98,6 +98,8 @@ export const designAutoRerunService = {
       if (existing) return { existing };
 
       const lane = await dispatchRunRepository.findLatestLaneForWorkItem(gate.workItemId, tx);
+      // Hosted only: an automatic re-run never targets a developer's own agent
+      // (`agent-instance-run.md` — Motir starts no run in a user's agent itself).
       if (!lane || lane.origin !== 'hosted') return null;
 
       const item = await workItemRepository.findById(gate.workItemId, tx);

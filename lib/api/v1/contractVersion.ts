@@ -905,5 +905,18 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.59.0` after MOTIR-6822's
  *   `1.58.0` on the same story branch. If it is taken on `origin/main` by then, RENUMBER
  *   this entry — it names the FIELD.
+ *
+ * - `1.60.0` — MOTIR-7023 (Story MOTIR-6864, a run in your agent) adds `instance` to
+ *   `DispatchRunOrigin` — a run inside one of the developer's own agents
+ *   (`docs/decisions/agent-instance-run.md` §5) — and `agentInstance`
+ *   (`{ id, name, profile, profileLabel }`, nullable) to `DispatchRun`. Only the server
+ *   opens such a run: `openDispatchRun` REFUSES `origin: "instance"` (400).
+ *
+ *   Additive: a new member of an enum every client must tolerate, and a new nullable
+ *   field (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.60.0` after MOTIR-6929's
+ *   `1.59.0`. If a sibling has taken it since, RENUMBER this entry — it names the ENUM
+ *   MEMBER and the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.59.0';
+export const V1_CONTRACT_VERSION = '1.60.0';

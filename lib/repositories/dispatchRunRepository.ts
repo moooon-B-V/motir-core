@@ -24,10 +24,49 @@ import type {
 /** A run WITH its legs, in the run's own stored order — the read `/runs/[id]`
  *  and the ingest's own close-out both need, without a second round trip. */
 export type DispatchRunWithCards = Prisma.DispatchRunGetPayload<{
-  include: { cards: true };
+  include: {
+    cards: true;
+    agentInstance: { select: { id: true; name: true; profileId: true } };
+  };
 }>;
 
-const WITH_CARDS = { cards: { orderBy: { position: 'asc' } } } as const;
+/**
+ * The agent a run executed in (MOTIR-7023, `agent-instance-run.md` §5), as the
+ * run's reads carry it — the name and the profile the run section and the run
+ * modal print. Null for every `local` / `hosted` run, and for an `instance` run
+ * whose agent row was removed (`SET NULL`).
+ */
+export interface DispatchRunAgentInstanceRef {
+  id: string;
+  name: string;
+  profileId: string;
+}
+
+const AGENT_INSTANCE_REF = { select: { id: true, name: true, profileId: true } } as const;
+
+const WITH_CARDS = {
+  cards: { orderBy: { position: 'asc' } },
+  agentInstance: AGENT_INSTANCE_REF,
+} as const;
+
+/** A RUNNING run in one agent — the active-run read by agent (§5). */
+export interface RunningDispatchRunInAgent {
+  id: string;
+  agentInstanceId: string;
+  projectId: string;
+  command: DispatchCommand;
+  startedAt: Date;
+  createdById: string | null;
+}
+
+const RUNNING_IN_AGENT_SELECT = {
+  id: true,
+  agentInstanceId: true,
+  projectId: true,
+  command: true,
+  startedAt: true,
+  createdById: true,
+} as const;
 
 /**
  * One page of a run listing: the cap, the opaque cursor, and — for the reads
@@ -57,6 +96,13 @@ export interface DispatchRunPage {
    * shortened after the read. Omit for a member.
    */
   withheldWorkItemIds?: readonly string[] | undefined;
+}
+
+/** A row the active-run read matched — its `agentInstanceId` is non-null by the filter. */
+function inAgent(
+  row: Omit<RunningDispatchRunInAgent, 'agentInstanceId'> & { agentInstanceId: string | null },
+): RunningDispatchRunInAgent {
+  return { ...row, agentInstanceId: row.agentInstanceId! };
 }
 
 /** The `mine` narrowing, as a `where` fragment — empty when absent. */
@@ -145,6 +191,42 @@ export const dispatchRunRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRun> {
     return tx.dispatchRun.create({ data });
+  },
+
+  /**
+   * THE ACTIVE-RUN READ BY AGENT (MOTIR-7023, `agent-instance-run.md` §5): the
+   * RUNNING run in this agent, or null. The start, Hibernate, Delete, the idle
+   * check and the image update share it. At most one row can match — the partial
+   * unique index `dispatch_run_agent_instance_running_key` guarantees it, and
+   * serves this read (its predicate is this filter).
+   */
+  async findRunningByAgentInstance(
+    agentInstanceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<RunningDispatchRunInAgent | null> {
+    const row = await tx.dispatchRun.findFirst({
+      where: { agentInstanceId, status: 'running' },
+      select: RUNNING_IN_AGENT_SELECT,
+    });
+    return row ? inAgent(row) : null;
+  },
+
+  /**
+   * {@link findRunningByAgentInstance} for a LIST of agents, in ONE query — the
+   * card's agent picker asks it for every agent it offers, so a per-agent read
+   * would be an N+1 on the picker. At most one row per agent (the index).
+   */
+  async findRunningByAgentInstances(
+    agentInstanceIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<RunningDispatchRunInAgent[]> {
+    if (agentInstanceIds.length === 0) return [];
+    const rows = await tx.dispatchRun.findMany({
+      where: { agentInstanceId: { in: [...agentInstanceIds] }, status: 'running' },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: RUNNING_IN_AGENT_SELECT,
+    });
+    return rows.map(inAgent);
   },
 
   /**
@@ -588,6 +670,12 @@ export const dispatchRunRepository = {
   /**
    * The LAPSE REAP's cross-tenant discovery read (MOTIR-6528): LOCAL runs still
    * `running` whose last heartbeat is older than the cut-off, oldest first.
+   *
+   * ⚠️ LOCAL ONLY, still. An `instance` run (MOTIR-7023) heartbeats too and
+   * `isRunAlive` lapses it by the same rule, but its close must go through the
+   * agent's end path, which revokes its credentials and stops its session
+   * (`agent-instance-run.md` §6) — the reap widening is MOTIR-7027's, with that
+   * end path.
    *
    * A null heartbeat never matches — a run opened by a CLI that never heartbeats
    * stays on the 12-hour age reap, and a HOSTED run's liveness is its

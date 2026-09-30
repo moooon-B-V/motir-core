@@ -184,7 +184,9 @@ describe('the closed enums are the ADR vocabulary, exactly', () => {
   });
 
   it('DispatchRunOrigin — the discriminator that lets one table serve two writers', () => {
-    expect(Object.keys(DispatchRunOrigin)).toEqual(['local', 'hosted']);
+    // `instance` — MOTIR-7023: a run in the developer's own agent
+    // (`agent-instance-run.md` §5).
+    expect(Object.keys(DispatchRunOrigin)).toEqual(['local', 'hosted', 'instance']);
   });
 
   it('DispatchRunStatus', () => {

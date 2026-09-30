@@ -19,6 +19,8 @@ export function toOpenRepairRuns(
       open.set(leg.workItemId, {
         id: run.id,
         label: dispatchRunLabel('fix', run.startedAt),
+        // `instance` is not hosted: a repair is never opened into an agent
+        // (MOTIR-7023) — only the server's `run` start opens an `instance` run.
         hosted: run.origin === 'hosted',
         holder: run.createdBy,
         byViewer: run.createdById === viewerId,

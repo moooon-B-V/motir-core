@@ -11,6 +11,8 @@
 //   DispatchRunNotFoundError        → 404  (also every cross-workspace read)
 //   DispatchRunTerminalError        → 409
 //   DuplicateDispatchRunError       → 409
+//   DispatchRunAgentBusyError       → 409 (server-opened `instance` runs only —
+//                                     mapped by `mapAgentInstanceError`)
 //   UnknownDispatchRunCardError     → 422
 //   DispatchRunEventBodyTooLargeError → 413
 //   DispatchRunEventLimitError      → 422
@@ -84,6 +86,50 @@ export class DuplicateDispatchRunError extends Error {
         'Read it rather than opening a second.',
     );
     this.name = 'DuplicateDispatchRunError';
+  }
+}
+
+/**
+ * 409 — the agent already has a RUNNING run (MOTIR-7023,
+ * `docs/decisions/agent-instance-run.md` §5): at most one per agent, enforced by
+ * the partial unique index `dispatch_run_agent_instance_running_key`.
+ *
+ * Raised by the open's own read when the running run is already visible, and by
+ * the translation of the index's unique violation when two opens raced — so a
+ * raw `P2002` never escapes. `runId` names the run holding the agent; it is null
+ * only inside the losing transaction, where the winner cannot be read any more
+ * (the violation aborted it), and `dispatchRunService.open` re-reads it before
+ * the error leaves the service.
+ */
+export class DispatchRunAgentBusyError extends Error {
+  readonly code = 'agent_instance_run_active' as const;
+  constructor(
+    readonly agentInstanceId: string,
+    readonly runId: string | null,
+  ) {
+    super(
+      runId
+        ? `This agent is already running run ${runId}. Wait for it to finish or cancel it first.`
+        : 'This agent is already running a run. Wait for it to finish or cancel it first.',
+    );
+    this.name = 'DispatchRunAgentBusyError';
+  }
+}
+
+/**
+ * 422 — an `instance` open that names no agent, or an agent on a run that is not
+ * `instance` (MOTIR-7023). Server-internal: only the server opens a run in an
+ * agent, so this is a caller bug, never a person's refusal.
+ */
+export class DispatchRunAgentInstanceMismatchError extends Error {
+  readonly code = 'DISPATCH_RUN_AGENT_INSTANCE_MISMATCH' as const;
+  constructor(origin: string) {
+    super(
+      origin === 'instance'
+        ? 'A run in an agent must name the agent it runs in.'
+        : `A ${origin} run cannot name an agent.`,
+    );
+    this.name = 'DispatchRunAgentInstanceMismatchError';
   }
 }
 

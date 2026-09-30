@@ -1083,6 +1083,8 @@ export const hostedRunService = {
     const run = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       dispatchRunRepository.findById(dispatchRunId, tx),
     );
+    // Hosted only: an `instance` run is cancelled through the agent's own end path
+    // (`agent-instance-run.md` §6, MOTIR-7027/7028), never this container stop.
     if (!run || run.workspaceId !== ctx.workspaceId || run.origin !== 'hosted') {
       throw new HostedRunNotFoundError(dispatchRunId);
     }

@@ -4,6 +4,7 @@ import {
   ProjectAccessDeniedError,
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
+import { DispatchRunAgentBusyError } from '@/lib/dispatchRuns/errors';
 import {
   AgentInstanceNameInvalidError,
   AgentInstanceNameTakenError,
@@ -55,6 +56,14 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
     err instanceof AgentInstanceNoTerminalServerError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  if (err instanceof DispatchRunAgentBusyError) {
+    // One running run per agent (MOTIR-7023, `agent-instance-run.md` §5) — the
+    // refusal names the run holding the agent so the page can link it.
+    return NextResponse.json(
+      { code: err.code, error: err.message, runId: err.runId },
+      { status: 409 },
+    );
   }
   if (err instanceof AgentInstanceStartRefusedError) {
     // 402 for money, 429 for a cap: a client can tell "add credits" from "wait

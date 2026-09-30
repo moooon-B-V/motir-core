@@ -30,6 +30,8 @@ export function RunHostedButton() {
 
   const run = door.currentRun;
   if (run && isLiveRun(run.status)) {
+    // A live `instance` run (MOTIR-7023) is not this door's to cancel: its Cancel is
+    // the agent's (MOTIR-7028), so it draws nothing here, as a local run does.
     if (run.origin !== 'hosted') return null;
     return <HostedRunCancel runId={run.id} onCancelled={door.notifyRunsChanged} />;
   }
@@ -39,6 +41,7 @@ export function RunHostedButton() {
 
   const modelsReady = door.models.state === 'ok' && door.models.models.length > 0;
   const disabled = !door.ready || !modelsReady || door.starting || !door.selectedModel;
+  // "Run hosted again" only after a HOSTED run — never after a local or `instance` one.
   const again = run?.origin === 'hosted';
 
   return (

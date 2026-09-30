@@ -128,6 +128,7 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
 
   // A LIVE HOSTED run's cost follows it (MOTIR-691): one re-read of the run every
   // 20 events on the one stream — no second connection, no timer.
+  // `instance` (MOTIR-7023) has no per-run cost to follow — hosted only.
   const hostedLive = run?.origin === 'hosted' && isLiveRun(run.status);
   const costBucket = hostedLive ? Math.floor(events.length / 20) : -1;
   const costBucketRef = useRef(costBucket);
@@ -181,6 +182,7 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
       ) : run ? (
         <>
           <RunHeader run={run} onCancelled={() => void fetchRun()} />
+          {/* Hosted only: an `instance` run carries no cost (MOTIR-7023, Q3.3). */}
           {run.origin === 'hosted' ? (
             <HostedRunCost
               runId={run.id}
@@ -195,6 +197,7 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
               {t('reconnecting')}
             </p>
           ) : null}
+          {/* A local OR `instance` run abandoned = its CLI stopped heartbeating. */}
           {run.stopReason === 'abandoned' && run.origin !== 'hosted' ? (
             <p
               className="flex items-center gap-2 border-b border-(--el-border-soft) bg-(--el-tint-peach) px-(--spacing-card-padding) py-1.5 text-xs text-(--el-text-strong)"
@@ -246,6 +249,7 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
             >
               <h2 className="flex items-center gap-2 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2 text-xs font-semibold text-(--el-text-secondary)">
                 {t('paneLog')}
+                {/* Hosted only: an `instance` run has no container phases. */}
                 {run.origin === 'hosted' ? <HostedPhaseChip run={run} events={events} /> : null}
               </h2>
               {/* PINNED ABOVE THE LOG, and absent entirely when the run
@@ -291,6 +295,7 @@ function RunHeader({ run, onCancelled }: { run: DispatchRunDetailDto; onCancelle
   const tHosted = useTranslations('runs.hosted');
   const commandKey =
     run.command === 'run' && run.scopeWorkItemId !== null ? 'run_scope' : run.command;
+  // `instance` (MOTIR-7023) is not hosted: its stop line is the stop reason's.
   const hosted = run.origin === 'hosted';
   // A hosted run's stop line is the REASON its end recorded, quoted — not the
   // stop-reason enum, whose `abandoned` would say reporting went offline.
