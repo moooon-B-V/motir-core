@@ -8457,14 +8457,18 @@ enum PlanChangeTurnRole {
 /// `docs/decisions/conversation-turn-intent.md`). ONE thread carries both, and a
 /// thread may alternate freely turn by turn — the previous turn's intent places
 /// no constraint on the next, which is why this sits on the TURN and never on
-/// the session. There is deliberately no third "unknown" value: every turn that
-/// ran, ran as one of these two, and a turn that never ran carries null.
+/// the session. There is deliberately no "unknown" value: every turn that ran,
+/// ran as one of these, and a turn that never ran carries null.
 enum PlanChangeTurnIntent {
   /// Propose a plan delta — the shipped path, unchanged.
   plan_change
   /// Answer a question about the project from its plan tree and code graph,
   /// with citations. Writes nothing.
   ask
+  /// Diagnose a REPORT OF BROKEN BEHAVIOUR (MOTIR-7047 · the ADR's AMENDMENT 1,
+  /// A1.6): `ask_project` redirected the turn and a `debug_bug` job ran for it.
+  /// It writes at most ONE card (A1.4) — landed by MOTIR-7049, not here.
+  debug
 
   @@map("plan_change_turn_intent")
 }

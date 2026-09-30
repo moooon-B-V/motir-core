@@ -21,8 +21,11 @@ export type PlanChangeTurnRoleDto = 'user' | 'system' | 'assistant';
  * text and reads back what Motir resolved (ADR §1). A field of this type
  * appearing on a REQUEST body would be the mode the design deliberately does not
  * have, re-entering through the back door.
+ *
+ * `debug` (MOTIR-7047 · the ADR's AMENDMENT 1) is the third reading: the turn
+ * reported broken behaviour, and a `debug_bug` job ran for it.
  */
-export type PlanChangeTurnIntentDto = 'plan_change' | 'ask';
+export type PlanChangeTurnIntentDto = 'plan_change' | 'ask' | 'debug';
 
 /** One turn on the thread, in `seq` order (0-based, gapless). `jobId` is set on a
  *  `system` submission marker and on an `assistant` turn (the job that produced

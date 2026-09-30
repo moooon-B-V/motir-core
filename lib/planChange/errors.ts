@@ -126,6 +126,21 @@ export class PlanChangeTurnNotFoundError extends Error {
   }
 }
 
+/**
+ * The work item an ask turn names as its ANCHOR (`anchorKey`, MOTIR-7047) does
+ * not resolve for this caller: an unknown key, a key in another project or
+ * workspace, or one they may not browse. ONE answer for all of them, and the same
+ * body `GET /api/work-items/planning-anchor` gives — a 403 would say "it exists
+ * but you can't see it". → 404 `NOT_FOUND`.
+ */
+export class AskAnchorNotAvailableError extends Error {
+  readonly code = 'NOT_FOUND' as const;
+  constructor() {
+    super('Work item not available.');
+    this.name = 'AskAnchorNotAvailableError';
+  }
+}
+
 // ── The BOUNDARY MAILBOX (Story MOTIR-4054 · MOTIR-4067) ────────────────────
 
 /**

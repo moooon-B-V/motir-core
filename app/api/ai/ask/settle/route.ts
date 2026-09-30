@@ -21,6 +21,13 @@ import { mapPlanChangeError, noActiveProject, readSessionId } from '../../plan-c
 // and guards the redirect on the turn's current intent. This route trusts
 // neither: it forwards the id and lets the service decide.
 //
+// A `debug` verdict (MOTIR-7047 · the ADR's AMENDMENT 1) answers
+// `{ outcome: 'debugging', jobId, session }` — `jobId` is the ONE `debug_bug` job
+// now running for the turn. Its gates answer here as typed errors: a caller
+// without `work_item:edit` is a 403 `PERMISSION_DENIED`, an anchor that no longer
+// resolves for them is the 404 `NOT_FOUND`, out of credits is the 402 — and in
+// every one of those no job was submitted.
+//
 // NOT rate-limited, deliberately (the `…/planner-turn` precedent): this reads a
 // job that was already submitted and already paid for at the `ai:generate`
 // ceiling. A limiter here would cap a database write and prevent no provider call

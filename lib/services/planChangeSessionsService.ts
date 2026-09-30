@@ -1019,6 +1019,49 @@ export const planChangeSessionsService = {
   },
 
   /**
+   * Move a `user` turn's intent from `from` to `to` ONLY if it still reads `from`
+   * — a compare-and-set under the session's row lock (MOTIR-7047).
+   *
+   * It exists for a dispatch that must happen AT MOST ONCE per turn but is
+   * reached from a replayable call: `aiAskService.settle`'s debug arm. Reading the
+   * turn's intent outside a lock and then recording it would let two concurrent
+   * settles of the same job both see `ask` and both submit a `debug_bug` job; the
+   * lock serialises them, so exactly one sees `from` and wins. Returns the fresh
+   * session when this call moved the turn, `null` when another call already had
+   * (or the turn never read `from`) — the loser's cue to submit nothing.
+   */
+  async claimTurnIntent(
+    turnId: string,
+    change: { from: PlanChangeTurnIntent; to: PlanChangeTurnIntent },
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanChangeSessionDto | null> {
+    const session = await requireSession(pctx, address);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        const turn = await planChangeTurnRepository.findByIdInSession(
+          turnId,
+          session.id,
+          pctx.workspaceId,
+          tx,
+        );
+        if (!turn) throw new PlanChangeTurnNotFoundError(turnId);
+        if (turn.intent !== change.from) return null;
+        await planChangeTurnRepository.updateIntent(turn.id, { intent: change.to }, tx);
+        const fresh = await planChangeSessionRepository.update(
+          session.id,
+          { lastActivityAt: new Date() },
+          tx,
+        );
+        return toDto(fresh, pctx, tx);
+      },
+    );
+  },
+
+  /**
    * Record the PLANNER's turn for a settled job — the consuming half of
    * MOTIR-2222's contract (MOTIR-2226).
    *

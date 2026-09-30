@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import {
+  AskAnchorNotAvailableError,
   EmptyPlanChangeIntentError,
   EmptyPlanChangeTurnError,
   PlanChangeJobNotRunningError,
@@ -33,7 +34,8 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
     // the same no-existence-leak answer as a missing thread.
     err instanceof PlanSessionNotFoundError ||
     err instanceof PlanChangeTurnNotFoundError ||
-    err instanceof PlanChangeMailboxJobMismatchError
+    err instanceof PlanChangeMailboxJobMismatchError ||
+    err instanceof AskAnchorNotAvailableError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }
