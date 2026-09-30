@@ -106,11 +106,15 @@ export class DispatchRunAgentBusyError extends Error {
   constructor(
     readonly agentInstanceId: string,
     readonly runId: string | null,
+    /** The card the running run works on (MOTIR-7026: §4's refusal names it), when known. */
+    readonly workItemKey: string | null = null,
   ) {
     super(
-      runId
-        ? `This agent is already running run ${runId}. Wait for it to finish or cancel it first.`
-        : 'This agent is already running a run. Wait for it to finish or cancel it first.',
+      runId && workItemKey
+        ? `This agent is already running ${workItemKey} (run ${runId}). Wait for it to finish or cancel it first.`
+        : runId
+          ? `This agent is already running run ${runId}. Wait for it to finish or cancel it first.`
+          : 'This agent is already running a run. Wait for it to finish or cancel it first.',
     );
     this.name = 'DispatchRunAgentBusyError';
   }

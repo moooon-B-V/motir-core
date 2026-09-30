@@ -540,11 +540,18 @@ const flyInstancesClient = {
     id: string,
     command: readonly string[],
     timeoutSeconds: number,
+    stdin?: string,
   ): Promise<PersistentExecResult> {
     const res = await flyRequest(path(app, `/machines/${encodeURIComponent(id)}/exec`), {
       method: 'POST',
       token: config.token,
-      body: JSON.stringify({ cmd: [...command], timeout: timeoutSeconds }),
+      // `stdin` is the Machines API's `MachineExecRequest.Stdin` (fly-go): the
+      // one field a secret may ride in, because it is neither argv nor env.
+      body: JSON.stringify({
+        cmd: [...command],
+        timeout: timeoutSeconds,
+        ...(stdin !== undefined ? { stdin } : {}),
+      }),
     });
     const body = await readFlyJson(res);
     if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
@@ -753,7 +760,7 @@ export const flyPersistentOrchestrator: PersistentContainerOrchestrator = {
   async exec(
     handle: PersistentContainerHandle,
     command: readonly string[],
-    options: { timeoutSeconds?: number } = {},
+    options: { timeoutSeconds?: number; stdin?: string } = {},
   ): Promise<PersistentExecResult> {
     return flyInstancesClient.exec(
       flyInstancesConfig(),
@@ -761,6 +768,7 @@ export const flyPersistentOrchestrator: PersistentContainerOrchestrator = {
       handle.machineId,
       command,
       options.timeoutSeconds ?? 120,
+      options.stdin,
     );
   },
 

@@ -16,6 +16,11 @@ import {
   AgentInstancesUnavailableError,
   AgentProfileNotOfferedError,
   AgentTerminalNotOwnerError,
+  AgentInstanceImageTooOldError,
+  AgentInstanceWrongProjectError,
+  AgentNotSignedInError,
+  AgentProfileCannotRunError,
+  AgentRunCardNotReadyError,
 } from './errors';
 
 // The agent-instance routes' ONE error mapper (Story MOTIR-6860 · MOTIR-6872).
@@ -53,7 +58,13 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
     err instanceof AgentInstanceNameTakenError ||
     err instanceof AgentInstanceStateConflictError ||
     err instanceof AgentInstanceNotRunningError ||
-    err instanceof AgentInstanceNoTerminalServerError
+    err instanceof AgentInstanceNoTerminalServerError ||
+    // The start's own refusals (MOTIR-7026, `agent-instance-run.md` §4) — each a
+    // 409 carrying its words, raised before anything was opened or woken.
+    err instanceof AgentInstanceWrongProjectError ||
+    err instanceof AgentInstanceImageTooOldError ||
+    err instanceof AgentProfileCannotRunError ||
+    err instanceof AgentNotSignedInError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
@@ -61,7 +72,13 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
     // One running run per agent (MOTIR-7023, `agent-instance-run.md` §5) — the
     // refusal names the run holding the agent so the page can link it.
     return NextResponse.json(
-      { code: err.code, error: err.message, runId: err.runId },
+      { code: err.code, error: err.message, runId: err.runId, workItemKey: err.workItemKey },
+      { status: 409 },
+    );
+  }
+  if (err instanceof AgentRunCardNotReadyError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, detail: err.detail },
       { status: 409 },
     );
   }

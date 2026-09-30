@@ -28,9 +28,14 @@ import {
 } from '@/lib/agentInstances/errors';
 import { buildCloneCommand } from '@/lib/agentInstances/cloneCommand';
 import {
+  AGENT_RUN_LAUNCHER_PROBE_COMMAND,
+  AGENT_SIGN_IN_COMMAND,
+  AGENT_SIGN_IN_TIMEOUT_SECONDS,
   AGENT_TERMINAL_PROBE_COMMAND,
   agentTerminalMachineConfig,
   isAgentTerminalConfigured,
+  parseSignInAnswer,
+  type AgentSignInAnswer,
 } from '@/lib/agentInstances/terminal';
 import { imageDigestResolver, pinnedImageReference } from '@/lib/agentInstances/imageDigest';
 import {
@@ -157,6 +162,15 @@ async function ownInstance(
   );
   if (!row || row.projectId !== project.id) throw new AgentInstanceNotFoundError(instanceId);
   return row;
+}
+
+/**
+ * The persistent handle a row names, or null before `provisionPersistent`
+ * answered. Exported for the run start (MOTIR-7026), which execs its launcher
+ * through the same handle.
+ */
+export function agentInstanceHandle(row: AgentInstance): PersistentContainerHandle | null {
+  return handleOf(row);
 }
 
 function handleOf(row: AgentInstance): PersistentContainerHandle | null {
@@ -372,6 +386,87 @@ async function probeTerminalServer(
       instanceId: row.id,
       detail: describeError(err),
     });
+  }
+}
+
+/**
+ * THE SIGN-IN QUERY (`agent-instance-run.md` §4 · MOTIR-7026): ask the agent's
+ * terminal server whether its coding agent is signed in, and record the answer
+ * with its time. Never a throw: an exec that failed or gave no answer returns
+ * null and leaves the recorded value standing — "could not ask" is not an answer.
+ */
+async function probeSignIn(
+  row: AgentInstance,
+  handle: PersistentContainerHandle,
+): Promise<AgentSignInAnswer | null> {
+  try {
+    const state = parseSignInAnswer(
+      await getPersistentOrchestrator().exec(handle, AGENT_SIGN_IN_COMMAND, {
+        timeoutSeconds: AGENT_SIGN_IN_TIMEOUT_SECONDS,
+      }),
+    );
+    if (state === null) return null;
+    await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+      agentInstanceRepository.recordSignIn(
+        row.id,
+        { signInState: state, at: agentInstanceClock.now() },
+        tx,
+      ),
+    );
+    return state;
+  } catch (err) {
+    console.warn('[agentInstanceLifecycle] the sign-in query did not answer', {
+      instanceId: row.id,
+      detail: describeError(err),
+    });
+    return null;
+  }
+}
+
+/**
+ * THE RUN PROBES AT A BOOT (`agent-instance-run.md` §4 · MOTIR-7026), beside the
+ * terminal-server probe: whether the image carries the run launcher — ONCE per
+ * digest, `motir agent-terminal run --help` exiting 0 — and the coding agent's
+ * sign-in, every boot. Never fails the boot. Skipped while the terminal is off:
+ * the launcher is the terminal server's, so there is nothing to ask.
+ */
+async function probeRunCapabilities(
+  row: AgentInstance,
+  handle: PersistentContainerHandle,
+): Promise<void> {
+  if (!isTerminalOnQuietly()) return;
+  try {
+    if (row.runLauncherDigest !== row.imageDigest) {
+      const result = await getPersistentOrchestrator().exec(
+        handle,
+        AGENT_RUN_LAUNCHER_PROBE_COMMAND,
+        { timeoutSeconds: 30 },
+      );
+      if (result.exitCode >= 0) {
+        await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+          agentInstanceRepository.recordRunLauncher(
+            row.id,
+            { runLauncher: result.exitCode === 0 ? 'present' : 'absent', digest: row.imageDigest },
+            tx,
+          ),
+        );
+      }
+    }
+  } catch (err) {
+    console.warn('[agentInstanceLifecycle] the run-launcher probe did not answer', {
+      instanceId: row.id,
+      detail: describeError(err),
+    });
+  }
+  await probeSignIn(row, handle);
+}
+
+/** {@link isAgentTerminalConfigured}, reading a misconfigured key as "off" (the probes never throw). */
+function isTerminalOnQuietly(): boolean {
+  try {
+    return isAgentTerminalConfigured();
+  } catch {
+    return false;
   }
 }
 
@@ -683,6 +778,9 @@ export const agentInstanceLifecycleService = {
     if (!(await systemTransition(row, ['running'], 'hibernating'))) return false;
     const handle = handleOf(row);
     if (handle) {
+      // §4 (MOTIR-7026): the last sign-in answer before the volume goes quiet is
+      // what a start reads while the agent sleeps. Best effort, never a refusal.
+      if (isTerminalOnQuietly()) await probeSignIn(row, handle);
       try {
         await getPersistentOrchestrator().stop(handle);
       } catch (err) {
@@ -757,6 +855,7 @@ export const agentInstanceLifecycleService = {
       }
     }
     await probeTerminalServer(row, handle);
+    await probeRunCapabilities(row, handle);
     const fresh = await reload(row);
     if (fresh.state !== row.state) return 'noop';
     await withWorkspaceServiceContext(row.workspaceId, async (tx) => {
@@ -832,6 +931,19 @@ export const agentInstanceLifecycleService = {
       agentInstanceRepository.markDeleted(row.id, agentInstanceClock.now(), tx),
     );
     return 'deleted';
+  },
+
+  /**
+   * Ask a RUNNING agent's terminal server for its sign-in now and record it
+   * (`agent-instance-run.md` §4 — the start's live probe). Null when the agent is
+   * not running, has no handle, or the query gave no answer.
+   */
+  async probeSignIn(instanceId: string): Promise<AgentSignInAnswer | null> {
+    const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
+    if (!row || row.deletedAt || row.state !== 'running') return null;
+    const handle = handleOf(row);
+    if (!handle) return null;
+    return probeSignIn(row, handle);
   },
 
   /** Bump the idle signal (§2) — the later stories' relay and runs call it. */

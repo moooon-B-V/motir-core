@@ -198,6 +198,22 @@ describe('exec (MOTIR-6872)', () => {
     expect(fake.execs.map((e) => e.command[0])).toEqual(['echo', 'git', 'true']);
   });
 
+  it('records stdin, answers through a responder, and lets a one-shot result win (MOTIR-7026)', async () => {
+    const h = await fake.provisionPersistent(SPEC);
+    fake.setExecResponder((command, stdin) => ({
+      exitCode: 0,
+      stdout: `${command.join(' ')}|${stdin ?? '-'}`,
+      stderr: '',
+    }));
+    expect((await fake.exec(h, ['cat'], { stdin: 'secret' })).stdout).toBe('cat|secret');
+    fake.setNextExecResult({ exitCode: 9, stdout: '', stderr: '' });
+    expect((await fake.exec(h, ['cat'])).exitCode).toBe(9);
+    expect((await fake.exec(h, ['ls'])).stdout).toBe('ls|-');
+    expect(fake.execs.map((e) => e.stdin)).toEqual(['secret', undefined, undefined]);
+    fake.setExecResponder(null);
+    expect((await fake.exec(h, ['ls'])).stdout).toBe('');
+  });
+
   it('refuses a machine that is not running', async () => {
     const h = await fake.provisionPersistent(SPEC);
     await fake.stop(h);

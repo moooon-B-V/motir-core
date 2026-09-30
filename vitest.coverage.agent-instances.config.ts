@@ -50,6 +50,11 @@ const MEASURED = [
   'lib/repositories/agentTerminalTicketRepository.ts',
   'lib/repositories/agentTerminalConnectionRepository.ts',
   'lib/mappers/agentTerminalMappers.ts',
+  // Story MOTIR-6864 — a run in my agent (MOTIR-7026).
+  'lib/services/agentInstanceRunService.ts',
+  'lib/mappers/agentInstanceRunMappers.ts',
+  'lib/jobs/definitions/agentInstanceRunLaunch.ts',
+  'app/api/work-items/[[]id]/agent-runs/**/*.ts',
 ];
 
 export default defineConfig({

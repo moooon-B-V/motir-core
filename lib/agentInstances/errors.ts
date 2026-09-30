@@ -126,3 +126,70 @@ export class AgentInstanceNotRunningError extends Error {
     this.name = 'AgentInstanceNotRunningError';
   }
 }
+
+// ── Starting a card's run in an agent (MOTIR-7026 · `agent-instance-run.md` §4) ──
+//
+// The start's own refusals, each raised BEFORE anything is opened, claimed or
+// woken. The rest of the §4 refusal set is shared: `agent_instance_not_found`,
+// `agent_instance_state_conflict`, the wake's `agent_instance_start_refused`
+// (passed through unchanged), `agent_instance_run_active`
+// (`DispatchRunAgentBusyError`) and `hosted_repository_not_writable`.
+
+/** The agent is on another project than the card (409). */
+export class AgentInstanceWrongProjectError extends Error {
+  readonly code = 'agent_instance_wrong_project' as const;
+  constructor(readonly instanceId: string) {
+    super('This agent works on another project, so it can’t run this card.');
+    this.name = 'AgentInstanceWrongProjectError';
+  }
+}
+
+/** The card cannot be run now — its status, or an open blocker, named in `detail` (409). */
+export class AgentRunCardNotReadyError extends Error {
+  readonly code = 'agent_run_card_not_ready' as const;
+  constructor(
+    readonly workItemKey: string,
+    readonly detail: string,
+  ) {
+    super(`${workItemKey} isn’t ready to run: ${detail}.`);
+    this.name = 'AgentRunCardNotReadyError';
+  }
+}
+
+/**
+ * The agent's image predates the run launcher (409) — or was never probed for
+ * its current digest, which §4 reads as the same thing.
+ */
+export class AgentInstanceImageTooOldError extends Error {
+  readonly code = 'agent_instance_image_too_old' as const;
+  constructor(readonly instanceId: string) {
+    super('This agent was made before agents could run cards. Move it to a newer image first.');
+    this.name = 'AgentInstanceImageTooOldError';
+  }
+}
+
+/** The agent's coding agent has no unattended command (§3) (409). */
+export class AgentProfileCannotRunError extends Error {
+  readonly code = 'agent_profile_cannot_run' as const;
+  constructor(
+    readonly profileId: string,
+    displayName: string,
+  ) {
+    super(`${displayName} can’t run a card on its own, so this agent can’t run cards.`);
+    this.name = 'AgentProfileCannotRunError';
+  }
+}
+
+/** The agent's coding agent is not signed in (409). */
+export class AgentNotSignedInError extends Error {
+  readonly code = 'agent_not_signed_in' as const;
+  constructor(
+    readonly instanceId: string,
+    displayName: string,
+  ) {
+    super(
+      `${displayName} isn’t signed in on this agent. Sign in from its terminal, then run again.`,
+    );
+    this.name = 'AgentNotSignedInError';
+  }
+}

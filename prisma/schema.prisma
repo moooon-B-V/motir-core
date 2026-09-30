@@ -11542,6 +11542,27 @@ enum AgentTerminalServer {
   @@map("agent_terminal_server")
 }
 
+/// Whether an agent's image carries the run launcher (`agent-instance-run.md`
+/// §4, MOTIR-7026) — `unknown` until its digest is probed.
+enum AgentRunLauncher {
+  unknown
+  present
+  absent
+
+  @@map("agent_run_launcher")
+}
+
+/// The coding agent's sign-in as `motir agent-terminal signin` answers it
+/// (`agent-instance-run.md` §4). `unknown` for a profile that cannot answer and
+/// for an agent never probed.
+enum AgentSignInState {
+  unknown
+  signed_in
+  signed_out
+
+  @@map("agent_sign_in_state")
+}
+
 /// Why a running interval ended (§4).
 enum AgentInstanceIntervalEndReason {
   hibernated
@@ -11612,6 +11633,22 @@ model AgentInstance {
   /// The image digest `terminalServer` was probed for; null = never probed. A
   /// digest that differs from `imageDigest` is re-probed on the next boot.
   terminalServerDigest String?             @map("terminal_server_digest")
+
+  /// Can the pinned image start a card's run (`agent-instance-run.md` §4,
+  /// MOTIR-7026)? Probed with `motir agent-terminal run --help` at a boot whose
+  /// digest was not probed yet, beside `terminalServer`. An agent never probed
+  /// for its CURRENT digest reads as too old to run a card.
+  runLauncher       AgentRunLauncher @default(unknown) @map("run_launcher")
+  /// The image digest `runLauncher` was probed for; null = never probed.
+  runLauncherDigest String?          @map("run_launcher_digest")
+  /// The coding agent's sign-in as the agent's terminal server last answered
+  /// `motir agent-terminal signin` (§4): probed at every boot, by a start on a
+  /// running agent, and just before a hibernate. The credential lives on the
+  /// volume, so a hibernated agent's last answer stands. A probe that could not
+  /// answer leaves the previous value.
+  signInState       AgentSignInState @default(unknown) @map("sign_in_state")
+  /// When `signInState` was last answered; null = never.
+  signInCheckedAt   DateTime?        @map("sign_in_checked_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

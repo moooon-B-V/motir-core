@@ -1,6 +1,8 @@
 import type {
   AgentInstance,
   AgentInstanceState,
+  AgentRunLauncher,
+  AgentSignInState,
   AgentTerminalServer,
   Prisma,
 } from '@/generated/prisma/client';
@@ -172,6 +174,39 @@ export const agentInstanceRepository = {
     const result = await tx.agentInstance.updateMany({
       where: { id, imageDigest: probe.digest, ...LIVE },
       data: { terminalServer: probe.terminalServer, terminalServerDigest: probe.digest },
+    });
+    return result.count;
+  },
+
+  /**
+   * Record the run-launcher probe (`agent-instance-run.md` §4, MOTIR-7026):
+   * whether the image `digest` can start a card's run. Guarded on the digest the
+   * row still pins, as {@link recordTerminalServer} is. `tx` required.
+   */
+  async recordRunLauncher(
+    id: string,
+    probe: { runLauncher: AgentRunLauncher; digest: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.agentInstance.updateMany({
+      where: { id, imageDigest: probe.digest, ...LIVE },
+      data: { runLauncher: probe.runLauncher, runLauncherDigest: probe.digest },
+    });
+    return result.count;
+  },
+
+  /**
+   * Record the coding agent's sign-in as the terminal server answered it (§4),
+   * and when. `tx` required.
+   */
+  async recordSignIn(
+    id: string,
+    probe: { signInState: AgentSignInState; at: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.agentInstance.updateMany({
+      where: { id, ...LIVE },
+      data: { signInState: probe.signInState, signInCheckedAt: probe.at },
     });
     return result.count;
   },

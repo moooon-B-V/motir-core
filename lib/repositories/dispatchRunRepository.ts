@@ -230,6 +230,33 @@ export const dispatchRunRepository = {
   },
 
   /**
+   * The card each of these runs works on, in ONE query (MOTIR-7026): a scope
+   * run's scope target, else its first leg — what the "already running" refusal
+   * and the card's agent picker name beside the run id. A run with neither is
+   * absent from the map.
+   */
+  async findTargetKeys(
+    runIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, string>> {
+    if (runIds.length === 0) return new Map();
+    const rows = await tx.dispatchRun.findMany({
+      where: { id: { in: [...runIds] } },
+      select: {
+        id: true,
+        scope: { select: { identifier: true } },
+        cards: { orderBy: { position: 'asc' }, take: 1, select: { workItemKey: true } },
+      },
+    });
+    const out = new Map<string, string>();
+    for (const row of rows) {
+      const key = row.scope?.identifier ?? row.cards[0]?.workItemKey ?? null;
+      if (key) out.set(row.id, key);
+    }
+    return out;
+  },
+
+  /**
    * The id of the newest RUNNING run whose SCOPE TARGET is this work item, or
    * that holds a leg for it, or null — the run a How-to-test record is
    * attributed to (MOTIR-5331). HOW TO TEST is written onto the run target, so a
