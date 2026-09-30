@@ -1,4 +1,5 @@
 import type { DesignEvidence } from '@/generated/prisma/client';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 import type {
   GateEffect,
   GateEffectArgs,
@@ -240,6 +241,25 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
     if (args.refusalVerdict === null) {
       return { statusWritten: null, statusDeferredReason: 'request_changes_moves_nothing' };
     }
-    return returnCardToTodo(args, 'designResultHandler');
+    const effect = await returnCardToTodo(args, 'designResultHandler');
+    // A REVISE ASKS FOR AN AUTOMATIC HOSTED RE-RUN (Story MOTIR-693 · MOTIR-700;
+    // `hosted-design-rerun-and-design-approval-switch.md` §1). Only ASKS: whether the
+    // card qualifies (its last run was hosted, it is under the cap, the dispatcher can
+    // still run) is the job's to decide, and it records the answer either way. AFTER
+    // the commit (§1g) — a start boots a container, and a failed start must never undo
+    // the refusal. A Re-plan never re-runs anything (`design-refusal-verdict.md` §3).
+    if (args.refusalVerdict !== 'revise') return effect;
+    const gateId = args.gate.id;
+    const workspaceId = args.gate.workspaceId;
+    return {
+      ...effect,
+      afterCommit: async () => {
+        await sendEvent('design/auto-rerun.requested', {
+          workspaceId,
+          gateId,
+          idempotencyKey: gateId,
+        });
+      },
+    };
   },
 };

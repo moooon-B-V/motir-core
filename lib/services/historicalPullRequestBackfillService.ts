@@ -137,6 +137,9 @@ interface TargetRow {
    *  rewrite every historical row once, purely to fill a column nothing here
    *  reads, and `updated_at` is what the Development surface orders by. */
   draft: undefined;
+  /** NOT ASSERTED either (MOTIR-7005), for `draft`'s reason: a merged row's head
+   *  decides nothing, and asserting it would rewrite every historical row once. */
+  headSha: undefined;
 }
 
 function emptyRepoReport(repo: GithubRepo): HistoricalPrRepoReport {
@@ -340,6 +343,7 @@ async function applyOne(
     title: cr.title,
     // See `TargetRow.draft`: merged rows only, where the flag decides nothing.
     draft: undefined,
+    headSha: undefined,
   };
 
   if (existing && rowMatches(existing, target)) {

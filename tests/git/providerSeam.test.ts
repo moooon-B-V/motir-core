@@ -40,7 +40,7 @@ function prEvent(over: Record<string, unknown> = {}): unknown {
       state: 'open',
       merged: false,
       title: 'feat: a thing',
-      head: { ref: 'subtask/MOTIR-891-github-app' },
+      head: { ref: 'subtask/MOTIR-891-github-app', sha: 'abc123' },
       base: { ref: 'main' },
       ...over,
     },
@@ -58,7 +58,15 @@ describe('github.parseChangeRequestEvent', () => {
       baseRef: 'main',
       title: 'feat: a thing',
       draft: false,
+      // MOTIR-7005 — the head COMMIT, the host's word for where the pull request is.
+      headSha: 'abc123',
     });
+  });
+
+  it('a payload whose head names no commit normalizes with headSha null (MOTIR-7005)', () => {
+    expect(
+      github.parseChangeRequestEvent(prEvent({ head: { ref: 'subtask/MOTIR-891-github-app' } })),
+    ).toMatchObject({ headSha: null });
   });
 
   // MOTIR-4968 — the DRAFT flag, read off `pull_request.draft`. The payload has
@@ -110,6 +118,7 @@ describe('github.changeRequestLifecycle', () => {
     baseRef: 'main',
     title: null,
     draft: false,
+    headSha: null,
   } as const;
 
   it('maps open → implemented, merged → done, closed-unmerged → todo (MOTIR-3005)', () => {

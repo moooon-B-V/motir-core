@@ -774,6 +774,79 @@ describe('the worker loop’s own branches', () => {
     expect(order).toEqual(['renewal settled', 'released', 'shutdown returned']);
   });
 
+  async function until(cond: () => boolean): Promise<void> {
+    const deadline = Date.now() + 5_000;
+    while (!cond()) {
+      if (Date.now() > deadline) throw new Error('condition never held');
+      await new Promise((r) => setTimeout(r, 5));
+    }
+  }
+
+  it('a heartbeat tick that fires while a renewal is held open starts no second renewal', async () => {
+    const renewal = heldOpen();
+    let calls = 0;
+    const originalClaim = jobQueueRepository.claimDueRuns;
+    const originalRenew = jobQueueRepository.renewLeases;
+    (jobQueueRepository as { claimDueRuns: unknown }).claimDueRuns = async () => [];
+    (jobQueueRepository as { renewLeases: unknown }).renewLeases = async () => {
+      calls += 1;
+      if (calls === 1) {
+        renewal.entered();
+        await renewal.gate;
+      }
+      return 0;
+    };
+    const w = new JobWorker({
+      workerId: 'renewal-single-flight',
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      timings: { idleMinMs: 10, idleMaxMs: 10, renewMs: 10 },
+      execute: async () => {},
+    });
+    try {
+      w.start();
+      await renewal.started;
+      // ~10 heartbeat ticks fire while the first renewal is held open.
+      await new Promise((r) => setTimeout(r, 100));
+      expect(calls).toBe(1);
+      // Once it settles, the heartbeat renews again — skipped, never stopped.
+      renewal.release();
+      await until(() => calls >= 2);
+    } finally {
+      renewal.release();
+      await w.shutdown();
+      (jobQueueRepository as { claimDueRuns: unknown }).claimDueRuns = originalClaim;
+      (jobQueueRepository as { renewLeases: unknown }).renewLeases = originalRenew;
+    }
+  });
+
+  it('a failed renewal does not wedge the heartbeat — the next tick renews again', async () => {
+    let calls = 0;
+    const warned: string[] = [];
+    const originalClaim = jobQueueRepository.claimDueRuns;
+    const originalRenew = jobQueueRepository.renewLeases;
+    (jobQueueRepository as { claimDueRuns: unknown }).claimDueRuns = async () => [];
+    (jobQueueRepository as { renewLeases: unknown }).renewLeases = async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('database went away');
+      return 0;
+    };
+    const w = new JobWorker({
+      workerId: 'renewal-failed',
+      logger: { info: () => {}, warn: (msg: string) => warned.push(msg), error: () => {} },
+      timings: { idleMinMs: 10, idleMaxMs: 10, renewMs: 10 },
+      execute: async () => {},
+    });
+    try {
+      w.start();
+      await until(() => calls >= 2);
+    } finally {
+      await w.shutdown();
+      (jobQueueRepository as { claimDueRuns: unknown }).claimDueRuns = originalClaim;
+      (jobQueueRepository as { renewLeases: unknown }).renewLeases = originalRenew;
+    }
+    expect(warned).toContain('[job-worker] lease renewal failed');
+  });
+
   it('notify() on an idle worker is a no-op rather than a throw', async () => {
     const w = new JobWorker({
       workerId: 'idle',

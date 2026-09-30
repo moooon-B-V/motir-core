@@ -1,12 +1,18 @@
 import { withWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { reconcileGatesFor } from '@/lib/services/gateSetFor';
+import { agentReviewStartService } from '@/lib/services/agentReviewStartService';
+import { evaluateAfterRaise } from '@/lib/services/pullRequestReviewSync';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { ProjectNotFoundError, ReviewAgentNeedsManualMergeError } from '@/lib/projects/errors';
 import type {
   ApprovalGateSettingsDTO,
   UpdateApprovalGateSettingsInput,
 } from '@/lib/dto/approvalGateSettings';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { Prisma } from '@/generated/prisma/client';
 
 /**
  * The project's APPROVAL-GATE switches (Story MOTIR-4925 · Subtask MOTIR-5170) —
@@ -30,6 +36,68 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
  * A dedicated `gate:manage` is a reasonable later split and is deliberately NOT
  * made here: this card has no warrant to add a permission to the catalog.
  */
+/** The room's switches, read off the project row — one mapping for every return. */
+function toSettingsDTO(project: {
+  acceptanceVideoEnabled: boolean;
+  reviewAgentEnabled: boolean;
+  designApprovalGate: boolean;
+}): ApprovalGateSettingsDTO {
+  return {
+    acceptanceVideoEnabled: project.acceptanceVideoEnabled,
+    reviewAgentEnabled: project.reviewAgentEnabled,
+    designApprovalGate: project.designApprovalGate,
+  };
+}
+
+/**
+ * SWITCHING THE REVIEW AGENT OFF (Story MOTIR-1626 · MOTIR-6819; `approval-gates.md` §12.5)
+ * — in the switch's own transaction, after the write: every AWAITING `agent_review` in the
+ * project is superseded `review_agent_disabled`, and each such card is reconciled so the
+ * ordinary flow is raised for its current version at once (the approve-and-merge gate,
+ * when its set is green). A DECIDED review is history and stays.
+ *
+ * ⚠️ LOCK ORDER — the gates, then each card: the order a transition and the decide door
+ * take them in. `reconcileGatesFor` relies on its caller holding the card's row lock.
+ *
+ * The review RUN in flight for each retired gate is CANCELLED once this transaction
+ * commits (§12.5, *"reviews in progress are cancelled"*; MOTIR-6820).
+ */
+async function retireAwaitingReviews(
+  projectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<string[]> {
+  const awaiting = await approvalGateRepository.lockAwaitingByProjectAndKind(
+    projectId,
+    'agent_review',
+    tx,
+  );
+  const cards = [
+    ...new Set(awaiting.flatMap((gate) => (gate.workItemId ? [gate.workItemId] : []))),
+  ];
+  const first = awaiting[0];
+  if (first) {
+    const project = await projectRepository.findById(projectId, tx);
+    if (project) {
+      agentReviewStartService.cancelRunsAfterCommit(
+        project.workspaceId,
+        awaiting.map((gate) => gate.id),
+      );
+    }
+  }
+  for (const workItemId of cards) {
+    await workItemRepository.lockById(workItemId, tx);
+    await approvalGateRepository.supersedeAwaitingByWorkItem(
+      workItemId,
+      'agent_review',
+      'review_agent_disabled',
+      tx,
+    );
+    const item = await workItemRepository.findById(workItemId, tx);
+    if (item) await reconcileGatesFor(item, tx);
+  }
+  return cards;
+}
+
 export const approvalGateSettingsService = {
   /**
    * The room's read. Resolution runs under `withSystemContext` and the ACCESS
@@ -50,7 +118,7 @@ export const approvalGateSettingsService = {
     const project = await withSystemContext((tx) => projectRepository.findById(projectId, tx));
     if (!project) throw new ProjectNotFoundError(projectId);
 
-    return { acceptanceVideoEnabled: project.acceptanceVideoEnabled };
+    return toSettingsDTO(project);
   },
 
   /**
@@ -68,22 +136,50 @@ export const approvalGateSettingsService = {
     // An empty patch is a no-op READ rather than an error: the route forwards only
     // the keys the body carried, and a caller sending none has asked for nothing.
     // Returning the current state keeps the client's reconcile honest either way.
-    if (patch.acceptanceVideoEnabled === undefined) {
+    // Only the switches the patch carries are written, so a PATCH naming one switch
+    // leaves every other exactly as it was.
+    const data: UpdateApprovalGateSettingsInput = {};
+    if (patch.acceptanceVideoEnabled !== undefined) {
+      data.acceptanceVideoEnabled = patch.acceptanceVideoEnabled;
+    }
+    if (patch.reviewAgentEnabled !== undefined) data.reviewAgentEnabled = patch.reviewAgentEnabled;
+    // The design switch is read at RAISE time (MOTIR-697), so writing it never decides
+    // a gate already waiting (§2f).
+    if (patch.designApprovalGate !== undefined) data.designApprovalGate = patch.designApprovalGate;
+    if (Object.keys(data).length === 0) {
       const project = await withSystemContext((tx) => projectRepository.findById(projectId, tx));
       if (!project) throw new ProjectNotFoundError(projectId);
-      return { acceptanceVideoEnabled: project.acceptanceVideoEnabled };
+      return toSettingsDTO(project);
     }
 
+    // ⚠️ ONLY THE KEYS THE BODY CARRIED. The design switch is read at RAISE time
+    // (MOTIR-697), so writing it never decides a gate already waiting — flipping it
+    // off leaves an in-progress review to its reviewer, and flipping it back on
+    // affects only gates raised afterwards (§2f).
     const updated = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      (tx) =>
-        projectRepository.updateApprovalGateSettings(
-          projectId,
-          { acceptanceVideoEnabled: patch.acceptanceVideoEnabled },
-          tx,
-        ),
+      async (tx) => {
+        // ⚠️ THE REVIEW AGENT NEEDS A PROJECT THAT ASKS BEFORE MERGING (§12.2a). The
+        // merge mode is read under the project's row lock — the lock the merge-mode
+        // write takes too — so the two switches cannot be turned into the forbidden
+        // pair by two admins at once.
+        if (data.reviewAgentEnabled === true) {
+          await projectRepository.lockById(projectId, tx);
+          const mode = await projectRepository.findPrMergeMode(projectId, tx);
+          if (!mode) throw new ProjectNotFoundError(projectId);
+          if (mode.prMergeMode === 'auto') throw new ReviewAgentNeedsManualMergeError(projectId);
+        }
+        const project = await projectRepository.updateApprovalGateSettings(projectId, data, tx);
+        const retired =
+          data.reviewAgentEnabled === false ? await retireAwaitingReviews(projectId, tx) : [];
+        return { project, retired };
+      },
     );
+    // POST-COMMIT and best-effort (MOTIR-5597, decision 8), as the promotion does: a GitHub
+    // approval recorded while the agent was reviewing applies to the approve-and-merge
+    // gate the switch just raised in its place (§12.2).
+    for (const workItemId of updated.retired) await evaluateAfterRaise(workItemId, ctx.workspaceId);
 
-    return { acceptanceVideoEnabled: updated.acceptanceVideoEnabled };
+    return toSettingsDTO(updated.project);
   },
 };

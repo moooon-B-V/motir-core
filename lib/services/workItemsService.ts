@@ -52,7 +52,7 @@ import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionR
 import { userRepository } from '@/lib/repositories/userRepository';
 import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
 import { countableReviewsAtHead, type CountableReview } from '@/lib/approvalGates/reviewVerdict';
-import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import type { GithubPullRequestWithContext } from '@/lib/repositories/githubPullRequestRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -67,7 +67,12 @@ import {
   rankOfStatus,
   withdrawsPendingQuestion,
 } from '@/lib/workItems/statusLadder';
-import { reconcileAcceptanceOwnerOf, reconcileGatesFor } from '@/lib/services/gateSetFor';
+import {
+  IN_REVIEW_STATUS_KEY,
+  reconcileAcceptanceOwnerOf,
+  reconcileGatesFor,
+  withdrawMergeQuestionOffReview,
+} from '@/lib/services/gateSetFor';
 import { choiceBodyOf, choiceGateService } from '@/lib/services/choiceGateService';
 import { decisionConfirmationGateService } from '@/lib/services/decisionConfirmationGateService';
 import { asksTheConfirmQuestion } from '@/lib/approvalGates/decisionConfirmationHandler';
@@ -1611,7 +1616,7 @@ async function readGithubReviewsForRows(
     if (!rowReviews || rowReviews.length === 0) continue;
 
     // The row's CURRENT head, read the way the gate's own version reads it.
-    const head = liveRowsAtLatestSha(row.checkRuns)[0]?.commitSha ?? null;
+    const head = pullRequestHead(row);
 
     const decided = head ? pickReview(countableReviewsAtHead(rowReviews, head)) : null;
     if (decided) {
@@ -3489,6 +3494,33 @@ export const workItemsService = {
       }
     }
 
+    // ⚠️ AND THE MERGE QUESTION LEAVES WITH THE CARD, WHEREVER IT GOES (MOTIR-6971;
+    // ADR `approval-gates.md` §8's EIGHTH AMENDMENT). The approve-to-merge question
+    // exists only while the card is `in_review`, so a move to ANY other open status
+    // supersedes it — `blocked` included, which rule 6 above keeps every OTHER
+    // question through, and a system write included, which rule 6 skips. Three moves
+    // are not this rule's:
+    //   · into the DONE category — the merge sync and Cancelled settle it (rule 6, and
+    //     `withdrawPullRequestApprovalGatesOnClose` by subject);
+    //   · the decide door's own write (`decidingGateId`) — `in_review → approved` is
+    //     the approval itself, and its gate is still `awaiting` until the door records it;
+    //   · the merge sync's lifecycle move (`keepPendingQuestions`), which withdraws by
+    //     subject before it moves.
+    // Under the locks taken at the top, in the door's order (rule 8).
+    if (
+      awaitingGates.some((gate) =>
+        (['pull_request_approval', 'agent_review', 'acceptance_result'] as const).some(
+          (kind) => gate.kind === kind,
+        ),
+      ) &&
+      target.category !== 'done' &&
+      toStatusKey !== IN_REVIEW_STATUS_KEY &&
+      !opts.decidingGateId &&
+      !opts.keepPendingQuestions
+    ) {
+      await withdrawMergeQuestionOffReview({ ...current, status: toStatusKey }, tx);
+    }
+
     // ⚠️ THE CARD'S OWN STATUS CHANGE RE-ASKS THE PREDICATE (Story MOTIR-5652 ·
     // Subtask MOTIR-5670), and it is here because a MEASUREMENT said it was owed
     // rather than because a reading said so — see the note below for what the
@@ -3529,7 +3561,13 @@ export const workItemsService = {
       });
       if (rank >= RUNG_RANK.implemented) {
         const fresh = await workItemRepository.findById(workItemId, tx);
-        if (fresh) await reconcileGatesFor(fresh, tx);
+        // ⚠️ AS IT WILL STAND, not as it stood (MOTIR-6971). This runs BEFORE the row
+        // write below, so the read still carries the OLD status — harmless while the
+        // predicate never looked at it, and wrong now that the merge question is asked
+        // only at `in_review`: a hand move `in_progress → in_review` would ask nothing.
+        // The write lands in this same transaction, so the target IS the status the
+        // gate will be raised against.
+        if (fresh) await reconcileGatesFor({ ...fresh, status: toStatusKey }, tx);
       }
     }
 

@@ -20,8 +20,9 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
 // when nobody is looking: an idle instance hibernates, a running interval never
 // outlives the 12-hour backstop, an organisation the credit pre-flight now
 // refuses stops running, a machine that stopped or vanished behind Motir's back
-// is reconciled and its interval charged, an orphan machine or volume is
-// destroyed, and every closed interval is charged exactly once.
+// is reconciled and its interval charged, an orphan volume is destroyed (an
+// orphan MACHINE is the attribution reconciler's, MOTIR-6925), and every
+// closed interval is charged exactly once.
 //
 // ⚠️ TWO CLOCKS, AND THE DECISION'S "EVERY 5 MINUTES" IS THE ONE THAT MOVED.
 // §2 names a 5-minute sweep. The job substrate refuses any cron off the
@@ -53,7 +54,7 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
 // already paid into. An organisation that has run out stops within one pass: the
 // overdraft is bounded by the sweep's 30 minutes, not by the backstop's 12 hours.
 
-/** A machine or volume younger than this is never an orphan — its create may be in flight. */
+/** A volume younger than this is never an orphan — its create may be in flight. */
 const ORPHAN_MIN_AGE_MS = 15 * 60 * 1000;
 
 /** How many rows one pass reads per state — a sweep is bounded, the next one continues. */
@@ -65,7 +66,8 @@ export interface AgentInstanceSweepSummary {
   /** Running machines charged for their minutes so far without stopping (AMENDMENT 2). */
   rolled: number;
   hibernated: { idle: number; backstop: number; credits: number };
-  orphans: { machines: number; volumes: number };
+  /** Orphan volumes destroyed. Orphan MACHINES are the attribution reconciler's (MOTIR-6925). */
+  orphans: { volumes: number };
   charges: { charged: number; notCharged: number; refused: number; retryable: number };
   errors: number;
 }
@@ -114,7 +116,7 @@ export const agentInstanceSweepService = {
       reconciled: 0,
       rolled: 0,
       hibernated: { idle: 0, backstop: 0, credits: 0 },
-      orphans: { machines: 0, volumes: 0 },
+      orphans: { volumes: 0 },
       charges: { charged: 0, notCharged: 0, refused: 0, retryable: 0 },
       errors: 0,
     };
@@ -198,7 +200,10 @@ export const agentInstanceSweepService = {
         });
       }
 
-      // 3 · Orphans: a machine or volume in an instance app no live record owns.
+      // 3 · Orphan VOLUMES: a volume in an instance app no live record owns.
+      //     The MACHINE half moved to the attribution reconciler
+      //     (`fleetAttributionService`, MOTIR-6925 — `fleet-per-org-pool.md` §6),
+      //     so one rule, in one place, raises one alert for every machine Fly runs.
       const apps = await withSystemContext((tx) => agentInstanceRepository.listDistinctApps(tx));
       const orchestrator = getPersistentOrchestrator();
       for (const app of apps) {
@@ -206,24 +211,13 @@ export const agentInstanceSweepService = {
           const owners = await withSystemContext((tx) =>
             agentInstanceRepository.listLiveInApp(app, tx),
           );
-          const machineIds = new Set(owners.flatMap((o) => (o.machineId ? [o.machineId] : [])));
           const volumeIds = new Set(owners.flatMap((o) => (o.volumeId ? [o.volumeId] : [])));
           const inventory = await orchestrator.listPersistent(app);
           const old = (at: Date | null) =>
             at !== null && now.getTime() - at.getTime() >= ORPHAN_MIN_AGE_MS;
-          for (const machine of inventory.machines) {
-            if (machineIds.has(machine.machineId) || !old(machine.createdAt)) continue;
-            await orchestrator.destroyMachine(app, machine.machineId);
-            console.warn('[agentInstanceSweep] destroyed an orphan instance machine', {
-              app,
-              machineId: machine.machineId,
-              instanceId: machine.instanceId,
-            });
-            summary.orphans.machines += 1;
-          }
-          // A volume still attached in this snapshot waits for the next pass, even
-          // when its machine was just destroyed above: Fly refuses a volume delete
-          // while its machine is still going away.
+          // A volume still attached waits for the next pass: Fly refuses a volume
+          // delete while its machine exists, and the reconciler destroys an
+          // orphan machine on its own schedule.
           for (const volume of inventory.volumes) {
             if (volumeIds.has(volume.volumeId) || volume.attachedMachineId) continue;
             if (!old(volume.createdAt)) continue;

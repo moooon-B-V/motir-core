@@ -53,7 +53,8 @@ function positiveIntFromEnv(name: string, fallback: number): number {
  * per-organisation cap. This bounds only what Motir has running on Fly at once if
  * everything else failed — Fly offers no spending cap of its own — so it sits well
  * above ordinary use and an operator raises it as usage grows. Agents have their
- * OWN pool: this number is not a share of CI's `MOTIR_FLEET_MAX_IN_FLIGHT`.
+ * OWN pool: this number is not a share of an org's fleet pool
+ * (`MOTIR_FLEET_ORG_MAX_IN_FLIGHT`).
  */
 export function instanceMaxRunning(): number {
   return positiveIntFromEnv('MOTIR_INSTANCE_MAX_RUNNING', 50);

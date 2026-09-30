@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
@@ -214,9 +215,23 @@ describe('2 · the guards', () => {
     ).toEqual(['a.ts', 'b.ts']);
   });
 
+  // The ONE file allowed to NAME a credential variable: the panel's sign-in hints
+  // (MOTIR-6941), whose Aider entry tells the PERSON which line to write into their
+  // own `~/.env`. It is display copy — no Motir process reads, sets or forwards the
+  // variable — and it is pinned below so no other value in it can slip past.
+  const SIGN_IN_COPY = 'lib/agentInstances/profiles.ts';
+
   it('no story file reads, stores or logs a vendor credential — Motir never touches the user’s sign-in', () => {
     const files = sourcesOf(STORY_FILES);
-    expect(offenders(VENDOR_CREDENTIAL, files)).toEqual([]);
+    expect(offenders(VENDOR_CREDENTIAL, files).filter((f) => f !== SIGN_IN_COPY)).toEqual([]);
+    const copy = files.find((f) => f.file === SIGN_IN_COPY);
+    if (copy) {
+      // Only the Aider hint's inline-code value may carry a credential name, and
+      // only as a placeholder the person fills in themselves.
+      const hits = copy.code.match(new RegExp(VENDOR_CREDENTIAL.source, 'g')) ?? [];
+      expect(hits).toEqual(['ANTHROPIC_API_KEY']);
+      expect(copy.code).toContain("values: ['ANTHROPIC_API_KEY=…', '~/.env']");
+    }
     expect(
       offenders(VENDOR_CREDENTIAL, [
         { file: 'a.ts', code: 'env: { ANTHROPIC_API_KEY: key }' },
@@ -453,7 +468,7 @@ describe('3 · the edges', () => {
       env: { MOTIR_INSTANCE_ID: 'orphan' },
     });
     await fleet.destroyMachine(orphan.app, orphan.machineId);
-    expect((await sweeper.sweep()).orphans).toEqual({ machines: 0, volumes: 0 });
+    expect((await sweeper.sweep()).orphans).toEqual({ volumes: 0 });
   });
 
   it('the list counts an interval begun before this month only from the month’s start', async () => {
@@ -588,9 +603,18 @@ describe('3b · the edges, staged in the database', () => {
       data: { machineId: null, volumeId: null, state: 'failed' },
     });
     clock.advance(20 * MIN);
-    // The real machine and volume are now owned by nobody: both are orphans.
+    // The real machine and volume are now owned by nobody. The MACHINE is the
+    // attribution reconciler's (MOTIR-6925); the sweep keeps only the volume,
+    // which waits while its machine still holds it.
     const first = await sweeper.sweep();
-    expect(first.orphans.machines).toBe(1);
+    expect(first.orphans.volumes).toBe(0);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const reconciled = await fleetAttributionService.reconcile({
+      now: () => new Date(clock.now().getTime() + 20 * MIN),
+    });
+    expect(reconciled).toMatchObject({ killed: [{ reason: 'no_record', action: 'destroyed' }] });
+    const second = await sweeper.sweep();
+    expect(second.orphans.volumes).toBe(1);
   });
 
   it('the charge backstop counts a refusal', async () => {

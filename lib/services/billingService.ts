@@ -16,6 +16,7 @@ import {
   type SeatQuantityResult,
 } from '@/lib/ai/motirAiClient';
 import { isCloudBilling } from '@/lib/billing/availability';
+import { isPaidAiSubscriptionStatus } from '@/lib/services/aiPlanGateService';
 import {
   BILLING_CATALOG,
   DEFAULT_CHECKOUT_QUANTITY,
@@ -37,8 +38,9 @@ import type { AiAccessDTO } from '@/lib/dto/aiAccess';
 // A paid Motir AI plan = a live Stripe subscription that grants the monthly
 // allotment (decision §5). `trialing` (the one-time free grant), `canceled`
 // (dropped to free) and "no subscription" are NOT paid — they take the tier-gate
-// paywall ("AI is a paid feature"), not the out-of-credits one.
-const PAID_AI_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due']);
+// paywall ("AI is a paid feature"), not the out-of-credits one. The status list
+// lives in `aiPlanGateService` (MOTIR-6909), so the billing panel and the fleet's
+// plan gate read ONE definition.
 
 // The OPEN-CORE side of billing (Story 8.1.6). motir-core holds NO ledger and NO
 // Stripe key (the open-core invariant): it READS the org's plan over the boundary
@@ -150,8 +152,7 @@ export const billingService = {
               }
             : null,
         hasPaidAiPlan:
-          (subscription.status !== null &&
-            PAID_AI_SUBSCRIPTION_STATUSES.has(subscription.status)) ||
+          isPaidAiSubscriptionStatus(subscription.status) ||
           (org?.isMeta ?? false) ||
           (org?.internalBilling ?? false),
       },
@@ -283,8 +284,7 @@ export const billingService = {
       organizationId: input.organizationId,
       organizationName: org?.name ?? null,
       canManageBilling: orgCan(access.role, 'manageBilling'),
-      hasPaidAiPlan:
-        subscription.status !== null && PAID_AI_SUBSCRIPTION_STATUSES.has(subscription.status),
+      hasPaidAiPlan: isPaidAiSubscriptionStatus(subscription.status),
       balance: usage.balance,
       tierName: usage.tier?.name ?? null,
       tierAllotment: usage.tier?.monthlyCreditAllotment ?? null,

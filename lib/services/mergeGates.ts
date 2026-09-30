@@ -2,7 +2,7 @@ import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { getGitProvider } from '@/lib/git';
 import { providerSupportsMerge } from '@/lib/git/provider';
 import type { GitProviderId } from '@/lib/git/types';
-import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { pullRequestHead, prCiStateAtHead } from '@/lib/github/pullRequestHead';
 import { isConflictedAt } from '@/lib/github/mergeability';
 import {
   githubPullRequestRepository,
@@ -10,9 +10,12 @@ import {
 } from '@/lib/repositories/githubPullRequestRepository';
 import {
   acceptanceRefusalHoldsMerge,
+  agentReviewStanding,
   designHoldsMerge,
   primaryApprovalStandsForMerge,
 } from '@/lib/approvalGates/gateSet';
+import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -47,9 +50,9 @@ export interface AutoMergeRequest {
  * head. Asked by the `auto` arm below and by the approve-and-merge gate's own raise, so
  * both modes read one statement of it.
  *
- * ⚠️ A green pull request always HAS a head: `derivePrCiState` answers `passing` only
- * over a non-empty set of rows at the latest sha, so the head is read from that same
- * set rather than checked for separately.
+ * ⚠️ A green pull request always HAS a head: `prCiStateAtHead` answers `passing` only
+ * over a non-empty set of rows AT the pull request's head, so the head exists whenever
+ * the verdict is green and is not checked for separately.
  *
  * ⚠️ AND A DRAFT IS NOT A CANDIDATE (MOTIR-5699). A draft is its author saying *not
  * ready*, and the host refuses to merge one — so a green draft that counted here put an
@@ -63,13 +66,23 @@ export interface AutoMergeRequest {
  * bug MOTIR-5907). A green pull request that no longer combines with its base can only
  * be refused when pressed, so it is asked about nobody — `lib/github/mergeability.ts`
  * holds the rule the three readers share. `null` stays a candidate, for the draft
- * arm's reason: an answer nobody has computed is not a conflict.
+ * arm's reason: an answer nobody has computed is not a conflict. *
+ * ⚠️ AND "GREEN AT ITS HEAD" MEANS THE PULL REQUEST'S HEAD (MOTIR-7005). A push that
+ * produced no check rows leaves the newest rows at the old commit; that commit is not
+ * the pull request, so its green makes nothing a candidate — `prCiStateAtHead` answers
+ * `null` for a head with no rows, and the head returned is the stored one.
  */
 export function mergeCandidateHead(
   pr:
     | (Pick<
         GithubPullRequestWithInstallation,
-        'state' | 'merged' | 'draft' | 'checkRuns' | 'mergeableState' | 'mergeableStateHeadSha'
+        | 'state'
+        | 'merged'
+        | 'draft'
+        | 'headSha'
+        | 'checkRuns'
+        | 'mergeableState'
+        | 'mergeableStateHeadSha'
       > & {
         repo: { provider: string };
       })
@@ -81,11 +94,11 @@ export function mergeCandidateHead(
     pr.merged ||
     pr.draft === true ||
     !providerSupportsMerge(getGitProvider(pr.repo.provider as GitProviderId)) ||
-    derivePrCiState(pr.checkRuns) !== 'passing'
+    prCiStateAtHead(pr) !== 'passing'
   ) {
     return null;
   }
-  const head = liveRowsAtLatestSha(pr.checkRuns)[0]!.commitSha;
+  const head = pullRequestHead(pr)!;
   return isConflictedAt(pr, head) ? null : head;
 }
 
@@ -157,6 +170,42 @@ async function primaryApprovalCarries(
 }
 
 /**
+ * Does the REVIEW AGENT hold this card's merge (Story MOTIR-1626 · MOTIR-6819;
+ * `approval-gates.md` §12.2)? True while the switch is on in a `manual` project and the
+ * review at the delivery set's CURRENT version has not passed — owed, awaiting, or sent
+ * back. {@link agentReviewStanding} is the one statement of it, shared with the gate set.
+ *
+ * ⚠️ WHAT IT HOLDS IS A PRIMARY'S CARRIED MERGE. The predicate stops asking the merge
+ * question while the review is owed, but a design, decision or acceptance approved before
+ * the set went green carries the merge with no merge gate at all (AMENDMENT 6 Q4) — and
+ * that carry is settled HERE, by the green verdict or by `settleAfterPrimaryApproval`. So
+ * the carry waits for the review, and a review's pass reaches this same settlement
+ * (`agentReviewHandler`'s after-commit), the way a primary approved before green does.
+ * No code merges unreviewed, whichever gate a person pressed.
+ */
+export async function agentReviewHoldsMerge(
+  item: WorkItem,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const settings = await projectRepository.findMergeSettings(item.projectId, tx);
+  if (!settings?.reviewAgentEnabled || settings.prMergeMode !== 'manual') return false;
+  const [deliveries, latestAgentReviewGate, latestMergeGate] = await Promise.all([
+    workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
+    approvalGateRepository.findLatestByWorkItem(item.id, 'agent_review', tx),
+    approvalGateRepository.findLatestByWorkItem(item.id, 'pull_request_approval', tx),
+  ]);
+  const standing = agentReviewStanding({
+    reviewAgentEnabled: settings.reviewAgentEnabled,
+    prMergeMode: settings.prMergeMode,
+    workItemId: item.id,
+    version: deliverySetVersion(deliveries.map((delivery) => deliveryMemberVersion(delivery))),
+    latestAgentReviewGate,
+    latestMergeGate,
+  });
+  return standing === 'owed' || standing === 'refused';
+}
+
+/**
  * {@link designHoldsMerge}, read from the card's own rows — whether an unanswered design
  * holds this card's merge (Bug MOTIR-5762). Exported for the review sync, the other merge
  * path that does not go through the design's own press.
@@ -212,6 +261,10 @@ export async function settleGreenVerdict(
     // ACCEPTANCE's (MOTIR-5789) — and, for a DECISION card, in
     // `decisionApprovalStandsForMerge` (MOTIR-5677, clause 5).
     if (!(await primaryApprovalCarries(args.item, tx))) return [];
+    // ⚠️ …AND THE CARRY WAITS FOR THE REVIEW AGENT (MOTIR-6819; `approval-gates.md` §12.2):
+    // a primary approved while the review has not passed records its decision and carries
+    // nothing yet. The review's pass settles the card again and lands here.
+    if (await agentReviewHoldsMerge(args.item, tx)) return [];
   } else if (mode?.prMergeMode !== 'auto') {
     return [];
   } else if ((await resolveRunTargetFor(args.item, tx)).kind === 'ancestor') {

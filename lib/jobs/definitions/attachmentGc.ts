@@ -29,16 +29,9 @@ import { defineJob } from '../defineJob';
 
 /** 03:30 every day — off-peak, and FIRST in the nightly table-walk cascade
  *  (03:30 here → 04:00 rate-limit sweep → 04:30 automation retention → 05:00
- *  code-graph offboard).
- *
- *  ⚠️ VALUE UNCHANGED, RATIONALE CORRECTED (MOTIR-3314). It read "clear of the
- *  09:00 health check", which prices the wrong thing: on a compute that suspends
- *  when idle, being clear of another schedule is what COSTS money, because each
- *  distinct minute is another wake. :30 is already a clustered minute
- *  (`lib/jobs/schedules.ts`), so this job needed no re-timing — but it needed to
- *  stop giving the superseded reason, or the next reader re-derives it. What
- *  genuinely matters here is the HOUR: this is a large-table walk and it gets the
- *  cascade's first slot to itself. */
+ *  code-graph offboard). Daily because an orphan only has to outlive its 7-day
+ *  safety window, and the hour matters because this is a large-table walk that
+ *  gets the cascade's first slot to itself. */
 export const ATTACHMENT_GC_CRON = '30 3 * * *';
 
 export const attachmentGc = defineJob(

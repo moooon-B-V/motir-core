@@ -28,7 +28,11 @@ import {
 } from '@/lib/approvalGates/registry';
 import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
 import { foldPendingDecisions } from '@/lib/approvalGates/pendingDecision';
-import { settingsDoorFor, type GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
+import {
+  SETTINGS_DOOR_PERMISSION,
+  settingsDoorFor,
+  type GateSettingsDoor,
+} from '@/lib/approvalGates/settingsDoor';
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateNotAuthorisedError,
@@ -92,6 +96,36 @@ import { planGateStampInputs, planSubjectVersion } from '@/lib/approvalGates/pla
 import { readPlanGateHeld } from '@/lib/approvalGates/planApprovalHandler';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { designAutoRerunRepository } from '@/lib/repositories/designAutoRerunRepository';
+import { toDesignAutoRerunDto } from '@/lib/mappers/designAutoRerunMappers';
+
+/**
+ * WHAT A DECISION CAUSED, as the deciding write records it — the ONE writer of
+ * `approval_gate.outcome_ref` (MOTIR-5520's pin, `tests/github/pullRequestMergeRecord.test.ts`).
+ * Shared by the decide door and the system approval (MOTIR-697), so the column keeps one
+ * meaning whichever of them decided.
+ *
+ * ⚠️ ON A CHOICE it is the OPTION'S ID (ADR §1's MOTIR-5887 amendment, point 7): Workflow A
+ * always writes `done`, so the status is implied by the kind and the column holds what only
+ * this decision caused. `confirmedRecord` is a CONFIRMED decision's written record, or that
+ * there was none (ADR §1's MOTIR-5952 amendment, point 8); null on every other kind.
+ */
+function decisionOutcomeFields(effect: GateEffect): {
+  outcomeRef: string | null;
+  chosenOption: NonNullable<GateEffect['chosenOption']> | null;
+  confirmedRecord: NonNullable<GateEffect['confirmedRecord']> | null;
+} {
+  return {
+    outcomeRef: effect.chosenOption ? effect.chosenOption.optionId : effect.statusWritten,
+    chosenOption: effect.chosenOption ?? null,
+    confirmedRecord: effect.confirmedRecord ?? null,
+  };
+}
+
+/** The design-approval switch's address — the card's anchor on Settings → Approvals. */
+export const DESIGN_APPROVAL_SETTINGS_HREF = '/settings/project/approvals#design-approval';
+import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
+import { resolveStatusIntent } from '@/lib/workflows/statusIntent';
 
 // THE DECIDE DOOR (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
 // docs/decisions/approval-gates.md).
@@ -138,6 +172,10 @@ const CONFIRMATION_KIND = 'decision_confirmation';
 /** The one kind that offers no `request_changes` because a plan is changed by TALKING
  *  to the planner (ADR §11.4, MOTIR-6035). */
 const PLAN_KIND = 'plan_approval';
+/** The REVIEW AGENT's kind (ADR §12.3, MOTIR-6819) — decided by the agent through
+ *  {@link approvalGatesService.decideAgentReview}, or APPROVED by the routed person with a
+ *  reason (*Continue without the review*); a person has no refusal verb on it. */
+const AGENT_REVIEW_KIND = 'agent_review';
 
 export interface DecideGateInput {
   gateId: string;
@@ -172,8 +210,12 @@ export interface DecideGateInput {
    * review approved in GitHub's own UI, where nobody clicked in Motir. It is not
    * reachable from this build's two callers, both of which have a human or a
    * token behind them.
+   *
+   * `system` is NOT accepted here, and the type is what refuses it (MOTIR-697): no
+   * caller of the door may claim that nobody pressed. Its one writer is
+   * {@link approvalGatesService.approveBySystem}, on the publish path.
    */
-  source: ApprovalGateDecisionSourceDTO;
+  source: Exclude<ApprovalGateDecisionSourceDTO, 'system'>;
   /**
    * WHAT THE READER WAS SHOWN — the `stamp` the render read handed them
    * (`WorkItemGateRead.stamp`), handed back with the press (Story MOTIR-5232 ·
@@ -234,6 +276,20 @@ export interface DecideGateOptions {
    * untouched as `GateEffectArgs.effectOptions`. ⚠️ INTERNAL, like the two above.
    */
   effectOptions?: Readonly<Record<string, unknown>>;
+
+  /**
+   * THE REVIEW AGENT DECIDED (Story MOTIR-1626 · MOTIR-6819; ADR `approval-gates.md`
+   * §12.3) — a hosted review run's verdict on an `agent_review` gate, about the version it
+   * NAMES. Recorded under the authority `review_agent`, which `resolveGateAuthority` never
+   * returns, so no person's press can claim it; `decidedById` is the run's attributed user
+   * (`ctx.userId`). The door refuses it on any other kind, and refuses a verdict about a
+   * version that is not the gate's as STALE.
+   *
+   * ⚠️ INTERNAL, like the three above — reached only through
+   * {@link approvalGatesService.decideAgentReview}, whose one caller is the run-token
+   * verdict route (MOTIR-6821). No route, server action or MCP tool accepts it.
+   */
+  reviewAgent?: { subjectVersion: string };
 }
 
 export interface DecideGateResult {
@@ -909,7 +965,22 @@ export const approvalGatesService = {
       const offersRefusalVerdict =
         row.state === 'awaiting' ? await refusalVerdictOfferFor(row, tx) : false;
 
-      const gateDto = toApprovalGateDto(row, item.descriptionMd, offersRefusalVerdict);
+      // THE TWO VIEW FACTS a design gate's record band draws (Story MOTIR-693 · MOTIR-702).
+      // A refused design gate carries its automatic re-run's record, if one was written;
+      // a SYSTEM-approved one carries the switch's address for a reader who may open it.
+      const rerunRow =
+        row.kind === 'design_result' && row.state === 'changes_requested'
+          ? await designAutoRerunRepository.findByGateId(row.id, tx)
+          : null;
+      const baseDto = toApprovalGateDto(row, item.descriptionMd, offersRefusalVerdict);
+      const gateDto = {
+        ...baseDto,
+        autoRerun: rerunRow ? toDesignAutoRerunDto(rerunRow) : null,
+        systemApprovalSettingsHref:
+          row.decisionSource === 'system' && held.has(SETTINGS_DOOR_PERMISSION)
+            ? DESIGN_APPROVAL_SETTINGS_HREF
+            : null,
+      };
       const earlierDto = earlier ? toEarlierApprovalDto(earlier) : null;
       // A Visitor reads every person by name only (MOTIR-6646).
       const decider = isVisitorActor(ctx)
@@ -1993,15 +2064,22 @@ export const approvalGatesService = {
       //     about a WORK ITEM's assignee and reporter, and a plan gate has none, so
       //     its authority is the kind's permission alone — the floor just asserted —
       //     recorded as `plan_permission` (`resolveCardlessGateAuthority`).
+      // ⚠️ THE REVIEW AGENT likewise skips the relationship half (MOTIR-6819; §12.3): its
+      //     entitlement is the review run's token, checked by the verdict route before this
+      //     door is called, and the attributed user may be the workspace's stand-in rather
+      //     than the card's assignee. The FLOOR above still applies to that user, as it does
+      //     to a synced decision's actor.
       const authority: ApprovalGateAuthorityDTO | null = options.synced
         ? 'github_review'
-        : item
-          ? await resolveGateAuthority(item, ctx, tx)
-          : await resolveCardlessGateAuthority(
-              { projectId, permission: handler.permission },
-              ctx,
-              tx,
-            );
+        : options.reviewAgent
+          ? 'review_agent'
+          : item
+            ? await resolveGateAuthority(item, ctx, tx)
+            : await resolveCardlessGateAuthority(
+                { projectId, permission: handler.permission },
+                ctx,
+                tx,
+              );
       if (!authority) throw new ApprovalGateNotAuthorisedError(input.gateId);
 
       // THE SYNCED ACTOR, resolved UNDER THE LOCK so the membership it reads is the
@@ -2104,6 +2182,18 @@ export const approvalGatesService = {
       // rather than what was approved. No earlier kind's effect moves its own subject, so
       // for them the two readings agree.
       const decidedVersion = await handler.subjectVersion(args);
+      // 3b′ · THE REVIEW AGENT'S VERDICT IS ABOUT ONE VERSION (MOTIR-6819; ADR §12.4, §12.5).
+      //       A verdict naming a version that is not the gate's, or a gate whose set has
+      //       moved under it, decides nothing — the push landed mid-review, and the verdict
+      //       is recorded on the RUN, never on the gate. After the state refusals, so a
+      //       withdrawn review is reported as withdrawn.
+      if (
+        options.reviewAgent &&
+        (locked.subjectVersion !== options.reviewAgent.subjectVersion ||
+          decidedVersion !== locked.subjectVersion)
+      ) {
+        throw new ApprovalGateStaleSubjectError(input.gateId, ['subject']);
+      }
       if (input.stamp !== DECIDED_WITHOUT_A_READER) {
         const moved = stampMoved(input.stamp, {
           // ⚠️ A SUBJECT REVISED IN PLACE (a plan, ADR §11.3/§11.5c) stamps the version
@@ -2128,6 +2218,24 @@ export const approvalGatesService = {
       //      after the state and stale refusals, which describe the QUESTION, and
       //      before anything is written. An option the choice does not hold is the
       //      handler's to refuse, since only it reads the options.
+      // THE REVIEW AGENT'S KIND (ADR §12.3, MOTIR-6819): the agent's verdict only on its own
+      // gate; a PERSON only approves it — *Continue without the review* — and says why.
+      // Waving a review past is the decision that most needs its reason (§10a, extended).
+      const isAgentReview = locked.kind === AGENT_REVIEW_KIND;
+      if (options.reviewAgent && !isAgentReview) {
+        throw new ApprovalGateVerbNotOfferedError(input.gateId, 'review_agent_on_other_kind');
+      }
+      if (isAgentReview && !options.reviewAgent) {
+        if (input.decision === 'request_changes') {
+          throw new ApprovalGateVerbNotOfferedError(
+            input.gateId,
+            'request_changes_on_agent_review',
+          );
+        }
+        if (input.decision === 'approve' && !input.noteMd?.trim()) {
+          throw new ApprovalGateVerbNotOfferedError(input.gateId, 'override_needs_a_note');
+        }
+      }
       const isChoice = locked.kind === CHOICE_KIND;
       if (input.decision === 'choose' && !isChoice) {
         throw new ApprovalGateVerbNotOfferedError(input.gateId, 'choose_on_other_kind');
@@ -2307,11 +2415,10 @@ export const approvalGatesService = {
           // amendment, point 7): Workflow A always writes `done`, so the status is
           // implied by the kind and the column holds what only this decision caused —
           // which option won. `chosenOption` carries the rest of the pick.
-          outcomeRef: effect.chosenOption ? effect.chosenOption.optionId : effect.statusWritten,
-          chosenOption: effect.chosenOption ?? null,
-          // What a CONFIRMED decision's written record was — or that there was none
-          // (ADR §1's MOTIR-5952 amendment, point 8). Null on every other kind.
-          confirmedRecord: effect.confirmedRecord ?? null,
+          //
+          // Written through {@link decisionOutcomeFields}, the ONE writer of `outcomeRef`,
+          // which the system approval (MOTIR-697) shares rather than duplicates.
+          ...decisionOutcomeFields(effect),
           // WHAT THE REFUSAL MEANT (ADR §10d, MOTIR-6421) — validated in step 3c, so it is
           // non-null only on a Motir-pressed `design_result` refusal. HERE, in the deciding
           // write, because the decided-row trigger refuses any later amendment.
@@ -2319,6 +2426,13 @@ export const approvalGatesService = {
         },
         tx,
       );
+
+      // 6b · WHAT THE DECISION CAUSES ONCE ITS ROW SAYS SO (MOTIR-6819; ADR §12.4) — the
+      //      review agent's pass raises the approve-and-merge gate, which the gate set asks
+      //      only once it reads this review as decided.
+      if (handler.afterDecisionWritten) {
+        await handler.afterDecisionWritten({ ...args, state: decided.state });
+      }
 
       // A card's to-fix answer reads its LATEST decided gate of any kind — a Request
       // changes on the approve-to-merge question, or an acceptance Re-run — so every
@@ -2333,5 +2447,173 @@ export const approvalGatesService = {
         companionSubjectVersion: companionVersion,
       };
     }
+  },
+
+  /**
+   * THE REVIEW AGENT'S VERDICT (Story MOTIR-1626 · MOTIR-6819; ADR `approval-gates.md`
+   * §12.3–§12.5, `hosted-agent-run.md` §8.4) — the INTERNAL entry the run-token verdict
+   * route calls (MOTIR-6821). `ctx` is the review run's attributed user, who becomes
+   * `decidedById`; the row's authority is `review_agent`, which is what says a machine
+   * decided.
+   *
+   * `pass` approves — the door then raises the approve-and-merge gate for the SAME version
+   * and settles the card after the commit. `changes_requested` records the findings, which
+   * are REQUIRED and non-empty (the door's `request_changes_needs_a_note`), and moves
+   * nothing: the card is To fix `changes_requested`.
+   *
+   * REFUSED, and nothing written: a gate that is not awaiting (`ApprovalGateSupersededError`
+   * for a withdrawn review — the push landed mid-review — or `ApprovalGateAlreadyDecidedError`,
+   * one verdict per question), a verdict about another version or a set that moved
+   * (`ApprovalGateStaleSubjectError`), and a gate of any other kind.
+   *
+   * Addressed by the gate's id, or by the card — then its awaiting review, else its latest
+   * one, so a verdict for a withdrawn or decided review is refused as such rather than as
+   * a not-found.
+   */
+  async decideAgentReview(
+    input: ({ gateId: string } | { workItemId: string }) & {
+      subjectVersion: string;
+      verdict: 'pass' | 'changes_requested';
+      noteMd?: string | null;
+    },
+    ctx: ServiceContext,
+  ): Promise<DecideGateResult> {
+    const gateId =
+      'gateId' in input
+        ? input.gateId
+        : await withWorkspaceContext(ctx, async (tx) => {
+            const gate = await approvalGateRepository.findLatestByWorkItem(
+              input.workItemId,
+              AGENT_REVIEW_KIND,
+              tx,
+            );
+            if (!gate) throw new ApprovalGateNotFoundError(input.workItemId);
+            return gate.id;
+          });
+    return approvalGatesService.decide(
+      {
+        gateId,
+        decision: input.verdict === 'pass' ? 'approve' : 'request_changes',
+        noteMd: input.noteMd ?? null,
+        // The verdict arrives through a token calling the REST API (§12.3) — never `ui`,
+        // which would claim a person pressed.
+        source: 'api',
+        // Nobody was shown a stamp: the version the run reviewed is checked instead.
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
+      ctx,
+      { reviewAgent: { subjectVersion: input.subjectVersion } },
+    );
+  },
+
+  /**
+   * APPROVE A GATE ON BEHALF OF A PROJECT SETTING — the design gate of a project whose
+   * design approval is switched OFF (Story MOTIR-693 · MOTIR-697;
+   * `docs/decisions/hosted-design-rerun-and-design-approval-switch.md` §2).
+   *
+   * ⚠️ IT RUNS IN THE CALLER'S TRANSACTION, which is the whole reason it is not
+   * {@link approvalGatesService.decide}. The gate it decides was created a few statements
+   * earlier in the PUBLISH's own transaction and is not visible to any other connection,
+   * so the door — which opens its own — would not find it. §2b asks for the gate to be
+   * raised and approved in the same transaction, so a rollback never leaves one without
+   * the other.
+   *
+   * ⚠️ AND IT IS THE SAME DECISION, NOT A SECOND ONE. It takes the door's steps 1, 4, 5
+   * and 6 through the door's own parts, in the door's order: lock and re-read the gate,
+   * PIN the version (§6c), run the kind's `approve` EFFECT (so §3's status effect is a
+   * person's approval's exactly), then write the decision LAST with the whole audit set.
+   * What it skips is what has no subject here — step 2's actor gate (nobody pressed),
+   * step 3b's stale check (nobody was shown anything) and 3c's verb check (the verb is
+   * `approve`, which every kind but a choice offers; only `design_result` calls this).
+   *
+   * THE ROW (§2c): no actor and no label — `decidedById` / `decidedByLabel` null, which
+   * §6a warns reads as *nobody decided* ONLY when nothing else says who did; here
+   * `decisionSource = system` and `decidedUnderAuthority = project_setting` say it.
+   *
+   * The status key is resolved from statuses read ON `tx` through the pure
+   * `resolveStatusIntent` — never `workflowsService.resolveStatusKey`, which opens a
+   * second connection while this one holds the gate lock (the shape
+   * `applyStatusTransition` warns about).
+   */
+  async approveBySystem(
+    gateId: string,
+    ctx: ServiceContext,
+    tx: Prisma.TransactionClient,
+  ): Promise<DecideGateResult> {
+    // 1 · LOCK AND RE-READ.
+    const locked = await approvalGateRepository.lockById(gateId, tx);
+    if (!locked || locked.workItemId === null) throw new ApprovalGateNotFoundError(gateId);
+    // The door's two refusals, split as its own step 3 splits them (§6b): a withdrawn
+    // question is never reported as somebody's answer.
+    if (locked.state === 'superseded') {
+      throw new ApprovalGateSupersededError(gateId, locked.supersededCause);
+    }
+    if (locked.state !== 'awaiting') {
+      throw new ApprovalGateAlreadyDecidedError(
+        gateId,
+        locked.state,
+        locked.decidedById,
+        locked.decidedAt,
+        locked.decidedByLabel,
+      );
+    }
+    const item = await workItemRepository.findById(locked.workItemId, tx);
+    if (!item || item.workspaceId !== ctx.workspaceId) throw new ApprovalGateNotFoundError(gateId);
+
+    const handler = handlerFor(locked.kind);
+    const statuses = await workflowsRepository.findStatuses(item.projectId, ctx.workspaceId, tx);
+    const resolvedStatusKey = handler.statusIntent
+      ? resolveStatusIntent(statuses, handler.statusIntent)
+      : null;
+    const args = {
+      gate: {
+        id: locked.id,
+        workspaceId: locked.workspaceId,
+        projectId: locked.projectId,
+        workItemId: locked.workItemId,
+        subjectId: locked.subjectId,
+      },
+      item,
+      ctx,
+      tx,
+      resolvedStatusKey,
+      prepared: undefined,
+      effectOptions: undefined,
+      refusalVerdict: null,
+    };
+    const decidedVersion = await handler.subjectVersion(args);
+
+    // 4 · THE PIN — an approval keeps the bytes it was given on (§6c).
+    const pinnedId = await designEvidenceService.pinCurrentForWorkItem(locked.workItemId, tx);
+    const filesKept = locked.kind === 'design_result' ? pinnedId === locked.subjectId : null;
+
+    // 5 · THE KIND'S EFFECT — the same `approve` a person's press runs.
+    const effect = await handler.approve(args);
+
+    // 6 · THE DECISION, LAST, with the §2c markers.
+    const decided = await approvalGateRepository.decide(
+      locked.id,
+      {
+        state: 'approved',
+        decidedById: null,
+        decidedAt: new Date(),
+        noteMd: null,
+        subjectVersion: decidedVersion,
+        decidedByLabel: null,
+        decidedUnderAuthority: 'project_setting',
+        decisionSource: 'system',
+        ...decisionOutcomeFields(effect),
+        refusalVerdict: null,
+      },
+      tx,
+    );
+    await recomputeWorkItemFixReason(item.id, tx);
+
+    return {
+      gate: toApprovalGateDto(decided, item.descriptionMd),
+      effect,
+      filesKept,
+      companionSubjectVersion: null,
+    };
   },
 };

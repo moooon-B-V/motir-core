@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
+import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { homeService } from '@/lib/services/homeService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from '../helpers/adminDb';
@@ -269,5 +270,102 @@ describe('To fix offers Continue hosted where the reader may edit (§ 31, MOTIR-
     await card(fx, 'building', 'in_progress');
     const page = await homeService.listInProgress(hctx(fx));
     expect(page.items.every((r) => r.canContinueHosted === false)).toBe(true);
+  });
+});
+
+describe('To fix offers Fix on the hosted agent on a row a REVIEW sent back (§ 32, MOTIR-6930)', () => {
+  async function sentBackBy(
+    fx: WorkItemFixture,
+    title: string,
+    gate: 'agent_review' | 'pull_request_approval' | 'acceptance_result',
+    assigneeId?: string,
+  ) {
+    const item = await card(fx, title, 'in_review', 'changes_requested');
+    await adminDb.workItem.update({
+      where: { id: item.id },
+      data: {
+        fixDetail: { ...DETAIL, check: null, gate, reviewerName: 'Mei Lin' },
+        ...(assigneeId ? { assigneeId } : {}),
+      },
+    });
+    return item;
+  }
+
+  it('an editor gets it on the agent’s and a person’s refusal — never on red CI or an acceptance Re-run', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'FHE' });
+    const agent = await sentBackBy(fx, 'agent', 'agent_review');
+    const person = await sentBackBy(fx, 'person', 'pull_request_approval');
+    const rerun = await sentBackBy(fx, 'rerun', 'acceptance_result');
+    const red = await card(fx, 'red', 'implemented', 'ci_failed');
+
+    const page = await homeService.listToFix(hctx(fx));
+    const row = (id: string) => page.items.find((r) => r.id === id)!;
+
+    expect(row(agent.id)).toMatchObject({ canFixHosted: true, repairRun: null });
+    expect(row(person.id)).toMatchObject({ canFixHosted: true, repairRun: null });
+    expect(row(rerun.id).canFixHosted).toBe(false);
+    expect(row(red.id).canFixHosted).toBe(false);
+    expect(page.items.every((r) => r.canContinueHosted === false)).toBe(true);
+  });
+
+  it('the open repair rides the row — hosted named as hosted — read once for the page', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'FHR' });
+    const held = await sentBackBy(fx, 'held', 'agent_review');
+    const free = await sentBackBy(fx, 'free', 'agent_review');
+    const identifier = (
+      await adminDb.workItem.findUniqueOrThrow({ where: { id: held.id }, select: { key: true } })
+    ).key;
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'fix',
+        cards: [{ key: `${fx.projectIdentifier}-${identifier}`, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    await adminDb.dispatchRun.update({ where: { id: run.id }, data: { origin: 'hosted' } });
+    // Opening a run is not what this read is about: the card stays the sent-back row.
+    await adminDb.workItem.update({
+      where: { id: held.id },
+      data: {
+        status: 'in_review',
+        assigneeId: fx.ownerId,
+        fixReason: 'changes_requested',
+        fixDetail: { ...DETAIL, check: null, gate: 'agent_review', reviewerName: 'Mei Lin' },
+      },
+    });
+
+    const page = await homeService.listToFix(hctx(fx));
+    const row = (id: string) => page.items.find((r) => r.id === id)!;
+
+    expect(row(held.id).repairRun).toMatchObject({
+      id: run.id,
+      hosted: true,
+      byViewer: true,
+      holder: { id: fx.ctx.userId },
+    });
+    expect(row(held.id).repairRun!.label).toMatch(/^motir fix · .+ UTC$/);
+    expect(row(free.id).repairRun).toBeNull();
+  });
+
+  it('a reader who may only browse gets no door', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'FHV' });
+    const viewer = await createTestUser({
+      email: `fh-viewer-${Date.now()}@example.com`,
+      name: 'Viewer',
+    });
+    await workspacesService.addMember({
+      userId: viewer.id,
+      workspaceId: fx.workspaceId,
+      workspaceRole: 'viewer',
+    });
+    await sentBackBy(fx, 'theirs', 'agent_review', viewer.id);
+    const page = await homeService.listToFix({
+      userId: viewer.id,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+    });
+    expect(page.total).toBe(1);
+    expect(page.items[0]!.canFixHosted).toBe(false);
   });
 });

@@ -5,9 +5,10 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 // A HOSTED RUN'S CODE GRAPH, per checkout (Story MOTIR-683 · MOTIR-6560).
 //
@@ -64,9 +65,25 @@ function hookBody(): string {
   ].join('\n');
 }
 
+/**
+ * The checkout's COMMON git directory — where `info/exclude` and `hooks/` live. A
+ * clone's is its `.git/`; a WORKTREE's `.git` is a FILE naming its own git dir, whose
+ * `commondir` names the clone's (MOTIR-6929: a hosted repair works in worktrees on the
+ * pull requests' own branches).
+ */
+function commonGitDir(repoDir: string): string {
+  const dotGit = join(repoDir, '.git');
+  if (statSync(dotGit).isDirectory()) return dotGit;
+  const named = /^gitdir:\s*(.+)$/m.exec(readFileSync(dotGit, 'utf8'))?.[1]?.trim();
+  if (!named) return dotGit;
+  const gitDir = resolve(repoDir, named);
+  const common = join(gitDir, 'commondir');
+  return existsSync(common) ? resolve(gitDir, readFileSync(common, 'utf8').trim()) : gitDir;
+}
+
 /** Name `.codegraph/` in the checkout's own exclude file, once. */
 function excludeIndex(repoDir: string): void {
-  const exclude = join(repoDir, '.git', 'info', 'exclude');
+  const exclude = join(commonGitDir(repoDir), 'info', 'exclude');
   mkdirSync(dirname(exclude), { recursive: true });
   const current = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
   if (current.split('\n').some((line) => line.trim() === EXCLUDE_LINE)) return;
@@ -78,7 +95,7 @@ function excludeIndex(repoDir: string): void {
 
 /** Keep the index fresh as the branch moves — without replacing a hook we did not write. */
 function installHooks(repoDir: string): void {
-  const hooks = join(repoDir, '.git', 'hooks');
+  const hooks = join(commonGitDir(repoDir), 'hooks');
   mkdirSync(hooks, { recursive: true });
   for (const hook of ['post-merge', 'post-checkout']) {
     const path = join(hooks, hook);

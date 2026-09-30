@@ -28,6 +28,7 @@
 // synthesizes the ledger's `event_name` as `scheduled.{job_id}` (see
 // defineJob); the payload type therefore makes `workspaceId` optional.
 
+import type { DesignAutoRerunRequestedData } from '@/lib/services/designAutoRerunService';
 import type { TransactionalEmail } from '@/lib/services/emailService';
 import type { HostedAgentSession } from '@/lib/services/hostedAgentContainerService';
 
@@ -373,8 +374,8 @@ export type CodeGraphRefreshData = CodeGraphIndexData;
  * that exists for a genuinely vanished tenant (MOTIR-1545). The result was NO
  * ledger row at all for the one job in the system that spends real money per
  * invocation. `null` is the honest value: the fleet is cross-tenant, the ledger's
- * `workspace_id` is nullable, and `system.ci-runner-reap` already lands
- * untenanted rows the same way.
+ * `workspace_id` is nullable, and `system.fleet-attribution` (which
+ * replaced `system.ci-runner-reap`) lands untenanted rows the same way.
  *
  * The type is the literal `null` rather than `string | null` ON PURPOSE — it is
  * what makes `''` (and any other string) a COMPILE error at the one call site
@@ -463,6 +464,8 @@ export interface JobEventDataMap {
   /** MOTIR-4219 — the certificate sweep. Cross-tenant, cron-only. */
   'system.public-address-certificate-refresh': SystemScheduledData;
   'system.rate-limit-sweep': SystemScheduledData;
+  /** MOTIR-6984 — the daily OAuth sweep. Identity-scoped tables, cron-only. */
+  'system.oauth-sweep': SystemScheduledData;
   'system.filter-subscription-tick': SystemScheduledData;
   'system.public-follow-digest-tick': SystemScheduledData;
   'system.auto-plan-cadence-tick': SystemScheduledData;
@@ -492,6 +495,9 @@ export interface JobEventDataMap {
   /** Monthly CI-minutes reconciliation (Story MOTIR-1775 · MOTIR-1896) — cron
    *  triggered, so it carries no payload beyond the scheduled envelope. */
   'system.ci-minutes-reconcile': SystemScheduledData;
+  /** The live CI charge (Story MOTIR-6906 · MOTIR-6910) — every debit period,
+   *  each live CI container's minutes are charged. Cron triggered. */
+  'system.ci-live-charge': SystemScheduledData;
   'system.ci-actions-gate-sweep': SystemScheduledData;
   /** The migrate-onboarding SWEEP lane — every transition of that state machine
    *  is observed only by an open browser tab, so this re-derives from durable
@@ -548,7 +554,7 @@ export interface JobEventDataMap {
    *  trigger, the per-intent boot, and the crash-backstop reaper. */
   'system.ci-runner-provision-sweep': SystemScheduledData;
   'system.ci-runner-boot': CiRunnerBootData;
-  'system.ci-runner-reap': SystemScheduledData;
+  'system.fleet-attribution': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   'system.code-graph-index': CodeGraphIndexData;
   'system.code-graph-refresh': CodeGraphRefreshData;
@@ -569,6 +575,15 @@ export interface JobEventDataMap {
   'work-item/derivation.requested': WorkItemDerivationRequestedData;
   'work-item/embedding.requested': WorkItemEmbeddingRequestedData;
   'pull-request/auto-merge.requested': PullRequestAutoMergeRequestedData;
+  /** An `agent_review` gate was RAISED (Story MOTIR-1626 · MOTIR-6819; `approval-gates.md`
+   *  §12.2, `hosted-agent-run.md` §8.1) — start ONE review run for it. Emitted after the
+   *  raising transaction commits. Consumed by `agent-review/requested`
+   *  (`lib/jobs/definitions/agentReviewRequested.ts`, MOTIR-6820), and emitted again by
+   *  *Review again*. */
+  'agent-review/requested': AgentReviewRequestedData;
+  /** A person sent a HOSTED design back with Revise (MOTIR-700): start its automatic
+   *  re-run, or record why not. Emitted by the design handler AFTER the refusal commits. */
+  'design/auto-rerun.requested': DesignAutoRerunRequestedData;
   /** A push moved a repository's DEFAULT branch (MOTIR-5914): re-read the host's
    *  mergeability of every open pull request that targets it, and withdraw the question
    *  over any that now conflict. Emitted by the push webhook after its own write. */
@@ -647,6 +662,31 @@ export interface PullRequestBaseMovedData {
 }
 
 /**
+ * The `agent-review/requested` event payload (Story MOTIR-1626 · MOTIR-6819; ADR
+ * `approval-gates.md` §12.2, `hosted-agent-run.md` §8.1) — one per `agent_review` gate ROW
+ * CREATED, emitted after the creating transaction commits (`lib/workspaces/afterCommit.ts`).
+ * The consumer (MOTIR-6820) re-reads the gate by id and starts a review run only while it
+ * is still `awaiting` at `subjectVersion`.
+ */
+export interface AgentReviewRequestedData {
+  workspaceId: string;
+  /** The `agent_review` gate the run answers. */
+  gateId: string;
+  /** The RUN TARGET the gate hangs on (§12.1). */
+  workItemId: string;
+  /** The delivery-set version the review is about — `deliverySetVersion`'s spelling. */
+  subjectVersion: string;
+  /**
+   * The REQUEST's key (MOTIR-6820) — `agent-review:<gateId>:raise` for the gate's raise,
+   * `agent-review:<gateId>:again:<uuid>` for one *Review again* press
+   * (`lib/agentReview/reviewRunKey.ts`). The job's dedup key and the review run's
+   * idempotency key, so a redelivered request starts nothing twice. Absent on an event
+   * emitted before it existed: the consumer then reads it as the raise.
+   */
+  idempotencyKey?: string;
+}
+
+/**
  * The `pull-request/auto-merge.requested` event payload (Story MOTIR-4882 ·
  * MOTIR-5518) — one pull request, at the head whose checks just went green, on a run
  * target in an `auto` project. Emitted by the CI promotion AFTER it commits.
@@ -714,6 +754,8 @@ export type JobEventData<N extends JobEventName> = JobEventDataMap[N];
  * events never go through `sendEvent` (they are cron / harness triggered):
  * `email.send` + the `work-item/*` events.
  */
+export type { DesignAutoRerunRequestedData };
+
 export type WorkspaceScopedEventName = Exclude<JobEventName, `system.${string}`>;
 
 /**

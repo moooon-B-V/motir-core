@@ -30,6 +30,24 @@ export const agentInstanceSweep = defineJob(
     retryPolicy: 'idempotent',
   },
   async (ctx, services) => {
-    return ctx.step.run('sweep-agent-instances', () => services.agentInstanceSweep.sweep());
+    const summary = await ctx.step.run('sweep-agent-instances', () =>
+      services.agentInstanceSweep.sweep(),
+    );
+    // agent-terminal.md Q3 (MOTIR-6940): the terminal tickets past their 60-second
+    // life, deleted here rather than on a cron minute of their own (the substrate
+    // refuses any minute off the cluster). Its own step, so the instance summary's
+    // memoized shape is unchanged.
+    await ctx.step.run('sweep-agent-terminal-tickets', () =>
+      services.agentTerminalRelay.sweepExpiredTickets(),
+    );
+    // MOTIR-6959: the terminal connections a relay stopped vouching for — it was
+    // killed without shutting down — closed `relay_lost` at their last heartbeat.
+    // On this 30-minute cadence a lost row closes within ~35 minutes; its
+    // recorded `closedAt` is the heartbeat, not the sweep, so the lag never
+    // inflates a duration. Its own step, for the same memoized-shape reason.
+    await ctx.step.run('sweep-lost-terminal-connections', () =>
+      services.agentTerminalRelay.sweepLostConnections(),
+    );
+    return summary;
   },
 );

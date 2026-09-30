@@ -120,6 +120,29 @@ export const verificationRepository = {
     return result.count;
   },
 
+  /**
+   * Delete up to `limit` OAuth authorization codes past their expiry — the OAuth
+   * sweep (MOTIR-6984). `@better-auth/oauth-provider` keeps a code here for its
+   * ten-minute life, as a row whose `value` is JSON opening with
+   * `{"type":"authorization_code"`, and deletes it only when it is redeemed, so
+   * an abandoned authorization leaves it behind. Matched on that prefix alone, so
+   * no other kind of verification row is ever touched. One bounded statement.
+   */
+  async deleteExpiredAuthorizationCodes(
+    before: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.$executeRaw`
+      DELETE FROM "verification"
+       WHERE "id" IN (
+         SELECT "id" FROM "verification"
+          WHERE "expiresAt" < ${before}
+            AND "value" LIKE '{"type":"authorization_code"%'
+          LIMIT ${limit}
+       )`;
+  },
+
   async deleteByIdentifier(identifier: string, tx: Prisma.TransactionClient): Promise<number> {
     const result = await tx.verification.deleteMany({ where: { identifier } });
     return result.count;

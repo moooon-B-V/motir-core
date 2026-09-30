@@ -314,13 +314,19 @@ describe('github_pull_request_review — the rows the sync writes (MOTIR-5594)',
     // …and `plan_permission` after it (Story MOTIR-6012 · MOTIR-6032; ADR
     // `approval-gates.md` §11.6): the `plan_approval` gate's decider, who holds
     // `ai:decide_plan` and no §2 relationship. Asserted so `github_review` keeps its
-    // place and a further member still arrives by name.
+    // place and a further member still arrives by name — `review_agent` (Story MOTIR-1626 ·
+    // MOTIR-6819; ADR §12.3), the review agent's own verdict on its `agent_review` gate.
     expect(values.map((v) => v.enumlabel)).toEqual([
       'assignee',
       'reporter',
       'admin',
       'github_review',
       'plan_permission',
+      'review_agent',
+      // `project_setting` (Story MOTIR-693 · MOTIR-697; `hosted-design-rerun-and-design-
+      // approval-switch.md` §2c) — a design gate a project with design approval off
+      // approves at raise time; nobody decided it. Written only by the publish path.
+      'project_setting',
     ]);
   });
 });

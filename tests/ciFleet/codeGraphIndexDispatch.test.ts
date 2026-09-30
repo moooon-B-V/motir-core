@@ -790,8 +790,8 @@ describe('the in-process composition QUEUES for admission rather than dropping',
     admit
       .mockResolvedValueOnce({
         outcome: 'deferred',
-        reason: 'workspace_index_cap',
-        detail: 'the workspace is at its index cap (3/3, half of the global 6)',
+        reason: 'org_index_cap',
+        detail: 'the organization is at its index cap (3/3, half of the global 6)',
       })
       .mockResolvedValueOnce({
         outcome: 'deferred',

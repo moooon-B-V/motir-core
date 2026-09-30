@@ -1,7 +1,9 @@
+import { agentReviewStartService } from '@/lib/services/agentReviewStartService';
 import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
 import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
+import { designAutoRerunService } from '@/lib/services/designAutoRerunService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
 import { dlqStandingDepthService } from '@/lib/services/dlqStandingDepthService';
@@ -18,6 +20,7 @@ import { notificationFanInService } from '@/lib/services/notificationFanInServic
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { publicAddressCertificatesService } from '@/lib/services/publicAddressCertificatesService';
 import { rateLimitService } from '@/lib/services/rateLimitService';
+import { oauthSweepService } from '@/lib/services/oauthSweepService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
 import { publicFollowDigestService } from '@/lib/services/publicFollowDigestService';
 import { automationEngineService } from '@/lib/services/automationEngineService';
@@ -30,6 +33,8 @@ import { codeGraphOffboardSweepService } from '@/lib/services/codeGraphOffboardS
 import { firstAuditTriggerService } from '@/lib/services/firstAuditTriggerService';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import { ciMinutesReconciliationService } from '@/lib/services/ciMinutesReconciliationService';
+import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
+import { ciLiveChargeService } from '@/lib/services/ciLiveChargeService';
 import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
@@ -53,6 +58,7 @@ import { organizationErasureSweepService } from '@/lib/services/organizationEras
 import { organizationRetentionPurgeService } from '@/lib/services/organizationRetentionPurgeService';
 import { supervisionSweepService } from '@/lib/services/supervisionSweepService';
 import { agentInstanceSweepService } from '@/lib/services/agentInstanceSweepService';
+import { agentTerminalRelayService } from '@/lib/services/agentTerminalRelayService';
 import { agentInstanceStorageChargeService } from '@/lib/services/agentInstanceStorageChargeService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
@@ -79,6 +85,8 @@ export const jobServices = {
   attachments: attachmentsService,
   publicAddressCertificates: publicAddressCertificatesService,
   rateLimit: rateLimitService,
+  // The daily OAuth sweep (MOTIR-6984).
+  oauthSweep: oauthSweepService,
   savedFilterSubscriptions: savedFilterSubscriptionsService,
   publicFollowDigest: publicFollowDigestService,
   automationEngine: automationEngineService,
@@ -93,6 +101,9 @@ export const jobServices = {
   firstAuditTrigger: firstAuditTriggerService,
   autoPlanCadence: autoPlanCadenceService,
   ciMinutesReconciliation: ciMinutesReconciliationService,
+  // The live CI charge (MOTIR-6910): every debit period, live CI containers are charged.
+  ciLiveCharge: ciLiveChargeService,
+  fleetAttribution: fleetAttributionService,
   ciActionsGate: ciActionsGateService,
   ciRunnerBoot: ciRunnerBootService,
   // A hosted run's supervision (Story MOTIR-683 · MOTIR-690).
@@ -138,6 +149,11 @@ export const jobServices = {
   // requests from GitHub and replays a close whose webhook delivery was lost.
   pullRequestReconcile: pullRequestReconcileService,
   pullRequestAutoMerge: pullRequestAutoMergeService,
+  // The review run's start (Story MOTIR-1626 · MOTIR-6820): one hosted `review` run per
+  // request for an awaiting `agent_review` gate.
+  agentReviewStart: agentReviewStartService,
+  // The automatic hosted re-run after a design Revise (MOTIR-700).
+  designAutoRerun: designAutoRerunService,
   // The base-branch mergeability re-read (MOTIR-5914): a push to a default branch
   // withdraws the approve-and-merge question over any pull request it put in conflict.
   pullRequestMergeability: pullRequestMergeabilityService,
@@ -153,6 +169,10 @@ export const jobServices = {
   // Agent instances (Story MOTIR-6860 · MOTIR-6873): the idle timer's check and
   // the sweep that reconciles, hibernates, cleans orphans and charges.
   agentInstanceSweep: agentInstanceSweepService,
+  // The agent terminal (Story MOTIR-6861 · MOTIR-6940): the sweep's second step
+  // deletes terminal tickets past their 60-second life; the third (MOTIR-6959)
+  // closes connections a dead relay left open.
+  agentTerminalRelay: agentTerminalRelayService,
   // Agent storage (Story MOTIR-6914 · MOTIR-6919): the per-day storage charge.
   agentInstanceStorageCharge: agentInstanceStorageChargeService,
 };

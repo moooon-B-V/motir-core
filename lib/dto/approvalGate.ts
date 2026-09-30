@@ -20,6 +20,7 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
+import type { AgentReviewViewDto } from '@/lib/dto/agentReview';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
@@ -58,7 +59,9 @@ export type ApprovalGateKindDTO =
   | 'decision_choice'
   | 'decision_confirmation'
   /** A PLAN, on a gate that belongs to NO work item (ADR §11, MOTIR-6032). */
-  | 'plan_approval';
+  | 'plan_approval'
+  /** The REVIEW AGENT's question over a green delivery set (ADR §12, MOTIR-6818). */
+  | 'agent_review';
 
 /**
  * WHETHER A DECISION IS WAITING ON A WORK ITEM, AND ON WHOM — the one answer the
@@ -176,7 +179,9 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'plan_discarded'
   /** A gate the old rule re-asked from a merge-queue FAILURE, withdrawn by the
    *  convergence (MOTIR-6595; §4 FIFTH AMENDMENT). */
-  | 'queue_failed';
+  | 'queue_failed'
+  /** The project turned its review agent OFF while the review was awaiting (ADR §12.5). */
+  | 'review_agent_disabled';
 
 /** Under which §2 authority rung the decision was made (ADR §6a). Mirrors the
  *  `ApprovalGateAuthority` Prisma enum. Frozen at decision time, so a reader can
@@ -194,13 +199,23 @@ export type ApprovalGateAuthorityDTO =
   | 'github_review'
   /** `ai:decide_plan` alone — the `plan_approval` kind has no work item, so no §2
    *  relationship rung is true of its decider (ADR §11.6). */
-  | 'plan_permission';
+  | 'plan_permission'
+  /** The review agent — a hosted review run's verdict (ADR §12.3). Never resolved
+   *  by `resolveGateAuthority`; no person's press can produce it. */
+  | 'review_agent'
+  /** A PROJECT SETTING, not a person: the design gate a project with design
+   *  approval switched off approves at raise time (MOTIR-697;
+   *  `hosted-design-rerun-and-design-approval-switch.md` §2c). Written only by the
+   *  publish path's system decision; `resolveGateAuthority` never returns it. */
+  | 'project_setting';
 
 /** Through which surface the decision arrived (ADR §6a, with `github` added by
  *  §6b's amendment). Mirrors the `ApprovalGateDecisionSource` Prisma enum. A
  *  human click, a token's API call, an agent's MCP call and a review synced out
- *  of GitHub are four different answers to *"was a human in the loop?"*. */
-export type ApprovalGateDecisionSourceDTO = 'ui' | 'api' | 'mcp' | 'github';
+ *  of GitHub are four different answers to *"was a human in the loop?"*. `system`
+ *  is the fifth, and its answer is NO: a project setting decided it (MOTIR-697;
+ *  `hosted-design-rerun-and-design-approval-switch.md` §2c). */
+export type ApprovalGateDecisionSourceDTO = 'ui' | 'api' | 'mcp' | 'github' | 'system';
 
 /**
  * WHAT A PERSON MEANT BY "NO" on a refused `design_result` gate (Story MOTIR-6070 ·
@@ -377,7 +392,49 @@ export interface ApprovalGateDTO {
 
   createdAt: string;
   updatedAt: string;
+  /**
+   * THE AUTOMATIC HOSTED RE-RUN this refusal caused or skipped (Story MOTIR-693 ·
+   * MOTIR-702; `hosted-design-rerun-and-design-approval-switch.md` §1g). Set by the
+   * item-page gate read on a refused `design_result` gate that HAS a record; absent or
+   * null everywhere else — and null means the frame draws no line (a card that was not
+   * hosted, a Re-plan, a GitHub refusal: nothing was attempted).
+   */
+  autoRerun?: DesignAutoRerunDTO | null;
+  /**
+   * Where a SYSTEM-approved gate's "Design approval is off for this project" links to —
+   * the switch on Settings → Approvals — for a reader who holds `workflow:manage`, the
+   * key that room is guarded by (MOTIR-702; the design's panel 1). Null or absent for
+   * everyone else, who get the same words as plain text (panel 2).
+   */
+  systemApprovalSettingsHref?: string | null;
 }
+
+/** The re-run line's facts (MOTIR-702) — `design_auto_rerun`, as the frame reads it. */
+export interface DesignAutoRerunDTO {
+  outcome: 'started' | 'skipped';
+  /** Null exactly when `outcome` is `started`. */
+  skipReason: DesignAutoRerunSkipReasonDTO | null;
+  /** The run it started; the line's *View run* link. */
+  dispatchRunId: string | null;
+  /** Which automatic re-run of the card this was, and the cap it counts against. */
+  ordinal: number;
+  cap: number;
+  /** The dispatcher, model or repository a skipped line names; null otherwise. */
+  detail: string | null;
+}
+
+/** Why an automatic re-run did not start — mirrors `DesignAutoRerunSkipReason`. */
+export type DesignAutoRerunSkipReasonDTO =
+  | 'cap_reached'
+  | 'dispatcher_gone'
+  | 'no_project_access'
+  | 'ci_credits_exhausted'
+  | 'model_not_offered'
+  | 'models_unavailable'
+  | 'out_of_credits'
+  | 'credits_unavailable'
+  | 'repository_not_writable'
+  | 'card_not_ready';
 
 /**
  * THE APPROVAL A RE-ASKED MERGE GATE REPLACED (Bug MOTIR-5863; `design/github/design-notes.md`
@@ -1060,6 +1117,14 @@ export type ApprovalGateOverlaySubjectDTO =
        * and the claim already share.
        */
       repair?: WorkItemRepairViewDto | null;
+      /**
+       * THE AGENT REVIEW THE PORT IS ABOUT (Story MOTIR-1626; ADR `approval-gates.md` §12.3) —
+       * present exactly when the address names an `agent_review` gate: its state, the
+       * could-not-run reason and the review run, which the frame draws as its band above
+       * the delivery set. The item page reads the same DTO (`agentReviewViewService`), so the
+       * card and the overlay cannot disagree about why the review is waiting.
+       */
+      agentReview?: AgentReviewViewDto | null;
     };
 
 /** The overlay's one read. */

@@ -18,7 +18,8 @@ import type {
   GithubPullRequestWithContext,
 } from '@/lib/repositories/githubPullRequestRepository';
 import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
-import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { derivePrCiState } from '@/lib/github/prCiState';
+import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import { isConflictedAtCurrentHead } from '@/lib/github/mergeability';
 
 // Prisma → DTO conversion for the GitHub integration (Story 7.10 · MOTIR-1498 /
@@ -84,7 +85,7 @@ export function toLinkedPullRequestDto(
     number: row.number,
     state: row.merged ? 'merged' : row.state === 'open' ? 'open' : 'closed',
     ci: derivePrCiState(row.checkRuns),
-    headSha: liveRowsAtLatestSha(row.checkRuns)[0]?.commitSha ?? null,
+    headSha: pullRequestHead(row),
     url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.number}`,
     baseRef: row.baseRef,
     // Only an OPEN member can conflict: a merged or closed one merges into nothing more.

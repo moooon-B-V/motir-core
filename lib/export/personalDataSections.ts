@@ -75,6 +75,10 @@ export type PersonalDataDelegate =
   | 'twoFactor'
   | 'apiToken'
   | 'deviceCode'
+  | 'oauthClient'
+  | 'oauthAccessToken'
+  | 'oauthRefreshToken'
+  | 'oauthConsent'
   | 'emailChangeRequest'
   | 'legalAcceptance'
   | 'workspaceMembership'
@@ -102,6 +106,7 @@ export type PersonalDataDelegate =
   | 'publicFollow'
   | 'dispatchRun'
   | 'agentInstance'
+  | 'agentTerminalConnection'
   | 'comment'
   | 'workItem'
   | 'workItemRevision'
@@ -188,6 +193,39 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     tier: 'identity',
     basis: '`motir login` device grants this account claimed.',
     redact: ['deviceCode', 'userCode'],
+    where: byUserId,
+  },
+  {
+    table: 'oauth_client',
+    model: 'oauthClient',
+    tier: 'identity',
+    basis: 'OAuth clients the reader registered while signed in (MOTIR-6982).',
+    // A public client carries no secret, but a confidential one would: never out.
+    redact: ['clientSecret'],
+    where: byUserId,
+  },
+  {
+    table: 'oauth_consent',
+    model: 'oauthConsent',
+    tier: 'identity',
+    basis: 'Apps the reader allowed to act for them, and the scopes they granted.',
+    where: byUserId,
+  },
+  {
+    table: 'oauth_access_token',
+    model: 'oauthAccessToken',
+    tier: 'identity',
+    basis: 'Access tokens issued to apps the reader connected, with their expiry.',
+    // Stored hashed, and still a credential's fingerprint: it never leaves.
+    redact: ['token'],
+    where: byUserId,
+  },
+  {
+    table: 'oauth_refresh_token',
+    model: 'oauthRefreshToken',
+    tier: 'identity',
+    basis: 'Refresh tokens issued to apps the reader connected, and their revocation.',
+    redact: ['token'],
     where: byUserId,
   },
   {
@@ -357,6 +395,18 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     tier: 'tenant',
     basis: 'Agent instances this person created.',
     where: (userId) => ({ ownerId: userId }),
+  },
+  {
+    // Story MOTIR-6861 · MOTIR-6940 — one row per terminal this person opened on
+    // their own agent: which agent, when it opened and closed, and why it closed.
+    // A record of the person's own action, so EXPORTED. It holds nothing about
+    // what flowed through the terminal (`agent-terminal.md` Q8), so neither does
+    // the export.
+    table: 'agent_terminal_connection',
+    model: 'agentTerminalConnection',
+    tier: 'tenant',
+    basis: 'Terminals this person opened on their own agents (when, and why they closed).',
+    where: byUserId,
   },
   {
     table: 'saved_filter_star',
@@ -587,6 +637,11 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
  * between a table nobody exported and a table nobody noticed.
  */
 export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
+  AgentTerminalTicket:
+    'A 60-second, single-use connection ticket (`agent-terminal.md` Q3), stored only ' +
+    'as a hash and swept once expired. It carries no fact about the person beyond ' +
+    '"a ticket existed" and is gone before an export could describe it — the ' +
+    'terminal itself is recorded in `agent_terminal_connection`, which IS exported.',
   PlatformAuditLog:
     'The controller’s own audit of moooon B.V. operator actions across the estate. ' +
     'Its rows name OTHER tenants (`targetLabel`, `organizationId`), so exporting them ' +

@@ -62,10 +62,14 @@ const OPTIONS_INTERFACE: Record<string, string | null> = {
   run: 'RunOptions',
   fix: 'FixOptions',
   continue: 'ContinueOptions',
+  // `motir review <key>` (MOTIR-6824) reads only its key — no options.
+  review: null,
   auto: 'AutoOptions',
   batch: 'BatchOptions',
   plan: 'PlanOptions',
   done: 'DoneOptions',
+  'agent-terminal': null,
+  'agent-terminal serve': 'AgentTerminalServeOptions',
 };
 
 /** The help surface registers pseudo-commands that carry no options. */

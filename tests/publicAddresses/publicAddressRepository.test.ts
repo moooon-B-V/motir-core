@@ -144,9 +144,9 @@ describe('the public read arm', () => {
   });
 
   it('follows the PROJECT: making it non-public hides its domain, and back', async () => {
-    // The arm reads the project's live `accessLevel`, so a project going private
+    // The arm reads the project's live `access_mode`, so a project going private
     // takes its address out of the public set with no write to this table. Both
-    // directions on the SAME row, so the only variable is the access level.
+    // directions on the SAME row, so the only variable is the access mode.
     await seedCustomDomain(host, 'roadmap.acme.example');
     for (const mode of ['workspace', 'members'] as const) {
       await setProjectAccess(adminDb, host.projectId, mode);

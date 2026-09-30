@@ -274,6 +274,10 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // choice (`withdrawn`). Product-written, no actor — its one raiser owns it.
       callers: [
         'lib/services/acceptanceEvidenceService.ts',
+        // MOTIR-6819 (`approval-gates.md` §12.5): switching the review agent OFF withdraws
+        // every awaiting `agent_review` in the project, cause `review_agent_disabled` —
+        // product-written, no actor, never a decision. The switch is its one writer.
+        'lib/services/approvalGateSettingsService.ts',
         'lib/services/choiceGateService.ts',
         // MOTIR-5954: the CONFIRM question's raiser withdraws its own stale question —
         // a moved stamp, a broken body, an executor flipped off `human`.
@@ -284,6 +288,10 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
         // convergence withdraws a gate the OLD rule re-asked from a queue failure, with
         // cause `queue_failed` — product-written, no actor, never a decision.
         'lib/services/ejectedCardConvergenceService.ts',
+        // MOTIR-6971 (`approval-gates.md` §8's EIGHTH AMENDMENT): the merge question is
+        // withdrawn from a card that is not `in_review` (`withdrawMergeQuestionOffReview`,
+        // cause `pulled_back`) — product-written, no actor, never a decision.
+        'lib/services/gateSetFor.ts',
         'lib/services/pullRequestApprovalGates.ts',
       ],
     },
@@ -354,6 +362,16 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       method: 'supersedeAwaitingCardlessBySubject',
       writes: 'superseded',
       callers: ['lib/services/planGateService.ts'],
+    },
+    {
+      method: 'setReviewUnavailableReason',
+      // MOTIR-6820 (Story MOTIR-1626; `approval-gates.md` §12.6): why an AWAITING
+      // `agent_review` gate's review could not run — written on a refused start or a run
+      // that ended with no verdict, cleared by *Review again*. It moves no state and names
+      // no decider: the gate stays `awaiting`, so it is a note on the open question, never a
+      // decision.
+      writes: 'awaiting',
+      callers: ['lib/services/agentReviewStartService.ts', 'lib/services/hostedRunService.ts'],
     },
   ] as const;
 

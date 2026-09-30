@@ -125,6 +125,17 @@ const eslintConfig = defineConfig([
     },
   },
 
+  // The TERMINAL RELAY's entrypoint and its bundler (MOTIR-6940) — the worker's
+  // shape: `motir-relay` is a process with no request or UI of its own, so its
+  // listen, drain and lifecycle lines on stdout are what Fly's log shows an
+  // operator. (Those lines carry ids only — `agent-terminal.md` Q8.)
+  {
+    files: ['scripts/relay.ts', 'scripts/build-relay.mjs'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+
   // The E2E mutation→assert scanner (MOTIR-4399) is a REPORTING command, and the
   // same reasoning as `scripts/worker.ts` above applies for the same reason: its
   // stdout IS its interface. It prints a site list, a drop ladder or a JSON

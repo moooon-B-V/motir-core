@@ -143,6 +143,9 @@ describe('the curated overview', () => {
         continue [options] <key>  Carry on a work item whose last run died, on the
                                   branch it left — from any machine, without starting
                                   it over.
+        review <key>              Hosted only: review a work item’s pull requests at
+                                  the version under review and submit ONE verdict —
+                                  never pushes, never posts to GitHub.
         auto [options]            Drain the ready set unattended: one item at a time
                                   onto a session branch.
         batch [options]           Implement a FROZEN snapshot of the ready set: one
@@ -151,6 +154,9 @@ describe('the curated overview', () => {
                                   conversation, add turns, submit.
         done [options] [key]      Close out a merged item — or a whole merged session
                                   branch.
+
+      ADDITIONAL COMMANDS:
+        agent-terminal            The terminal server inside a Motir agent image.
 
       HELP TOPICS:
         help [command...]         Show help for a command, or read a help topic.
@@ -229,6 +235,7 @@ describe('group membership', () => {
       HELP_GROUP.setup,
       HELP_GROUP.read,
       HELP_GROUP.workLoop,
+      HELP_GROUP.additional,
       HELP_GROUP.topics,
     ]);
     // `login` / `logout` lead the group: the device grant is the command a
@@ -247,11 +254,15 @@ describe('group membership', () => {
       'run',
       'fix',
       'continue',
+      'review',
       'auto',
       'batch',
       'plan',
       'done',
     ]);
+    // The agent machine's terminal server (MOTIR-6938): published, but not a
+    // command a person types, so it takes the default bucket.
+    expect(groups.get(HELP_GROUP.additional)).toEqual(['agent-terminal']);
     expect(groups.get(HELP_GROUP.topics)).toEqual(['help', 'environment', 'files', 'runs']);
   });
 
@@ -266,7 +277,7 @@ describe('group membership', () => {
 
     const groups = commandGroups(render(program));
 
-    expect(groups.get(HELP_GROUP.additional)).toEqual(['throwaway']);
+    expect(groups.get(HELP_GROUP.additional)).toEqual(['agent-terminal', 'throwaway']);
   });
 
   it('renders the WORK LOOP heading now that the dispatch commands have landed', () => {

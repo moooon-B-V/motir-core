@@ -458,6 +458,8 @@ describe('which argv gets a version check at all', () => {
       ['-h'],
       ['help'],
       ['help', 'auth'],
+      // The agent machine's main process (MOTIR-6938): never checked.
+      ['agent-terminal', 'serve'],
     ]) {
       expect(shouldCheckStaleness(argv), argv.join(' ') || '(bare)').toBe(false);
     }

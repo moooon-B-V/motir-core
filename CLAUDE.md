@@ -877,7 +877,10 @@ you do not treat a superseded design's missing files as a defect.
 
 **The approve-to-merge gate is RAISED ON GREEN, not on opening (Story MOTIR-4882;
 Bug MOTIR-5603).** Opening a pull request raises nothing. When a run target's whole
-delivery set goes green in a `manual` project, Motir raises **ONE** `awaiting`
+delivery set goes green in a `manual` project **and the card is `in_review`**
+(MOTIR-6971 — green CI alone asks nothing; a card your run leaves at `in_progress`
+is a dead run and is never asked, so set its status as the runbook says), Motir
+raises **ONE** `awaiting`
 `pull_request_approval` gate over the WHOLE SET — not one per pull request
 (`lib/services/pullRequestApprovalGates.ts`) — and a push, a close or an unlink to
 ANY member withdraws it, because the set is the subject. Approving it commits the

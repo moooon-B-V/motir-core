@@ -29,15 +29,17 @@ export type WorkItemRepairOutcome = 'claimed' | 'mine' | 'taken' | 'not_repairab
  *
  * - `not_implemented` — archived, or at neither the project's Implemented nor its
  *   In Review rung. A red build is only a repair's business once the run that built
- *   it has ended; In Review is admitted for a merge-queue ejection (MOTIR-5803).
+ *   it has ended; In Review is admitted for a merge-queue ejection (MOTIR-5803) and
+ *   for a card a review sent back (the `review` class, MOTIR-6822).
  * - `repair_on_run_target` — the pull requests belong to a run launched against
  *   another card (`runTargetKey`); the repair runs there, never on a child the
  *   same pull requests also deliver.
  * - `no_pull_requests` — the card has no delivery rows at all.
  * - `ci_running` — nothing open is failing, and at least one member is running.
  * - `not_failing` — nothing open is failing and nothing is running. Also an In
- *   Review card with no standing merge-queue outcome at a member's head: it is
- *   waiting on review, not failing (MOTIR-5803).
+ *   Review card with no standing merge-queue outcome at a member's head and no
+ *   standing review refusal at the current version: it is waiting on review, not
+ *   failing (MOTIR-5803, MOTIR-6822).
  * - `repair_not_code` — the merge did not land for a reason NO CODE CHANGE fixes
  *   (MOTIR-5803; `approval-gates.md` §4 FOURTH AMENDMENT, point 6): a setting
  *   blocked it, or somebody took the pull request out of the queue by hand. The
@@ -61,8 +63,28 @@ export type WorkItemRepairRefusal =
  *   (`revise`), pressed in Motir, and the refusal still stands over the current receipt.
  *   The checks are usually GREEN: the fix is to what the reviewer SAW, so every open
  *   member is handed over, and the agent is told the reason.
+ * - `review` — a REVIEW sent the card back (Story MOTIR-1626 · MOTIR-6822;
+ *   `approval-gates.md` §12.4, §12.7): the review agent's `changes_requested` on
+ *   `agent_review`, or a person's *Request changes* on the approve-and-merge gate, still
+ *   standing over the delivery set's CURRENT version. The checks are usually GREEN: every
+ *   open member is handed over with the findings ({@link ReviewRefusalDto}), and the
+ *   agent answers each one on the pull requests' own branches. Its push moves a head,
+ *   which is what retires the refusal.
  */
-export type WorkItemRepairClass = 'ci' | 'acceptance_rerun';
+export type WorkItemRepairClass = 'ci' | 'acceptance_rerun' | 'review';
+
+/** The refusal a `review` repair answers — the findings, and who sent the card back. */
+export interface ReviewRefusalDto {
+  /** Which review sent it back — the review agent's gate, or the approve-and-merge gate. */
+  gate: 'agent_review' | 'pull_request_approval';
+  /** The findings, VERBATIM and in full — the gate's note. */
+  findingsMd: string | null;
+  /** The reviewer as the To fix row names them: `Review agent` for the agent (never the
+   *  run's attributed user, §12.3), the person's display name otherwise. */
+  reviewerName: string | null;
+  /** ISO-8601. */
+  decidedAt: string;
+}
 
 /** The refusal an `acceptance_rerun` repair answers — what the reviewer said. */
 export interface AcceptanceRefusalDto {
@@ -141,9 +163,12 @@ export interface WorkItemRepairClaimDto {
   /** The acceptance refusal an `acceptance_rerun` answers — set exactly on that class
    *  with `claimed` / `mine`, null otherwise. */
   acceptanceRefusal: AcceptanceRefusalDto | null;
+  /** The review refusal a `review` repair answers — set exactly on that class with
+   *  `claimed` / `mine`, null otherwise (MOTIR-6822). */
+  reviewRefusal: ReviewRefusalDto | null;
   /** The failing OPEN pull requests — non-empty on `claimed` and `mine`, empty
    *  otherwise, so a refused caller is handed nothing to act on. On an
-   *  `acceptance_rerun` it is EVERY open member, green ones included. */
+   *  `acceptance_rerun` or a `review` it is EVERY open member, green ones included. */
   pullRequests: RepairPullRequestDto[];
 }
 
@@ -206,8 +231,34 @@ export type WorkItemRepairViewDto =
       /** The viewer started it — the copy says *you*. */
       byViewer: boolean;
       startedAt: string;
+      /** The open `fix` run itself — a HOSTED one is drawn with its run link (MOTIR-6930;
+       *  design `design/github` § 30 Panel 3b). Absent on a view built before it existed. */
+      run?: RepairRunRefDto | null;
     }
   | { state: 'pointer'; failing: RepairPullRequestRefDto[]; runTargetKey: string };
+
+/** The open `fix` run a repair view names (Story MOTIR-1626 · MOTIR-6930). */
+export interface RepairRunRefDto {
+  id: string;
+  /** The run's own label, as the runs surface prints it (`dispatchRunLabel`). */
+  label: string;
+  /** Opened by *Fix on the hosted agent* — `origin: hosted` — rather than a local `motir fix`. */
+  hosted: boolean;
+}
+
+/**
+ * THE OPEN REPAIR on a card, as the To fix banner and the Workbench To fix row read it
+ * (Story MOTIR-1626 · MOTIR-6930; `design/workbench` § 32): the open `fix` run IS the
+ * one-repair-at-a-time lock (`hosted-agent-run.md` §8.6), so while it is open neither
+ * repair is offered, and a hosted one is named with its run.
+ */
+export interface OpenRepairRunDto extends RepairRunRefDto {
+  holder: ClaimActorDto | null;
+  /** The viewer started it — the copy says *you*. */
+  byViewer: boolean;
+  /** ISO-8601. */
+  startedAt: string;
+}
 
 /**
  * How an agent says its repair ENDED (Story MOTIR-6804 · MOTIR-6807) — the

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CI_DEBIT_PERIOD_MINUTES,
   CREDITS_PER_LINEAR_EQUIVALENT_MINUTE,
   INCLUDED_MINUTES_PER_SEAT,
   ORG_POOL_FLOOR_MINUTES,
   computeIncrementalCharge,
+  resolveAdmissionCoverage,
   resolvePool,
   resolveState,
 } from '@/lib/ciMetering/allowance';
@@ -226,5 +228,68 @@ describe('resolveState — two thresholds, never conflated (§6.5)', () => {
     expect(resolveState({ consumptionMinutes: 1200, poolMinutes: 1000, balance: null })).toBe(
       'drawing_on_credits',
     );
+  });
+});
+
+describe('admission by coverage (fleet-per-org-pool.md §3, MOTIR-6911)', () => {
+  const base = { consumptionMinutes: 1_000, poolMinutes: 1_000 };
+
+  it('pins the 5-minute debit period', () => {
+    expect(CI_DEBIT_PERIOD_MINUTES).toBe(5);
+  });
+
+  it('covers at exactly (running + 1) × period, and not one credit less', () => {
+    expect(resolveAdmissionCoverage({ ...base, balance: 15, chargedRunning: 2 })).toBe('covered');
+    expect(resolveAdmissionCoverage({ ...base, balance: 14, chargedRunning: 2 })).toBe(
+      'credits_insufficient',
+    );
+  });
+
+  it('spends the remaining included minutes alongside the balance', () => {
+    const inside = { consumptionMinutes: 993, poolMinutes: 1_000 };
+    expect(resolveAdmissionCoverage({ ...inside, balance: 3, chargedRunning: 1 })).toBe('covered');
+    expect(resolveAdmissionCoverage({ ...inside, balance: 2, chargedRunning: 1 })).toBe(
+      'credits_insufficient',
+    );
+    // Inside the pool a zero balance is not exhausted — the minutes cover it.
+    expect(resolveAdmissionCoverage({ ...inside, balance: 0, chargedRunning: 0 })).toBe('covered');
+  });
+
+  it('a negative balance eats into the remaining minutes', () => {
+    expect(
+      resolveAdmissionCoverage({
+        consumptionMinutes: 900,
+        poolMinutes: 1_000,
+        balance: -95,
+        chargedRunning: 0,
+      }),
+    ).toBe('covered');
+    expect(
+      resolveAdmissionCoverage({
+        consumptionMinutes: 900,
+        poolMinutes: 1_000,
+        balance: -96,
+        chargedRunning: 0,
+      }),
+    ).toBe('credits_insufficient');
+  });
+
+  it('answers the exhausted state by its own name', () => {
+    expect(resolveAdmissionCoverage({ ...base, balance: 0, chargedRunning: 0 })).toBe(
+      'ci_credits_exhausted',
+    );
+  });
+
+  it('REFUSES an unknown balance — the opposite of resolveState, on purpose', () => {
+    const inside = { consumptionMinutes: 0, poolMinutes: 1_000, balance: null };
+    expect(resolveAdmissionCoverage({ ...inside, chargedRunning: 0 })).toBe('balance_unavailable');
+    expect(resolveState(inside)).toBe('within_allowance');
+  });
+
+  it('reads a negative running count as zero, and takes an explicit period', () => {
+    expect(resolveAdmissionCoverage({ ...base, balance: 5, chargedRunning: -3 })).toBe('covered');
+    expect(
+      resolveAdmissionCoverage({ ...base, balance: 5, chargedRunning: 0, periodMinutes: 10 }),
+    ).toBe('credits_insufficient');
   });
 });

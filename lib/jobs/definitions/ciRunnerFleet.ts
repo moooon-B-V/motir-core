@@ -5,12 +5,15 @@ import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
 // The runner FLEET's background jobs (Story MOTIR-1916 · MOTIR-1921) — the
 // trigger, the boot, and the backstop.
 //
-// Three functions, and the third is the one that matters most:
+// Two functions:
 //
 //   * `system.ci-runner-provision-sweep` — finds pending intents and fans out one
 //     boot event each. THE RECOVERY TRIGGER (see below).
 //   * `system.ci-runner-boot` — one intent, one runner, supervised to its end.
-//   * `system.ci-runner-reap` — destroys containers nothing is supervising.
+//
+// The third, `system.ci-runner-reap`, was replaced by the attribution
+// reconciler (`./fleetAttribution.ts`, MOTIR-6925), which destroys any machine
+// no live record owns.
 //
 // ⚠️ THE SWEEP IS NO LONGER THE PRIMARY TRIGGER, AND NEVER COULD BE.
 // `docs/decisions/ci-runner-fleet.md` §6 budgets p50 ≤ 30s from the
@@ -41,93 +44,24 @@ import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
 // Motir's infrastructure bill does.
 
 /**
- * Every minute. The floor cron granularity allows, which is also the
- * honest statement of what this trigger can and cannot promise (§6).
+ * Every 5 minutes — the one sub-hourly cadence (`SUB_HOURLY_CADENCE`,
+ * `lib/jobs/schedules.ts`).
  *
  * ⚠️ WHO OWNS ADMISSION LATENCY, AS OF MOTIR-2852: NOT THIS. A queued job is
  * dispatched by the `workflow_job` webhook (MOTIR-1996) and a DEFERRED one by the
  * admission WAKE the moment its project's slot is released
  * (`ciRunnerBootService.dispatchNextPendingForProject`). Both are events the
  * service already observes, so neither waits on a cron minute. **This cadence is
- * now purely a BACKSTOP** — the cover for a dispatch that was dropped in transit
- * — and the module header above is the older framing, corrected in place.
- *
- * ⚠️ AND IT IS UNCHANGED — NOW ON A MEASUREMENT RATHER THAN PENDING ONE
- * (MOTIR-2853, 2026-08-21). The paragraph that stood here deferred the cadence
- * question to a measurement taken after the wake shipped. That measurement is
- * done, and it says **this line is not the lever**.
- *
- * The Neon compute was sampled from the control plane every 5 minutes for 6 h 12 m
- * against release v96 — 76 samples, `current_state: "active"` in every one, duty
- * cycle **100%** (100.8% over the cleanest 3 h 16 m sub-window, which contains no
- * deploy and no merge; the >100% is refresh-boundary jitter on a counter that
- * batches every ~90–105 min). The database never suspended once.
- *
- * **And lengthening this cron could not have changed that, even set to never.**
- * Delete this schedule outright and the remaining `system.*` crons still wake the
- * compute at minutes {0,7,10,17,20,22,27,30,37,40,47,50,52,57} — a longest quiet
- * gap of **7 minutes**, under the ~9 min suspend delay measured on 2026-08-20
- * (`docs/decisions/application-hosting.md` §21). Every one of those ticks is a
- * guaranteed database WRITE, not a possible read: `defineJob` records a `job_run`
- * row before the handler body runs and flips it after, so no early return in any
- * job can avoid it.
- *
- * So the cost is the SHAPE of the schedule, not the frequency of its loudest
- * member — see the reaper's cron below, where that is now argued out.
- *
- * ⚠️ AND IT IS CHANGED NOW (MOTIR-3314): `* * * * *` → the cluster. The
- * paragraph above is right that this line was not the LEVER — deleting it left a
- * 7-minute gap — and it is not an argument for keeping sixty wakes an hour once
- * the shape is being fixed. Re-timing every `system.*` job onto
- * `SCHEDULE_CLUSTER_MINUTES` is what buys the gap; this job is simply the largest
- * single contributor to the old one.
- *
- * WHAT IT GAVE UP: up to 30 minutes of RECOVERY latency for an intent whose boot
- * dispatch was dropped in transit, against up to 60 seconds before. That is the
- * whole cost, and it lands only on the backstop path — a queued job is still
- * dispatched by the `workflow_job` webhook within the §6 budget, and a deferred
- * one by the admission wake the moment its slot frees. Neither waits on this
- * cron. A dropped dispatch is a transport blip a sender swallows; it is rare, and
- * nothing about it gets worse with waiting except the wait.
- * WHAT IT BOUGHT: fifty-eight wake-minutes an hour, which is the difference
- * between a compute that never sleeps and one that sleeps half the hour.
+ * purely a BACKSTOP** — the cover for a dispatch that was dropped in transit — so
+ * five minutes is how long an intent whose boot dispatch was lost can wait before
+ * it is picked up again. The module header above is the older framing, corrected
+ * in place.
  */
 export const CI_RUNNER_PROVISION_SWEEP_CRON = '*/5 * * * *';
 
-/** Every 30 minutes, ON the cluster. The reaper only ever finds something when a
- *  supervisor died, so it is almost always a single provider list call that
- *  returns nothing actionable.
- *
- *  ⚠️ THE OFFSET RATIONALE WAS INVERTED, AND THIS COMMENT NOW DESCRIBES THE SHAPE
- *  THAT REPLACED IT (MOTIR-2853 diagnosed it, MOTIR-3314 acted on it). Two
- *  superseded forms, kept in order because the second is the one a reader is
- *  likeliest to re-derive:
- *
- *  1. It first read "offset off the hour so it never lines up with the other
- *     `system.*` schedules". That is textbook load-spreading and it is correct on
- *     a machine that is always on. On a compute that SUSPENDS WHEN IDLE it is
- *     exactly inverted: the only quantity billed is how often the thing wakes,
- *     and every distinct offset is another wake.
- *  2. It then read "running often is the point: the window between an orphan
- *     appearing and being destroyed is billed" — true, and it prices only ONE of
- *     the two bills. An orphaned container is rare and costs container-minutes
- *     while it survives; the wake it takes to look for one is charged every 10
- *     minutes forever, whether or not anything is there. The cadence was set
- *     against the cost of finding something and never against the cost of
- *     looking.
- *
- *  WHAT IT GAVE UP: an orphan now survives up to 30 minutes instead of 10 — at
- *  most 20 extra container-minutes, and only in the rare case where a supervisor
- *  actually died. WHAT IT BOUGHT: five of the fourteen old wake-minutes, this job
- *  being the single largest contributor to the spread after the provision sweep.
- *  The trade is roughly 20 container-minutes per orphan against ~$14/mo of
- *  always-awake Neon compute, which is not close.
- *
- *  Measured (MOTIR-2853): the old schedule's fourteen distinct wake-minutes left
- *  a longest gap of 7 minutes, under the ~9 min suspend delay, so the compute
- *  never slept — 100% duty cycle over 6 h 12 m. The spreading is what cost the
- *  money; `lib/jobs/schedules.ts` now asserts the gap so it cannot re-open. */
-export const CI_RUNNER_REAP_CRON = '*/5 * * * *';
+// The reaper's schedule (`system.ci-runner-reap`) is gone: the attribution
+// reconciler replaced it (MOTIR-6925, `fleet-per-org-pool.md` §5–§6) — see
+// `./fleetAttribution.ts`, which also runs the stale-claim sweep it carried.
 
 /** How many pending intents one sweep will fan out. A ceiling rather than
  *  "everything", so a backlog drains at a predictable rate instead of firing
@@ -144,12 +78,12 @@ export const ciRunnerProvisionSweep = defineJob(
     // replaying a missed one saves less than the claim loop's own poll interval
     // — while after a six-hour outage it would enqueue 360 rows fanning out
     // against the batch ceiling below." Both halves were properties of the
-    // minute cadence, and both are false at `0,30 * * * *`: the next fire is up
-    // to 30 minutes away, and a six-hour outage owes 12 fires, not 360.
+    // minute cadence, and both are false at `*/5 * * * *`: the next fire is up
+    // to 5 minutes away, and a six-hour outage owes 72 fires, not 360.
     //
     // So §11.3's discriminator now lands on the other side. The sweep is
     // convergent — `listRunnableIntentIds` reads the CURRENT pending set, so one
-    // pass answers for every fire it missed — and 30 minutes of a stranded
+    // pass answers for every fire it missed — and minutes of a stranded
     // intent is a real cost paid by whoever is waiting on a CI runner. That is
     // exactly the `latest` case, and it is the same argument its sibling
     // `system.ci-runner-reap` has always made.
@@ -276,26 +210,5 @@ export const ciRunnerBoot = defineJob(
           ctx.step.run(id, fn as () => Promise<T>) as unknown as Promise<T>,
       },
     });
-  },
-);
-
-export const ciRunnerReap = defineJob(
-  {
-    id: 'system.ci-runner-reap',
-    cron: CI_RUNNER_REAP_CRON,
-    // `latest`, not `skip` like the provision sweep above, and the ten-minute
-    // cadence is not what decides it: an orphaned container bills for every
-    // minute it survives, so an immediate reap on restart reclaims spend the next
-    // fire would not. One pass suffices — it reads the CURRENT orphan set.
-    catchUp: 'latest',
-    // `idempotent`: destroying an already-destroyed container is a no-op at every
-    // provider the port targets, and the port requires teardown to be idempotent
-    // anyway.
-    retryPolicy: 'idempotent',
-  },
-  async (ctx, services) => {
-    return ctx.step.run('reap-orphaned-containers', async () =>
-      services.ciRunnerBoot.reapOrphans(),
-    );
   },
 );

@@ -647,6 +647,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'legal-gone-selfhost.spec.ts': 3.0,
   'link-search-flow.spec.ts': 14.6,
   'member-facing-permissions.spec.ts': 7.7,
+  // MOTIR-7004 — a brand-new spec, ESTIMATED rather than measured: no browser
+  // page at all, two seeds, two MCP sessions and a handful of tool calls plus
+  // one catalogue GET. Rounded UP, because under-estimating unbalances the
+  // bin-packer. Re-measure from the first green CI run that includes it.
+  'mcp-tool-hints.spec.ts': 8.0,
   'migrate-index-fleet.spec.ts': 26.7,
   'modal-scroll-container.spec.ts': 6.0,
   'multi-tenant-isolation.spec.ts': 2.5,
@@ -657,6 +662,13 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // it from a green run's `e2e-harness/*.jsonl` when this table is next refreshed.
   'not-found-theme.spec.ts': 9.0,
   'notifications.spec.ts': 14.3,
+  // MOTIR-6985: an estimate, not a measurement — sign-up, one project, one
+  // authorize → consent → approve round trip. Re-measure from the first green run.
+  // MOTIR-6988: measured locally on a production build — four tests at 6.6 s,
+  // 4.5 s, 2.7 s and 3.8 s, plus each test's reset and seed. Re-measure from a
+  // green run's `e2e-harness/*.jsonl` when this table is next refreshed.
+  'oauth-connect.spec.ts': 22.0,
+  'oauth-consent.spec.ts': 15.0,
   'onboarding-discovery.spec.ts': 2.6,
   'onboarding-entrance.spec.ts': 6.8,
   'onboarding-entry.spec.ts': 2.9,
@@ -859,6 +871,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // runner, so treat it as a FLOOR and re-measure from the artifacts on the next
   // green run, exactly as this file's header prescribes.
   'two-factor-enforcement.spec.ts': 17.6,
+  // MOTIR-6967 — MEASURED LOCALLY (1.5 s against a file:// page: no sign-up, no
+  // seeding, no app route). Recorded at 3.0 as a floor-plus-margin; replace it
+  // with its measured CI time.
+  'design-render-mock-offline.spec.ts': 3.0,
   'work-item-delete.spec.ts': 6.8,
   'work-item-mentions.spec.ts': 6.5,
   'work-item-type-vocabulary.spec.ts': 6.9,

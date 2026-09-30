@@ -174,12 +174,18 @@ describe('the READ takes `workflow:manage` — a member is refused it (MOTIR-539
 
     await expect(approvalGateSettingsService.getSettings(s.projectId, s.admin)).resolves.toEqual({
       acceptanceVideoEnabled: false,
+      reviewAgentEnabled: false,
+      designApprovalGate: true,
     });
 
     actAs(s.admin);
     const res = await GET(new Request('https://app.motir.co/x'), params(s.projectKey));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ acceptanceVideoEnabled: false });
+    expect(await res.json()).toEqual({
+      acceptanceVideoEnabled: false,
+      reviewAgentEnabled: false,
+      designApprovalGate: true,
+    });
   });
 });
 
@@ -216,8 +222,54 @@ describe('the WRITE keeps `workflow:manage` (MOTIR-5278, unchanged by MOTIR-5394
     actAs(s.admin);
     const res = await PATCH(patchBody({ acceptanceVideoEnabled: true }), params(s.projectKey));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ acceptanceVideoEnabled: true });
+    expect(await res.json()).toEqual({
+      acceptanceVideoEnabled: true,
+      reviewAgentEnabled: false,
+      designApprovalGate: true,
+    });
     expect(await storedAcceptanceVideo(s.projectId)).toBe(true);
+  });
+});
+
+describe('the DESIGN-APPROVAL switch takes the same key (MOTIR-697)', () => {
+  async function storedDesignApproval(projectId: string): Promise<boolean> {
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: projectId } });
+    return row.designApprovalGate;
+  }
+
+  it('a project MEMBER’s PATCH is a 403 naming `workflow:manage`, and the switch does not move', async () => {
+    const s = await seed('member-design-switch');
+
+    actAs(s.member);
+    const res = await PATCH(patchBody({ designApprovalGate: false }), params(s.projectKey));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ permission: 'workflow:manage' });
+    expect(await storedDesignApproval(s.projectId)).toBe(true);
+  });
+
+  it('CONTROL: an ADMIN turns it off, and ONLY that key is written', async () => {
+    const s = await seed('admin-design-switch');
+    await storeAcceptanceVideo(s.projectId, false);
+
+    actAs(s.admin);
+    const res = await PATCH(patchBody({ designApprovalGate: false }), params(s.projectKey));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      acceptanceVideoEnabled: false,
+      reviewAgentEnabled: false,
+      designApprovalGate: false,
+    });
+    expect(await storedDesignApproval(s.projectId)).toBe(false);
+    expect(await storedAcceptanceVideo(s.projectId)).toBe(false);
+  });
+
+  it('a non-boolean value is a 400 and writes nothing', async () => {
+    const s = await seed('bad-design-switch');
+
+    actAs(s.admin);
+    const res = await PATCH(patchBody({ designApprovalGate: 'off' }), params(s.projectKey));
+    expect(res.status).toBe(400);
+    expect(await storedDesignApproval(s.projectId)).toBe(true);
   });
 });
 

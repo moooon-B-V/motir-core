@@ -630,6 +630,17 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
     ],
   },
   {
+    path: 'review',
+    // Story MOTIR-1626 · MOTIR-6824 (`hosted-agent-run.md` §8) — the REVIEW AGENT. Run by
+    // Motir's hosted container on the review run it opened when a card's pull requests
+    // went green with the review agent on; typed anywhere else it refuses, saying why.
+    signature: '<key>',
+    description:
+      'Hosted only: review a work item’s pull requests at the version under review and submit ONE verdict — never pushes, never posts to GitHub.',
+    helpGroup: HELP_GROUP.workLoop,
+    options: [],
+  },
+  {
     path: 'auto',
     signature: '',
     description: 'Drain the ready set unattended: one item at a time onto a session branch.',
@@ -803,6 +814,30 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       {
         flags: '--via <status>',
         description: 'Move through this status first (e.g. in_review).',
+      },
+    ],
+  },
+  // The in-agent terminal server (MOTIR-6938 · `docs/decisions/agent-terminal.md`
+  // Q4). Not a command a person types: an agent's machine runs it as its main
+  // process. It is still published, in the default ADDITIONAL group, because
+  // the machine's init guards on `motir agent-terminal --help` and a reader
+  // who finds it in `ps` should find it documented.
+  {
+    path: 'agent-terminal',
+    signature: '',
+    description: 'The terminal server inside a Motir agent image.',
+    helpGroup: HELP_GROUP.additional,
+    options: [],
+  },
+  {
+    path: 'agent-terminal serve',
+    signature: '',
+    description: 'Serve this agent’s shell to Motir’s relay over WebSocket.',
+    helpGroup: null,
+    options: [
+      {
+        flags: '--port <port>',
+        description: 'Port to listen on, on every interface (default 7681).',
       },
     ],
   },

@@ -511,6 +511,64 @@ export interface PersistentContainerSpec {
   readonly volumeSizeGb: number;
   /** Where the volume is mounted — the image's `HOME` (§1: `/home/node`). */
   readonly mountPath: string;
+  /**
+   * The agent terminal's machine config (`docs/decisions/agent-terminal.md` Q2,
+   * Q3, Q4, Q8 · MOTIR-6939): the main process, the public service and the
+   * per-instance key. `null` boots the machine exactly as before the terminal —
+   * the image's own `CMD`, no service — which is what a deployment without
+   * `MOTIR_TERMINAL_MASTER_KEY` gets.
+   */
+  readonly terminal: PersistentTerminalConfig | null;
+}
+
+/**
+ * What an agent's machine needs to serve its terminal (`agent-terminal.md` Q2,
+ * Q4, Q8). Policy — the command, the port, the key — is decided ABOVE the port;
+ * the adapter only writes it into the provider's machine config.
+ */
+export interface PersistentTerminalConfig {
+  /**
+   * The config's version, stamped on the machine (Q8). A wake of a machine whose
+   * stamp is older (or absent) rewrites the machine's config before starting it.
+   */
+  readonly version: number;
+  /**
+   * A NON-SECRET fingerprint of the key in {@link env}, stamped beside the version:
+   * a machine stamped with the same version but another key id (the master key
+   * was rotated) is rewritten on its next wake too (Q3's rotation rule).
+   */
+  readonly keyId: string;
+  /**
+   * The machine's main process: the argv that REPLACES the image's `CMD` under
+   * its unchanged `ENTRYPOINT` (Q4), so the entrypoint still seeds the home and
+   * sources the agent's config env first.
+   */
+  readonly command: readonly string[];
+  /** Env merged over the spec's (Q3: `MOTIR_TERMINAL_KEY`). Never a user credential. */
+  readonly env: Readonly<Record<string, string>>;
+  /** The public service the relay dials (Q2). */
+  readonly service: PersistentPublicService;
+}
+
+/**
+ * One public service on the machine (Q2). `autostart` / `autostop` are literal
+ * types on purpose: the provider's proxy must NEVER wake a hibernated agent
+ * (that would bypass Motir's wake, its credit check and its charge) and never
+ * stop one (Motir hibernates), so no caller can ask for anything else.
+ */
+export interface PersistentPublicService {
+  readonly internalPort: number;
+  readonly ports: ReadonlyArray<{ readonly port: number; readonly handlers: readonly string[] }>;
+  readonly autostart: false;
+  readonly autostop: 'off';
+}
+
+/** Where the relay dials ONE agent's terminal server (Q2) — the address and the routing headers. */
+export interface PersistentTerminalEndpoint {
+  /** `wss://…/v1/terminal` on Fly; a local `ws://` address on the fake. */
+  readonly url: string;
+  /** Headers the dial must carry to reach this one machine (Fly: `fly-force-instance-id`). */
+  readonly headers: Readonly<Record<string, string>>;
 }
 
 /** The persistent handle (§1's table) — persisted on the instance record. */
@@ -627,6 +685,24 @@ export interface PersistentContainerOrchestrator {
     command: readonly string[],
     options?: { timeoutSeconds?: number },
   ): Promise<PersistentExecResult>;
+
+  /**
+   * Bring a STOPPED machine's config up to `terminal` (`agent-terminal.md` Q8) —
+   * the wake calls it before {@link start}. When the machine's stamp is newer than
+   * `terminal.version`, or the same version with the same `keyId`, it changes
+   * nothing (`'current'`); otherwise
+   * it rewrites the main process, the service, the env and the stamp, KEEPING the
+   * image digest, the volume mount and every other field, WITHOUT starting the
+   * machine (`'updated'`). It also ensures the app's public addresses, which an
+   * app created before the terminal lacks. Idempotent.
+   */
+  ensureMachineConfig(
+    handle: PersistentContainerHandle,
+    terminal: PersistentTerminalConfig,
+  ): Promise<'updated' | 'current'>;
+
+  /** Where the relay dials this machine's terminal server (Q2). Pure — no provider call. */
+  terminalEndpoint(handle: PersistentContainerHandle): PersistentTerminalEndpoint;
 }
 
 /** What one {@link PersistentContainerOrchestrator.exec} returned. */
@@ -634,4 +710,52 @@ export interface PersistentExecResult {
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE FLEET INVENTORY — what the PROVIDER says is running (Story MOTIR-6906 ·
+// MOTIR-6925, `docs/decisions/fleet-per-org-pool.md` §5)
+// ═══════════════════════════════════════════════════════════════════════════
+// Every read above starts from a handle Motir already holds. The attribution
+// reconciler must not: the machine it exists to find is one Motir holds NO record
+// of — a crashed boot, a failed teardown, a machine started by hand — so it asks
+// the provider for EVERY app in the fleet organisation and EVERY machine in each,
+// tagged or not, and treats Motir's own tables only as the index it attributes
+// against. Metadata is carried for the alert's context and is never attribution:
+// anyone holding the token can write it.
+
+/** One machine as the provider lists it. */
+export interface InventoryMachine {
+  readonly app: string;
+  readonly machineId: string;
+  /** The machine's name, for the alert; empty when the provider gives none. */
+  readonly name: string;
+  /** Where it runs — part of the handle a teardown of it needs. */
+  readonly region: string;
+  /** The provider's state in the instance vocabulary — `gone` is a machine that
+   *  no longer runs anything and is not judged. */
+  readonly state: PersistentContainerState;
+  /** Null when the provider omits it — such a machine cannot be aged, and is
+   *  alerted rather than destroyed on a guess. */
+  readonly createdAt: Date | null;
+  readonly metadata: Readonly<Record<string, string>>;
+}
+
+/**
+ * The inventory half of the port. Both listings THROW on failure — a listing
+ * error is never an empty list, because the reconciler would read "nothing is
+ * running" and a leak would hide behind an outage. Both actions are IDEMPOTENT
+ * on their end state, like every other action on this port.
+ */
+export interface FleetInventory {
+  readonly provider: OrchestratorProvider;
+  /** Every app in Motir's fleet organisation — including apps no record names. */
+  listApps(): Promise<string[]>;
+  /** Every machine in one app, tagged or not. An app that no longer exists is empty. */
+  listMachines(app: string): Promise<InventoryMachine[]>;
+  /** Destroy one machine, forcibly. Idempotent on one already gone. */
+  destroyMachine(app: string, machineId: string): Promise<void>;
+  /** Stop one machine — for a PERSISTENT machine whose record owns it but says it
+   *  should be resting (§5: stopped, never destroyed). Idempotent. */
+  stopMachine(app: string, machineId: string): Promise<void>;
 }

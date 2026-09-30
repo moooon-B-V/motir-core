@@ -177,7 +177,17 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'the defect and the fix are indistinguishable — so the arm is what makes it observable and ' +
       '`tests/github/siblingWorkspaceAttribution.test.ts` is what observes it.',
   },
-  'lib/services/ciRunnerAdmissionService.ts#resolveCaps': {
+  'lib/services/aiPlanGateService.ts#hasPaidAiPlan': {
+    tables: ['organization'],
+    source: 'scan',
+    why: 'organization_active',
+  },
+  'lib/services/ciLiveChargeService.ts#chargeOrganization': {
+    tables: ['organization'],
+    source: 'scan',
+    why: 'organization_active',
+  },
+  'lib/services/fleetCeilingService.ts#resolveOrgPool': {
     tables: ['organization'],
     source: 'scan',
     why: 'organization_active',

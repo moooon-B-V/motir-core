@@ -1,8 +1,12 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { gateSetFor, reconcileGatesFor, type GateSetSignals } from './gateSetFor';
+import { agentReviewStartService } from './agentReviewStartService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import {
+  approvalGateRepository,
+  type LiveSupersedeCause,
+} from '@/lib/repositories/approvalGateRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 
 // RAISE and WITHDRAW the `pull_request_approval` gate (Story MOTIR-4909 · MOTIR-5482;
@@ -26,6 +30,43 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 
 const KIND = 'pull_request_approval' as const;
 const ACCEPTANCE_KIND = 'acceptance_result' as const;
+const REVIEW_KIND = 'agent_review' as const;
+
+/**
+ * Retire the card's awaiting REVIEW AGENT question with the withdrawal's own cause (Story
+ * MOTIR-1626 · MOTIR-6819; `approval-gates.md` §12.5). The review is about exactly the
+ * commits the approve-and-merge gate would be about (§12.1's one stamp), so every event
+ * that withdraws one withdraws the other, under the same cause and touching no decision
+ * field. A decided review is history and is never touched. The next green raises a fresh
+ * review at the new version (the re-ask below).
+ *
+ * The review RUN in flight for it is CANCELLED once this transaction commits (§12.5's
+ * third bullet; MOTIR-6820): its answer can no longer decide anything and it is still
+ * being paid for.
+ */
+async function withdrawAgentReview(
+  workItemId: string,
+  cause: LiveSupersedeCause,
+  tx: Prisma.TransactionClient,
+): Promise<number> {
+  const awaiting = (await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx)).filter(
+    (gate) => gate.kind === REVIEW_KIND,
+  );
+  const count = await approvalGateRepository.supersedeAwaitingByWorkItem(
+    workItemId,
+    REVIEW_KIND,
+    cause,
+    tx,
+  );
+  const first = awaiting[0];
+  if (count > 0 && first) {
+    agentReviewStartService.cancelRunsAfterCommit(
+      first.workspaceId,
+      awaiting.map((gate) => gate.id),
+    );
+  }
+  return count;
+}
 
 /**
  * Raise the card's `awaiting` approve-and-merge gate when {@link gateSetFor} says it is
@@ -58,6 +99,14 @@ const ACCEPTANCE_KIND = 'acceptance_result' as const;
  * `ancestor` and raised nothing, while the parent's own promotion was skipped by
  * `ContainerHasOpenChildrenError` — no gate anywhere. `resolveRunTargetFor` itself is
  * untouched.
+ *
+ * ⚠️ BUT THE CARD'S STATUS IS A CONDITION AGAIN, AND THAT PARENT IS ASKED NOTHING
+ * (MOTIR-6971; `approval-gates.md` §8's EIGHTH AMENDMENT). The run-target refusal was
+ * the wrong question; *is the card in review* is the right one, and removing the first
+ * left nothing asking it. A parent held below `implemented` by an open child is a run
+ * that has not settled its status, and green CI is not that statement — so the gate
+ * now waits for `in_review` (`resolveGateSet`'s `cardInReview`). MOTIR-6914 was that
+ * parent, asked at `in_progress`, and its press could only throw.
  */
 export async function raisePullRequestApprovalGate(
   item: WorkItem,
@@ -144,9 +193,27 @@ export async function withdrawPullRequestApprovalGatesOnHeadMove(
     tx,
   )) {
     const signals: GateSetSignals = { movedHead: { pullRequestId, headSha } };
-    const gate = (await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx)).find(
-      (row) => row.kind === KIND,
-    );
+    const awaitingRows = await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx);
+    const gate = awaitingRows.find((row) => row.kind === KIND);
+    // ⚠️ THE REVIEW AGENT'S QUESTION RIDES THE SAME VERSION (MOTIR-6819; §12.5). It is
+    // awaiting INSTEAD of the merge gate while the switch is on, so it is withdrawn on its
+    // own version check — before, and independently of, the merge gate's below.
+    const review = awaitingRows.find((row) => row.kind === REVIEW_KIND);
+    let reviewWithdrawn = false;
+    if (review) {
+      const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
+      const current = deliverySetVersion(
+        deliveries.map((delivery) =>
+          deliveryMemberVersion(
+            delivery,
+            delivery.githubPullRequestId === pullRequestId ? headSha : undefined,
+          ),
+        ),
+      );
+      if (current && current !== review.subjectVersion) {
+        reviewWithdrawn = (await withdrawAgentReview(workItemId, 'head_moved', tx)) > 0;
+      }
+    }
     if (!gate) {
       // No merge question to retire — but a story run's acceptance question may be
       // awaiting on its own (an `auto` project raises no merge gate), and a moved head
@@ -158,6 +225,8 @@ export async function withdrawPullRequestApprovalGatesOnHeadMove(
           'head_moved',
           tx,
         );
+        await reraiseAfterWithdrawal(workItemId, tx, signals);
+      } else if (reviewWithdrawn) {
         await reraiseAfterWithdrawal(workItemId, tx, signals);
       }
       continue;
@@ -226,6 +295,7 @@ export async function withdrawPullRequestApprovalGatesOnClose(
       'member_closed',
       tx,
     );
+    await withdrawAgentReview(workItemId, 'member_closed', tx);
     if (await acceptanceNoLongerOwed(workItemId, tx)) {
       await approvalGateRepository.supersedeAwaitingByWorkItem(
         workItemId,
@@ -261,6 +331,7 @@ export async function withdrawPullRequestApprovalGatesOnDraft(
       'member_drafted',
       tx,
     );
+    await withdrawAgentReview(workItemId, 'member_drafted', tx);
     if (await acceptanceNoLongerOwed(workItemId, tx)) {
       await approvalGateRepository.supersedeAwaitingByWorkItem(
         workItemId,
@@ -303,6 +374,7 @@ export async function withdrawPullRequestApprovalGatesOnConflict(
       'conflict',
       tx,
     );
+    await withdrawAgentReview(workItemId, 'conflict', tx);
     if (await acceptanceNoLongerOwed(workItemId, tx)) {
       await approvalGateRepository.supersedeAwaitingByWorkItem(
         workItemId,
@@ -360,6 +432,7 @@ export async function withdrawPullRequestApprovalGatesOnCiFailure(
       'ci_failed',
       tx,
     );
+    await withdrawAgentReview(workItemId, 'ci_failed', tx);
     // The acceptance question rides on the same green set (MOTIR-5903): a story run's
     // receipt is evidence for the one approve-to-merge decision, so a red build retires it
     // with the merge question under the same cause.
@@ -412,20 +485,30 @@ export async function withdrawPullRequestApprovalGatesOnCiRerun(
     pullRequestId,
     tx,
   )) {
-    const gate = (await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx)).find(
-      (row) => row.kind === KIND,
-    );
-    if (gate) {
+    const awaiting = await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx);
+    const gate = awaiting.find((row) => row.kind === KIND);
+    // The REVIEW stands where the merge question would (Story MOTIR-1626; `approval-gates.md`
+    // §12.2), so a set that leaves green retires it the same way — only at its own version,
+    // cancelling its run — and the next green asks it again (§12.5: a WITHDRAWN review is
+    // owed again at the same head).
+    const review = awaiting.find((row) => row.kind === REVIEW_KIND);
+    if (gate || review) {
       const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
       const current = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
-      if (!current || current !== gate.subjectVersion) continue;
-      const retired = await approvalGateRepository.supersedeAwaitingByWorkItem(
-        workItemId,
-        KIND,
-        'ci_rerunning',
-        tx,
-      );
-      if (retired > 0) withdrawn.push(workItemId);
+      let retired = 0;
+      if (gate && current && current === gate.subjectVersion) {
+        retired += await approvalGateRepository.supersedeAwaitingByWorkItem(
+          workItemId,
+          KIND,
+          'ci_rerunning',
+          tx,
+        );
+      }
+      if (review && current && current === review.subjectVersion) {
+        retired += await withdrawAgentReview(workItemId, 'ci_rerunning', tx);
+      }
+      if (retired === 0) continue;
+      withdrawn.push(workItemId);
     }
     // The acceptance question rides on the same green set (MOTIR-5903) — and an `auto`
     // project raises no merge gate, so it can be the only question standing. Asked
@@ -459,6 +542,7 @@ export async function withdrawPullRequestApprovalGateOnSetChange(
     'set_changed',
     tx,
   );
+  await withdrawAgentReview(workItemId, 'set_changed', tx);
   if (await acceptanceNoLongerOwed(workItemId, tx)) {
     await approvalGateRepository.supersedeAwaitingByWorkItem(
       workItemId,

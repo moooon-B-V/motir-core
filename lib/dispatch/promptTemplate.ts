@@ -571,22 +571,57 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '   below, which says what to do with it and whether this run may file it.',
   ],
   design: [
-    '1. Read the card description above, then INVENTORY the shipped reality the',
+    // ⚠️ STEP 1 NAMES THE DESIGN SYSTEM (MOTIR-6963). A project imported with its
+    // own component library has none of Motir's tokens, and an unnamed "real design
+    // system" was filled with whatever the agent knew best. The three branches are
+    // mutually exclusive, and step 1's verdict decides which one a run takes.
+    '1. IDENTIFY THE DESIGN SYSTEM before anything else. The project is on Motir',
+    '   Design ONLY when BOTH hold: its package.json (the root’s, or the web app’s',
+    '   in a monorepo) depends on @motir/design-system, AND its global CSS imports',
+    '   @motir/design-system/theme.css. Either check alone is NOT enough. Write the',
+    '   files you read and the verdict as the first lines of design-notes.md, then',
+    '   follow exactly ONE branch:',
+    '   (a) ON MOTIR DESIGN (both checks hold). Read the installed version',
+    '       (node_modules/@motir/design-system/package.json, else the lockfile).',
+    '       Read the project’s OWN axes from its root layout’s data-style /',
+    '       data-palette / data-type (or its DESIGN.md where it has one) — never the',
+    '       package defaults unless the project uses them. If that version exports',
+    '       @motir/design-system/mock, build the mock with renderMock from the',
+    '       package’s parts at those axes; otherwise compose from those parts’',
+    '       actual markup with that version’s theme.css inlined. Reach for the',
+    '       package’s parts first, then the project’s own local components, then new',
+    '       ones. List each part the package lacks in design-notes.md as either',
+    '       "proposed addition to @motir/design-system" or "product-local component",',
+    '       with a one-line reason.',
+    '   (b) ON ITS OWN SYSTEM (either check fails, and the repository has shared',
+    '       components or a theme). Build from the repository’s own component',
+    '       library and theme — its components directory, its Tailwind config or',
+    '       CSS variables, its UI library’s theme — and name those files in',
+    '       design-notes.md. Use no --el-* token and no @motir/design-system import.',
+    '   (c) NO COHERENT SYSTEM (either check fails, and there are no shared',
+    '       components and no theme). BEFORE drawing, write the colours, type sizes',
+    '       and spacing the shipped code actually uses into a "## Working palette"',
+    '       section of design-notes.md, each with the file it came from, and draw',
+    '       with those alone.',
+    '   NEVER MIGRATE: in every branch, the design never adds, installs or proposes',
+    '   @motir/design-system for a project that does not already use it. A design',
+    '   card is not where that decision is made — it is the project owner’s.',
+    '2. Read the card description above, then INVENTORY the shipped reality the',
     '   surface lands in — the real routes, shell, and neighbouring design assets.',
     '   Design to FIT what exists; never invent a route, nav, or architecture.',
-    '2. RENDER the surface as it ships today (or the real components it composes)',
+    '3. RENDER the surface as it ships today (or the real components it composes)',
     '   before drawing anything, and design against that pixel reality.',
-    '3. Produce the design asset set for the surface — TWO files, the area’s',
-    '   design-notes.md and a <surface>.mock.html — composed from the real design',
-    "   system's primitives and tokens, never a raw hex colour or a fixed radius.",
+    '4. Produce the design asset set for the surface — TWO files, the area’s',
+    '   design-notes.md and a <surface>.mock.html — composed from the design system',
+    '   step 1 identified, never a raw hex colour or a fixed radius.',
     '   Nothing else: no screenshot export, and no Pencil source.',
-    '4. If the surface ALREADY has a design, do not edit its mock. Draw the change',
+    '5. If the surface ALREADY has a design, do not edit its mock. Draw the change',
     '   in a NEW <surface>--<change>.mock.html holding only the panels that change,',
     '   and add a new notes section citing the section and the mock it amends. An',
     '   older mock is a record of its moment, not a specification to keep current.',
-    '5. Draw the ACCESS PATH: the affordance in the parent surface that opens this',
+    '6. Draw the ACCESS PATH: the affordance in the parent surface that opens this',
     '   one. Naming the route in prose is not enough — the reader must see the door.',
-    '6. Stop at the asset. A design is reviewed before anything is built on it.',
+    '7. Stop at the asset. A design is reviewed before anything is built on it.',
   ],
   test: [
     '1. Read the card description above and the behaviour under test.',
@@ -771,15 +806,18 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
  * two kinds to send and that nothing else goes.
  */
 function designResultSteps(openDependentKeys: readonly string[]): string[] {
+  // Numbered directly after the last design step, so adding a design step can
+  // never leave the publish step colliding with it (MOTIR-6963).
+  const n = WHAT_TO_DO.design.filter((line) => /^\d+\. /.test(line)).length + 1;
   if (openDependentKeys.length === 0) {
     return [
-      '7. Do NOT publish a design result. No open work item is blocked_by this card,',
+      `${n}. Do NOT publish a design result. No open work item is blocked_by this card,`,
       '   so nothing waits on this design: its pull request is its review, and',
       '   publish_design_result would refuse the call.',
     ];
   }
   return [
-    `7. PUBLISH the design result — ${openDependentKeys.join(', ')} ${
+    `${n}. PUBLISH the design result — ${openDependentKeys.join(', ')} ${
       openDependentKeys.length === 1 ? 'is' : 'are'
     } blocked_by this card, so`,
     '   work waits on this design. Commit both files, then call the',
@@ -1418,6 +1456,9 @@ const REFUSAL_SOURCE_LABEL: Record<NonNullable<LatestRefusalDTO['decisionSource'
   api: 'through the Motir API',
   mcp: 'through Motir MCP',
   github: 'in a GitHub review',
+  // Total over the enum. A system decision is only ever an APPROVAL (MOTIR-697), so
+  // no refusal reaches a prompt with this source.
+  system: 'automatically, by a project setting',
 };
 
 /** What each design verdict tells the next run (MOTIR-6421; `design-refusal-verdict.md`). */

@@ -29,7 +29,7 @@ import zh from '@/messages/zh.json';
 // repair?"*. Four of their cards are stuck, each for a different reason, and none is waiting
 // on a decision — so a bare `/workbench` lands on **To fix**, whose count reads 4. Each row
 // says WHY in words (the merge queue failed it · it conflicts with main · its CI failed · a
-// reviewer sent it back) and WHAT REPAIRS IT (`motir fix <KEY>`, or `motir run <KEY>` for the
+// reviewer sent it back) and WHAT REPAIRS IT (`motir fix <KEY>`, or — before §12.7 (MOTIR-6822) — `motir run <KEY>` for the
 // card sent back). In progress holds none of the four. Then a fix lands on the red card: the
 // count drops to 3 without a reload, the row stays where it was, marked Cleared, and the next
 // load omits it. The whole tab reads in Chinese, down to its empty state.
@@ -182,6 +182,33 @@ async function checks(
       repo: WEB_REPO,
     }),
     `${conclusion ?? 'running'} #${number} at ${headSha.slice(0, 7)}`,
+  );
+}
+
+/** A push moved the pull request's head — GitHub's `synchronize` delivery, which every real
+ *  push sends. The conflict's repair needs it: the `dirty` reading is kept against the head
+ *  Motir STORES (MOTIR-7005), and only a push delivery (or a fresh host read) moves that head;
+ *  check rows at a new commit do not. */
+async function push(page: Page, card: SeededCard, scenario: Scenario, sha: string): Promise<void> {
+  const { number } = PRS[scenario];
+  const payload = pullRequestPayload({
+    action: 'opened',
+    number,
+    title: card.title,
+    headRef: headRefFor(card, scenario),
+    state: 'open',
+    merged: false,
+    repo: WEB_REPO,
+  }) as { pull_request: Record<string, unknown> } & Record<string, unknown>;
+  await deliver(
+    page,
+    'pull_request',
+    {
+      ...payload,
+      action: 'synchronize',
+      pull_request: { ...payload.pull_request, head: { ref: headRefFor(card, scenario), sha } },
+    },
+    `push #${number} to ${sha.slice(0, 7)}`,
   );
 }
 
@@ -364,7 +391,12 @@ test.describe('To fix on the Workbench', () => {
         `${plain(reasons.changesRequested, { name: seed.ownerName, note: '' }).split(' — ')[0]}`,
       );
       await expect(rowOf(page, toFix, sentBack)).toContainText(`“${REVIEW_NOTE}”`);
-      await expect(rowOf(page, toFix, sentBack)).toContainText(`motir run ${sentBack.identifier}`);
+      // ⚠️ AMENDED BY A RECORDED DECISION, not edited to match today (MOTIR-1626 · MOTIR-6822,
+      // `docs/decisions/approval-gates.md` §12.7): a card a person sent back was repaired by
+      // `motir run`, which could never claim it — the card sits in the review band and `run`
+      // claims only To do. §12.7 corrects the repair to `motir fix`; this receipt's video is
+      // still the record of what MOTIR-6588 shipped.
+      await expect(rowOf(page, toFix, sentBack)).toContainText(`motir fix ${sentBack.identifier}`);
     });
     await beat();
 
@@ -442,8 +474,9 @@ test.describe('To fix on the Workbench', () => {
         plain(zr.changesRequested, { name: '', note: REVIEW_NOTE }).trim(),
       );
       // The commands are commands — they stay untranslated.
+      // `motir fix` since §12.7 (MOTIR-6822) — see the English assertion above.
       await expect(rowOf(page, zhToFix, sentBack)).toContainText(
-        `motir run ${sentBack.identifier}`,
+        `motir fix ${sentBack.identifier}`,
       );
     });
     await beat();
@@ -452,6 +485,7 @@ test.describe('To fix on the Workbench', () => {
       // A push that goes green on each: a new head leaves the queue exit, the conflict and
       // the refusal all behind.
       await checks(page, queue, 'queue', 'success', pushedHead('queue'));
+      await push(page, conflict, 'conflict', pushedHead('conflict'));
       await checks(page, conflict, 'conflict', 'success', pushedHead('conflict'));
       await checks(page, sentBack, 'sentBack', 'success', pushedHead('sentBack'));
       for (const card of [queue, conflict, sentBack]) expect(await fixReasonOf(card)).toBeNull();

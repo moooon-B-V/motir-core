@@ -1,7 +1,11 @@
 import type { PrMergeMode, Prisma } from '@/generated/prisma/client';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
 import { PR_MERGE_MODE_VALUES, type PrMergeModeValue } from '@/lib/dto/projects';
-import { InvalidPrMergeModeError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  InvalidPrMergeModeError,
+  MergeModeReviewAgentOnError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
 import { derivePrMergeModeDefault, isEstablishedSet } from '@/lib/projects/prMergeModeDefault';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
@@ -70,7 +74,18 @@ export const projectPrMergeModeService = {
     await projectAccessService.assertPermission(projectId, ctx, 'workflow:manage');
     const updated = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
-      (tx) => projectRepository.setPrMergeMode(projectId, mode as PrMergeMode, new Date(), tx),
+      async (tx) => {
+        // ⚠️ AUTO MERGING AND THE REVIEW AGENT EXCLUDE EACH OTHER (`approval-gates.md`
+        // §12.2a). Read under the project's row lock, which the review agent's switch
+        // takes too, so neither write can race the other into the forbidden pair.
+        if (mode === 'auto') {
+          await projectRepository.lockById(projectId, tx);
+          const project = await projectRepository.findById(projectId, tx);
+          if (!project) throw new ProjectNotFoundError(projectId);
+          if (project.reviewAgentEnabled) throw new MergeModeReviewAgentOnError(projectId);
+        }
+        return projectRepository.setPrMergeMode(projectId, mode as PrMergeMode, new Date(), tx);
+      },
     );
     return { prMergeMode: updated.prMergeMode };
   },

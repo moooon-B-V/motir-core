@@ -288,3 +288,30 @@ export class MotirHostedRepoIsTakenOverError extends Error {
     this.name = 'MotirHostedRepoIsTakenOverError';
   }
 }
+
+/**
+ * Thrown when Motir Studio is asked to create a hosted repository for an
+ * organisation with no paid AI plan (Story MOTIR-6906 · MOTIR-6909,
+ * `docs/decisions/fleet-per-org-pool.md` §4). The fleet that runs a hosted
+ * repository's CI is paid-AI-plan only, so the repository is not created at all —
+ * refused before any GitHub call.
+ */
+export class AiPlanRequiredError extends Error {
+  readonly code = 'ai_plan_required' as const;
+  constructor(message: string) {
+    super(message);
+    this.name = 'AiPlanRequiredError';
+  }
+}
+
+/**
+ * Thrown when the organisation's AI plan could not be read (motir-ai
+ * unreachable). FAIL-CLOSED: no repository is created on a guess (MOTIR-6909).
+ */
+export class AiPlanUnknownError extends Error {
+  readonly code = 'plan_unknown' as const;
+  constructor(message: string) {
+    super(message);
+    this.name = 'AiPlanUnknownError';
+  }
+}
