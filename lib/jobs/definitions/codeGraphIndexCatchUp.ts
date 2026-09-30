@@ -5,10 +5,9 @@ import { defineJob } from '../defineJob';
  * index allowance for repositories MOTIR-4593 paused, and resumes indexing where
  * it may. See `codeGraphIndexCatchUpService` for why this is a pull.
  *
- * ⚠️ THE MINUTE IS NOT FREE TO PICK. `lib/jobs/schedules.ts` clusters every
- * `system.*` cron onto minutes 0 and 30 so the database can suspend between them;
- * this takes both, like the drift sweep, and costs no new wake. Thirty minutes is
- * the latency between a top-up and the index resuming.
+ * Every 5 minutes — the one sub-hourly cadence (`SUB_HOURLY_CADENCE`,
+ * `lib/jobs/schedules.ts`). Five minutes is the latency between a top-up and the
+ * index resuming.
  */
 export const CODE_GRAPH_INDEX_CATCH_UP_CRON = '*/5 * * * *';
 

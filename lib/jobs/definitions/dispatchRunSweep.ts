@@ -12,9 +12,9 @@ import { defineJob } from '../defineJob';
 //
 // ⚠️ ONE JOB FOR TWO SWEEPS, and that is a decision rather than tidiness. They
 // share a cadence (nightly is right for both), a tenancy shape (discover across,
-// write within) and a subject (the dispatch-run record). Two jobs would be two
-// wake minutes on a compute that suspends when idle, for work that takes
-// milliseconds — and `SCHEDULE_CLUSTER_MINUTES` exists precisely to stop that.
+// write within) and a subject (the dispatch-run record), and each half is
+// milliseconds of work — a second job would add a schedule and a ledger stream
+// for nothing.
 //
 // `retryPolicy: 'idempotent'`: both halves converge on re-run by construction. A
 // cleared body no longer matches `body IS NOT NULL`, and a closed run no longer
@@ -22,9 +22,7 @@ import { defineJob } from '../defineJob';
 // first and a pass that finds nothing does nothing.
 
 /**
- * 06:30 every day — a clustered minute (`lib/jobs/schedules.ts`'s
- * `SCHEDULE_CLUSTER_MINUTES`, so it opens no new wake-minute and the quiet gap
- * is untouched), at the TAIL of the nightly cascade: 03:00
+ * 06:30 every day, at the TAIL of the nightly cascade: 03:00
  * `system.account-erasure-sweep` → 03:30 `system.attachment-gc` → 04:00
  * `system.rate-limit-sweep` → 04:30 `system.automation-retention-sweep` → 05:00
  * `system.code-graph-offboard-sweep` → 05:30 `system.data-export-expiry-sweep`
@@ -39,8 +37,8 @@ import { defineJob } from '../defineJob';
  * The reason it is daily ANYWAY is that the reap's own threshold already
  * dominates that wait: a run is not abandoned until it has been `running` for
  * twelve hours (`DISPATCH_RUN_ABANDON_AFTER_HOURS`), so the worst case is
- * 12h + 24h either way and a tighter cadence would buy a fraction of it for a
- * new wake-minute. If that trade is ever revisited, revisit the THRESHOLD
+ * 12h + 24h either way and a tighter cadence would buy only a fraction of it.
+ * If that trade is ever revisited, revisit the THRESHOLD
  * first — it is the larger term and it costs nothing.
  */
 export const DISPATCH_RUN_SWEEP_CRON = '30 6 * * *';
