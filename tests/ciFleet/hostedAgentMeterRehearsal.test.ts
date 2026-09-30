@@ -29,6 +29,7 @@ import { buildFleetCostReadout } from '../../scripts/fleetCostReadoutQuery';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // THE END-TO-END REHEARSAL (Story MOTIR-4336 · MOTIR-4717) — a hosted-agent
 // container ran → rows were written while it ran and when it stopped → "what did
@@ -108,6 +109,8 @@ async function seedNeighbour(workload: FleetWorkloadKind, seconds: number, at: D
     }),
   );
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   fakeOrchestrator.reset();

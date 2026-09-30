@@ -25,6 +25,7 @@ import { plansService } from '@/lib/services/plansService';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { withUserContext } from '@/lib/workspaces/context';
 import { seedGithubInstallation } from './github-seed';
+import { grantPaidAiPlanIfBilled } from './billing';
 import type { GithubCall, GithubReposControl } from '@/lib/test-github-repos-mock';
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -112,6 +113,8 @@ export async function seedRepositorySet(
     name: `Repo Set E2E — ${identifier}`,
     ownerUserId: owner.id,
   });
+  // A Motir-hosted repository is paid-AI-plan only.
+  grantPaidAiPlanIfBilled(workspace.organizationId);
   const project = await projectsService.createProject({
     name: projectName,
     identifier,

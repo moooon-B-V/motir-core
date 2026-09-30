@@ -17,6 +17,9 @@
 //   - POST /v1/stripe/checkout-session → a synthetic hosted Checkout URL
 //   - POST /v1/stripe/portal-session   → a synthetic hosted Portal URL
 //   - POST /v1/stripe/seat-quantity    → an applied seat-sync result
+//   - POST /v1/credits/ci-overage      → a CI overage debit that LOWERS the org's
+//     fixture balance (Story MOTIR-6906 · MOTIR-6913 — so a live CI tick can
+//     drive an org to zero the way the real ledger does)
 //   - POST/DELETE /v1/orgs/:id/closing  → an organization's billing pauses / resumes
 //   - POST /v1/orgs/:id/offboard        → the AI tenant erased to its billing tombstone
 //   - POST /v1/orgs/:id/purge-retained  → the retained ledger purged
@@ -38,7 +41,7 @@
 // this + the OAuth/Blob mocks — a second setGlobalDispatcher would silently
 // disconnect the others).
 
-import { readFixtureFileSync } from '@/lib/test-fixture-file';
+import { readFixtureFileSync, writeFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
 
 /** The synthetic hosted-session URLs the boundary returns (the spec's `page.route`
@@ -135,6 +138,14 @@ export interface BillingFixtureEntry {
    *  off while search spend is zero — the distinction AC 4 drives. */
   totalSpend?: number;
   monthSpend?: number;
+  /**
+   * The balance read FAILS (Story MOTIR-6906 · MOTIR-6913). `/v1/usage` answers
+   * a 500 problem for this org, which is motir-ai unreachable as motir-core sees
+   * it: every surface that reads the balance gets `balance: null` or its own
+   * error state, and the fleet's admission defers `balance_unavailable`.
+   * Optional, so every existing fixture keeps a readable balance.
+   */
+  usageUnavailable?: boolean;
 }
 
 /** The fixture file shape: `coreOrganizationId` → its motir-ai billing state. */
@@ -173,6 +184,32 @@ function queryOrgId(reqPath: string): string | null {
 }
 
 const json = { headers: { 'content-type': 'application/json' } } as const;
+const problemJson = { headers: { 'content-type': 'application/problem+json' } } as const;
+
+/**
+ * The `externalRef`s this process has already debited — motir-ai's idempotency
+ * on `ci_overage:<ref>`, so a retried charge lowers the balance once. Per
+ * process, which is the scope a debit is retried in.
+ */
+const debitedRefs = new Set<string>();
+
+/**
+ * Lower one org's fixture balance by `credits`, as the real ledger does, and
+ * answer the balance after. The fixture file is the ledger here: the app server
+ * and any other process re-read it on their next `/v1/usage`, so a debit made by
+ * a live CI tick is the balance the billing page shows next.
+ */
+function debitFixtureBalance(coreOrganizationId: string, credits: number): number {
+  const path = process.env['MOTIR_AI_BILLING_FIXTURE_PATH'];
+  const fixture = readFixture();
+  const entry = fixture[coreOrganizationId] ?? { ...FREE_DEFAULT };
+  const balanceAfter = entry.balance - credits;
+  if (path) {
+    fixture[coreOrganizationId] = { ...entry, balance: balanceAfter };
+    writeFixtureFileSync(path, JSON.stringify(fixture));
+  }
+  return balanceAfter;
+}
 
 export function installBillingBoundaryMock(agent: MockAgent): void {
   const origin = (process.env['MOTIR_AI_URL'] ?? '').replace(/\/+$/, '');
@@ -187,9 +224,22 @@ export function installBillingBoundaryMock(agent: MockAgent): void {
   // the paywall `blocked` threshold, and the post-upgrade tier reflection).
   pool
     .intercept({ path: (p) => p.startsWith('/v1/usage'), method: 'GET' })
-    .reply((req) => {
+    .reply<object>((req) => {
       const orgId = queryOrgId(req.path);
       const e = entryFor(orgId);
+      if (e.usageUnavailable) {
+        return {
+          statusCode: 500,
+          data: {
+            type: 'about:blank',
+            code: 'internal_error',
+            title: 'Internal error',
+            status: 500,
+            detail: 'the credit ledger could not be read (E2E fixture)',
+          },
+          responseOptions: problemJson,
+        };
+      }
       const q = queryOf(req.path);
       // ECHO the requested scope rather than hardcoding `org`. motir-core sends
       // the scope it RESOLVED server-side (a member is narrowed to their own
@@ -270,6 +320,46 @@ export function installBillingBoundaryMock(agent: MockAgent): void {
   pool
     .intercept({ path: '/v1/stripe/seat-quantity', method: 'POST' })
     .reply(200, { applied: true, outcome: 'updated' }, json)
+    .persist();
+
+  // POST /v1/credits/ci-overage — the CI overage debit (MOTIR-1899's endpoint),
+  // which a live CI tick reaches once an org is past its included minutes
+  // (Story MOTIR-6906 · MOTIR-6910). It LOWERS the fixture balance rather than
+  // answering a fixed one, because the story under test is an org driven to zero
+  // by its own running containers — a debit that moved nothing could never get
+  // there. Idempotent on `externalRef`, as motir-ai is.
+  pool
+    .intercept({ path: '/v1/credits/ci-overage', method: 'POST' })
+    .reply((req) => {
+      const body = JSON.parse(String(req.body ?? '{}')) as {
+        coreOrganizationId?: string;
+        credits?: number;
+        externalRef?: string;
+      };
+      const orgId = String(body.coreOrganizationId ?? '');
+      const credits = Number(body.credits ?? 0);
+      const ref = String(body.externalRef ?? '');
+      const idempotent = debitedRefs.has(ref);
+      let balanceAfter: number;
+      if (idempotent) {
+        balanceAfter = entryFor(orgId).balance;
+      } else {
+        debitedRefs.add(ref);
+        balanceAfter = debitFixtureBalance(orgId, credits);
+      }
+      return {
+        statusCode: 200,
+        data: {
+          transactionId: `e2e_ci_overage_${debitedRefs.size}`,
+          aiOrganizationId: `e2e_ai_${orgId}`,
+          credits: -credits,
+          balanceAfter,
+          exhausted: balanceAfter <= 0,
+          idempotent,
+        },
+        responseOptions: json,
+      };
+    })
     .persist();
 
   // The organization-deletion lifecycle (Story MOTIR-6306): scheduling pauses the

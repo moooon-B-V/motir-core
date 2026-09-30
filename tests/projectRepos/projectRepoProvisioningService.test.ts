@@ -27,6 +27,12 @@ import {
 } from '../helpers/actionsVariableFake';
 import { spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
 import * as jobDispatcher from '@/lib/jobs/engine/dispatcher';
+import {
+  aiPlanGateService,
+  AI_PLAN_REQUIRED_ESTABLISH_MESSAGE,
+  PLAN_UNKNOWN_ESTABLISH_MESSAGE,
+} from '@/lib/services/aiPlanGateService';
+import { AiPlanRequiredError, AiPlanUnknownError } from '@/lib/projectRepos/errors';
 
 // The repo-CREATION primitive over real Postgres (Story MOTIR-1775 · MOTIR-1781).
 //
@@ -897,5 +903,51 @@ describe('no long transaction wraps the external calls', () => {
 
     expect(seenDuringRowTwo).toEqual({ state: 'created', established: true });
     expect(await readState(twoId, fx)).toMatchObject({ state: 'created' });
+  });
+});
+
+// ── THE PAID-AI-PLAN GATE (MOTIR-6906 · MOTIR-6909) ─────────────────────────
+// Motir-hosted repositories are paid-AI-plan only. The refusal lands BEFORE any
+// GitHub call, so an unpaid org never gets a repository, a runner group or a
+// variable. (The plan read itself is tested in `tests/ciFleet/aiPlanGate.test.ts`;
+// off-cloud, which the rest of this file runs as, the gate passes everyone.)
+describe('the paid-AI-plan gate at establish', () => {
+  it('refuses ai_plan_required, with the §4 words, before touching GitHub', async () => {
+    vi.stubEnv('MOTIR_CLOUD', 'true');
+    const hasPaid = vi.spyOn(aiPlanGateService, 'hasPaidAiPlan').mockResolvedValue(false);
+    const fx = await makeWorkItemFixture();
+    const rowId = await addRow(fx, 'web', 'acme-web');
+
+    const attempt = projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    await expect(attempt).rejects.toBeInstanceOf(AiPlanRequiredError);
+    await expect(attempt).rejects.toThrow(AI_PLAN_REQUIRED_ESTABLISH_MESSAGE);
+    expect(hasPaid).toHaveBeenCalledWith(fx.workspace.organizationId);
+    expect(calls).toEqual([]);
+    expect((await readState(rowId, fx)).established).toBe(false);
+  });
+
+  it('refuses plan_unknown when the plan cannot be read, before touching GitHub', async () => {
+    vi.stubEnv('MOTIR_CLOUD', 'true');
+    vi.spyOn(aiPlanGateService, 'hasPaidAiPlan').mockResolvedValue('unknown');
+    const fx = await makeWorkItemFixture();
+    await addRow(fx, 'web', 'acme-web');
+
+    const attempt = projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    await expect(attempt).rejects.toBeInstanceOf(AiPlanUnknownError);
+    await expect(attempt).rejects.toThrow(PLAN_UNKNOWN_ESTABLISH_MESSAGE);
+    expect(calls).toEqual([]);
+  });
+
+  it('creates the repository for a paid org', async () => {
+    vi.stubEnv('MOTIR_CLOUD', 'true');
+    vi.spyOn(aiPlanGateService, 'hasPaidAiPlan').mockResolvedValue(true);
+    const fx = await makeWorkItemFixture();
+    const rowId = await addRow(fx, 'web', 'acme-web');
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows[0]).toMatchObject({ rowId, outcome: 'created' });
   });
 });

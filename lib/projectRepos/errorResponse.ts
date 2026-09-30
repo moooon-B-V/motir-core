@@ -5,6 +5,8 @@ import {
   ProjectAccessDeniedError,
 } from '@/lib/projects/errors';
 import {
+  AiPlanRequiredError,
+  AiPlanUnknownError,
   GithubIdentityRequiredError,
   ProjectRepoInvalidFieldError,
   ProjectRepoLinkConflictError,
@@ -45,6 +47,8 @@ import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organization
  *     rules reject — a blank or over-long name, an illegal character)
  *   OrganizationNotFoundError → 404 · OrgForbiddenError → 403 (the ORG-tier gate
  *     on the add paths, MOTIR-4678 — see the note at the arm)
+ *   AiPlanRequiredError → 402 · AiPlanUnknownError → 503 (the paid-AI-plan gate
+ *     on establish, MOTIR-6909)
  */
 export function mapProjectRepoError(err: unknown): NextResponse | null {
   if (err instanceof ProjectNotFoundError || err instanceof ProjectRepoNotFoundError) {
@@ -91,6 +95,15 @@ export function mapProjectRepoError(err: unknown): NextResponse | null {
   // The takeover's upstream failure (MOTIR-711): GitHub refused, and no change to
   // the request would fix it — so it is a 502, not a 4xx blaming the caller. The
   // row is already `failed` with the reason recorded and is re-promptable.
+  // The paid-AI-plan gate on establish (MOTIR-6909). No plan is 402 — the one
+  // thing that changes the answer is paying; an unreadable plan is 503 — nothing
+  // about the request is wrong, and a retry is the right response.
+  if (err instanceof AiPlanRequiredError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 402 });
+  }
+  if (err instanceof AiPlanUnknownError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 503 });
+  }
   if (err instanceof RepoTransferRefusedError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 502 });
   }

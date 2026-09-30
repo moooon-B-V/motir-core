@@ -21,7 +21,9 @@ export interface FleetInFlightSlotTakeInput {
    *  second run asking for the same `ref`, and so a release can be refused unless
    *  it owns the row. Omit it to keep the pre-MOTIR-2160 behaviour. */
   ownerRef?: string | null;
-  organizationId?: string | null;
+  /** The organisation whose pool this slot counts against — REQUIRED
+   *  (MOTIR-6907): a slot with no org is a container no org's pool bounds. */
+  organizationId: string;
   workspaceId?: string | null;
   /** When this slot stops being counted if it is never released. NOT the
    *  release mechanism — see the model comment. */
@@ -61,7 +63,7 @@ export const fleetInFlightSlotRepository = {
         ${data.workload},
         ${data.ref},
         ${data.ownerRef ?? null},
-        ${data.organizationId ?? null},
+        ${data.organizationId},
         ${data.workspaceId ?? null},
         NOW(), ${data.expiresAt}, NOW(), NOW()
       )
@@ -154,33 +156,24 @@ export const fleetInFlightSlotRepository = {
   },
 
   /**
-   * How many slots one workload is holding FOR ONE WORKSPACE — the per-tenant
-   * fairness read (MOTIR-1990's `ceil(global / 2)` cap).
+   * How many LIVE slots one organisation is holding, per workload — the
+   * slot-backed terms of the per-organisation pool (MOTIR-6907,
+   * `docs/decisions/fleet-per-org-pool.md` §2), and with one workload the
+   * per-organisation index share (§7).
    *
    * ⚠️ The same locking contract as {@link countLiveForWorkload}: read under the
    * `fleet` admission lock, in the same transaction as the take it guards. Two
-   * racers from the same workspace reading this outside the lock both see room.
-   *
-   * ⚠️ `workspace_id` IS ATTRIBUTION, NOT A TENANCY BOUNDARY — the model comment
-   * says so, and this read does not change it. A slot with a NULL workspace is
-   * counted by nobody's per-tenant cap and by everybody's global one, which is
-   * the honest reading of "a container whose tenant was not recorded": it spends,
-   * so it must bound the invoice, but it cannot be attributed to a tenant's
-   * fairness allowance.
-   *
-   * No index of its own on purpose. The predicate rides the existing
-   * `[workload, expiresAt]` index and then filters a set the FLEET CEILING
-   * already bounds — a handful of rows by construction, never a table scan that
-   * grows.
+   * racers from the same organisation reading this outside the lock both see
+   * room. Rides `[organization_id, expires_at]`.
    */
-  async countLiveForWorkloadInWorkspace(
+  async countLiveForWorkloadInOrganization(
     workload: string,
-    workspaceId: string,
+    organizationId: string,
     now: Date,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     return tx.fleetInFlightSlot.count({
-      where: { workload, workspaceId, expiresAt: { gt: now } },
+      where: { workload, organizationId, expiresAt: { gt: now } },
     });
   },
 

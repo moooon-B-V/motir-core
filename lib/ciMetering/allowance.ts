@@ -204,3 +204,64 @@ export function resolveState(input: {
   if (input.balance !== null && input.balance <= 0) return 'ci_credits_exhausted';
   return 'drawing_on_credits';
 }
+
+/**
+ * The debit period, in minutes (`fleet-per-org-pool.md` §3). The live charge
+ * (`ciLiveChargeService`) accrues and debits on this boundary, and admission by
+ * coverage asks for one period of it per charged container.
+ */
+export const CI_DEBIT_PERIOD_MINUTES = 5;
+
+/** What admission by coverage decided (`fleet-per-org-pool.md` §3–§4). */
+export type CiAdmissionCoverage =
+  /** Minutes plus credits pay for everything running and one more, for a period. */
+  | 'covered'
+  /** Past the pool at balance ≤ 0 — the §6.5 exhausted state. */
+  | 'ci_credits_exhausted'
+  /** Not exhausted, but not enough for running + 1 for one period. */
+  | 'credits_insufficient'
+  /** The balance could not be read. */
+  | 'balance_unavailable';
+
+/**
+ * ADMISSION BY COVERAGE (Story MOTIR-6906 · MOTIR-6911) — may one more charged
+ * container start? Only when
+ *
+ *     remaining included minutes + balance ≥ (charged containers running + 1) × period
+ *
+ * where the charged containers are the org's CI runners and hosted-agent runs
+ * (both draw on the same balance; index containers are never charged).
+ *
+ * ⚠️ ADMISSION ONLY, AND THE UNKNOWN IS REFUSED HERE — the opposite of
+ * {@link resolveState}, deliberately. `resolveState` feeds the billing panel,
+ * which must still render an org whose balance momentarily failed to load, so a
+ * null balance there is "not exhausted". Admitting is a promise to be paid, and a
+ * promise cannot be checked against a balance nobody could read, so a null
+ * balance here is `balance_unavailable` — whatever the remaining minutes. A
+ * running container is never stopped for it (§3: stopping every org's CI because
+ * motir-ai is down is the outage this rule refuses to cause).
+ */
+export function resolveAdmissionCoverage(input: {
+  consumptionMinutes: number;
+  poolMinutes: number;
+  balance: number | null;
+  /** The org's charged containers already running, NOT counting this one. */
+  chargedRunning: number;
+  periodMinutes?: number;
+}): CiAdmissionCoverage {
+  if (input.balance === null) return 'balance_unavailable';
+  if (
+    resolveState({
+      consumptionMinutes: input.consumptionMinutes,
+      poolMinutes: input.poolMinutes,
+      balance: input.balance,
+    }) === 'ci_credits_exhausted'
+  ) {
+    return 'ci_credits_exhausted';
+  }
+  const period = input.periodMinutes ?? CI_DEBIT_PERIOD_MINUTES;
+  const remainingMinutes = Math.max(0, input.poolMinutes - input.consumptionMinutes);
+  const running = Math.max(0, input.chargedRunning);
+  const needed = (running + 1) * period;
+  return remainingMinutes + input.balance >= needed ? 'covered' : 'credits_insufficient';
+}

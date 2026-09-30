@@ -21,22 +21,22 @@ import {
   type FleetWorkloadKind,
 } from '@/lib/ciFleet/workloads';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
-// THE CROSS-WORKLOAD FLEET CEILING against real Postgres (Story MOTIR-1916 ·
-// MOTIR-1997).
+// THE PER-ORGANISATION FLEET POOL against real Postgres (Story MOTIR-6906 ·
+// MOTIR-6907, re-cutting MOTIR-1916 · MOTIR-1997;
+// `docs/decisions/fleet-per-org-pool.md`).
 //
-// ⚠️ WHAT THIS SUITE HAS TO PROVE THAT MOTIR-1922's CANNOT. That suite proves a
-// ceiling over CI. This one proves a ceiling over CI *and* the workloads that
-// share the Fly org and write no runner intent — index containers (MOTIR-1981 /
-// MOTIR-1990) and hosted agents (Epic 9). The failure it exists to catch is the
-// one measured in production on 2026-08-02: two workloads each individually
-// within a cap of 2, four containers actually running, and neither number
-// meaning what it said. So every case here mixes workloads on purpose; a case
-// that only exercises CI belongs in the sibling file.
+// ⚠️ WHAT THIS SUITE HAS TO PROVE. An organisation's pool is ONE number over CI
+// *and* the workloads that write no runner intent — index containers and hosted
+// agents — so every case mixes workloads on purpose (the 2026-08-02 lesson: two
+// per-workload caps do not compose into a bound). And it is PER ORGANISATION: one
+// org's burst must never queue another's, so the race cases mix ORGS too.
 //
 // Everything load-bearing is REAL: Postgres, the shared `fleet` admission lock
 // and its `FOR UPDATE`, both counted tables, the claim's compare-and-set and the
@@ -123,18 +123,19 @@ let refSeq = 0;
  *  admission every future workload gets by calling `reserve` and nothing more. */
 async function reserve(
   workload: FleetWorkloadKind,
-  fx?: Fixture,
+  fx: Fixture,
   ref = `run-${(refSeq += 1)}`,
+  at: Date = NOW,
 ): Promise<{ ref: string; verdict: FleetSlotVerdict }> {
   const verdict = await fleetCeilingService.reserve(
     {
       workload,
       ref,
-      organizationId: fx?.organizationId ?? null,
-      workspaceId: fx?.workspaceId ?? null,
+      organizationId: fx.organizationId,
+      workspaceId: fx.workspaceId,
       ttlSeconds: TTL_SECONDS,
     },
-    NOW,
+    at,
   );
   return { ref, verdict };
 }
@@ -159,6 +160,12 @@ async function census(): Promise<FleetInFlightCensus> {
   return withSystemContext((tx) => fleetCeilingService.census(NOW, tx));
 }
 
+async function orgCensus(fx: Fixture, at: Date = NOW): Promise<FleetInFlightCensus> {
+  return withSystemContext((tx) => fleetCeilingService.orgCensus(fx.organizationId, at, tx));
+}
+
+grantPaidAiPlan();
+
 beforeEach(async () => {
   await truncateAuthTables();
   await adminDb.fleetInFlightSlot.deleteMany({});
@@ -167,10 +174,8 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
   vi.stubEnv('MOTIR_AI_URL', 'https://ai.test');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
-  // The per-project cap is deliberately lifted in nearly every case here: this
-  // suite is about the case per-workload caps CANNOT catch, so a per-project
-  // refusal would mask exactly the branch under test.
-  vi.stubEnv('MOTIR_FLEET_PROJECT_CAP_FREE', '50');
+  // No kill switch unless a case sets one.
+  vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');
   stubMotirAi();
 });
 
@@ -179,14 +184,11 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
-  // ⚠️ AND AFTER, NOT ONLY BEFORE. `fleet_in_flight_slot` is FLEET-WIDE — nullable
-  // `workspace_id`, no foreign key, by design, so a slot outlives whatever it
-  // pointed at — which means no `TRUNCATE "workspace" CASCADE` reaches it and the
-  // NEXT FILE IN THIS WORKER does not clean up after this one. A slot this file
-  // leaves behind is counted by `fleetCeilingService.census`, which unions EVERY
-  // workload, so it defers an unrelated file's CI-runner admission with no visible
-  // cause. Clearing it before our own tests protects us; clearing it after protects
-  // everyone else.
+  // ⚠️ AND AFTER, NOT ONLY BEFORE. `fleet_in_flight_slot` carries no foreign key,
+  // by design, so a slot outlives whatever it pointed at — which means no
+  // `TRUNCATE "workspace" CASCADE` reaches it and the NEXT FILE IN THIS WORKER
+  // does not clean up after this one. Clearing it before our own tests protects
+  // us; clearing it after protects everyone else.
   await adminDb.fleetInFlightSlot.deleteMany({});
 });
 
@@ -201,15 +203,20 @@ describe('the fleet workload REGISTRY', () => {
   // The compile-time guard is the `Record<FleetWorkloadKind, …>` itself; this is
   // the runtime half — a counter that was registered but wired to nothing would
   // type-check and count nothing.
-  it('gives EVERY workload kind a counter, and counts them all', async () => {
+  it('gives EVERY workload kind a fleet-wide AND a per-org counter', async () => {
+    const fx = await seedTenant();
     expect(FLEET_WORKLOAD_KINDS.length).toBeGreaterThanOrEqual(3);
     for (const kind of FLEET_WORKLOAD_KINDS) {
       expect(FLEET_WORKLOADS[kind].kind).toBe(kind);
       expect(FLEET_WORKLOADS[kind].label).toBeTruthy();
       const counted = await withSystemContext((tx) => FLEET_WORKLOADS[kind].countInFlight(NOW, tx));
       expect(counted).toBe(0);
+      const forOrg = await withSystemContext((tx) =>
+        FLEET_WORKLOADS[kind].countInFlightForOrg(fx.organizationId, NOW, tx),
+      );
+      expect(forOrg).toBe(0);
     }
-    expect(Object.keys((await census()).byWorkload).sort()).toEqual(
+    expect(Object.keys((await orgCensus(fx)).byWorkload).sort()).toEqual(
       [...FLEET_WORKLOAD_KINDS].sort(),
     );
   });
@@ -221,17 +228,29 @@ describe('the fleet workload REGISTRY', () => {
     await seedIntent(fx, { status: 'running' });
     await reserve('code_graph_index', fx);
 
-    const seen = await census();
+    const seen = await orgCensus(fx);
     expect(seen.byWorkload['ci_runner']).toBe(1);
     expect(seen.byWorkload['code_graph_index']).toBe(1);
     expect(seen.total).toBe(2);
-    // The CI runner left NO slot row behind: a dual write on the hottest path in
-    // the fleet is exactly what the union exists to avoid.
+    expect((await census()).total).toBe(2);
     const fleetInFlightSlotCount = await adminDb.fleetInFlightSlot.count({
       where: { workload: 'ci_runner' },
     });
     expect(fleetInFlightSlotCount).toBe(0);
     expect(SLOT_BACKED_WORKLOADS).not.toContain('ci_runner');
+  });
+
+  // The org census counts ONE org; the fleet census counts them all.
+  it("an org's census never counts another org's containers", async () => {
+    const a = await seedTenant();
+    const b = await seedTenant();
+    await seedIntent(a, { status: 'running' });
+    await reserve('hosted_agent', b);
+    await reserve('code_graph_index', b);
+
+    expect((await orgCensus(a)).total).toBe(1);
+    expect((await orgCensus(b)).total).toBe(2);
+    expect((await census()).total).toBe(3);
   });
 
   it('names each workload in the operator breakdown', async () => {
@@ -242,15 +261,11 @@ describe('the fleet workload REGISTRY', () => {
   });
 });
 
-// ── The case per-workload caps structurally cannot catch ────────────────────
+// ── One pool per organisation, over ALL its workloads ───────────────────────
 
-describe('ONE ceiling over ALL workloads', () => {
-  // ⚠️ THE POINT OF THE WHOLE CARD. Every per-workload cap is satisfied — CI has
-  // zero runners in flight and its project cap is 50 — and the fleet is still
-  // full, because indexing and agents are spending on the same invoice. A
-  // runner-only ceiling admits this job; the cross-workload one does not.
-  it('refuses a CI job when INDEX and AGENT containers have filled the fleet', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '4');
+describe("ONE pool per organisation, over ALL of that org's workloads", () => {
+  it("refuses an org's CI job when ITS index and agent containers filled its pool", async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '4');
     const fx = await seedTenant();
     await reserve('code_graph_index', fx);
     await reserve('code_graph_index', fx);
@@ -260,25 +275,21 @@ describe('ONE ceiling over ALL workloads', () => {
     const queued = await seedIntent(fx);
     const verdict = await ciRunnerAdmissionService.admit(queued);
 
-    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'fleet_ceiling' });
-    // QUEUED, not failed — a ceiling must feel like waiting.
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'org_pool' });
+    // QUEUED, not failed — a full pool must feel like waiting.
     const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: queued.id },
     });
     expect(after.status).toBe('pending');
-    // And the refusal names WHICH workload filled it, or an operator cannot act
-    // on it.
-    expect(verdict).toMatchObject({
-      detail: expect.stringContaining('code-graph index 2'),
-    });
-    expect((verdict as { detail: string }).detail).toContain('hosted agents 2');
+    // §4's words, and the breakdown an operator acts on.
+    const detail = (verdict as { detail: string }).detail;
+    expect(detail).toContain('Your organization is running 4 of its 4 CI containers.');
+    expect(detail).toContain('code-graph index 2');
+    expect(detail).toContain('hosted agents 2');
   });
 
-  // The mirror case, and the one that proves the ceiling is not a CI feature
-  // wearing a general name: CI fills the fleet, and an INDEX container is the
-  // one refused.
-  it('refuses an INDEX container when CI RUNNERS have filled the fleet', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '3');
+  it("refuses an org's INDEX container when ITS CI runners filled its pool", async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '3');
     const fx = await seedTenant();
     await seedIntent(fx, { status: 'running' });
     await seedIntent(fx, { status: 'running' });
@@ -286,80 +297,174 @@ describe('ONE ceiling over ALL workloads', () => {
 
     const { verdict } = await reserve('code_graph_index', fx);
 
-    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'fleet_ceiling' });
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'org_pool' });
     expect((verdict as { detail: string }).detail).toContain('CI runners 3');
-    const fleetInFlightSlotCount = await adminDb.fleetInFlightSlot.count();
-    expect(fleetInFlightSlotCount).toBe(0);
+    expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
   });
 
-  it('refuses an AGENT container when INDEX containers have filled the fleet', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '2');
-    const fx = await seedTenant();
-    await reserve('code_graph_index', fx);
-    await reserve('code_graph_index', fx);
+  // ⚠️ THE POINT OF THE CARD (criterion 1): another org's full pool is NOT this
+  // org's problem.
+  it("admits org B while org A's pool is full", async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '2');
+    const a = await seedTenant();
+    const b = await seedTenant();
+    await seedIntent(a, { status: 'running' });
+    await reserve('hosted_agent', a);
 
-    const { verdict } = await reserve('hosted_agent', fx);
-
-    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'fleet_ceiling' });
+    expect((await reserve('code_graph_index', a)).verdict).toMatchObject({ reason: 'org_pool' });
+    expect(await ciRunnerAdmissionService.admit(await seedIntent(a))).toMatchObject({
+      reason: 'org_pool',
+    });
+    expect((await reserve('hosted_agent', b)).verdict).toMatchObject({ outcome: 'reserved' });
+    expect((await ciRunnerAdmissionService.admit(await seedIntent(b))).outcome).toBe('admitted');
   });
 
-  it('admits while the CROSS-WORKLOAD total is still under the ceiling', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '4');
+  it('admits while the org total is under its pool, and reports the pool it used', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '4');
     const fx = await seedTenant();
     await seedIntent(fx, { status: 'running' });
     await reserve('code_graph_index', fx);
 
     const { verdict } = await reserve('hosted_agent', fx);
 
-    expect(verdict).toMatchObject({ outcome: 'reserved', ceiling: 4 });
-    expect(verdict).toMatchObject({ census: { total: 2 } });
-    expect((await census()).total).toBe(3);
+    expect(verdict).toMatchObject({ outcome: 'reserved', pool: 4, census: { total: 2 } });
+    expect((await orgCensus(fx)).total).toBe(3);
   });
 
-  it('ZERO stops EVERY workload — the product-side kill switch', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '0');
+  it('defaults to 500 per org with nothing configured', async () => {
     const fx = await seedTenant();
+    const { verdict } = await reserve('hosted_agent', fx);
+    expect(verdict).toMatchObject({ outcome: 'reserved', pool: 500 });
+  });
 
-    expect((await reserve('code_graph_index', fx)).verdict).toMatchObject({
-      reason: 'fleet_ceiling',
+  // The enterprise override (§2): platform staff set it on the org row.
+  it("honours the org's own pool over the environment's", async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
+    const big = await seedTenant();
+    const small = await seedTenant();
+    await adminDb.organization.update({
+      where: { id: big.organizationId },
+      data: { fleetPoolCap: 3 },
     });
-    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({
-      reason: 'fleet_ceiling',
-    });
-    expect(await ciRunnerAdmissionService.admit(await seedIntent(fx))).toMatchObject({
-      reason: 'fleet_ceiling',
-    });
+    for (let i = 0; i < 3; i += 1) {
+      expect((await reserve('hosted_agent', big)).verdict).toMatchObject({
+        outcome: 'reserved',
+        pool: 3,
+      });
+    }
+    expect((await reserve('hosted_agent', big)).verdict).toMatchObject({ reason: 'org_pool' });
+
+    await reserve('hosted_agent', small);
+    expect((await reserve('hosted_agent', small)).verdict).toMatchObject({ reason: 'org_pool' });
   });
 
   // Configurable per environment, never a hardcoded constant — asserted by
-  // moving the ceiling and watching the SAME world flip verdict.
-  it('reads the ceiling from the environment, not from a constant', async () => {
+  // moving the pool and watching the SAME world flip verdict.
+  it('reads the pool from the environment, not from a constant', async () => {
     const fx = await seedTenant();
     await reserve('code_graph_index', fx);
     await reserve('hosted_agent', fx);
 
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '2');
-    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '2');
+    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({ reason: 'org_pool' });
+
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '3');
+    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({ outcome: 'reserved' });
+  });
+
+  // An `own`-pool workload is bounded by its guard alone (agent-instances.md
+  // AMENDMENT 2): it neither counts toward nor is refused by the org's pool.
+  it("agent instances neither count toward nor are refused by the org's pool", async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
+    const fx = await seedTenant();
+    await reserve('hosted_agent', fx);
+
+    const { verdict } = await reserve('agent_instance', fx);
+    expect(verdict).toMatchObject({ outcome: 'reserved', pool: null });
+    expect((await orgCensus(fx)).total).toBe(1);
+  });
+});
+
+// ── The kill switch (§6) ────────────────────────────────────────────────────
+
+describe('MOTIR_FLEET_MAX_IN_FLIGHT is the kill switch, and only that', () => {
+  it('ZERO stops EVERY workload of every org', async () => {
+    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '0');
+    const fx = await seedTenant();
+
+    for (const workload of ['code_graph_index', 'hosted_agent', 'agent_instance'] as const) {
+      expect((await reserve(workload, fx)).verdict).toMatchObject({
+        outcome: 'deferred',
+        reason: 'fleet_ceiling',
+        detail: expect.stringContaining('kill switch'),
+      });
+    }
+    expect(await ciRunnerAdmissionService.admit(await seedIntent(fx))).toMatchObject({
       reason: 'fleet_ceiling',
     });
+    expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
+  });
 
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '3');
-    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({ outcome: 'reserved' });
+  // The retired default (24) an environment may still carry, or any positive
+  // number, imposes NO platform ceiling: 30 containers across two orgs boot.
+  it.each(['', '24', '2'])('a value of %j imposes no platform ceiling', async (raw) => {
+    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', raw);
+    const a = await seedTenant();
+    const b = await seedTenant();
+    for (let i = 0; i < 15; i += 1) {
+      expect((await reserve('hosted_agent', a)).verdict.outcome).toBe('reserved');
+      expect((await reserve('code_graph_index', b)).verdict.outcome).toBe('reserved');
+    }
+    expect((await census()).total).toBe(30);
+  });
+});
+
+// ── An org-less request is refused ──────────────────────────────────────────
+
+describe('a slot with no organisation is refused (criterion 5)', () => {
+  it.each(['', '   '])('refuses organizationId %j and writes nothing', async (organizationId) => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const verdict = await fleetCeilingService.reserve(
+      { workload: 'hosted_agent', ref: 'orgless', organizationId, ttlSeconds: TTL_SECONDS },
+      NOW,
+    );
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'organization_required' });
+    expect(error).toHaveBeenCalled();
+    expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
+  });
+
+  it('refuses a request whose organizationId is missing at runtime', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const verdict = await fleetCeilingService.reserve(
+      { workload: 'code_graph_index', ref: 'orgless-2' } as unknown as Parameters<
+        typeof fleetCeilingService.reserve
+      >[0],
+      NOW,
+    );
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'organization_required' });
+  });
+
+  // The column itself enforces it too, so no writer can slip one past the type.
+  it('the slot table refuses a row with no organisation', async () => {
+    await expect(
+      adminDb.$executeRawUnsafe(
+        `INSERT INTO "fleet_in_flight_slot" ("id","workload","ref","claimed_at","expires_at","created_at","updated_at")
+         VALUES ('orgless-row','hosted_agent','x',NOW(),NOW() + interval '1 hour',NOW(),NOW())`,
+      ),
+    ).rejects.toThrow();
   });
 });
 
 // ── Completion frees a slot, whoever's container it was ─────────────────────
 
-describe('completion frees a slot for ANY workload', () => {
-  it('an INDEX container ending lets a queued CI job through', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '1');
+describe('completion frees a slot for ANY workload of the org', () => {
+  it('an INDEX container ending lets the same org’s queued CI job through', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
     const fx = await seedTenant();
     const { ref } = await reserve('code_graph_index', fx);
     const queued = await seedIntent(fx);
 
-    expect(await ciRunnerAdmissionService.admit(queued)).toMatchObject({
-      reason: 'fleet_ceiling',
-    });
+    expect(await ciRunnerAdmissionService.admit(queued)).toMatchObject({ reason: 'org_pool' });
 
     expect(await fleetCeilingService.release('code_graph_index', ref)).toBe(true);
 
@@ -369,17 +474,12 @@ describe('completion frees a slot for ANY workload', () => {
     expect((await ciRunnerAdmissionService.admit(after)).outcome).toBe('admitted');
   });
 
-  // The mirror, and the property CI gets for free: settling an intent drops it
-  // out of the in-flight window in the same write that ends the container, with
-  // no slot bookkeeping at all.
-  it('a CI runner settling lets a queued INDEX container through', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '1');
+  it('a CI runner settling lets the same org’s queued INDEX container through', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
     const fx = await seedTenant();
     const busy = await seedIntent(fx, { status: 'running' });
 
-    expect((await reserve('code_graph_index', fx)).verdict).toMatchObject({
-      reason: 'fleet_ceiling',
-    });
+    expect((await reserve('code_graph_index', fx)).verdict).toMatchObject({ reason: 'org_pool' });
 
     await adminDb.ciRunnerProvisioningIntent.update({
       where: { id: busy.id },
@@ -392,13 +492,10 @@ describe('completion frees a slot for ANY workload', () => {
   });
 
   it('releasing a slot that was never held is visible, not silent', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(await fleetCeilingService.release('hosted_agent', 'never-taken')).toBe(false);
   });
 
-  // Release is best-effort ON PURPOSE, and this is the branch that says so: a
-  // failure here must not fail the teardown path it hangs off. The cost is a
-  // slot that occupies capacity until `expires_at` ages it out — visible and
-  // bounded, which a thrown teardown would not be.
   it('LOGS and keeps going when the release write fails', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(fleetInFlightSlotRepository, 'release').mockRejectedValue(new Error('conn reset'));
@@ -408,44 +505,51 @@ describe('completion frees a slot for ANY workload', () => {
   });
 });
 
-// ── The real-concurrency contract, across workloads ─────────────────────────
+// ── The real-concurrency contract ───────────────────────────────────────────
 
-describe('the ceiling holds under REAL concurrency, across workloads (notes.html #35)', () => {
+describe('the pool holds under REAL concurrency (notes.html #35)', () => {
   // ⚠️ MUTATION-CHECK THIS TEST: comment out the `lockScope` call in
   // `fleetCeilingService.reserve` (and/or in `ciRunnerAdmissionService.admit`)
   // and it MUST go red. Every racer then reads the same "0 in flight" snapshot
-  // and all of them take a slot — the TOCTOU a count-then-write with no shared
-  // row allows, and the exact bug a serial test cannot see.
+  // and all of them take a slot.
   //
-  // It races DIFFERENT workloads on purpose. A same-workload race would pass
-  // against an implementation that took a per-workload lock, which is precisely
-  // the shape ("two independent ceilings") this card exists to replace.
-  it('never exceeds the ceiling when CI, INDEX and AGENT dispatches race', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '4');
-    const fx = await seedTenant();
-    const intents = await Promise.all([1, 2, 3].map(() => seedIntent(fx)));
+  // It races TWO ORGS and THREE workloads at once (criterion 1): org A bursts
+  // past its pool while org B bursts inside its own, in the same instant. Org A
+  // is held to exactly its pool; every one of org B's containers is admitted.
+  it("holds org A at its pool while org B's concurrent burst is admitted in full", async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '4');
+    const a = await seedTenant();
+    const b = await seedTenant();
+    const aIntents = await Promise.all([1, 2, 3].map(() => seedIntent(a)));
+    const bIntents = await Promise.all([1, 2].map(() => seedIntent(b)));
 
-    const results = await Promise.all([
-      ...intents.map((intent) => ciRunnerAdmissionService.admit(intent)),
-      ...[1, 2, 3].map(() => reserve('code_graph_index', fx).then((r) => r.verdict)),
-      ...[1, 2, 3].map(() => reserve('hosted_agent', fx).then((r) => r.verdict)),
+    const [aResults, bResults] = await Promise.all([
+      Promise.all([
+        ...aIntents.map((intent) => ciRunnerAdmissionService.admit(intent)),
+        ...[1, 2, 3].map(() => reserve('code_graph_index', a).then((r) => r.verdict)),
+        ...[1, 2, 3].map(() => reserve('hosted_agent', a).then((r) => r.verdict)),
+      ]),
+      Promise.all([
+        ...bIntents.map((intent) => ciRunnerAdmissionService.admit(intent)),
+        ...[1, 2].map(() => reserve('hosted_agent', b).then((r) => r.verdict)),
+      ]),
     ]);
 
-    const won = results.filter((r) => r.outcome === 'admitted' || r.outcome === 'reserved');
-    // WHICH four win is the scheduler's business; the invariant is that the
-    // ceiling is a ceiling, and it is exact because none of the nine ever
-    // completes.
-    expect(won).toHaveLength(4);
+    const wonA = aResults.filter((r) => r.outcome === 'admitted' || r.outcome === 'reserved');
+    const lostA = aResults.filter((r) => r.outcome === 'deferred');
+    expect(wonA).toHaveLength(4);
+    expect(lostA).toHaveLength(5);
+    for (const lost of lostA) expect(lost).toMatchObject({ reason: 'org_pool' });
 
-    const seen = await census();
-    expect(seen.total).toBe(4);
-    // The total really is the sum over every workload, not one workload's count
-    // wearing a general name.
-    expect(Object.values(seen.byWorkload).reduce((a, b) => a + b, 0)).toBe(4);
+    // Org B was never deferred for org A's load.
+    expect(bResults.every((r) => r.outcome === 'admitted' || r.outcome === 'reserved')).toBe(true);
+
+    expect((await orgCensus(a)).total).toBe(4);
+    expect((await orgCensus(b)).total).toBe(4);
+    expect((await census()).total).toBe(8);
   });
 
   it('two reservations of the SAME ref take exactly one slot', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '10');
     const fx = await seedTenant();
 
     const verdicts = await Promise.all([
@@ -455,54 +559,47 @@ describe('the ceiling holds under REAL concurrency, across workloads (notes.html
 
     expect(verdicts.filter((v) => v.outcome === 'reserved')).toHaveLength(1);
     expect(verdicts.filter((v) => v.outcome === 'already_held')).toHaveLength(1);
-    expect((await census()).total).toBe(1);
+    expect((await orgCensus(fx)).total).toBe(1);
   });
 
   // A redelivery of a job that is ALREADY running must not be judged against the
-  // ceiling: it occupies capacity it already holds, and refusing it would make
-  // the caller tear down a live container to honour a refusal.
-  it('an already-held ref is admitted even when the fleet is full', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '1');
+  // pool: it occupies capacity it already holds.
+  it('an already-held ref is admitted even when the org’s pool is full', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
     const fx = await seedTenant();
     const { ref } = await reserve('code_graph_index', fx, 'redelivered');
-    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({
-      reason: 'fleet_ceiling',
-    });
+    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({ reason: 'org_pool' });
 
     const { verdict } = await reserve('code_graph_index', fx, ref);
 
     expect(verdict).toMatchObject({ outcome: 'already_held' });
-    expect((await census()).total).toBe(1);
+    expect((await orgCensus(fx)).total).toBe(1);
   });
 });
 
 // ── Fail CLOSED ─────────────────────────────────────────────────────────────
 
-describe('the ceiling fails CLOSED', () => {
-  // The opposite posture to the CI gate's credit read, deliberately: an
-  // unestablished count is treated as a FULL fleet, because the failure on the
-  // other side is unbounded spend on an account with no provider-side cap.
+describe('the pool fails CLOSED', () => {
   it('DECLINES AND LOGS a reservation when a workload counter throws', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.spyOn(ciRunnerProvisioningIntentRepository, 'countInFlightFleetWide').mockRejectedValue(
-      new Error('connection reset'),
-    );
+    vi.spyOn(
+      ciRunnerProvisioningIntentRepository,
+      'countInFlightForOrganization',
+    ).mockRejectedValue(new Error('connection reset'));
     const fx = await seedTenant();
 
     const { verdict } = await reserve('code_graph_index', fx);
 
     expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'gate_unavailable' });
     expect(error).toHaveBeenCalled();
-    // The transaction rolled back, so no slot was taken either.
-    const fleetInFlightSlotCount = await adminDb.fleetInFlightSlot.count();
-    expect(fleetInFlightSlotCount).toBe(0);
+    expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
   });
 
-  // And the same posture reached through the CI gate — a NON-CI counter failing
-  // must stop a CI boot, which is only true because the ceiling is one number.
+  // A NON-CI counter failing must stop a CI boot, which is only true because
+  // the org's pool is one number over every workload.
   it('DECLINES a CI admission when the SLOT counter throws', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.spyOn(fleetInFlightSlotRepository, 'countLiveForWorkload').mockRejectedValue(
+    vi.spyOn(fleetInFlightSlotRepository, 'countLiveForWorkloadInOrganization').mockRejectedValue(
       new Error('connection reset'),
     );
     const fx = await seedTenant();
@@ -516,6 +613,26 @@ describe('the ceiling fails CLOSED', () => {
     });
     expect(after.status).toBe('pending');
     expect(error).toHaveBeenCalled();
+  });
+
+  // An org whose pool cannot be READ is not handed the default.
+  it("DECLINES when the org's pool cannot be read", async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(organizationRepository, 'findFleetPoolCapInTx').mockRejectedValue(
+      new Error('connection reset'),
+    );
+    const fx = await seedTenant();
+
+    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({
+      outcome: 'deferred',
+      reason: 'gate_unavailable',
+    });
+    expect(await ciRunnerAdmissionService.admit(await seedIntent(fx))).toMatchObject({
+      outcome: 'deferred',
+      reason: 'gate_unavailable',
+    });
+    expect(error).toHaveBeenCalled();
+    expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
   });
 
   it('DECLINES AND LOGS when the shared admission lock cannot be taken', async () => {
@@ -532,45 +649,44 @@ describe('the ceiling fails CLOSED', () => {
 
 // ── No bypass ───────────────────────────────────────────────────────────────
 
-describe('nothing bypasses the ceiling', () => {
-  // MOTIR-1981 decision 7 puts META's index containers on this same fleet, so
-  // the exemption that lifts meta's per-project CI cap must not reach here: a
-  // meta-org runaway costs Motir exactly as much per container-second as anyone
-  // else's.
-  it('the META org is NOT exempt — its INDEX containers are refused too', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '2');
+describe('nothing bypasses the pool', () => {
+  // §1: meta keeps the same pool.
+  it('the META org is NOT exempt', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '2');
     const meta = await seedTenant({ isMeta: true });
     await reserve('code_graph_index', meta);
     await reserve('hosted_agent', meta);
 
     expect((await reserve('code_graph_index', meta)).verdict).toMatchObject({
-      reason: 'fleet_ceiling',
+      reason: 'org_pool',
     });
-  });
-
-  it('a META CI job is refused when NON-CI containers filled the fleet', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '2');
-    const meta = await seedTenant({ isMeta: true });
-    await reserve('code_graph_index', meta);
-    await reserve('hosted_agent', meta);
-
     expect(await ciRunnerAdmissionService.admit(await seedIntent(meta))).toMatchObject({
       outcome: 'deferred',
-      reason: 'fleet_ceiling',
+      reason: 'org_pool',
     });
   });
 
-  // Self-hosting lifts the per-tenant PLAN allowance — a GPL build has no plan —
-  // but the ceiling is not an allowance. It bounds whoever pays the container
-  // bill, and a self-hoster's runaway fleet is as real as Motir's.
   it('MOTIR_CLOUD=false does not lift it either', async () => {
     vi.stubEnv('MOTIR_CLOUD', 'false');
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '1');
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
     const fx = await seedTenant();
     await reserve('hosted_agent', fx);
 
     expect(await ciRunnerAdmissionService.admit(await seedIntent(fx))).toMatchObject({
-      reason: 'fleet_ceiling',
+      reason: 'org_pool',
+    });
+  });
+
+  // §6: the per-project tier caps are retired — one project may use its org's
+  // whole pool.
+  it('one project may use the whole org pool (no per-project cap)', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '5');
+    const fx = await seedTenant();
+    for (let i = 0; i < 5; i += 1) {
+      expect((await ciRunnerAdmissionService.admit(await seedIntent(fx))).outcome).toBe('admitted');
+    }
+    expect(await ciRunnerAdmissionService.admit(await seedIntent(fx))).toMatchObject({
+      reason: 'org_pool',
     });
   });
 });
@@ -578,45 +694,31 @@ describe('nothing bypasses the ceiling', () => {
 // ── The expiry safety net ───────────────────────────────────────────────────
 
 describe('the expiry safety net', () => {
-  // A release that never runs — a crashed dispatcher — must cost capacity for at
-  // most the container's own budget, not forever. This is the ONLY thing
-  // standing between a leaked row and a permanently smaller fleet.
   it('stops counting a slot whose safety net has passed', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '1');
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
     const fx = await seedTenant();
     await reserve('code_graph_index', fx);
-    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({
-      reason: 'fleet_ceiling',
-    });
+    expect((await reserve('hosted_agent', fx)).verdict).toMatchObject({ reason: 'org_pool' });
 
     const later = new Date(NOW.getTime() + (TTL_SECONDS + 60) * 1_000);
-    const verdict = await fleetCeilingService.reserve(
-      { workload: 'hosted_agent', ref: 'after-expiry', ttlSeconds: TTL_SECONDS },
-      later,
-    );
+    const { verdict } = await reserve('hosted_agent', fx, 'after-expiry', later);
 
     expect(verdict).toMatchObject({ outcome: 'reserved' });
   });
 
-  // ...and it does NOT free a container that is still inside its budget, which is
-  // the direction that would break the ceiling rather than merely age it.
   it('keeps counting a slot that is still inside its budget', async () => {
     const fx = await seedTenant();
     await reserve('code_graph_index', fx);
 
     const almost = new Date(NOW.getTime() + (TTL_SECONDS - 60) * 1_000);
-    const seen = await withSystemContext((tx) => fleetCeilingService.census(almost, tx));
-    expect(seen.byWorkload['code_graph_index']).toBe(1);
+    expect((await orgCensus(fx, almost)).byWorkload['code_graph_index']).toBe(1);
   });
 
   it('sweeps expired rows without touching live ones', async () => {
     const fx = await seedTenant();
     const { ref: stale } = await reserve('code_graph_index', fx);
     const later = new Date(NOW.getTime() + (TTL_SECONDS + 60) * 1_000);
-    await fleetCeilingService.reserve(
-      { workload: 'hosted_agent', ref: 'live', ttlSeconds: TTL_SECONDS },
-      later,
-    );
+    await reserve('hosted_agent', fx, 'live', later);
 
     expect(await fleetCeilingService.sweepExpired(later)).toBe(1);
     expect(
@@ -632,48 +734,18 @@ describe('the expiry safety net', () => {
   });
 });
 
-// ── MOTIR-1922's own guarantees, unchanged ──────────────────────────────────
-
-describe('the per-workload caps still behave exactly as before', () => {
-  // The scope boundary, asserted rather than asserted-in-prose: this ceiling
-  // sits ABOVE the per-project cap and replaces none of its semantics.
-  it('the per-project CI cap still refuses first, on its own reason', async () => {
-    vi.stubEnv('MOTIR_FLEET_PROJECT_CAP_FREE', '1');
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '50');
-    const fx = await seedTenant();
-    await seedIntent(fx, { status: 'running' });
-
-    expect(await ciRunnerAdmissionService.admit(await seedIntent(fx))).toMatchObject({
-      outcome: 'deferred',
-      reason: 'project_cap',
-    });
-  });
-
-  it('a sibling workload does NOT consume a project’s CI cap', async () => {
-    vi.stubEnv('MOTIR_FLEET_PROJECT_CAP_FREE', '1');
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '50');
-    const fx = await seedTenant();
-    await reserve('code_graph_index', fx);
-    await reserve('hosted_agent', fx);
-
-    // Fairness is per workload; the invoice is not. Index containers must not
-    // eat the tenant's CI concurrency allowance.
-    expect((await ciRunnerAdmissionService.admit(await seedIntent(fx))).outcome).toBe('admitted');
-  });
-});
-
 // ── The reserve path's remaining edges ──────────────────────────────────────
 
 describe('the slot reservation’s defaults and its own race', () => {
   it('falls back to the CONFIGURED TTL when the caller names none', async () => {
-    // A workload that does not know its own hard-kill budget still gets the
-    // fleet-wide safety net rather than an undefined expiry.
     vi.stubEnv('MOTIR_FLEET_SLOT_TTL_SECONDS', '120');
+    const fx = await seedTenant();
     const before = Date.now();
 
     const verdict = await fleetCeilingService.reserve({
       workload: 'code_graph_index',
       ref: 'ttl-default-1',
+      organizationId: fx.organizationId,
     });
 
     expect(verdict.outcome).toBe('reserved');
@@ -682,19 +754,22 @@ describe('the slot reservation’s defaults and its own race', () => {
     );
     expect(slot?.expiresAt.getTime()).toBeGreaterThanOrEqual(before + 120_000 - 5_000);
     expect(slot?.expiresAt.getTime()).toBeLessThanOrEqual(before + 120_000 + 5_000);
+    expect(slot?.organizationId).toBe(fx.organizationId);
   });
 
   it('a LOST INSERT RACE reports `already_held`, never a second slot', async () => {
-    // The window the `ON CONFLICT DO NOTHING` closes: another transaction
-    // committed the same (workload, ref) between this one's read and its write.
-    // Simulated by blinding the pre-read, which is exactly what that racer's
-    // timing does.
-    await fleetCeilingService.reserve({ workload: 'hosted_agent', ref: 'raced-ref' });
+    const fx = await seedTenant();
+    await fleetCeilingService.reserve({
+      workload: 'hosted_agent',
+      ref: 'raced-ref',
+      organizationId: fx.organizationId,
+    });
     vi.spyOn(fleetInFlightSlotRepository, 'findByRef').mockResolvedValue(null);
 
     const verdict = await fleetCeilingService.reserve({
       workload: 'hosted_agent',
       ref: 'raced-ref',
+      organizationId: fx.organizationId,
     });
 
     expect(verdict).toEqual({ outcome: 'already_held' });
@@ -706,11 +781,13 @@ describe('the slot reservation’s defaults and its own race', () => {
 
   it('reports a NON-ERROR rejection as `unknown` rather than losing it', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await seedTenant();
     vi.spyOn(ciFleetAdmissionLockRepository, 'ensureScope').mockRejectedValue('a bare string');
 
     const verdict = await fleetCeilingService.reserve({
       workload: 'code_graph_index',
       ref: 'non-error-1',
+      organizationId: fx.organizationId,
     });
 
     expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'gate_unavailable' });
