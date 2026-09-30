@@ -292,6 +292,28 @@ describe('a paid AI plan, and storage in the words (MOTIR-6918, the MOTIR-6916 d
     expect(screen.getAllByText('Hibernated').length).toBeGreaterThan(0);
   });
 
+  it('panel D: your organization’s limit, titled, naming the number the refusal carries', async () => {
+    mount(page([]));
+    fireEvent.click(screen.getAllByRole('button', { name: 'New agent' })[0]!);
+    await screen.findByRole('dialog');
+    fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Name'), {
+      target: { value: 'x' },
+    });
+    fetchMock.mockResolvedValueOnce(
+      json(429, { code: 'agent_instance_start_refused', reason: 'org_running_cap', limit: 50 }),
+    );
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole('dialog')).getByRole('button', { name: 'Create agent' }),
+      );
+    });
+    const alert = within(screen.getByRole('dialog')).getByRole('alert');
+    expect(alert.textContent).toBe(
+      'Your organization’s limitYour organization is running 50 of its 50 agents. Hibernate one to start another.',
+    );
+    expect(alert.className).toContain('bg-(--el-tint-rose)');
+  });
+
   it('on a cloud build the price line and the empty state say storage is charged every day, at the rate given', async () => {
     mount(page([]), undefined, 10);
     expect(

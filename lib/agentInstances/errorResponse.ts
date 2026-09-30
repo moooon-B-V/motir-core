@@ -68,7 +68,12 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
           ? 503
           : 429;
     return NextResponse.json(
-      { code: err.code, error: err.message, reason: err.reason },
+      {
+        code: err.code,
+        error: err.message,
+        reason: err.reason,
+        ...(err.limit !== undefined ? { limit: err.limit } : {}),
+      },
       { status },
     );
   }

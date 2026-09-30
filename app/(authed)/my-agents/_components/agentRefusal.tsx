@@ -25,6 +25,8 @@ export interface AgentRefusal {
 interface RefusalBody {
   code?: string;
   reason?: string;
+  /** The number a cap refusal names (`org_running_cap`). */
+  limit?: number;
 }
 
 /** The copy key a refused response maps to. Exported for the unit test. */
@@ -40,6 +42,8 @@ export function refusalKey(body: RefusalBody | null): string {
       return 'creditsUnknown';
     case 'user_cap':
       return 'userCap';
+    case 'org_running_cap':
+      return 'orgRunningLimit';
     case 'fleet_busy':
       return 'busy';
   }
@@ -60,7 +64,13 @@ export function refusalKey(body: RefusalBody | null): string {
 }
 
 /** The keys whose box opens with a title (the delta's table, MOTIR-6916). */
-const TITLED = new Set(['aiPlanRequired', 'aiPlanUnknown', 'credits', 'userCap']);
+const TITLED = new Set([
+  'aiPlanRequired',
+  'aiPlanUnknown',
+  'credits',
+  'userCap',
+  'orgRunningLimit',
+]);
 
 /** The keys whose sentence carries a link to Billing & plans. */
 const BILLING_LINKED = new Set(['aiPlanRequired', 'credits']);
@@ -81,9 +91,11 @@ export function useAgentRefusal(maxPerUser: number) {
         })
       : key === 'userCap'
         ? t('userCap', { count: maxPerUser })
-        : key === 'nameTaken'
-          ? t('nameTaken', { name: name ?? '' })
-          : t(key);
+        : key === 'orgRunningLimit'
+          ? t('orgRunningLimit', { limit: body?.limit ?? 0 })
+          : key === 'nameTaken'
+            ? t('nameTaken', { name: name ?? '' })
+            : t(key);
     return {
       kind: key === 'busy' ? 'busy' : 'refusal',
       ...(TITLED.has(key) ? { title: tt(key) } : {}),

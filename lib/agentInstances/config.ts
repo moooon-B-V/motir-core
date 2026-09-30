@@ -45,16 +45,19 @@ function positiveIntFromEnv(name: string, fallback: number): number {
 }
 
 /**
- * The agent pool's safety valve — running instances fleet-wide, across every
- * organisation: `MOTIR_INSTANCE_MAX_RUNNING`, default 50 (AMENDMENT 2).
+ * Running agent instances ONE ORGANISATION may hold at once:
+ * `MOTIR_INSTANCE_MAX_RUNNING`, default 50 (`agent-instances.md` AMENDMENT 3,
+ * `agent-instance-storage.md` §3). It was one count across every organisation
+ * (AMENDMENT 2); Motir is multi-tenant, so one busy organisation must never slow
+ * another, and the count is now keyed on the slot's organisation, under the same
+ * fleet admission lock that takes the slot. Reaching it refuses
+ * `org_running_cap` with the organisation's own limit in the words.
  *
- * ⚠️ NOT A PRODUCT LIMIT. Who may run how many is decided by credits (charged
- * while a machine runs) and by {@link INSTANCE_MAX_PER_USER}; there is no
- * per-organisation cap. This bounds only what Motir has running on Fly at once if
- * everything else failed — Fly offers no spending cap of its own — so it sits well
- * above ordinary use and an operator raises it as usage grows. Agents have their
- * OWN pool: this number is not a share of an org's fleet pool
- * (`MOTIR_FLEET_ORG_MAX_IN_FLIGHT`).
+ * Motir's own organisations (`isMeta` / `internalBilling`) have no running cap
+ * ({@link isUnlimitedAgentOrg}). There is no fleet-wide agent cap any more:
+ * `MOTIR_FLEET_MAX_IN_FLIGHT=0` stays the operator's kill switch for every
+ * workload. Agents keep their OWN pool: this number is not a share of an org's
+ * fleet pool (`MOTIR_FLEET_ORG_MAX_IN_FLIGHT`).
  */
 export function instanceMaxRunning(): number {
   return positiveIntFromEnv('MOTIR_INSTANCE_MAX_RUNNING', 50);
@@ -69,3 +72,15 @@ export const INSTANCE_INLINE_STOP_WAIT_MS = 15_000;
 
 /** A name: lower-case letters, digits and dashes, starting with a letter or digit. */
 export const INSTANCE_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
+
+/**
+ * Motir's own organisations have NO agent limits (`agent-instances.md`
+ * AMENDMENT 3; the product owner, 2026-09-29: "meta org and internal org have no
+ * limit"). The meta org (`isMeta`) and every internal org (`internalBilling`) skip
+ * the per-user cap, the per-organisation running cap and the credit gate — at
+ * create, at wake and in the sweep — and are still CHARGED like any org. The ONE
+ * predicate: this reads the two flags and gives neither a new meaning.
+ */
+export function isUnlimitedAgentOrg(org: { isMeta: boolean; internalBilling: boolean }): boolean {
+  return org.isMeta || org.internalBilling;
+}

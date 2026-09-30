@@ -326,18 +326,68 @@ describe('create', () => {
       await expectNothingStarted();
     });
 
-    it('there is no per-organisation cap: one organisation runs as many agents as it has credits for', async () => {
-      for (const name of ['one', 'two', 'three', 'four', 'five']) await create(name);
-      expect((await instances()).map((r) => r.state)).toEqual(Array(5).fill('running'));
-      expect(await slots()).toHaveLength(5);
+    it('the running cap is the ORGANISATION’s own: at MOTIR_INSTANCE_MAX_RUNNING it refuses create and wake, naming the limit', async () => {
+      vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '2');
+      await create('one');
+      const two = await create('two');
+      await expect(create('three')).rejects.toMatchObject({
+        reason: 'org_running_cap',
+        limit: 2,
+        message: 'Your organization is running 2 of its 2 agents. Hibernate one to start another.',
+      });
+      expect(await instances()).toHaveLength(2);
+      expect(await slots()).toHaveLength(2);
+      // Hibernating one frees its place; a third takes it, and the wake is refused.
+      await lifecycle.hibernate(KEY(), two.id, fx.ctx);
+      await create('three');
+      await expect(lifecycle.wake(KEY(), two.id, fx.ctx)).rejects.toMatchObject({
+        reason: 'org_running_cap',
+        limit: 2,
+      });
+      expect((await instances()).find((r) => r.id === two.id)!.state).toBe('hibernated');
     });
 
-    it('the agent pool’s safety valve reads as Motir being busy', async () => {
-      vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '1');
+    it('one organisation at its limit never refuses another — in the same instant, under the admission lock', async () => {
+      vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '2');
+      const other = await makeWorkItemFixture({ name: 'Other org', identifier: 'OTHR' });
+      const createIn = (name: string, profileId = 'claude') =>
+        lifecycle.create(other.projectIdentifier, { name, profileId }, other.ctx);
       await create('one');
-      await expect(create('two')).rejects.toMatchObject({ reason: 'fleet_busy' });
-      expect(await instances()).toHaveLength(1);
-      expect(await slots()).toHaveLength(1);
+      await create('two');
+      const [a, b, c] = await Promise.allSettled([
+        create('three'),
+        createIn('b-one'),
+        createIn('b-two', 'codex'),
+      ]);
+      expect(a).toMatchObject({ status: 'rejected', reason: { reason: 'org_running_cap' } });
+      expect(b).toMatchObject({ status: 'fulfilled', value: { state: 'running' } });
+      expect(c).toMatchObject({ status: 'fulfilled', value: { state: 'running' } });
+      // …and the other org's own cap holds against its own racing creates.
+      const racing = await Promise.allSettled([createIn('b-three'), createIn('b-four')]);
+      expect(racing.every((r) => r.status === 'rejected')).toBe(true);
+      const byOrg = await adminDb.agentInstance.groupBy({
+        by: ['organizationId'],
+        _count: { _all: true },
+      });
+      expect(byOrg.map((g) => g._count._all).sort()).toEqual([2, 2]);
+    });
+
+    it('no create is refused as Motir being busy because of other organisations — only the kill switch reads that way', async () => {
+      vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '1');
+      const other = await makeWorkItemFixture({ name: 'Other org', identifier: 'OTHR' });
+      await lifecycle.create(
+        other.projectIdentifier,
+        { name: 'b-one', profileId: 'claude' },
+        other.ctx,
+      );
+      expect((await create('one')).state).toBe('running');
+
+      vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '0');
+      await expect(create('two')).rejects.toMatchObject({
+        reason: 'fleet_busy',
+        message: expect.stringContaining('Motir is running as many machines as it can'),
+      });
+      expect(await instances()).toHaveLength(2);
     });
 
     it('agents have their OWN pool: the org’s shared fleet pool neither refuses them nor counts them', async () => {
@@ -505,6 +555,59 @@ describe('a paid AI plan comes first (MOTIR-6918, agent-instance-storage.md §1)
     plan = 'unanswerable';
     expect((await create('self-hosted')).state).toBe('running');
     expect(asked('/v1/stripe/subscription')).toEqual([]);
+  });
+});
+
+describe('Motir’s own organisations have no agent limits (AMENDMENT 3, MOTIR-6926)', () => {
+  const seedLive = async (count: number) => {
+    for (let i = 0; i < count; i++) {
+      await adminDb.agentInstance.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          organizationId: fx.workspace.organizationId,
+          projectId: fx.projectId,
+          ownerId: fx.ownerId,
+          name: `old-${i}`,
+          profileId: 'claude',
+          imageTag: 't',
+          imageDigest: 'sha256:x',
+          region: 'iad',
+          state: 'hibernated',
+        },
+      });
+    }
+  };
+
+  for (const flag of ['isMeta', 'internalBilling'] as const) {
+    it(`an ${flag} org runs past the running cap, makes an 11th agent for one person, and creates and wakes at zero credits`, async () => {
+      await adminDb.organization.update({
+        where: { id: fx.workspace.organizationId },
+        data: { [flag]: true },
+      });
+      vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '1');
+      mayRun = false;
+      await seedLive(10);
+      const first = await create('one');
+      const second = await create('two');
+      expect([first.state, second.state]).toEqual(['running', 'running']);
+      await lifecycle.hibernate(KEY(), first.id, fx.ctx);
+      expect((await lifecycle.wake(KEY(), first.id, fx.ctx)).state).toBe('running');
+      expect(await instances()).toHaveLength(12);
+      // The credit gate is skipped, never asked and overruled.
+      expect(calls.filter((c) => c.url.endsWith('/v1/credits/agent-run-check'))).toEqual([]);
+    });
+  }
+
+  it('an org with neither flag is limited exactly as before — per person, by credits, and by its own running cap', async () => {
+    await seedLive(10);
+    await expect(create()).rejects.toMatchObject({ reason: 'user_cap' });
+    await adminDb.agentInstance.deleteMany({});
+    mayRun = false;
+    await expect(create()).rejects.toMatchObject({ reason: 'credits' });
+    mayRun = true;
+    vi.stubEnv('MOTIR_INSTANCE_MAX_RUNNING', '1');
+    await create('one');
+    await expect(create('two')).rejects.toMatchObject({ reason: 'org_running_cap', limit: 1 });
   });
 });
 

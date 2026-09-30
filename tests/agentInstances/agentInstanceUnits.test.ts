@@ -59,6 +59,18 @@ describe('mapAgentInstanceError — every typed refusal is a status, never a 500
     expect(cap.status).toBe(429);
     expect(await cap.json()).toMatchObject({ reason: 'user_cap', error: 'full' });
     expect(statusOf(new AgentInstanceStartRefusedError('fleet_busy', 'busy'))).toBe(429);
+    // MOTIR-6918: no paid plan is money (402), an unreadable plan a retry (503).
+    expect(statusOf(new AgentInstanceStartRefusedError('ai_plan_required', 'no'))).toBe(402);
+    expect(statusOf(new AgentInstanceStartRefusedError('ai_plan_unknown', 'no'))).toBe(503);
+    // MOTIR-6926: the organisation's own cap is a cap (429) and carries its number.
+    const orgCap = mapAgentInstanceError(
+      new AgentInstanceStartRefusedError('org_running_cap', 'full', 50),
+    )!;
+    expect(orgCap.status).toBe(429);
+    expect(await orgCap.json()).toMatchObject({ reason: 'org_running_cap', limit: 50 });
+    expect(
+      await mapAgentInstanceError(new AgentInstanceStartRefusedError('user_cap', 'full'))!.json(),
+    ).not.toHaveProperty('limit');
     expect(statusOf(new AgentInstancesUnavailableError('x'))).toBe(503);
     expect(statusOf(new Error('anything else'))).toBeNull();
   });

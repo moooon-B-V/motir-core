@@ -8896,6 +8896,7 @@
       "credits": "你的组织额度已用完。智能体运行时消耗额度，其存储每天也消耗额度，无论是否休眠。<link>充值额度</link>后即可创建或唤醒智能体。",
       "creditsUnknown": "Motir 暂时无法查询你的组织额度。请稍后重试。",
       "userCap": "你已经有 {count} 个智能体。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
+      "orgRunningLimit": "你的组织正在运行 {limit} 个智能体，已达上限 {limit} 个。休眠一个后才能启动另一个。",
       "busy": "Motir 当前运行的机器已达上限。请几分钟后重试。",
       "notOffered": "暂不提供该编码智能体：其条款尚不允许平台托管它。请选择其他编码智能体。",
       "nameTaken": "你在这个项目上已经有一个名为 {name} 的智能体。",
@@ -8908,7 +8909,8 @@
       "aiPlanRequired": "需要 AI 套餐",
       "aiPlanUnknown": "无法查询你的 AI 套餐",
       "credits": "额度已用完",
-      "userCap": "你的上限"
+      "userCap": "你的上限",
+      "orgRunningLimit": "你的组织的上限"
     },
     "delete": {
       "title": "删除 {name}？",

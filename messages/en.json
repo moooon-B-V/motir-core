@@ -8900,6 +8900,7 @@
       "credits": "Your organization is out of credits. Agents use credits while they run and for their storage every day, asleep or not. <link>Add credits</link> to create or wake an agent.",
       "creditsUnknown": "Motir could not check your organization’s credits just now. Try again in a moment.",
       "userCap": "You already have {count} agents. Each one is charged for its storage every day, even asleep. Delete one to create another.",
+      "orgRunningLimit": "Your organization is running {limit} of its {limit} agents. Hibernate one to start another.",
       "busy": "Motir is running as many machines as it can right now. Try again in a few minutes.",
       "notOffered": "That coding agent isn’t offered: its terms don’t yet allow a platform to host it. Choose another coding agent.",
       "nameTaken": "You already have an agent called {name} on this project.",
@@ -8912,7 +8913,8 @@
       "aiPlanRequired": "Needs an AI plan",
       "aiPlanUnknown": "Couldn’t check your AI plan",
       "credits": "Out of credits",
-      "userCap": "Your limit"
+      "userCap": "Your limit",
+      "orgRunningLimit": "Your organization’s limit"
     },
     "delete": {
       "title": "Delete {name}?",

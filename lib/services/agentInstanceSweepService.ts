@@ -12,6 +12,7 @@ import { agentInstanceChargeService } from '@/lib/services/agentInstanceChargeSe
 import {
   agentInstanceClock,
   agentInstanceLifecycleService as lifecycle,
+  readUnlimitedAgentOrg,
 } from '@/lib/services/agentInstanceLifecycleService';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
@@ -171,7 +172,10 @@ export const agentInstanceSweepService = {
       }
 
       // 2b · Then the three reasons to hibernate it: the backstop, credits, idle.
+      //     Motir's own organisations (`isMeta` / `internalBilling`) are never
+      //     hibernated for credits (AMENDMENT 3): read once per org per pass.
       const creditsByOrg = new Map<string, boolean>();
+      const unlimitedByOrg = new Map<string, boolean>();
       const now = agentInstanceClock.now();
       for (const row of stillRunning) {
         await guarded(async () => {
@@ -180,7 +184,12 @@ export const agentInstanceSweepService = {
               summary.hibernated.backstop += 1;
             return;
           }
-          if (isCloudBilling()) {
+          let unlimited = unlimitedByOrg.get(row.organizationId);
+          if (unlimited === undefined && isCloudBilling()) {
+            unlimited = await readUnlimitedAgentOrg(row.organizationId);
+            unlimitedByOrg.set(row.organizationId, unlimited);
+          }
+          if (isCloudBilling() && !unlimited) {
             let mayRun = creditsByOrg.get(row.organizationId);
             if (mayRun === undefined) {
               // "Could not ask" is not a refusal here: stopping a person's machine
