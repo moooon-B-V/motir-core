@@ -142,7 +142,10 @@ describe('ReviewAgentCard — saving, saved, refused', () => {
     resolve(Response.json({ acceptanceVideoEnabled: true, reviewAgentEnabled: true }));
     expect(await screen.findByText('Saved')).toBeTruthy();
     expect(reviewSwitch().getAttribute('aria-checked')).toBe('true');
-    expect(reviewSwitch().disabled).toBe(false);
+    // The toast is raised INSIDE the async transition, so it can commit before
+    // `isPending` turns false on a later commit (MOTIR-7009). Wait for the
+    // re-enable itself rather than reading it synchronously after the toast.
+    await waitFor(() => expect(reviewSwitch().disabled).toBe(false));
     expect(screen.getByText(OFF_NOTE)).toBeTruthy();
   });
 
