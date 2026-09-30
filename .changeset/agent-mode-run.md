@@ -1,5 +1,0 @@
----
-'@motir/cli': minor
----
-
-`motir run <KEY> --run-id <id>` has an agent mode (MOTIR-7024): started inside one of your own Motir agents with `MOTIR_AGENT_RUN=1`, it adopts the run Motir opened and launches the coding agent the agent was created with, on your own sign-in. It uses the unattended command each profile now carries (`claude -p --dangerously-skip-permissions`, `codex exec --sandbox danger-full-access -`, `opencode run --auto`, `kimi -p`, `aider --yes-always --message`, `goose run --no-session -t` with `GOOSE_MODE=auto`). A profile with no unattended mode (`antigravity`, `cursor`) is refused as `agent_profile_cannot_run` before any card is claimed. The run's token is read from its state directory's `run.json` and never from `MOTIR_TOKEN`, and neither token is passed to the coding agent. The git helper, the `gh` shim, `GIT_CONFIG_GLOBAL` and `gh`'s own state live in that run-private directory, and the checkouts live under `~/.motir/runs/<id>`. Both are removed when the run succeeds, fails or is interrupted, and `~/.gitconfig`, `~/.config/gh` and your own checkouts are never written.
