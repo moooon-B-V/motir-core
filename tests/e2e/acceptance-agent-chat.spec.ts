@@ -483,10 +483,19 @@ test.describe('Chat with your agent', () => {
       await expect(panelTitle(page)).toContainText('yue-aider');
       const disabled = panel(page).getByTestId('agent-chat-tab-disabled');
       await expect(disabled).toHaveAttribute('aria-disabled', 'true');
-      await disabled.hover();
-      await expect(page.getByRole('tooltip', { name: chatCopy.unsupported })).toBeVisible();
+      // The terminal attaches first, so the panel has stopped re-rendering before
+      // the pointer moves. The tip is CSS `group-hover`, and a re-render under a
+      // resting pointer does not always re-apply :hover in headless Chromium,
+      // so the hover is re-issued until the tip shows (it was red once in CI,
+      // on 1b9a610, with the tip never drawn).
       await expect(connWord(page)).toHaveText(copy.panel.conn.live, { timeout: 30_000 });
       await expect(screen(page)).toContainText(PROMPT);
+      const tip = page.getByRole('tooltip', { name: chatCopy.unsupported });
+      await expect(async () => {
+        await page.mouse.move(0, 0);
+        await disabled.hover();
+        await expect(tip).toBeVisible({ timeout: 2_000 });
+      }).toPass({ timeout: 20_000 });
       await expect(chatTab(page)).toHaveCount(0);
     });
 
