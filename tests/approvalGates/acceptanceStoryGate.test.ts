@@ -228,7 +228,9 @@ describe('the placement matrix — which card each question lands on (points 1�
 
     const published = await publishVia(e2e.identifier, 'c0ffee1');
     expect(published.isError, JSON.stringify(published)).toBeFalsy();
-    // The subtask's own green set asks its own question — exactly as the CI promotion does.
+    // The subtask's own green set asks its own question — exactly as the CI promotion does,
+    // which writes `in_review` first: the merge question is asked only there (MOTIR-6971).
+    await adminDb.workItem.update({ where: { id: e2e.id }, data: { status: 'in_review' } });
     await withWorkspaceContext(fx.ctx, async (tx) =>
       reconcileGatesFor((await tx.workItem.findUniqueOrThrow({ where: { id: e2e.id } }))!, tx),
     );
@@ -384,9 +386,14 @@ describe('the lifecycles', () => {
         conclusion: 'success',
       },
     });
-    await withWorkspaceContext(fx.ctx, async (tx) =>
-      reconcileGatesFor(await tx.workItem.findUniqueOrThrow({ where: { id: story.id } }), tx),
+    // The refused merge dropped the story to `implemented` (can't land), where nothing is
+    // asked (MOTIR-6971). The new head's green is what promotes it back to review — the
+    // CI-green latch — and the merge question is asked there.
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } })).status).toBe(
+      'implemented',
     );
+    const { promoteIfCiAlreadyGreen } = await import('@/lib/services/ciPromotion');
+    expect(await promoteIfCiAlreadyGreen(story.id, fx.ctx, async () => null)).toBe(true);
 
     const rows = await adminDb.approvalGate.findMany({
       where: { workItemId: story.id },

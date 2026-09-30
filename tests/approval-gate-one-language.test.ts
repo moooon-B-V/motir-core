@@ -288,6 +288,10 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
         // convergence withdraws a gate the OLD rule re-asked from a queue failure, with
         // cause `queue_failed` — product-written, no actor, never a decision.
         'lib/services/ejectedCardConvergenceService.ts',
+        // MOTIR-6971 (`approval-gates.md` §8's EIGHTH AMENDMENT): the merge question is
+        // withdrawn from a card that is not `in_review` (`withdrawMergeQuestionOffReview`,
+        // cause `pulled_back`) — product-written, no actor, never a decision.
+        'lib/services/gateSetFor.ts',
         'lib/services/pullRequestApprovalGates.ts',
       ],
     },

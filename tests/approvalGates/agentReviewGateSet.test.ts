@@ -25,6 +25,7 @@ const input = (over: Partial<GateSetInput> = {}): GateSetInput => ({
   members: [{ memberVersion: V1, isMergeCandidate: true }],
   prMergeMode: 'manual',
   cardIsTerminal: false,
+  cardInReview: true,
   primaryApprovalStandsForMerge: false,
   workItemId: WORK_ITEM,
   reviewAgentEnabled: true,
@@ -141,5 +142,11 @@ describe('agentReviewStanding — the one statement the gate set and the carry s
 
   it('a review of ANOTHER card never counts', () => {
     expect(standing({ latestAgentReviewGate: gate('approved', V1, 'wi_other') })).toBe('owed');
+  });
+});
+
+describe('resolveGateSet — MOTIR-6971: the review is asked only at `in_review`, like the merge it stands in front of', () => {
+  it('asks NEITHER the review nor the merge of a green set on a card that is not in review', () => {
+    expect(resolveGateSet(input({ cardInReview: false }))).toEqual({ awaited: [], primary: null });
   });
 });
