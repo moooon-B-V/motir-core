@@ -46,6 +46,11 @@ export interface AgentTerminalServeOptions {
   port?: string;
 }
 
+/** `agent-terminal run | stop | status` — the run the command acts on. */
+export interface AgentTerminalRunIdOptions {
+  runId?: string;
+}
+
 export interface AgentTerminalServeDeps {
   env?: NodeJS.ProcessEnv;
   loadPty?: (dir: string) => SpawnPty | null;
@@ -227,7 +232,7 @@ const REFUSAL_WORDS: Record<string, string> = {
  */
 export async function agentTerminalRunCommand(
   key: string,
-  opts: { runId?: string },
+  opts: AgentTerminalRunIdOptions,
   deps: AgentTerminalRunDeps = {},
 ): Promise<string> {
   if (!isWorkItemKey(key)) {
@@ -282,7 +287,7 @@ export async function agentTerminalRunCommand(
 
 /** `motir agent-terminal stop --run-id <id>`: SIGTERM, then SIGKILL after the grace. */
 export async function agentTerminalStopCommand(
-  opts: { runId?: string },
+  opts: AgentTerminalRunIdOptions,
   deps: AgentTerminalControlDeps = {},
 ): Promise<'stopped' | 'not_found'> {
   const runId = requireRunId(opts.runId);
@@ -297,7 +302,7 @@ export async function agentTerminalStopCommand(
 
 /** `motir agent-terminal status --run-id <id>`: running, exited with its code, or not_found. */
 export async function agentTerminalStatusCommand(
-  opts: { runId?: string },
+  opts: AgentTerminalRunIdOptions,
   deps: AgentTerminalControlDeps = {},
 ): Promise<ControlResponse> {
   const runId = requireRunId(opts.runId);
