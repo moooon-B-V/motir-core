@@ -86,3 +86,40 @@ export const AGENT_SIGN_IN_HINTS: Readonly<Record<string, AgentSignInHint>> = {
 export function agentSignInHint(profileId: string): AgentSignInHint | null {
   return AGENT_SIGN_IN_HINTS[profileId] ?? null;
 }
+
+/**
+ * Which offered coding agents can chat (`docs/decisions/agent-chat.md` Q1 and Q8;
+ * Story MOTIR-6863 · MOTIR-7017). The panel draws an UNSUPPORTED profile's Chat
+ * tab disabled, with its reason, WITHOUT connecting. For a supported profile the
+ * agent's server is authoritative: its `hello` carries Q2's subscription refusal,
+ * and an image from before the chat answers the relay's dial with 4411.
+ *
+ * `reason` is Q1's verdict in the decision's words — the record the tab's
+ * localised tooltip (`myAgents.panel.chat.unsupported`) says to the reader.
+ *
+ * ⚠️ DATA ON THE `lib` SIDE, like `AGENT_SIGN_IN_HINTS` above: the CLI's own
+ * adapter set is never imported here.
+ */
+export type ChatProfile =
+  | { readonly supported: true }
+  | { readonly supported: false; readonly reason: string };
+
+export const CHAT_PROFILES: Readonly<Record<string, ChatProfile>> = {
+  claude: { supported: true },
+  codex: { supported: true },
+  opencode: { supported: true },
+  kimi: { supported: true },
+  goose: { supported: true },
+  aider: {
+    supported: false,
+    reason: 'Aider has no machine-readable output for a chat to follow',
+  },
+};
+
+/**
+ * A profile's chat verdict. A profile the table does not know is treated as
+ * supported: the tab connects, and the server's `hello` decides.
+ */
+export function chatProfile(profileId: string): ChatProfile {
+  return CHAT_PROFILES[profileId] ?? { supported: true };
+}

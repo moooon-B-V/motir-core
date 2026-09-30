@@ -15,7 +15,7 @@ import {
 } from '@/lib/agentInstances/presentation';
 import type { AgentInstanceListItemDto, AgentInstanceListPageDto } from '@/lib/dto/agentInstances';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
-import { AgentPanel, type AgentPanelActions } from './AgentPanel';
+import { AgentPanel, TAB_PARAM, type AgentPanelActions, type AgentPanelTab } from './AgentPanel';
 import { AgentRowMenu } from './AgentRowMenu';
 import { CreateAgentDialog, type OfferedProfile } from './CreateAgentDialog';
 import { DeleteAgentDialog } from './DeleteAgentDialog';
@@ -48,6 +48,8 @@ function agentHref(id: string | null): string {
   const url = new URL(window.location.href);
   if (id) url.searchParams.set(AGENT_PARAM, id);
   else url.searchParams.delete(AGENT_PARAM);
+  // An agent opens on Terminal (MOTIR-7011 panel 1): switching or closing drops `&tab=`.
+  url.searchParams.delete(TAB_PARAM);
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
@@ -63,6 +65,7 @@ export function MyAgentsRoom({
   profiles,
   maxPerUser,
   openAgentId = null,
+  openTab = 'terminal',
 }: {
   projectKey: string;
   projectName: string;
@@ -72,6 +75,8 @@ export function MyAgentsRoom({
   maxPerUser: number;
   /** The agent the address names (`?agent=`), read by the page; null when none. */
   openAgentId?: string | null;
+  /** The tab the address names for that agent (`&tab=chat`), read by the page. */
+  openTab?: AgentPanelTab;
 }) {
   const t = useTranslations('myAgents');
   const refusalFor = useAgentRefusal(maxPerUser);
@@ -83,6 +88,11 @@ export function MyAgentsRoom({
   const [deleteRefusal, setDeleteRefusal] = useState<AgentRefusal | null>(null);
   const [listRefusal, setListRefusal] = useState<AgentRefusal | null>(null);
   const [openId, setOpenId] = useState<string | null>(openAgentId);
+  // The address's tab applies to the agent the page opened with, once: an agent
+  // the reader opens from the list starts on Terminal.
+  const [landingTab, setLandingTab] = useState<{ id: string; tab: AgentPanelTab } | null>(
+    openAgentId ? { id: openAgentId, tab: openTab } : null,
+  );
   const returnFocusTo = useRef<string | null>(null);
   const seq = useRef(0);
   const base = `/api/projects/${encodeURIComponent(projectKey)}/instances`;
@@ -97,11 +107,13 @@ export function MyAgentsRoom({
   }, []);
 
   const openAgent = useCallback((id: string) => {
+    setLandingTab(null);
     setOpenId(id);
     shallowPush(agentHref(id));
   }, []);
 
   const closeAgent = useCallback(() => {
+    setLandingTab(null);
     setOpenId((current) => {
       returnFocusTo.current = current;
       return null;
@@ -311,6 +323,7 @@ export function MyAgentsRoom({
             projectName={projectName}
             agent={openRow}
             actions={panelActions}
+            initialTab={landingTab && landingTab.id === openRow?.id ? landingTab.tab : 'terminal'}
           />
         </div>
       ) : (
