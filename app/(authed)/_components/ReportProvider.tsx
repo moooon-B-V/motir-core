@@ -37,6 +37,13 @@ interface ReportContextValue {
    * re-read if you cache the queue".
    */
   submissionsChangedAt: number;
+  /**
+   * Bump {@link submissionsChangedAt} from OUTSIDE the widget — a debug turn
+   * that filed a bug into Triage from the AI conversation (MOTIR-7049). The
+   * server cannot reach this client tick, so the surface that saw the write
+   * reports it here.
+   */
+  notifySubmissionsChanged: () => void;
 }
 
 const ReportContext = createContext<ReportContextValue | null>(null);
@@ -61,8 +68,15 @@ export function ReportProvider({
   const notifySubmitted = useCallback(() => setSubmissionsChangedAt((n) => n + 1), []);
 
   const value = useMemo<ReportContextValue>(
-    () => ({ open, setOpen, openReport, canReport: Boolean(projectKey), submissionsChangedAt }),
-    [open, openReport, projectKey, submissionsChangedAt],
+    () => ({
+      open,
+      setOpen,
+      openReport,
+      canReport: Boolean(projectKey),
+      submissionsChangedAt,
+      notifySubmissionsChanged: notifySubmitted,
+    }),
+    [open, openReport, projectKey, submissionsChangedAt, notifySubmitted],
   );
 
   return (
@@ -86,4 +100,11 @@ export function useReport(): ReportContextValue {
     throw new Error('useReport must be used inside <ReportProvider>');
   }
   return ctx;
+}
+
+/** The report context, or `null` outside a {@link ReportProvider} — for a
+ *  surface that is mounted both inside the authenticated shell and without it
+ *  (the planning workspace's tests render it bare), and only NOTIFIES. */
+export function useOptionalReport(): ReportContextValue | null {
+  return useContext(ReportContext);
 }

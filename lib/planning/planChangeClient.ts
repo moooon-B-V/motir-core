@@ -1,5 +1,6 @@
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
 import type {
+  DebugLandingDto,
   EarlierSessionDto,
   PlanChangeSessionDto,
   ResumableSessionDto,
@@ -292,6 +293,11 @@ export interface AskSubmitResponse {
 export type AskSettleResponse =
   | { outcome: 'answered'; session: PlanChangeSessionDto }
   | { outcome: 'redirected'; jobId: string; planId: string; session: PlanChangeSessionDto }
+  // The turn reported broken behaviour (MOTIR-7047): `jobId` is the `debug_bug`
+  // job now diagnosing it, streamed and settled like an ask.
+  | { outcome: 'debugging'; jobId: string; session: PlanChangeSessionDto }
+  // That debug job's own settle (MOTIR-7049): the ONE card it wrote, if any.
+  | { outcome: 'debugged'; landing: DebugLandingDto; session: PlanChangeSessionDto }
   | { outcome: 'silent'; session: PlanChangeSessionDto };
 
 /**

@@ -28,6 +28,15 @@ import { mapPlanChangeError, noActiveProject, readSessionId } from '../../plan-c
 // resolves for them is the 404 `NOT_FOUND`, out of credits is the 402 — and in
 // every one of those no job was submitted.
 //
+// Settling THAT `debug_bug` job (MOTIR-7049) LANDS it: the ONE card the ADR's
+// A1.4 allows is written as the caller, the handler's reply is appended, and the
+// answer is `{ outcome: 'debugged', landing: { outcome, workItemKey, title,
+// createdInTriage }, session }`. Replayed, it returns the same `landing` and
+// writes nothing. Its refusals write nothing either: a malformed result is a 502
+// `INVALID_AUTHORED_BUG` naming the field, a named card that does not resolve for
+// the caller the 404 `NOT_FOUND`, a `diagnose` anchored on a card that is not a
+// triage bug a 422, and a card edited mid-write a retryable 409.
+//
 // NOT rate-limited, deliberately (the `…/planner-turn` precedent): this reads a
 // job that was already submitted and already paid for at the `ai:generate`
 // ceiling. A limiter here would cap a database write and prevent no provider call

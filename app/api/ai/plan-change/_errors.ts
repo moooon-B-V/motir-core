@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 
 import {
   AskAnchorNotAvailableError,
+  DebugAnchorNotTriageBugError,
+  DebugTargetChangedError,
+  DebugTargetNotAvailableError,
   EmptyPlanChangeIntentError,
   EmptyPlanChangeTurnError,
   PlanChangeJobNotRunningError,
@@ -18,6 +21,7 @@ import {
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
+import { InvalidAuthoredBugError } from '@/lib/ai/authoredBug';
 
 // Shared typed-error → HTTP mapping for the plan-change conversation routes
 // (Story 7.30 · MOTIR-1728). Returns null for an unrecognized error so the route
@@ -35,7 +39,8 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
     err instanceof PlanSessionNotFoundError ||
     err instanceof PlanChangeTurnNotFoundError ||
     err instanceof PlanChangeMailboxJobMismatchError ||
-    err instanceof AskAnchorNotAvailableError
+    err instanceof AskAnchorNotAvailableError ||
+    err instanceof DebugTargetNotAvailableError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }
@@ -46,6 +51,24 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   // the thread's current state, not malformed requests.
   if (err instanceof PlanChangeTurnConflictError || err instanceof EmptyPlanChangeIntentError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  // A debug landing refused before anything was written (MOTIR-7049): the card
+  // was edited underneath the write (409, retryable — the claim was released), or
+  // a `diagnose` was anchored on a card that is not a triage bug (422).
+  if (err instanceof DebugTargetChangedError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  if (err instanceof DebugAnchorNotTriageBugError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+  }
+  // A `debug_bug` result that failed re-validation at this boundary (MOTIR-7049):
+  // the far side produced something this build will not write onto a card. An
+  // upstream fault, so 502, and it names the field that failed.
+  if (err instanceof InvalidAuthoredBugError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, field: err.field },
+      { status: 502 },
+    );
   }
   // A mailbox turn addressed at a job that has already finished (MOTIR-4067).
   // 409 for the same reason as the two above — a state conflict, not a malformed

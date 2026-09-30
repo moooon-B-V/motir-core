@@ -47,6 +47,7 @@ import type { PlanningLaunch } from '@/lib/planning/launcher';
 import type { PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { fetchPlanningAnchor } from '@/lib/planning/planningAnchorClient';
+import { useOptionalReport } from '@/app/(authed)/_components/ReportProvider';
 import {
   followFromPlan,
   followFromTarget,
@@ -365,6 +366,7 @@ export function PlanningWorkspaceHost({
     setGuardOpen(false);
     closeBypassingGuard();
   }, [refresh, closeBypassingGuard]);
+  const report = useOptionalReport();
   const { state, send, retry, correctTurn, approve, discard, stop } = usePlanChangeConversation({
     onApproved,
     anchorId,
@@ -375,6 +377,9 @@ export function PlanningWorkspaceHost({
     // the first send carries.
     sessionIsResume,
     seedGateId,
+    // A debug turn that filed a bug into Triage (MOTIR-7049) bumps the inbox's
+    // refetch tick — the one surface `router.refresh()` cannot reach.
+    onTriageChanged: report?.notifySubmissionsChanged,
   });
 
   // The rail sends TEXT; the anchors come from the set this host owns, so the

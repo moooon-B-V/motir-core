@@ -471,6 +471,14 @@ export interface UsePlanChangeConversationOptions {
    *    session and carries nothing.
    */
   seedGateId?: string | null;
+  /**
+   * A debug turn FILED a new bug into Triage (MOTIR-7049 — the settle's
+   * `landing.createdInTriage`). The triage inbox is a client island that
+   * refetches only on `ReportProvider`'s `submissionsChangedAt` tick, which the
+   * server cannot bump, so the caller bumps it here (`motir-core/CLAUDE.md`'s
+   * page-state contract, case 3).
+   */
+  onTriageChanged?: () => void;
 }
 
 /**
@@ -525,6 +533,7 @@ export function usePlanChangeConversation({
   sessionId = null,
   sessionIsResume = false,
   seedGateId = null,
+  onTriageChanged,
 }: UsePlanChangeConversationOptions = {}) {
   const [state, setState] = useState<PlanChangeConversationState>(INITIAL);
   // The seed the FIRST send carries (MOTIR-6210). Seeded once from the option —
@@ -562,12 +571,15 @@ export function usePlanChangeConversation({
   const stateRef = useRef(state);
   // The latest `onApproved` without re-creating `approve` on every parent render.
   const approvedCbRef = useRef(onApproved);
+  // The latest `onTriageChanged`, for the same reason (MOTIR-7049).
+  const triageChangedRef = useRef(onTriageChanged);
   // Both mirrors are written in an EFFECT (never during render): the callbacks that
   // read them only run from a user event or after an await, by which point effects
   // have flushed.
   useEffect(() => {
     stateRef.current = state;
     approvedCbRef.current = onApproved;
+    triageChangedRef.current = onTriageChanged;
     anchorRef.current = anchorId;
   });
 
@@ -1172,12 +1184,44 @@ export function usePlanChangeConversation({
         );
         if (failed || !mountedRef.current) return;
 
-        const settled = await settleAskJob(
-          submitted.jobId,
-          controller.signal,
-          submitted.session?.id ?? stateRef.current.session?.id ?? null,
-        );
+        const settleSessionId = submitted.session?.id ?? stateRef.current.session?.id ?? null;
+        let settled = await settleAskJob(submitted.jobId, controller.signal, settleSessionId);
         if (!mountedRef.current) return;
+
+        // THE TURN WAS A REPORT (MOTIR-7047 dispatch · MOTIR-7049 landing): its
+        // `debug_bug` job is running now. Watch it exactly as the ask was watched,
+        // then settle IT — that settle lands the one card and appends the reply.
+        // The rail's rendering of the debug turn is MOTIR-7050's; this only keeps
+        // the loop going to the landing and bumps the Triage tick it owes.
+        if (settled.outcome === 'debugging') {
+          const debugJobId = settled.jobId;
+          const debugSession = settled.session;
+          setState((s) => ({ ...s, session: debugSession, jobId: debugJobId }));
+          let debugFailed = false;
+          await streamAskJob(
+            debugJobId,
+            controller.signal,
+            (code) => {
+              debugFailed = true;
+              if (!mountedRef.current) return;
+              const gated = code !== null && OUT_OF_CREDITS_CODES.has(code);
+              setState((s) => ({
+                ...s,
+                phase: s.review ? 'review' : 'idle',
+                progress: null,
+                errorCode: gated ? null : (code ?? 'FAILED'),
+                outOfCredits: gated,
+              }));
+            },
+            () => {},
+          );
+          if (debugFailed || !mountedRef.current) return;
+          settled = await settleAskJob(debugJobId, controller.signal, debugSession.id);
+          if (!mountedRef.current) return;
+        }
+        if (settled.outcome === 'debugged' && settled.landing.createdInTriage) {
+          triageChangedRef.current?.();
+        }
 
         if (settled.outcome === 'redirected') {
           livePlan = settled.planId ?? null;

@@ -316,6 +316,7 @@ describe('planChangeMappers — no Prisma row crosses the boundary', () => {
       isAnswer: false,
       intent: null,
       intentCorrected: false,
+      debugLandingClaimedAt: null,
       citations: [],
       authorId: 'u1',
       createdAt: now,

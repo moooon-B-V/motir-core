@@ -8,6 +8,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { readAskOutcome } from '@/lib/planning/askResult';
+import { debugLandingService } from '@/lib/services/debugLandingService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
@@ -17,7 +18,11 @@ import {
   PlanChangeTurnNotFoundError,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE, PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
-import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
+import type {
+  DebugLandingDto,
+  PlanChangeSessionDto,
+  PlanChangeTurnDto,
+} from '@/lib/dto/planChange';
 import { pendingQuestion } from '@/lib/planning/planChangeThread';
 
 // The ASK seam (Story MOTIR-1343 · MOTIR-1819) — the motir-core side of "Ask
@@ -84,7 +89,7 @@ export interface AskSubmitResult {
 }
 
 /**
- * What a settled ask turn produced. Exactly one of four states, and they are
+ * What a settled ask turn produced. Exactly one of five states, and they are
  * kept apart deliberately because the rail renders each differently:
  *
  *  * `answered` — an `assistant` turn is on the thread, with its citations.
@@ -92,6 +97,8 @@ export interface AskSubmitResult {
  *    plan-edit job now running, and the shipped diff + confirm chrome takes over.
  *  * `debugging` — the turn reported broken behaviour (MOTIR-7047); `jobId`
  *    names the `debug_bug` job now running ({@link AskDebugResult}).
+ *  * `debugged` — that `debug_bug` job's own settle (MOTIR-7049): the one card
+ *    it wrote, and its reply on the thread ({@link AskDebuggedResult}).
  *  * `silent` — the job ran and said nothing at all. Core persists NOTHING for
  *    this: an assistant turn needs a body, and inventing one would mean motir-core
  *    writing the assistant's words. (An honest "I could not find that" is prose
@@ -120,10 +127,20 @@ export interface AskDebugResult {
   session: PlanChangeSessionDto;
 }
 
+/** A settled `debug_bug` job, LANDED (MOTIR-7049): the ONE card the turn
+ *  touched — or, for an ungrounded report, none — and the thread with the reply
+ *  appended. A replayed settle returns the same `landing` and writes nothing. */
+export interface AskDebuggedResult {
+  outcome: 'debugged';
+  landing: DebugLandingDto;
+  session: PlanChangeSessionDto;
+}
+
 export type AskSettleResult =
   | { outcome: 'answered'; session: PlanChangeSessionDto }
   | { outcome: 'redirected'; jobId: string; planId: string; session: PlanChangeSessionDto }
   | AskDebugResult
+  | AskDebuggedResult
   | { outcome: 'silent'; session: PlanChangeSessionDto };
 
 function tenantFor(
@@ -501,6 +518,23 @@ export const aiAskService = {
     if (!turn) return { outcome: 'silent', session };
 
     const job = await getJob(jobId, ctx.projectId);
+
+    // THE DEBUG JOB'S OWN SETTLE (MOTIR-7049). After the dispatch above the
+    // turn's `jobId` names its `debug_bug` job, so settling THAT id lands here:
+    // the result is landed as the ONE write A1.4 allows and the handler's reply
+    // is appended. Keyed on the turn's intent AND the result's own unit, so an
+    // `ask_project` job of a turn that has since moved to `debug` never reaches
+    // the landing. Replayable — see `debugLandingService.land`.
+    if (turn.intent === 'debug' && job.result?.debugBug != null) {
+      const landed = await debugLandingService.land(
+        { jobId, turnId: turn.id, result: job.result },
+        ctx,
+        address,
+      );
+      if (!landed) return { outcome: 'silent', session };
+      return { outcome: 'debugged', landing: landed.landing, session: landed.session };
+    }
+
     const outcome = readAskOutcome(job.result);
     if (!outcome) return { outcome: 'silent', session };
 
