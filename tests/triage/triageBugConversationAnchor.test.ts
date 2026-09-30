@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import type { ProjectContext } from '@/lib/projects';
 import { triageService } from '@/lib/services/triageService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -122,7 +123,12 @@ afterAll(async () => {
 
 describe('the substrate', () => {
   it('the code under test connects as the NON-BYPASS app role, and the bug IS in triage', async () => {
-    const [{ role }] = await db.$queryRaw<[{ role: string }]>`SELECT current_user::text AS role`;
+    // Probed through the SAME bound context the services open (not a bare
+    // statement on the singleton), so this is the role the code under test runs as.
+    const [{ role }] = await withWorkspaceContext(
+      fx.ctx,
+      (tx) => tx.$queryRaw<[{ role: string }]>`SELECT current_user::text AS role`,
+    );
     expect(role).toBe('motir_app');
     const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: triaged.id } });
     expect(row.triagedAt).not.toBeNull();

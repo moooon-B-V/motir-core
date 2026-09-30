@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { Page, Response } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedAiAugmentReplan, markProjectOnboarded } from './_helpers/ai-augment-replan-seed';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -189,9 +189,14 @@ async function landingOf(res: Response): Promise<Landing> {
   return body.landing!;
 }
 
-/** The project's Triage — every parentless item still waiting there. */
+/**
+ * The project's Triage — every parentless item still waiting there. A direct-DB
+ * ASSERTION read, so it goes through the owner (`adminDb`), not the app-role
+ * singleton — under `motir_app` an unbound count would read 0 and the "Triage
+ * gains no row" check would pass while checking nothing.
+ */
 const triageCount = (projectId: string) =>
-  db.workItem.count({ where: { projectId, triagedAt: { not: null } } });
+  adminDb.workItem.count({ where: { projectId, triagedAt: { not: null } } });
 
 test.beforeEach(async () => {
   await resetDatabase();

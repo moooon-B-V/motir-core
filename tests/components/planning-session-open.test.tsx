@@ -177,13 +177,29 @@ describe('opening the overlay — the hook', () => {
     await act(async () => {
       await result.current.send('add payments');
     });
-    expect(submitAsk).toHaveBeenLastCalledWith('add payments', expect.anything(), false, null);
+    // The trailing `null, null` are the optional seed gate and anchor (MOTIR-7050)
+    // — absent here, and `submitAskTurn` leaves both off the wire.
+    expect(submitAsk).toHaveBeenLastCalledWith(
+      'add payments',
+      expect.anything(),
+      false,
+      null,
+      null,
+      null,
+    );
     await waitFor(() => expect(result.current.state.session?.id).toBe('s1'));
 
     await act(async () => {
       await result.current.send('smaller');
     });
-    expect(submitAsk).toHaveBeenLastCalledWith('smaller', expect.anything(), false, 's1');
+    expect(submitAsk).toHaveBeenLastCalledWith(
+      'smaller',
+      expect.anything(),
+      false,
+      's1',
+      null,
+      null,
+    );
   });
 
   it('an ANCHORED open past the window carries the earlier conversation too', async () => {

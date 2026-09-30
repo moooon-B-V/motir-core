@@ -276,7 +276,8 @@ describe('the answer flag is derived from the thread the user was looking at', (
     // rides the ONE DOOR now (ADR §1's wire table lists `isAnswer` on it), which
     // is why routing the reply through a classifier does not cost the thread its
     // "Answered — planning resumed" marker.
-    expect(submitAsk).toHaveBeenCalledWith('money in', expect.anything(), true, 's1');
+    // …then no seed gate and no anchor (MOTIR-7050's optional trailing pair).
+    expect(submitAsk).toHaveBeenCalledWith('money in', expect.anything(), true, 's1', null, null);
   });
 
   it('does NOT flag it when nothing is pending', async () => {
@@ -284,6 +285,13 @@ describe('the answer flag is derived from the thread the user was looking at', (
     await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
     await sendOne(hook);
 
-    expect(submitAsk).toHaveBeenCalledWith('add payments', expect.anything(), false, 's1');
+    expect(submitAsk).toHaveBeenCalledWith(
+      'add payments',
+      expect.anything(),
+      false,
+      's1',
+      null,
+      null,
+    );
   });
 });

@@ -1663,7 +1663,12 @@ export function usePlanChangeConversation({
         (signal) =>
           rerunAskTurn(
             turnId,
-            { sessionId: stateRef.current.session?.id ?? null, anchorKey },
+            // The anchor rides only when the turn HAS one — an ordinary turn's
+            // re-run names no `anchorKey` at all, rather than a `null` one.
+            {
+              sessionId: stateRef.current.session?.id ?? null,
+              ...(anchorKey ? { anchorKey } : {}),
+            },
             signal,
           ),
         anchorKey,
@@ -1702,7 +1707,11 @@ export function usePlanChangeConversation({
         (signal) =>
           rerunAskTurn(
             turnId,
-            { flip: true, sessionId: stateRef.current.session?.id ?? null, anchorKey },
+            {
+              flip: true,
+              sessionId: stateRef.current.session?.id ?? null,
+              ...(anchorKey ? { anchorKey } : {}),
+            },
             signal,
           ),
         anchorKey,
