@@ -1820,6 +1820,7 @@
       "fields": "字段",
       "components": "组件",
       "aiPlanning": "AI规划",
+      "hostedAgent": "托管智能体",
       "rules": "规则",
       "repositories": "代码仓库",
       "monitoring": "监控",
@@ -3715,6 +3716,35 @@
         "factKeptBy": "已保留"
       }
     },
+    "hostedAgent": {
+      "title": "托管智能体",
+      "pageDescription": "托管运行使用哪个模型。“托管运行”会根据工作项的难度预选模型；发起运行的人仍可以选择其他模型。",
+      "card": {
+        "title": "按难度选择模型",
+        "subtitle": "除非你覆盖，否则每个难度都使用平台默认模型。父工作项使用其叶子工作项中最高难度对应的模型。"
+      },
+      "col": {
+        "difficulty": "难度",
+        "model": "模型",
+        "source": "来源"
+      },
+      "modelFor": "{difficulty}难度的模型",
+      "source": {
+        "default": "平台默认",
+        "override": "覆盖"
+      },
+      "optionDefault": "{difficulty}难度的平台默认",
+      "reset": "恢复默认",
+      "withdrawn": "已保存的模型 <id>{model}</id> 已不再提供，因此{difficulty}难度的运行使用平台默认模型。恢复默认即可清除它。",
+      "noDifficulty": "没有难度的工作项使用平台默认模型 <id>{model}</id>——即“托管运行”标记为<b>默认</b>的模型。",
+      "readOnlyBanner": "只有项目管理员可以更改托管智能体设置。",
+      "unavailableBody": "无法连接 Motir AI，因此暂时无法显示或更改托管模型。在它恢复响应之前，托管运行不可用。",
+      "emptyBody": "目前没有模型可以运行托管工作项，因此没有可选的模型。",
+      "savedTitle": "托管智能体设置已保存",
+      "savedDesc": "新的托管运行将使用这些模型。",
+      "errorTitle": "无法保存",
+      "saveError": "你的托管智能体设置未保存，请重试。"
+    },
     "apiTokens": {
       "heading": "令牌",
       "subtitle": "个人访问令牌让你的编码 agent 通过 MCP 服务器连接 Motir。每个令牌都以你的身份执行——给每个 agent 单独分配一个，不再使用的随时吊销。",
@@ -3913,6 +3943,7 @@
         "components": "模块由项目管理员管理。如需新增或修改，请联系管理员。",
         "bugs": "本项目缺陷的归档位置由项目管理员管理。如需更改，请联系管理员。",
         "ai-planning": "本项目的 AI 规划——节奏与规划模型——由项目管理员配置。如需调整，请联系管理员。",
+        "hosted-agent": "托管运行使用哪个模型，只向能在此项目上发起托管运行的人显示。如需查看，请联系项目管理员。",
         "automation": "项目自动化由项目管理员管理。如需修改规则，请联系管理员。",
         "monitoring": "本项目的错误监控连接由可管理集成的成员负责。如需连接或重新连接 Sentry，请联系项目管理员。"
       }

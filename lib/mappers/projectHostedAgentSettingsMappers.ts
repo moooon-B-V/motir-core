@@ -1,5 +1,8 @@
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
-import type { ProjectHostedAgentSettingsDto } from '@/lib/dto/projectHostedAgentSettings';
+import type {
+  HostedAgentOfferedModelDto,
+  ProjectHostedAgentSettingsDto,
+} from '@/lib/dto/projectHostedAgentSettings';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import {
   resolveHostedModel,
@@ -40,6 +43,12 @@ export function toHostedModelOverrideColumns(
 export function toProjectHostedAgentSettingsDto(
   row: ProjectHostedModelOverridesRow,
   offered: HostedModelOffer,
+  /** The offered models with their providers; defaults to the bare ids with an
+   *  empty provider, for a caller that holds only the offer. */
+  models: readonly HostedAgentOfferedModelDto[] = offered.models.map((id) => ({
+    id,
+    provider: '',
+  })),
 ): ProjectHostedAgentSettingsDto {
   const overrides = toHostedModelOverrides(row);
   const noDifficulty = resolveHostedModel({ difficulty: null, overrides, offered });
@@ -57,6 +66,7 @@ export function toProjectHostedAgentSettingsDto(
       };
     }),
     offeredModels: [...offered.models],
+    offered: models.map((m) => ({ id: m.id, provider: m.provider })),
     noDifficulty: { effective: noDifficulty?.model ?? null, source: noDifficulty?.source ?? null },
   };
 }

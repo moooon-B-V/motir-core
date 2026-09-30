@@ -22,11 +22,20 @@ export interface HostedAgentLevelSettingDto {
   source: HostedModelSource | null;
 }
 
+/** One model motir-ai offers, with its provider — the room's select labels it
+ *  `id` + `provider`, Run hosted's labelling (MOTIR-6995). */
+export interface HostedAgentOfferedModelDto {
+  id: string;
+  provider: string;
+}
+
 export interface ProjectHostedAgentSettingsDto {
   /** The four levels, easiest first (`WORK_ITEM_DIFFICULTIES`' order). */
   levels: HostedAgentLevelSettingDto[];
   /** The offered bare model ids — the only values an override may take. */
   offeredModels: string[];
+  /** The same list with each model's provider, in motir-ai's order (MOTIR-6995). */
+  offered: HostedAgentOfferedModelDto[];
   /** What a leaf with NO difficulty runs on: motir-ai's single default, else the first offered. */
   noDifficulty: { effective: string | null; source: HostedModelSource | null };
 }

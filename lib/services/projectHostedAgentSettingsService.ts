@@ -18,6 +18,7 @@ import {
   toProjectHostedAgentSettingsDto,
 } from '@/lib/mappers/projectHostedAgentSettingsMappers';
 import type {
+  HostedAgentOfferedModelDto,
   ProjectHostedAgentSettingsDto,
   ResolvedWorkItemHostedModelDto,
   UpdateProjectHostedAgentSettingsInput,
@@ -32,23 +33,34 @@ import type {
 // Every effective model this service reports comes from `resolveHostedModel`,
 // the one rule the Run hosted picker and the start path also call.
 //
-// Gates mirror the AI-planning room (`projectAiSettingsService`): a READ is
-// browse-scoped, a WRITE asks for `ai:configure`. A save refuses a model motir-ai
+// Gates follow the settings room's two keys (design MOTIR-6991): a READ asks for
+// `work_item:edit` (the room's VIEW key), a WRITE for `ai:configure`. A save refuses a model motir-ai
 // does not offer (`HostedModelNotOfferedError`, 422) and writes nothing; while
 // motir-ai cannot answer, nothing can be read or saved
 // (`HostedModelsUnavailableError`, 503) — an unanswered list is never "empty".
 
-/** motir-ai's offer, or the typed error that it could not be read. */
-async function readOffer(): Promise<HostedModelOffer> {
+/** motir-ai's offer plus each model's provider, or the typed error that it could not be read. */
+async function readOfferWithModels(): Promise<{
+  offer: HostedModelOffer;
+  models: HostedAgentOfferedModelDto[];
+}> {
   const offered = await hostedRunModelService.listOfferedModels();
   if (offered.state === 'unavailable') {
     throw new HostedModelsUnavailableError('motir-ai could not be reached');
   }
   return {
-    models: offered.models.map((m) => m.id),
-    default: offered.default,
-    defaultsByDifficulty: offered.defaultsByDifficulty,
+    offer: {
+      models: offered.models.map((m) => m.id),
+      default: offered.default,
+      defaultsByDifficulty: offered.defaultsByDifficulty,
+    },
+    models: offered.models.map((m) => ({ id: m.id, provider: m.provider })),
   };
+}
+
+/** motir-ai's offer, or the typed error that it could not be read. */
+async function readOffer(): Promise<HostedModelOffer> {
+  return (await readOfferWithModels()).offer;
 }
 
 async function resolveProjectByKeyInTx(
@@ -88,19 +100,24 @@ function validatePatch(
 export const projectHostedAgentSettingsService = {
   /**
    * Every level's override, whether it is still offered, the platform default and
-   * the effective model. Browse-gated (404 with no existence leak).
+   * the effective model. Gated on `work_item:edit` — the settings room's VIEW key
+   * (MOTIR-6995, design MOTIR-6991) and the key the hosted START asserts:
+   * whoever may press Run hosted may read which model it runs on. A non-browser
+   * gets 404 (no existence leak); a browser without the key, 403.
    *
-   * Throws: `ProjectNotFoundError` (404), `HostedModelsUnavailableError` (503).
+   * Throws: `ProjectNotFoundError` (404), `PermissionDeniedError` (403),
+   * `HostedModelsUnavailableError` (503).
    */
   async get(projectKey: string, ctx: WorkspaceContext): Promise<ProjectHostedAgentSettingsDto> {
     const row = await withWorkspaceContext(ctx, async (tx) => {
       const project = await resolveProjectByKeyInTx(projectKey, ctx.workspaceId, tx);
-      await projectAccessService.assertCanBrowse(project.id, ctx, tx);
+      await projectAccessService.assertPermission(project.id, ctx, 'work_item:edit', tx);
       const overrides = await projectRepository.findHostedModelOverrides(project.id, tx);
       if (!overrides) throw new ProjectNotFoundError(projectKey);
       return overrides;
     });
-    return toProjectHostedAgentSettingsDto(row, await readOffer());
+    const { offer, models } = await readOfferWithModels();
+    return toProjectHostedAgentSettingsDto(row, offer, models);
   },
 
   /**
@@ -117,7 +134,7 @@ export const projectHostedAgentSettingsService = {
     patch: UpdateProjectHostedAgentSettingsInput,
     ctx: WorkspaceContext,
   ): Promise<ProjectHostedAgentSettingsDto> {
-    const offer = await readOffer();
+    const { offer, models } = await readOfferWithModels();
     const valid = validatePatch(patch, offer);
     const row = await withWorkspaceContext(ctx, async (tx) => {
       const project = await resolveProjectByKeyInTx(projectKey, ctx.workspaceId, tx);
@@ -128,7 +145,7 @@ export const projectHostedAgentSettingsService = {
         tx,
       );
     });
-    return toProjectHostedAgentSettingsDto(row, offer);
+    return toProjectHostedAgentSettingsDto(row, offer, models);
   },
 
   /**

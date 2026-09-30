@@ -77,10 +77,12 @@ const ctxFor = (fx: WorkItemFixture, userId = fx.ownerId) => ({
   workspaceId: fx.workspaceId,
 });
 
-async function addMember(fx: WorkItemFixture) {
-  const member = await createTestUser({ email: `member-${fx.workspaceId}@example.com` });
+async function addMember(fx: WorkItemFixture, workspaceRole: 'member' | 'viewer' = 'member') {
+  const member = await createTestUser({
+    email: `${workspaceRole}-${fx.workspaceId}@example.com`,
+  });
   await adminDb.workspaceMembership.create({
-    data: { userId: member.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
+    data: { userId: member.id, workspaceId: fx.workspaceId, workspaceRole },
   });
   return member;
 }
@@ -103,6 +105,8 @@ describe('projectHostedAgentSettingsService.get', () => {
     });
     expect(levelOf(dto, 'high').effective).toBe('claude-opus-5-5');
     expect(dto.offeredModels).toEqual(['claude-opus-5', 'claude-opus-5-5', 'claude-sonnet-5-5']);
+    // MOTIR-6995 — the room labels each option with its provider.
+    expect(dto.offered).toEqual(OFFERED.models);
     expect(dto.noDifficulty).toEqual({ effective: 'claude-opus-5-5', source: 'platform_default' });
   });
 
@@ -183,6 +187,19 @@ describe('projectHostedAgentSettingsService.update', () => {
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PermissionDeniedError);
     expect((err as PermissionDeniedError).permission).toBe('ai:configure');
+  });
+
+  // MOTIR-6995 — the READ asks for the room's VIEW key, `work_item:edit` (design
+  // MOTIR-6991): a viewer browses the project but may not start a hosted run, so
+  // it may not read which model one would use either.
+  it('refuses a READ to a viewer, who browses but lacks work_item:edit', async () => {
+    const fx = await makeWorkItemFixture();
+    const viewer = await addMember(fx, 'viewer');
+    const err = await service
+      .get(fx.projectIdentifier, ctxFor(fx, viewer.id))
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PermissionDeniedError);
+    expect((err as PermissionDeniedError).permission).toBe('work_item:edit');
   });
 });
 
@@ -298,6 +315,13 @@ describe('GET / PATCH /api/projects/[key]/hosted-agent-settings', () => {
     const res = await patch(fx.projectIdentifier, { low: 'gpt-9' });
     expect(res.status).toBe(422);
     expect(await res.json()).toMatchObject({ code: 'HOSTED_MODEL_NOT_OFFERED', model: 'gpt-9' });
+  });
+
+  it('403s a GET from a viewer without work_item:edit', async () => {
+    const fx = await makeWorkItemFixture();
+    const viewer = await addMember(fx, 'viewer');
+    ctxRef.current = ctxFor(fx, viewer.id);
+    expect((await get(fx.projectIdentifier)).status).toBe(403);
   });
 
   it('403s a member without ai:configure', async () => {

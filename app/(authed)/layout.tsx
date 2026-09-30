@@ -17,6 +17,7 @@ import { notificationsService } from '@/lib/services/notificationsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { resumeGateEnabled } from '@/lib/onboarding/resumeVisibility';
 import { isCloud, isCloudBilling } from '@/lib/billing/availability';
+import { isHostedRunsAvailable } from '@/lib/hostedRuns/availability';
 import { resolveReconsentHold } from '@/lib/legal/reconsentGate';
 import { legalIndexUrl as resolveLegalIndexUrl } from '@/lib/legal/links';
 import { docsIndexUrl as resolveDocsIndexUrl } from '@/lib/docs/links';
@@ -306,6 +307,9 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // The slot is then simply empty, which is the correct rendering of a
   // capability this build does not have.
   const publicProjectsAvailable = isCloud();
+  // The settings registry's hosted-runs axis (MOTIR-6995): the Hosted agent room
+  // exists only on a build that runs hosted agents. A build fact, not a live read.
+  const hostedRunsAvailable = isHostedRunsAvailable();
   const buildInPublicProjectKey =
     publicProjectsAvailable && canManage && activeProject && activeProject.accessMode !== 'public'
       ? activeProject.identifier
@@ -493,6 +497,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                           billingAvailable={cloudBilling}
                           workspaceTierRevealed={workspaceTierRevealed}
                           publicProjectsAvailable={publicProjectsAvailable}
+                          hostedRunsAvailable={hostedRunsAvailable}
                           helpMenu={
                             <HelpMenu docsIndexUrl={docsIndexUrl} legalIndexUrl={legalIndexUrl} />
                           }
@@ -610,6 +615,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                         billingAvailable={cloudBilling}
                         workspaceTierRevealed={workspaceTierRevealed}
                         publicProjectsAvailable={publicProjectsAvailable}
+                        hostedRunsAvailable={hostedRunsAvailable}
                       />
                     </SidebarDrawer>
 
@@ -624,6 +630,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       settingsPermissions={settingsPermissions}
                       aiPlanningConfigured={aiPlanningConfigured}
                       publicProjectsAvailable={publicProjectsAvailable}
+                      hostedRunsAvailable={hostedRunsAvailable}
                       isOrgAdmin={activeOrg ? orgCan(activeOrg.role, 'manageOrgSettings') : false}
                     />
 

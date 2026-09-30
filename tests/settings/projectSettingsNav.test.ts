@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { Globe, Megaphone } from 'lucide-react';
+import { Cloud, Globe, Megaphone } from 'lucide-react';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -56,10 +56,14 @@ const NO_ACCESS = toSettingsNavPermissions([]);
 // actor holds. It defaults CLOSED, so every assertion below that expects the
 // whole rail has to say which deployment it is talking about; that is the point
 // of the default rather than a cost of it.
-const ON_CLOUD = { publicProjectsAvailable: true };
-const SELF_HOSTED = { publicProjectsAvailable: false };
-/** The entries that exist on EVERY build — the rail minus the cloud-only rooms. */
-const ALWAYS_PRESENT = PROJECT_SETTINGS_NAV.filter((e) => !e.cloudOnly);
+//
+// A cloud build also runs hosted agents (`isHostedRunsAvailable()` asks the
+// cloud question, MOTIR-6995), so ON_CLOUD carries both capabilities; the
+// hosted-runs axis is exercised on its own in the Hosted agent block below.
+const ON_CLOUD = { publicProjectsAvailable: true, hostedRunsAvailable: true };
+const SELF_HOSTED = { publicProjectsAvailable: false, hostedRunsAvailable: false };
+/** The entries that exist on EVERY build — the rail minus the build-gated rooms. */
+const ALWAYS_PRESENT = PROJECT_SETTINGS_NAV.filter((e) => !e.cloudOnly && !e.hostedRunsOnly);
 
 describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29)', () => {
   it('every settings route is accounted for EXACTLY once, and vice versa', () => {
@@ -178,7 +182,8 @@ describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29
     const automationIds = groupSettingsNav(PROJECT_SETTINGS_NAV)
       .find((g) => g.group === 'automation')!
       .entries.map((e) => e.id);
-    expect(automationIds).toEqual(['ai-planning', 'automation']);
+    // MOTIR-6995 — Hosted agent sits DIRECTLY under AI planning (design panel 0).
+    expect(automationIds).toEqual(['ai-planning', 'hosted-agent', 'automation']);
   });
 });
 
@@ -208,9 +213,14 @@ describe('projectSettingsNav registry — access matrix (rides the 6.4.3 policy)
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
   // MOTIR-5278 had inverted this to "a member sees exactly ONE section — Approvals".
-  it('a member sees NO section — every entry gates on an administrative key now', () => {
+  // ⚠️ SCOPED TO A BUILD WITH NO HOSTED RUNS BY MOTIR-6995. The Hosted agent room
+  // opens on `work_item:edit`, which a member holds (design MOTIR-6991, decided
+  // knowingly), so on a build that runs hosted agents a member is offered that
+  // ONE room — asserted in the Hosted agent block below.
+  it('a member sees NO section off a hosted-runs build — every other entry gates on an administrative key', () => {
     expect(visibleSettingsNav(MEMBER)).toEqual([]);
     expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_ROUTES)).toEqual([]);
+    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, SELF_HOSTED)).toEqual([]);
   });
 
   it('a no-browse actor sees NOTHING — the whole area filters away (no nav leak)', () => {
@@ -265,7 +275,11 @@ describe('the Public page room (Story MOTIR-3875 · MOTIR-4243)', () => {
     // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
     // MOTIR-5394); MOTIR-5278's browse view is reverted.
     // MOTIR-5278 had narrowed these two to "no public-page, and exactly Approvals".
-    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, ON_CLOUD)).toEqual([]);
+    // MOTIR-6995: on cloud a member is offered the Hosted agent room (its view key
+    // is `work_item:edit`) and nothing cloud-only.
+    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, ON_CLOUD).map((e) => e.id)).toEqual([
+      'hosted-agent',
+    ]);
     expect(visibleSettingsNav(VIEWER, PROJECT_SETTINGS_NAV, ON_CLOUD)).toEqual([]);
   });
 
@@ -307,6 +321,75 @@ describe('the Public page room (Story MOTIR-3875 · MOTIR-4243)', () => {
     // filtered view of it, so an off-cloud build still accounts for the file on
     // disk. The route answers `notFound()` there; it does not vanish.
     expect(PROJECT_SETTINGS_ROUTE_PATHS).toContain('/settings/project/public');
+  });
+});
+
+describe('the Hosted agent room (Story MOTIR-6989 · MOTIR-6995)', () => {
+  const entry = PROJECT_SETTINGS_NAV.find((e) => e.id === 'hosted-agent');
+  const HOSTED_ONLY = { publicProjectsAvailable: false, hostedRunsAvailable: true };
+
+  it('is registered per the design table, DIRECTLY under AI planning, with the Run hosted glyph', () => {
+    expect(entry).toBeTruthy();
+    expect(entry!.group).toBe('automation');
+    expect(entry!.href).toBe('/settings/project/hosted-agent');
+    expect(entry!.labelKey).toBe('nav.hostedAgent');
+    expect(entry!.icon).toBe(Cloud);
+    expect(entry!.permission).toBe('ai:configure');
+    expect(entry!.viewPermission).toBe('work_item:edit');
+    expect(entry!.hostedRunsOnly).toBe(true);
+    expect(entry!.cloudOnly).toBeUndefined();
+  });
+
+  it('is ABSENT on a build with no hosted runs, whatever the actor holds', () => {
+    for (const held of [ADMIN, MEMBER]) {
+      expect(
+        visibleSettingsNav(held, PROJECT_SETTINGS_NAV, SELF_HOSTED).map((e) => e.id),
+      ).not.toContain('hosted-agent');
+      // A cloud build WITHOUT the hosted-runs fact still has no such room — the
+      // two axes are separate facts.
+      expect(
+        visibleSettingsNav(held, PROJECT_SETTINGS_NAV, { publicProjectsAvailable: true }).map(
+          (e) => e.id,
+        ),
+      ).not.toContain('hosted-agent');
+    }
+  });
+
+  it('DEFAULTS CLOSED — a caller that forgets the hosted-runs fact drops the row', () => {
+    expect(visibleSettingsNav(ADMIN).map((e) => e.id)).not.toContain('hosted-agent');
+    expect(visibleSettingsNav(ADMIN, PROJECT_SETTINGS_ROUTES).map((e) => e.id)).not.toContain(
+      'hosted-agent',
+    );
+  });
+
+  it('opens on the VIEW key: an admin and a member see it, a viewer does not', () => {
+    expect(visibleSettingsNav(ADMIN, PROJECT_SETTINGS_NAV, HOSTED_ONLY).map((e) => e.id)).toContain(
+      'hosted-agent',
+    );
+    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, HOSTED_ONLY).map((e) => e.id)).toEqual([
+      'hosted-agent',
+    ]);
+    expect(visibleSettingsNav(VIEWER, PROJECT_SETTINGS_NAV, HOSTED_ONLY)).toEqual([]);
+    // `ai:configure` alone opens nothing here — it is the room's WRITE key.
+    expect(
+      visibleSettingsNav(
+        toSettingsNavPermissions(['ai:configure']),
+        PROJECT_SETTINGS_NAV,
+        HOSTED_ONLY,
+      ).map((e) => e.id),
+    ).not.toContain('hosted-agent');
+  });
+
+  it('the destination guard admits a member and refuses a viewer', () => {
+    expect(resolveSettingsRefusal('hosted-agent', MEMBER)).toBeNull();
+    expect(resolveSettingsRefusal('hosted-agent', ADMIN)).toBeNull();
+    expect(resolveSettingsRefusal('hosted-agent', VIEWER)).toMatchObject({
+      descriptionKey: 'noAccess.section.hosted-agent',
+    });
+  });
+
+  it('the route ↔ registry totality holds REGARDLESS of the flag — the page exists either way', () => {
+    expect(PROJECT_SETTINGS_ROUTE_PATHS).toContain('/settings/project/hosted-agent');
   });
 });
 
@@ -536,6 +619,12 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
     source: 'lib/services/customDomainService.ts',
     gate: 'assertPermission',
   },
+  // MOTIR-6995 — the Hosted agent room's WRITE: `update` asserts `ai:configure`.
+  'hosted-agent': {
+    permission: 'ai:configure',
+    source: 'lib/services/projectHostedAgentSettingsService.ts',
+    gate: 'assertPermission',
+  },
 };
 
 describe('every registry entry names the key its DESTINATION asserts (MOTIR-2468)', () => {
@@ -611,16 +700,32 @@ describe('what each actor is offered (MOTIR-2468)', () => {
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
   // MOTIR-5278 had inverted this and the VIEWER case below to "offered exactly
   // Approvals — so the area door comes BACK".
-  it('a built-in MEMBER is offered NOTHING — so the area door goes with it', () => {
+  it('a built-in MEMBER is offered NOTHING off a hosted-runs build — so the area door goes with it', () => {
     expect(visibleSettingsNav(MEMBER)).toEqual([]);
     expect(hasVisibleSettingsArea(MEMBER)).toBe(false);
+    expect(hasVisibleSettingsArea(MEMBER, SELF_HOSTED)).toBe(false);
+  });
+
+  // MOTIR-6995 — the population consequence the Hosted agent design flagged: its
+  // view key is `work_item:edit`, which a member holds, so on a build that runs
+  // hosted agents the **Project settings** door COMES BACK for a member, opening
+  // onto exactly that one read-only room.
+  it('a built-in MEMBER on a hosted-runs build is offered exactly Hosted agent — and the door returns', () => {
+    const hosted = { publicProjectsAvailable: false, hostedRunsAvailable: true };
+    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, hosted).map((e) => e.id)).toEqual([
+      'hosted-agent',
+    ]);
+    expect(hasVisibleSettingsArea(MEMBER, hosted)).toBe(true);
+    expect(hasVisibleSettingsArea(MEMBER, ON_CLOUD)).toBe(true);
   });
 
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
-  it('a built-in VIEWER is offered NOTHING either', () => {
+  it('a built-in VIEWER is offered NOTHING either — on any build', () => {
     expect(visibleSettingsNav(VIEWER)).toEqual([]);
     expect(hasVisibleSettingsArea(VIEWER)).toBe(false);
+    // A viewer may not start a hosted run, so it does not see the Hosted agent room.
+    expect(hasVisibleSettingsArea(VIEWER, ON_CLOUD)).toBe(false);
   });
 
   it('an actor with no keys at all is offered NOTHING', () => {
@@ -687,24 +792,39 @@ describe('what each actor is offered (MOTIR-2468)', () => {
 // to align. So the alignment is a test, and the test is shown to FIRE.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Whether `entry` exists on a build with `available` — the registry's own axis, restated. */
-function existsOn(entry: SettingsNavEntry, available: { publicProjectsAvailable: boolean }) {
-  return !entry.cloudOnly || available.publicProjectsAvailable;
+/** Whether `entry` exists on a build with `available` — the registry's own axes, restated. */
+function existsOn(
+  entry: SettingsNavEntry,
+  available: { publicProjectsAvailable: boolean; hostedRunsAvailable?: boolean },
+) {
+  return (
+    (!entry.cloudOnly || available.publicProjectsAvailable) &&
+    (!entry.hostedRunsOnly || available.hostedRunsAvailable === true)
+  );
 }
+
+/** The shipped entries that declare NO view key — the one-key model's population. */
+const ONE_KEY_ENTRIES = PROJECT_SETTINGS_NAV.filter((e) => !e.viewPermission);
 
 describe('the VIEW key defaults to the WRITE key — the no-regression proof (MOTIR-5193)', () => {
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
   // MOTIR-5278 had carved `approvals` out of both cases below as the one declared
   // exception.
-  it('every shipped entry’s effective view key IS its permission', () => {
-    for (const entry of PROJECT_SETTINGS_NAV) {
+  // MOTIR-6995 carves ONE declared exception back out: Hosted agent, whose view
+  // key is `work_item:edit` (design MOTIR-6991). Every other entry still has one key.
+  it('every shipped entry’s effective view key IS its permission — bar the declared exception', () => {
+    for (const entry of ONE_KEY_ENTRIES) {
       expect(settingsEntryViewKey(entry), entry.id).toBe(entry.permission);
       expect(settingsEntryKeys(entry.id), entry.id).toEqual({
         view: entry.permission,
         write: entry.permission,
       });
     }
+    expect(settingsEntryKeys('hosted-agent')).toEqual({
+      view: 'work_item:edit',
+      write: 'ai:configure',
+    });
   });
 
   it('the view-gated rail, door and refusal are IDENTICAL to the write-gated ones for every actor', () => {
@@ -721,13 +841,15 @@ describe('the VIEW key defaults to the WRITE key — the no-regression proof (MO
     ];
     for (const held of actors) {
       for (const available of [ON_CLOUD, SELF_HOSTED]) {
-        const writeGated = PROJECT_SETTINGS_NAV.filter(
+        const writeGated = ONE_KEY_ENTRIES.filter(
           (e) => existsOn(e, available) && held.has(e.permission),
         );
-        expect(visibleSettingsNav(held, PROJECT_SETTINGS_NAV, available)).toEqual(writeGated);
-        expect(hasVisibleSettingsArea(held, available)).toBe(writeGated.length > 0);
+        expect(visibleSettingsNav(held, ONE_KEY_ENTRIES, available)).toEqual(writeGated);
+        expect(hasVisibleSettingsArea(held, available, ONE_KEY_ENTRIES)).toBe(
+          writeGated.length > 0,
+        );
       }
-      for (const entry of PROJECT_SETTINGS_NAV) {
+      for (const entry of ONE_KEY_ENTRIES) {
         expect(resolveSettingsRefusal(entry.id, held) === null).toBe(held.has(entry.permission));
       }
     }
@@ -830,7 +952,15 @@ describe('a distinct VIEW key opens the door, and only the door (MOTIR-5193, ove
 // MOTIR-5394); MOTIR-5278's browse view is reverted.
 // MOTIR-5278 had written an `approvals` row here, for a `getSettings` that read on
 // browse.
-const VIEW_KEY_EVIDENCE: Record<string, { source: string; gate: string }> = {};
+// MOTIR-6995 — the Hosted agent room's READ asserts its view key,
+// `projectAccessService.assertPermission(…, 'work_item:edit', …)` in
+// `projectHostedAgentSettingsService.get`.
+const VIEW_KEY_EVIDENCE: Record<string, { source: string; gate: string }> = {
+  'hosted-agent': {
+    source: 'lib/services/projectHostedAgentSettingsService.ts',
+    gate: 'assertPermission',
+  },
+};
 
 /** The repo-relative `page.tsx` a settings route renders from. */
 function pageFileFor(route: string): string {
@@ -924,7 +1054,8 @@ describe('the VIEW key cannot drift from its destination (MOTIR-5193)', () => {
     // MOTIR-5394); MOTIR-5278's browse view is reverted.
     // MOTIR-5278 had updated this to `['approvals']`. With that declaration reverted,
     // the drift test rules on the fixture alone again, as MOTIR-5193 shipped it.
-    expect(declaring.map((e) => e.id)).toEqual([]);
+    // MOTIR-6995 declares the first again: Hosted agent (`work_item:edit`).
+    expect(declaring.map((e) => e.id)).toEqual(['hosted-agent']);
   });
 
   it('every declaring entry has an evidence row, and every evidence row a declaring entry', () => {
