@@ -75,6 +75,10 @@ export type PersonalDataDelegate =
   | 'twoFactor'
   | 'apiToken'
   | 'deviceCode'
+  | 'oauthClient'
+  | 'oauthAccessToken'
+  | 'oauthRefreshToken'
+  | 'oauthConsent'
   | 'emailChangeRequest'
   | 'legalAcceptance'
   | 'workspaceMembership'
@@ -189,6 +193,39 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     tier: 'identity',
     basis: '`motir login` device grants this account claimed.',
     redact: ['deviceCode', 'userCode'],
+    where: byUserId,
+  },
+  {
+    table: 'oauth_client',
+    model: 'oauthClient',
+    tier: 'identity',
+    basis: 'OAuth clients the reader registered while signed in (MOTIR-6982).',
+    // A public client carries no secret, but a confidential one would: never out.
+    redact: ['clientSecret'],
+    where: byUserId,
+  },
+  {
+    table: 'oauth_consent',
+    model: 'oauthConsent',
+    tier: 'identity',
+    basis: 'Apps the reader allowed to act for them, and the scopes they granted.',
+    where: byUserId,
+  },
+  {
+    table: 'oauth_access_token',
+    model: 'oauthAccessToken',
+    tier: 'identity',
+    basis: 'Access tokens issued to apps the reader connected, with their expiry.',
+    // Stored hashed, and still a credential's fingerprint: it never leaves.
+    redact: ['token'],
+    where: byUserId,
+  },
+  {
+    table: 'oauth_refresh_token',
+    model: 'oauthRefreshToken',
+    tier: 'identity',
+    basis: 'Refresh tokens issued to apps the reader connected, and their revocation.',
+    redact: ['token'],
     where: byUserId,
   },
   {

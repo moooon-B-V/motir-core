@@ -1,7 +1,8 @@
 // ⚠️ GENERATED — DO NOT EDIT. Run `pnpm generate:mcp-tool-schemas`.
 //
-// Every MCP tool's `inputSchema`, exactly as `tools/list` serves it
-// (Story MOTIR-3875 · Subtask MOTIR-4389). Written by
+// Every MCP tool's `inputSchema` (Story MOTIR-3875 · Subtask MOTIR-4389), and
+// its `title` and `annotations` (Story MOTIR-6974 · Subtask MOTIR-7002) —
+// three values, exactly as `tools/list` serves them. Written by
 // `scripts/generateMcpToolSchemas.ts` from a live handshake against
 // `buildMcpServer`, and pinned byte-for-byte against a fresh one by
 // `tests/mcp/tool-schema-truth.test.ts` — so this file cannot drift from the
@@ -11,16 +12,17 @@
 // `lib/apiDocs/mcp.ts` is a LEAF: it imports `lib/mcp/toolPermissions.ts` and
 // nothing else from `lib/mcp/`, so that the anonymous
 // `GET /api/docs/mcp-tools.json` handler does not pull the tool registry, the
-// services and Prisma behind it. The schemas live inside `registerTool(...)`
-// calls that only the registry can reach. This module is the seam: a value the
+// services and Prisma behind it. The schemas and titles live inside
+// `registerTool(...)` calls that only the registry can reach, and the hints are
+// what the registration seam injects there. This module is the seam: a value the
 // registry produced, in a file that imports nothing at runtime.
 //
-// The map is TOTAL over the tool set by TYPE — a tool added to the registry
+// Each map is TOTAL over the tool set by TYPE — a tool added to the registry
 // forces a `TOOL_PERMISSIONS` entry, which makes this annotation incomplete and
 // this file a compile error until it is regenerated.
 
 import type { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
-import type { McpToolInputSchema } from './mcpToolSchema';
+import type { McpToolHints, McpToolInputSchema } from './mcpToolSchema';
 
 /** Tool name → the draft-07 JSON Schema of its arguments. */
 export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpToolInputSchema> = {
@@ -3101,5 +3103,439 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     required: ['planId', 'planItemId'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+};
+
+/** Tool name → the human `title` the tool registers (guarded to 1–64 characters at the seam). */
+export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
+  add_comment: 'Add comment',
+  add_lesson: 'Add lesson',
+  add_plan_items: 'Append proposals to a plan',
+  add_work_item_todo: 'Add a to-do step',
+  append_plan_turn: 'Add a planning turn',
+  archive_work_item: 'Archive work item',
+  attach_file: 'Attach file',
+  change_kind: 'Change work item kind',
+  claim_next_ready: 'Claim next ready work item',
+  claim_work_item: 'Claim a work item',
+  claim_work_item_repair: 'Claim a red work item’s repair',
+  close_work_item_repair: 'Close a repair',
+  complete_session: 'Complete session',
+  complete_sprint: 'Complete sprint',
+  create_acceptance_upload: 'Create acceptance upload',
+  create_design_upload: 'Create design upload',
+  create_folder: 'Create folder',
+  create_plan: 'Open a plan to propose into',
+  create_sprint: 'Create sprint',
+  create_work_item: 'Create work item',
+  delete_comment: 'Delete comment',
+  delete_folder: 'Delete folder',
+  delete_sprint: 'Delete sprint',
+  delete_work_item: 'Delete work item',
+  dispatch_prompt: 'Dispatch prompt',
+  edit_comment: 'Edit comment',
+  expand_item: 'Expand work item',
+  get_approval_gate: 'Get approval gate',
+  get_approved_shape_verdict: 'Is this card still what its plan approved?',
+  get_design: 'Get design',
+  get_plan: 'Read plan proposals',
+  get_plan_status: 'Plan status',
+  get_project_state: 'Get project state',
+  get_work_item: 'Get work item',
+  get_work_item_activity: 'Get work item activity',
+  link_pull_request: 'Link pull request',
+  link_work_items: 'Link work items',
+  list_designs: 'List designs',
+  list_folders: 'List folders',
+  list_projects: 'List projects',
+  list_ready: 'List ready work items',
+  list_sprints: 'List sprints',
+  list_work_item_todos: 'List a work item’s to-do list',
+  mark_integrated: 'Mark integrated',
+  move_to_backlog: 'Move work items to backlog',
+  move_to_parent: 'Move work item to a new parent',
+  move_to_sprint: 'Move work items to sprint',
+  next_ready: 'Next ready work item',
+  open_plan_session: 'Open plan conversation',
+  publish_acceptance_result: 'Publish acceptance result',
+  publish_design_result: 'Publish design result',
+  publish_test_instructions: 'Publish How to test',
+  record_plan_revision_reason: 'Record WHY a plan had to change',
+  reinforce_lesson: 'Reinforce a lesson',
+  report_unbuildable_target: 'Report a card you cannot build',
+  search_lessons: 'Search lessons by meaning',
+  search_work_items: 'Search work items',
+  search_work_items_semantic: 'Search work items by meaning',
+  set_work_item_todo_done: 'Tick or untick a to-do step',
+  skeleton: 'Project skeleton',
+  start_sprint: 'Start sprint',
+  submit_plan_session: 'Submit plan conversation',
+  touch_work_item_repair: 'Keep a repair alive',
+  transition_status: 'Transition status',
+  unarchive_work_item: 'Unarchive work item',
+  unlink_pull_request: 'Unlink pull request',
+  unlink_work_items: 'Unlink work items',
+  update_folder: 'Update folder',
+  update_plan: "Correct a plan's own title and summary",
+  update_plan_item: 'Deepen a proposal you appended',
+  update_plan_proposal: 'Correct a proposal, including its structure',
+  update_sprint: 'Update sprint',
+  update_work_item: 'Update work item',
+  validate_plan: 'Validate a plan before anybody reviews it',
+  validate_sprint: 'Validate sprint finishability',
+  validate_work_item: 'Validate work-item finishability',
+  whoami: 'Who am I',
+  withdraw_plan_proposal: 'Take a proposal off a plan',
+};
+
+/** Tool name → the `annotations` (hints) the registration seam injects from `TOOL_ANNOTATIONS`. */
+export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpToolHints> = {
+  add_comment: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  add_lesson: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  add_plan_items: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  add_work_item_todo: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  append_plan_turn: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  archive_work_item: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  attach_file: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  change_kind: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  claim_next_ready: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  claim_work_item: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  claim_work_item_repair: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  close_work_item_repair: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  complete_session: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  complete_sprint: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  create_acceptance_upload: { readOnlyHint: true, openWorldHint: false },
+  create_design_upload: { readOnlyHint: true, openWorldHint: false },
+  create_folder: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  create_plan: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  create_sprint: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  create_work_item: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  delete_comment: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  delete_folder: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  delete_sprint: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  delete_work_item: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  dispatch_prompt: { readOnlyHint: true, openWorldHint: false },
+  edit_comment: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  expand_item: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  get_approval_gate: { readOnlyHint: true, openWorldHint: false },
+  get_approved_shape_verdict: { readOnlyHint: true, openWorldHint: false },
+  get_design: { readOnlyHint: true, openWorldHint: false },
+  get_plan: { readOnlyHint: true, openWorldHint: false },
+  get_plan_status: { readOnlyHint: true, openWorldHint: false },
+  get_project_state: { readOnlyHint: true, openWorldHint: false },
+  get_work_item: { readOnlyHint: true, openWorldHint: false },
+  get_work_item_activity: { readOnlyHint: true, openWorldHint: false },
+  link_pull_request: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: true,
+  },
+  link_work_items: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  list_designs: { readOnlyHint: true, openWorldHint: false },
+  list_folders: { readOnlyHint: true, openWorldHint: false },
+  list_projects: { readOnlyHint: true, openWorldHint: false },
+  list_ready: { readOnlyHint: true, openWorldHint: false },
+  list_sprints: { readOnlyHint: true, openWorldHint: false },
+  list_work_item_todos: { readOnlyHint: true, openWorldHint: false },
+  mark_integrated: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: true,
+  },
+  move_to_backlog: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  move_to_parent: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  move_to_sprint: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  next_ready: { readOnlyHint: true, openWorldHint: false },
+  open_plan_session: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  publish_acceptance_result: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  publish_design_result: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  publish_test_instructions: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  record_plan_revision_reason: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  reinforce_lesson: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  report_unbuildable_target: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  search_lessons: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  search_work_items: { readOnlyHint: true, openWorldHint: false },
+  search_work_items_semantic: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  set_work_item_todo_done: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  skeleton: { readOnlyHint: true, openWorldHint: false },
+  start_sprint: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  submit_plan_session: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  touch_work_item_repair: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  transition_status: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: true,
+  },
+  unarchive_work_item: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  unlink_pull_request: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: true,
+  },
+  unlink_work_items: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  update_folder: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  update_plan: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  update_plan_item: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  update_plan_proposal: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  update_sprint: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  update_work_item: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  validate_plan: { readOnlyHint: true, openWorldHint: false },
+  validate_sprint: { readOnlyHint: true, openWorldHint: false },
+  validate_work_item: { readOnlyHint: true, openWorldHint: false },
+  whoami: { readOnlyHint: true, openWorldHint: false },
+  withdraw_plan_proposal: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
   },
 };

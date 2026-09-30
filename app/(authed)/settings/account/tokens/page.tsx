@@ -1,12 +1,15 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { projectsService } from '@/lib/services/projectsService';
+import { oauthConnectionsService } from '@/lib/services/oauthConnectionsService';
 import { ApiDocsLinkPanel } from '../_components/ApiDocsLinkPanel';
 import { ApiTokensManager } from '../_components/ApiTokensManager';
 import { ConnectCliPanel } from '../_components/ConnectCliPanel';
+import { ConnectedAppsSection, ConnectedAppsSkeleton } from '../_components/ConnectedAppsSection';
 
 // The Tokens pane of the account-settings area (Story 7.8 · Subtask 7.8.3) —
 // the Security → Tokens surface (design `account-settings.mock.html` Panels
@@ -74,6 +77,27 @@ export default async function AccountApiTokensPage() {
         activeWorkspaceId={ctx?.workspaceId ?? null}
         activeProjectId={activeProject?.id ?? null}
       />
+
+      {/* Connected apps — the LAST card, below the tokens, whatever the tokens
+          card shows (MOTIR-6986, design `account-settings--connected-apps`
+          Panel 1): the pane is still the tokens pane, and the CLI panel's tie
+          line promises its terminal "appears below" in the tokens list. The
+          frame is an in-page <Suspense> placed after the session gate above —
+          never a `loading.tsx` (CLAUDE.md) — so only these rows wait. */}
+      <Suspense fallback={<ConnectedAppsSkeleton />}>
+        <ConnectedApps userId={session.user.id} multiOrg={scopeOrgs.length > 1} />
+      </Suspense>
     </div>
   );
+}
+
+/** The Connected apps read, streamed behind its own boundary. A failed read
+ * renders the card's inline error (Panel 5) — whose Try again re-reads through
+ * the list route — rather than failing the whole pane. */
+async function ConnectedApps({ userId, multiOrg }: { userId: string; multiOrg: boolean }) {
+  const connections = await oauthConnectionsService.listForUser(userId).catch((err: unknown) => {
+    console.error('[connected-apps] list read failed', err);
+    return null;
+  });
+  return <ConnectedAppsSection initialConnections={connections} multiOrg={multiOrg} />;
 }

@@ -377,6 +377,12 @@ export const apiTokensService = {
       // everywhere. This line costs one null check and closes that window.
       // It goes when the column does — see `prisma/schema.prisma`.
       if (row.revokedAt) throw new ApiTokenRevokedError();
+      // An OAuth CONNECTION (MOTIR-6983) is not a bearer credential: its hash is
+      // of bytes nobody holds, so no presented secret can match it. Refused here
+      // anyway, so the PAT door can never become a way into a connected app's
+      // grant — the connection's own tokens resolve through
+      // `oauthConnectionsService.resolveAccessToken`.
+      if (row.oauthClientId !== null) throw new InvalidApiTokenError();
       const now = new Date();
       if (row.expiresAt && row.expiresAt.getTime() <= now.getTime()) {
         throw new ApiTokenExpiredError();

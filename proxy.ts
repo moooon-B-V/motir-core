@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getSessionCookie } from 'better-auth/cookies';
 import { publicSiteOrigin } from '@/lib/publicProjects/urls';
 import { publicCorsHeaders, publicCorsPreflightHeaders } from '@/lib/publicProjects/cors';
+import { WELL_KNOWN_CORS_HEADERS, WELL_KNOWN_PREFIX } from '@/lib/oauth/cors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { VISITOR_COOKIE, isVisitorCookieValue, visitorCookieOptions } from '@/lib/visitor/cookie';
 import { parseVisitorPath, visitorPathForMemberPath } from '@/lib/visitor/routes';
@@ -268,7 +269,30 @@ async function publicSurfaceCors(request: NextRequest): Promise<NextResponse | n
   return response;
 }
 
+/**
+ * The OAuth discovery documents' answer (MOTIR-6982): `/.well-known/*` is public
+ * metadata an MCP client reads before anyone has signed in, from any origin. So a
+ * preflight is answered here, every other request is forwarded with the CORS
+ * headers, and — like the public API above — it always TERMINATES: falling
+ * through would bounce an anonymous discovery request to `/sign-in`.
+ */
+function wellKnownCors(request: NextRequest): NextResponse | null {
+  if (!request.nextUrl.pathname.startsWith(WELL_KNOWN_PREFIX)) return null;
+  if (request.method === 'OPTIONS') {
+    return new NextResponse(null, { status: 204, headers: WELL_KNOWN_CORS_HEADERS });
+  }
+  const response = NextResponse.next();
+  for (const [name, value] of Object.entries(WELL_KNOWN_CORS_HEADERS)) {
+    response.headers.set(name, value);
+  }
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
+  // OAuth discovery (MOTIR-6982) — before anything that could bounce it.
+  const wellKnown = wellKnownCors(request);
+  if (wellKnown) return wellKnown;
+
   // The public READ API's cross-origin answer (MOTIR-4114) — first, because a
   // preflight is answered here and never reaches a handler, and because these
   // paths are an API rather than a page: none of the page logic below applies
@@ -389,6 +413,8 @@ export const config = {
     // API path and takes only the cross-origin answer, which `proxy()` handles
     // before any of it.
     '/api/public/:path*',
+    // OAuth discovery (MOTIR-6982) — matched for CORS only, like the line above.
+    '/.well-known/:path*',
     '/',
     '/explore/:path*',
     '/docs/:path*',

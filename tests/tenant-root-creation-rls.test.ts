@@ -247,6 +247,15 @@ describe('RLS coverage across the public schema', () => {
       // leaves the authenticator. Restated in the table's migration header and
       // its `schema.prisma` doc comment.
       passkey: 'per-user WebAuthn credentials, read pre-session on the sign-in ceremony',
+      // The OAuth authorization server's rows (MOTIR-6982). Registration is
+      // UNAUTHENTICATED and the token endpoint runs with no session, so no
+      // `app.workspace_id` GUC exists on the paths that write them; the grant's
+      // workspace is carried by the consent decision (MOTIR-6983), not by row
+      // visibility. Tokens are stored hashed. Restated in the migration header.
+      oauth_client: 'dynamically registered OAuth clients, written pre-authentication',
+      oauth_access_token: 'hashed OAuth access tokens, read by the sessionless token path',
+      oauth_refresh_token: 'hashed OAuth refresh tokens, read by the sessionless token path',
+      oauth_consent: "a person's consent to an OAuth client, keyed to the user",
       // User-scoped preference rows: keyed to the USER, who spans workspaces.
       notification_preference: 'per-user preference, deliberately cross-workspace',
       user_appearance_preference: 'per-user preference, deliberately cross-workspace',

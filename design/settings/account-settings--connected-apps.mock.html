@@ -1,0 +1,3239 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock &middot; Account settings &rsaquo; Tokens &mdash; Connected apps (MOTIR-6981, a
+      delta)
+    </title>
+    <!--
+      DESIGN ASSET — a DELTA mock (MOTIR-6981, Story MOTIR-6973). It amends
+      design/settings/account-settings.mock.html (Panel 3, the tokens pane; and the
+      shipped rail as Panel 9 of that asset draws it) and holds ONLY the panels that
+      change: a new "Connected apps" section at the foot of Settings -> Account ->
+      Tokens, every state of it, and its revoke flow. The base mock is not edited.
+      Spec: design/settings/design-notes.md -> "## Connected apps".
+
+      Token block: carried from the base asset (itself 1:1 from app/globals.css),
+      plus the Tier-3 tokens it did not need (named below). Markup mirrors the
+      SHIPPED primitives and ApiTokensManager's row: Card, Pill, Button, Modal,
+      Toast, Tooltip. Panels:
+        1 access path + populated · 2 row anatomy · 3 empty · 4 loading · 5 error
+        6 revoke confirm · 7 revoking · 8 revoked (+ revoke-failed toast) · 9 narrow
+      Toggle dark to confirm token parity.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-control: 36px;
+        --height-input: 44px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        /* ADDED by MOTIR-4675, verbatim from packages/design-system/theme.css.
+           --el-danger-on-surface is the ink for danger text ON a page surface;
+           --el-danger-text above is legal ONLY on an element carrying a danger
+           FILL, and --el-danger-surface is the tint the shipped DisconnectButton
+           hovers to. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-danger-surface: var(--color-tint-rose);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-task: var(--color-info);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #242424;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── ADDED for this delta, verbatim from packages/design-system/theme.css ── */
+      :root {
+        --color-link-pressed: #005bab;
+        --el-link-pressed: var(--color-link-pressed);
+        --el-card: var(--color-background);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-overlay-scrim: #00000066;
+      }
+      [data-theme='dark'] {
+        --color-link-pressed: #79b8ff;
+        --el-overlay-scrim: #000000a6;
+      }
+
+      /* ── Board chrome (NOT design) — the base asset's review page ── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 90ch;
+        line-height: 1.5;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+        line-height: 1.6;
+      }
+      .panel-label b {
+        color: var(--el-text);
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .panel-note {
+        max-width: 1180px;
+        margin: 10px auto 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .panel-note b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .panel-note code,
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+      .solo {
+        max-width: 920px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 24px;
+      }
+      .stub {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 12px 16px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        background: var(--el-page-bg);
+      }
+      .stub-k {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-right: 6px;
+        color: var(--el-text-secondary);
+      }
+      .stub .mono {
+        font-size: 10.5px;
+      }
+      .newmark {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: var(--el-text);
+        margin: 4px 0 -12px 2px;
+      }
+      .is-new {
+        outline: 2px solid var(--el-accent);
+        outline-offset: 3px;
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+
+      /* ── The area shell — carried verbatim from the base asset ── */
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+      }
+      .shell {
+        display: flex;
+        min-height: 600px;
+        background: var(--el-page-bg);
+      }
+      .rail {
+        flex: none;
+        width: 252px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .rail-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .back .bk {
+        width: 16px;
+        height: 16px;
+      }
+      .me {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px var(--spacing-control-x) 2px;
+      }
+      .me .av {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .me .meta {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .me .nm {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .me .em {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .settings-eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--el-text-secondary);
+        padding: 0 var(--spacing-control-x);
+        text-transform: uppercase;
+      }
+      .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .grp + .grp {
+        margin-top: 12px;
+      }
+      .grp-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-secondary);
+        padding: 0 var(--spacing-control-x);
+        margin-bottom: 2px;
+      }
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        border: 1px solid transparent;
+      }
+      .nav-row .ni {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-icon-muted);
+      }
+      .nav-row .ni svg {
+        width: 18px;
+        height: 18px;
+      }
+      .nav-row .nl {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .nav-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 500;
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+      }
+      .nav-row.active .ni {
+        color: var(--el-accent);
+      }
+      .content {
+        flex: 1;
+        min-width: 0;
+        background: var(--el-page-bg);
+        padding: 30px 32px 36px;
+      }
+      .page-head {
+        margin-bottom: 22px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .page-head .sub {
+        font-size: 14px;
+        color: var(--el-text-muted);
+        margin: 5px 0 0;
+        max-width: 34rem;
+        line-height: 1.5;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        max-width: 64rem;
+      }
+
+      /* ── Card (components/ui/Card) with the header slot ApiTokensManager uses ── */
+      .card {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .card-head .hsub {
+        font-size: 14px;
+        color: var(--el-text-muted);
+        margin: 2px 0 0;
+        max-width: 60ch;
+        line-height: 1.45;
+      }
+      .card-body {
+        padding: 8px var(--spacing-card-padding) 12px;
+        overflow-x: auto;
+      }
+
+      /* ── The row list — ApiTokensManager's <table>, column for column ── */
+      .ttable {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+        font-size: 14px;
+      }
+      .ttable thead th {
+        padding: var(--spacing-control-y) 16px var(--spacing-control-y) 0;
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        border-bottom: 1px solid var(--el-border);
+        white-space: nowrap;
+      }
+      .ttable .right {
+        text-align: right;
+        padding-right: 0;
+      }
+      .ttable tbody td {
+        padding: var(--spacing-control-y) 16px var(--spacing-control-y) 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: middle;
+      }
+      .ttable tbody tr:last-child td {
+        border-bottom: 0;
+      }
+      .ttable tbody tr.noline td {
+        border-bottom: 0;
+      }
+      .ttable tbody tr.subrow td {
+        padding-bottom: 14px;
+      }
+      .label {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .meta {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .code-chip {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+        white-space: nowrap;
+      }
+      .app {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .app-top {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+      }
+      .app-host {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .ws {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        white-space: nowrap;
+      }
+      .ws-name {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .ws-scope {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .scopes {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+
+      /* Pill (components/ui/Pill) — tone=neutral, severity=success|danger */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill .pi {
+        width: 12px;
+        height: 12px;
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill--success {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill--danger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .pill.focus {
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+
+      /* disclose chevron + icon button — ApiTokensManager's two row buttons */
+      .disclose,
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .disclose .ic,
+      .icon-btn .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .disclose.open .ic {
+        transform: rotate(180deg);
+      }
+      .disclose:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-danger-on-surface);
+      }
+
+      /* the disclosed grant — the token picker's two columns, read-only */
+      .detail {
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        border-radius: var(--radius-card);
+        padding: 12px var(--spacing-control-x) 14px;
+      }
+      .dlead {
+        margin: 0 0 10px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .pcols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px 24px;
+      }
+      .pcol {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .pdom {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin-bottom: 4px;
+      }
+      .plist {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .prow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 5px 6px;
+        border-radius: var(--radius-control);
+        font-size: 13px;
+      }
+      .prow .pic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+      .prow .plabel {
+        flex: 1;
+        min-width: 0;
+      }
+      .prow.on .plabel {
+        color: var(--el-text);
+      }
+      .prow.off .plabel {
+        color: var(--el-text-secondary);
+      }
+      .prow.danger {
+        background: var(--el-tint-rose);
+      }
+      .prow.danger .pic {
+        color: var(--el-danger-on-surface);
+      }
+      .prow.danger .plabel {
+        color: var(--el-text-strong);
+        font-weight: 500;
+      }
+      .pstate {
+        flex: none;
+        display: inline-flex;
+      }
+      .pchk {
+        width: 16px;
+        height: 16px;
+        color: var(--el-success);
+      }
+      .poff {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+
+      /* Tooltip (components/ui/Tooltip) — shown open on Panel 2 */
+      .tipcard .card,
+      .tipcard .card-body {
+        overflow: visible;
+      }
+      .tipwrap {
+        position: relative;
+        display: inline-block;
+        width: 0;
+      }
+      .tooltip {
+        position: absolute;
+        top: 16px;
+        left: 44px;
+        width: 250px;
+        background: var(--el-tooltip-bg);
+        color: var(--el-tooltip-text);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        font-size: 12px;
+        line-height: 1.45;
+        white-space: normal;
+        box-shadow: var(--shadow-elevated);
+        z-index: 2;
+      }
+
+      /* empty line (Panel 3) */
+      .empty-line {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 0 8px;
+      }
+      .empty-ic {
+        flex: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 9999px;
+        background: var(--el-muted);
+        color: var(--el-icon-muted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .empty-ic .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .empty-line p {
+        margin: 6px 0 0;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 72ch;
+      }
+      .link {
+        color: var(--el-link);
+        text-decoration: underline;
+        white-space: nowrap;
+      }
+      .link:hover {
+        color: var(--el-link-pressed);
+      }
+      .link .lic {
+        width: 13px;
+        height: 13px;
+        vertical-align: -2px;
+        margin-left: 2px;
+      }
+
+      /* loading (Panel 4) */
+      .sk {
+        display: block;
+        height: 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .sk + .sk {
+        margin-top: 6px;
+      }
+      .sk-sm {
+        height: 9px;
+      }
+      .sk-pill {
+        width: 78px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+      }
+      .sk-btn {
+        display: inline-block;
+        width: 28px;
+        height: 28px;
+      }
+      .pulse td {
+        padding-top: 12px;
+        padding-bottom: 12px;
+      }
+      .pulse {
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      /* error (Panel 5) */
+      .err {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 0 10px;
+      }
+      .err-ic {
+        flex: none;
+        color: var(--el-danger-on-surface);
+        display: inline-flex;
+      }
+      .err-ic .ic {
+        width: 20px;
+        height: 20px;
+      }
+      .err-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .err-t {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .err-d {
+        margin: 2px 0 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+
+      /* Button (components/ui/Button) */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        font-size: 13px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-danger {
+        background: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .btn-danger[aria-busy='true'] {
+        opacity: 0.85;
+      }
+      .spin {
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Modal (components/ui/Modal) size sm, over the scrim */
+      .mstage {
+        position: relative;
+        max-width: 920px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 48px 16px;
+        display: flex;
+        justify-content: center;
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .overlay-tint {
+        position: absolute;
+        inset: 0;
+        background: var(--el-overlay-scrim);
+      }
+      .modal {
+        position: relative;
+        width: 100%;
+        max-width: 28rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal.modal-sm {
+        max-width: 24rem;
+      }
+      .modal-head {
+        margin-bottom: var(--spacing-md);
+        padding-right: 28px;
+      }
+      .modal-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .modal-close[disabled] {
+        opacity: 0.5;
+      }
+      .modal-close .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .modal-body {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .modal-foot {
+        margin-top: 24px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .callout {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+      .callout.danger {
+        background: var(--el-tint-rose);
+      }
+      .callout .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+        color: var(--el-danger);
+      }
+      .callout p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-strong);
+      }
+      .facts {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .facts div {
+        display: flex;
+        gap: 12px;
+        font-size: 13px;
+      }
+      .facts dt {
+        width: 84px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .facts dd {
+        margin: 0;
+        color: var(--el-text);
+      }
+
+      /* Toast (components/ui/Toast) — success + error variants */
+      .toast-row {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+      }
+      .toast-stage {
+        position: relative;
+        flex: 1 1 400px;
+        height: 120px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .toast {
+        position: absolute;
+        bottom: 16px;
+        right: 16px;
+        width: 360px;
+        max-width: calc(100% - 32px);
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-success);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 12px 16px;
+      }
+      .toast--error {
+        border-color: var(--el-danger);
+      }
+      .toast .t-ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-success);
+      }
+      .toast--error .t-ic {
+        color: var(--el-danger);
+      }
+      .toast .t-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .toast .t-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .toast .t-desc {
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .toast .t-close {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-secondary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+      }
+      .toast .t-close .ic {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* narrow viewport (Panel 9) */
+      .phone {
+        width: 375px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-card);
+      }
+      .phone-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 48px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--el-border);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .hamb {
+        width: 16px;
+        height: 2px;
+        background: var(--el-text-secondary);
+        box-shadow:
+          0 5px 0 var(--el-text-secondary),
+          0 -5px 0 var(--el-text-secondary);
+      }
+      .phone-body {
+        padding: 20px 16px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .ph-h {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .phone .card-head {
+        padding: 14px 16px;
+      }
+      .nlist {
+        list-style: none;
+        margin: 0;
+        padding: 0 16px 4px;
+      }
+      .nrow {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .nrow:last-child {
+        border-bottom: 0;
+      }
+      .nrow-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .nrow-top .icon-btn {
+        margin: -6px -8px 0 0;
+      }
+      .nrow-ws {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .nrow-dates {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .nrow .scopes {
+        flex-wrap: wrap;
+      }
+      .nrow .pcols {
+        grid-template-columns: 1fr;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Connected apps &mdash; a delta on Settings &rsaquo; Account &rsaquo; Tokens</h1>
+        <p>
+          MOTIR-6981 (Story MOTIR-6973). Amends
+          <span class="mono">design/settings/account-settings.mock.html</span> Panel 3 &mdash; only
+          the panels that change. Every app connected to Motir over OAuth, one row per grant, with
+          Revoke. Multi-panel &mdash; review each.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        type="button"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <g
+          id="i-user"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </g>
+        <g
+          id="i-languages"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 8 6 6" />
+          <path d="m4 14 6-6 2-3" />
+          <path d="M2 5h12" />
+          <path d="M7 2h1" />
+          <path d="m22 22-5-10-5 10" />
+          <path d="M14 18h6" />
+        </g>
+        <g
+          id="i-bell"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+          <path
+            d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+          />
+        </g>
+        <g
+          id="i-palette"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"
+          />
+          <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+          <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+          <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+          <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-shield-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="i-key-round"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-git-branch"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 6a9 9 0 0 0-9 9V3" />
+          <circle cx="18" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+        </g>
+        <g
+          id="i-database"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <ellipse cx="12" cy="5" rx="9" ry="3" />
+          <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+          <path d="M3 12A9 3 0 0 0 21 12" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-trash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M3 6h18" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a1.73 1.73 0 0 0 1.73-3"
+          />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-check-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-square-pen"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path
+            d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"
+          />
+        </g>
+        <g
+          id="i-message-square"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
+          />
+        </g>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-sparkles"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+          />
+          <path d="M20 2v4" />
+          <path d="M22 4h-4" />
+          <circle cx="4" cy="20" r="2" />
+        </g>
+        <g
+          id="i-plug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 22v-5" />
+          <path d="M15 8V2" />
+          <path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z" />
+          <path d="M9 8V2" />
+        </g>
+        <g
+          id="i-loader"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </g>
+        <g
+          id="i-arrow-up-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M7 7h10v10" />
+          <path d="M7 17 17 7" />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="panel-label">
+      1 &middot; <b>The access path, populated.</b> Settings &rarr; Account &rarr;
+      <b>Tokens</b> (Security group, unchanged row). The new <b>Connected apps</b> card is the LAST
+      section of the pane, directly below <b>Your tokens</b>. Four connections across two
+      workspaces; the first row&rsquo;s scopes are disclosed.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg class="bk" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-arrow-left" /></svg
+                >Back to Motir</span
+              >
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta"
+                  ><span class="nm">Zhu Yue</span><span class="em">zhuyue@motir.co</span></span
+                >
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span
+                  ><span class="nl">Profile</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg></span
+                  ><span class="nl">Language</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg></span
+                  ><span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg></span
+                  ><span class="nl">Appearance</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield-check" /></svg></span
+                  ><span class="nl">Two-factor</span>
+                </div>
+                <div class="nav-row active" aria-current="page">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key-round" /></svg></span
+                  ><span class="nl">Tokens</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-git-branch" /></svg></span
+                  ><span class="nl">Git accounts</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Data</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-database" /></svg></span
+                  ><span class="nl">Data &amp; privacy</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Tokens</h2>
+              <p class="sub">
+                Personal access tokens let your coding agents reach Motir over the MCP server. Each
+                token acts as you &mdash; give every agent its own, and revoke any you no longer
+                use.
+              </p>
+            </div>
+            <div class="stack">
+              <div class="stub" aria-hidden="true">
+                <span class="stub-k">unchanged</span> Documentation panel &mdash;
+                <span class="mono">ApiDocsLinkPanel</span>
+              </div>
+              <div class="stub" aria-hidden="true">
+                <span class="stub-k">unchanged</span> Connect the CLI &mdash;
+                <span class="mono">ConnectCliPanel</span>
+              </div>
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Your tokens</h3>
+                    <p class="hsub">Shown once at creation, then stored only as a hash.</p>
+                  </div>
+                  <button class="btn btn-primary btn-sm" type="button">
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-plus" /></svg
+                    >Create token
+                  </button>
+                </div>
+                <div class="card-body">
+                  <table class="ttable">
+                    <thead>
+                      <tr>
+                        <th>Label</th>
+                        <th>Token</th>
+                        <th>Scopes</th>
+                        <th>Workspace</th>
+                        <th>Created</th>
+                        <th>Expires</th>
+                        <th>Last used</th>
+                        <th class="right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><span class="label">CLI &middot; zhu-mbp</span></td>
+                        <td><span class="code-chip">motir_pat_AbC1&hellip;</span></td>
+                        <td>
+                          <span class="scopes"
+                            ><span class="pill pill--neutral">Standard</span
+                            ><button
+                              type="button"
+                              class="disclose"
+                              aria-expanded="false"
+                              aria-label="Show scopes for CLI &middot; zhu-mbp"
+                            >
+                              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-chevron-down" />
+                              </svg></button
+                          ></span>
+                        </td>
+                        <td><span class="meta">Motir</span></td>
+                        <td><span class="meta">12 Sep 2026</span></td>
+                        <td><span class="meta">in 72 days</span></td>
+                        <td><span class="meta">30 Sep 2026</span></td>
+                        <td class="right">
+                          <button
+                            class="icon-btn"
+                            type="button"
+                            aria-label="Revoke token CLI &middot; zhu-mbp"
+                          >
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-trash" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="newmark" aria-hidden="true">NEW &mdash; this card</div>
+              <section
+                class="card is-new"
+                id="connected-apps"
+                aria-labelledby="connected-apps-title"
+              >
+                <div class="card-head">
+                  <div>
+                    <h3 id="connected-apps-title">Connected apps</h3>
+                    <p class="hsub">
+                      Apps you&rsquo;ve signed into with your Motir account. Each one acts as you,
+                      in one workspace, with the scopes you approved.
+                    </p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <table class="ttable">
+                    <thead>
+                      <tr>
+                        <th>App</th>
+                        <th>Scopes</th>
+                        <th>Workspace</th>
+                        <th>Connected</th>
+                        <th>Last used</th>
+                        <th class="right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr class="noline">
+                        <td>
+                          <span class="app"
+                            ><span class="app-top"
+                              ><span class="label">Claude</span
+                              ><span
+                                class="pill pill--neutral"
+                                title="This app registered itself. Motir hasn&rsquo;t verified who publishes it."
+                                >Unverified</span
+                              ></span
+                            ><span class="app-host">claude.ai</span></span
+                          >
+                        </td>
+                        <td>
+                          <span class="scopes"
+                            ><span class="pill pill--neutral">Standard</span
+                            ><button
+                              type="button"
+                              class="disclose open"
+                              aria-expanded="true"
+                              aria-label="Hide scopes for Claude"
+                            >
+                              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-chevron-down" />
+                              </svg></button
+                          ></span>
+                        </td>
+                        <td>
+                          <span class="ws"
+                            ><span class="ws-name">Motir</span
+                            ><span class="ws-scope">All projects</span></span
+                          >
+                        </td>
+                        <td><span class="meta">28 Sep 2026</span></td>
+                        <td><span class="meta">2 minutes ago</span></td>
+                        <td class="right">
+                          <button
+                            class="icon-btn"
+                            type="button"
+                            aria-label="Revoke Claude in Motir"
+                          >
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-trash" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                      <tr class="subrow">
+                        <td colspan="6">
+                          <div class="detail">
+                            <p class="dlead">This app can:</p>
+                            <div class="pcols">
+                              <div class="pcol">
+                                <div class="pgrp">
+                                  <div class="pdom">Project</div>
+                                  <ul class="plist">
+                                    <li class="prow on">
+                                      <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                        <use href="#i-eye" /></svg
+                                      ><span class="plabel">View project</span
+                                      ><span class="pstate"
+                                        ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                          <use href="#i-check-circle" /></svg
+                                        ><span class="sr">Granted</span></span
+                                      >
+                                    </li>
+                                    <li class="prow on">
+                                      <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                        <use href="#i-eye" /></svg
+                                      ><span class="plabel">View the lesson library</span
+                                      ><span class="pstate"
+                                        ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                          <use href="#i-check-circle" /></svg
+                                        ><span class="sr">Granted</span></span
+                                      >
+                                    </li>
+                                    <li class="prow on">
+                                      <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                        <use href="#i-eye" /></svg
+                                      ><span class="plabel">Change the lesson library</span
+                                      ><span class="pstate"
+                                        ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                          <use href="#i-check-circle" /></svg
+                                        ><span class="sr">Granted</span></span
+                                      >
+                                    </li>
+                                    <li class="prow on">
+                                      <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                        <use href="#i-eye" /></svg
+                                      ><span class="plabel">Record a lesson recurrence</span
+                                      ><span class="pstate"
+                                        ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                          <use href="#i-check-circle" /></svg
+                                        ><span class="sr">Granted</span></span
+                                      >
+                                    </li>
+                                  </ul>
+                                </div>
+                                <div class="pgrp">
+                                  <div class="pdom">Work items</div>
+                                  <ul class="plist">
+                                    <li class="prow on">
+                                      <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                        <use href="#i-square-pen" /></svg
+                                      ><span class="plabel">Edit work items</span
+                                      ><span class="pstate"
+                                        ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                          <use href="#i-check-circle" /></svg
+                                        ><span class="sr">Granted</span></span
+                                      >
+                                    </li>
+                                    <li class="prow on">
+                                      <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                        <use href="#i-square-pen" /></svg
+                                      ><span class="plabel">Archive work items</span
+                                      ><span class="pstate"
+                                        ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                          <use href="#i-check-circle" /></svg
+                                        ><span class="sr">Granted</span></span
+                                      >
+                                    </li>
+                                    <li class="prow off">
+                                      <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                        <use href="#i-trash" /></svg
+                                      ><span class="plabel">Delete work items</span
+                                      ><span class="pstate poff">Not granted</span>
+                                    </li>
+                                  </ul>
+                                </div>
+                              </div>
+                              <div class="pcol">
+                                <div class="pgrp">
+                                  <div class="pdom">Comments</div>
+                                  <ul class="plist">
+                                    <li class="prow on">
+                                      <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                        <use href="#i-message-square" /></svg
+                                      ><span class="plabel">Add comments</span
+                                      ><span class="pstate"
+                                        ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                          <use href="#i-check-circle" /></svg
+                                        ><span class="sr">Granted</span></span
+                                      >
+                                    </li>
+                                  </ul>
+                                </div>
+                                <div class="pgrp">
+                                  <div class="pdom">Plans</div>
+                                  <ul class="plist">
+                                    <li class="prow on">
+                                      <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                        <use href="#i-eye" /></svg
+                                      ><span class="plabel">See every plan</span
+                                      ><span class="pstate"
+                                        ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                          <use href="#i-check-circle" /></svg
+                                        ><span class="sr">Granted</span></span
+                                      >
+                                    </li>
+                                  </ul>
+                                </div>
+                                <div class="pgrp">
+                                  <div class="pdom">Agent runs</div>
+                                  <ul class="plist">
+                                    <li class="prow on">
+                                      <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                        <use href="#i-eye" /></svg
+                                      ><span class="plabel">See every agent run</span
+                                      ><span class="pstate"
+                                        ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                          <use href="#i-check-circle" /></svg
+                                        ><span class="sr">Granted</span></span
+                                      >
+                                    </li>
+                                  </ul>
+                                </div>
+                                <div class="pgrp">
+                                  <div class="pdom">Sprints &amp; backlog</div>
+                                  <ul class="plist">
+                                    <li class="prow on">
+                                      <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                        <use href="#i-zap" /></svg
+                                      ><span class="plabel">Manage sprints</span
+                                      ><span class="pstate"
+                                        ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                          <use href="#i-check-circle" /></svg
+                                        ><span class="sr">Granted</span></span
+                                      >
+                                    </li>
+                                  </ul>
+                                </div>
+                                <div class="pgrp">
+                                  <div class="pdom">AI planning</div>
+                                  <ul class="plist">
+                                    <li class="prow on">
+                                      <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                        <use href="#i-sparkles" /></svg
+                                      ><span class="plabel">Run AI planning</span
+                                      ><span class="pstate"
+                                        ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                          <use href="#i-check-circle" /></svg
+                                        ><span class="sr">Granted</span></span
+                                      >
+                                    </li>
+                                    <li class="prow on">
+                                      <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                        <use href="#i-sparkles" /></svg
+                                      ><span class="plabel">Author AI plans</span
+                                      ><span class="pstate"
+                                        ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                          <use href="#i-check-circle" /></svg
+                                        ><span class="sr">Granted</span></span
+                                      >
+                                    </li>
+                                    <li class="prow on">
+                                      <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                        <use href="#i-sparkles" /></svg
+                                      ><span class="plabel">Approve or decline AI plans</span
+                                      ><span class="pstate"
+                                        ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                          <use href="#i-check-circle" /></svg
+                                        ><span class="sr">Granted</span></span
+                                      >
+                                    </li>
+                                  </ul>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="app"
+                            ><span class="app-top"
+                              ><span class="label">Claude Code</span
+                              ><span
+                                class="pill pill--neutral"
+                                title="This app registered itself. Motir hasn&rsquo;t verified who publishes it."
+                                >Unverified</span
+                              ></span
+                            ><span class="app-host">localhost</span></span
+                          >
+                        </td>
+                        <td>
+                          <span class="scopes"
+                            ><span class="pill pill--neutral">Custom</span
+                            ><button
+                              type="button"
+                              class="disclose"
+                              aria-expanded="false"
+                              aria-label="Show scopes for Claude Code"
+                            >
+                              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-chevron-down" />
+                              </svg></button
+                          ></span>
+                        </td>
+                        <td>
+                          <span class="ws"
+                            ><span class="ws-name">Client work</span
+                            ><span class="ws-scope">Website rebuild</span></span
+                          >
+                        </td>
+                        <td><span class="meta">21 Sep 2026</span></td>
+                        <td><span class="meta">Yesterday</span></td>
+                        <td class="right">
+                          <button
+                            class="icon-btn"
+                            type="button"
+                            aria-label="Revoke Claude Code in Client work"
+                          >
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-trash" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="app"
+                            ><span class="app-top"
+                              ><span class="label">Claude Code</span
+                              ><span
+                                class="pill pill--neutral"
+                                title="This app registered itself. Motir hasn&rsquo;t verified who publishes it."
+                                >Unverified</span
+                              ></span
+                            ><span class="app-host">localhost</span></span
+                          >
+                        </td>
+                        <td>
+                          <span class="scopes"
+                            ><span class="pill pill--neutral">Standard</span
+                            ><button
+                              type="button"
+                              class="disclose"
+                              aria-expanded="false"
+                              aria-label="Show scopes for Claude Code"
+                            >
+                              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-chevron-down" />
+                              </svg></button
+                          ></span>
+                        </td>
+                        <td>
+                          <span class="ws"
+                            ><span class="ws-name">Motir</span
+                            ><span class="ws-scope">All projects</span></span
+                          >
+                        </td>
+                        <td><span class="meta">3 Sep 2026</span></td>
+                        <td><span class="meta">12 Sep 2026</span></td>
+                        <td class="right">
+                          <button
+                            class="icon-btn"
+                            type="button"
+                            aria-label="Revoke Claude Code in Motir"
+                          >
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-trash" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="app"
+                            ><span class="app-top"
+                              ><span class="label">Cursor</span
+                              ><span
+                                class="pill pill--neutral"
+                                title="This app registered itself. Motir hasn&rsquo;t verified who publishes it."
+                                >Unverified</span
+                              ></span
+                            ><span class="app-host">localhost</span></span
+                          >
+                        </td>
+                        <td>
+                          <span class="scopes"
+                            ><span class="pill pill--neutral">Read only</span
+                            ><button
+                              type="button"
+                              class="disclose"
+                              aria-expanded="false"
+                              aria-label="Show scopes for Cursor"
+                            >
+                              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-chevron-down" />
+                              </svg></button
+                          ></span>
+                        </td>
+                        <td>
+                          <span class="ws"
+                            ><span class="ws-name">Client work</span
+                            ><span class="ws-scope">All projects</span></span
+                          >
+                        </td>
+                        <td><span class="meta">18 Aug 2026</span></td>
+                        <td><span class="meta">Never</span></td>
+                        <td class="right">
+                          <button
+                            class="icon-btn"
+                            type="button"
+                            aria-label="Revoke Cursor in Client work"
+                          >
+                            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-trash" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel-note">
+      <b>Order in the pane:</b> page header &rarr; Documentation &rarr; Connect the CLI &rarr;
+      <b>Your tokens</b> &rarr; <b>Connected apps</b>. Below the tokens, because the pane is still
+      the tokens pane and the CLI panel&rsquo;s tie line already says an approved terminal appears
+      &ldquo;below&rdquo; &mdash; in the tokens card, which must stay the next thing down. The card
+      carries <code>id=&quot;connected-apps&quot;</code>, so
+      <code>/settings/account/tokens#connected-apps</code> is a link docs and the consent screen can
+      hand out. No new rail row: the rail is drawn as it ships
+      (<code>lib/settings/accountSettingsNav.ts</code>). The grey dashed slabs are board chrome, not
+      design &mdash; those two panels are unchanged.
+    </p>
+    <p class="panel-note">
+      <b>One row per connection, and a connection is ONE grant</b> (MOTIR-6983 &mdash;
+      <i>A connection IS a grant</i>): one person, one workspace, one set of permission keys, one
+      client. So the same app connected to two workspaces is TWO rows (Claude Code, rows 2 and 3),
+      and each revokes alone. Newest first by Connected, the order the token list uses.
+    </p>
+    <div class="panel-label">
+      2 &middot; <b>Row anatomy.</b> A full grant (the rose <b>Can delete</b> pill is never hidden
+      behind the summary), its scopes disclosed in the token picker&rsquo;s two columns, and the
+      <b>Unverified</b> tooltip open. Card only; the pane around it is Panel 1&rsquo;s.
+    </div>
+    <div class="panel">
+      <div class="solo tipcard">
+        <section class="card" id="connected-apps" aria-labelledby="connected-apps-title">
+          <div class="card-head">
+            <div>
+              <h3 id="connected-apps-title">Connected apps</h3>
+              <p class="hsub">
+                Apps you&rsquo;ve signed into with your Motir account. Each one acts as you, in one
+                workspace, with the scopes you approved.
+              </p>
+            </div>
+          </div>
+          <div class="card-body">
+            <table class="ttable">
+              <thead>
+                <tr>
+                  <th>App</th>
+                  <th>Scopes</th>
+                  <th>Workspace</th>
+                  <th>Connected</th>
+                  <th>Last used</th>
+                  <th class="right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="noline">
+                  <td>
+                    <span class="app"
+                      ><span class="app-top"
+                        ><span class="label">Claude</span
+                        ><span class="tipwrap"
+                          ><span class="tooltip" role="tooltip"
+                            >This app registered itself. Motir hasn&rsquo;t verified who publishes
+                            it.</span
+                          ></span
+                        ><span
+                          class="pill pill--neutral focus"
+                          title="This app registered itself. Motir hasn&rsquo;t verified who publishes it."
+                          >Unverified</span
+                        ></span
+                      ><span class="app-host">claude.ai</span></span
+                    >
+                  </td>
+                  <td>
+                    <span class="scopes"
+                      ><span class="pill pill--success">Full access</span
+                      ><span class="pill pill--danger"
+                        ><svg class="pi" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-trash" /></svg
+                        >Can delete</span
+                      ><button
+                        type="button"
+                        class="disclose open"
+                        aria-expanded="true"
+                        aria-label="Hide scopes for Claude"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-chevron-down" />
+                        </svg></button
+                    ></span>
+                  </td>
+                  <td>
+                    <span class="ws"
+                      ><span class="ws-name">Motir</span
+                      ><span class="ws-scope">All projects</span></span
+                    >
+                  </td>
+                  <td><span class="meta">30 Sep 2026</span></td>
+                  <td><span class="meta">Just now</span></td>
+                  <td class="right">
+                    <button class="icon-btn" type="button" aria-label="Revoke Claude in Motir">
+                      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-trash" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+                <tr class="subrow">
+                  <td colspan="6">
+                    <div class="detail">
+                      <p class="dlead">This app can:</p>
+                      <div class="pcols">
+                        <div class="pcol">
+                          <div class="pgrp">
+                            <div class="pdom">Project</div>
+                            <ul class="plist">
+                              <li class="prow on">
+                                <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-eye" /></svg
+                                ><span class="plabel">View project</span
+                                ><span class="pstate"
+                                  ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                    <use href="#i-check-circle" /></svg
+                                  ><span class="sr">Granted</span></span
+                                >
+                              </li>
+                              <li class="prow on">
+                                <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-eye" /></svg
+                                ><span class="plabel">View the lesson library</span
+                                ><span class="pstate"
+                                  ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                    <use href="#i-check-circle" /></svg
+                                  ><span class="sr">Granted</span></span
+                                >
+                              </li>
+                              <li class="prow on">
+                                <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-eye" /></svg
+                                ><span class="plabel">Change the lesson library</span
+                                ><span class="pstate"
+                                  ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                    <use href="#i-check-circle" /></svg
+                                  ><span class="sr">Granted</span></span
+                                >
+                              </li>
+                              <li class="prow on">
+                                <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-eye" /></svg
+                                ><span class="plabel">Record a lesson recurrence</span
+                                ><span class="pstate"
+                                  ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                    <use href="#i-check-circle" /></svg
+                                  ><span class="sr">Granted</span></span
+                                >
+                              </li>
+                            </ul>
+                          </div>
+                          <div class="pgrp">
+                            <div class="pdom">Work items</div>
+                            <ul class="plist">
+                              <li class="prow on">
+                                <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-square-pen" /></svg
+                                ><span class="plabel">Edit work items</span
+                                ><span class="pstate"
+                                  ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                    <use href="#i-check-circle" /></svg
+                                  ><span class="sr">Granted</span></span
+                                >
+                              </li>
+                              <li class="prow on">
+                                <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-square-pen" /></svg
+                                ><span class="plabel">Archive work items</span
+                                ><span class="pstate"
+                                  ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                    <use href="#i-check-circle" /></svg
+                                  ><span class="sr">Granted</span></span
+                                >
+                              </li>
+                              <li class="prow on danger">
+                                <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-trash" /></svg
+                                ><span class="plabel">Delete work items</span
+                                ><span class="pstate"
+                                  ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                    <use href="#i-check-circle" /></svg
+                                  ><span class="sr">Granted</span></span
+                                >
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+                        <div class="pcol">
+                          <div class="pgrp">
+                            <div class="pdom">Comments</div>
+                            <ul class="plist">
+                              <li class="prow on">
+                                <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-message-square" /></svg
+                                ><span class="plabel">Add comments</span
+                                ><span class="pstate"
+                                  ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                    <use href="#i-check-circle" /></svg
+                                  ><span class="sr">Granted</span></span
+                                >
+                              </li>
+                            </ul>
+                          </div>
+                          <div class="pgrp">
+                            <div class="pdom">Plans</div>
+                            <ul class="plist">
+                              <li class="prow on">
+                                <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-eye" /></svg
+                                ><span class="plabel">See every plan</span
+                                ><span class="pstate"
+                                  ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                    <use href="#i-check-circle" /></svg
+                                  ><span class="sr">Granted</span></span
+                                >
+                              </li>
+                            </ul>
+                          </div>
+                          <div class="pgrp">
+                            <div class="pdom">Agent runs</div>
+                            <ul class="plist">
+                              <li class="prow on">
+                                <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-eye" /></svg
+                                ><span class="plabel">See every agent run</span
+                                ><span class="pstate"
+                                  ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                    <use href="#i-check-circle" /></svg
+                                  ><span class="sr">Granted</span></span
+                                >
+                              </li>
+                            </ul>
+                          </div>
+                          <div class="pgrp">
+                            <div class="pdom">Sprints &amp; backlog</div>
+                            <ul class="plist">
+                              <li class="prow on">
+                                <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-zap" /></svg
+                                ><span class="plabel">Manage sprints</span
+                                ><span class="pstate"
+                                  ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                    <use href="#i-check-circle" /></svg
+                                  ><span class="sr">Granted</span></span
+                                >
+                              </li>
+                            </ul>
+                          </div>
+                          <div class="pgrp">
+                            <div class="pdom">AI planning</div>
+                            <ul class="plist">
+                              <li class="prow on">
+                                <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-sparkles" /></svg
+                                ><span class="plabel">Run AI planning</span
+                                ><span class="pstate"
+                                  ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                    <use href="#i-check-circle" /></svg
+                                  ><span class="sr">Granted</span></span
+                                >
+                              </li>
+                              <li class="prow on">
+                                <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-sparkles" /></svg
+                                ><span class="plabel">Author AI plans</span
+                                ><span class="pstate"
+                                  ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                    <use href="#i-check-circle" /></svg
+                                  ><span class="sr">Granted</span></span
+                                >
+                              </li>
+                              <li class="prow on">
+                                <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                                  <use href="#i-sparkles" /></svg
+                                ><span class="plabel">Approve or decline AI plans</span
+                                ><span class="pstate"
+                                  ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                    <use href="#i-check-circle" /></svg
+                                  ><span class="sr">Granted</span></span
+                                >
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+    <p class="panel-note">
+      <b>App</b> &mdash; the client&rsquo;s registered name in <code>--el-text</code> 500, then the
+      <b>Unverified</b> neutral Pill when the client registered itself (dynamic registration). A
+      client Motir registered for itself draws no pill; there is no &ldquo;Verified&rdquo; badge,
+      because the absence is the ordinary case. Under the name, the <b>host</b> its tokens are sent
+      to (the host of the grant&rsquo;s redirect URI: <code>claude.ai</code>,
+      <code>localhost</code>) in <code>--el-text-secondary</code> &mdash; the only fact on the row
+      the app did not choose for itself, so the one that tells two same-named apps apart.
+    </p>
+    <p class="panel-note">
+      <b>Scopes</b> &mdash; <code>summarizeGrant()</code> exactly as the token row: mint
+      <b>Full access</b>, neutral <b>Standard</b> / <b>Read only</b> / <b>Custom</b>, plus the rose
+      <b>Can delete</b> whenever <code>work_item:delete</code> is granted. The chevron discloses
+      every grantable permission in <code>permissionColumnsForTokens()</code>&rsquo;s split (7 / 7
+      today, cut after Work items), read-only: a granted row carries a success check, an ungranted
+      row the words <i>Not granted</i>. Nothing on this surface edits a grant &mdash; narrowing one
+      is revoke-and-reconnect.
+    </p>
+    <div class="panel-label">
+      3 &middot; <b>Empty</b> &mdash; nothing connected. The card keeps its place and its header;
+      the body is one line and one link.
+    </div>
+    <div class="panel">
+      <div class="solo">
+        <section class="card" id="connected-apps" aria-labelledby="connected-apps-title">
+          <div class="card-head">
+            <div>
+              <h3 id="connected-apps-title">Connected apps</h3>
+              <p class="hsub">
+                Apps you&rsquo;ve signed into with your Motir account. Each one acts as you, in one
+                workspace, with the scopes you approved.
+              </p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="empty-line">
+              <span class="empty-ic"
+                ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plug" /></svg
+              ></span>
+              <p>
+                No apps connected. When you add Motir to Claude, or another app that signs in with
+                your Motir account, it appears here.
+                <a href="#" class="link"
+                  >How to add Motir to Claude<svg
+                    class="lic"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-arrow-up-right" /></svg
+                ></a>
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <p class="panel-note">
+      Not the <code>EmptyState</code> primitive: that is a 48px glyph and a serif title, the
+      treatment the tokens card uses because tokens are this pane&rsquo;s subject. Connected apps is
+      its second section, and a full empty state here would out-shout the tokens above it. The link
+      opens motir.co&rsquo;s <i>Add Motir to Claude</i> page in a new tab (MOTIR-6976 publishes it;
+      its path is that card&rsquo;s to fix).
+    </p>
+    <div class="panel-label">
+      4 &middot; <b>Loading</b> &mdash; header real, three skeleton rows in the table&rsquo;s own
+      columns.
+    </div>
+    <div class="panel">
+      <div class="solo">
+        <section class="card" id="connected-apps" aria-labelledby="connected-apps-title">
+          <div class="card-head">
+            <div>
+              <h3 id="connected-apps-title">Connected apps</h3>
+              <p class="hsub">
+                Apps you&rsquo;ve signed into with your Motir account. Each one acts as you, in one
+                workspace, with the scopes you approved.
+              </p>
+            </div>
+          </div>
+          <div class="card-body">
+            <table class="ttable" aria-hidden="true">
+              <thead>
+                <tr>
+                  <th>App</th>
+                  <th>Scopes</th>
+                  <th>Workspace</th>
+                  <th>Connected</th>
+                  <th>Last used</th>
+                  <th class="right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="pulse">
+                <tr>
+                  <td>
+                    <span class="sk" style="width: 72px"></span
+                    ><span class="sk sk-sm" style="width: 64px"></span>
+                  </td>
+                  <td><span class="sk sk-pill"></span></td>
+                  <td>
+                    <span class="sk" style="width: 64px"></span
+                    ><span class="sk sk-sm" style="width: 72px"></span>
+                  </td>
+                  <td><span class="sk" style="width: 76px"></span></td>
+                  <td><span class="sk" style="width: 84px"></span></td>
+                  <td class="right"><span class="sk sk-btn"></span></td>
+                </tr>
+                <tr>
+                  <td>
+                    <span class="sk" style="width: 96px"></span
+                    ><span class="sk sk-sm" style="width: 64px"></span>
+                  </td>
+                  <td><span class="sk sk-pill"></span></td>
+                  <td>
+                    <span class="sk" style="width: 80px"></span
+                    ><span class="sk sk-sm" style="width: 72px"></span>
+                  </td>
+                  <td><span class="sk" style="width: 76px"></span></td>
+                  <td><span class="sk" style="width: 84px"></span></td>
+                  <td class="right"><span class="sk sk-btn"></span></td>
+                </tr>
+                <tr>
+                  <td>
+                    <span class="sk" style="width: 84px"></span
+                    ><span class="sk sk-sm" style="width: 64px"></span>
+                  </td>
+                  <td><span class="sk sk-pill"></span></td>
+                  <td>
+                    <span class="sk" style="width: 70px"></span
+                    ><span class="sk sk-sm" style="width: 72px"></span>
+                  </td>
+                  <td><span class="sk" style="width: 76px"></span></td>
+                  <td><span class="sk" style="width: 84px"></span></td>
+                  <td class="right"><span class="sk sk-btn"></span></td>
+                </tr>
+              </tbody>
+            </table>
+            <span class="sr" role="status">Loading&hellip;</span>
+          </div>
+        </section>
+      </div>
+    </div>
+    <p class="panel-note">
+      An in-page <code>&lt;Suspense&gt;</code> around this card only, placed after the page&rsquo;s
+      session gate &mdash; never a <code>loading.tsx</code> (CLAUDE.md &sect;
+      <i>A loading.tsx may NOT sit above a route that decides existence</i>). The header, the tokens
+      above and the rail are already painted; only the rows wait. Bars are
+      <code>--el-muted</code> fills under <code>animate-pulse</code>, <code>aria-hidden</code>, with
+      a visually hidden <i>Loading&hellip;</i> status (<code>common.loading</code>).
+    </p>
+    <div class="panel-label">
+      5 &middot; <b>Error</b> &mdash; the list failed to load. Contained in the card; the tokens
+      above render normally.
+    </div>
+    <div class="panel">
+      <div class="solo">
+        <section class="card" id="connected-apps" aria-labelledby="connected-apps-title">
+          <div class="card-head">
+            <div>
+              <h3 id="connected-apps-title">Connected apps</h3>
+              <p class="hsub">
+                Apps you&rsquo;ve signed into with your Motir account. Each one acts as you, in one
+                workspace, with the scopes you approved.
+              </p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="err" role="alert">
+              <span class="err-ic"
+                ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg
+              ></span>
+              <div class="err-body">
+                <p class="err-t">Couldn&rsquo;t load your connected apps.</p>
+                <p class="err-d">Your tokens above are unaffected. Nothing was revoked.</p>
+              </div>
+              <button class="btn btn-secondary btn-sm" type="button">Try again</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <p class="panel-note">
+      An inline row, not the <code>ErrorState</code> card, for the reason Panel 3 gives: a 48px
+      danger glyph under the tokens would read as the whole pane failing. The glyph carries the hue
+      (<code>--el-danger-on-surface</code>, a graphic); both lines are ink (<code>--el-text</code> /
+      <code>--el-text-secondary</code>). <b>Try again</b> is the secondary Button re-running the one
+      read, with <code>loading</code> while it does. The second sentence is there because a person
+      who came here to revoke something needs to know the failure did not do it for them &mdash; or
+      undo anything.
+    </p>
+    <div class="panel-label">
+      6 &middot; <b>Revoke confirm</b> &mdash; the row&rsquo;s trash button opens a destructive
+      <code>Modal</code> (sm) naming the app and its workspace.
+    </div>
+    <div class="panel">
+      <div class="mstage">
+        <div class="overlay-tint"></div>
+        <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="rv-t6">
+          <button class="modal-close" type="button" aria-label="Close">
+            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+          </button>
+          <div class="modal-head">
+            <h2 class="modal-title" id="rv-t6">Revoke &ldquo;Claude&rdquo;?</h2>
+          </div>
+          <div class="modal-body">
+            <div class="callout danger">
+              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+              <p>
+                <b>Claude</b> loses access to the <b>Motir</b> workspace now. Its next request is
+                refused, and it will ask you to sign in again. Your tokens and other connected apps
+                are not affected.
+              </p>
+            </div>
+            <dl class="facts">
+              <div>
+                <dt>Workspace</dt>
+                <dd>Motir &middot; All projects</dd>
+              </div>
+              <div>
+                <dt>Scopes</dt>
+                <dd>Standard</dd>
+              </div>
+              <div>
+                <dt>Connected</dt>
+                <dd>28 Sep 2026</dd>
+              </div>
+            </dl>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-ghost" type="button">Cancel</button
+            ><button class="btn btn-danger" type="button">
+              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash" /></svg
+              >Revoke access
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel-note">
+      The shipped <code>RevokeTokenDialog</code> composition, re-worded: rose-tint callout with the
+      <code>TriangleAlert</code> in <code>--el-danger</code> and its sentence in
+      <code>--el-text-strong</code>, then the three facts that tell THIS row from its siblings (one
+      app can hold several connections, Panel 1). Title names the app; the callout names the
+      workspace, because &ldquo;revoke Claude&rdquo; is ambiguous to someone whose Claude reaches
+      two. No &ldquo;can&rsquo;t be undone&rdquo;: unlike a token, a connection IS recoverable
+      &mdash; connect again and approve &mdash; and the callout says what that costs instead.
+    </p>
+    <div class="panel-label">
+      7 &middot; <b>Revoking</b> &mdash; the request is in flight: the danger Button in its
+      <code>loading</code> state, Cancel and the close button disabled.
+    </div>
+    <div class="panel">
+      <div class="mstage">
+        <div class="overlay-tint"></div>
+        <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="rv-t7">
+          <button class="modal-close" type="button" disabled aria-label="Close">
+            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+          </button>
+          <div class="modal-head">
+            <h2 class="modal-title" id="rv-t7">Revoke &ldquo;Claude&rdquo;?</h2>
+          </div>
+          <div class="modal-body">
+            <div class="callout danger">
+              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+              <p>
+                <b>Claude</b> loses access to the <b>Motir</b> workspace now. Its next request is
+                refused, and it will ask you to sign in again. Your tokens and other connected apps
+                are not affected.
+              </p>
+            </div>
+            <dl class="facts">
+              <div>
+                <dt>Workspace</dt>
+                <dd>Motir &middot; All projects</dd>
+              </div>
+              <div>
+                <dt>Scopes</dt>
+                <dd>Standard</dd>
+              </div>
+              <div>
+                <dt>Connected</dt>
+                <dd>28 Sep 2026</dd>
+              </div>
+            </dl>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-ghost" type="button" disabled>Cancel</button
+            ><button class="btn btn-danger" type="button" aria-busy="true" disabled>
+              <svg class="ic spin" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-loader" /></svg
+              >Revoke access
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel-note">
+      The label does not change to &ldquo;Revoking&hellip;&rdquo; &mdash;
+      <code>Button loading</code> swaps the icon for its <code>Spinner</code> and sets
+      <code>aria-busy</code>, as the token dialog does. Escape and the scrim are inert while it
+      runs, so the dialog cannot close on a revoke whose outcome is unknown.
+    </p>
+    <div class="panel-label">
+      8 &middot; <b>Revoked</b> &mdash; the dialog closes, the row leaves the list (spliced out, no
+      refresh), and a success Toast confirms it. Right: the toast when the revoke fails &mdash; the
+      dialog stays open and the row stays.
+    </div>
+    <div class="panel">
+      <div class="solo">
+        <section class="card" id="connected-apps" aria-labelledby="connected-apps-title">
+          <div class="card-head">
+            <div>
+              <h3 id="connected-apps-title">Connected apps</h3>
+              <p class="hsub">
+                Apps you&rsquo;ve signed into with your Motir account. Each one acts as you, in one
+                workspace, with the scopes you approved.
+              </p>
+            </div>
+          </div>
+          <div class="card-body">
+            <table class="ttable">
+              <thead>
+                <tr>
+                  <th>App</th>
+                  <th>Scopes</th>
+                  <th>Workspace</th>
+                  <th>Connected</th>
+                  <th>Last used</th>
+                  <th class="right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <span class="app"
+                      ><span class="app-top"
+                        ><span class="label">Claude Code</span
+                        ><span
+                          class="pill pill--neutral"
+                          title="This app registered itself. Motir hasn&rsquo;t verified who publishes it."
+                          >Unverified</span
+                        ></span
+                      ><span class="app-host">localhost</span></span
+                    >
+                  </td>
+                  <td>
+                    <span class="scopes"
+                      ><span class="pill pill--neutral">Custom</span
+                      ><button
+                        type="button"
+                        class="disclose"
+                        aria-expanded="false"
+                        aria-label="Show scopes for Claude Code"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-chevron-down" />
+                        </svg></button
+                    ></span>
+                  </td>
+                  <td>
+                    <span class="ws"
+                      ><span class="ws-name">Client work</span
+                      ><span class="ws-scope">Website rebuild</span></span
+                    >
+                  </td>
+                  <td><span class="meta">21 Sep 2026</span></td>
+                  <td><span class="meta">Yesterday</span></td>
+                  <td class="right">
+                    <button
+                      class="icon-btn"
+                      type="button"
+                      aria-label="Revoke Claude Code in Client work"
+                    >
+                      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-trash" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <span class="app"
+                      ><span class="app-top"
+                        ><span class="label">Claude Code</span
+                        ><span
+                          class="pill pill--neutral"
+                          title="This app registered itself. Motir hasn&rsquo;t verified who publishes it."
+                          >Unverified</span
+                        ></span
+                      ><span class="app-host">localhost</span></span
+                    >
+                  </td>
+                  <td>
+                    <span class="scopes"
+                      ><span class="pill pill--neutral">Standard</span
+                      ><button
+                        type="button"
+                        class="disclose"
+                        aria-expanded="false"
+                        aria-label="Show scopes for Claude Code"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-chevron-down" />
+                        </svg></button
+                    ></span>
+                  </td>
+                  <td>
+                    <span class="ws"
+                      ><span class="ws-name">Motir</span
+                      ><span class="ws-scope">All projects</span></span
+                    >
+                  </td>
+                  <td><span class="meta">3 Sep 2026</span></td>
+                  <td><span class="meta">12 Sep 2026</span></td>
+                  <td class="right">
+                    <button class="icon-btn" type="button" aria-label="Revoke Claude Code in Motir">
+                      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-trash" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <span class="app"
+                      ><span class="app-top"
+                        ><span class="label">Cursor</span
+                        ><span
+                          class="pill pill--neutral"
+                          title="This app registered itself. Motir hasn&rsquo;t verified who publishes it."
+                          >Unverified</span
+                        ></span
+                      ><span class="app-host">localhost</span></span
+                    >
+                  </td>
+                  <td>
+                    <span class="scopes"
+                      ><span class="pill pill--neutral">Read only</span
+                      ><button
+                        type="button"
+                        class="disclose"
+                        aria-expanded="false"
+                        aria-label="Show scopes for Cursor"
+                      >
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-chevron-down" />
+                        </svg></button
+                    ></span>
+                  </td>
+                  <td>
+                    <span class="ws"
+                      ><span class="ws-name">Client work</span
+                      ><span class="ws-scope">All projects</span></span
+                    >
+                  </td>
+                  <td><span class="meta">18 Aug 2026</span></td>
+                  <td><span class="meta">Never</span></td>
+                  <td class="right">
+                    <button
+                      class="icon-btn"
+                      type="button"
+                      aria-label="Revoke Cursor in Client work"
+                    >
+                      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-trash" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+      <div class="toast-row">
+        <div class="toast-stage">
+          <div class="toast" role="status">
+            <svg class="t-ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-check-circle" />
+            </svg>
+            <div class="t-body">
+              <div class="t-title">Access revoked</div>
+              <div class="t-desc">
+                Claude can no longer act in Motir. Connect it again from Claude to restore it.
+              </div>
+            </div>
+            <button class="t-close" type="button" aria-label="Close">
+              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+            </button>
+          </div>
+        </div>
+        <div class="toast-stage">
+          <div class="toast toast--error" role="alert">
+            <svg class="t-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+            <div class="t-body">
+              <div class="t-title">Couldn&rsquo;t revoke access</div>
+              <div class="t-desc">Something went wrong. Please try again.</div>
+            </div>
+            <button class="t-close" type="button" aria-label="Close">
+              <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel-note">
+      Revoking removes the grant and every access and refresh token issued under it (MOTIR-6983), so
+      there is no &ldquo;Revoked&rdquo; row to keep &mdash; the same disposition as tokens since
+      MOTIR-3546. The list is a client island seeded from the server read, so the revoke splices it
+      locally (the page-state contract&rsquo;s case 3), never <code>router.refresh()</code>.
+      Removing the last row leaves Panel 3.
+    </p>
+    <div class="panel-label">
+      9 &middot; <b>Narrow viewport</b> (375px) &mdash; below <code>sm</code> the table becomes a
+      list: one block per connection, every fact kept, Revoke beside the name.
+    </div>
+    <div class="panel">
+      <div class="phone">
+        <div class="phone-bar">
+          <span class="hamb" aria-hidden="true"></span><span>Account settings</span>
+        </div>
+        <div class="phone-body">
+          <h2 class="ph-h">Tokens</h2>
+          <div class="stub" aria-hidden="true">
+            <span class="stub-k">unchanged</span> Documentation &middot; CLI &middot; Your tokens
+          </div>
+          <section class="card" aria-labelledby="ca-n">
+            <div class="card-head">
+              <div>
+                <h3 id="ca-n">Connected apps</h3>
+                <p class="hsub">
+                  Apps you&rsquo;ve signed into with your Motir account. Each one acts as you, in
+                  one workspace, with the scopes you approved.
+                </p>
+              </div>
+            </div>
+            <ul class="nlist">
+              <li class="nrow">
+                <div class="nrow-top">
+                  <span class="app"
+                    ><span class="app-top"
+                      ><span class="label">Claude</span
+                      ><span
+                        class="pill pill--neutral"
+                        title="This app registered itself. Motir hasn&rsquo;t verified who publishes it."
+                        >Unverified</span
+                      ></span
+                    ><span class="app-host">claude.ai</span></span
+                  ><button class="icon-btn" type="button" aria-label="Revoke Claude in Motir">
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-trash" />
+                    </svg>
+                  </button>
+                </div>
+                <div class="nrow-ws">Motir &middot; All projects</div>
+                <span class="scopes"
+                  ><span class="pill pill--neutral">Standard</span
+                  ><button
+                    type="button"
+                    class="disclose open"
+                    aria-expanded="true"
+                    aria-label="Hide scopes for Claude"
+                  >
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-down" />
+                    </svg></button
+                ></span>
+                <div class="detail">
+                  <p class="dlead">This app can:</p>
+                  <div class="pcols">
+                    <div class="pcol">
+                      <div class="pgrp">
+                        <div class="pdom">Project</div>
+                        <ul class="plist">
+                          <li class="prow on">
+                            <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="plabel">View project</span
+                            ><span class="pstate"
+                              ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-check-circle" /></svg
+                              ><span class="sr">Granted</span></span
+                            >
+                          </li>
+                          <li class="prow on">
+                            <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="plabel">View the lesson library</span
+                            ><span class="pstate"
+                              ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-check-circle" /></svg
+                              ><span class="sr">Granted</span></span
+                            >
+                          </li>
+                          <li class="prow on">
+                            <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="plabel">Change the lesson library</span
+                            ><span class="pstate"
+                              ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-check-circle" /></svg
+                              ><span class="sr">Granted</span></span
+                            >
+                          </li>
+                          <li class="prow on">
+                            <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="plabel">Record a lesson recurrence</span
+                            ><span class="pstate"
+                              ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-check-circle" /></svg
+                              ><span class="sr">Granted</span></span
+                            >
+                          </li>
+                        </ul>
+                      </div>
+                      <div class="pgrp">
+                        <div class="pdom">Work items</div>
+                        <ul class="plist">
+                          <li class="prow on">
+                            <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-square-pen" /></svg
+                            ><span class="plabel">Edit work items</span
+                            ><span class="pstate"
+                              ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-check-circle" /></svg
+                              ><span class="sr">Granted</span></span
+                            >
+                          </li>
+                          <li class="prow on">
+                            <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-square-pen" /></svg
+                            ><span class="plabel">Archive work items</span
+                            ><span class="pstate"
+                              ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-check-circle" /></svg
+                              ><span class="sr">Granted</span></span
+                            >
+                          </li>
+                          <li class="prow off">
+                            <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-trash" /></svg
+                            ><span class="plabel">Delete work items</span
+                            ><span class="pstate poff">Not granted</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                    <div class="pcol">
+                      <div class="pgrp">
+                        <div class="pdom">Comments</div>
+                        <ul class="plist">
+                          <li class="prow on">
+                            <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-message-square" /></svg
+                            ><span class="plabel">Add comments</span
+                            ><span class="pstate"
+                              ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-check-circle" /></svg
+                              ><span class="sr">Granted</span></span
+                            >
+                          </li>
+                        </ul>
+                      </div>
+                      <div class="pgrp">
+                        <div class="pdom">Plans</div>
+                        <ul class="plist">
+                          <li class="prow on">
+                            <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="plabel">See every plan</span
+                            ><span class="pstate"
+                              ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-check-circle" /></svg
+                              ><span class="sr">Granted</span></span
+                            >
+                          </li>
+                        </ul>
+                      </div>
+                      <div class="pgrp">
+                        <div class="pdom">Agent runs</div>
+                        <ul class="plist">
+                          <li class="prow on">
+                            <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-eye" /></svg
+                            ><span class="plabel">See every agent run</span
+                            ><span class="pstate"
+                              ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-check-circle" /></svg
+                              ><span class="sr">Granted</span></span
+                            >
+                          </li>
+                        </ul>
+                      </div>
+                      <div class="pgrp">
+                        <div class="pdom">Sprints &amp; backlog</div>
+                        <ul class="plist">
+                          <li class="prow on">
+                            <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-zap" /></svg
+                            ><span class="plabel">Manage sprints</span
+                            ><span class="pstate"
+                              ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-check-circle" /></svg
+                              ><span class="sr">Granted</span></span
+                            >
+                          </li>
+                        </ul>
+                      </div>
+                      <div class="pgrp">
+                        <div class="pdom">AI planning</div>
+                        <ul class="plist">
+                          <li class="prow on">
+                            <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="plabel">Run AI planning</span
+                            ><span class="pstate"
+                              ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-check-circle" /></svg
+                              ><span class="sr">Granted</span></span
+                            >
+                          </li>
+                          <li class="prow on">
+                            <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="plabel">Author AI plans</span
+                            ><span class="pstate"
+                              ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-check-circle" /></svg
+                              ><span class="sr">Granted</span></span
+                            >
+                          </li>
+                          <li class="prow on">
+                            <svg class="pic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            ><span class="plabel">Approve or decline AI plans</span
+                            ><span class="pstate"
+                              ><svg class="pchk" viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-check-circle" /></svg
+                              ><span class="sr">Granted</span></span
+                            >
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="nrow-dates">Connected 28 Sep 2026 &middot; Last used 2 minutes ago</div>
+              </li>
+              <li class="nrow">
+                <div class="nrow-top">
+                  <span class="app"
+                    ><span class="app-top"
+                      ><span class="label">Claude Code</span
+                      ><span
+                        class="pill pill--neutral"
+                        title="This app registered itself. Motir hasn&rsquo;t verified who publishes it."
+                        >Unverified</span
+                      ></span
+                    ><span class="app-host">localhost</span></span
+                  ><button
+                    class="icon-btn"
+                    type="button"
+                    aria-label="Revoke Claude Code in Client work"
+                  >
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-trash" />
+                    </svg>
+                  </button>
+                </div>
+                <div class="nrow-ws">Client work &middot; Website rebuild</div>
+                <span class="scopes"
+                  ><span class="pill pill--neutral">Custom</span
+                  ><button
+                    type="button"
+                    class="disclose"
+                    aria-expanded="false"
+                    aria-label="Show scopes for Claude Code"
+                  >
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-down" />
+                    </svg></button
+                ></span>
+
+                <div class="nrow-dates">Connected 21 Sep 2026 &middot; Last used Yesterday</div>
+              </li>
+              <li class="nrow">
+                <div class="nrow-top">
+                  <span class="app"
+                    ><span class="app-top"
+                      ><span class="label">Claude Code</span
+                      ><span
+                        class="pill pill--neutral"
+                        title="This app registered itself. Motir hasn&rsquo;t verified who publishes it."
+                        >Unverified</span
+                      ></span
+                    ><span class="app-host">localhost</span></span
+                  ><button class="icon-btn" type="button" aria-label="Revoke Claude Code in Motir">
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-trash" />
+                    </svg>
+                  </button>
+                </div>
+                <div class="nrow-ws">Motir &middot; All projects</div>
+                <span class="scopes"
+                  ><span class="pill pill--neutral">Standard</span
+                  ><button
+                    type="button"
+                    class="disclose"
+                    aria-expanded="false"
+                    aria-label="Show scopes for Claude Code"
+                  >
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-down" />
+                    </svg></button
+                ></span>
+
+                <div class="nrow-dates">Connected 3 Sep 2026 &middot; Last used 12 Sep 2026</div>
+              </li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
+    <p class="panel-note">
+      The rail is the shipped drawer at this width and is not drawn. The disclosed columns collapse
+      to ONE (the picker&rsquo;s own single-column arm), in the same order. Revoke keeps its 36px
+      hit area, top-right of each block. The tokens table above keeps its shipped
+      <code>overflow-x-auto</code>; bringing it to this list form is not this card&rsquo;s change.
+    </p>
+  </body>
+</html>
