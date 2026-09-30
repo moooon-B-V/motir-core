@@ -150,6 +150,9 @@ describe('each section names a real table, model and column set', () => {
       github_identity: ['accessTokenEncrypted'],
       import_source_identity: ['accessTokenEncrypted', 'refreshTokenEncrypted'],
       device_code: ['deviceCode', 'userCode'],
+      oauth_client: ['clientSecret'],
+      oauth_access_token: ['token'],
+      oauth_refresh_token: ['token'],
     };
     for (const [table, columns] of Object.entries(MUST_REDACT)) {
       const section = PERSONAL_DATA_SECTIONS.find((s) => s.table === table);

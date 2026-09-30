@@ -12,6 +12,7 @@ asset was drawn.
 | **Passkey sign-in** | **`passkey-sign-in.mock.html`** (HTML mock)      | The one control Story 8.12 (MOTIR-1214 · MOTIR-3609) adds to the signed-out card: **Sign in with a passkey**, on the EMAIL step, beside the Google button and before the password. A passkey sign-in mints a session directly, so it never reaches the password step and never reaches `TwoFactorChallenge`. **Gates MOTIR-3613**; the account-side half is `../settings/passkeys.mock.html`.                                                              |
 | **2FA required**    | **`two-factor-required.mock.html`** (HTML mock)  | The screen a member without a second factor meets once their organization or workspace starts REQUIRING one (Story 8.13 · MOTIR-3643): who is asking, the three ways to satisfy it, the mounted enrolment surface, the return to where they were going, and the way out. Signed IN but held — it wears the `(auth)` frame precisely so nothing else is reachable. **Gates MOTIR-3648**; the admin-facing half is `../org-admin/security-policy.mock.html`. |
 | **Legal agreement** | **`legal-agreement.mock.html`** (HTML mock)      | Two surfaces, one agreement (Story 8.4 · MOTIR-3679): the notice at the sign-up card's FOOT — on BOTH steps, because `Continue with Google` creates an account from step 1 and never saw the old one — and the re-consent interstitial a material change holds a signed-in reader on. **Gates MOTIR-1135**; for the agreement element it SUPERSEDES `03-signup-desktop.png`, and for everything else on that screen it does not.                           |
+| **OAuth consent**   | **`oauth-consent.mock.html`** (HTML mock)        | The page an MCP client’s browser redirect lands on (Story MOTIR-6973 · MOTIR-6980): the app asking and where it returns, one workspace, all projects or one, the grant in the token picker’s columns, Approve / Deny, and the signed-out, no-workspace, invalid-request, approved and denied states. **Gates MOTIR-6985.** See § OAuth consent.                                                                                                            |
 | CLI hand-off        | `../cli-connect/cli-connect.mock.html`           | `/device` and the banner it adds to the sign-in card. Drawn later, in its own area — this file does not re-specify it.                                                                                                                                                                                                                                                                                                                                     |
 | Brand lockup        | `../brand/brand-mark.mock.html` §7b              | The `BrandMark` the `(auth)` card renders top-left. Supersedes this asset's "P" tile (see the ledger below).                                                                                                                                                                                                                                                                                                                                               |
 
@@ -1476,3 +1477,232 @@ about the manifest seam and are unaffected; MOTIR-4011 is `motir-marketing`'s.
 - No nested interactive elements. The three affordances that change the card's own
   state rather than navigating are `button`s styled as links, not anchors with an
   address that does not exist.
+
+---
+
+## OAuth consent
+
+**Asset:** `oauth-consent.mock.html` (HTML mock, 13 panels) · **Card:** MOTIR-6980 ·
+**Builds it:** [Build the CONSENT screen](motir:cmunc4k9p0042hvshn0qwwipj) (MOTIR-6985) ·
+**Story:** MOTIR-6973.
+
+A **NEW surface**, and the first design of an app-authorization screen: no route of
+this family exists on `origin/main` `20903a65d`, and `list_designs` held no published
+design for the one precedent, the CLI's device approval (`app/(auth)/device/`). It is
+the page a person's browser lands on when an MCP client (Claude Code, claude.ai, the
+Claude apps, Cowork, any OAuth MCP client) asks to connect to Motir: which app is
+asking and where it will return, **one** workspace, all projects or one, the grant in
+the token picker's own columns and words, and Approve / Deny.
+
+It is **composed, not redesigned**. The frame is the shipped `(auth)` layout; the
+detail box, callouts, Deny composition and name-only permission rows are
+`DeviceApproval`'s; the grant is the create-token modal's picker
+(`CreateTokenModal.tsx`, authority `../settings/permission-columns.mock.html`); the
+controls are the design-system primitives. Nothing in the mock is a new primitive.
+
+### The route, and how it is reached
+
+- **Route: app.motir.co/oauth/consent** (the consent page MOTIR-6982 configures on the
+  provider), rendered in the `(auth)` route group — NOT `(authed)`, for the reason
+  `app/(auth)/device/page.tsx` gives: the `(authed)` layout redirects, and the page
+  must render its own signed-out and refused states. It is written unquoted in this
+  file on purpose — `tests/design-asset-addresses.test.ts` fails an asset that quotes
+  an address no route serves yet; MOTIR-6985 creates the route and may quote it.
+- **Nobody navigates to it inside Motir.** No nav entry, no link, ever — the /device
+  rule. Its only door is the client's browser redirect: the client discovers Motir's
+  sign-in from the MCP's 401, registers itself (RFC 7591), and opens the authorize
+  endpoint; **a signed-in person's valid request is redirected to the consent page
+  with the request intact** (MOTIR-6982's AC). Panel 0 draws that door from both
+  Claude Code (terminal → system browser) and claude.ai (Connectors → Connect → new
+  tab), in browser chrome showing the URL arriving.
+- **Signed out** → the authorize endpoint sends the browser to the shipped sign-in
+  page (Better-Auth's `loginPage`), with the WHOLE authorize URL encoded into `next`;
+  after sign-in (password, Google, passkey, 2FA as usual) it returns to authorize,
+  which re-validates and redirects to consent (Panel 5).
+- **The exit** is the redirect back to the client's registered `redirect_uri` — with
+  `code` + `state` on Approve (Panel 9), with `error=access_denied` + `state` on Deny
+  and on the no-workspace Deny (Panels 6, 10). The refused-request page (Panel 7) is
+  the one state with NO exit redirect.
+
+### Which card specifies each behaviour
+
+| Behaviour drawn                                                                                                                                                                                                | Specified by                                                                                                                  |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| The reach choice — **All projects** (fixed `DEFAULT_TOKEN_GRANT`, no project) or **One project** (a chosen subset of `grantableFor(held in that project)`); one workspace per connection; what Approve records | [A connection IS a grant](motir:cmunc4k7k003yhvshih02on3t) (MOTIR-6983), on `docs/decisions/token-permissions.md` Amendment 1 |
+| The grant's rendering — the picker's two columns, catalog domain groups, shipped `permissions.*` copy, locked rows, the irreversible key's danger card                                                         | [the token-permission picker](motir:cmta33s2l007si3phwbk1ccnc) (MOTIR-3580) → `../settings/permission-columns.mock.html`      |
+| What makes a request invalid — unknown client, `redirect_uri` not registered, PKCE missing or not S256, `resource` not the MCP; and that such a request never reaches consent                                  | [The OAuth authorization server](motir:cmunc4k6j003whvshsn8ba41w) (MOTIR-6982)                                                |
+| Signed-out → sign-in → back with the request intact; Deny → `access_denied`, nothing stored; no workspace → Deny only; the unverified label for a dynamically registered client                                | [Sign in with Motir from Claude](motir:cmunc4jqf0032hvsh1yfzv3ju) (MOTIR-6973, the story) and this card                       |
+| The Connected apps pane the foot line points at                                                                                                                                                                | [CONNECTED APPS on Account settings](motir:cmunc4k5b003uhvsh2uh5gjcw) (MOTIR-6981) — not drawn here                           |
+
+### Panels
+
+| #   | State                                                                                | Primitives composed                                                                                    |
+| --- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| 0   | The entrance — Claude Code and claude.ai → authorize → consent                       | review chrome only (terminal stand-in, URL bars)                                                       |
+| 1   | Consent · one workspace · all projects · unverified self-registered Claude Code      | `(auth)` wide frame, `AuthShell tight`, detail box, `Pill`, `Segmented`, fixed grant rows, `Button` ×2 |
+| 2   | Consent · several workspaces · the picker OPEN · Claude on claude.ai                 | + `Combobox` trigger and its `Popover` listbox                                                         |
+| 3   | Consent · One project · a narrowed grant (3 locked rows, 2 switched off, Delete off) | + project `Combobox`, the picker's `Switch` rows, the danger card                                      |
+| 4   | The app row · unverified (dynamic registration) vs pre-registered                    | detail box only                                                                                        |
+| 5   | Not signed in → the sign-in card with the carried banner → back                      | `(auth)` narrow frame + lockup, `AuthShell`, `IdeaCarried`                                             |
+| 6   | No workspace · or none it could act in → Deny only (two copies)                      | `AuthShell`, warn `Callout`, Deny `Button` full width                                                  |
+| 7   | Invalid request → an error page that does NOT redirect, + the four reasons' copy     | `AuthShell`, danger `Callout`, `CodeChip`, secondary `Button`                                          |
+| 8   | Submitting                                                                           | `Button loading` + disabled Deny                                                                       |
+| 9   | Approved + the exit redirect (loopback and claude.ai)                                | `AuthShell`, success `Callout`, secondary `Button`                                                     |
+| 10  | Denied + the exit redirect                                                           | `AuthShell`, danger `Callout`                                                                          |
+| 11  | Narrow viewport, 375px                                                               | Panel 1, stacked                                                                                       |
+| 12  | Dark parity — Panel 3 on `data-theme="dark"`                                         | —                                                                                                      |
+
+### The frame
+
+- **Consent (Panels 1–3, 8, 11, 12)** renders `data-auth-wide`, exactly as the
+  /device confirm step does: the `(auth)` column widens `max-w-[28rem]` →
+  `max-w-[40rem]`, the page and card padding tighten (`py-8`, card `py-5 sm:px-8`),
+  and the brand lockup is suppressed. Page `bg-(--el-auth-wash)`; card
+  `bg-(--el-page-bg) rounded-(--radius-card) shadow-(--shadow-elevated)`.
+  `AuthShell tight`: headline `font-serif text-2xl font-semibold text-(--el-text)`,
+  subhead `text-sm text-(--el-text-muted)` (legal: it sits on the white card, 4.54:1).
+- **Every other state (Panels 5, 6, 7, 9, 10)** is the ordinary 28rem `(auth)` card
+  with the 28px lockup and the default `AuthShell` (4xl/5xl serif headline, gap-8) —
+  the /device terminal-state composition (`TerminalState`), announced through a
+  `role="status" aria-live="polite"` wrapper.
+- **Fold.** Unlike /device, this screen does not fit 648px, and it is not asked to:
+  the All-projects grant is fourteen name-only rows. The summary line directly above
+  the buttons restates the whole decision, so a reader who scrolls straight to
+  Approve still reads what they are approving.
+
+### Per element — consent (Panels 1–3)
+
+| Element                       | Primitive / markup                                                                                                                     | Colour (`--el-*`)                                                                                                                                                                             | Shape / size token                                                                                       | Copy                                                                                                                                                                                                         |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Headline                      | `AuthShell tight` `h1`                                                                                                                 | `--el-text`                                                                                                                                                                                   | —                                                                                                        | **Connect {app} to Motir?**                                                                                                                                                                                  |
+| Subhead                       | `AuthShell` `p`                                                                                                                        | `--el-text-muted` on the white card                                                                                                                                                           | —                                                                                                        | It will act as you, in the one workspace you choose. Check each part before you approve.                                                                                                                     |
+| Detail box                    | /device `DetailColumn` ×2 + `DetailBlock`; `sm:grid-cols-2`                                                                            | border `--el-border`; inner hairlines `--el-border-soft`                                                                                                                                      | `rounded-(--radius-card)`                                                                                | —                                                                                                                                                                                                            |
+| Block keys                    | `DetailBlock` label, 11px uppercase semibold                                                                                           | `--el-text-muted` (white card only)                                                                                                                                                           | —                                                                                                        | APP ASKING · RETURNS YOU TO · YOU · WORKSPACE                                                                                                                                                                |
+| App tile                      | a 32px letter tile — the app name's first letter                                                                                       | bg `--el-card-icon-bg`, glyph `--el-card-icon-fg`                                                                                                                                             | `rounded-(--radius-control)`                                                                             | —                                                                                                                                                                                                            |
+| App name                      | `text-sm font-medium`                                                                                                                  | `--el-text`                                                                                                                                                                                   | —                                                                                                        | the client's registered `client_name`, rendered as DATA (escaped, never markup)                                                                                                                              |
+| Unverified marker             | `Pill tone="warning"` + lucide `ShieldAlert` 12px                                                                                      | bg `--el-tint-peach`, ink `--el-text-strong`                                                                                                                                                  | `rounded-(--radius-badge)`, `px-(--spacing-chip-x) py-(--spacing-chip-y)`                                | **Unverified**                                                                                                                                                                                               |
+| App sub-line — dynamic        | `DetailSub`                                                                                                                            | `--el-text-muted`                                                                                                                                                                             | —                                                                                                        | It registered itself, so this name is its own claim. Motir hasn’t reviewed this app.                                                                                                                         |
+| App sub-line — pre-registered | `DetailSub` (no marker)                                                                                                                | `--el-text-muted`                                                                                                                                                                             | —                                                                                                        | Registered with this Motir ahead of time — not by itself.                                                                                                                                                    |
+| Returns-to value              | lucide `Laptop` (loopback) / `Globe` (https) + the redirect's HOST                                                                     | glyph `--el-text-muted`, host `--el-text`                                                                                                                                                     | —                                                                                                        | **localhost** / **claude.ai** — the host of the request's `redirect_uri`                                                                                                                                     |
+| Returns-to sub — loopback     | `DetailSub`                                                                                                                            | `--el-text-muted`                                                                                                                                                                             | —                                                                                                        | An app on this computer. Approve only if you just asked {app} to connect.                                                                                                                                    |
+| Returns-to sub — https        | `DetailSub`                                                                                                                            | `--el-text-muted`                                                                                                                                                                             | —                                                                                                        | You’ll be sent to {full redirect_uri}                                                                                                                                                                        |
+| You                           | /device WHO block: 32px avatar (`bg-(--el-text) text-(--el-text-inverted)`), name, email                                               | name `--el-text`, email `--el-text-muted`                                                                                                                                                     | `rounded-full` (avatar)                                                                                  | Not you? **Sign out** and sign in as them. — the /device `confirm.notYou` copy; Sign out returns to sign-in with the request in `next`                                                                       |
+| Workspace — one               | plain value                                                                                                                            | `--el-text`                                                                                                                                                                                   | —                                                                                                        | {org} · {workspace} / sub: Your only workspace.                                                                                                                                                              |
+| Workspace — several           | `Combobox` (trigger `h-(--height-control)`, `px-(--spacing-control-x)`); options `org · workspace`; opens on the last-active workspace | trigger `--el-page-bg` / `--el-border`; open ring `--focus-ring-color`; listbox `Popover` `--el-page-bg`, `--shadow-elevated`, highlighted row `--el-surface`, check `--el-accent-on-surface` | trigger `rounded-(--radius-input)`; listbox `rounded-(--radius-card)`; rows `rounded-(--radius-control)` | accessible name: Workspace {app} can act in / sub: You belong to {n} — it acts in this one only.                                                                                                             |
+| Reach label + help            | the modal's field label + helper                                                                                                       | label `--el-text`, help `--el-text-muted`                                                                                                                                                     | —                                                                                                        | **Where it can act** / All: Every project in {workspace} you can open. In each one it can also do no more than your role there allows. / One: Only the project you pick, with the permissions you switch on. |
+| Reach control                 | `Segmented`, two options, `role="radiogroup"`; defaults to **All projects**                                                            | track `--el-tabnav-track`, border `--el-border`; pressed `--el-page-bg` + `--el-text-strong` + `--shadow-subtle`; idle `--el-text-secondary`                                                  | `rounded-(--radius-btn)`, segments `h-(--height-control)`                                                | **All projects** · **One project**                                                                                                                                                                           |
+| Project (One project only)    | `Combobox`, options `KEY — Name`, default = the active project (MOTIR-4876), then the first                                            | as the workspace trigger                                                                                                                                                                      | as above                                                                                                 | label **Project** / sub: {app} acts in this project only.                                                                                                                                                    |
+| Grant label + help — All      | field label + helper                                                                                                                   | `--el-text` / `--el-text-muted`                                                                                                                                                               | —                                                                                                        | **What it can do** / The standard permissions every new connection gets — everything except deleting.                                                                                                        |
+| Grant label + help — One      | field label + helper                                                                                                                   | `--el-text` / `--el-text-muted`                                                                                                                                                               | —                                                                                                        | **What it can do** / Choose what {app} is allowed to do. You can grant less than your own access, never more. (the picker's `scopes.permissionsHelper`, with {app} for "this token")                         |
+| Grant columns                 | the picker's `grid grid-cols-2 gap-x-6 gap-y-4`, `permissionColumnsForTokens()` — today 7 \| 7                                         | —                                                                                                                                                                                             | —                                                                                                        | —                                                                                                                                                                                                            |
+| Domain caption                | `font-mono text-[0.625rem] uppercase tracking-wide`                                                                                    | `--el-text-secondary` (NOT faint — MOTIR-2578's correction)                                                                                                                                   | —                                                                                                        | `permissions.domain.*`: PROJECT · WORK ITEMS · COMMENTS · PLANS · AGENT RUNS · SPRINTS & BACKLOG · AI PLANNING                                                                                               |
+| Row — All projects (fixed)    | /device `PermissionRow`: domain glyph + NAME only, hairline-divided, no switch                                                         | glyph `--el-text-muted`, name `--el-text`; dividers `--el-border-soft`                                                                                                                        | —                                                                                                        | the shipped `permissions.<slug>.label`                                                                                                                                                                       |
+| Row — One project             | the picker row: glyph, name, description, `Switch`                                                                                     | name `--el-text`, description `--el-text-muted`                                                                                                                                               | `Switch` (h-5 w-9)                                                                                       | `permissions.<slug>.label` / `.description`                                                                                                                                                                  |
+| Row — locked (One project)    | the picker's disabled row: `Switch disabled`, name + description faint, reason line                                                    | name/desc `--el-text-faint` (legal: the element carries `aria-disabled="true"`), reason `--el-text-secondary`                                                                                 | —                                                                                                        | You do not have this in this project.                                                                                                                                                                        |
+| Switch                        | `Switch`                                                                                                                               | on: `--el-switch-on` / `--el-switch-on-border` / knob `--el-switch-knob`; off: `--el-muted` / `--el-switch-off-border` / knob `--el-switch-knob-off`                                          | `rounded-full`                                                                                           | `aria-label` = the permission's label                                                                                                                                                                        |
+| Irreversible key              | the picker's own danger card — `grantsIrreversible` / `meta.danger`                                                                    | bg `--el-tint-rose`, border `--el-border-soft`, `Trash2` glyph `--el-danger`, name + text `--el-text-strong`, tag `--el-danger-on-surface`                                                    | `rounded-(--radius-card)`, `px-(--spacing-control-x) py-(--spacing-control-y)`                           | **Delete work items · DANGER** / All: Not included. Pick **One project** to choose it. / One: the shipped description + a Switch, OFF by default                                                             |
+| Summary line                  | lucide `Info` + one sentence, top hairline                                                                                             | text `--el-text-secondary`, emphasis `--el-text`, rule `--el-border-soft`                                                                                                                     | —                                                                                                        | All: {app} gets **{n} of {total}** permissions, in every project of **{workspace}** you can open. / One: {app} gets **{n}** permissions, in **{KEY}** only.                                                  |
+| Deny                          | `Button variant="secondary" size="lg"` + `CircleX`, FIRST in the DOM, 50/50 row — /device's composition                                | label `--el-text`, border + glyph `--el-danger` (never `--el-danger-text`)                                                                                                                    | `rounded-(--radius-btn)`, `h-(--height-btn-lg)`                                                          | **Deny**                                                                                                                                                                                                     |
+| Approve                       | `Button variant="primary" size="lg"`; disabled when no workspace chosen or the One-project grant is empty                              | `--el-accent` / `--el-accent-text`                                                                                                                                                            | as Deny                                                                                                  | **Approve and connect**                                                                                                                                                                                      |
+| Foot                          | `p text-xs`                                                                                                                            | `--el-text-muted` (white card)                                                                                                                                                                | —                                                                                                        | Disconnect it any time in Settings → Account → Connected apps.                                                                                                                                               |
+| Empty grant (One project)     | the picker's `role="alert"` line + `TriangleAlert`                                                                                     | `--el-danger-on-surface` (see the delta below)                                                                                                                                                | —                                                                                                        | Grant at least one permission to connect.                                                                                                                                                                    |
+
+### Per element — the other states
+
+| Panel | Headline / subhead                                                                                     | Body                                                                                                                                                                                                                                                                                                      | Action · foot                                                                                                                             |
+| ----- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 5     | **Welcome back!** / Use Motir to turn any product idea into reality. (unchanged)                       | `IdeaCarried` — label `--el-text-secondary`, value `--el-text`, `bg-(--el-surface-soft) border-(--el-border) rounded-(--radius-input)`: **CONNECTING AN APP** / {app} — you’ll pick a workspace and approve next. Then the shipped sign-in form, unchanged.                                               | foot: Only the account you sign in as can approve this — and only its workspaces can be picked.                                           |
+| 6a    | **{app} can’t connect yet** / You’re not in any Motir workspace.                                       | warn `Callout` (`--el-warning-surface` / `--el-warning-text`, `CircleAlert`): A connection acts in one workspace, and your account isn’t in any yet. Create a workspace, or ask to be invited to one, then connect again from {app}.                                                                      | Deny, full width: **Deny and return to {app}** · foot: Deny tells {app} the connection was refused. Nothing is stored.                    |
+| 6b    | **{app} can’t connect yet** / None of your workspaces lets you grant it anything.                      | warn `Callout`: In **{ws A}** and **{ws B}** you can’t open any project, so there is nothing {app} could do there. Ask a workspace admin for project access, then connect again.                                                                                                                          | as 6a                                                                                                                                     |
+| 7     | **This connection request can’t be used** / Nothing was connected, and you haven’t been sent anywhere. | danger `Callout` (`--el-danger-surface` / `--el-danger-surface-text`, `CircleX`) with the reason sentence (table below); then `--el-text-secondary`: Go back to the app and start connecting again. If this keeps happening, the app is set up wrong — tell whoever makes it, and quote `CodeChip`{code}. | `Button variant="secondary"` full width: **Go to Motir** (to the app root) · foot: You can close this tab. — **no Approve, no Deny**      |
+| 8     | as Panel 1                                                                                             | every control read-only                                                                                                                                                                                                                                                                                   | Approve `loading` → **Connecting…**; Deny `disabled`. A failure is /device's `ErrorBanner` above the actions, on this screen.             |
+| 9     | **{app} is connected** / You can close this tab.                                                       | success `Callout` (`--el-success-surface` / `--el-text-strong`, `CircleCheckBig`): {app} can now act as you in **{workspace}** — every project you can open. (One project: — in **{KEY}** only.) Then: Returning you to {app}… If nothing happens, go back to it yourself — it’s already connected.       | `Button variant="secondary"` + `KeyRound`: **View connected apps** · foot: Disconnect it any time in Settings → Account → Connected apps. |
+| 10    | **{app} was not connected** / You can close this tab.                                                  | danger `Callout`: Nothing was stored. {app} will be told you declined. Then: Changed your mind? Start connecting again from {app}.                                                                                                                                                                        | foot: Nothing about your account was shared with it.                                                                                      |
+
+**Panel 7's reasons** — the callout sentence names the problem in words; the quoted
+code is for the app's maker:
+
+| Request                       | Callout sentence                                                                    | Quoted code                        |
+| ----------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------- |
+| unknown `client_id`           | The app isn’t registered with Motir, or its registration has expired.               | `invalid_client`                   |
+| `redirect_uri` not registered | It asked to send you back to **{host}**, an address it never registered with Motir. | `invalid_request · redirect_uri`   |
+| PKCE missing, or not S256     | It left out a security check Motir requires on every connection.                    | `invalid_request · code_challenge` |
+| `resource` not this MCP       | It asked for access to something other than Motir’s MCP server.                     | `invalid_target · resource`        |
+
+### Decisions, and why
+
+1. **The page never shows a client logo.** A self-registered client's `logo_uri` is as
+   unverified as its name, and a borrowed logo is the more convincing lie. The tile is
+   the name's first letter.
+2. **There is no "Verified" badge**, only an "Unverified" one. Motir has no review
+   process; a tick would claim one. A pre-registered client simply carries no marker
+   and a line saying who registered it (Panel 4). GitHub and Linear draw the same
+   asymmetry for unreviewed apps.
+3. **The return host is always on screen**, for both kinds of client: the code goes
+   there, so it is part of what is being approved. Loopback reads **localhost**, with
+   a sub-line that ties it to "this computer".
+4. **All projects shows no switches.** Its grant is fixed (`DEFAULT_TOKEN_GRANT`, per
+   Amendment 1's one-arm rule, which MOTIR-6983 applies to connections): drawing
+   switches would offer a choice the server ignores. It shows names only (the /device
+   row), and draws **Delete work items WITHHELD** in its danger card, pointing at One
+   project — so the irreversible key is flagged in both modes.
+5. **One project IS the picker**, offered `grantableFor(held)` for the chosen project:
+   rows the person does not hold are disabled with the picker's reason, never hidden;
+   Delete is off by default and switchable. Changing the project resets the switches to
+   the default grant ∩ what they hold there.
+6. **The workspace list is only workspaces the person may grant something in**, as
+   `org · workspace`. Empty → Panel 6b; no memberships at all → Panel 6a. Both still
+   offer Deny, which redirects `access_denied`: the request was valid, and the client is
+   waiting on an answer.
+7. **A refused request does not redirect** (Panel 7): with an unregistered
+   `redirect_uri` the only address on hand may be the attacker's. **As built by
+   MOTIR-6982**, Panel 7 is reached only when the redirect cannot be trusted — an
+   unknown `client_id` or an unregistered `redirect_uri`. A request whose client and
+   redirect check out but which lacks PKCE, asks for `plain`, or names another
+   `resource` is sent BACK to the app with `invalid_request` / `invalid_target`, as
+   RFC 6749 §4.1.2.1 requires; its last two table rows stay as the copy for the day a
+   refusal cannot be returned. Today the provider's error redirect lands on
+   Better-Auth's `/api/auth/error`; pointing it at this page (`onAPIError.errorURL`)
+   is MOTIR-6985's. The mock's URL bar shows app.motir.co/oauth/error as a
+   suggestion.
+8. **Approve shows its own terminal state, then redirects immediately.** For a
+   loopback client the tab normally lands on the client's own page; if that listener
+   has already closed, the tab stays on Motir's "is connected — you can close this
+   tab", which is true, rather than a spinner that never ends.
+9. **The sign-in hand-off carries the whole authorize query in `next`** (Panel 5), and
+   the sign-in card gains only an `IdeaCarried` banner, the /device precedent. Proxy
+   redirects that keep only the pathname would drop `state`, `code_challenge` and
+   `resource`.
+
+### The one deliberate delta from the shipped picker
+
+The shipped picker paints its "· Danger" tag and its empty-grant error in raw
+`--el-danger`, which `CLAUDE.md` names as under AA on the dark page in three palettes
+and on most tints. This mock paints both in **`--el-danger-on-surface`** (≥ 4.77:1 on
+`--el-tint-rose` and the page in all twenty palette × theme contexts). Everything else
+about the danger card — tint, border, glyph, strong ink, position — is the picker's.
+MOTIR-6985 should use `--el-danger-on-surface` on this page; bringing the create-token
+modal into line is out of this card's scope.
+
+### Accessibility
+
+- Deny is first in the DOM; the two actions share a `role="group"` named
+  "Approve or deny {app}".
+- The reach control is a `radiogroup`; the grant is a `role="group"` named
+  "What it can do"; every `Switch` is named by its permission's label.
+- Terminal states (6, 7, 9, 10) render inside `role="status" aria-live="polite"`.
+- State is never carried by colour alone: every callout has a glyph and words; the
+  unverified pill has a glyph and a word; the danger card has a glyph and a tag.
+- Ink: `--el-text-muted` appears only on the white card; `--el-text-faint` only on
+  elements carrying `aria-disabled="true"`; no `--el-danger-text` anywhere.
+
+### How the mock was produced
+
+The token block is lifted from `packages/design-system/theme.css` by brace-count,
+comments stripped: Tier 0, the Tier-1 dark block, the Tier-3 `--el-*` layer emitted
+twice (on `:root, [data-appearance-scope]` and again as a separate `[data-theme]`
+rule, so the nested dark panel resolves dark), and the Tier-3 dark lift. The grant
+data is the shipped derivation read from code, not recalled: `GRANTABLE_PERMISSIONS`
+= 14 keys, `DEFAULT_TOKEN_GRANT` = 13, catalog-domain groups, a 7 | 7 column split.
+Panels were rendered in headless Chromium at 1240px wide to check layout; no image is
+part of the asset.

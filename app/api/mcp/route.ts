@@ -5,6 +5,8 @@ import { verifyMcpToken } from '@/lib/mcp/auth';
 import { answerClientAbort } from '@/lib/mcp/clientAbort';
 import { enforceMcpRateLimit } from '@/lib/rateLimit/mcpGuard';
 import { stampRateLimitHeaders } from '@/lib/rateLimit/guard';
+import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
+import { PROTECTED_RESOURCE_METADATA_PATH } from '@/lib/oauth/config';
 
 // The Motir MCP server (Story 7.8 · Subtask 7.8.4) — one streamable-HTTP
 // endpoint exposing the PM core to AI agents and the CLI (7.9), all of which
@@ -88,8 +90,21 @@ async function limitedHandler(req: Request): Promise<Response> {
 // `answerClientAbort` sits INSIDE the auth gate, around the layer that reads the
 // body: a caller that hangs up before `mcp-handler` has read it answers 499
 // rather than surfacing `Error: aborted` as a server fault (MOTIR-6853).
-const handler = withMcpAuth(answerClientAbort(limitedHandler), verifyMcpToken, {
-  required: true,
-});
+//
+// The 401 names where OAuth starts (MOTIR-6983): `WWW-Authenticate: Bearer …
+// resource_metadata="<base>/.well-known/oauth-protected-resource"`, the RFC 9728
+// pointer an MCP client follows to discover the authorization server. `<base>` is
+// the app's own origin (`lib/baseUrl.ts`) rather than the request's, so the header
+// names the same document the metadata route serves behind any proxy. Built per
+// request because the origin is read at request time, as every derived URL is.
+const innerHandler = answerClientAbort(limitedHandler);
+
+function handler(req: Request): Promise<Response> {
+  return withMcpAuth(innerHandler, verifyMcpToken, {
+    required: true,
+    resourceUrl: resolveBaseUrlTrimmed(),
+    resourceMetadataPath: PROTECTED_RESOURCE_METADATA_PATH,
+  })(req);
+}
 
 export { handler as GET, handler as POST, handler as DELETE };
