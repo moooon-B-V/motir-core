@@ -768,6 +768,10 @@ export const PRESS_READ_RETRY_WAITS_MS = [1_000, 1_000] as const;
  * Only an AWAITING approve-to-merge gate is read for: a decided or superseded one is
  * refused by the decide door with its own true reason (Panel 5b's stale tab), and reading
  * the host first would only make that refusal slower.
+ *
+ * ⚠️ THIS IS THE DIRECT PRESS ONLY. A press on a PRIMARY that carries this gate with it is
+ * read by {@link refusePrimaryPressOnConflict} (Bug MOTIR-7006), which ends in the same
+ * {@link refuseIfMembersConflict}.
  */
 async function refuseAtPressOnConflict(gateId: string, ctx: ServiceContext): Promise<void> {
   const target = await withWorkspaceContext(ctx, async (tx) => {
@@ -775,7 +779,8 @@ async function refuseAtPressOnConflict(gateId: string, ctx: ServiceContext): Pro
     if (!gate || gate.kind !== APPROVAL_KIND || gate.state !== 'awaiting') return null;
     // A PRIMARY question still awaiting (a design, a decision, an acceptance) refuses this
     // press by name in the decide door (MOTIR-5785) — and that refusal promises the host
-    // was never called, so nothing here asks it either.
+    // was never called, so nothing here asks it either. The PRIMARY's own press is not
+    // this one: it reads the host itself, before its decision (MOTIR-7006).
     const awaiting = await approvalGateRepository.findAwaitingByWorkItem(
       requireGateCard(gate, 'pullRequestMergeService'),
       tx,
@@ -786,10 +791,48 @@ async function refuseAtPressOnConflict(gateId: string, ctx: ServiceContext): Pro
       tx,
     );
   });
-  if (!target) return;
+  if (target) await refuseIfMembersConflict(gateId, target, ctx);
+}
 
+/**
+ * THE SAME READ, FOR A PRESS ON A PRIMARY (Bug MOTIR-7006; MOTIR-5915's promise, kept on
+ * the press a person usually makes). A design, decision or acceptance gate whose card also
+ * holds an AWAITING approve-to-merge gate decides that gate with it and merges — so a
+ * conflicting member has to refuse THIS press before the primary is decided, or the card
+ * reads Approved over a merge that can only fail.
+ *
+ * A conflict refuses the WHOLE press: the primary stays awaiting as well, because nothing
+ * was decided. `settleReading` has withdrawn the merge gate and held the card at
+ * Implemented, so a press once the conflict is resolved answers the primary over the
+ * next green, the ordinary way.
+ *
+ * ⚠️ NO COMPANION, NO READ. With no awaiting merge gate the press merges nothing (the
+ * merge is HELD, `design-result.md` AMENDMENT 6 Q4), and whether a primary may be
+ * approved over a set that cannot land yet is the design / acceptance ADRs' question,
+ * not this guard's. A primary that is not awaiting is refused by the decide door with
+ * its own reason, so it is not read for either.
+ */
+async function refusePrimaryPressOnConflict(gateId: string, ctx: ServiceContext): Promise<void> {
+  const target = await withWorkspaceContext(ctx, async (tx) => {
+    const gate = await approvalGateRepository.findById(gateId, tx);
+    if (!gate || !isPrimaryKind(gate.kind) || gate.state !== 'awaiting') return null;
+    const card = requireGateCard(gate, 'pullRequestMergeService');
+    const awaiting = await approvalGateRepository.findAwaitingByWorkItem(card, tx);
+    if (!awaiting.some((row) => row.kind === APPROVAL_KIND)) return null;
+    return workItemDeliveryRepository.listByWorkItemWithChecks(card, tx);
+  });
+  if (target) await refuseIfMembersConflict(gateId, target, ctx);
+}
+
+/** Ask the host about every open member of `deliveries`, settle each computed reading, and
+ *  refuse the press on `gateId` with `MERGE_CONFLICT` `atPress` when any member conflicts. */
+async function refuseIfMembersConflict(
+  gateId: string,
+  deliveries: Awaited<ReturnType<typeof workItemDeliveryRepository.listByWorkItemWithChecks>>,
+  ctx: ServiceContext,
+): Promise<void> {
   const conflicts: MergeConflictMember[] = [];
-  for (const delivery of target) {
+  for (const delivery of deliveries) {
     if (delivery.pullRequest.state !== 'open' || delivery.pullRequest.merged) continue;
     const reading = await readAtPress(delivery.githubPullRequestId);
     if (!reading) continue;
@@ -901,6 +944,10 @@ async function approvePrimaryAndMerge(
   input: Omit<DecideGateInput, 'decision'>,
   ctx: ServiceContext,
 ): Promise<ApproveAndMergeResult> {
+  // STEP 0 — ASK THE HOST BEFORE THE PRIMARY IS DECIDED (Bug MOTIR-7006), exactly as the
+  // merge gate's own press does: this press decides that gate too.
+  await refusePrimaryPressOnConflict(input.gateId, ctx);
+
   const approval = await approvalGatesService.decide({ ...input, decision: 'approve' }, ctx);
 
   const merge = await withWorkspaceContext(ctx, async (tx) =>

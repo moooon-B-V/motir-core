@@ -353,6 +353,13 @@ describe('the merge follows ONLY the decision', () => {
     const [decision] = await gatesOf(item.id, 'decision_approval');
     const [merge] = await gatesOf(item.id, 'pull_request_approval');
     expect(merge?.state).toBe('awaiting');
+    // The decision's press asks the host whether the member can merge first (MOTIR-7006);
+    // the token is stubbed above, so answer here rather than let it reach GitHub.
+    vi.spyOn(github, 'readChangeRequestMergeability').mockResolvedValue({
+      mergeable: true,
+      mergeableState: 'clean',
+      headSha: null,
+    });
     const host = vi
       .spyOn(github, 'mergeChangeRequest')
       .mockResolvedValue({ outcome: 'merged', commitSha: 'merge-sha' });
@@ -435,5 +442,57 @@ describe('a card that is not an agent’s decision is untouched', () => {
 
     expect(await gatesOf(item.id, 'decision_approval')).toEqual([]);
     expect(await settle(item, pr.id)).toEqual([{ pullRequestId: pr.id, headSha: HEAD }]);
+  });
+});
+
+// Bug MOTIR-7006 — the decision's press decides the merge gate too, so a member the host
+// reports `dirty` refuses it BEFORE the decision is written, as the merge gate's own press
+// does (MOTIR-5915).
+describe('a conflict found at the DECISION press writes nothing (MOTIR-7006)', () => {
+  it('a `dirty` member refuses the press: neither gate approved, the merge gate withdrawn as `conflict`, the card at Implemented, nothing merged', async () => {
+    const { item } = await decisionCard();
+    await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(item.id, 'in_review', fx.ctx);
+    await withWorkspaceContext(fx.ctx, async (tx) => {
+      const { reconcileGatesFor } = await import('@/lib/services/gateSetFor');
+      await reconcileGatesFor(await tx.workItem.findUniqueOrThrow({ where: { id: item.id } }), tx);
+    });
+    const [decision] = await gatesOf(item.id, 'decision_approval');
+    const [merge] = await gatesOf(item.id, 'pull_request_approval');
+    expect(merge?.state).toBe('awaiting');
+    vi.spyOn(github, 'readChangeRequestMergeability').mockResolvedValue({
+      mergeable: false,
+      mergeableState: 'dirty',
+      headSha: HEAD,
+    });
+    const host = vi.spyOn(github, 'mergeChangeRequest');
+
+    await expect(
+      pullRequestMergeService.decideGate(
+        {
+          stamp: DECIDED_WITHOUT_A_READER,
+          gateId: decision!.id,
+          decision: 'approve',
+          source: 'ui',
+        },
+        fx.ctx,
+      ),
+    ).rejects.toMatchObject({
+      tag: 'MERGE_CONFLICT',
+      atPress: true,
+      conflicts: [{ pullRequest: 'acme/web#21', baseRef: 'main' }],
+    });
+
+    const gate = (id: string) => adminDb.approvalGate.findUniqueOrThrow({ where: { id } });
+    expect([(await gate(decision!.id)).state, (await gate(decision!.id)).decidedAt]).toEqual([
+      'awaiting',
+      null,
+    ]);
+    const mergeRow = await gate(merge!.id);
+    expect([mergeRow.state, mergeRow.supersededCause]).toEqual(['superseded', 'conflict']);
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } })).status).toBe(
+      'implemented',
+    );
+    expect(host).not.toHaveBeenCalled();
   });
 });
