@@ -207,9 +207,15 @@ export const agentInstanceLapseService = {
     for (const row of due) {
       let unlimited = unlimitedByOrg.get(row.organizationId);
       if (unlimited === undefined) {
-        const org = await readOrg(row.organizationId);
         // An org that cannot be read is not deleted from: a destructive act
-        // waits for a definite answer.
+        // waits for a definite answer, and the next pass asks again.
+        const org = await readOrg(row.organizationId).catch((err: unknown) => {
+          console.error('[agentInstanceLapseService] could not read the org — deleting nothing', {
+            organizationId: row.organizationId,
+            detail: describeError(err),
+          });
+          return null;
+        });
         unlimited = !org || isUnlimitedAgentOrg(org);
         unlimitedByOrg.set(row.organizationId, unlimited);
         if (org && isUnlimitedAgentOrg(org)) await this.clearLapse(row.organizationId);
