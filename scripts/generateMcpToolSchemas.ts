@@ -9,8 +9,10 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // The MCP tool INPUT-SCHEMA generator (Story MOTIR-3875 · Subtask MOTIR-4389).
 //
 // It turns ONE input — a live `tools/list` handshake against `buildMcpServer` —
-// into ONE artifact: `lib/apiDocs/mcpToolSchemas.ts`, the map the published
-// catalogue (`GET /api/docs/mcp-tools.json`) serves as each tool's `inputSchema`.
+// into ONE artifact: `lib/apiDocs/mcpToolSchemas.ts`, the three maps the
+// published catalogue (`GET /api/docs/mcp-tools.json`) serves as each tool's
+// `inputSchema`, `title` and `annotations` (the last two since MOTIR-7002 — the
+// hints the registration seam injects from `lib/mcp/toolAnnotations.ts`).
 //
 // ── Why a GENERATED artifact and not a direct read ──────────────────────────
 // The schemas are declared inside each tool's `registerTool(...)` call, so the
@@ -48,21 +50,22 @@ export const MCP_TOOL_SCHEMAS_FILE = join('lib', 'apiDocs', 'mcpToolSchemas.ts')
 /** `tools/list` runs no handler and needs no actor, so a stub context is honest. */
 const STUB_CONTEXT = { userId: 'generate', workspaceId: 'generate' } as unknown as ServiceContext;
 
-/** One tool as the handshake reports it — only the two fields this script reads. */
-interface ListedTool {
+/** One tool as the handshake reports it — only the four fields this script reads. */
+export interface ListedTool {
   name: string;
+  title?: string;
   inputSchema: unknown;
+  annotations?: unknown;
 }
 
 /**
- * Every tool the server exposes, with the schema `tools/list` serves for it.
- *
- * SORTED by name, because the handshake's order is the registry's registration
- * order and a re-ordering there would otherwise rewrite this file for no change
- * in content. Determinism is what makes the freshness guard a signal instead of
- * a source of churn.
+ * Every tool the server exposes, as `tools/list` serves it — SORTED by name,
+ * because the handshake's order is the registry's registration order and a
+ * re-ordering there would otherwise rewrite the file for no change in content.
+ * Determinism is what makes the freshness guard a signal instead of a source of
+ * churn.
  */
-export async function listShippedToolSchemas(): Promise<[string, unknown][]> {
+export async function listShippedTools(): Promise<ListedTool[]> {
   const server = buildMcpServer(() => STUB_CONTEXT);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
@@ -70,15 +73,19 @@ export async function listShippedToolSchemas(): Promise<[string, unknown][]> {
   await client.connect(clientTransport);
   const listed = (await client.listTools()).tools as ListedTool[];
   await client.close();
-  return listed
-    .map((tool): [string, unknown] => [tool.name, tool.inputSchema])
-    .sort(([a], [b]) => a.localeCompare(b));
+  return [...listed].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Every tool the server exposes, with the schema `tools/list` serves for it, by name. */
+export async function listShippedToolSchemas(): Promise<[string, unknown][]> {
+  return (await listShippedTools()).map((tool): [string, unknown] => [tool.name, tool.inputSchema]);
 }
 
 const HEADER = `// ⚠️ GENERATED — DO NOT EDIT. Run \`pnpm generate:mcp-tool-schemas\`.
 //
-// Every MCP tool's \`inputSchema\`, exactly as \`tools/list\` serves it
-// (Story MOTIR-3875 · Subtask MOTIR-4389). Written by
+// Every MCP tool's \`inputSchema\` (Story MOTIR-3875 · Subtask MOTIR-4389), and
+// its \`title\` and \`annotations\` (Story MOTIR-6974 · Subtask MOTIR-7002) —
+// three values, exactly as \`tools/list\` serves them. Written by
 // \`scripts/generateMcpToolSchemas.ts\` from a live handshake against
 // \`buildMcpServer\`, and pinned byte-for-byte against a fresh one by
 // \`tests/mcp/tool-schema-truth.test.ts\` — so this file cannot drift from the
@@ -88,22 +95,29 @@ const HEADER = `// ⚠️ GENERATED — DO NOT EDIT. Run \`pnpm generate:mcp-too
 // \`lib/apiDocs/mcp.ts\` is a LEAF: it imports \`lib/mcp/toolPermissions.ts\` and
 // nothing else from \`lib/mcp/\`, so that the anonymous
 // \`GET /api/docs/mcp-tools.json\` handler does not pull the tool registry, the
-// services and Prisma behind it. The schemas live inside \`registerTool(...)\`
-// calls that only the registry can reach. This module is the seam: a value the
+// services and Prisma behind it. The schemas and titles live inside
+// \`registerTool(...)\` calls that only the registry can reach, and the hints are
+// what the registration seam injects there. This module is the seam: a value the
 // registry produced, in a file that imports nothing at runtime.
 //
-// The map is TOTAL over the tool set by TYPE — a tool added to the registry
+// Each map is TOTAL over the tool set by TYPE — a tool added to the registry
 // forces a \`TOOL_PERMISSIONS\` entry, which makes this annotation incomplete and
 // this file a compile error until it is regenerated.
 
 import type { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
-import type { McpToolInputSchema } from './mcpToolSchema';
+import type { McpToolHints, McpToolInputSchema } from './mcpToolSchema';
+`;
 
-/** Tool name → the draft-07 JSON Schema of its arguments. */
-export const MCP_TOOL_INPUT_SCHEMAS: Record<
-  keyof typeof TOOL_PERMISSIONS,
-  McpToolInputSchema
-> = `;
+/** One generated map: its doc line, its exported name, its value type and its values. */
+function emitMap(
+  doc: string,
+  name: string,
+  valueType: string,
+  entries: [string, unknown][],
+): string {
+  const body = entries.map(([tool, value]) => `${JSON.stringify(tool)}: ${JSON.stringify(value)},`);
+  return `\n/** ${doc} */\nexport const ${name}: Record<keyof typeof TOOL_PERMISSIONS, ${valueType}> = {\n${body.join('\n')}\n};\n`;
+}
 
 /**
  * The file's contents, from a live handshake.
@@ -119,12 +133,29 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<
  * formatting rather than on staleness. The config must be READ.
  */
 export async function generateMcpToolSchemas(): Promise<string> {
-  const entries = await listShippedToolSchemas();
-  const body = `{\n${entries
-    .map(([name, schema]) => `${JSON.stringify(name)}: ${JSON.stringify(schema)},`)
-    .join('\n')}\n}`;
+  const tools = await listShippedTools();
+  const body = [
+    emitMap(
+      'Tool name → the draft-07 JSON Schema of its arguments.',
+      'MCP_TOOL_INPUT_SCHEMAS',
+      'McpToolInputSchema',
+      tools.map((tool) => [tool.name, tool.inputSchema]),
+    ),
+    emitMap(
+      'Tool name → the human `title` the tool registers (guarded to 1–64 characters at the seam).',
+      'MCP_TOOL_TITLES',
+      'string',
+      tools.map((tool) => [tool.name, tool.title]),
+    ),
+    emitMap(
+      'Tool name → the `annotations` (hints) the registration seam injects from `TOOL_ANNOTATIONS`.',
+      'MCP_TOOL_ANNOTATIONS',
+      'McpToolHints',
+      tools.map((tool) => [tool.name, tool.annotations]),
+    ),
+  ].join('');
   const options = await resolveConfig(MCP_TOOL_SCHEMAS_FILE);
-  return format(`${HEADER}${body};\n`, { ...options, filepath: MCP_TOOL_SCHEMAS_FILE });
+  return format(`${HEADER}${body}`, { ...options, filepath: MCP_TOOL_SCHEMAS_FILE });
 }
 
 /** What is committed today, or `null` when the file does not exist yet. */
