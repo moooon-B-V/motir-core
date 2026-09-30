@@ -217,11 +217,12 @@ describe('the pure protocol', () => {
 });
 
 describe('the adapter registry', () => {
-  it('registers NO real adapter: every profile answers unsupported until an adapter card lands', () => {
-    expect(CHAT_ADAPTERS).toEqual([]);
-    for (const profile of ['claude', 'codex', 'opencode', 'kimi', 'goose', 'aider']) {
-      expect(resolveChatAdapter(profile)).toBeNull();
-    }
+  it('registers at most one adapter per profile, each resolved by its own id, and never aider', () => {
+    const profiles = CHAT_ADAPTERS.map((adapter) => adapter.profile);
+    expect(new Set(profiles).size).toBe(profiles.length);
+    for (const adapter of CHAT_ADAPTERS) expect(resolveChatAdapter(adapter.profile)).toBe(adapter);
+    // Q1: aider has no machine-readable output for a chat to follow.
+    expect(resolveChatAdapter('aider')).toBeNull();
     expect(resolveChatAdapter(null)).toBeNull();
   });
 

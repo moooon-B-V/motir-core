@@ -1,0 +1,5 @@
+---
+'@motir/cli': minor
+---
+
+The agent chat now works with Claude Code (MOTIR-7014), on an Anthropic API key or a cloud-provider sign-in only. Before a turn, the chat asks the installed `claude` for `claude auth status --json` and runs only when Claude Code authenticates with an API key the user configured or with a cloud provider (Bedrock, Vertex, Foundry); on a Claude subscription sign-in it answers `subscription_signin` and starts nothing, and a turn whose stream reveals no API key is killed at once and ends failed with the same code. A turn runs the unmodified `claude -p --output-format stream-json --verbose --include-partial-messages --dangerously-skip-permissions` with the prompt on stdin, streams its reply word by word, draws reads, edits (with their diff) and commands (with their output) as tool rows, and stops on SIGINT. The session list and a resumed session's earlier turns are read from Claude Code's own store for `$HOME/workspace`. Motir sets no API key, helper or `--bare` flag, and the terminal is unchanged.

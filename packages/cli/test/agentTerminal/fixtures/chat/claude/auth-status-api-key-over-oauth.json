@@ -1,0 +1,8 @@
+{
+  "loggedIn": true,
+  "authMethod": "oauth_token",
+  "apiProvider": "firstParty",
+  "email": "dev@example.com",
+  "subscriptionType": "max",
+  "apiKeySource": "ANTHROPIC_API_KEY"
+}
