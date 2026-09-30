@@ -2,7 +2,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import { ToFixTag, toFixTagId, toFixTagState } from '@/components/workItems/ToFixTag';
+import {
+  ToFixTag,
+  toFixTagId,
+  toFixTagNameKey,
+  toFixTagState,
+} from '@/components/workItems/ToFixTag';
 import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import { FIX_REASON_PRIORITY } from '@/lib/workItems/fixReason';
 import enMessages from '@/messages/en.json';
@@ -98,6 +103,45 @@ describe('ToFixTag — the label form (board card, quick view)', () => {
       messages: zhMessages,
     });
     expect(screen.getByRole('img', { name: '待修复 · 运行已中断' })).toBeTruthy();
+  });
+
+  // § 32 (MOTIR-6825): the SAME tag, its name naming the review agent — keyed by the gate
+  // the refusal was on. A surface that cannot tell the decider keeps the reason's name.
+  it('names the review agent when the gate says it sent the card back', () => {
+    render(
+      <ToFixTag
+        fixReason="changes_requested"
+        statusCategory="in_progress"
+        id="t-agent"
+        fixGate="agent_review"
+      />,
+    );
+    const el = document.getElementById('t-agent')!;
+    expect(el.getAttribute('title')).toBe('To fix · sent back by the review agent');
+    expect(el.textContent).toBe('To fix · sent back by the review agent');
+    expect(el.dataset.toFix).toBe('changes_requested');
+    cleanup();
+    render(
+      <ToFixTag
+        fixReason="changes_requested"
+        statusCategory="in_progress"
+        form="glyph"
+        fixGate="agent_review"
+      />,
+      { locale: 'zh', messages: zhMessages },
+    );
+    expect(screen.getByRole('img', { name: '待修复 · 已被审查代理退回' })).toBeTruthy();
+    cleanup();
+    render(
+      <ToFixTag
+        fixReason="changes_requested"
+        statusCategory="in_progress"
+        form="glyph"
+        fixGate="pull_request_approval"
+      />,
+    );
+    expect(screen.getByRole('img', { name: 'To fix · changes requested' })).toBeTruthy();
+    expect(toFixTagNameKey('ci_failed', 'agent_review')).toBe('ci_failed');
   });
 
   it('builds the card-scoped id the board points aria-describedby at', () => {

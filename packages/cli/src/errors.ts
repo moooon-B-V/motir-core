@@ -206,3 +206,17 @@ export class DispatchRunClosedError extends CliError {
     this.name = 'DispatchRunClosedError';
   }
 }
+
+/**
+ * 409 `REVIEW_STALE` — a hosted review run's verdict arrived LATE (MOTIR-6824;
+ * `approval-gates.md` §12.5): the version it names is no longer the one the review
+ * asks about, or the review was withdrawn or already decided. The server RECORDED it
+ * on the run and decided nothing. Typed on the CODE, because `motir review` answers
+ * it with a clean exit — the code moved, which is expected — rather than a failure.
+ */
+export class ReviewStaleError extends CliError {
+  constructor(message: string) {
+    super(message, { exitCode: 0 });
+    this.name = 'ReviewStaleError';
+  }
+}

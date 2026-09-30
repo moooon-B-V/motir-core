@@ -97,6 +97,8 @@ function dto(over: Partial<HomeWorkItemRowDto> & { identifier: string }): HomeWo
     viewerIsAssignee: true,
     viewerIsReporter: true,
     canContinueHosted: false,
+    canFixHosted: false,
+    repairRun: null,
     ...over,
   };
 }

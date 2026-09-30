@@ -1,7 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ProjectAccessLevel } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
@@ -16,7 +15,11 @@ import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
-import { modeForLegacyLevel, setProjectAccess } from '@/tests/helpers/projectAccess';
+import {
+  type LegacyAccessLevel,
+  modeForLegacyLevel,
+  setProjectAccess,
+} from '@/tests/helpers/projectAccess';
 
 // THE STORY GATE for MOTIR-2282 (Subtask MOTIR-2264) — run against the merged
 // surface of the story's cards, doing the three things a per-card unit test
@@ -44,7 +47,7 @@ interface Scenario {
   ctxs: Record<Persona, WorkspaceContext>;
 }
 
-async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<Scenario> {
+async function buildScenario(level: LegacyAccessLevel, slug: string): Promise<Scenario> {
   const owner = await usersService.createUser({
     email: `g-owner-${slug}@ex.com`,
     password: PASSWORD,
@@ -116,7 +119,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   };
 }
 
-const LEVELS: ProjectAccessLevel[] = ['open', 'limited', 'private', 'public'];
+const LEVELS: LegacyAccessLevel[] = ['open', 'limited', 'private', 'public'];
 const PERSONAS: Persona[] = ['owner', 'wsAdmin', 'stranger', 'viewer', 'member', 'admin'];
 
 // ═══════════════════════════════════════════════════════════════════════════

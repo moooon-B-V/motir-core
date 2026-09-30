@@ -28,6 +28,9 @@ import type { Locale } from '@/lib/i18n/locales';
 import { ArchivedBanner } from './_components/ArchivedBanner';
 import { PendingPlanNotice } from './_components/PendingPlanNotice';
 import { ToFixBanner } from './_components/ToFixBanner';
+import { isReviewSentBack } from '@/lib/workItems/reviewSentBack';
+import { ToFixHostedDoor } from './_components/ToFixHostedDoor';
+import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { PlanHistorySection } from './_components/PlanHistorySection';
 import { PLAN_HISTORY_FIRST_PAGE } from './_components/planHistoryPaging';
 import { CoreFieldsPanel } from './_components/CoreFieldsPanel';
@@ -223,6 +226,10 @@ export default async function ItemView({
     hasChildren: detail.children.length > 0,
   });
 
+  // A card a REVIEW sent back (MOTIR-6930) — decides the To fix banner's hosted door and
+  // whether its open repair is read in the tier-two group below.
+  const reviewSentBack = isReviewSentBack(detail.fixReason, detail.fixDetail);
+
   // ── TIER TWO: what the reader came for, awaited before the first flush ─────
   //
   // The title, both prose bodies, the children list and the core-fields rail.
@@ -250,6 +257,7 @@ export default async function ItemView({
     heldTransitions,
     pendingDecisions,
     planHold,
+    repairRun,
   ] = await Promise.all([
     // Members back the inline assignee picker + reporter display, and the
     // Activity section's mention candidates. Assignable users are scoped by
@@ -348,6 +356,15 @@ export default async function ItemView({
     // move, and the status control says so under its value. `null` on almost every
     // card (anything not at Planning stops after the item row).
     planTargetLockService.readPlanHold(item.id, svc),
+    // FIX ON THE HOSTED AGENT ON THE TO FIX BANNER (MOTIR-6930; `design/workbench` § 32
+    // Panel 4) — a card a REVIEW sent back. Its open repair, if any, is read ONLY for such
+    // a card, so every other page pays nothing for it; in THIS group, because the banner
+    // sits at the top of the content column and it adds no serial await.
+    reviewSentBack && !isVisitor
+      ? workItemRepairService
+          .findOpenRepairRuns([item.id], svc)
+          .then((runs) => runs.get(item.id) ?? null)
+      : null,
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
@@ -383,6 +400,9 @@ export default async function ItemView({
   const statusCategory =
     detail.workflow.statuses.find((s) => s.key === item.status)?.category ?? null;
   const archivedAtLabel = item.archivedAt ? formatDate(item.archivedAt, locale) : '';
+  // THE RUN HOSTED RULE (MOTIR-691) — who may start a hosted run on this card: the Run
+  // section's door, Continue hosted and *Fix on the hosted agent* all follow it.
+  const canRunHosted = canEdit && !isArchived && statusCategory !== 'done';
 
   return (
     <EstimationConfigProvider config={estimationConfig} canEdit={canEdit}>
@@ -572,6 +592,12 @@ export default async function ItemView({
                       fixReason={detail.fixReason}
                       fixDetail={detail.fixDetail}
                       statusCategory={statusCategory}
+                      repairRun={repairRun}
+                      hostedDoor={
+                        reviewSentBack && canRunHosted ? (
+                          <ToFixHostedDoor itemKey={item.identifier} viewerId={ctx.userId} />
+                        ) : null
+                      }
                     />
                     {/* MOTIR-4197: the pending-plan indicator — LAST in the slot,
               after the archived banner and the To fix banner when they render (present before
@@ -681,7 +707,7 @@ export default async function ItemView({
                         canReplan={canEdit && !isArchived}
                         parentIdentifier={detail.parent?.identifier ?? null}
                         hostedDoor={
-                          canEdit && !isArchived && statusCategory !== 'done'
+                          canRunHosted
                             ? {
                                 ready: detail.readiness.ready,
                                 openBlockers: detail.readiness.openBlockers.length,

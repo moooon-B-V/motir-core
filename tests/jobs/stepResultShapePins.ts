@@ -324,6 +324,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/test-deferring-job.ts',
     shape: '{ bootedAt: string }',
   },
+  'purge-expired-job-runs': {
+    file: 'lib/jobs/definitions/jobRunReap.ts',
+    shape: '{ batches: number; deleted: number; drained: boolean; kept: number }',
+  },
   'reap-abandoned-job-runs': {
     file: 'lib/jobs/definitions/jobRunReap.ts',
     shape: '{ abandoned: number; scanned: number; stillLive: number }',

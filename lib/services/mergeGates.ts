@@ -10,9 +10,12 @@ import {
 } from '@/lib/repositories/githubPullRequestRepository';
 import {
   acceptanceRefusalHoldsMerge,
+  agentReviewStanding,
   designHoldsMerge,
   primaryApprovalStandsForMerge,
 } from '@/lib/approvalGates/gateSet';
+import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -157,6 +160,42 @@ async function primaryApprovalCarries(
 }
 
 /**
+ * Does the REVIEW AGENT hold this card's merge (Story MOTIR-1626 · MOTIR-6819;
+ * `approval-gates.md` §12.2)? True while the switch is on in a `manual` project and the
+ * review at the delivery set's CURRENT version has not passed — owed, awaiting, or sent
+ * back. {@link agentReviewStanding} is the one statement of it, shared with the gate set.
+ *
+ * ⚠️ WHAT IT HOLDS IS A PRIMARY'S CARRIED MERGE. The predicate stops asking the merge
+ * question while the review is owed, but a design, decision or acceptance approved before
+ * the set went green carries the merge with no merge gate at all (AMENDMENT 6 Q4) — and
+ * that carry is settled HERE, by the green verdict or by `settleAfterPrimaryApproval`. So
+ * the carry waits for the review, and a review's pass reaches this same settlement
+ * (`agentReviewHandler`'s after-commit), the way a primary approved before green does.
+ * No code merges unreviewed, whichever gate a person pressed.
+ */
+export async function agentReviewHoldsMerge(
+  item: WorkItem,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const settings = await projectRepository.findMergeSettings(item.projectId, tx);
+  if (!settings?.reviewAgentEnabled || settings.prMergeMode !== 'manual') return false;
+  const [deliveries, latestAgentReviewGate, latestMergeGate] = await Promise.all([
+    workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
+    approvalGateRepository.findLatestByWorkItem(item.id, 'agent_review', tx),
+    approvalGateRepository.findLatestByWorkItem(item.id, 'pull_request_approval', tx),
+  ]);
+  const standing = agentReviewStanding({
+    reviewAgentEnabled: settings.reviewAgentEnabled,
+    prMergeMode: settings.prMergeMode,
+    workItemId: item.id,
+    version: deliverySetVersion(deliveries.map((delivery) => deliveryMemberVersion(delivery))),
+    latestAgentReviewGate,
+    latestMergeGate,
+  });
+  return standing === 'owed' || standing === 'refused';
+}
+
+/**
  * {@link designHoldsMerge}, read from the card's own rows — whether an unanswered design
  * holds this card's merge (Bug MOTIR-5762). Exported for the review sync, the other merge
  * path that does not go through the design's own press.
@@ -212,6 +251,10 @@ export async function settleGreenVerdict(
     // ACCEPTANCE's (MOTIR-5789) — and, for a DECISION card, in
     // `decisionApprovalStandsForMerge` (MOTIR-5677, clause 5).
     if (!(await primaryApprovalCarries(args.item, tx))) return [];
+    // ⚠️ …AND THE CARRY WAITS FOR THE REVIEW AGENT (MOTIR-6819; `approval-gates.md` §12.2):
+    // a primary approved while the review has not passed records its decision and carries
+    // nothing yet. The review's pass settles the card again and lands here.
+    if (await agentReviewHoldsMerge(args.item, tx)) return [];
   } else if (mode?.prMergeMode !== 'auto') {
     return [];
   } else if ((await resolveRunTargetFor(args.item, tx)).kind === 'ancestor') {

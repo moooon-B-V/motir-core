@@ -2,6 +2,7 @@ import type {
   ApprovalGate,
   ApprovalGateKind,
   ApprovalGateRefusalVerdict,
+  ApprovalGateState,
   Prisma,
   WorkItem,
 } from '@/generated/prisma/client';
@@ -12,6 +13,7 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { ApprovalGateKindUnregisteredError } from '@/lib/approvalGates/errors';
 import { acceptanceResultGateHandler } from '@/lib/approvalGates/acceptanceResultHandler';
+import { agentReviewGateHandler } from '@/lib/approvalGates/agentReviewHandler';
 import { decisionApprovalGateHandler } from '@/lib/approvalGates/decisionApprovalHandler';
 import { decisionChoiceGateHandler } from '@/lib/approvalGates/decisionChoiceHandler';
 import { decisionConfirmationGateHandler } from '@/lib/approvalGates/decisionConfirmationHandler';
@@ -92,6 +94,11 @@ import type { TransactionBudget } from '@/lib/workspaces/context';
 // MOTIR-6035 registers `plan_approval`: a PLAN, on a gate that belongs to NO work item
 // (Story MOTIR-6012; ADR §11). Its verbs are Approve and a NEW Decline — no Request
 // changes — and it writes a plan's status, never a work item's.
+//
+// MOTIR-6819 registers `agent_review`: the REVIEW AGENT's question over the run target's
+// green delivery set, asked instead of the merge question while the project's switch is
+// on (Story MOTIR-1626; ADR §12). Decided by the review run (`review_agent`) through an
+// internal entry, or by the routed person continuing without it — never refused by one.
 export type RegisteredGateKind =
   | 'design_result'
   | 'decision_approval'
@@ -99,7 +106,8 @@ export type RegisteredGateKind =
   | 'pull_request_approval'
   | 'decision_choice'
   | 'decision_confirmation'
-  | 'plan_approval';
+  | 'plan_approval'
+  | 'agent_review';
 
 /**
  * The kinds that are deliberately NOT registered yet — the registry's
@@ -109,7 +117,8 @@ export type RegisteredGateKind =
  * | ----------------------- | -------------------------------------------------- |
  * | `pull_request_merge`    | nobody — RETIRED (MOTIR-5616)                      |
  *
- * (`plan_approval` was a NOT-YET here from MOTIR-6032 until MOTIR-6035 built it.)
+ * (`plan_approval` was a NOT-YET here from MOTIR-6032 until MOTIR-6035 built it, and
+ * `agent_review` from MOTIR-6818 until MOTIR-6819 built it.)
  *
  * ⚠️ THE ONE HOLE LEFT IS NOT A NOT-YET. `decision_approval` was the other, a kind
  * NOT BUILT YET with a card that would build it — and MOTIR-5676 built it.
@@ -179,7 +188,10 @@ export interface GateEffect {
     /** A `plan_approval` decision (ADR §11.5): what approve and decline change is the
      *  PLAN's status. Approve's materialize writes work-item statuses on each item's own
      *  history, and those are the plan's effects, never this gate's `outcomeRef`. */
-    | 'plan_decision_writes_no_work_item';
+    | 'plan_decision_writes_no_work_item'
+    /** An `agent_review` decision (ADR §12.4): it owns no transition. A pass raises the
+     *  ordinary flow, which owns its own writes; the agent's refusal writes nothing. */
+    | 'agent_review_moves_nothing';
   /** WHAT A CHOICE PICKED (MOTIR-5893) — returned by the `decision_choice` handler's
    *  approve and written by the door onto the deciding row, which then records the
    *  option's id as `outcomeRef`. Absent on every other kind's effect. */
@@ -477,6 +489,16 @@ export interface GateHandler<TSubject = unknown> {
   afterRollback?(err: unknown, args: GateOutsideTransactionArgs): Promise<unknown>;
 
   /**
+   * WHAT THE DECISION CAUSES ONCE ITS OWN ROW SAYS SO (Story MOTIR-1626 · MOTIR-6819; ADR
+   * §12.4) — run by the door in its transaction AFTER the deciding write, under the same
+   * locks. For a kind whose consequence is a question about the card's gates that must
+   * read this gate as DECIDED: the review agent's pass raises the approve-and-merge gate
+   * through `reconcileGatesFor`, and the gate set would still see the review awaiting if
+   * that ran inside `approve`, which the door calls before it writes. Absent: nothing.
+   */
+  afterDecisionWritten?(args: GateEffectArgs & { state: ApprovalGateState }): Promise<void>;
+
+  /**
    * The interactive-transaction budget the door opens with for this kind, when the
    * default is too small (MOTIR-6035: a plan's approve materializes a subtree —
    * `APPROVE_TX_BUDGET`). Absent: Prisma's defaults.
@@ -496,6 +518,7 @@ export const APPROVAL_GATE_HANDLERS: Record<RegisteredGateKind, GateHandler> = {
   decision_choice: decisionChoiceGateHandler,
   decision_confirmation: decisionConfirmationGateHandler,
   plan_approval: planApprovalGateHandler,
+  agent_review: agentReviewGateHandler,
 };
 
 /** Narrow a gate's kind to one this build can dispatch. */

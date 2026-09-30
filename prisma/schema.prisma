@@ -1374,18 +1374,20 @@ model Project {
   /// floor `manual` and a chosen `manual` are the same bytes, and a default
   /// would overwrite a person's choice (§7's 2026-09-13 amendment).
   prMergeModeDecidedAt             DateTime?             @map("pr_merge_mode_decided_at")
-  /// The RETIRED browse-access level (Story 6.4) — superseded by `accessMode`.
-  /// Neither read (MOTIR-6687) nor written (MOTIR-6692); the column stays in the
-  /// database for one more release, and its default fills it on insert.
-  // ⚠️ `@ignore`d so the generated client stops selecting it, pending the phase-3 drop (MOTIR-6692 → MOTIR-6694).
-  accessLevel                      ProjectAccessLevel    @default(open) @ignore
+  /// Whether this project's green cards are REVIEWED by the review agent before the
+  /// approve-and-merge gate is asked or anything auto-merges (Story MOTIR-1626 ·
+  /// ADR `approval-gates.md` §12). Orthogonal to `prMergeMode`, and OFF by default:
+  /// a review is a hosted run paid from the organisation's AI credits, so no
+  /// existing project starts paying for one. Nothing is backfilled.
+  reviewAgentEnabled               Boolean               @default(false) @map("review_agent_enabled")
   /// The project's ACCESS MODE (Story MOTIR-6169 · MOTIR-6541) — who may ENTER
   /// it: `workspace` (every Full-scope workspace member, plus the people added),
   /// `members` (only the people added) or `public` (as `workspace`, plus anyone
   /// with the link) — `docs/decisions/role-model.md` Q1. The ONE column a
   /// project's access is read from: stored, never derived (MOTIR-6686 filled
   /// every NULL and made it NOT NULL). A project created without choosing one is
-  /// Open to the workspace.
+  /// Open to the workspace. It replaced the browse-access LEVEL (`accessLevel`,
+  /// Story 6.4), which was retired in three phases and dropped by MOTIR-6694.
   ///
   /// ⚠️ `projectRepository.setAccessMode` is its only writer.
   accessMode                       ProjectAccessMode     @default(workspace) @map("access_mode")
@@ -2078,27 +2080,6 @@ enum RoleMigrationReason {
   project_access_lost
 
   @@map("role_migration_reason")
-}
-
-/// A project's browse-access level (`project.accessLevel`, Story 6.4),
-/// mirroring Jira team-managed projects: `open` = any workspace member views +
-/// edits; `limited` = any member views + comments (no edit); `private` = only
-/// explicit project members. Defaults to `open` so existing projects backfill
-/// safely (no lockout). Closed + stable, so a Postgres enum.
-enum ProjectAccessLevel {
-  open
-  limited
-  private
-  /// `public` (Story 6.12) — the project is open for read-only VIEW to ANYONE
-  /// on the web (no sign-in), ACROSS orgs/workspaces. The openness ladder is
-  /// public > open > limited > private; `public` is the ONLY level that crosses
-  /// the org boundary for READ (the single exception the access policy carves).
-  /// The default stays `open` — a project becomes public only by an explicit
-  /// admin action (the make-public toggle, Subtask 6.12.8), so adding the value
-  /// locks nothing out.
-  public
-
-  @@map("project_access_level")
 }
 
 /// A project's ACCESS MODE (`project.accessMode`, Story MOTIR-6169 · MOTIR-6541)
@@ -4798,6 +4779,12 @@ enum ApprovalGateKind {
   /// (`approval_gate_work_item_iff_not_plan`), and `subjectId` is the `Plan.id`.
   /// UNREGISTERED until its handler lands (MOTIR-6035).
   plan_approval
+  /// The REVIEW AGENT's question (Story MOTIR-1626 · MOTIR-6818; ADR `approval-gates.md`
+  /// §12) — a hosted AI reviews the run target's green delivery SET against the card
+  /// BEFORE the approve-and-merge gate is asked or anything auto-merges. Raised only
+  /// when `Project.reviewAgentEnabled`; decided by the review run (`review_agent`) or
+  /// by the routed person continuing without it (§12.3).
+  agent_review
 
   @@map("approval_gate_kind")
 }
@@ -4891,6 +4878,9 @@ enum ApprovalGateSupersedeCause {
   /// about — CAN'T-LAND since `approval-gates.md` §4's FIFTH AMENDMENT (MOTIR-6595).
   /// Only the convergence writes it, because a live failure raises no gate to withdraw.
   queue_failed
+  /// The project turned its review agent OFF while this `agent_review` gate was
+  /// awaiting (ADR `approval-gates.md` §12.5); the ordinary flow is raised instead.
+  review_agent_disabled
 
   @@map("approval_gate_supersede_cause")
 }
@@ -4929,6 +4919,12 @@ enum ApprovalGateAuthority {
   /// `plan_approval` kind has no work item, so §2's relationship rungs are not true
   /// of its decider (ADR `approval-gates.md` §11.6).
   plan_permission
+  /// The REVIEW AGENT (ADR `approval-gates.md` §12.3) — a hosted review run's verdict
+  /// on an `agent_review` gate, through the run-token verdict route. `decidedById` is
+  /// the run's attributed user; THIS column is what says a machine decided, so the row
+  /// never claims a person reviewed the code. Never resolved by
+  /// `resolveGateAuthority`, and unreachable from a person's press.
+  review_agent
 
   @@map("approval_gate_authority")
 }
@@ -5105,6 +5101,13 @@ model ApprovalGate {
   /// (§6b). A cause says what HAPPENED to the question; it must never make a
   /// withdrawn question readable as a decision somebody made.
   supersededCause ApprovalGateSupersedeCause? @map("superseded_cause")
+
+  /// WHY an `agent_review` gate's review COULD NOT RUN (ADR `approval-gates.md` §12.6)
+  /// — the hosted start's refusal code (out of credits, no model offered, a
+  /// repository the run cannot read, …) or `no_verdict` for a run that ended without
+  /// one. Written on the AWAITING gate, never in `noteMd` (which is the decider's),
+  /// and cleared when *Review again* starts a new run. Null on every other kind.
+  reviewUnavailableReason String? @map("review_unavailable_reason")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -5494,8 +5497,10 @@ model ProjectTag {
 /// (the set semantics the per-project tagging service relies on) AND serves the
 /// forward "tags of project Y" read as its left-prefix. The `@@index([tagId])`
 /// is the reverse edge the tag-FACET read walks — "how many PUBLIC projects
-/// carry tag X" — counting through to `project.access_level = 'public'` (the
-/// 6.13.2 filter the category counts respect), so a tag's count is its
+/// carry tag X" — counting through to the project being public (the 6.13.2
+/// filter the category counts respect; it read `project.access_level = 'public'`
+/// until the level was retired for `access_mode` and dropped by MOTIR-6694), so
+/// a tag's count is its
 /// public-project count and a tag with only non-public projects never inflates
 /// the square.
 model ProjectTagAssignment {
@@ -10672,6 +10677,10 @@ enum DispatchCommand {
   /// DIED. Opened by the server's continue claim, like `fix`: the open `continue`
   /// run IS the one-continue-at-a-time lock, and it writes no status.
   continue
+  /// A hosted REVIEW run (Story MOTIR-1626; `hosted-agent-run.md` §8) — reads a green
+  /// card's pull requests against the card and returns ONE verdict to its
+  /// `agent_review` gate. It makes no to-do claim, pushes nothing and writes no status.
+  review
 
   @@map("dispatch_command")
 }
@@ -10809,6 +10818,14 @@ enum DispatchEventKind {
   /// appends it, and the CLI reporter NEVER emits it — the v1 ingest refuses it,
   /// so a client with a run token cannot forge a report the server never made.
   unbuildable_reported
+  /// A REVIEW run's verdict (MOTIR-6821; `hosted-agent-run.md` §8.4,
+  /// `approval-gates.md` §12.5) — every verdict the run submitted, the one that
+  /// decided the `agent_review` gate AND a late one that decided nothing, naming the
+  /// verdict, the version it was about and what became of it. It is also what makes a
+  /// run's verdict ONE: a run holding one is refused a second.
+  /// ⚠️ SERVER-WRITTEN, like `unbuildable_reported`: the verdict route's service
+  /// appends it, and the v1 ingest refuses it, so a run token cannot forge one.
+  review_verdict
 
   @@map("dispatch_event_kind")
 }

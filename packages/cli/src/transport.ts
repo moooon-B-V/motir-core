@@ -21,6 +21,7 @@ import {
   CliError,
   ContainerHasOpenChildrenError,
   DispatchRunClosedError,
+  ReviewStaleError,
   PlanNotDecidableError,
   IncompatibleServerError,
   NotFoundError,
@@ -475,6 +476,11 @@ export class V1Transport {
       // other, so it is typed rather than read out of the sentence.
       if (envelope.code === 'DISPATCH_RUN_TERMINAL') {
         return new DispatchRunClosedError(envelope.error);
+      }
+      // ⚠️ THE FIFTH: a hosted review's LATE verdict (MOTIR-6824). The server recorded
+      // it and decided nothing; `motir review` exits clean on this code and on no other.
+      if (envelope.code === 'REVIEW_STALE') {
+        return new ReviewStaleError(envelope.error);
       }
       const allowed = readAllowedTransitions(parsed);
       return new CliError(allowed ? `${envelope.error} Allowed: ${allowed}.` : envelope.error);

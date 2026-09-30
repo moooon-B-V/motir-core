@@ -297,7 +297,7 @@ describe('per reason — an event puts the card on To fix, and only there', () =
     });
   });
 
-  it('a Request changes decision → changes_requested, naming the reviewer and the note, repaired by `motir run`', async () => {
+  it('a Request changes decision → changes_requested, naming the reviewer and the note, repaired by `motir fix` (§12.7)', async () => {
     const s = await makeScenario('gate-changes@example.com');
     const { item } = await card(s, 'reviewed card', 104);
     await check(s, 104, 'sha-a', 'vitest', 'success');
@@ -310,7 +310,7 @@ describe('per reason — an event puts the card on To fix, and only there', () =
       status: 'in_review',
       fixReason: 'changes_requested',
       fixDetail: {
-        repair: 'run',
+        repair: 'fix',
         gate: 'pull_request_approval',
         notePreview: 'Rename the export button.',
       },
@@ -444,7 +444,7 @@ describe('priority — a dead run (Story MOTIR-6590 · MOTIR-6883, case 5)', () 
 });
 
 describe('the list agrees with the command — `motir fix`', () => {
-  it('a card is on To fix with a pull-request reason exactly when claimRepair would claim it', async () => {
+  it('a card is on To fix exactly when claimRepair would claim it', async () => {
     const s = await makeScenario('gate-matrix@example.com');
     const shapes: Array<{ label: string; id: string }> = [];
 
@@ -484,7 +484,9 @@ describe('the list agrees with the command — `motir fix`', () => {
     shapes.push({ label: 'red from In Progress', id: building.item.id });
 
     const toFix = await homeService.listToFix(hctx(s));
-    const PR_REASONS = ['queue_failed', 'conflicted', 'ci_failed'];
+    // Since MOTIR-6822 a card a review sent back is claimable too (the `review` class),
+    // so EVERY listed reason here is one `motir fix` claims.
+    const CLAIMED_REASONS = ['queue_failed', 'conflicted', 'ci_failed', 'changes_requested'];
     const verdicts: Record<string, { listed: string | null; claimed: boolean }> = {};
     for (const shape of shapes) {
       const row = toFix.items.find((r) => r.id === shape.id);
@@ -496,7 +498,7 @@ describe('the list agrees with the command — `motir fix`', () => {
         claimed: claim.outcome === 'claimed',
       };
       expect(
-        PR_REASONS.includes(row?.fixReason ?? ''),
+        CLAIMED_REASONS.includes(row?.fixReason ?? ''),
         `${shape.label}: listed ${row?.fixReason ?? 'nothing'}, claim ${claim.outcome}`,
       ).toBe(claim.outcome === 'claimed');
     }
@@ -506,8 +508,8 @@ describe('the list agrees with the command — `motir fix`', () => {
       'queue failed': { listed: 'queue_failed', claimed: true },
       running: { listed: null, claimed: false },
       'green (in review)': { listed: null, claimed: false },
-      // The one reason `motir fix` does not claim: its repair is a re-run.
-      'sent back': { listed: 'changes_requested', claimed: false },
+      // A review sent it back: claimed as the `review` class, its repair `fix` (§12.7).
+      'sent back': { listed: 'changes_requested', claimed: true },
       'red from In Progress': { listed: 'ci_failed', claimed: true },
     });
   });

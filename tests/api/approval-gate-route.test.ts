@@ -442,6 +442,83 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     expect(body.subject.members).toEqual([]);
   });
 
+  it('an AGENT REVIEW is ported by the Development block, with the review’s own state beside it (§12.3)', async () => {
+    // The overlay is where *Continue without the review* is decided (MOTIR-6323's rule), so
+    // an `agent_review` address resolves: the delivery set it reviewed, and the review's
+    // state read by the SAME service the item page reads it with — never `kind_not_built`.
+    const story = await twoRepoStory();
+    const gate = await rawGate(story, 'agent_review', story.id);
+    await adminDb.approvalGate.update({
+      where: { id: gate.id },
+      data: { reviewUnavailableReason: 'hosted_run_out_of_credits' },
+    });
+    signIn(owner());
+
+    const res = await gateViaRoute({ key: story.identifier, kind: 'agent_review' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    expect(body.gate).toMatchObject({ id: gate.id, kind: 'agent_review', state: 'awaiting' });
+    expect(body.subject).toMatchObject({ state: 'resolved', kind: 'pull_request_approval' });
+    expect(
+      body.subject.pullRequests
+        .map((pr: { number: number }) => pr.number)
+        .sort((a: number, b: number) => a - b),
+    ).toEqual([7, 12]);
+    expect(body.subject.agentReview).toMatchObject({
+      gate: { id: gate.id, kind: 'agent_review' },
+      reviewUnavailableReason: 'hosted_run_out_of_credits',
+    });
+    const { agentReviewViewService } = await import('@/lib/services/agentReviewViewService');
+    expect(body.subject.agentReview).toEqual(
+      JSON.parse(JSON.stringify(await agentReviewViewService.readForWorkItem(story.id, fx.ctx))),
+    );
+  });
+
+  it('the approve-and-merge gate carries the review that PASSED its version, and only that one (MOTIR-1626)', async () => {
+    // `design/github` § 30 Panels 2a/2b: *Reviewed by the review agent · Passed* sits above
+    // Approve and merge in the overlay too — read by the same service the item page uses.
+    const story = await twoRepoStory();
+    const version = 'acme/web#7@aaa,acme/api#12@bbb';
+    const review = await rawGate(story, 'agent_review', story.id);
+    await adminDb.approvalGate.update({
+      where: { id: review.id },
+      data: {
+        state: 'approved',
+        subjectVersion: version,
+        decidedAt: new Date(),
+        decidedByLabel: 'Review agent',
+        decidedUnderAuthority: 'review_agent',
+        decisionSource: 'ui',
+        noteMd: 'Meets every criterion.',
+      },
+    });
+    const merge = await rawGate(story, 'pull_request_approval', story.id);
+    await adminDb.approvalGate.update({
+      where: { id: merge.id },
+      data: { subjectVersion: version },
+    });
+    signIn(owner());
+
+    const res = await gateViaRoute({ key: story.identifier, kind: 'pull_request_approval' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.subject).toMatchObject({ state: 'resolved', kind: 'pull_request_approval' });
+    expect(body.subject.agentReview).toMatchObject({
+      gate: { id: review.id, state: 'approved', subjectVersion: version },
+    });
+
+    // The merge question moves on to other commits: that review is not about them.
+    await adminDb.approvalGate.update({
+      where: { id: merge.id },
+      data: { subjectVersion: 'acme/web#7@ccc,acme/api#12@bbb' },
+    });
+    const moved = await (
+      await gateViaRoute({ key: story.identifier, kind: 'pull_request_approval' })
+    ).json();
+    expect(moved.subject.agentReview ?? null).toBeNull();
+  });
+
   it('a DECISION gate is ported by the Development block with the document read server-side (MOTIR-5678)', async () => {
     const story = await twoRepoStory();
     const gate = await rawGate(story, 'decision_approval', story.id);
@@ -971,6 +1048,9 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
       // leads; the same read the item page's late stack makes.
       'acceptanceEvidenceService.getCurrentForStory',
       'acceptanceEvidenceService.getForGateSubject',
+      // The agent review's state beside its port (§12.3) — the same read `lateReads.ts`
+      // makes for the item page's Development frame.
+      'agentReviewViewService.readForWorkItem',
       'approvalGatesService.getForWorkItem',
       // The choice port's parsed options (MOTIR-5891) — the same parse the item page reads.
       'choiceGateService.readPort',
@@ -1007,6 +1087,7 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
       .join('\n');
     // The approve-to-merge port's reads, each one the item page already makes.
     for (const call of [
+      'agentReviewViewService.readForWorkItem',
       'decisionDocumentService.readViewForWorkItem',
       'projectAccessService.getPermissions',
       'designEvidenceService.getCurrentForWorkItem',

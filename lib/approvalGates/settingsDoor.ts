@@ -27,8 +27,9 @@ export const SETTINGS_DOOR_PERMISSION: PermissionKey = 'workflow:manage';
 /** One door: where it lands, and the message key its label is drawn from. */
 export interface GateSettingsDoor {
   href: string;
-  /** A key under `approvalGate.settingsDoor` — resolved by the rendering surface. */
-  labelKey: 'mergeMode';
+  /** A key under `approvalGate.settingsDoor` — resolved by the rendering surface.
+   *  `reviewAgent` is the review agent's switch (MOTIR-6825, design `design/github` § 30). */
+  labelKey: 'mergeMode' | 'reviewAgent';
 }
 
 /**

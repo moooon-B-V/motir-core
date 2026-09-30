@@ -50,9 +50,11 @@ export interface FixBranchDto {
 export interface FixDetailDto {
   /**
    * The repair command. Decided by what `motir fix` would CLAIM, not by the reason:
-   * the three pull-request reasons and an acceptance Re-run are `fix`, an
-   * approve-to-merge Request changes is `run` — its re-run's prompt carries the note.
-   * A dead run is `continue`, or `none` when it pushed nothing.
+   * the three pull-request reasons, an acceptance Re-run and a card a review sent back
+   * (the review agent's refusal or an approve-to-merge Request changes — the `review`
+   * repair class, MOTIR-6822; `approval-gates.md` §12.7) are `fix`. A dead run is
+   * `continue`, or `none` when it pushed nothing. `run` is no longer derived; it stays in
+   * the type for a row stored before §12.7 until its next recompute.
    */
   repair: FixRepairCommandDto;
   /**
@@ -71,8 +73,9 @@ export interface FixDetailDto {
    *  cut to `FIX_NOTE_PREVIEW_MAX` characters; null when the note is empty. */
   notePreview: string | null;
   /** `changes_requested`: which gate the refusal was on — the approve-to-merge question
-   *  or a story's acceptance video. Null on the pull-request reasons. */
-  gate: 'pull_request_approval' | 'acceptance_result' | null;
+   *  a story's acceptance video, or the REVIEW AGENT's review (MOTIR-6819). Null on the
+   *  pull-request reasons. */
+  gate: 'pull_request_approval' | 'acceptance_result' | 'agent_review' | null;
   /** `run_died`: when the dead run was last heard from, ISO-8601 — the continue view's
    *  `deadRun.lastHeardAt`. */
   lastHeardAt: string | null;

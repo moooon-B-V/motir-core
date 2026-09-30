@@ -138,6 +138,10 @@ const CONFIRMATION_KIND = 'decision_confirmation';
 /** The one kind that offers no `request_changes` because a plan is changed by TALKING
  *  to the planner (ADR §11.4, MOTIR-6035). */
 const PLAN_KIND = 'plan_approval';
+/** The REVIEW AGENT's kind (ADR §12.3, MOTIR-6819) — decided by the agent through
+ *  {@link approvalGatesService.decideAgentReview}, or APPROVED by the routed person with a
+ *  reason (*Continue without the review*); a person has no refusal verb on it. */
+const AGENT_REVIEW_KIND = 'agent_review';
 
 export interface DecideGateInput {
   gateId: string;
@@ -234,6 +238,20 @@ export interface DecideGateOptions {
    * untouched as `GateEffectArgs.effectOptions`. ⚠️ INTERNAL, like the two above.
    */
   effectOptions?: Readonly<Record<string, unknown>>;
+
+  /**
+   * THE REVIEW AGENT DECIDED (Story MOTIR-1626 · MOTIR-6819; ADR `approval-gates.md`
+   * §12.3) — a hosted review run's verdict on an `agent_review` gate, about the version it
+   * NAMES. Recorded under the authority `review_agent`, which `resolveGateAuthority` never
+   * returns, so no person's press can claim it; `decidedById` is the run's attributed user
+   * (`ctx.userId`). The door refuses it on any other kind, and refuses a verdict about a
+   * version that is not the gate's as STALE.
+   *
+   * ⚠️ INTERNAL, like the three above — reached only through
+   * {@link approvalGatesService.decideAgentReview}, whose one caller is the run-token
+   * verdict route (MOTIR-6821). No route, server action or MCP tool accepts it.
+   */
+  reviewAgent?: { subjectVersion: string };
 }
 
 export interface DecideGateResult {
@@ -1993,15 +2011,22 @@ export const approvalGatesService = {
       //     about a WORK ITEM's assignee and reporter, and a plan gate has none, so
       //     its authority is the kind's permission alone — the floor just asserted —
       //     recorded as `plan_permission` (`resolveCardlessGateAuthority`).
+      // ⚠️ THE REVIEW AGENT likewise skips the relationship half (MOTIR-6819; §12.3): its
+      //     entitlement is the review run's token, checked by the verdict route before this
+      //     door is called, and the attributed user may be the workspace's stand-in rather
+      //     than the card's assignee. The FLOOR above still applies to that user, as it does
+      //     to a synced decision's actor.
       const authority: ApprovalGateAuthorityDTO | null = options.synced
         ? 'github_review'
-        : item
-          ? await resolveGateAuthority(item, ctx, tx)
-          : await resolveCardlessGateAuthority(
-              { projectId, permission: handler.permission },
-              ctx,
-              tx,
-            );
+        : options.reviewAgent
+          ? 'review_agent'
+          : item
+            ? await resolveGateAuthority(item, ctx, tx)
+            : await resolveCardlessGateAuthority(
+                { projectId, permission: handler.permission },
+                ctx,
+                tx,
+              );
       if (!authority) throw new ApprovalGateNotAuthorisedError(input.gateId);
 
       // THE SYNCED ACTOR, resolved UNDER THE LOCK so the membership it reads is the
@@ -2104,6 +2129,18 @@ export const approvalGatesService = {
       // rather than what was approved. No earlier kind's effect moves its own subject, so
       // for them the two readings agree.
       const decidedVersion = await handler.subjectVersion(args);
+      // 3b′ · THE REVIEW AGENT'S VERDICT IS ABOUT ONE VERSION (MOTIR-6819; ADR §12.4, §12.5).
+      //       A verdict naming a version that is not the gate's, or a gate whose set has
+      //       moved under it, decides nothing — the push landed mid-review, and the verdict
+      //       is recorded on the RUN, never on the gate. After the state refusals, so a
+      //       withdrawn review is reported as withdrawn.
+      if (
+        options.reviewAgent &&
+        (locked.subjectVersion !== options.reviewAgent.subjectVersion ||
+          decidedVersion !== locked.subjectVersion)
+      ) {
+        throw new ApprovalGateStaleSubjectError(input.gateId, ['subject']);
+      }
       if (input.stamp !== DECIDED_WITHOUT_A_READER) {
         const moved = stampMoved(input.stamp, {
           // ⚠️ A SUBJECT REVISED IN PLACE (a plan, ADR §11.3/§11.5c) stamps the version
@@ -2128,6 +2165,24 @@ export const approvalGatesService = {
       //      after the state and stale refusals, which describe the QUESTION, and
       //      before anything is written. An option the choice does not hold is the
       //      handler's to refuse, since only it reads the options.
+      // THE REVIEW AGENT'S KIND (ADR §12.3, MOTIR-6819): the agent's verdict only on its own
+      // gate; a PERSON only approves it — *Continue without the review* — and says why.
+      // Waving a review past is the decision that most needs its reason (§10a, extended).
+      const isAgentReview = locked.kind === AGENT_REVIEW_KIND;
+      if (options.reviewAgent && !isAgentReview) {
+        throw new ApprovalGateVerbNotOfferedError(input.gateId, 'review_agent_on_other_kind');
+      }
+      if (isAgentReview && !options.reviewAgent) {
+        if (input.decision === 'request_changes') {
+          throw new ApprovalGateVerbNotOfferedError(
+            input.gateId,
+            'request_changes_on_agent_review',
+          );
+        }
+        if (input.decision === 'approve' && !input.noteMd?.trim()) {
+          throw new ApprovalGateVerbNotOfferedError(input.gateId, 'override_needs_a_note');
+        }
+      }
       const isChoice = locked.kind === CHOICE_KIND;
       if (input.decision === 'choose' && !isChoice) {
         throw new ApprovalGateVerbNotOfferedError(input.gateId, 'choose_on_other_kind');
@@ -2320,6 +2375,13 @@ export const approvalGatesService = {
         tx,
       );
 
+      // 6b · WHAT THE DECISION CAUSES ONCE ITS ROW SAYS SO (MOTIR-6819; ADR §12.4) — the
+      //      review agent's pass raises the approve-and-merge gate, which the gate set asks
+      //      only once it reads this review as decided.
+      if (handler.afterDecisionWritten) {
+        await handler.afterDecisionWritten({ ...args, state: decided.state });
+      }
+
       // A card's to-fix answer reads its LATEST decided gate of any kind — a Request
       // changes on the approve-to-merge question, or an acceptance Re-run — so every
       // card decision re-decides it (MOTIR-6602). After the write, in this transaction,
@@ -2333,5 +2395,62 @@ export const approvalGatesService = {
         companionSubjectVersion: companionVersion,
       };
     }
+  },
+
+  /**
+   * THE REVIEW AGENT'S VERDICT (Story MOTIR-1626 · MOTIR-6819; ADR `approval-gates.md`
+   * §12.3–§12.5, `hosted-agent-run.md` §8.4) — the INTERNAL entry the run-token verdict
+   * route calls (MOTIR-6821). `ctx` is the review run's attributed user, who becomes
+   * `decidedById`; the row's authority is `review_agent`, which is what says a machine
+   * decided.
+   *
+   * `pass` approves — the door then raises the approve-and-merge gate for the SAME version
+   * and settles the card after the commit. `changes_requested` records the findings, which
+   * are REQUIRED and non-empty (the door's `request_changes_needs_a_note`), and moves
+   * nothing: the card is To fix `changes_requested`.
+   *
+   * REFUSED, and nothing written: a gate that is not awaiting (`ApprovalGateSupersededError`
+   * for a withdrawn review — the push landed mid-review — or `ApprovalGateAlreadyDecidedError`,
+   * one verdict per question), a verdict about another version or a set that moved
+   * (`ApprovalGateStaleSubjectError`), and a gate of any other kind.
+   *
+   * Addressed by the gate's id, or by the card — then its awaiting review, else its latest
+   * one, so a verdict for a withdrawn or decided review is refused as such rather than as
+   * a not-found.
+   */
+  async decideAgentReview(
+    input: ({ gateId: string } | { workItemId: string }) & {
+      subjectVersion: string;
+      verdict: 'pass' | 'changes_requested';
+      noteMd?: string | null;
+    },
+    ctx: ServiceContext,
+  ): Promise<DecideGateResult> {
+    const gateId =
+      'gateId' in input
+        ? input.gateId
+        : await withWorkspaceContext(ctx, async (tx) => {
+            const gate = await approvalGateRepository.findLatestByWorkItem(
+              input.workItemId,
+              AGENT_REVIEW_KIND,
+              tx,
+            );
+            if (!gate) throw new ApprovalGateNotFoundError(input.workItemId);
+            return gate.id;
+          });
+    return approvalGatesService.decide(
+      {
+        gateId,
+        decision: input.verdict === 'pass' ? 'approve' : 'request_changes',
+        noteMd: input.noteMd ?? null,
+        // The verdict arrives through a token calling the REST API (§12.3) — never `ui`,
+        // which would claim a person pressed.
+        source: 'api',
+        // Nobody was shown a stamp: the version the run reviewed is checked instead.
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
+      ctx,
+      { reviewAgent: { subjectVersion: input.subjectVersion } },
+    );
   },
 };

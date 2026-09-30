@@ -13,6 +13,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { projectsService } from '@/lib/services/projectsService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
 import { usersService } from '@/lib/services/usersService';
+import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from '../helpers/adminDb';
@@ -290,15 +291,29 @@ describe('a gate decision', () => {
     expect(await fixOf(item.id)).toMatchObject({
       fixReason: 'changes_requested',
       fixDetail: {
-        repair: 'run',
+        repair: 'fix',
         gate: 'pull_request_approval',
         notePreview: 'Rename the export button.',
+      },
+    });
+    // …and `motir fix` claims it — the `review` class, with the WHOLE note (MOTIR-6822).
+    const claim = await workItemRepairService.claimRepair(s.project.id, item.identifier, s.ctx);
+    expect(claim).toMatchObject({
+      outcome: 'claimed',
+      repairClass: 'review',
+      reviewRefusal: {
+        gate: 'pull_request_approval',
+        findingsMd: 'Rename the export button.\nAnd the tooltip.',
       },
     });
 
     // The first check at a NEW head is a new commit: the refusal was about the old one.
     await check(61, 'sha-b', 'vitest', null);
     expect((await fixOf(item.id)).fixReason).toBeNull();
+    // The repair's push answered the refusal without re-deciding it.
+    expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate!.id } })).state).toBe(
+      'changes_requested',
+    );
   });
 });
 

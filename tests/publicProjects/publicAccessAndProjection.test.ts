@@ -139,7 +139,7 @@ describe('public READ access (6.12.9) — anonymous + cross-org, non-public 404'
   // along with the caller it was named after.
   //
   // Its `public` verdict in `tests/rls/singleton-read-guard.test.ts` rests on this
-  // case: `project_public_read` is an UNGATED `"accessLevel" = 'public'` arm, so
+  // case: `project_public_read` is an UNGATED `"access_mode" = 'public'` arm, so
   // an unbound cross-tenant list is admitted — which is exactly what a sitemap
   // needs and exactly what nothing had watched happen.
   it('listPublicForSitemap lists every PUBLIC project CROSS-TENANT and excludes non-public + archived', async () => {

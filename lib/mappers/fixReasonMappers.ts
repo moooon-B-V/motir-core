@@ -77,7 +77,12 @@ export function toFixDetailDto(
     base: str(d.base),
     reviewerName: str(d.reviewerName),
     notePreview: str(d.notePreview),
-    gate: d.gate === 'pull_request_approval' || d.gate === 'acceptance_result' ? d.gate : null,
+    gate:
+      d.gate === 'pull_request_approval' ||
+      d.gate === 'acceptance_result' ||
+      d.gate === 'agent_review'
+        ? d.gate
+        : null,
     lastHeardAt: str(d.lastHeardAt),
     ranByName: str(d.ranByName),
     branch: str(d.branch),

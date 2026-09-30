@@ -7,7 +7,7 @@ import { approvalGateSettingsService } from '@/lib/services/approvalGateSettings
 import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
 import { projectPrMergeModeService } from '@/lib/services/projectPrMergeModeService';
 import { AcceptanceVideoGateCard } from './_components/AcceptanceVideoGateCard';
-import { PrMergeModeCard } from './_components/PrMergeModeCard';
+import { MergeModeAndReviewAgentCards } from './_components/MergeModeAndReviewAgentCards';
 import { guardSettingsPage } from '../_guard';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
@@ -85,7 +85,14 @@ export default async function ProjectApprovalsPage() {
         entitled={eligibility.reason !== 'no_plan'}
       />
 
-      <PrMergeModeCard projectKey={ctx.project.identifier} initialMode={prMergeMode} />
+      {/* Merge mode, then the REVIEW AGENT (MOTIR-6823) — third, because its copy
+          reads the merge mode above it. One client island holds the pair, since
+          the two exclude each other (approval-gates.md §12.2a). */}
+      <MergeModeAndReviewAgentCards
+        projectKey={ctx.project.identifier}
+        initialPrMergeMode={prMergeMode}
+        initialReviewAgentEnabled={settings.reviewAgentEnabled}
+      />
     </div>
   );
 }

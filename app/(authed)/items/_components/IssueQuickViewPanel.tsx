@@ -692,7 +692,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         {/* THE TO FIX TAG (MOTIR-6610; design MOTIR-6608 panel 4) — the label,
             right after the status pill it qualifies. A proposal peek carries no
             reason, so it draws nothing there. */}
-        <ToFixTag fixReason={data.fixReason} statusCategory={data.statusCategory} />
+        <ToFixTag
+          fixReason={data.fixReason}
+          statusCategory={data.statusCategory}
+          fixGate={data.fixGate}
+        />
         {/* MOTIR-2050: the "Archived" chip, mirroring the detail page's eyebrow
           chip (2.9.6) — the archived state stays legible after the main column
           (which scrolls independently) is scrolled past the notice below. Neutral
