@@ -476,6 +476,16 @@ describe('the live charge — a run is charged while it runs (§3)', () => {
         periodStart: JULY_2026,
       }),
     ).toBe(0);
+    // …and so is one whose record is gone altogether by the time of the lock.
+    const gone = await seedRunningIntent(fx);
+    await adminDb.ciRunnerProvisioningIntent.delete({ where: { id: gone.id } });
+    expect(
+      await ciLiveChargeService.accrueContainer(gone, {
+        now: at(10),
+        tickStart: tickStartFor(at(10)),
+        periodStart: JULY_2026,
+      }),
+    ).toBe(0);
   });
 
   it('logs and carries on past one container that fails, and one org whose charge throws', async () => {
