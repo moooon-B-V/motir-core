@@ -234,10 +234,56 @@ export async function callTool(
 
 // ── The person's side ────────────────────────────────────────────────────────
 
+/**
+ * The page the app's loopback listener serves once it has the code — what an
+ * MCP client like Claude Code shows the person before they switch back. It is
+ * the APP's page, not Motir's, so it borrows nothing from Motir's design system:
+ * system fonts and the browser's own `Canvas` / `CanvasText` colours, which a
+ * real client's minimal page would use too.
+ */
+const LOOPBACK_PAGE = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${APP_NAME} — connected</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: Canvas; color: CanvasText;
+    font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  main {
+    max-width: 26rem; padding: 2.5rem 2rem; text-align: center;
+    border: 1px solid color-mix(in srgb, CanvasText 15%, Canvas);
+    border-radius: 16px;
+    box-shadow: 0 8px 30px color-mix(in srgb, CanvasText 8%, transparent);
+  }
+  .tick {
+    width: 3rem; height: 3rem; margin: 0 auto 1.25rem; border-radius: 50%;
+    display: grid; place-items: center;
+    background: color-mix(in srgb, CanvasText 8%, Canvas);
+  }
+  h1 { margin: 0 0 0.5rem; font-size: 1.375rem; font-weight: 600; }
+  p { margin: 0; opacity: 0.75; }
+</style>
+</head>
+<body>
+<main>
+  <div class="tick" aria-hidden="true">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>
+  </div>
+  <h1>Back in ${APP_NAME}</h1>
+  <p>Authorization finished. You can close this window and return to ${APP_NAME}.</p>
+</main>
+</body>
+</html>`;
+
 /** Stand in for the app's loopback listener, so the browser has somewhere to land. */
 export async function answerLoopback(page: Page): Promise<void> {
   await page.route(`${CALLBACK}**`, (route) =>
-    route.fulfill({ status: 200, contentType: 'text/plain', body: 'Back in the app.' }),
+    route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: LOOPBACK_PAGE }),
   );
 }
 

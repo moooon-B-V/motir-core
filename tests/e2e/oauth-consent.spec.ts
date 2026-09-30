@@ -13,7 +13,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { createFirstProject, signUp } from './_helpers/shell-session';
-import { CALLBACK } from './_helpers/oauth-connect-seed';
+import { CALLBACK, answerLoopback } from './_helpers/oauth-connect-seed';
 
 test.describe.configure({ timeout: 120_000 });
 
@@ -60,10 +60,7 @@ test('a pending request opens the consent screen, and Approve returns the code',
     resource: `${baseURL}/api/mcp`,
   });
 
-  // Stand in for the app's loopback listener.
-  await page.route(`${CALLBACK}**`, (route) =>
-    route.fulfill({ status: 200, contentType: 'text/plain', body: 'connected' }),
-  );
+  await answerLoopback(page);
 
   await page.goto(`/api/auth/oauth2/authorize?${authorize.toString()}`);
   await page.waitForURL(/\/oauth\/consent\?/);

@@ -93,6 +93,8 @@ test('an app connects to the workspace the person picks, reads only there, and R
     expect(back.searchParams.get('state')).toBe(pending.state);
     const code = back.searchParams.get('code');
     expect(code).toBeTruthy();
+    await expect(page.getByRole('heading', { name: `Back in ${APP_NAME}` })).toBeVisible();
+    await beat();
     accessToken = await exchangeCode(app, clientId, code!, pending.verifier);
   });
 
