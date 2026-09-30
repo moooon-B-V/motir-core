@@ -99,6 +99,29 @@ import { recomputeWorkItemFixReason } from './fixReasonService';
 import { designAutoRerunRepository } from '@/lib/repositories/designAutoRerunRepository';
 import { toDesignAutoRerunDto } from '@/lib/mappers/designAutoRerunMappers';
 
+/**
+ * WHAT A DECISION CAUSED, as the deciding write records it — the ONE writer of
+ * `approval_gate.outcome_ref` (MOTIR-5520's pin, `tests/github/pullRequestMergeRecord.test.ts`).
+ * Shared by the decide door and the system approval (MOTIR-697), so the column keeps one
+ * meaning whichever of them decided.
+ *
+ * ⚠️ ON A CHOICE it is the OPTION'S ID (ADR §1's MOTIR-5887 amendment, point 7): Workflow A
+ * always writes `done`, so the status is implied by the kind and the column holds what only
+ * this decision caused. `confirmedRecord` is a CONFIRMED decision's written record, or that
+ * there was none (ADR §1's MOTIR-5952 amendment, point 8); null on every other kind.
+ */
+function decisionOutcomeFields(effect: GateEffect): {
+  outcomeRef: string | null;
+  chosenOption: NonNullable<GateEffect['chosenOption']> | null;
+  confirmedRecord: NonNullable<GateEffect['confirmedRecord']> | null;
+} {
+  return {
+    outcomeRef: effect.chosenOption ? effect.chosenOption.optionId : effect.statusWritten,
+    chosenOption: effect.chosenOption ?? null,
+    confirmedRecord: effect.confirmedRecord ?? null,
+  };
+}
+
 /** The design-approval switch's address — the card's anchor on Settings → Approvals. */
 export const DESIGN_APPROVAL_SETTINGS_HREF = '/settings/project/approvals#design-approval';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
@@ -2337,11 +2360,10 @@ export const approvalGatesService = {
           // amendment, point 7): Workflow A always writes `done`, so the status is
           // implied by the kind and the column holds what only this decision caused —
           // which option won. `chosenOption` carries the rest of the pick.
-          outcomeRef: effect.chosenOption ? effect.chosenOption.optionId : effect.statusWritten,
-          chosenOption: effect.chosenOption ?? null,
-          // What a CONFIRMED decision's written record was — or that there was none
-          // (ADR §1's MOTIR-5952 amendment, point 8). Null on every other kind.
-          confirmedRecord: effect.confirmedRecord ?? null,
+          //
+          // Written through {@link decisionOutcomeFields}, the ONE writer of `outcomeRef`,
+          // which the system approval (MOTIR-697) shares rather than duplicates.
+          ...decisionOutcomeFields(effect),
           // WHAT THE REFUSAL MEANT (ADR §10d, MOTIR-6421) — validated in step 3c, so it is
           // non-null only on a Motir-pressed `design_result` refusal. HERE, in the deciding
           // write, because the decided-row trigger refuses any later amendment.
@@ -2461,9 +2483,7 @@ export const approvalGatesService = {
         decidedByLabel: null,
         decidedUnderAuthority: 'project_setting',
         decisionSource: 'system',
-        outcomeRef: effect.statusWritten,
-        chosenOption: null,
-        confirmedRecord: null,
+        ...decisionOutcomeFields(effect),
         refusalVerdict: null,
       },
       tx,

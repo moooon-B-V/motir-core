@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { CirclePause, RefreshCw } from 'lucide-react';
 import type { DesignAutoRerunDTO, DesignAutoRerunSkipReasonDTO } from '@/lib/dto/approvalGate';
 import { runsHref } from '@/lib/runs/runsAddress';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // THE AUTOMATIC RE-RUN LINE (Story MOTIR-693 · MOTIR-702), built to
 // `design/work-items/design-result--auto-rerun.mock.html`: the LAST line of a refused
@@ -34,6 +35,9 @@ const NEXT_STEP: Record<DesignAutoRerunSkipReasonDTO, { href: string } | null> =
 
 export function AutoRerunLine({ rerun }: { rerun: DesignAutoRerunDTO | null | undefined }) {
   const t = useTranslations('approvalGate.autoRerun');
+  // A shared body builds its addresses FOR THE READER (MOTIR-6888): a visitor's tree
+  // routes the run elsewhere, so the member route is never emitted raw.
+  const routes = useReaderRoutes();
   if (!rerun) return null;
 
   if (rerun.outcome === 'started') {
@@ -48,7 +52,7 @@ export function AutoRerunLine({ rerun }: { rerun: DesignAutoRerunDTO | null | un
         {rerun.dispatchRunId ? (
           <Link
             className="text-(--el-link) underline underline-offset-2"
-            href={runsHref({ run: rerun.dispatchRunId })}
+            href={routes.view(runsHref({ run: rerun.dispatchRunId }))}
           >
             {t('viewRun')}
           </Link>

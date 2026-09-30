@@ -321,6 +321,10 @@ describe('github_pull_request_review — the rows the sync writes (MOTIR-5594)',
       'admin',
       'github_review',
       'plan_permission',
+      // `project_setting` (Story MOTIR-693 · MOTIR-697; `hosted-design-rerun-and-design-
+      // approval-switch.md` §2c) — a design gate a project with design approval off
+      // approves at raise time; nobody decided it. Written only by the publish path.
+      'project_setting',
     ]);
   });
 });
