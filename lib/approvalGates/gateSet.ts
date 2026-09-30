@@ -139,6 +139,23 @@ export interface GateSetInput {
    */
   cardIsTerminal: boolean;
   /**
+   * Whether the card's status is `in_review` — by the literal KEY, never by category
+   * (`approved` and `implemented` share `in_review`'s category), resolved by the loader
+   * from the card it read under the caller's lock (MOTIR-6971).
+   *
+   * ⚠️ THE CARD'S STATUS IS THE RUN'S OWN STATEMENT THAT IT FINISHED, AND GREEN CI IS
+   * NOT. Any pull request can be linked to a card, so a green delivery set says nothing
+   * about whether the run that owns the card followed the runbook to the end: it opens
+   * its pull requests, sets the card to `implemented`, and CI's promotion then writes
+   * `in_review`. A card still at `in_progress` is a DEAD run, waiting for a `motir
+   * continue` to set its status right — and asking a person to approve it offered a
+   * button the workflow can never honour (`in_progress → approved` is no edge;
+   * MOTIR-6914's gate, Sentry `IllegalTransitionError`). So the merge question — and a
+   * story run's acceptance question beside it — is asked ONLY at `in_review`: CI all
+   * green AND the card in review, both, or no gate.
+   */
+  cardInReview: boolean;
+  /**
    * Whether a STANDING PRIMARY APPROVAL already authorises the merge — the card's
    * latest `design_result` gate is `approved` over its CURRENT result (AMENDMENT 6
    * Q4; Story MOTIR-5652 · Subtask MOTIR-5664), or its latest `acceptance_result`
@@ -578,7 +595,11 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   // (`versionIdentifies: false`).
   const receipt = input.currentReceipt;
   const storyRun = input.members.length > 0;
-  const acceptanceTimely = storyRun ? everyMemberMergeable : input.subtreeSettled === true;
+  // A story run's video rides the merge question, so it takes that question's status
+  // condition too (MOTIR-6971): asked only while the story is `in_review`.
+  const acceptanceTimely = storyRun
+    ? everyMemberMergeable && input.cardInReview
+    : input.subtreeSettled === true;
   if (
     receipt !== null &&
     acceptanceTimely &&
@@ -607,8 +628,15 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   // over the very commits that cannot land. A push is what ends the outcome, and the next
   // green asks about the new commits.
   const cantLandHolds = outcome?.landingClass === 'cant_land';
+  // ⚠️ ONLY A CARD AT `in_review` IS ASKED (MOTIR-6971; `approval-gates.md` §8's EIGHTH
+  // AMENDMENT). Green CI alone is not a finished run — see `cardInReview`. The CI
+  // promotion writes `implemented → in_review` BEFORE it reconciles, in the same
+  // transaction, so the ordinary path is unchanged; every other raiser (the sweep, the
+  // post-transition re-ask, a withdrawer's re-raise) now asks nothing of a card the run
+  // has not settled.
   if (
     input.prMergeMode === 'manual' &&
+    input.cardInReview &&
     !answered &&
     !acceptanceHolds &&
     !cantLandHolds &&

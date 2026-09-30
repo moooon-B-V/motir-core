@@ -58,6 +58,14 @@ const ACCEPTANCE_KIND = 'acceptance_result' as const;
  * `ancestor` and raised nothing, while the parent's own promotion was skipped by
  * `ContainerHasOpenChildrenError` — no gate anywhere. `resolveRunTargetFor` itself is
  * untouched.
+ *
+ * ⚠️ BUT THE CARD'S STATUS IS A CONDITION AGAIN, AND THAT PARENT IS ASKED NOTHING
+ * (MOTIR-6971; `approval-gates.md` §8's EIGHTH AMENDMENT). The run-target refusal was
+ * the wrong question; *is the card in review* is the right one, and removing the first
+ * left nothing asking it. A parent held below `implemented` by an open child is a run
+ * that has not settled its status, and green CI is not that statement — so the gate
+ * now waits for `in_review` (`resolveGateSet`'s `cardInReview`). MOTIR-6914 was that
+ * parent, asked at `in_progress`, and its press could only throw.
  */
 export async function raisePullRequestApprovalGate(
   item: WorkItem,

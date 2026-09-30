@@ -287,6 +287,12 @@ describe('RAISE — one awaiting gate per card, on the run target, when its whol
       });
     }
     await greenRow(13, 'sha-p');
+    // MOTIR-6971: asked only of a card IN REVIEW — the run target does not decide it,
+    // and neither does green CI on its own.
+    await adminDb.workItem.updateMany({
+      where: { id: { in: [story.id, child.id] } },
+      data: { status: 'in_review' },
+    });
 
     const raised = await withWorkspaceContext(s.ctx, async (tx) => {
       const [childRow, storyRow] = await Promise.all(
@@ -415,6 +421,15 @@ describe('WITHDRAW — superseded when the set the gate asked about changes', ()
       { workItemId: item.id, projectId: s.project.id, owner: 'moooon', name: 'acme', number: 12 },
       s.ctx,
     );
+    // ⚠️ MOTIR-6971: the close pulled the card back to `in_progress`, and a card there is
+    // asked nothing, however green what is left — its status has to be set right first.
+    expect(await statusOf(item.id)).toBe('in_progress');
+    expect(await awaiting(item.id)).toEqual([]);
+
+    // The run settles it (`implemented`); the CI-green latch promotes it on the verdict
+    // it already has, and the question comes back over the smaller set, once.
+    await workItemsService.updateStatus(item.id, 'implemented', s.ctx);
+    expect(await statusOf(item.id)).toBe('in_review');
     expect((await awaiting(item.id)).map((g) => g.subjectVersion)).toEqual([
       'moooon/acme#11@sha-a',
     ]);
