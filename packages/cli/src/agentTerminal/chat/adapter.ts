@@ -6,6 +6,7 @@ import type {
 } from './protocol.js';
 import { claudeChatAdapter } from './adapters/claude.js';
 import { codexChatAdapter } from './adapters/codex.js';
+import { opencodeChatAdapter } from './adapters/opencode.js';
 
 // The chat adapter contract (MOTIR-7012 · `docs/decisions/agent-chat.md` Q3,
 // Q5, Q7, Q11).
@@ -107,7 +108,11 @@ export const UNSUPPORTED: ChatSupport = { supported: false, code: 'unsupported' 
  * The registry, keyed on `MOTIR_SANDBOX_AGENT`. EMPTY until the adapter cards
  * land; each adds its adapter here.
  */
-export const CHAT_ADAPTERS: readonly ChatAdapter[] = [claudeChatAdapter, codexChatAdapter];
+export const CHAT_ADAPTERS: readonly ChatAdapter[] = [
+  claudeChatAdapter,
+  codexChatAdapter,
+  opencodeChatAdapter,
+];
 
 /** The adapter serving this machine's profile, or null (answered `unsupported`). */
 export function resolveChatAdapter(
