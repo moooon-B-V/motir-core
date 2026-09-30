@@ -47,3 +47,16 @@ export function oauthAuthorizeNext(params: URLSearchParams): string | null {
   else query.delete('prompt');
   return `${AUTH_BASE_PATH}/oauth2/authorize?${query.toString()}`;
 }
+
+/**
+ * The `client_id` of the authorize request a sign-in `next` returns to, or null
+ * when `next` is anything else. The sign-in card uses it to say WHICH app is
+ * waiting (design Panel 5) — display only: the authorize endpoint re-validates
+ * the whole request after sign-in.
+ */
+export function authorizeNextClientId(next: string | null | undefined): string | null {
+  if (!next) return null;
+  const prefix = `${AUTH_BASE_PATH}/oauth2/authorize?`;
+  if (!next.startsWith(prefix)) return null;
+  return new URLSearchParams(next.slice(prefix.length)).get('client_id') || null;
+}

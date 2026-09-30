@@ -27,3 +27,51 @@ export interface ApproveConsentResult {
   connectionId: string;
   redirectUrl: string;
 }
+
+/** A project the consent screen's One-project picker offers, with what the
+ * person may confer there (the create-token picker's offer). */
+export interface ConsentProjectDto {
+  id: string;
+  key: string;
+  name: string;
+  grantable: PermissionKey[];
+}
+
+/** A workspace a connection may act in — one the person can grant something in. */
+export interface ConsentWorkspaceDto {
+  id: string;
+  /** `org · workspace`: a workspace name alone is ambiguous across orgs. */
+  label: string;
+  projects: ConsentProjectDto[];
+}
+
+/**
+ * A pending consent request, read SERVER-SIDE from the request the provider
+ * signed — never from what the URL claims about the app. What the consent
+ * screen (MOTIR-6985) renders.
+ */
+export interface ConsentRequestDto {
+  client: {
+    clientId: string;
+    /** The registered `client_name` — the app's own claim, rendered as data. */
+    name: string | null;
+    /** True for a dynamically registered client: nobody vouched for its name. */
+    unverified: boolean;
+  };
+  /** Where the code goes: the request's `redirect_uri`, already checked against
+   * the client's registration. */
+  redirectUri: string;
+  redirectHost: string;
+  /** A loopback redirect — an app on this computer. */
+  loopback: boolean;
+  /** The workspaces the person can grant something in. */
+  workspaces: ConsentWorkspaceDto[];
+  /** Labels of the workspaces they belong to but can grant nothing in — the
+   * "none of your workspaces" state names them. */
+  unusableWorkspaces: string[];
+}
+
+/** What declining returns: the client redirect carrying `error=access_denied`. */
+export interface DenyConsentResult {
+  redirectUrl: string;
+}

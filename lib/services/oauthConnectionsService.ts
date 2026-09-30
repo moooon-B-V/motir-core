@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { constantTimeEqual, makeSignature } from 'better-auth/crypto';
-import type { User } from '@/generated/prisma/client';
+import type { OauthClient, User } from '@/generated/prisma/client';
 import { auth } from '@/lib/auth';
 import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
 import { apiTokenRepository } from '@/lib/repositories/apiTokenRepository';
@@ -11,6 +11,7 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 import { toOAuthConnectionDto } from '@/lib/mappers/oauthConnectionMappers';
 import { withConsentConnection } from '@/lib/oauth/consentContext';
 import { AUTH_BASE_PATH } from '@/lib/oauth/config';
+import { isLoopbackHostname, matchesRegisteredRedirect } from '@/lib/oauth/redirectPolicy';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import {
   OAuthAccessTokenRejectedError,
@@ -26,7 +27,12 @@ import {
   expandStoredGrant,
 } from '@/lib/tokens/grant';
 import type { PermissionKey } from '@/lib/permissions/catalog';
-import type { ApproveConsentResult, OAuthConnectionDto } from '@/lib/dto/oauthConnections';
+import type {
+  ApproveConsentResult,
+  ConsentRequestDto,
+  DenyConsentResult,
+  OAuthConnectionDto,
+} from '@/lib/dto/oauthConnections';
 
 // OAuth connections (Story MOTIR-6973 · Subtask MOTIR-6983) — what an app a
 // person connected through "Sign in with Motir" may DO.
@@ -86,6 +92,14 @@ function providerTokenHash(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('base64url');
 }
 
+function parseUrl(uri: string): URL | null {
+  try {
+    return new URL(uri);
+  } catch {
+    return null;
+  }
+}
+
 /** Resolve the grant a connection is recorded with — the one-arm rule. */
 async function resolveConnectionGrant(input: ApproveConsentInput): Promise<PermissionKey[]> {
   if (!input.projectId) return [...DEFAULT_TOKEN_GRANT];
@@ -108,11 +122,12 @@ async function resolveConnectionGrant(input: ApproveConsentInput): Promise<Permi
 
 /**
  * Check the consent request is one the provider signed and has not expired, and
- * return its `client_id`. The provider checks the same signature again when it
+ * return its parameters. The provider checks the same signature again when it
  * records the consent; checking first means a forged or stale request records
- * no connection at all rather than one that has to be taken back.
+ * no connection at all rather than one that has to be taken back — and it is
+ * what lets the consent page trust the app and redirect it DESCRIBES.
  */
-async function verifiedClientId(oauthQuery: string): Promise<string> {
+async function verifiedConsentQuery(oauthQuery: string): Promise<URLSearchParams> {
   const params = new URLSearchParams(oauthQuery);
   const sig = params.get('sig');
   const exp = Number(params.get('exp'));
@@ -120,24 +135,39 @@ async function verifiedClientId(oauthQuery: string): Promise<string> {
   const { secret } = await auth.$context;
   const expected = await makeSignature(params.toString(), secret);
   if (!sig || !constantTimeEqual(sig, expected)) {
-    throw new OAuthConsentRequestInvalidError('it was not issued by Motir');
+    throw new OAuthConsentRequestInvalidError('it was not issued by Motir', 'not_issued');
   }
   if (!Number.isFinite(exp) || exp * 1000 < Date.now()) {
-    throw new OAuthConsentRequestInvalidError('it has expired');
+    throw new OAuthConsentRequestInvalidError('it has expired', 'expired');
   }
-  const clientId = params.get('client_id');
-  if (!clientId) throw new OAuthConsentRequestInvalidError('it names no app');
-  return clientId;
+  if (!params.get('client_id')) {
+    throw new OAuthConsentRequestInvalidError('it names no app', 'invalid_client');
+  }
+  return params;
+}
+
+/** The client a verified request names, refused when unknown or disabled. */
+async function consentClient(clientId: string): Promise<OauthClient> {
+  const client = await oauthClientRepository.findByClientId(clientId);
+  if (!client || client.disabled) {
+    throw new OAuthConsentRequestInvalidError('the app is not registered', 'invalid_client');
+  }
+  return client;
 }
 
 /**
- * Record the consent with the provider and get the client redirect back. Sent as
- * a REQUEST through Better-Auth's handler rather than an `auth.api` call: the
- * provider continues into its authorize step, which refuses to run without the
+ * Answer the provider's consent step and get the client redirect back — with the
+ * code on accept, with `error=access_denied` on decline. Sent as a REQUEST
+ * through Better-Auth's handler rather than an `auth.api` call: the provider
+ * continues into its authorize step, which refuses to run without the
  * originating request. The person's session rides in the forwarded headers; the
  * origin is the app's own, which the handler's CSRF check requires.
  */
-async function completeProviderConsent(headers: Headers, oauthQuery: string): Promise<string> {
+async function answerProviderConsent(
+  headers: Headers,
+  oauthQuery: string,
+  accept: boolean,
+): Promise<string> {
   const base = resolveBaseUrlTrimmed();
   const forwarded = new Headers(headers);
   forwarded.set('content-type', 'application/json');
@@ -147,7 +177,7 @@ async function completeProviderConsent(headers: Headers, oauthQuery: string): Pr
     new Request(`${base}${AUTH_BASE_PATH}/oauth2/consent`, {
       method: 'POST',
       headers: forwarded,
-      body: JSON.stringify({ accept: true, oauth_query: oauthQuery }),
+      body: JSON.stringify({ accept, oauth_query: oauthQuery }),
     }),
   );
   const body = (await res.json().catch(() => null)) as {
@@ -162,12 +192,96 @@ async function completeProviderConsent(headers: Headers, oauthQuery: string): Pr
         body?.error ||
         body?.message ||
         `the provider answered ${res.status}`,
+      'rejected',
     );
   }
   return body.url;
 }
 
 export const oauthConnectionsService = {
+  /**
+   * Describe a pending consent request for the consent screen (MOTIR-6985): the
+   * app, where the code will go, and the workspaces the person can connect it to.
+   *
+   * Everything shown is read from the request the PROVIDER SIGNED and from the
+   * client's own registration — never from what the URL claims — so a hand-edited
+   * query cannot put another app's name or another redirect on the screen. The
+   * workspaces are the create-token picker's (`listScopeOptions`), narrowed to
+   * those with a project the person can grant something in: a workspace where
+   * nothing can be granted cannot hold a connection that does anything.
+   *
+   * Refused with `OAuthConsentRequestInvalidError` (its `reason` says which) for
+   * a request Motir did not sign, an expired one, an unknown or disabled client,
+   * or a redirect the client did not register.
+   */
+  async describeConsentRequest(userId: string, oauthQuery: string): Promise<ConsentRequestDto> {
+    const params = await verifiedConsentQuery(oauthQuery);
+    const client = await consentClient(params.get('client_id')!);
+    const redirectUri = params.get('redirect_uri') ?? '';
+    // The provider matched it before signing; checked again because the screen
+    // is about to SAY where the code goes, and must not say it about a redirect
+    // the client never registered.
+    const redirect = parseUrl(redirectUri);
+    if (!redirect || !matchesRegisteredRedirect(client.redirectUris, redirectUri)) {
+      throw new OAuthConsentRequestInvalidError(
+        'it names a redirect the app did not register',
+        'invalid_redirect',
+      );
+    }
+    const orgs = await apiTokensService.listScopeOptions(userId);
+    const workspaces: ConsentRequestDto['workspaces'] = [];
+    const unusableWorkspaces: string[] = [];
+    for (const org of orgs) {
+      for (const workspace of org.workspaces) {
+        const label = `${org.name} · ${workspace.name}`;
+        if (workspace.projects.some((p) => p.grantable.length > 0)) {
+          workspaces.push({ id: workspace.id, label, projects: workspace.projects });
+        } else {
+          unusableWorkspaces.push(label);
+        }
+      }
+    }
+    return {
+      client: {
+        clientId: client.clientId,
+        name: client.name?.trim() || null,
+        // A client a signed-in person registered was put there by someone this
+        // Motir knows; one that registered itself (RFC 7591, unauthenticated —
+        // every MCP client) is only its own claim.
+        unverified: client.userId === null,
+      },
+      redirectUri,
+      redirectHost: redirect.host,
+      loopback: redirect.protocol === 'http:' && isLoopbackHostname(redirect.hostname),
+      workspaces,
+      unusableWorkspaces,
+    };
+  },
+
+  /**
+   * The name a registered client gave itself, for the sign-in card's "connecting
+   * an app" banner (design Panel 5). Null for an unknown or disabled client, or
+   * one that registered no name — the card then says "This app". Display only.
+   */
+  async clientDisplayName(clientId: string): Promise<string | null> {
+    const client = await oauthClientRepository.findByClientId(clientId);
+    if (!client || client.disabled) return null;
+    return client.name?.trim() || null;
+  },
+
+  /**
+   * Decline a consent request: the client is sent back with
+   * `error=access_denied` and its `state`. Writes NOTHING — no connection, no
+   * consent row; the provider's decline path stores nothing either. Refuses a
+   * request Motir did not sign or that has expired, so a decline can never be
+   * turned into a redirect to an address nobody checked.
+   */
+  async denyConsent(input: { headers: Headers; oauthQuery: string }): Promise<DenyConsentResult> {
+    await verifiedConsentQuery(input.oauthQuery);
+    const redirectUrl = await answerProviderConsent(input.headers, input.oauthQuery, false);
+    return { redirectUrl };
+  },
+
   /**
    * Approve an app's consent request: record the CONNECTION (person, client,
    * workspace, project-or-none, grant), then complete the provider's
@@ -186,11 +300,8 @@ export const oauthConnectionsService = {
    * that already existed is left alone.
    */
   async approveConsent(input: ApproveConsentInput): Promise<ApproveConsentResult> {
-    const clientId = await verifiedClientId(input.oauthQuery);
-    const client = await oauthClientRepository.findByClientId(clientId);
-    if (!client || client.disabled) {
-      throw new OAuthConsentRequestInvalidError('the app is not registered');
-    }
+    const params = await verifiedConsentQuery(input.oauthQuery);
+    const client = await consentClient(params.get('client_id')!);
     const access = await organizationsService.resolveWorkspaceAccess(
       input.userId,
       input.workspaceId,
@@ -220,7 +331,7 @@ export const oauthConnectionsService = {
 
     try {
       const redirectUrl = await withConsentConnection(connection.id, () =>
-        completeProviderConsent(input.headers, input.oauthQuery),
+        answerProviderConsent(input.headers, input.oauthQuery, true),
       );
       return { connectionId: connection.id, redirectUrl };
     } catch (err) {

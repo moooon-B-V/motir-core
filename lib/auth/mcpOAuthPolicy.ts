@@ -1,6 +1,6 @@
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import type { BetterAuthPlugin } from 'better-auth';
-import { mcpResourceUrl } from '@/lib/oauth/config';
+import { mcpResourceUrl, oauthErrorPageUrl } from '@/lib/oauth/config';
 import { isAllowedRedirectUri, matchesRegisteredRedirect } from '@/lib/oauth/redirectPolicy';
 import { currentConsentConnection } from '@/lib/oauth/consentContext';
 
@@ -23,6 +23,11 @@ import { currentConsentConnection } from '@/lib/oauth/consentContext';
 //      that redirect is one the client registered (RFC 6749 §4.1.2.1), and to
 //      Better-Auth's error page otherwise — an unverified redirect is never
 //      followed, which is the open-redirect rule.
+//      BEFORE that, a request whose CLIENT is unknown or disabled, or whose
+//      `redirect_uri` that client never registered, is shown Motir's own
+//      refused-request page (`/oauth/error`, MOTIR-6985) — the one state with no
+//      trustworthy address to send an error to. The provider would refuse both
+//      too, to Better-Auth's bare `/api/auth/error`; this says it in words.
 //   3. CONSENT (MOTIR-6983) — an ACCEPTING `/oauth2/consent` is honoured only
 //      from inside `oauthConnectionsService.approveConsent`, which has recorded
 //      the connection (workspace, project, grant) the consent binds to. Posted
@@ -38,6 +43,16 @@ const CONSENT_PATH = '/oauth2/consent';
 
 interface RegisteredClient {
   redirectUris?: string[] | null;
+  disabled?: boolean | null;
+}
+
+function hostOf(uri: string | undefined): string | null {
+  if (!uri) return null;
+  try {
+    return new URL(uri).host;
+  } catch {
+    return null;
+  }
 }
 
 function refusedRegistration(description: string): APIError {
@@ -83,34 +98,35 @@ export function mcpOAuthPolicy(): BetterAuthPlugin {
           matcher: (ctx) => ctx.path === AUTHORIZE_PATH,
           handler: createAuthMiddleware(async (ctx) => {
             const query = (ctx.query ?? {}) as Record<string, string | undefined>;
+            const clientId = query.client_id;
+            const redirectUri = query.redirect_uri;
+            const client = clientId
+              ? await ctx.context.adapter.findOne<RegisteredClient>({
+                  model: 'oauthClient',
+                  where: [{ field: 'clientId', value: clientId }],
+                })
+              : null;
+            if (!client || client.disabled) {
+              throw ctx.redirect(oauthErrorPageUrl('invalid_client'));
+            }
+            const redirectTrusted =
+              !!redirectUri && matchesRegisteredRedirect(client.redirectUris ?? [], redirectUri);
+            if (!redirectTrusted) {
+              throw ctx.redirect(oauthErrorPageUrl('invalid_redirect', hostOf(redirectUri)));
+            }
             if (query.resource === mcpResourceUrl()) return;
 
             const description = query.resource
               ? `resource must be ${mcpResourceUrl()}`
               : 'resource is required';
-            const clientId = query.client_id;
-            const redirectUri = query.redirect_uri;
-            const client =
-              clientId && redirectUri
-                ? await ctx.context.adapter.findOne<RegisteredClient>({
-                    model: 'oauthClient',
-                    where: [{ field: 'clientId', value: clientId }],
-                  })
-                : null;
-            const target =
-              client &&
-              redirectUri &&
-              matchesRegisteredRedirect(client.redirectUris ?? [], redirectUri)
-                ? errorUrl(redirectUri, {
-                    error: 'invalid_target',
-                    error_description: description,
-                    state: query.state,
-                    iss: ctx.context.baseURL,
-                  })
-                : errorUrl(`${ctx.context.baseURL}/error`, {
-                    error: 'invalid_target',
-                    error_description: description,
-                  });
+            // The redirect is the client's own, checked above: the refusal goes
+            // back to it (RFC 6749 §4.1.2.1).
+            const target = errorUrl(redirectUri!, {
+              error: 'invalid_target',
+              error_description: description,
+              state: query.state,
+              iss: ctx.context.baseURL,
+            });
             throw ctx.redirect(target);
           }),
         },

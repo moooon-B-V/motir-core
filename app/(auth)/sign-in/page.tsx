@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { resolvePostAuthDestination } from '@/lib/navigation/landing';
-import { oauthAuthorizeNext } from '@/lib/oauth/authorizeReturn';
+import { authorizeNextClientId, oauthAuthorizeNext } from '@/lib/oauth/authorizeReturn';
+import { oauthConnectionsService } from '@/lib/services/oauthConnectionsService';
 import { SignInCard } from './_components/SignInCard';
 
 /**
@@ -74,7 +75,15 @@ export default async function SignInPage({
     redirect(resolvePostAuthDestination({ next: params.next }));
   }
 
-  return <SignInCard sessionActive={Boolean(session)} />;
+  // The app an authorize request is waiting on, named on the card (design
+  // `design/auth/oauth-consent.mock.html` Panel 5). `null` = not an OAuth return.
+  const next = Array.isArray(params.next) ? params.next[0] : params.next;
+  const oauthClientId = authorizeNextClientId(next);
+  const oauthApp = oauthClientId
+    ? { name: await oauthConnectionsService.clientDisplayName(oauthClientId) }
+    : null;
+
+  return <SignInCard sessionActive={Boolean(session)} oauthApp={oauthApp} />;
 }
 
 function toSearchParams(params: Record<string, string | string[] | undefined>): URLSearchParams {

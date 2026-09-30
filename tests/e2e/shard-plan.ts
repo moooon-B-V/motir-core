@@ -657,6 +657,9 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // it from a green run's `e2e-harness/*.jsonl` when this table is next refreshed.
   'not-found-theme.spec.ts': 9.0,
   'notifications.spec.ts': 14.3,
+  // MOTIR-6985: an estimate, not a measurement — sign-up, one project, one
+  // authorize → consent → approve round trip. Re-measure from the first green run.
+  'oauth-consent.spec.ts': 15.0,
   'onboarding-discovery.spec.ts': 2.6,
   'onboarding-entrance.spec.ts': 6.8,
   'onboarding-entry.spec.ts': 2.9,

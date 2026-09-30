@@ -10383,5 +10383,111 @@
       "heldLine": "This item is marked <strong>{mark}</strong>. Clear the mark to reopen this item.",
       "openItem": "Open item"
     }
+  },
+  "oauthConsent": {
+    "unnamedApp": "This app",
+    "heading": {
+      "consent": "Connect {app} to Motir?",
+      "noWorkspace": "{app} can’t connect yet",
+      "refused": "This connection request can’t be used",
+      "approved": "{app} is connected",
+      "denied": "{app} was not connected"
+    },
+    "subhead": {
+      "consent": "It will act as you, in the one workspace you choose. Check each part before you approve.",
+      "noMemberships": "You’re not in any Motir workspace.",
+      "noGrantable": "None of your workspaces lets you grant it anything.",
+      "refused": "Nothing was connected, and you haven’t been sent anywhere.",
+      "closeTab": "You can close this tab."
+    },
+    "detail": {
+      "app": "App asking",
+      "returnsTo": "Returns you to",
+      "you": "You",
+      "workspace": "Workspace",
+      "unverified": "Unverified",
+      "appDynamic": "It registered itself, so this name is its own claim. Motir hasn’t reviewed this app.",
+      "appRegistered": "Registered with this Motir ahead of time — not by itself.",
+      "returnsLoopback": "An app on this computer. Approve only if you just asked {app} to connect.",
+      "returnsHttps": "You’ll be sent to {uri}",
+      "notYou": "Not you? <link>Sign out</link> and sign in as them.",
+      "workspaceOnly": "Your only workspace.",
+      "workspaceHelp": "You belong to {count} — it acts in this one only.",
+      "workspacePicker": "Workspace {app} can act in"
+    },
+    "reach": {
+      "label": "Where it can act",
+      "all": "All projects",
+      "one": "One project",
+      "helpAll": "Every project in {workspace} you can open. In each one it can also do no more than your role there allows.",
+      "helpOne": "Only the project you pick, with the permissions you switch on.",
+      "project": "Project",
+      "projectHelp": "{app} acts in this project only."
+    },
+    "grant": {
+      "label": "What it can do",
+      "helpAll": "The standard permissions every new connection gets — everything except deleting.",
+      "helpOne": "Choose what {app} is allowed to do. You can grant less than your own access, never more.",
+      "withheld": "Not included. Pick <b>One project</b> to choose it.",
+      "empty": "Grant at least one permission to connect.",
+      "locked": "You do not have this in this project.",
+      "dangerTag": "· Danger"
+    },
+    "summary": {
+      "all": "{app} gets <b>{count} of {total}</b> permissions, in every project of <b>{workspace}</b> you can open.",
+      "one": "{app} gets <b>{count}</b> permissions, in <b>{project}</b> only."
+    },
+    "actions": {
+      "group": "Approve or deny {app}",
+      "deny": "Deny",
+      "approve": "Approve and connect",
+      "connecting": "Connecting…",
+      "denyReturn": "Deny and return to {app}"
+    },
+    "foot": {
+      "disconnect": "Disconnect it any time in Settings → Account → Connected apps.",
+      "denyNothingStored": "Deny tells {app} the connection was refused. Nothing is stored.",
+      "closeTab": "You can close this tab.",
+      "nothingShared": "Nothing about your account was shared with it."
+    },
+    "noWorkspace": {
+      "noMemberships": "A connection acts in one workspace, and your account isn’t in any yet. Create a workspace, or ask to be invited to one, then connect again from {app}.",
+      "noGrantable": "In {workspaces} you can’t open any project, so there is nothing {app} could do there. Ask a workspace admin for project access, then connect again."
+    },
+    "refused": {
+      "reason": {
+        "invalid_client": "The app isn’t registered with Motir, or its registration has expired.",
+        "invalid_redirect": "It asked to send you back to <b>{host}</b>, an address it never registered with Motir.",
+        "invalid_redirect_nohost": "It asked to send you back to an address it never registered with Motir.",
+        "code_challenge": "It left out a security check Motir requires on every connection.",
+        "invalid_target": "It asked for access to something other than Motir’s MCP server.",
+        "expired": "It is too old to use — a connection has to be approved within a few minutes of the app asking.",
+        "not_issued": "It wasn’t issued by Motir, or it was changed on its way here.",
+        "rejected": "Motir couldn’t finish it."
+      },
+      "next": "Go back to the app and start connecting again. If this keeps happening, the app is set up wrong — tell whoever makes it, and quote <chip>{code}</chip>.",
+      "home": "Go to Motir"
+    },
+    "approved": {
+      "bodyAll": "{app} can now act as you in <b>{workspace}</b> — every project you can open.",
+      "bodyOne": "{app} can now act as you in <b>{workspace}</b> — in <b>{project}</b> only.",
+      "returning": "Returning you to {app}… If nothing happens, go back to it yourself — it’s already connected.",
+      "viewConnected": "View connected apps"
+    },
+    "denied": {
+      "body": "Nothing was stored. {app} will be told you declined.",
+      "retry": "Changed your mind? Start connecting again from {app}."
+    },
+    "errors": {
+      "unexpected": "Something went wrong, and nothing was connected. Try again.",
+      "network": "Couldn’t reach Motir. Check your connection and try again.",
+      "workspace": "You can’t connect it to that workspace any more. Pick another one.",
+      "grant": "You can no longer grant one of those permissions in this project. Reload the page to see what you can."
+    },
+    "signIn": {
+      "carriedLabel": "Connecting an app",
+      "carriedValue": "{app} — you’ll pick a workspace and approve next.",
+      "foot": "Only the account you sign in as can approve this — and only its workspaces can be picked."
+    }
   }
 }

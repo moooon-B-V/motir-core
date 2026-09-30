@@ -18,6 +18,22 @@ export const PROTECTED_RESOURCE_METADATA_PATH = '/.well-known/oauth-protected-re
 /** Where the provider sends a signed-in person to decide (MOTIR-6985 draws it). */
 export const OAUTH_CONSENT_PAGE = '/oauth/consent';
 
+/**
+ * Where a REFUSED authorize request is shown (MOTIR-6985, design Panel 7): an
+ * unknown client or an unregistered redirect, whose only address on hand may be
+ * an attacker's, so the refusal is Motir's own page and never a redirect to it.
+ */
+export const OAUTH_ERROR_PAGE = '/oauth/error';
+
+/** The refused-request page for one error code, with the host an unregistered
+ * redirect asked for (display only — it is shown as data, never followed). */
+export function oauthErrorPageUrl(error: string, host?: string | null): string {
+  const url = new URL(OAUTH_ERROR_PAGE, `${resolveBaseUrlTrimmed()}/`);
+  url.searchParams.set('error', error);
+  if (host) url.searchParams.set('host', host);
+  return url.toString();
+}
+
 /** Where the provider sends a signed-out person first. */
 export const OAUTH_LOGIN_PAGE = '/sign-in';
 

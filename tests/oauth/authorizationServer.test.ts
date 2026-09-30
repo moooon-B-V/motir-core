@@ -195,8 +195,10 @@ describe('the authorize endpoint', () => {
       await authorize({ clientId, resource: null, redirectUri: 'https://attacker.example/cb' }),
     );
     expect(at.host).not.toBe('attacker.example');
-    expect(at.pathname).toBe('/api/auth/error');
-    expect(at.searchParams.get('error')).toBe('invalid_target');
+    // Motir's own refused-request page (MOTIR-6985): the redirect is checked
+    // before the resource, so the reason given is the untrusted redirect.
+    expect(at.pathname).toBe('/oauth/error');
+    expect(at.searchParams.get('error')).toBe('invalid_redirect');
   });
 });
 

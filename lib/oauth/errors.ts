@@ -4,18 +4,41 @@
 //
 //   OAuthConsentRequestInvalidError → 400 — the consent request is not one Motir
 //       issued (a missing or forged signature, an expired request, an unknown or
-//       disabled client). Nothing is recorded.
+//       disabled client). Nothing is recorded. `reason` names which, so the
+//       consent page can say it in words (design Panel 7).
 //   OAuthConnectionNotFoundError → 404 — revoking a connection that is missing
 //       OR another person's (404-not-403: no existence leak).
 //   OAuthAccessTokenRejectedError → 401 at the MCP gate — the bearer resolves to
 //       no connection it may act through. `reason` is for logs and tests; the
 //       gate answers every reason with the same 401, as it does for a PAT.
 
+/**
+ * Why a consent request cannot be used — the consent page's refused state names
+ * each in words (`design/auth/design-notes.md` § OAuth consent, Panel 7).
+ */
+export type OAuthConsentProblem =
+  /** No client with this id, or a disabled one. */
+  | 'invalid_client'
+  /** The `redirect_uri` is not one the client registered. */
+  | 'invalid_redirect'
+  /** PKCE missing, or a method other than S256. */
+  | 'code_challenge'
+  /** `resource` is not Motir's MCP. */
+  | 'invalid_target'
+  /** A request Motir signed, too old to use. */
+  | 'expired'
+  /** A request Motir did not sign (no or a forged signature). */
+  | 'not_issued'
+  /** The provider refused to complete a request that passed Motir's checks. */
+  | 'rejected';
+
 export class OAuthConsentRequestInvalidError extends Error {
   readonly code = 'OAUTH_CONSENT_REQUEST_INVALID' as const;
-  constructor(detail: string) {
+  readonly reason: OAuthConsentProblem;
+  constructor(detail: string, reason: OAuthConsentProblem = 'not_issued') {
     super(`This connection request can't be used: ${detail}.`);
     this.name = 'OAuthConsentRequestInvalidError';
+    this.reason = reason;
   }
 }
 
