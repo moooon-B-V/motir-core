@@ -26,6 +26,17 @@ import baseConfig from './vitest.config';
 //   * `scripts/relay.ts` is the relay's process entrypoint (monitoring init, listen,
 //     drain on SIGTERM) — it is bundled and run, not imported, like
 //     `scripts/worker.ts`; everything it wires is measured here.
+//
+// EXTENDED BY THE AGENT-CHAT STORY GATE (Story MOTIR-6863 · MOTIR-7018): the
+// chat's motir-core half — the browser's protocol mirror (`lib/agentChat/**`),
+// `CHAT_PROFILES` (already under `lib/agentInstances/**`), the relay's chat
+// channel and the ticket's channel (already under `lib/agentTerminal/**` and the
+// services above), and the Chat tab (already under `app/(authed)/my-agents/**`) —
+// held to the same per-file floor, over the chat's own suites (`tests/agentChat/**`,
+// whose story gate drives the relay into the REAL in-process chat server, and the
+// tab's `AgentChat.test.tsx`). The in-agent chat server and its five adapters
+// (`packages/cli/src/agentTerminal/chat/**`) are held, like the terminal server,
+// by `packages/cli/vitest.config.ts`'s per-file thresholds.
 
 const FLOOR = { statements: 90, functions: 90, branches: 90, lines: 90 } as const;
 
@@ -50,6 +61,18 @@ const MEASURED = [
   'lib/repositories/agentTerminalTicketRepository.ts',
   'lib/repositories/agentTerminalConnectionRepository.ts',
   'lib/mappers/agentTerminalMappers.ts',
+  // Story MOTIR-6863 — the agent chat (MOTIR-7018).
+  'lib/agentChat/**/*.ts',
+  // The Chat tab. Its parentheses are ESCAPED (`[(]` / `[)]`): the coverage
+  // include is a glob, where `(authed)` is a pattern group matching the bare
+  // segment `authed` — so the two `app/(authed)/my-agents/**` entries above
+  // match no file at all, and the panel they name has never been measured.
+  // Measured on this branch, they would hold the terminal story's own files
+  // below the floor, so widening them is left to that story; the chat's files
+  // are measured here, at the floor.
+  'app/[(]authed[)]/my-agents/_components/AgentChat.tsx',
+  'app/[(]authed[)]/my-agents/_components/useAgentChat.ts',
+  'app/[(]authed[)]/my-agents/_components/chat/**/*.{ts,tsx}',
 ];
 
 export default defineConfig({
@@ -61,6 +84,9 @@ export default defineConfig({
       'tests/components/MyAgentsRoom.test.tsx',
       'tests/agentTerminal/**/*.test.ts',
       'tests/components/AgentPanel.test.tsx',
+      // Story MOTIR-6863 — the agent chat (MOTIR-7018).
+      'tests/agentChat/**/*.test.{ts,tsx}',
+      'tests/components/AgentChat.test.tsx',
     ],
     coverage: {
       provider: 'v8',
