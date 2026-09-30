@@ -210,6 +210,24 @@ describe('the backstop — `system/init` with apiKeySource "none"', () => {
     expect(events.at(-1)).toEqual({ k: 'turn_end', reason: 'failed', code: 'subscription_signin' });
   });
 
+  it('draws nothing the process wrote after the init line, even when the whole stream arrives in one read', async () => {
+    const r = await rig('auth-status-api-key.json');
+    r.send({ t: 'open' });
+    await settle();
+    r.send({ t: 'prompt', text: 'p' });
+    await settle();
+    const proc = r.procs[0] as FakeChatProcess;
+    proc.raw((await streamLines('no-key.jsonl')).join('\n') + '\n');
+    await settle();
+    proc.exit(0);
+    await settle();
+    expect(proc.signals).toEqual(['SIGKILL']);
+    const events = r.socket.events();
+    expect(events.filter((event) => event.k !== 'user')).toEqual([
+      { k: 'turn_end', reason: 'failed', code: 'subscription_signin' },
+    ]);
+  });
+
   it('does not fire on a cloud-provider sign-in, whose init honestly carries no Anthropic key', async () => {
     const { proc, events } = await replay('auth-status-cloud-provider.json', 'no-key.jsonl');
     expect(proc.signals).toEqual([]);

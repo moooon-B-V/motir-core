@@ -369,7 +369,10 @@ export function createChatHub(options: ChatHubOptions): ChatHub {
   };
 
   const onLine = (turn: Turn, line: string): void => {
-    if (turn.ended || !turn.mapper) return;
+    // Once a turn is failing (its adapter's kill code, or shutdown), nothing
+    // else it prints is drawn — including lines that arrived in the same read
+    // as the killing one, and a partial flushed on exit.
+    if (turn.ended || !turn.mapper || turn.failCode) return;
     let events: TranscriptEvent[];
     try {
       events = turn.mapper.onLine(line);
