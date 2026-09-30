@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · A design result approved by the SYSTEM — MOTIR-694 (a delta of
+      design-result.mock.html)
+    </title>
+    <!--
+      DELTA MOCK — Subtask MOTIR-694 (Story MOTIR-693). It AMENDS
+      design/work-items/design-result.mock.html and design-notes.md § ⭐ Design result
+      panel — the DECIDED state of its approval frame. Nothing else in the frame changes.
+
+      Built to the SHIPPED record band (ApprovalGateControl's RecordStrip): who, when,
+      the version. The decision is
+      docs/decisions/hosted-design-rerun-and-design-approval-switch.md §2c–§2d: a gate
+      the system approved has NO actor (decidedById / decidedByLabel null), and
+      decisionSource = system, decidedUnderAuthority = project_setting.
+
+      WHY THIS NEEDS DRAWING: fed such a row today, the shipped band prints its null-label
+      fallback, "No longer attributable" — which says somebody decided and the name was
+      lost. The opposite is true (§6a). This delta replaces that line for a system row.
+
+      PANELS:
+        1 · For a reader who can manage the project — the setting is a link.
+        2 · For everyone else — the same words, not a link.
+        3 · A person's approval, for comparison (shipped, unchanged).
+        4 · The Approvals room's decided records — the same words on the row.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --color-link-pressed: #005bb1;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-warning: var(--color-warning);
+        --el-success: var(--color-success);
+        --el-info: var(--color-info);
+        --el-switch-knob: var(--color-surface);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-story: var(--color-accent-green);
+      }
+
+      :root {
+        /* Declared here with theme.css's own values — newer than the copied block. */
+        --color-primary-fill: #5645d4;
+        --el-card: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .board-title {
+        margin: 0 0 6px;
+        font-size: 22px;
+      }
+      .board-sub {
+        margin: 0 0 28px;
+        max-width: 58rem;
+        color: var(--el-text-secondary);
+      }
+      .panel {
+        margin-bottom: 40px;
+      }
+      .panel > h2 {
+        margin: 0 0 6px;
+        font-size: 16px;
+      }
+      .panel > .why {
+        margin: 0 0 14px;
+        max-width: 58rem;
+        color: var(--el-text-secondary);
+      }
+      code,
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+      .ic {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+      }
+      .ic-sm {
+        width: 12px;
+        height: 12px;
+        flex-shrink: 0;
+      }
+      /* Card — components/ui/Card: rounded-(--radius-card) border-(--el-border)
+         p-(--spacing-card-padding) bg-(--el-card); header slot mb-(--spacing-md). */
+      .card {
+        max-width: 42rem;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+      .card + .card {
+        margin-top: 24px;
+      }
+      .card-h {
+        margin-bottom: var(--spacing-md);
+      }
+      .card-h h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .card-h p {
+        margin: 2px 0 0;
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .state {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .state-name {
+        display: block;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .state-what {
+        display: block;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      /* Switch — components/ui/Switch: h-5 w-9 rounded-full border; knob size-3.5. */
+      .switch {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        width: 36px;
+        height: 20px;
+        flex-shrink: 0;
+        border-radius: 9999px;
+        border: 1px solid var(--el-switch-off-border);
+        background: var(--el-muted);
+      }
+      .switch .knob {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        box-shadow: var(--shadow-subtle);
+        transform: translateX(2px);
+        background: var(--el-switch-knob-off);
+      }
+      .switch.on {
+        border-color: var(--el-switch-on-border);
+        background: var(--el-switch-on);
+      }
+      .switch.on .knob {
+        transform: translateX(18px);
+        background: var(--el-switch-knob);
+      }
+      .page {
+        max-width: 42rem;
+      }
+      .page h1 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .page > p {
+        margin: 4px 0 24px;
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .new {
+        outline: 2px dashed var(--el-accent-on-surface);
+        outline-offset: 4px;
+      }
+      /* The decided frame's RECORD strip — ApprovalGateControl's RecordStrip:
+         flex-wrap gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) px-4 py-3
+         text-xs text-(--el-text-secondary). */
+      .frame {
+        max-width: 44rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .frame-body {
+        padding: 12px 16px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .record {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        column-gap: 16px;
+        row-gap: 6px;
+        border-top: 1px solid var(--el-border-soft);
+        padding: 12px 16px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .record .who {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .record .ver {
+        font-family: var(--font-mono);
+        color: var(--el-text-identifier);
+      }
+      .record a,
+      .rerun a {
+        color: var(--el-link);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+        font-weight: 500;
+      }
+      .quote {
+        flex-basis: 100%;
+        margin: 0;
+        padding-left: 10px;
+        border-left: 2px solid var(--el-border);
+        color: var(--el-text);
+      }
+      /* THE NEW LINE (MOTIR-694 · 3): the automatic re-run's outcome, the last row of
+         the refused gate's record — its own full-width line after the quote. */
+      .rerun {
+        flex-basis: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        column-gap: 6px;
+        row-gap: 2px;
+        color: var(--el-text-secondary);
+      }
+      .rerun .lead {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .rerun svg {
+        color: var(--el-text-secondary);
+      }
+      .variants {
+        max-width: 44rem;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .variant {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 10px 16px;
+        font-size: 12px;
+      }
+      .variant .reason {
+        display: block;
+        margin-bottom: 4px;
+        font-family: var(--font-mono);
+        color: var(--el-text-identifier);
+      }
+      .rows {
+        max-width: 44rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: var(--spacing-control-y) 16px;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .row + .row {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .row .by {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol
+        id="i-refresh"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+        <path d="M21 3v5h-5" />
+        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+        <path d="M8 16H3v5" />
+      </symbol>
+      <symbol
+        id="i-pause"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M10 15V9" />
+        <path d="M14 15V9" />
+      </symbol>
+      <symbol
+        id="i-settings"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 2v2" />
+        <path d="M12 20v2" />
+        <path d="m4.93 4.93 1.41 1.41" />
+        <path d="m17.66 17.66 1.41 1.41" />
+        <path d="M2 12h2" />
+        <path d="M20 12h2" />
+        <path d="m6.34 17.66-1.41 1.41" />
+        <path d="m19.07 4.93-1.41 1.41" />
+        <circle cx="12" cy="12" r="4" />
+      </symbol>
+    </svg>
+
+    <h1 class="board-title">Design result — approved by the project setting (a delta)</h1>
+    <p class="board-sub">
+      Story MOTIR-693 · Subtask MOTIR-694. Amends the decided state of
+      <code>design/work-items/design-result.mock.html</code>. Only the record band's WHO changes;
+      the frame above it and the version beside it are the shipped ones.
+    </p>
+    <section class="panel">
+      <h2>1 · Approved by the setting — a reader who holds workflow:manage</h2>
+      <p class="why">
+        The lead names WHAT happened, in the place a person's name goes, so the band never shows an
+        empty actor. The second item names WHY, and links to the switch: the one place this reader
+        can change it. The time is the publish time, because the approval happened then.
+      </p>
+      <div class="frame">
+        <div class="frame-body">The published design renders above this line, unchanged.</div>
+        <div class="record">
+          <span class="who">Approved automatically</span>
+          <span
+            ><a href="/settings/project/approvals#design-approval"
+              >Design approval is off for this project</a
+            ></span
+          >
+          <span>29 Sep 2026, 21:42</span>
+          <span class="ver">version c0389f2a</span>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>2 · The same record, for a reader without workflow:manage</h2>
+      <p class="why">
+        The room is manage-only, so a link would lead to a refusal. The words are the same; only the
+        link goes.
+      </p>
+      <div class="frame">
+        <div class="frame-body">The published design renders above this line, unchanged.</div>
+        <div class="record">
+          <span class="who">Approved automatically</span>
+          <span>Design approval is off for this project</span>
+          <span>29 Sep 2026, 21:42</span>
+          <span class="ver">version c0389f2a</span>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>3 · For comparison — a person's approval, as it ships</h2>
+      <p class="why">
+        Unchanged. The two are told apart by their first item: a name, or "Approved automatically".
+      </p>
+      <div class="frame">
+        <div class="frame-body">The published design renders above this line, unchanged.</div>
+        <div class="record">
+          <span class="who">Ada Lovelace</span>
+          <span>29 Sep 2026, 21:42</span>
+          <span class="ver">version c0389f2a</span>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>4 · The Approvals room's decided records</h2>
+      <p class="why">
+        The room's own list of decisions reads the same row, so it says the same thing: never a
+        blank decider, never "No longer attributable".
+      </p>
+      <div class="rows">
+        <div class="row">
+          <span>MOTIR-694 · Design — the design-approval switch</span
+          ><span class="by">Approved automatically · design approval off</span>
+        </div>
+        <div class="row">
+          <span>MOTIR-6420 · Design — the verdict pair</span
+          ><span class="by">Approved by Ada Lovelace</span>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>

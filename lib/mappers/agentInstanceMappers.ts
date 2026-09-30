@@ -19,6 +19,7 @@ export function toAgentInstanceDto(row: AgentInstance): AgentInstanceDto {
     region: row.region,
     state: row.state,
     failureReason: row.failureReason,
+    terminalServer: row.terminalServer,
     stateChangedAt: row.stateChangedAt.toISOString(),
     lastActivityAt: row.lastActivityAt.toISOString(),
     createdAt: row.createdAt.toISOString(),

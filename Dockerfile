@@ -207,6 +207,14 @@ RUN --mount=type=secret,id=SENTRY_AUTH_TOKEN \
 # BEFORE the standalone assertion so the bundle is not mistaken for traced output.
 RUN pnpm build:worker
 
+# ── the terminal relay bundle (MOTIR-6940) ──────────────────────────────────
+# The `motir-relay` Fly app (`fly.relay.toml`, `docs/decisions/agent-terminal.md`
+# Q1) runs from THIS image, as the worker does, so it is bundled the worker's way
+# for the worker's reason (`scripts/build-relay.mjs`): one ESM file, `ws` inlined,
+# only `pg`/`argon2`-class natives external. Its import graph stops short of
+# `lib/auth`, so the relay app boots with its four secrets and no others.
+RUN pnpm build:relay
+
 
 # ── assert the standalone output stayed small — the prune's successor ────────
 # ⚠️ THIS STEP USED TO PRUNE. It does not any more, because there is nothing
@@ -356,6 +364,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts/release-migrate.mjs ./mig
 # failure in minutes and not diagnosing it at all.
 COPY --from=builder --chown=nextjs:nodejs /app/.worker/worker.mjs ./worker/worker.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/.worker/worker.mjs.map ./worker/worker.mjs.map
+
+# ── /app/relay — the terminal relay app (MOTIR-6940) ─────────────────────────
+# `fly.relay.toml` runs `node relay/relay.mjs`. Like the worker, its unresolved
+# imports resolve upward into `/app/node_modules`; the map is copied for the
+# same reason.
+COPY --from=builder --chown=nextjs:nodejs /app/.relay/relay.mjs ./relay/relay.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/.relay/relay.mjs.map ./relay/relay.mjs.map
 
 # ── the RUNNING process must be able to name its own build (MOTIR-3760) ─────
 # ⚠️ THE BUILDER STAGE'S `MOTIR_RELEASE` DOES NOT REACH HERE, AND FOR MONTHS

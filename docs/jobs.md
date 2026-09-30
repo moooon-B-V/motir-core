@@ -1145,6 +1145,80 @@ wrong: a **tick inside the existing worker process**
 It adds no machine, no process and no environment variable — which is why the
 correction is worth stating rather than deleting.
 
+### The registered schedules
+
+This is every id `jobSchedules()` (`lib/jobs/schedules.ts`) returns, with its cron —
+31 jobs. The cron is the definition's; a reason for the time a job runs lives in
+its own header in `lib/jobs/definitions/`, not here.
+
+**The cadence rule.** A `system.*` job that fires more than once an hour fires on
+exactly `*/5 * * * *` (`SUB_HOURLY_CADENCE`) unless its id is named in
+`SUB_HOURLY_CADENCE_EXCEPTIONS` with a reason — and that map is empty today. Hourly and
+slower jobs keep whatever cron their own definition argues for.
+`tests/jobs/schedule-cadence.test.ts` asserts it. It replaced the `:00`/`:30`
+cluster rule (MOTIR-3314), which existed so the database could sleep between ticks.
+The job worker polls Postgres every ≤ 5 s, so the database is always on and the
+cluster bought nothing. The why is
+[`docs/decisions/always-on-database-job-cadence.md`](decisions/always-on-database-job-cadence.md)
+(MOTIR-6893), the amendment that supersedes the cluster clauses of
+[`application-hosting.md` §21](decisions/application-hosting.md).
+
+**Every 5 minutes**
+
+| job                                         | cron          |
+| ------------------------------------------- | ------------- |
+| `system.agent-instance-sweep`               | `*/5 * * * *` |
+| `system.ci-runner-provision-sweep`          | `*/5 * * * *` |
+| `system.ci-runner-reap`                     | `*/5 * * * *` |
+| `system.code-graph-drift-sweep`             | `*/5 * * * *` |
+| `system.code-graph-index-catch-up`          | `*/5 * * * *` |
+| `system.migrate-onboarding-sweep`           | `*/5 * * * *` |
+| `system.monitor-issue-reconcile`            | `*/5 * * * *` |
+| `system.plan-target-lock-sweep`             | `*/5 * * * *` |
+| `system.public-address-certificate-refresh` | `*/5 * * * *` |
+| `system.pull-request-reconcile`             | `*/5 * * * *` |
+| `system.run-liveness-sweep`                 | `*/5 * * * *` |
+| `system.supervision-sweep`                  | `*/5 * * * *` |
+
+**Hourly**
+
+| job                                 | cron         |
+| ----------------------------------- | ------------ |
+| `system.abandoned-plan-sweep`       | `0 * * * *`  |
+| `system.filter-subscription-tick`   | `0 * * * *`  |
+| `system.organization-erasure-sweep` | `0 * * * *`  |
+| `system.auto-plan-cadence-tick`     | `30 * * * *` |
+| `system.ci-actions-gate-sweep`      | `30 * * * *` |
+
+**Daily (UTC)**
+
+| job                                      | cron         |
+| ---------------------------------------- | ------------ |
+| `system.account-erasure-sweep`           | `0 3 * * *`  |
+| `system.attachment-gc`                   | `30 3 * * *` |
+| `system.rate-limit-sweep`                | `0 4 * * *`  |
+| `system.automation-retention-sweep`      | `30 4 * * *` |
+| `system.code-graph-offboard-sweep`       | `0 5 * * *`  |
+| `system.data-export-expiry-sweep`        | `30 5 * * *` |
+| `system.job-run-reap`                    | `0 6 * * *`  |
+| `system.dispatch-run-sweep`              | `30 6 * * *` |
+| `system.dlq-standing-depth-sweep`        | `0 7 * * *`  |
+| `system.organization-retention-purge`    | `30 7 * * *` |
+| `system.daily-health-check`              | `0 9 * * *`  |
+| `system.organization-deletion-reminders` | `0 9 * * *`  |
+
+**Weekly (UTC)**
+
+| job                                | cron        |
+| ---------------------------------- | ----------- |
+| `system.public-follow-digest-tick` | `0 9 * * 1` |
+
+**Monthly (UTC)**
+
+| job                           | cron         |
+| ----------------------------- | ------------ |
+| `system.ci-minutes-reconcile` | `30 5 3 * *` |
+
 ### Where the scheduler runs, and the guard that makes that safe
 
 It rides the worker's claim loop, beside the claim rather than on a timer of its
@@ -1171,11 +1245,10 @@ compiler will not let it omit one:
 | `latest`    | enqueues **only the most recent** owed fire                   |
 | `skip`      | enqueues **nothing**; the next scheduled fire is the next run |
 
-**Thirteen of the fourteen take `latest`** — each is a convergent sweep, so one
-run answers for every fire it missed — and `system.ci-runner-provision-sweep`
-takes **`skip`**, because at `* * * * *` the next fire is under a minute away and
-a long outage would otherwise fan out hundreds of ticks against a batch ceiling.
-No job takes `all` today.
+**Every scheduled job takes `latest`** — each is a convergent sweep, so one run
+answers for every fire it missed. `system.ci-runner-provision-sweep` used to take
+`skip`, an argument that held only while it ran every minute; at `*/5` it is
+`latest` like the rest. No job takes `all` today.
 
 **The per-job table and the reasoning live in
 [`docs/decisions/job-queue-foundation.md` §11](decisions/job-queue-foundation.md),

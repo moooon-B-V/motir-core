@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   FLEET_CONTAINER_SIZE,
   INSTANCE_METADATA_KEY,
+  MACHINE_CONFIG_METADATA_KEY,
+  TERMINAL_KEY_ID_METADATA_KEY,
   OrchestratorApiError,
   OrchestratorImageUnpullableError,
   OrchestratorNotConfiguredError,
@@ -14,11 +16,14 @@ import {
   instanceMachineName,
   instanceVolumeName,
   isFlyInstancesConfigured,
+  isMachineConfigCurrent,
+  machineConfigVersionOf,
   persistentTiming,
   toFlyMachine,
   toPersistentState,
   type PersistentContainerHandle,
   type PersistentContainerSpec,
+  type PersistentTerminalConfig,
 } from '../src/index';
 
 // The FLY adapter's PERSISTENT half on the wire (Story MOTIR-6860 · MOTIR-6869,
@@ -30,6 +35,8 @@ interface Call {
   url: string;
   method: string;
   body: Record<string, unknown> | null;
+  /** The body exactly as sent — for the byte-identity pin. */
+  rawBody: string | null;
   auth: string | null;
 }
 
@@ -58,6 +65,34 @@ const SPEC: PersistentContainerSpec = {
   region: 'iad',
   volumeSizeGb: 10,
   mountPath: '/home/node',
+  terminal: null,
+};
+
+/** The terminal machine config (`agent-terminal.md` Q2–Q4) as the lifecycle builds it. */
+const TERMINAL: PersistentTerminalConfig = {
+  version: 1,
+  keyId: 'kid-1',
+  command: [
+    'sh',
+    '-c',
+    'motir agent-terminal --help >/dev/null 2>&1 && exec motir agent-terminal serve; exec sleep infinity',
+  ],
+  env: { MOTIR_TERMINAL_KEY: 'derived-key' },
+  service: {
+    internalPort: 7681,
+    ports: [{ port: 443, handlers: ['tls', 'http'] }],
+    autostart: false,
+    autostop: 'off',
+  },
+};
+
+/** Fly's machine-config spelling of {@link TERMINAL}'s service. */
+const FLY_SERVICE = {
+  protocol: 'tcp',
+  internal_port: 7681,
+  ports: [{ port: 443, handlers: ['tls', 'http'] }],
+  autostart: false,
+  autostop: 'off',
 };
 
 const HANDLE: PersistentContainerHandle = {
@@ -103,6 +138,7 @@ beforeEach(() => {
       method: init.method ?? 'GET',
       body:
         typeof init.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : null,
+      rawBody: typeof init.body === 'string' ? init.body : null,
       auth: headers['authorization'] ?? null,
     };
     calls.push(call);
@@ -557,6 +593,14 @@ describe('the ephemeral path is unchanged', () => {
     expect(config['mounts']).toBeUndefined();
     expect(calls[0]!.url).toBe(`${API}/apps/motir-ci-fleet/machines`);
     expect(calls[0]!.auth).toBe('Bearer fleet-token');
+    // MOTIR-6939: BYTE-IDENTICAL to the body before the terminal existed (captured
+    // from `9f32def0e`) — no init, no services, no terminal key on a CI machine.
+    expect(calls[0]!.rawBody).toBe(
+      '{"name":"motir-runner-1","region":"iad","config":{"image":"registry.fly.io/runner@sha256:abc",' +
+        '"guest":{"cpu_kind":"performance","cpus":2,"memory_mb":8192},"env":{},' +
+        '"metadata":{"motir_fleet":"ci-runner","motir_intent_id":"1","motir_org_id":"org-1","motir_project_id":"proj-1"},' +
+        '"auto_destroy":true,"restart":{"policy":"no"}}}',
+    );
   });
 });
 
@@ -589,5 +633,243 @@ describe('exec — one command inside a running machine (MOTIR-6872)', () => {
     await expect(flyPersistentOrchestrator.exec(HANDLE, ['true'])).rejects.toThrow(
       OrchestratorApiError,
     );
+  });
+});
+
+describe('the terminal machine config (agent-terminal.md Q2–Q4 · MOTIR-6939)', () => {
+  const SHARED_V4 = { ip: '137.66.0.1', shared: true, egress: false, network: null };
+  const PUBLIC_V6 = { ip: '2a09:8280:1::1', shared: false, egress: false, network: null };
+
+  function provisionHandler(ips: unknown[]) {
+    return (call: Call) => {
+      if (call.method === 'GET' && call.url === `${API}/apps/${APP}`) return json(200, { id: 'a' });
+      if (call.url.endsWith('/ip_assignments'))
+        return call.method === 'GET' ? json(200, { ips }) : json(200, { ip: 'x' });
+      if (call.url.endsWith('/volumes')) return json(200, { id: 'vol_1', name: 'x' });
+      if (call.url.endsWith('/machines')) return json(200, flyMachine('created'));
+      return json(500, {});
+    };
+  }
+
+  it('creates the machine with the terminal server as its MAIN process, the one public service, the key and the stamp', async () => {
+    handler = provisionHandler([]);
+    await flyPersistentOrchestrator.provisionPersistent({ ...SPEC, terminal: TERMINAL });
+    expect(calls.map((c) => `${c.method} ${c.url.replace(API, '')}`)).toEqual([
+      `GET /apps/${APP}`,
+      `GET /apps/${APP}/ip_assignments`,
+      `POST /apps/${APP}/ip_assignments`,
+      `POST /apps/${APP}/ip_assignments`,
+      `POST /apps/${APP}/volumes`,
+      `POST /apps/${APP}/machines`,
+    ]);
+    // A shared IPv4 and an IPv6 (Q2).
+    expect(calls[2]!.body).toEqual({ type: 'shared_v4' });
+    expect(calls[3]!.body).toEqual({ type: 'v6' });
+
+    const config = calls[5]!.body!['config'] as Record<string, unknown>;
+    // The argv replaces the image's CMD; the image's ENTRYPOINT is left alone.
+    expect(config['init']).toEqual({ cmd: TERMINAL.command });
+    expect(config['services']).toEqual([FLY_SERVICE]);
+    expect(config['env']).toEqual({
+      MOTIR_INSTANCE_ID: 'cmInstance1',
+      MOTIR_TERMINAL_KEY: 'derived-key',
+    });
+    expect(config['metadata']).toMatchObject({
+      [INSTANCE_METADATA_KEY]: 'cmInstance1',
+      [MACHINE_CONFIG_METADATA_KEY]: '1',
+      [TERMINAL_KEY_ID_METADATA_KEY]: 'kid-1',
+    });
+    // Everything else as before: the pinned digest, the home volume, restart.
+    expect(config['image']).toBe(SPEC.image);
+    expect(config['mounts']).toEqual([{ volume: 'vol_1', path: '/home/node' }]);
+    expect(config['restart']).toEqual({ policy: 'on-failure' });
+    expect(config['auto_destroy']).toBe(false);
+  });
+
+  it('allocates the app’s addresses ONCE — a second ensure, on an app that has them, allocates nothing', async () => {
+    handler = provisionHandler([SHARED_V4, PUBLIC_V6]);
+    await flyPersistentOrchestrator.provisionPersistent({ ...SPEC, terminal: TERMINAL });
+    expect(calls.filter((c) => c.url.endsWith('/ip_assignments') && c.method === 'POST')).toEqual(
+      [],
+    );
+  });
+
+  it('never counts a private (Flycast) or egress address as the public one', async () => {
+    handler = provisionHandler([
+      { ip: 'fdaa:0:1::3', shared: false, egress: false, network: { name: APP, org_slug: 'o' } },
+      { ip: '149.248.1.2', shared: false, egress: true, network: null },
+      { ip: '2a09:1::9', shared: false, egress: true },
+      { nothing: true },
+    ]);
+    await flyPersistentOrchestrator.provisionPersistent({ ...SPEC, terminal: TERMINAL });
+    expect(
+      calls
+        .filter((c) => c.url.endsWith('/ip_assignments') && c.method === 'POST')
+        .map((c) => c.body),
+    ).toEqual([{ type: 'shared_v4' }, { type: 'v6' }]);
+  });
+
+  it('allocates only the missing family, and a refused allocation stops the provision before any volume', async () => {
+    handler = provisionHandler([SHARED_V4]);
+    await flyPersistentOrchestrator.provisionPersistent({ ...SPEC, terminal: TERMINAL });
+    expect(
+      calls
+        .filter((c) => c.url.endsWith('/ip_assignments') && c.method === 'POST')
+        .map((c) => c.body),
+    ).toEqual([{ type: 'v6' }]);
+
+    for (const refuse of ['GET', 'POST']) {
+      calls = [];
+      handler = (call) => {
+        if (call.url.endsWith('/ip_assignments') && call.method === refuse)
+          return json(403, { error: 'no' });
+        return provisionHandler([])(call);
+      };
+      await expect(
+        flyPersistentOrchestrator.provisionPersistent({ ...SPEC, terminal: TERMINAL }),
+      ).rejects.toThrow(OrchestratorApiError);
+      expect(calls.filter((c) => c.url.endsWith('/volumes'))).toEqual([]);
+    }
+  });
+
+  it('reads a stamp as its version, and anything else as 0', () => {
+    expect(machineConfigVersionOf({ [MACHINE_CONFIG_METADATA_KEY]: '3' })).toBe(3);
+    expect(machineConfigVersionOf({})).toBe(0);
+    expect(machineConfigVersionOf({ [MACHINE_CONFIG_METADATA_KEY]: 'v2' })).toBe(0);
+    const stamp = (v: string, k?: string) => ({
+      [MACHINE_CONFIG_METADATA_KEY]: v,
+      ...(k ? { [TERMINAL_KEY_ID_METADATA_KEY]: k } : {}),
+    });
+    expect(isMachineConfigCurrent(stamp('1', 'kid-1'), TERMINAL)).toBe(true);
+    expect(isMachineConfigCurrent(stamp('2'), TERMINAL)).toBe(true);
+    expect(isMachineConfigCurrent(stamp('1', 'rotated'), TERMINAL)).toBe(false);
+    expect(isMachineConfigCurrent(stamp('0'), TERMINAL)).toBe(false);
+  });
+
+  describe('ensureMachineConfig — a wake brings an older machine up to date (Q8)', () => {
+    /** A machine created before the terminal: no init, no services, no stamp. */
+    const LEGACY_CONFIG = {
+      image: SPEC.image,
+      guest: { cpu_kind: 'performance', cpus: 2, memory_mb: 8192 },
+      env: { MOTIR_INSTANCE_ID: 'cmInstance1' },
+      metadata: { [INSTANCE_METADATA_KEY]: 'cmInstance1', motir_org_id: ORG },
+      mounts: [{ volume: 'vol_1', path: '/home/node', name: 'home_x', size_gb: 10 }],
+      auto_destroy: false,
+      restart: { policy: 'on-failure' },
+    };
+
+    function machineHandler(config: Record<string, unknown> | null, ips: unknown[] = []) {
+      return (call: Call) => {
+        if (call.method === 'GET' && call.url === `${API}/apps/${APP}/machines/m-1`)
+          return config
+            ? json(200, { ...flyMachine('stopped'), version: 'ver-7', config })
+            : json(404, { error: 'not found' });
+        if (call.url.endsWith('/ip_assignments'))
+          return call.method === 'GET' ? json(200, { ips }) : json(200, {});
+        if (call.method === 'POST' && call.url === `${API}/apps/${APP}/machines/m-1`)
+          return json(200, flyMachine('stopped'));
+        return json(500, { error: 'unexpected' });
+      };
+    }
+
+    it('sends ONE update with skip_launch, the same image digest and the same /home/node mount — and never starts it', async () => {
+      handler = machineHandler(LEGACY_CONFIG);
+      expect(await flyPersistentOrchestrator.ensureMachineConfig(HANDLE, TERMINAL)).toBe('updated');
+      expect(calls.map((c) => `${c.method} ${c.url.replace(API, '')}`)).toEqual([
+        `GET /apps/${APP}/machines/m-1`,
+        `GET /apps/${APP}/ip_assignments`,
+        `POST /apps/${APP}/ip_assignments`,
+        `POST /apps/${APP}/ip_assignments`,
+        `POST /apps/${APP}/machines/m-1`,
+      ]);
+      const update = calls[4]!.body!;
+      expect(update['skip_launch']).toBe(true);
+      expect(update['current_version']).toBe('ver-7');
+      expect(update['config']).toEqual({
+        ...LEGACY_CONFIG,
+        init: { cmd: TERMINAL.command },
+        services: [FLY_SERVICE],
+        env: { MOTIR_INSTANCE_ID: 'cmInstance1', MOTIR_TERMINAL_KEY: 'derived-key' },
+        metadata: {
+          ...LEGACY_CONFIG.metadata,
+          [MACHINE_CONFIG_METADATA_KEY]: '1',
+          [TERMINAL_KEY_ID_METADATA_KEY]: 'kid-1',
+        },
+      });
+      expect(calls.some((c) => c.url.endsWith('/start'))).toBe(false);
+    });
+
+    it('sends NO update to an up-to-date machine, nor to one a newer build stamped', async () => {
+      for (const stamp of [
+        { [MACHINE_CONFIG_METADATA_KEY]: '1', [TERMINAL_KEY_ID_METADATA_KEY]: 'kid-1' },
+        { [MACHINE_CONFIG_METADATA_KEY]: '9' },
+      ]) {
+        calls = [];
+        handler = machineHandler({ ...LEGACY_CONFIG, metadata: stamp });
+        expect(await flyPersistentOrchestrator.ensureMachineConfig(HANDLE, TERMINAL)).toBe(
+          'current',
+        );
+        expect(calls.map((c) => c.method)).toEqual(['GET']);
+      }
+    });
+
+    it('rewrites a machine whose key id differs (a rotated master key), keeping an existing init field', async () => {
+      handler = machineHandler(
+        {
+          ...LEGACY_CONFIG,
+          init: { swap_size_mb: 512, cmd: ['bash', '-l'] },
+          metadata: { [MACHINE_CONFIG_METADATA_KEY]: '1', [TERMINAL_KEY_ID_METADATA_KEY]: 'old' },
+        },
+        [SHARED_V4, PUBLIC_V6],
+      );
+      expect(await flyPersistentOrchestrator.ensureMachineConfig(HANDLE, TERMINAL)).toBe('updated');
+      const update = calls.find((c) => c.method === 'POST')!;
+      expect((update.body!['config'] as Record<string, unknown>)['init']).toEqual({
+        swap_size_mb: 512,
+        cmd: TERMINAL.command,
+      });
+    });
+
+    it('throws for a machine that is gone, and on an update Fly refuses', async () => {
+      handler = machineHandler(null);
+      await expect(flyPersistentOrchestrator.ensureMachineConfig(HANDLE, TERMINAL)).rejects.toThrow(
+        OrchestratorApiError,
+      );
+      const base = machineHandler(LEGACY_CONFIG, [SHARED_V4, PUBLIC_V6]);
+      handler = (call) =>
+        call.method === 'POST' && call.url.endsWith('/machines/m-1')
+          ? json(409, { error: 'version mismatch' })
+          : base(call);
+      await expect(flyPersistentOrchestrator.ensureMachineConfig(HANDLE, TERMINAL)).rejects.toThrow(
+        OrchestratorApiError,
+      );
+      handler = () => json(500, { error: 'boom' });
+      await expect(flyPersistentOrchestrator.ensureMachineConfig(HANDLE, TERMINAL)).rejects.toThrow(
+        OrchestratorApiError,
+      );
+    });
+
+    it('omits current_version when the machine reports none, and tolerates a config-less body', async () => {
+      handler = (call) => {
+        if (call.method === 'GET' && call.url.endsWith('/machines/m-1'))
+          return json(200, { id: 'm-1', state: 'stopped' });
+        if (call.url.endsWith('/ip_assignments')) return json(200, {});
+        return json(200, {});
+      };
+      expect(await flyPersistentOrchestrator.ensureMachineConfig(HANDLE, TERMINAL)).toBe('updated');
+      const update = calls.find((c) => c.method === 'POST' && c.url.endsWith('/machines/m-1'))!;
+      expect(update.body!['current_version']).toBeUndefined();
+      expect((update.body!['config'] as Record<string, unknown>)['services']).toEqual([
+        FLY_SERVICE,
+      ]);
+    });
+  });
+
+  it('terminalEndpoint: the org app’s public name, pinned to the one machine by fly-force-instance-id', () => {
+    expect(flyPersistentOrchestrator.terminalEndpoint(HANDLE)).toEqual({
+      url: `wss://${APP}.fly.dev/v1/terminal`,
+      headers: { 'fly-force-instance-id': 'm-1' },
+    });
+    expect(calls).toEqual([]);
   });
 });

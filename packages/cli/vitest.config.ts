@@ -124,6 +124,30 @@ export default defineConfig({
         'src/commands/continue.ts': { branches: 90, functions: 90, lines: 90 },
         'src/interrupt.ts': { branches: 90, functions: 90, lines: 90 },
 
+        // Story MOTIR-6861 · MOTIR-6938 — the in-agent terminal server. MEASURED
+        // FIRST over `test/agentTerminal/` (fake PTY), lines / branches / funcs:
+        // relayToken 100/100/100, protocol 100/100/100, signIn 100/95.45/100,
+        // websocket 100/94.62/94.44, outputRing 100/100/100,
+        // commands/agentTerminal 100/90/100. Named on
+        // the way in, for the reason stated above: this is the code that decides
+        // who gets a shell.
+        'src/agentTerminal/relayToken.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/agentTerminal/protocol.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/agentTerminal/signIn.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/agentTerminal/websocket.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/commands/agentTerminal.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/agentTerminal/outputRing.ts': { branches: 90, functions: 90, lines: 90 },
+        // FUNCTIONS + LINES only (99.05 lines / 89.83 br / 95 funcs): its
+        // uncovered arms are the refusal of an upgrade racing `close()` and the
+        // defensive fallbacks on a bound address, and a 90% branch bar would
+        // fail on those alone.
+        'src/agentTerminal/server.ts': { functions: 90, lines: 90 },
+        // UNGATED: src/agentTerminal/pty.ts — the node-pty adapter. Its loader's
+        // absent / unloadable arms are covered in `units.test.ts`; the adapter
+        // body runs only against a real node-pty, which `realPty.test.ts` drives
+        // where one is built (the agent image, or MOTIR_TERMINAL_MODULE_DIR) and
+        // skips everywhere else, CI included.
+
         // These two gate on FUNCTIONS + LINES only (both are at 100% / ~98%):
         // each carries DEFENSIVE branches that are unreachable under shipped
         // invariants, so a 90% BRANCH bar would fail on un-coverable code — the

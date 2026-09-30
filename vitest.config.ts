@@ -901,6 +901,16 @@ export default defineConfig({
         // ship un-measured: the defect it fixes lost three cards' whole bodies
         // under a success line. MEASURED on this branch before pinning.
         'lib/mcp/strictInput.ts',
+        // Story MOTIR-6974 · Subtask MOTIR-7003 — the tool HINTS: the table and
+        // its registration seam (a wrong `readOnlyHint: true` lets Claude run a
+        // write without asking), and the two files that carry each tool's title
+        // and hints into the published catalogue (`lib/apiDocs/mcp.ts` and the
+        // generator that writes its leaf). MEASURED on this branch before
+        // pinning: 100 / 100 / 100 for the table and the content module, and
+        // 100 lines / 100 branches / 92.3 functions for the generator.
+        'lib/mcp/toolAnnotations.ts',
+        'lib/apiDocs/mcp.ts',
+        'scripts/generateMcpToolSchemas.ts',
         'app/**/settings/account/_components/permissionMeta.tsx',
         'app/**/settings/account/_components/CreateTokenModal.tsx',
         'app/**/settings/account/_components/apiTokensClient.ts',
@@ -2829,6 +2839,43 @@ export default defineConfig({
         'app/**/workspace/_components/AccessScopeCell.tsx',
         'app/**/workspace/_components/InviteAccessFields.tsx',
         'app/api/projects/**/access/preview/route.ts',
+        // ── Story MOTIR-6973 · CONNECT MOTIR TO CLAUDE WITH OAUTH (gate MOTIR-6987) ──
+        // The OAuth door for MCP: discovery documents, the register/authorize policy,
+        // the consent screen and route, Connected apps, and the connection service.
+        // MEASURED on the parent branch over the story's own suites (10 files / 218
+        // tests, including the SDK-driven journey in tests/integration/oauth): every
+        // file at or above 90 on all four axes; the closest are the branches of
+        // ConsentScreen 91.2, oauthConnectionMappers 91.3 and mcpOAuthPolicy 91.7.
+        // GATED at the project floor in `thresholds`.
+        'app/**/oauth/_components/ConsentRefused.tsx',
+        'app/**/oauth/_components/ConsentScreen.tsx',
+        'app/**/oauth/_components/consentParts.tsx',
+        'app/**/oauth/consent/page.tsx',
+        'app/**/oauth/error/page.tsx',
+        'app/**/settings/account/_components/ConnectedAppsSection.tsx',
+        'app/**/settings/account/_components/PermissionPicker.tsx',
+        'app/**/settings/account/_components/connectedAppsClient.ts',
+        'app/.well-known/oauth-authorization-server/\\[\\[...path\\]\\]/route.ts',
+        'app/.well-known/oauth-protected-resource/\\[\\[...path\\]\\]/route.ts',
+        'app/api/account/oauth-connections/\\[id\\]/route.ts',
+        'app/api/account/oauth-connections/route.ts',
+        'app/api/oauth/consent/route.ts',
+        'lib/auth/mcpOAuthPolicy.ts',
+        'lib/jobs/definitions/oauthSweep.ts',
+        'lib/mappers/oauthConnectionMappers.ts',
+        'lib/oauth/authorizeReturn.ts',
+        'lib/oauth/config.ts',
+        'lib/oauth/consentContext.ts',
+        'lib/oauth/cors.ts',
+        'lib/oauth/errors.ts',
+        'lib/oauth/metadata.ts',
+        'lib/oauth/redirectPolicy.ts',
+        'lib/oauth/wellKnownPaths.ts',
+        'lib/repositories/oauthAccessTokenRepository.ts',
+        'lib/repositories/oauthClientRepository.ts',
+        'lib/repositories/oauthRefreshTokenRepository.ts',
+        'lib/services/oauthConnectionsService.ts',
+        'lib/services/oauthSweepService.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -4865,6 +4912,9 @@ export default defineConfig({
         'lib/mcp/scopes.ts': { branches: 90, functions: 90, lines: 90 },
         // Bug MOTIR-3342 — the unknown-argument gate (see the `include` note).
         'lib/mcp/strictInput.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/toolAnnotations.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/apiDocs/mcp.ts': { branches: 90, functions: 90, lines: 90 },
+        'scripts/generateMcpToolSchemas.ts': { branches: 90, functions: 90, lines: 90 },
         'app/**/settings/account/_components/permissionMeta.tsx': {
           branches: 90,
           functions: 90,
@@ -6207,6 +6257,181 @@ export default defineConfig({
           statements: 90,
         },
         'components/approvals/useOpenRefusalReplan.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ── Story MOTIR-6973 · the OAuth door (gate MOTIR-6987) — see `include`. ──
+        'app/**/oauth/_components/ConsentRefused.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/oauth/_components/ConsentScreen.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/oauth/_components/consentParts.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/oauth/consent/page.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/oauth/error/page.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/settings/account/_components/ConnectedAppsSection.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/settings/account/_components/PermissionPicker.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/settings/account/_components/connectedAppsClient.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/.well-known/oauth-authorization-server/\\[\\[...path\\]\\]/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/.well-known/oauth-protected-resource/\\[\\[...path\\]\\]/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/account/oauth-connections/\\[id\\]/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/account/oauth-connections/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/oauth/consent/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/auth/mcpOAuthPolicy.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/oauthSweep.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/oauthConnectionMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/oauth/authorizeReturn.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/oauth/config.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/oauth/consentContext.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/oauth/cors.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/oauth/errors.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/oauth/metadata.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/oauth/redirectPolicy.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/oauth/wellKnownPaths.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/oauthAccessTokenRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/oauthClientRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/oauthRefreshTokenRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/oauthConnectionsService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/oauthSweepService.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

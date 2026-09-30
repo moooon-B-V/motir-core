@@ -471,6 +471,14 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/agentInstanceIdleCheck.ts',
     shape: '"active" | "backstop" | "idle" | "noop"',
   },
+  'sweep-agent-terminal-tickets': {
+    file: 'lib/jobs/definitions/agentInstanceSweep.ts',
+    shape: '{ deleted: number }',
+  },
+  'sweep-lost-terminal-connections': {
+    file: 'lib/jobs/definitions/agentInstanceSweep.ts',
+    shape: '{ closed: number }',
+  },
   'sweep-agent-instances': {
     file: 'lib/jobs/definitions/agentInstanceSweep.ts',
     shape:
@@ -492,6 +500,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   'sweep-expired-exports': {
     file: 'lib/jobs/definitions/dataExportExpirySweep.ts',
     shape: '{ expired: number; failed: number; scanned: number }',
+  },
+  'sweep-oauth-leftovers': {
+    file: 'lib/jobs/definitions/oauthSweep.ts',
+    shape:
+      '{ accessTokens: number; authorizationCodes: number; clients: number; refreshTokens: number }',
   },
   'sweep-standing-dead-letters': {
     file: 'lib/jobs/definitions/dlqStandingDepthSweep.ts',

@@ -80,6 +80,44 @@ RUN pnpm --filter @motir/cli build \
     && npm pack --pack-destination /pkg
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Stage 1b — compile node-pty for the in-agent terminal server (MOTIR-6938)
+# ─────────────────────────────────────────────────────────────────────────────
+# `motir agent-terminal serve` hands a browser a shell through Motir's relay
+# (`docs/decisions/agent-terminal.md` Q4), and it needs a real PTY to do it.
+# node-pty is that PTY, and it is deliberately NOT a dependency of `@motir/cli`:
+# its 1.1.0 ships prebuilt binaries for macOS and Windows only, so on Linux it
+# compiles at install — and the package is also installed on laptops, which must
+# never be asked for a C++ toolchain. So it is built HERE, in a stage that has
+# one, into a directory the final stage copies, and `serve` loads it from there
+# with `createRequire`. Outside this image `serve` refuses in words instead.
+#
+# The SAME `NODE_TAG` as the runtime stage, on purpose: a native addon is bound
+# to the Node ABI it was compiled against, and a mismatch fails at `require`
+# time on the user's machine rather than here.
+#
+# The version is PINNED EXACTLY (`--save-exact`, and the ARG is a version, not a
+# range): a terminal server whose PTY changed under it between two builds of the
+# same tag is the kind of drift nobody can bisect.
+#
+# The build tools stay in THIS stage. The runtime image gains the compiled
+# directory and nothing else — no compiler for an unprivileged agent to find.
+FROM node:${NODE_TAG} AS terminal-pty
+ARG NODE_PTY_VERSION=1.1.0
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/motir-terminal
+# The smoke test is a SPAWN, not a `require`: an addon that loads but cannot
+# open a PTY is the failure that matters, and it must fail the BUILD — the same
+# reason the runtime stage asserts `motir --version`.
+RUN printf '%s\n' '{ "name": "motir-terminal", "private": true }' > package.json \
+    && npm install --no-audit --no-fund --save-exact --foreground-scripts "node-pty@${NODE_PTY_VERSION}" \
+    && node -e "const pty = require('node-pty'); \
+const child = pty.spawn('/bin/sh', ['-c', 'exit 7'], { cols: 80, rows: 24 }); \
+child.onExit(({ exitCode }) => process.exit(exitCode === 7 ? 0 : 1));" \
+    && rm -rf /root/.npm /root/.cache
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 — the sandbox base
 # ─────────────────────────────────────────────────────────────────────────────
 FROM node:${NODE_TAG} AS base
@@ -357,6 +395,18 @@ COPY --from=builder /pkg/*.tgz /tmp/motir-cli.tgz
 RUN npm install -g /tmp/motir-cli.tgz \
     && rm /tmp/motir-cli.tgz \
     && motir --version
+
+# ── The terminal server's PTY (MOTIR-6938) ───────────────────────────────────
+# The compiled node-pty from stage 1b, at the path `motir agent-terminal serve`
+# loads it from. Root-owned, like the `motir` binary above, so the agent can
+# neither replace the addon the server spawns shells with nor break it.
+#
+# `motir agent-terminal --help` exiting 0 is exactly what an agent machine's
+# init probes before it starts the server (Q4, Q8), so it is asserted here: an
+# image that cannot answer it must fail the BUILD, not boot into `sleep`.
+COPY --from=terminal-pty /opt/motir-terminal /opt/motir-terminal
+RUN motir agent-terminal --help >/dev/null \
+    && node -e "require('module').createRequire('/opt/motir-terminal/package.json')('node-pty')"
 
 # ── CodeGraph: the coding agent's own navigation graph (7.9.7d / MOTIR-1513) ─
 # The structural code-graph engine the 7.5.3 spike selected, so the agent inside

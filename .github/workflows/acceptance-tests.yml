@@ -196,17 +196,18 @@ name: Acceptance tests
 #
 # THE DERIVATION lives in the `membership` gate, which already counts the lane:
 #
-#   legs = min(specs, 4), floored at 1
+#   legs = min(specs, 6), floored at 1
 #
 #   0 specs → 1 leg    (a PR against an empty lane; `push` skips entirely)
-#   1 spec  → 1 leg    2 specs → 2 legs    3 specs → 3 legs    ≥ 4 → 4 legs
+#   1 spec  → 1 leg    2 specs → 2 legs    …    ≥ 6 → 6 legs
 #
 # Two things that number is chosen to protect, both of which a plain "one leg per
 # spec" would break:
-#   • THE CAP keeps MOTIR-2600 intact. At ≥ 4 specs the matrix is exactly the
-#     `[1, 2, 3, 4]` that card measured against 29 minutes of test time, so a
-#     lane that legitimately grows again gets the parallelism it was sized for
-#     and never regresses toward the serial runtime it replaced.
+#   • THE CAP gives a grown lane its full parallelism, so it never regresses
+#     toward the serial runtime sharding replaced. MOTIR-2600 set it at 4
+#     (`[1, 2, 3, 4]` against 29 minutes of test time). MOTIR-7054 raised it
+#     to 6 when the lane reached 87 specs and a four-leg shard ran past its
+#     then 40-minute job timeout.
 #   • THE FLOOR of 1 keeps the rehearsal. A lane-definition PR against an empty
 #     lane runs no tests either way — what it still proves is that the harness
 #     BOOTS (the Playwright config loads, the webServer comes up, `e2e-setup`'s
@@ -450,7 +451,7 @@ jobs:
           # it held. The FLOOR is 1 rather than 0 because a run with no legs at
           # all would stop proving the harness still boots, which is the only
           # thing a lane-definition PR against an empty lane can prove.
-          MAX_LEGS=4
+          MAX_LEGS=6
           if [ "${COUNT}" -lt 1 ]; then
             LEGS=1
           elif [ "${COUNT}" -gt "${MAX_LEGS}" ]; then
@@ -458,10 +459,14 @@ jobs:
           else
             LEGS="${COUNT}"
           fi
-          # The CAP is what keeps MOTIR-2600's sizing intact: at ≥ MAX_LEGS specs
-          # the matrix is byte-for-byte the [1,2,3,4] that card measured, so a
-          # lane that legitimately grows again gets exactly the parallelism it
-          # was sized for and never regresses toward the serial runtime.
+          # The CAP is the lane's full parallelism: at ≥ MAX_LEGS specs the
+          # matrix is [1..MAX_LEGS], so a lane that grows gets that many legs and
+          # never regresses toward the serial runtime. MOTIR-2600 sized it at 4
+          # for 26 specs and 25.7 min of test time. At 87 specs those four legs
+          # ran 33–37 min of Playwright each and the slowest job reached 40.9 min
+          # against the shard job's then 40-minute timeout, so a green shard was
+          # cancelled and the merge queue dropped its PR (MOTIR-7054). Six legs
+          # bring the same lane to ~22 min of tests per leg.
           # `paste -sd, -`, not `seq -s,`: BSD `seq` puts the separator after the
           # last number too, so on a Mac the list came out `[1,]` — not JSON —
           # and tests/ci-acceptance-lane.test.ts, which runs this snippet on the
@@ -574,12 +579,19 @@ jobs:
   acceptance:
     name: Playwright E2E (acceptance) ${{ matrix.shard }}/${{ needs.membership.outputs.legs }}
     runs-on: ubuntu-latest
-    # Observed 4.9–11.3 min per shard across four runs → 40 (~3.5x on the
-    # worst). ⚠️ DERIVED FROM THIS LANE, NOT COPIED FROM `e2e`. The acceptance
-    # specs are an order of magnitude heavier than ordinary E2E per test, so
-    # the number next door is not evidence about this one either way; run
-    # 33217054605 is the slowest on record (11.30 min, shard 3/4).
-    timeout-minutes: 40
+    # ⚠️ DERIVED FROM THIS LANE, NOT COPIED FROM `e2e`. The acceptance specs
+    # are an order of magnitude heavier than ordinary E2E per test, so the
+    # number next door is not evidence about this one either way. First sized
+    # at 4.9–11.3 min per shard → 40 (~3.5x). The lane then grew to 87 specs on
+    # four legs, and every leg ran 33–41 min: on PR #3277 and in merge-queue run
+    # 36721238788, shard 4/4 passed all 37 of its tests and was CANCELLED at 40
+    # during the ~72 s report upload, which dropped green PRs from the queue.
+    # MOTIR-6973 raised this 40 → 55 (~1.5x the slowest measured leg), and
+    # MOTIR-7054 took the lasting fix, the leg cap (`MAX_LEGS`, 4 → 6): six legs
+    # are ~22 min of tests plus ~5 min of setup and upload, so 55 is now ~2x on
+    # a slow runner and still catches a hung leg. When the lane grows back
+    # toward it, raise the cap first, not this number.
+    timeout-minutes: 55
     # BOTH edges, and each is load-bearing (MOTIR-2908):
     #   · `build` publishes the `.next/` artifact every leg downloads, and it is
     #     where the MOTIR-2760 gate lives — a skipped build skips the fan-out.
@@ -593,11 +605,11 @@ jobs:
       # report — the artifact a red lane is debugged from at all (MOTIR-1706).
       fail-fast: false
       matrix:
-        # SIZED FROM THE LANE'S MEMBERSHIP (MOTIR-2908) — `[1]` … `[1, 2, 3, 4]`,
+        # SIZED FROM THE LANE'S MEMBERSHIP (MOTIR-2908) — `[1]` … `[1, …, 6]`,
         # derived by the `membership` gate above. It was a literal `[1, 2, 3, 4]`
         # from MOTIR-2600 until MOTIR-2765 gave a spec a lifecycle and MOTIR-2769
         # triaged the lane empty; four legs over ≤2 specs is not parallelism, it
-        # is four copies of the setup. At ≥4 specs this is the same matrix again.
+        # is four copies of the setup. The cap is 6 since MOTIR-7054.
         shard: ${{ fromJSON(needs.membership.outputs.shards) }}
     # ⚠️ NO `id-token: write` — RETIRED WITH THE PUBLISHER (MOTIR-4096). This job
     # carried it for the keyless-OIDC acceptance publish (MOTIR-1650); nothing in

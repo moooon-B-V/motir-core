@@ -28,6 +28,7 @@
 // synthesizes the ledger's `event_name` as `scheduled.{job_id}` (see
 // defineJob); the payload type therefore makes `workspaceId` optional.
 
+import type { DesignAutoRerunRequestedData } from '@/lib/services/designAutoRerunService';
 import type { TransactionalEmail } from '@/lib/services/emailService';
 import type { HostedAgentSession } from '@/lib/services/hostedAgentContainerService';
 
@@ -463,6 +464,8 @@ export interface JobEventDataMap {
   /** MOTIR-4219 — the certificate sweep. Cross-tenant, cron-only. */
   'system.public-address-certificate-refresh': SystemScheduledData;
   'system.rate-limit-sweep': SystemScheduledData;
+  /** MOTIR-6984 — the daily OAuth sweep. Identity-scoped tables, cron-only. */
+  'system.oauth-sweep': SystemScheduledData;
   'system.filter-subscription-tick': SystemScheduledData;
   'system.public-follow-digest-tick': SystemScheduledData;
   'system.auto-plan-cadence-tick': SystemScheduledData;
@@ -575,6 +578,9 @@ export interface JobEventDataMap {
    *  (`lib/jobs/definitions/agentReviewRequested.ts`, MOTIR-6820), and emitted again by
    *  *Review again*. */
   'agent-review/requested': AgentReviewRequestedData;
+  /** A person sent a HOSTED design back with Revise (MOTIR-700): start its automatic
+   *  re-run, or record why not. Emitted by the design handler AFTER the refusal commits. */
+  'design/auto-rerun.requested': DesignAutoRerunRequestedData;
   /** A push moved a repository's DEFAULT branch (MOTIR-5914): re-read the host's
    *  mergeability of every open pull request that targets it, and withdraw the question
    *  over any that now conflict. Emitted by the push webhook after its own write. */
@@ -741,6 +747,8 @@ export type JobEventData<N extends JobEventName> = JobEventDataMap[N];
  * events never go through `sendEvent` (they are cron / harness triggered):
  * `email.send` + the `work-item/*` events.
  */
+export type { DesignAutoRerunRequestedData };
+
 export type WorkspaceScopedEventName = Exclude<JobEventName, `system.${string}`>;
 
 /**

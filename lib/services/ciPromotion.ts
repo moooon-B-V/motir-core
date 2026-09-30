@@ -4,7 +4,7 @@ import {
   withWorkspaceContext,
 } from '@/lib/workspaces/context';
 import type { GithubCheckRun, Prisma, WorkItem } from '@/generated/prisma/client';
-import { derivePrCiState } from '@/lib/github/prCiState';
+import { prCiStateAtHead } from '@/lib/github/pullRequestHead';
 import {
   readReportedCheckSet,
   reconcileRecordedCheckSet,
@@ -33,6 +33,7 @@ import {
   withdrawPullRequestApprovalGatesOnCiRerun,
 } from './pullRequestApprovalGates';
 import { evaluateAfterRaise } from './pullRequestReviewSync';
+import { gateSetFor } from './gateSetFor';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import {
   ContainerHasOpenChildrenError,
@@ -79,6 +80,12 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 // SUPERSEDED sha loses to the newer push's rows (not promoted). Re-deriving any
 // of them here would be a second opinion that could drift from the pill a person
 // reads on the Development surface.
+//
+// ⚠️ AMENDED BY MOTIR-7005: "the latest recorded sha" is now the pull request's
+// STORED head (`prCiStateAtHead`), not the newest check row's commit. A push that
+// produced no CI (every push to a conflicting pull request) left the rows at the old
+// green commit, and the latest-sha reading promoted that commit every reconcile tick.
+// A head with no rows reads `null` — not reported yet — and withholds.
 
 /**
  * The refusals a promotion TOLERATES, per card.
@@ -127,6 +134,19 @@ const TARGET_STATUS = 'in_review';
  * promotion's own transaction.
  */
 const REVIEW_STATUSES: readonly string[] = ['in_review', 'approved'];
+/** The status an approval writes — a card there whose commits moved is asked again at
+ *  `in_review` (MOTIR-6971). */
+const APPROVED_STATUS = 'approved';
+
+/**
+ * Would this `approved` card owe a merge question over its CURRENT set if it were in
+ * review? The predicate answers it — the card's own status read as `in_review` — so the
+ * move back to review happens only when a question is genuinely owed (MOTIR-6971).
+ */
+async function asksAgainInReview(item: WorkItem, tx: Prisma.TransactionClient): Promise<boolean> {
+  const set = await gateSetFor({ ...item, status: TARGET_STATUS }, tx);
+  return set.awaited.some((gate) => gate.kind === 'pull_request_approval');
+}
 
 // `collectDeliveries` — every pull request that delivers this card — MOVED to
 // `deliveryVerdict.ts` (MOTIR-5470), and imported at the top of this file. It was
@@ -157,9 +177,8 @@ const REVIEW_STATUSES: readonly string[] = ['in_review', 'approved'];
  * row recorded on both sides is counted once. The union collapses when
  * MOTIR-3672 retires the parse.
  *
- * The verdict per member is `derivePrCiState` — the SAME function the
- * Development pill shows and MOTIR-3697's `deliveries` field publishes, at the
- * latest recorded sha. A second opinion here would drift from what a person
+ * The verdict per member is `prCiStateAtHead` — `derivePrCiState`'s precedence over
+ * the rows AT the pull request's stored head (MOTIR-7005). A second opinion here would drift from what a person
  * reads on the card it is deciding about.
  *
  * ── ONE AMENDMENT, AND IT IS THE PROMOTION'S ALONE (MOTIR-3823) ───────────
@@ -207,12 +226,12 @@ async function everyDeliveryIsGreen(
  * the current head and the next green verdict promotes (with ONE fresh gate over
  * the new heads); or *Queue again* stamps the exit and moves the card itself.
  *
- * "Current head" is the latest check run's commit — the rule the gate's own
- * `subjectVersion` is written with (`deliveryMemberVersion`), so the two cannot
- * disagree about which commit a member is at.
+ * "Current head" is `pullRequestHead` — the rule the gate's own `subjectVersion` is
+ * written with (`deliveryMemberVersion`), so the two cannot disagree about which
+ * commit a member is at (MOTIR-7005).
  */
 async function heldByQueueFailure(
-  byId: Map<string, { checkRuns: GithubCheckRun[] }>,
+  byId: Map<string, { headSha: string | null; checkRuns: GithubCheckRun[] }>,
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
   // The rule is `queueExitHoldsAtHead` (MOTIR-5717), shared with the card's own
@@ -273,7 +292,7 @@ export async function promoteDeliveredCardsOnGreen(args: {
     const none = { promote: [] as string[], reRaise: [] as string[] };
     const pr = await githubPullRequestRepository.findByIdWithInstallation(args.changeRequestId, tx);
     if (!pr) return none;
-    if (derivePrCiState(pr.checkRuns) !== 'passing') return none;
+    if (prCiStateAtHead(pr) !== 'passing') return none;
 
     // ⚠️ THE PULL REQUEST, NOT A CARD READ OFF IT (MOTIR-3721). This used to
     // resolve the pull request's own link column and hand the resolver a single
@@ -390,9 +409,9 @@ async function withdrawDeliveredCardsOffGreen(
     const pr = await githubPullRequestRepository.findByIdWithInstallation(args.changeRequestId, tx);
     // ⚠️ RE-DERIVE, never trust the delivery that woke us. The event that called this is one
     // check; the question is whether the PULL REQUEST is red (or running) at its latest
-    // recorded sha, which is the same reading `derivePrCiState` gives the pill and the
-    // promotion. A single red check on a superseded run must retire nothing.
-    if (!pr || derivePrCiState(pr.checkRuns) !== verdict) {
+    // head, which is the same reading `prCiStateAtHead` gives the promotion. A single red
+    // check on a superseded run must retire nothing.
+    if (!pr || prCiStateAtHead(pr) !== verdict) {
       return { withdrawn: 0, moved: [] as string[] };
     }
     const refs = await resolveDeliveredWorkItems(args.changeRequestId, tx);
@@ -697,12 +716,29 @@ async function reRaiseMergeGates(
 ): Promise<void> {
   for (const id of workItemIds) {
     const settled = await withWorkspaceContext(ctx, async (tx) => {
-      // A card deleted since the verdict locks nothing and reads back null.
+      // The decide door's lock order — the card's awaiting gates, then the card (ADR
+      // §6d AMENDMENT, rule 8) — because the move below goes through the funnel,
+      // which takes them in that order too. A card deleted since the verdict locks
+      // nothing and reads back null.
+      await approvalGateRepository.lockAwaitingByWorkItem(id, tx);
       await workItemRepository.lockById(id, tx);
-      const item = await workItemRepository.findById(id, tx);
+      let item = await workItemRepository.findById(id, tx);
       const nothing = { autoMerges: [] as AutoMergeRequest[], raisedApprovalGate: false };
       if (!item || !REVIEW_STATUSES.includes(item.status)) return nothing;
       if (!(await isPromotable(item, tx))) return nothing;
+      // ⚠️ AN `approved` CARD IS ASKED AGAIN AT `in_review`, NEVER WHERE IT STANDS
+      // (MOTIR-6971; `approval-gates.md` §8's EIGHTH AMENDMENT). The merge question is
+      // asked only of a card in review, so a green set at commits nobody approved —
+      // a push after the approval — first moves the card back to `in_review` (a
+      // declared edge, §4's FOURTH AMENDMENT), as a system write: CI spoke and a
+      // person must decide. The same commits already approved (MOTIR-5632's late
+      // green) owe nothing and move nothing.
+      if (item.status === APPROVED_STATUS && (await asksAgainInReview(item, tx))) {
+        await workItemsService.applyStatusTransition(item.id, TARGET_STATUS, ctx, tx, {
+          system: true,
+        });
+        item = (await workItemRepository.findById(id, tx)) ?? item;
+      }
       return settleMergesForCard(item, ctx, tx);
     });
     await dispatchAutoMerges(id, settled.autoMerges, ctx);

@@ -1,5 +1,11 @@
 # @motir/design-system
 
+## 0.8.0
+
+### Minor Changes
+
+- 261f7d9: Add `renderMock` on the new `@motir/design-system/mock` subpath: it renders the package's own parts into one self-contained `.mock.html` under a given style, palette and type, with Tailwind compiled over the markup and `theme.css` inlined.
+
 ## 0.7.0
 
 ### Minor Changes

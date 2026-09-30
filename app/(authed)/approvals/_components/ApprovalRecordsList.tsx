@@ -180,12 +180,16 @@ export function ApprovalRecordsList({ records }: { records: ApprovalRecordsPageD
                             // A decision made on GitHub says so here, because the room is
                             // where an auditor reads decisions side by side and the door
                             // they came through is the thing that distinguishes them.
+                            // A SYSTEM approval names the setting, never "No one"
+                            // (MOTIR-702; `design-result--system-approved.mock.html` panel 4).
                             value:
-                              row.decisionSource === 'github'
-                                ? t('decidedByOnGithub', {
-                                    label: row.decidedByLabel ?? t('noOne'),
-                                  })
-                                : (row.decidedByLabel ?? t('noOne')),
+                              row.decisionSource === 'system'
+                                ? t('decidedBySystem')
+                                : row.decisionSource === 'github'
+                                  ? t('decidedByOnGithub', {
+                                      label: row.decidedByLabel ?? t('noOne'),
+                                    })
+                                  : (row.decidedByLabel ?? t('noOne')),
                           }
                         : undefined
                     }

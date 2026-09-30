@@ -4,6 +4,8 @@
   decision-subtask ladder). This is the rung-1/rung-2 contract the rest of
   MOTIR-1343 implements — no ask code ships until these points are pinned.
   **No application behaviour ships in this subtask** (the ADR only).
+  **Amended 2026-09-30** by MOTIR-7044 — a third intent, `debug` (see
+  _AMENDMENT 1_ at the end).
 - **Story / Subtask:** MOTIR-1343 (The AI assistant — Ask about this project) ·
   Subtask MOTIR-1816.
 - **Consumed by:** MOTIR-1815 (design: the cited-answer turn and the correction
@@ -247,3 +249,196 @@ whose reading failed is the expensive half of the asymmetry above.
 | **MOTIR-1820** (rail)                | The composer sends to the one door and carries **no switch**; the rail renders the correction marker and handles the two-stream redirect (§3, Consequence 3).                                                                              |
 | **MOTIR-1821 / MOTIR-1822** (vitest) | Cover the redirect path and assert an ask — including a redirected one — writes no work item (Consequence 5).                                                                                                                              |
 | **MOTIR-1823** (E2E)                 | The acceptance walk asks, gets a cited answer, then asks for a plan change **in the same thread with no mode change** (§5).                                                                                                                |
+
+---
+
+## AMENDMENT 1 (2026-09-30) — a third intent, `debug`
+
+- **Status:** Accepted on approval of MOTIR-7044's pull request. It **extends**
+  §1, §2, §3, §4 and §5. It rewrites none of them: every rule above holds for
+  `ask` and `plan_change` exactly as written.
+- **Story / Subtask:** MOTIR-7042 (Debug with Motir AI) · Subtask MOTIR-7044.
+- **Consumed by:** MOTIR-7042. That means the design card MOTIR-7045, the
+  motir-ai classifier and `debug_bug` handler MOTIR-7046 (and its tests
+  MOTIR-7048), the motir-core intent plumbing and triage anchor MOTIR-7047, the
+  landing of the result MOTIR-7049, the two entrances and the rendered turn
+  MOTIR-7050, its Postgres tests MOTIR-7051 and the acceptance run MOTIR-7052.
+
+### Context
+
+A person who has just reported a bug should be able to hand it to Motir AI. Motir
+AI then reads the code, names the likely cause, checks whether a card already
+covers it, and files or enriches exactly one bug. Most of that job already ships
+in separate places. The `author_bug` job grounds one error-monitor issue in the
+code graph and returns candidate mechanisms and context refs as a typed answer
+(motir-ai `src/jobs/handlers/authorBug.ts`, landed by motir-core
+`lib/ai/authoredBug.ts`). The triage intake creates a parentless `bug` that every
+normal read excludes (`triageService.createSubmission`, `triagedAt`). And the
+one conversation surface already resolves intent per turn (§1, §2).
+
+This story asks for that job to happen **in the conversation**, not in a new
+panel. That is a third intent, not a new surface: §5 and the callout registry
+(`lib/planning/aiCallout.ts`, _"a row is a LABEL, not a route"_) rule out a
+second door. What the ADR above does not say is how the third intent is told
+apart, what it may anchor on, what it may write, or how one of its two
+entrances can break §5's text-only seed without re-opening the mode that §5
+closed. This amendment answers those six questions.
+
+Verified on `origin/main` @ `1600e9a9` (motir-core) and `origin/main` @
+`7db33fc` (motir-ai), 2026-09-30:
+
+| Fact                                                                                                                                                                                                                                                                        | Where                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| The first call of `ask_project` returns a two-value verdict. Anything short of a confident `plan_change` parses as `ask`.                                                                                                                                                   | motir-ai `src/jobs/handlers/askProject.ts` (`IntentVerdict`, `parseIntentVerdict`, `CLASSIFY_SYSTEM`)  |
+| `PlanChangeTurn.intent` is a Prisma enum with two values, nullable, and set on `user` turns only.                                                                                                                                                                           | `prisma/schema.prisma` (`enum PlanChangeTurnIntent`)                                                   |
+| A triage item is excluded from every LIST read: tree, boards, lists, the ready set and search. The KEYED reads do not exclude it: `workItemsService.getWorkItem` / `getWorkItemByIdentifier` resolve it. Those keyed reads are what a conversation anchor resolves through. | `lib/dto/workItems.ts` (`triage` marker); `lib/services/contextualPlanningService.ts` (`resolveScope`) |
+| The report widget posts one submission to `POST /api/projects/[key]/triage/submissions`. On a 201 it bumps the `ReportProvider` tick, and the Triage inbox refetches on that tick.                                                                                          | `app/(authed)/_components/ReportWidgetModal.tsx`, `ReportProvider.tsx`                                 |
+| Every callout row carries the SAME href, and a row seeds starter text only.                                                                                                                                                                                                 | `lib/planning/aiCallout.ts`; §5 above                                                                  |
+
+### Decision
+
+#### A1.1 — Classification: `ask_project`'s first call returns `ask | plan_change | debug`. (Extends §2 and §4.)
+
+A turn is **`debug`** when it **reports behaviour that is broken**: something
+happens that should not, or does not happen that should, and the person wants
+it understood or recorded. That holds whether or not the turn is anchored on a
+bug. Wording decides nothing on its own. _"File a bug: saving a comment drops
+the mention"_ is `debug`, because it reports a defect. _"Add a bug card under
+MOTIR-12 for the export work"_ is `plan_change`, because it shapes the plan.
+_"Why is MOTIR-12 blocked?"_ stays `ask`.
+
+**An anchored triage `bug` is evidence, not a hint.** When the turn's anchor is a
+triage bug (A1.2), the classifier sees that anchor. It already crosses the wire as
+`targets` under §1. A turn anchored there that describes the anchored defect
+reads as `debug`. This is not a client-supplied intent. The anchor is data the
+shipped wire already carries, and the classifier still decides.
+
+**When unsure, the default stays `ask`** (§4, unchanged). Among the three
+intents, `debug` sits between the other two in cost. It writes one card
+(A1.4) and spends the code-graph grounding, while `ask` writes nothing. So a
+reading that is not confidently `debug` answers instead, and §3's marker
+corrects it.
+
+_Why a third verdict and not a sub-mode of `ask`:_ `ask` is defined by writing
+nothing (§2, Consequence 5). A turn that may write a card cannot hide inside
+it. The vitest gate that asserts _"an ask writes no work item"_ would have to
+learn an exception, and that exception would be the mode §1 exists to prevent.
+
+#### A1.2 — Anchoring: a triage `bug` is a legal conversation target. (Extends §1's `targets`.)
+
+A work item of kind `bug` with `triagedAt` set may be the anchor of a turn,
+and a `debug` turn may run on it. This is legal **although** normal reads
+exclude triage items. Those reads are LIST reads, which answer _"what is in
+this project?"_. An anchor is resolved by KEY, and the keyed reads already
+resolve triage rows (the table above). So this amendment names a legal target
+and adds no new read. The anchor keeps every existing gate: the keyed read's
+workspace check and `assertCanBrowse`.
+
+The triage exclusion is **not** relaxed anywhere else. Anchoring a triage bug
+does not make it appear in the tree, a board, search or the ready set, and a
+debug turn never promotes it. Promotion stays the Triage inbox's act (6.11.5).
+
+#### A1.3 — Seeding: a callout row seeds TEXT only. The report widget's accept is the ONE seeded send. (Extends §5.)
+
+- **The orb's _Debug with Motir AI_ row obeys §5 unchanged.** It opens the same
+  surface with starter text in the composer and sends nothing. The person
+  still has to describe the bug, and the classifier reads what they type.
+- **The report widget's _Debug with Motir AI_ offer SENDS the turn when
+  accepted.** It opens the surface anchored on the triage bug the person has
+  just submitted and sends the turn at once. It still sends **text and the
+  anchor only**, with no intent field (§1 holds), so the classifier resolves
+  it like any other turn.
+
+**Why the widget may send and the orb may not.** §5 forbids a row from
+pre-deciding the conversation because a row does not know what the person
+means. The words are not theirs yet. The widget's offer is different on
+three counts, and all three must hold:
+
+1. **Every word of the seed is the person's own**, taken from the submission
+   they confirmed seconds earlier in the same flow. The seed is their title and
+   description, with nothing composed by Motir.
+2. **The offer says it starts the work.** The label and its surrounding copy
+   tell the person that pressing it runs the debug, so the press is the go and
+   not a navigation.
+3. **Nothing crosses the wire that the person could not have typed.** There is
+   no intent and no mode, only the body and the anchor that §1 already allows.
+
+A later entrance may copy this exception **only if it meets all three**. An
+entrance whose seed contains any text Motir wrote, or whose control reads as
+navigation, seeds text and waits, as the orb row does.
+
+#### A1.4 — Writes: a debug turn writes to EXACTLY ONE card, and changes no status. (Extends §2 and Consequence 5.)
+
+A `debug` turn ends in exactly one of these outcomes:
+
+| Situation                                                   | The one write                                                                                                                                                    |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An existing card already covers the reported defect         | **Enrich that card** with the diagnosis. **Nothing new is filed**, and the anchored triage bug (if any) is left as it is.                                        |
+| No card covers it, and the turn is anchored on a triage bug | **Write the diagnosis onto that triage bug** (candidate mechanisms, context refs, acceptance criteria).                                                          |
+| No card covers it, and the turn has no anchor (the orb)     | **Create ONE bug in Triage through the triage intake** (`triageService.createSubmission`, the same authority the widget uses), then write the diagnosis onto it. |
+| The report cannot be grounded                               | **No write.** The turn answers that it could not ground the report, as `ask` does when the graphs are silent.                                                    |
+
+Four limits apply on every path. A debug turn **never files two bugs**. It
+**never changes a status**, kind, parent, sprint or dependency edge. It
+**never promotes** a triage item. And an enrichment **adds** the diagnosis
+without replacing what a person wrote on the card. Every write runs as the
+person who sent the turn, under their own permissions. The turn cannot do
+anything they could not do by hand.
+
+_Why a debug turn may write directly when `plan_change` only proposes:_ a plan
+change reshapes the tree, and the §1 counter-precedent rests on the fact that
+it is approved one layer down. A debug write is **additive content on one
+card**, bounded as above, and usually lands on a triage item no normal read
+shows until a person promotes it. Promotion is the approval step, and it
+already exists. A proposal step in front of a single diagnosis would ask the
+person to approve their own bug report twice.
+
+#### A1.5 — Correction: re-run the turn (§3). A debug turn that already wrote LEAVES its write. (Extends §3.)
+
+§3's marker covers the third intent too. A mis-read is corrected by re-running
+the same `user` turn under another intent, never by re-typing it, and
+`intent` / `intentCorrected` record what finally ran. **A debug turn's write is
+not undone by the correction.** The diagnosis written, or the triage bug
+created, stays where it landed. The transcript is a record of what Motir DID
+(§1), and a card that was written is part of that record. Removing it is a
+person's ordinary edit or archive, not a side effect of a marker click.
+
+#### A1.6 — Storage: `PlanChangeTurn.intent` gains `debug`. (Extends §1's persisted row.)
+
+`enum PlanChangeTurnIntent` gains a third value, `debug`, with a matching
+change to the DTO union and a generated migration. The column's rules are
+unchanged: nullable, set on `user` turns only, holding the effective
+disposition, and moved by a §3 re-run with `intentCorrected` set.
+
+### Consequences
+
+1. **The two entrances behave differently on purpose.** The orb row pre-fills
+   and waits; the widget's accept sends. The design card must draw them that
+   way and must not add an intent control to the composer (§1, Consequence 1).
+2. **The rail's state machine gains a third terminal state.** A settled `debug`
+   job shows the diagnosis and links the one card it touched, or says that it
+   found nothing to ground.
+3. **Consequence 5's gate is unchanged for `ask`.** A `debug` turn gets its own
+   gate: exactly one card touched, no status moved, no second bug filed.
+4. **`intentCorrected` now measures three readings.** It counts
+   `debug` ↔ `ask` mis-reads as well as the original pair.
+
+### What this does NOT decide
+
+- **The `debug_bug` handler's prompt, tools and duplicate-search strategy**, or
+  how it reuses `author_bug`'s grounding. That is MOTIR-7046.
+- **The UI copy, layout or placement** of the widget offer, the orb row and the
+  rendered turn. That is MOTIR-7045's design.
+- **The field-level shape of an enrichment**: which fields the diagnosis writes
+  and how it sits beside a person's text. That is MOTIR-7049, within A1.4's
+  limits.
+- **What `ask` or `plan_change` do on a triage anchor.** A1.2 makes the anchor
+  legal. It does not decide whether a plan change may target an unpromoted
+  item, or what grounding scope a parentless triage anchor gets.
+- **Who may promote a triage item**, or whether debugging should make one more
+  likely to be promoted. Promotion stays 6.11.5's.
+- **The outward `analyze_bug` meta-bug path** (a defect in Motir's own planning
+  or coding, filed into the MOTIR project). It shares a noun with this intent
+  and nothing else.
+- **The header report button**, which stays where it is and files into the
+  current project. Moving or relabelling it is out of this story.

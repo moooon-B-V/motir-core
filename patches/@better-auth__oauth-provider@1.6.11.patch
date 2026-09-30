@@ -1,0 +1,13 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 608e1a135614a26d5d538aca79610c0243aff4d7..bf48ccbfb799a90c5716c37064ff9a95b0f79b04 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -3853,7 +3853,7 @@ async function authorizeEndpoint(ctx, opts, settings) {
+ 		try {
+ 			const registered = new URL(url);
+ 			const requested = new URL(query.redirect_uri);
+-			if (isLoopbackIP(registered.hostname) && registered.hostname === requested.hostname && registered.pathname === requested.pathname && registered.protocol === requested.protocol && registered.search === requested.search) return true;
++			if ((isLoopbackIP(registered.hostname) || registered.hostname === "localhost") && registered.hostname === requested.hostname && registered.pathname === requested.pathname && registered.protocol === requested.protocol && registered.search === requested.search) return true;
+ 		} catch {}
+ 		return false;
+ 	}) || !query.redirect_uri) return handleRedirect(ctx, getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"));

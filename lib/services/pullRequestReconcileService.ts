@@ -20,7 +20,7 @@ import { resettleStandingExit } from './mergeQueueExitService';
 import { githubMergeQueueAttemptRepository } from '@/lib/repositories/githubMergeQueueAttemptRepository';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import type { ReportedCheckRun } from '@/lib/github/checkRuns';
-import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import { HUNG_CHECK_CONCLUSIONS } from '@/lib/mergeQueue/queueExit';
 import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
 import { sendEvent } from '@/lib/jobs/sendEvent';
@@ -517,7 +517,7 @@ async function resolveStandingQueueExit(candidate: ReconcileCandidate): Promise<
     const pr = (await githubPullRequestRepository.findManyByIdsForSummary([candidate.id], tx)).get(
       candidate.id,
     );
-    const head = pr ? liveRowsAtLatestSha([...pr.checkRuns])[0]?.commitSha : undefined;
+    const head = pr ? (pullRequestHead(pr) ?? undefined) : undefined;
     if (!queueExitStandsAtHead(exit, head)) return null;
     const attempt = await githubMergeQueueAttemptRepository.findLatestByPullRequest(
       candidate.id,

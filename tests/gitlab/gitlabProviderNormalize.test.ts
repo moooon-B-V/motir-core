@@ -26,6 +26,7 @@ function mrEvent(overAttrs: Record<string, unknown> = {}): unknown {
       title: 'feat: a thing',
       source_branch: 'subtask/MOTIR-1474-gitlab',
       target_branch: 'main',
+      last_commit: { id: 'def456' },
       ...overAttrs,
     },
   };
@@ -42,6 +43,14 @@ describe('gitlab.parseChangeRequestEvent', () => {
       baseRef: 'main',
       title: 'feat: a thing',
       draft: false,
+      // MOTIR-7005 — the MR's head commit, `last_commit.id`.
+      headSha: 'def456',
+    });
+  });
+
+  it('an MR payload with no last_commit normalizes with headSha null (MOTIR-7005)', () => {
+    expect(gitlab.parseChangeRequestEvent(mrEvent({ last_commit: undefined }))).toMatchObject({
+      headSha: null,
     });
   });
 
@@ -103,6 +112,7 @@ describe('gitlab.changeRequestLifecycle', () => {
     baseRef: 'main',
     title: null,
     draft: false,
+    headSha: null,
   } as const;
 
   it('maps open → implemented, merged → done, closed-unmerged → todo (MOTIR-3005)', () => {

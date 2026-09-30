@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Plus, SquareTerminal, TriangleAlert } from 'lucide-react';
 import { RunTonePill } from '@/components/runs/RunTonePill';
@@ -14,6 +14,8 @@ import {
   type AgentMove,
 } from '@/lib/agentInstances/presentation';
 import type { AgentInstanceListItemDto, AgentInstanceListPageDto } from '@/lib/dto/agentInstances';
+import { shallowPush } from '@/lib/navigation/shallowUrl';
+import { AgentPanel, type AgentPanelActions } from './AgentPanel';
 import { AgentRowMenu } from './AgentRowMenu';
 import { CreateAgentDialog, type OfferedProfile } from './CreateAgentDialog';
 import { DeleteAgentDialog } from './DeleteAgentDialog';
@@ -29,6 +31,25 @@ import { RefusalBox, useAgentRefusal, type AgentRefusal } from './agentRefusal';
 // (starting, hibernating, waking, deleting) it polls until that row settles, so a
 // transition resolves on screen without a reload. Reads are sequence-guarded, so an
 // older response never overwrites a newer one.
+//
+// THE AGENT PANEL (Story MOTIR-6861 · MOTIR-6941, `my-agents--panel.mock.html`):
+// the row is the door. Opening an agent puts `?agent=<id>` in the address with
+// `shallowPush` (the panel's body is already in the browser — CLAUDE.md § URL
+// state the CLIENT reads), so a reload or a shared link reopens it and Back
+// closes it. Open, the page is two columns: the list, in its card form and still
+// usable, beside the panel. The panel's Hibernate / Delete / Wake run through
+// THIS island's own handlers, so the list re-reads itself after every one — the
+// same page-state contract (case 3) the row menu follows.
+
+/** The query parameter that names the open agent. */
+const AGENT_PARAM = 'agent';
+
+function agentHref(id: string | null): string {
+  const url = new URL(window.location.href);
+  if (id) url.searchParams.set(AGENT_PARAM, id);
+  else url.searchParams.delete(AGENT_PARAM);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
 
 /** How often a row in motion is re-read. */
 const POLL_MS = 2_000;
@@ -41,6 +62,7 @@ export function MyAgentsRoom({
   initial,
   profiles,
   maxPerUser,
+  openAgentId = null,
 }: {
   projectKey: string;
   projectName: string;
@@ -48,6 +70,8 @@ export function MyAgentsRoom({
   initial: AgentInstanceListPageDto | null;
   profiles: readonly OfferedProfile[];
   maxPerUser: number;
+  /** The agent the address names (`?agent=`), read by the page; null when none. */
+  openAgentId?: string | null;
 }) {
   const t = useTranslations('myAgents');
   const refusalFor = useAgentRefusal(maxPerUser);
@@ -58,8 +82,46 @@ export function MyAgentsRoom({
   const [createRefusal, setCreateRefusal] = useState<AgentRefusal | null>(null);
   const [deleteRefusal, setDeleteRefusal] = useState<AgentRefusal | null>(null);
   const [listRefusal, setListRefusal] = useState<AgentRefusal | null>(null);
+  const [openId, setOpenId] = useState<string | null>(openAgentId);
+  const returnFocusTo = useRef<string | null>(null);
   const seq = useRef(0);
   const base = `/api/projects/${encodeURIComponent(projectKey)}/instances`;
+
+  // Back / forward move the address; the panel follows it.
+  useEffect(() => {
+    const onPop = () => {
+      setOpenId(new URLSearchParams(window.location.search).get(AGENT_PARAM));
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const openAgent = useCallback((id: string) => {
+    setOpenId(id);
+    shallowPush(agentHref(id));
+  }, []);
+
+  const closeAgent = useCallback(() => {
+    setOpenId((current) => {
+      returnFocusTo.current = current;
+      return null;
+    });
+    shallowPush(agentHref(null));
+  }, []);
+
+  // Closing returns focus to the row that was open (panel 1 C).
+  useEffect(() => {
+    if (openId !== null || !returnFocusTo.current) return;
+    const id = returnFocusTo.current;
+    returnFocusTo.current = null;
+    // The table row on a wide page, the card on a narrow one — whichever is shown.
+    const doors = [
+      ...document.querySelectorAll<HTMLElement>(
+        `[data-agent-id="${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id}"]`,
+      ),
+    ];
+    (doors.find((el) => el.getClientRects().length > 0) ?? doors[0])?.focus();
+  }, [openId]);
 
   const load = useCallback(async () => {
     const mine = ++seq.current;
@@ -137,9 +199,36 @@ export function MyAgentsRoom({
       setDeleteRefusal(refusalFor(result.body, deleteTarget.name));
       return;
     }
+    // Deleting closes the panel; the list keeps the row in Deleting until it is gone.
+    if (deleteTarget.id === openId) closeAgent();
     setDeleteTarget(null);
     await load();
   }
+
+  // The panel's own doors, all through this island so the list re-reads itself.
+  const onMoveRef = useRef(onMove);
+  useLayoutEffect(() => {
+    onMoveRef.current = onMove;
+  });
+  const panelActions = useMemo<AgentPanelActions>(
+    () => ({
+      onClose: closeAgent,
+      onHibernate: (row) => void onMoveRef.current(row, 'hibernate'),
+      onDelete: (row) => void onMoveRef.current(row, 'delete'),
+      onWake: async (row) => {
+        const result = await send(`${base}/${encodeURIComponent(row.id)}/wake`, {
+          method: 'POST',
+        });
+        await load();
+        return result.ok ? null : refusalFor(result.body, row.name);
+      },
+      onRefresh: () => void load(),
+    }),
+    // `refusalFor` is rebuilt each render from the same translator; the doors
+    // need only the routes and the list's reader.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [base, closeAgent, load],
+  );
 
   const total = data?.total ?? 0;
   const newAgent = (
@@ -154,8 +243,51 @@ export function MyAgentsRoom({
     </Button>
   );
 
+  const openRow = openId ? (rows.find((r) => r.id === openId) ?? null) : null;
+  const list =
+    data === null ? (
+      <div
+        role="alert"
+        className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-strong)"
+      >
+        <TriangleAlert className="size-4 flex-none" aria-hidden="true" />
+        {t('loadFailed')}
+      </div>
+    ) : total === 0 ? (
+      // The shipped empty state — the same component the Runs page uses, so the
+      // title, copy and action carry the design system's own type and spacing.
+      <EmptyState
+        icon={<SquareTerminal className="h-12 w-12" aria-hidden="true" />}
+        title={t('emptyTitle')}
+        description={t('emptyBody')}
+        action={newAgent}
+      />
+    ) : openId ? (
+      // Open: the list column is below the table's width, so its rows take the
+      // page's own card form (base panel 8), with the open one marked.
+      <AgentCards
+        rows={rows}
+        projectName={projectName}
+        onMove={onMove}
+        onOpen={openAgent}
+        selectedId={openRow?.id ?? null}
+        always
+      />
+    ) : (
+      <>
+        <AgentTable
+          rows={rows}
+          projectName={projectName}
+          pending={pending}
+          onMove={onMove}
+          onOpen={openAgent}
+        />
+        <AgentCards rows={rows} projectName={projectName} onMove={onMove} onOpen={openAgent} />
+      </>
+    );
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="@container flex flex-col gap-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div className="flex min-w-0 flex-col gap-1">
           <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('title')}</h1>
@@ -169,28 +301,20 @@ export function MyAgentsRoom({
 
       {listRefusal ? <RefusalBox refusal={listRefusal} /> : null}
 
-      {data === null ? (
-        <div
-          role="alert"
-          className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-strong)"
-        >
-          <TriangleAlert className="size-4 flex-none" aria-hidden="true" />
-          {t('loadFailed')}
+      {openId && data !== null ? (
+        // Two columns from 1024px of content; below it the open agent takes the
+        // whole view and the header's crumb returns to the list (panel 7).
+        <div className="grid items-start gap-4 @5xl:grid-cols-[340px_minmax(0,1fr)]">
+          <div className="hidden min-w-0 @5xl:block">{list}</div>
+          <AgentPanel
+            projectKey={projectKey}
+            projectName={projectName}
+            agent={openRow}
+            actions={panelActions}
+          />
         </div>
-      ) : total === 0 ? (
-        // The shipped empty state — the same component the Runs page uses, so the
-        // title, copy and action carry the design system's own type and spacing.
-        <EmptyState
-          icon={<SquareTerminal className="h-12 w-12" aria-hidden="true" />}
-          title={t('emptyTitle')}
-          description={t('emptyBody')}
-          action={newAgent}
-        />
       ) : (
-        <>
-          <AgentTable rows={rows} projectName={projectName} pending={pending} onMove={onMove} />
-          <AgentCards rows={rows} projectName={projectName} onMove={onMove} />
-        </>
+        list
       )}
 
       <CreateAgentDialog
@@ -253,16 +377,39 @@ function RowLine({ line }: { line: { text: string; danger: boolean } | null }) {
   );
 }
 
+/**
+ * The row is the door (panel 1): a click or Enter opens the agent. The row menu
+ * keeps its own click — its cell swallows the event, including the menu's
+ * portalled items, whose React events bubble through this tree.
+ */
+function doorProps(id: string, onOpen: (id: string) => void) {
+  return {
+    tabIndex: 0,
+    'data-agent-id': id,
+    onClick: () => onOpen(id),
+    onKeyDown: (event: React.KeyboardEvent) => {
+      if (event.key === 'Enter' && event.target === event.currentTarget) onOpen(id);
+    },
+  };
+}
+
+const stop = {
+  onClick: (event: React.MouseEvent) => event.stopPropagation(),
+  onKeyDown: (event: React.KeyboardEvent) => event.stopPropagation(),
+};
+
 function AgentTable({
   rows,
   projectName,
   pending,
   onMove,
+  onOpen,
 }: {
   rows: AgentInstanceListItemDto[];
   projectName: string;
   pending: Action | null;
   onMove: (row: AgentInstanceListItemDto, move: AgentMove) => void;
+  onOpen: (id: string) => void;
 }) {
   const t = useTranslations('myAgents');
   const lineFor = useRowLine();
@@ -304,7 +451,8 @@ function AgentTable({
               data-testid="agent-row"
               data-state={row.state}
               aria-busy={pending?.kind !== 'create' && pending?.id === row.id ? true : undefined}
-              className="border-b border-(--el-border-soft) last:border-b-0"
+              {...doorProps(row.id, onOpen)}
+              className="cursor-pointer border-b border-(--el-border-soft) last:border-b-0 hover:bg-(--el-surface-soft) focus-visible:bg-(--el-surface-soft) focus-visible:shadow-[inset_3px_0_0_var(--el-accent)] focus-visible:outline-none"
             >
               <td className={td}>
                 <strong className="text-sm text-(--el-text)">{row.name}</strong>
@@ -331,7 +479,7 @@ function AgentTable({
               >
                 {row.creditsThisMonth}
               </td>
-              <td className={`${td} text-right`}>
+              <td className={`${td} text-right`} {...stop}>
                 <AgentRowMenu name={row.name} state={row.state} onMove={(m) => onMove(row, m)} />
               </td>
             </tr>
@@ -347,23 +495,42 @@ function AgentCards({
   rows,
   projectName,
   onMove,
+  onOpen,
+  selectedId = null,
+  always = false,
 }: {
   rows: AgentInstanceListItemDto[];
   projectName: string;
   onMove: (row: AgentInstanceListItemDto, move: AgentMove) => void;
+  onOpen: (id: string) => void;
+  /** The open agent's card carries the "this one" mark (panel 1). */
+  selectedId?: string | null;
+  /** The list column beside the panel is always cards, whatever the viewport. */
+  always?: boolean;
 }) {
   const t = useTranslations('myAgents');
   const lineFor = useRowLine();
   return (
-    <ul className="m-0 flex list-none flex-col gap-2 p-0 md:hidden">
+    <ul
+      data-testid={always ? 'agent-list-column' : undefined}
+      className={`m-0 flex list-none flex-col gap-2 p-0 ${always ? '' : 'md:hidden'}`}
+    >
       {rows.map((row) => (
         <li
           key={row.id}
-          className="flex flex-col gap-1 rounded-(--radius-card) border border-(--el-border) px-(--spacing-control-x) py-(--spacing-control-y)"
+          {...doorProps(row.id, onOpen)}
+          aria-current={row.id === selectedId ? 'true' : undefined}
+          className={`flex cursor-pointer flex-col gap-1 rounded-(--radius-card) border px-(--spacing-control-x) py-(--spacing-control-y) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none ${
+            row.id === selectedId
+              ? 'border-(--el-accent) bg-(--el-tint-lavender)'
+              : 'border-(--el-border) hover:bg-(--el-surface-soft)'
+          }`}
         >
           <div className="flex items-center justify-between gap-2">
             <strong className="text-sm text-(--el-text)">{row.name}</strong>
-            <AgentRowMenu name={row.name} state={row.state} onMove={(m) => onMove(row, m)} />
+            <span {...stop}>
+              <AgentRowMenu name={row.name} state={row.state} onMove={(m) => onMove(row, m)} />
+            </span>
           </div>
           <div className="flex items-center justify-between gap-2 text-sm text-(--el-text-secondary)">
             <span>

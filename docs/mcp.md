@@ -134,6 +134,77 @@ three plan-session tools, all of which spend the workspace's AI credits. Under
 the old vocabulary they travelled with _edit work items_ because nothing
 narrower existed; an agent wired only to file work items can now be denied them.
 
+## Authorization
+
+Besides a personal access token, an MCP client can connect with **OAuth 2.1** —
+the flow Claude's connectors and Claude Code use (MCP authorization spec,
+2025-06-18). Motir is the authorization server for exactly one protected
+resource, `<base>/api/mcp`. A client discovers everything from two documents:
+
+- **Protected resource metadata** (RFC 9728):
+  `<base>/.well-known/oauth-protected-resource`, also served at
+  `<base>/.well-known/oauth-protected-resource/api/mcp`. It names the resource
+  and its authorization server, `<base>/api/auth`.
+- **Authorization server metadata** (RFC 8414):
+  `<base>/.well-known/oauth-authorization-server`, also served at the
+  issuer-path form `<base>/.well-known/oauth-authorization-server/api/auth`.
+
+Both answer without a session and to any origin. From there a client:
+
+1. **Registers itself** (RFC 7591) at the advertised `registration_endpoint` —
+   a public client (`token_endpoint_auth_method: none`). A `redirect_uri` must
+   be `https`, or `http` on `localhost` / `127.0.0.1` / `[::1]` (any port: a
+   loopback redirect is matched without its port, RFC 8252). Anything else is
+   refused `invalid_redirect_uri`.
+2. **Sends the person to authorize** with PKCE (`code_challenge_method=S256`;
+   `plain` is refused) and `resource=<base>/api/mcp` (RFC 8707; any other value,
+   or none, is refused `invalid_target`). A signed-out person signs in first and
+   comes back; a signed-in one is asked for consent at `/oauth/consent`.
+3. **Exchanges the code** at `token_endpoint`, refreshes with the refresh token
+   (ask for the `offline_access` scope to receive one), and **revokes** at
+   `revocation_endpoint` (RFC 7009).
+
+Tokens are opaque and stored hashed. Registration and token requests are
+rate-limited per IP (`MOTIR_OAUTH_REGISTER_RATE_LIMIT`, default 60 a minute, and
+`MOTIR_OAUTH_TOKEN_RATE_LIMIT`, default 300 a minute).
+
+### A connection is a token
+
+Consent picks **one workspace**, and either **every project** the person can
+open or **one project**. Approving records a **connection**, and a connection
+is a token in everything but its secret: the same workspace binding, the
+same project binding, the same grant, the same "last used". An OAuth access
+token resolves to its connection, so a tool called with it runs as the person
+who approved, in that workspace, narrowed by that grant — exactly as a personal
+access token with the same grant would, down to the error a tool outside the
+grant returns.
+
+- **All projects:** the grant is the default token grant (everything a token can
+  hold except deleting work items), whatever the request asked for.
+- **One project:** the grant is chosen from what the person can confer in that
+  project, and a permission outside it is refused, as it is when creating a
+  token.
+
+Approving the same app for the same workspace and project again updates that
+connection rather than adding a second one. Disconnecting an app deletes the
+connection with every token minted from it, so its next call is refused. A
+connection whose person has left the workspace is refused too.
+
+### The 401
+
+Every MCP request without a usable bearer — none at all, an unknown or expired
+token, a disconnected app's token, a token whose person left the workspace — is
+answered **401** before any tool runs, with the pointer an MCP client follows to
+start OAuth:
+
+```
+WWW-Authenticate: Bearer error="invalid_token", error_description="…",
+  resource_metadata="<base>/.well-known/oauth-protected-resource"
+```
+
+A `motir_pat_…` bearer is checked exactly as before; anything else is checked as
+an OAuth access token.
+
 ## Rate limits
 
 `POST /api/mcp` is metered on **two** budgets, keyed on the token owner **+ the
@@ -309,6 +380,46 @@ Shared input conventions:
   it from `list_sprints`.
 - Paginated reads take an opaque **`cursor`** in and return a **`nextCursor`**
   out (null at the tail); there is no load-everything path.
+
+### Tool hints
+
+Every tool in `tools/list` carries a human **`title`** and an **`annotations`**
+object (Story MOTIR-6974). An MCP client reads them to decide how carefully to
+treat a call: **Claude runs a read-only tool without asking, and asks before a
+destructive one.** A tool that says nothing is assumed to be a possible write,
+so without these every read would ask for approval.
+
+Each tool's values come from ONE table, `TOOL_ANNOTATIONS` in
+`lib/mcp/toolAnnotations.ts`, injected where tools are registered. A tool with
+no row, no title or a title over 64 characters cannot register. Every field is
+explicit on every tool, because the MCP defaults are the permissive ones. For a
+Motir tool the fields promise:
+
+- **`title`** — the tool's name in words, 1–64 characters, for a client to show
+  a person in place of the snake_case `name`.
+- **`readOnlyHint: true`** — the handler performs **no write** of any kind: no
+  row created, updated or deleted, no job enqueued, no status moved, no counter
+  or timestamp stamped. A tool that writes anything is a write, however it is
+  named. A read-only tool carries only `readOnlyHint` and `openWorldHint`.
+- **`destructiveHint`** (writes only) — `false` only when every write is
+  **additive**: it creates, appends or links, and changes or removes no existing
+  value. `true` for anything that deletes, archives, withdraws, unlinks, closes,
+  moves a status, or overwrites a stored value.
+- **`idempotentHint`** (writes only) — `true` only where a second identical call
+  has no further effect (re-setting the same status, re-linking an existing
+  edge), confirmed from the handler rather than assumed from the verb.
+- **`openWorldHint`** — `true` only where the handler reaches a system outside
+  Motir's own deployment, such as GitHub. Motir's own services, its planning
+  backend and its file store are not the open world.
+
+The hints are a promise about what a tool CAN do, which is what a client needs
+before it asks. They do not replace the token's permissions: a read-only tool is
+still refused to a token that was not granted its permission.
+
+Every tool's values are published in the machine-readable catalogue,
+`GET /api/docs/mcp-tools.json` (each tool object's `title` and `annotations`),
+generated from the same `tools/list` a client receives. This page names no
+per-tool value, so it cannot drift from them.
 
 ### Reads & dispatch
 
