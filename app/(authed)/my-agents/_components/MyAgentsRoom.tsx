@@ -56,6 +56,13 @@ function agentHref(id: string | null): string {
 
 /** How often a row in motion is re-read. */
 const POLL_MS = 2_000;
+/**
+ * How often the list is re-read while a run works in any agent (MOTIR-7029): the
+ * panel's run line gives way to its "Last run" face when the record closes, with
+ * no reload. The run's session exiting re-reads at once; this is the backstop for
+ * a run that ends while nobody watches it.
+ */
+export const RUN_POLL_MS = 5_000;
 
 type Action = { kind: 'create' } | { kind: 'move'; id: string } | { kind: 'delete'; id: string };
 
@@ -88,6 +95,8 @@ export function MyAgentsRoom({
   const [createRefusal, setCreateRefusal] = useState<AgentRefusal | null>(null);
   const [deleteRefusal, setDeleteRefusal] = useState<AgentRefusal | null>(null);
   const [listRefusal, setListRefusal] = useState<AgentRefusal | null>(null);
+  /** The agent the list's refusal is about: shown in its panel when that one is open. */
+  const [listRefusalFor, setListRefusalFor] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(openAgentId);
   const returnFocusTo = useRef<string | null>(null);
   const seq = useRef(0);
@@ -144,11 +153,13 @@ export function MyAgentsRoom({
 
   const rows = data?.instances ?? [];
   const inMotion = rows.some((r) => AGENT_STATES_IN_MOTION.has(r.state));
+  const anyRun = rows.some((r) => r.activeRun !== null);
+  const pollMs = inMotion ? POLL_MS : anyRun ? RUN_POLL_MS : null;
   useEffect(() => {
-    if (!inMotion) return;
-    const id = setInterval(() => void load(), POLL_MS);
+    if (pollMs === null) return;
+    const id = setInterval(() => void load(), pollMs);
     return () => clearInterval(id);
-  }, [inMotion, load]);
+  }, [pollMs, load]);
 
   async function send(
     url: string,
@@ -190,7 +201,10 @@ export function MyAgentsRoom({
     setPending({ kind: 'move', id: row.id });
     const result = await send(`${base}/${encodeURIComponent(row.id)}/${move}`, { method: 'POST' });
     setPending(null);
-    if (!result.ok) setListRefusal(refusalFor(result.body, row.name));
+    if (!result.ok) {
+      setListRefusal(refusalFor(result.body, row.name, move));
+      setListRefusalFor(row.id);
+    }
     await load();
   }
 
@@ -202,7 +216,7 @@ export function MyAgentsRoom({
     });
     setPending(null);
     if (!result.ok) {
-      setDeleteRefusal(refusalFor(result.body, deleteTarget.name));
+      setDeleteRefusal(refusalFor(result.body, deleteTarget.name, 'delete'));
       return;
     }
     // Deleting closes the panel; the list keeps the row in Deleting until it is gone.
@@ -307,7 +321,9 @@ export function MyAgentsRoom({
 
       {data?.planLapse ? <PlanLapseBanner deletesOn={data.planLapse.deletesOn} /> : null}
 
-      {listRefusal ? <RefusalBox refusal={listRefusal} /> : null}
+      {listRefusal && !(openId && listRefusalFor === openId) ? (
+        <RefusalBox refusal={listRefusal} />
+      ) : null}
 
       {openId && data !== null ? (
         // Two columns from 1024px of content; below it the open agent takes the
@@ -319,6 +335,7 @@ export function MyAgentsRoom({
             projectName={projectName}
             agent={openRow}
             actions={panelActions}
+            refusal={listRefusal && listRefusalFor === openId ? listRefusal : null}
           />
         </div>
       ) : (

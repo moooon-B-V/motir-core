@@ -316,7 +316,7 @@ describe('could not start (Panel 3d) — the Continue hosted door’s answers, r
       'model not offered',
       { status: 422, body: { code: 'hosted_model_not_offered' } },
       'modelNotOffered',
-      'claude-opus-5-5 is no longer offered for hosted runs.',
+      'claude-opus-5-5 is no longer offered.',
       refused.modelNotOffered.body,
     ],
     [
@@ -362,7 +362,7 @@ describe('could not start (Panel 3d) — the Continue hosted door’s answers, r
     await pressFix();
     const text = screen.getByTestId('fix-hosted-refused-outOfCredits').textContent ?? '';
     expect(text).toContain('Fix on the hosted agent works again');
-    expect(text).not.toContain('Run hosted works again');
+    expect(text).not.toContain('Run works again');
   });
 
   it('model not offered re-reads the list, so the person chooses again in place', async () => {

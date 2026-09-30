@@ -58,6 +58,11 @@ export interface RunsIndexProps {
   viewInUrl?: boolean;
   /** Whether the reader can start a run — picks the Project-empty copy. */
   canRun?: boolean;
+  /**
+   * The signed-in member, or null for a Visitor. The run modal offers Cancel run
+   * on a run in an agent to the agent's owner only (MOTIR-7028).
+   */
+  viewerId?: string | null;
   /** `null` when the read FAILED — which is not the same as empty. */
   initialLive: DispatchRunListItemDto[] | null;
   initialPast: DispatchRunListItemDto[] | null;
@@ -70,6 +75,7 @@ export function RunsIndex({
   view = 'project',
   viewInUrl = false,
   canRun = true,
+  viewerId = null,
   initialLive,
   initialPast,
   pageSize,
@@ -214,7 +220,13 @@ export function RunsIndex({
   // many rows the list happens to hold.
   const modal =
     openRunId !== null ? (
-      <RunModal key={openRunId} runId={openRunId} projectKey={projectKey} onClose={onCloseRun} />
+      <RunModal
+        key={openRunId}
+        runId={openRunId}
+        projectKey={projectKey}
+        onClose={onCloseRun}
+        viewerId={viewerId}
+      />
     ) : null;
 
   // Nothing at all has ever run — the ONE case that replaces both sections,

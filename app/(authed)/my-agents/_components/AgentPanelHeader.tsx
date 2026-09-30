@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { AGENT_STATE_TONE } from '@/lib/agentInstances/presentation';
 import { agentSignInHint } from '@/lib/agentInstances/profiles';
 import type { AgentInstanceListItemDto, AgentInstanceState } from '@/lib/dto/agentInstances';
+import { AgentRunLine } from './AgentRunLine';
 import type { TerminalSignIn } from './useAgentTerminal';
 
 // THE PANEL'S HEADER (Story MOTIR-6861 · MOTIR-6941; `design/my-agents/design-notes.md`
@@ -24,6 +25,12 @@ import type { TerminalSignIn } from './useAgentTerminal';
 // the list's own state pill, coding agent · project — with Hibernate (running
 // only), Delete… (disabled, never hidden, while the agent is in motion) and ×;
 // then the sign-in status the terminal server pushed, and the §9 sentence.
+//
+// THE AGENT'S LIVE RUN (Story MOTIR-6864 · MOTIR-7029, `my-agents--run.mock.html`
+// panels 1–4): the run line under the meta line (AgentRunLine), and while a run
+// works in the agent Hibernate and Delete wear their disabled face with ONE line
+// saying why — the server refuses both during a run (`agent_instance_run_active`),
+// so the panel does not offer a press it knows will be refused.
 
 /** Delete… is disabled in these states — the row menu's own rule (panel 2). */
 const DELETE_DISABLED: ReadonlySet<AgentInstanceState> = new Set([
@@ -56,7 +63,10 @@ export function AgentPanelHeader({
   onDelete: () => void;
 }) {
   const t = useTranslations('myAgents');
-  const deleteOff = DELETE_DISABLED.has(agent.state);
+  const runActive = agent.activeRun !== null;
+  const deleteOff = DELETE_DISABLED.has(agent.state) || runActive;
+  const offClass =
+    'disabled:bg-(--el-surface) disabled:text-(--el-text-secondary) disabled:opacity-100';
   return (
     <div className="flex flex-col gap-2.5 border-b border-(--el-border-soft) p-(--spacing-card-padding)">
       <button
@@ -84,6 +94,9 @@ export function AgentPanelHeader({
             <Button
               variant="secondary"
               size="sm"
+              disabled={runActive}
+              aria-disabled={runActive || undefined}
+              className={offClass}
               leftIcon={<Moon aria-hidden="true" />}
               onClick={onHibernate}
             >
@@ -95,7 +108,7 @@ export function AgentPanelHeader({
             size="sm"
             disabled={deleteOff}
             aria-disabled={deleteOff || undefined}
-            className="text-(--el-danger-on-surface) disabled:bg-(--el-surface) disabled:text-(--el-text-secondary) disabled:opacity-100"
+            className={`text-(--el-danger-on-surface) ${offClass}`}
             leftIcon={<Trash2 aria-hidden="true" />}
             onClick={onDelete}
           >
@@ -111,7 +124,14 @@ export function AgentPanelHeader({
           <X className="size-4" aria-hidden="true" />
         </button>
       </div>
-      <div aria-live="polite">
+      {/* One polite region: the run line and the sign-in line both change under the reader. */}
+      <div aria-live="polite" className="flex flex-col gap-2.5">
+        <AgentRunLine activeRun={agent.activeRun} lastRun={agent.lastRun} />
+        {runActive ? (
+          <p data-testid="agent-run-off" className="m-0 text-xs text-(--el-text-secondary)">
+            {t('panel.run.offWhy')}
+          </p>
+        ) : null}
         {signIn && agent.state === 'running' ? (
           <SignInLine profileId={agent.profileId} agentName={agent.profileName} signIn={signIn} />
         ) : null}

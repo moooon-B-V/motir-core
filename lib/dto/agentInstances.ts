@@ -4,6 +4,7 @@ import type {
   AgentInstanceState,
   AgentTerminalServer,
 } from '@/generated/prisma/client';
+import type { DispatchRunStatus } from '@/lib/dto/dispatchRuns';
 
 // The AGENT INSTANCE DTOs (Story MOTIR-6860 · MOTIR-6870), the shape the
 // lifecycle service returns and the Instances page renders
@@ -81,6 +82,40 @@ export interface AgentInstanceListItemDto extends AgentInstanceDto {
    * Null when nothing is scheduled.
    */
   scheduledDeletionAt: string | null;
+  /** The run working in this agent, or null (MOTIR-7029). */
+  activeRun: AgentInstanceActiveRunDto | null;
+  /** The agent's latest CLOSED run while none is active, or null (MOTIR-7029). */
+  lastRun: AgentInstanceLastRunDto | null;
+}
+
+/**
+ * The run working in this agent right now (MOTIR-7029 · `agent-instance-run.md`
+ * §5): the panel header's run line names its card and links it and the run.
+ */
+export interface AgentInstanceActiveRunDto {
+  id: string;
+  /** The card's key; null only for a run that names no card (never one an agent opens). */
+  workItemKey: string | null;
+  /** The card's title; null when the work item has since been deleted. */
+  title: string | null;
+  startedAt: string;
+}
+
+/**
+ * The agent's LATEST run once it has closed (MOTIR-7029): the panel header's
+ * "Last run" line, until the agent's next run replaces it.
+ */
+export interface AgentInstanceLastRunDto {
+  id: string;
+  workItemKey: string | null;
+  title: string | null;
+  status: Exclude<DispatchRunStatus, 'running'>;
+  endedAt: string | null;
+  /**
+   * The reason the run's end path RECORDED (`AGENT_RUN_END_DETAIL`, verbatim), on
+   * a run that did not succeed; null when none was recorded (the CLI closed it).
+   */
+  reason: string | null;
 }
 
 /** The hibernations Motir makes on its own, which the page explains. */

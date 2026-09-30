@@ -653,6 +653,7 @@ function dispatchRun(s: Scenario, status: 'running' | 'succeeded') {
     startedAt: NOW,
     endedAt: status === 'running' ? null : NOW,
     createdById: OWNER,
+    agentInstance: null,
     cards: s.legs.map((leg, position) => ({
       id: `card_${leg}`,
       key: leg,

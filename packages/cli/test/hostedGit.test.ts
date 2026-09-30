@@ -1,5 +1,14 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -14,7 +23,12 @@ import {
   resetHostedRun,
   withHostedAttribution,
 } from '../src/hostedAttribution.js';
-import { gitCredentialCommand, githubRepository, prepareHostedRun } from '../src/hostedGit.js';
+import {
+  claimAgentRunScratch,
+  gitCredentialCommand,
+  githubRepository,
+  prepareHostedRun,
+} from '../src/hostedGit.js';
 import { openSessionPr } from '../src/git.js';
 
 // A HOSTED RUN'S GITHUB ACCESS (MOTIR-6559), driven through REAL git.
@@ -332,5 +346,73 @@ describe('pull requests name the dispatcher, the card and the run (AC4)', () => 
     resetHostedRun();
     expect(withHostedAttribution('Body.')).toBe('Body.');
     expect(hostedPromptAddendum()).toBe('');
+  });
+});
+
+describe('agent mode (MOTIR-7024)', () => {
+  it('redirects gh’s own state into the run, and drops the Motir tokens from the environment', async () => {
+    const env = cleanEnv();
+    env['MOTIR_TOKEN'] = 'mtk_developer_pat';
+    env['MOTIR_RUN_TOKEN'] = 'mrt_run';
+    const stateDir = tempDir('motir-agent-state-');
+    await prepareHostedRun({
+      serverUrl,
+      token: RUN_TOKEN,
+      runId: RUN,
+      targetKey: 'PROD-7',
+      client: new MotirClient({ serverUrl, token: RUN_TOKEN }),
+      env,
+      stateDir,
+      cli: CLI,
+      agentMode: true,
+    });
+
+    expect(env['GH_CONFIG_DIR']).toBe(join(stateDir, 'gh'));
+    expect(env['GH_NO_UPDATE_NOTIFIER']).toBe('1');
+    expect(env['MOTIR_TOKEN']).toBeUndefined();
+    expect(env['MOTIR_RUN_TOKEN']).toBeUndefined();
+    expect(env['GIT_CONFIG_GLOBAL']).toBe(join(stateDir, 'gitconfig'));
+  });
+
+  it('claims the workspace and removes it, the state and only the parents it created', () => {
+    const home = tempDir('motir-agent-home-');
+    mkdirSync(join(home, '.motir'), { recursive: true });
+    writeFileSync(join(home, '.motir', 'mine'), 'the developer’s');
+    const stateDir = tempDir('motir-agent-state-');
+    const workspace = join(home, '.motir', 'runs', 'run-1');
+    const listeners: (() => void)[] = [];
+    let detached = 0;
+    const release = claimAgentRunScratch(
+      { stateDir, workspace },
+      {
+        onExit: (fn) => {
+          listeners.push(fn);
+          return () => {
+            detached++;
+          };
+        },
+      },
+    );
+    expect(existsSync(workspace)).toBe(true);
+    writeFileSync(join(workspace, 'file'), 'x');
+
+    listeners[0]!();
+    expect(existsSync(stateDir)).toBe(false);
+    expect(existsSync(join(home, '.motir', 'runs'))).toBe(false);
+    // `.motir` existed before, and still holds the developer's file.
+    expect(existsSync(join(home, '.motir', 'mine'))).toBe(true);
+    // A second removal (the `finally` after the interrupt's) is harmless.
+    release();
+    expect(detached).toBe(2);
+  });
+
+  it('stops at a parent that is no longer empty', () => {
+    const home = tempDir('motir-agent-home-');
+    const workspace = join(home, '.motir', 'runs', 'run-1');
+    const release = claimAgentRunScratch({ stateDir: tempDir('motir-agent-state-'), workspace });
+    writeFileSync(join(home, '.motir', 'written-meanwhile'), 'x');
+    release();
+    expect(existsSync(join(home, '.motir', 'runs'))).toBe(false);
+    expect(existsSync(join(home, '.motir', 'written-meanwhile'))).toBe(true);
   });
 });

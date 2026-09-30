@@ -154,6 +154,8 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
     creditsThisMonth: 72,
     stopReason: null,
     scheduledDeletionAt: null,
+    activeRun: null,
+    lastRun: null,
     ...over,
   };
 }

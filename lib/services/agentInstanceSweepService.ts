@@ -3,6 +3,7 @@ import {
   INSTANCE_IDLE_WINDOW_MS,
   INSTANCE_INTERVAL_BACKSTOP_MS,
 } from '@/lib/agentInstances/config';
+import { AgentInstanceRunActiveError } from '@/lib/agentInstances/errors';
 import { checkAgentRunCredits } from '@/lib/ai/motirAiClient';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
@@ -92,6 +93,23 @@ async function pastBackstop(row: AgentInstance, now: Date): Promise<boolean> {
   return startedAt !== null && now.getTime() - startedAt.getTime() >= INSTANCE_INTERVAL_BACKSTOP_MS;
 }
 
+/**
+ * Hibernate an IDLE instance — unless a run is running in it
+ * (`agent-instance-run.md` §6, MOTIR-7027): `agent-instances.md` §2 already
+ * counts "no active run" as part of idle, and the lifecycle refuses the idle stop
+ * under a run. That refusal is the check, so there is no read here to race: a run
+ * that opens between an idle read and the stop is refused all the same. The next
+ * idle check after the run closes (and the window passes again) hibernates it.
+ */
+async function hibernateIfIdle(instanceId: string): Promise<'idle' | 'active' | 'noop'> {
+  try {
+    return (await lifecycle.beginHibernate(instanceId, 'idle')) ? 'idle' : 'noop';
+  } catch (err) {
+    if (err instanceof AgentInstanceRunActiveError) return 'active';
+    throw err;
+  }
+}
+
 export const agentInstanceSweepService = {
   /**
    * THE IDLE TIMER'S HANDLER — one instance. Hibernates it (`idle`) when it has
@@ -105,9 +123,7 @@ export const agentInstanceSweepService = {
     if (await pastBackstop(row, now)) {
       return (await lifecycle.beginHibernate(row.id, 'backstop')) ? 'backstop' : 'noop';
     }
-    if (isIdle(row, now)) {
-      return (await lifecycle.beginHibernate(row.id, 'idle')) ? 'idle' : 'noop';
-    }
+    if (isIdle(row, now)) return hibernateIfIdle(row.id);
     return 'active';
   },
 
@@ -230,8 +246,8 @@ export const agentInstanceSweepService = {
               return;
             }
           }
-          if (isIdle(row, now)) {
-            if (await lifecycle.beginHibernate(row.id, 'idle')) summary.hibernated.idle += 1;
+          if (isIdle(row, now) && (await hibernateIfIdle(row.id)) === 'idle') {
+            summary.hibernated.idle += 1;
           }
         });
       }
