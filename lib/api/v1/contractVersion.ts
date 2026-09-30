@@ -847,5 +847,63 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: `V1_CONTRACT_VERSION` was `1.54.0`
  *   at `58946b8a0`, so this claims `1.55.0`. If a sibling has taken it since,
  *   RENUMBER this entry.
+ *
+ * - `1.56.0` — MOTIR-6818 (Story MOTIR-1626, the review agent) adds `review` to
+ *   `DispatchCommand`: a hosted REVIEW run the server opens for an `agent_review`
+ *   gate (`docs/decisions/hosted-agent-run.md` §8). No operation writes it yet. The
+ *   approval-gate record gains `agent_review` (kind), `review_agent` (authority) and
+ *   `review_agent_disabled` (supersede cause) — `docs/decisions/approval-gates.md` §12.
+ *
+ *   Additive: new members of enums every client must tolerate unknown members of
+ *   (§8's allowed list); no declared field changes meaning.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: `V1_CONTRACT_VERSION` was `1.55.0`
+ *   after MOTIR-6841, so this claims `1.56.0`. If a sibling has taken it since,
+ *   RENUMBER this entry — it names the ENUM MEMBER.
+ *
+ * - `1.57.0` — MOTIR-6821 (Story MOTIR-1626, the review agent) adds the hosted REVIEW
+ *   run's two operations (`docs/decisions/hosted-agent-run.md` §8.2 / §8.4):
+ *   `getWorkItemReviewPrompt` (`GET …/work-items/{key}/review-prompt`, the server-assembled
+ *   review brief with every pull request at its reviewed head) and
+ *   `submitWorkItemAgentReview` (`POST …/work-items/{key}/agent-review`, the run's ONE
+ *   verdict deciding the `agent_review` gate as `review_agent`), with the components
+ *   `ReviewPrompt` and `AgentReviewResult`. Both answer ONLY a `review` run's own
+ *   credential, for its own card.
+ *
+ *   Additive: two new operations; no declared shape changes.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.57.0` after MOTIR-6818's
+ *   `1.56.0`, and the sibling MOTIR-6822 claims `1.58.0` above it on the same branch. If
+ *   either number is taken on `origin/main` by then, RENUMBER — it names the OPERATIONS.
+ *
+ * - `1.58.0` — MOTIR-6822 (Story MOTIR-1626, the review agent) adds `review` to the
+ *   `WorkItemRepairClaim` component's `repairClass`, and `reviewRefusal`
+ *   (`{ gate, findingsMd, reviewerName, decidedAt }`, nullable) beside it. `review` is a
+ *   card a REVIEW sent back — the review agent's `changes_requested` on `agent_review`, or
+ *   a person's Request changes on the approve-and-merge gate — still standing over the
+ *   current delivery-set version (`approval-gates.md` §12.4, §12.7): `motir fix` claims it
+ *   though its checks are green, and its prompt carries the findings in full.
+ *
+ *   Additive: a new member of an enum every client must tolerate, and a new nullable
+ *   field (§8's allowed list). A client that predates it reads `review` as an unknown
+ *   class and runs its CI loop, which finds nothing red — it changes nothing.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.58.0` because the sibling
+ *   MOTIR-6821 claims `1.57.0` on the same story branch. If either number is taken on
+ *   `origin/main` by then, RENUMBER this entry — it names the ENUM MEMBER and the FIELD.
+ *
+ * - `1.59.0` — MOTIR-6929 (Story MOTIR-1626, the hosted repair) adds `repair` to
+ *   `DispatchRun`, filled only by `getDispatchRun` and only for a HOSTED `fix` run: the
+ *   repair class, every pull request on its OWN branch with the head it was handed, and
+ *   the review's findings (gate, version, text, reviewer, decider, authority, when), as
+ *   the repair claim's hosted opening recorded them on `run_opened` (MOTIR-6928). The
+ *   container ADOPTS the run instead of claiming a second time, so this is how it learns
+ *   what that claim decided — `continues` (1.53.0) for the repair.
+ *
+ *   Additive: one new optional, nullable field on an existing shape (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.59.0` after MOTIR-6822's
+ *   `1.58.0` on the same story branch. If it is taken on `origin/main` by then, RENUMBER
+ *   this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.55.0';
+export const V1_CONTRACT_VERSION = '1.59.0';

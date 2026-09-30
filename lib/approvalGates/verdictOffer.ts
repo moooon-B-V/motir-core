@@ -56,6 +56,8 @@ export async function refusalVerdictOfferFor(
     case 'decision_choice':
     case 'decision_confirmation':
     case 'plan_approval':
+    // A person has no refusal verb on the review agent's gate (ADR §12.3).
+    case 'agent_review':
       return false;
     default: {
       const unhandled: never = gate.kind;

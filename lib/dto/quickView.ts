@@ -1,5 +1,5 @@
 import type { HeldTransitionDTO, PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
-import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
+import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
@@ -103,6 +103,9 @@ export interface QuickViewData {
    *  The header draws the To fix tag off it, off the `done` category only
    *  (`toFixTagState`, MOTIR-6610). */
   fixReason: WorkItemFixReasonDto | null;
+  /** Which gate a `changes_requested` was on (`fixDetail.gate`) — names the review agent in
+   *  the tag's accessible name (MOTIR-6825). Null for every other reason. */
+  fixGate?: FixDetailDto['gate'];
   descriptionMd: string | null;
   /**
    * The WHY (MOTIR-4183, story MOTIR-4181, design Part XIV §6).

@@ -107,6 +107,8 @@ describe('client.getDispatchRun — the run a hosted CLI adopts', () => {
       ],
       // Not a continue run, so it resumes nothing (MOTIR-6795).
       continues: null,
+      // Not a hosted fix run, so it carries no repair decision (MOTIR-6929).
+      repair: null,
     });
   });
 });

@@ -7,6 +7,7 @@ import type { DispatchRunOrigin, DispatchRunStatus } from '@/lib/dto/dispatchRun
 import type { WorkItemContinueViewDto } from '@/lib/dto/workItemContinue';
 import { HostedModelsProvider, useHostedModels } from '@/components/hosted/HostedModelsProvider';
 import { useContinueHosted } from '@/components/hosted/useContinueHosted';
+import { useRunsChangedSignal } from '@/components/hosted/runsChangedSignal';
 import {
   refusalOf,
   type ContinueHostedRefusal,
@@ -179,6 +180,11 @@ function HostedRunState({
     setRunsChangedAt((n) => n + 1);
     router.refresh();
   }, [router]);
+  // A start made by the To fix banner's *Fix on the hosted agent* (MOTIR-6930), which sits
+  // outside this provider: it refreshed the server surfaces itself, so only the Run
+  // section's island is owed its tick.
+  const bumpRuns = useCallback(() => setRunsChangedAt((n) => n + 1), []);
+  useRunsChangedSignal(itemKey, bumpRuns);
 
   const start = useCallback(async (): Promise<void> => {
     if (!selectedModel || starting) return;

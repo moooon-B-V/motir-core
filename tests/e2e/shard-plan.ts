@@ -859,6 +859,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // runner, so treat it as a FLOOR and re-measure from the artifacts on the next
   // green run, exactly as this file's header prescribes.
   'two-factor-enforcement.spec.ts': 17.6,
+  // MOTIR-6967 — MEASURED LOCALLY (1.5 s against a file:// page: no sign-up, no
+  // seeding, no app route). Recorded at 3.0 as a floor-plus-margin; replace it
+  // with its measured CI time.
+  'design-render-mock-offline.spec.ts': 3.0,
   'work-item-delete.spec.ts': 6.8,
   'work-item-mentions.spec.ts': 6.5,
   'work-item-type-vocabulary.spec.ts': 6.9,

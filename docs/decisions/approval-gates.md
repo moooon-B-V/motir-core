@@ -138,6 +138,25 @@
   webhook, or read by the reconcile tick) re-settles a still-standing exit. The
   FIFTH AMENDMENT's affected sentences carry narrowed notes; none is struck.
 
+- **AMENDED 2026-09-29 (MOTIR-6815, for Story MOTIR-1626 · 9.8) — §12, NEW: the
+  AGENT-REVIEW kind.** With `Project.reviewAgentEnabled` on, a green delivery
+  set raises `agent_review` on the run target INSTEAD OF the approve-and-merge
+  gate; a hosted review run decides it
+  under the new `review_agent` authority, or the routed person continues without
+  it on the record. A pass raises the ordinary flow at the same version; a
+  refusal moves no status and makes the card To fix, repaired by `motir fix`;
+  nothing re-runs by itself; one review per version; a review that cannot run
+  holds the card with its reason. §12.4b (the requester, same day) lets a person
+  repair a card a review sent back on the HOSTED agent. §12.7 also corrects the To-fix repair of a
+  person's _Request changes_ from `run` to `fix`. §1, §4, §7, §7a, §8 (the
+  MOTIR-5479 amendment's decision 3) and §10h each carry a pointer; nothing is
+  struck. **Consumed by** MOTIR-6816 – MOTIR-6827 and MOTIR-6904.
+  **Revised the same day by the requester** (Yue, on MOTIR-6816's design gate):
+  _"Review agent on and Merge automatically can't be true at the same time."_
+  The review agent exists only in a project that asks before merging, and the
+  two settings refuse each other (§12.2a). The first draft's `auto` branch is
+  struck in §12.2, §12.4 and §12.5.
+
 - **AMENDED 2026-09-29 (MOTIR-6903), at §4 — a re-queue made OUTSIDE Motir.**
   §4's SEVENTH AMENDMENT handles GitHub's `enqueued` delivery: an exit still
   standing at the head it names is stamped re-queued, so the card's red, the
@@ -241,6 +260,8 @@ first two are unchanged. The fourth is added by §1's MOTIR-5887 amendment
 amendment (2026-09-21), below the MOTIR-5887 one, whose points it cites._
 
 _The sixth — `plan_approval` — is added by §11 (MOTIR-6031, 2026-09-23), whose points it cites; it is the first kind whose gate belongs to NO work item._
+
+_The seventh — `agent_review` — is added by §12 (MOTIR-6815, 2026-09-29), whose registry row and KIND-table row are stated there (12.1): a question the review AGENT answers, in front of the merge question._
 
 A third kind is then a row in the enum, a handler, and a renderer for its
 subject body. **No second vocabulary, no second control, no second decide door.**
@@ -1494,6 +1515,13 @@ nothing** — the revise loop is Story 9.2's (§5).
 
 **Merging for real is the point, and it costs a permission and a re-consent.**
 An approval that does not merge is a note, not a gate.
+
+> **§4 · POINTER (MOTIR-6815, 2026-09-29).** With the review agent on, nothing
+> in this section runs until the delivery set's `agent_review` has passed or
+> been overridden at the current version: no merge gate is asked before it,
+> and a primary's carried merge waits for it too (§12.2, §12.4). The review
+> agent cannot be on in an `auto` project (§12.2a), so no auto-merge ever waits
+> on it. What approving a merge DOES is unchanged.
 
 > ### §4 — AMENDMENT (MOTIR-4911, 2026-09-08): the gate writes `approved`, and still does not write `done`
 >
@@ -3544,6 +3572,14 @@ than a fabricated approval.
 confirmed.** It follows from their stated principle and is recorded as the
 planner's reading of it; it is cheap to reverse before MOTIR-4882 ships.
 
+> **§7 · §7a · POINTER (MOTIR-6815, 2026-09-29).** `Project.reviewAgentEnabled`
+> is a second project switch, default off, and it is **EXCLUSIVE with `auto`**
+> (Yue, 2026-09-29; §12.2a): it may be on only while `prMergeMode` is `manual`,
+> and `auto` may be chosen only while it is off. With it on, `manual` raises
+> its gate only after `agent_review` passes or is overridden at that version
+> (§12.2). **§7a is untouched**: `auto` still raises no gate and writes no
+> synthetic row, and no review stands in front of it.
+
 ### 8. THE TWO WORKFLOWS — NEW (MOTIR-4911, 2026-09-08), DECIDED BY THE REQUESTER (Yue, 2026-09-08)
 
 **This section is the record's own statement of the model, not a pointer at
@@ -3742,6 +3778,13 @@ record holds then, and why a null FK would be the wrong answer.
 > amendment, decision 9), so a gate would sit in somebody's To-approve tab while
 > the merge happened anyway. §7a's rule — no synthetic approval row — is why
 > nothing is written instead.
+>
+> **3 · POINTER (MOTIR-6815, 2026-09-29).** With `Project.reviewAgentEnabled`
+> on, the trigger above gains a clause: _all green **and** this version's
+> `agent_review` passed or was overridden_. The verdict raises `agent_review`
+> in its place, and the pass raises this gate at the reviewed version (§12.2,
+> §12.4). Every raise path reaches it through `resolveGateSet`, so the clause
+> holds on all of them.
 >
 > **This SUPERSEDES, by quotation, the "created when the pull request is linked"
 > wording.** MOTIR-4910's scope boundary said the pull-request gates _"are
@@ -4980,19 +5023,22 @@ hand-back, which is this epic's.
 is what the refusal's own handler writes; every other effect named in the rows
 above this section is unchanged.
 
-| kind · case                                                  | refusal verb(s), reason REQUIRED (10a)                                      | verdict at the press (10d)                 | status written by the refusal                                                                                                                                                                | planner opens (10f) — anchor                                                                                                             | built by                     |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `design_result`                                              | Request changes                                                             | **Revise** · **Re-plan**                   | **Revise**: the DESIGN CARD → To do (10c). **Re-plan**: none                                                                                                                                 | **Re-plan** only — anchored on the design card's PARENT (the cards planned after the design), seeded with the design card and the reason | MOTIR-6070                   |
-| `acceptance_result` · STORY run (the gate on the run target) | Request changes                                                             | **Re-run** (stored `revise`) · **Re-plan** | **Re-run**: the STORY and EVERY not-`done` child → To do (10c) — a story re-run's scope claim re-asserts the to-do category on every member (`scopeClaimService`, step 5). **Re-plan**: none | **Re-plan** only — anchored on the STORY; it may re-plan ALL its subtasks                                                                | MOTIR-6071                   |
-| `acceptance_result` · SUBTASK runs, last one finished        | Request changes                                                             | none — Re-plan is the only answer          | none — nothing under the story is open to re-run                                                                                                                                             | **always** — anchored on the STORY, seeded to PLAN A REMEDY                                                                              | MOTIR-6071                   |
-| `decision_approval`                                          | Request changes                                                             | none                                       | none (unchanged: the pull request stays open, the merge stays HELD — §8's FIFTH AMENDMENT clause 5)                                                                                          | **always** — anchored on the decision card, seeded to re-plan from the reason                                                            | MOTIR-6068                   |
-| `decision_confirmation`                                      | Overturn (note already required)                                            | none                                       | `cancelled` (unchanged, §1's MOTIR-5952 amendment point 7)                                                                                                                                   | **always** — anchored on the decision card; the seed also names the keys `replanOwed` derives from `## Supersedes`                       | MOTIR-6068                   |
-| `decision_choice` · None of these                            | None of these — revise the options                                          | none                                       | none (unchanged)                                                                                                                                                                             | **always** — anchored on the choice card, seeded to re-plan from the reason                                                              | MOTIR-6068                   |
-| `decision_choice` · an option chosen                         | — (not a refusal; its note stays optional)                                  | none                                       | `done` (unchanged, §1's MOTIR-5887 amendment point 6)                                                                                                                                        | **offered** — anchored on the choice card, seeded to plan `## What this choice gates` with the chosen option → amended [1][pop] [2][ps]  | MOTIR-6069                   |
-| `pull_request_approval`                                      | Request changes                                                             | none                                       | none (unchanged)                                                                                                                                                                             | **none** — the author reads the reason on the card and the pull request, as today                                                        | MOTIR-6067 (the reason only) |
-| `plan_approval` (MOTIR-6012)                                 | ~~— no refusal verb~~ **Decline**, reason OPTIONAL — §11.10 amends this row | —                                          | —                                                                                                                                                                                            | —                                                                                                                                        | MOTIR-6035                   |
+| kind · case                                                  | refusal verb(s), reason REQUIRED (10a)                                                                                                                       | verdict at the press (10d)                 | status written by the refusal                                                                                                                                                                | planner opens (10f) — anchor                                                                                                             | built by                     |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `design_result`                                              | Request changes                                                                                                                                              | **Revise** · **Re-plan**                   | **Revise**: the DESIGN CARD → To do (10c). **Re-plan**: none                                                                                                                                 | **Re-plan** only — anchored on the design card's PARENT (the cards planned after the design), seeded with the design card and the reason | MOTIR-6070                   |
+| `acceptance_result` · STORY run (the gate on the run target) | Request changes                                                                                                                                              | **Re-run** (stored `revise`) · **Re-plan** | **Re-run**: the STORY and EVERY not-`done` child → To do (10c) — a story re-run's scope claim re-asserts the to-do category on every member (`scopeClaimService`, step 5). **Re-plan**: none | **Re-plan** only — anchored on the STORY; it may re-plan ALL its subtasks                                                                | MOTIR-6071                   |
+| `acceptance_result` · SUBTASK runs, last one finished        | Request changes                                                                                                                                              | none — Re-plan is the only answer          | none — nothing under the story is open to re-run                                                                                                                                             | **always** — anchored on the STORY, seeded to PLAN A REMEDY                                                                              | MOTIR-6071                   |
+| `decision_approval`                                          | Request changes                                                                                                                                              | none                                       | none (unchanged: the pull request stays open, the merge stays HELD — §8's FIFTH AMENDMENT clause 5)                                                                                          | **always** — anchored on the decision card, seeded to re-plan from the reason                                                            | MOTIR-6068                   |
+| `decision_confirmation`                                      | Overturn (note already required)                                                                                                                             | none                                       | `cancelled` (unchanged, §1's MOTIR-5952 amendment point 7)                                                                                                                                   | **always** — anchored on the decision card; the seed also names the keys `replanOwed` derives from `## Supersedes`                       | MOTIR-6068                   |
+| `decision_choice` · None of these                            | None of these — revise the options                                                                                                                           | none                                       | none (unchanged)                                                                                                                                                                             | **always** — anchored on the choice card, seeded to re-plan from the reason                                                              | MOTIR-6068                   |
+| `decision_choice` · an option chosen                         | — (not a refusal; its note stays optional)                                                                                                                   | none                                       | `done` (unchanged, §1's MOTIR-5887 amendment point 6)                                                                                                                                        | **offered** — anchored on the choice card, seeded to plan `## What this choice gates` with the chosen option → amended [1][pop] [2][ps]  | MOTIR-6069                   |
+| `pull_request_approval`                                      | Request changes                                                                                                                                              | none                                       | none (unchanged)                                                                                                                                                                             | **none** — the author reads the reason on the card and the pull request, as today                                                        | MOTIR-6067 (the reason only) |
+| `agent_review` (MOTIR-6815)                                  | the AGENT's `changes_requested`, findings REQUIRED; a person has no refusal verb — _Continue without the review_ is an approval with a required note (§12.3) | none                                       | none — the card is To fix, repaired by `motir fix` (§12.4)                                                                                                                                   | **none** — the findings are the brief, and the repair is a fix, not a re-plan                                                            | MOTIR-6819                   |
+| `plan_approval` (MOTIR-6012)                                 | ~~— no refusal verb~~ **Decline**, reason OPTIONAL — §11.10 amends this row                                                                                  | —                                          | —                                                                                                                                                                                            | —                                                                                                                                        | MOTIR-6035                   |
 
 **Amended for `design_result` by [`design-refusal-verdict.md`](design-refusal-verdict.md) (MOTIR-6419)** — the `design_result` row.
+
+**Amended by §12 (MOTIR-6815, 2026-09-29)** — the `agent_review` row is added (§12.8), and the `pull_request_approval` row's To-fix repair is `motir fix`, never `run` (§12.7).
 
 [pop]: picked-option-planning.md
 [ps]: picked-option-planning-starts.md
@@ -5493,6 +5539,320 @@ before generation (MOTIR-6033 draws it; MOTIR-6037 builds it). Refusing a manual
 move of a plan's cards out of Planning, which is Story MOTIR-6017, the consumer of
 this gate. Notifications. Where a plans row opens (Story MOTIR-6043, which
 consumes 11.5b's fallback). ~~Running the backfill on production (11.9).~~ The backfill now runs with the deploy (11.9, amended).
+
+---
+
+### 12. The AGENT-REVIEW kind — a hosted AI reviews the delivery set BEFORE anyone is asked to approve it — NEW (MOTIR-6815 for Story [9.8](motir:cmr89sbe1000104i85hxeotab) · MOTIR-1626, 2026-09-29), DECIDED BY THE PLANNER on the story's settled shape
+
+**Why this is a gate kind and not a new mechanism.** A review agent answers the
+same question a person answers on the approve-and-merge gate — _is this code
+right for this card?_ — one step earlier, and its answer has to be recorded
+with who gave it, at which commits, and what it caused (§6a). That is exactly
+what a gate row is. So the agent joins the registry as a seventh kind rather
+than as a column, a job status or a comment convention, and every rule below is
+a rule about that kind.
+
+**Read at base `351724043`** (motir-core `origin/main`, 2026-09-29), after
+§4's SIXTH AMENDMENT (MOTIR-6844). Every seam named below was read there. The
+story's other cards build against these subsections and cite them by number:
+MOTIR-6818 (schema), MOTIR-6819 (the gate), MOTIR-6820 (starting the run),
+MOTIR-6821 (the prompt and the verdict route), MOTIR-6822 (`motir fix`),
+MOTIR-6904 (the convention), MOTIR-6824 (the CLI), and the two designs
+MOTIR-6816 / MOTIR-6817 with their builds MOTIR-6823 / MOTIR-6825.
+`hosted-agent-run.md` §8 decides the review RUN, which is what answers this gate.
+
+#### 12.1 The kind is `agent_review`, hung on the run target, about the delivery SET
+
+- **`ApprovalGateKind.agent_review`** is a new enum member, with a handler in
+  the registry like every other kind (§1).
+- **It hangs on the RUN TARGET**, `resolveRunTarget` (`lib/services/runTarget.ts`),
+  exactly where `pull_request_approval` hangs (§8's MOTIR-5479 amendment,
+  decision 1). A child the same pull requests also deliver gets no gate.
+- **Its subject is the delivery SET**, in the approve-and-merge gate's own form
+  (§8's MOTIR-5479 amendment, decision 2): `subjectId` is the work item's own
+  id, and `subjectVersion` is `deliverySetVersion`
+  (`lib/approvalGates/deliverySetVersion.ts`), each member as
+  `owner/name#number@headSha`, sorted and comma-joined. **One stamp, one
+  function**: the review is about exactly the commits the approve-and-merge gate
+  would be about, so a pass can hand its version to that gate unchanged (12.4).
+- **At most one awaiting `agent_review` per run target.** The partial unique
+  index `approval_gate_one_awaiting_per_subject` over
+  `(work_item_id, kind, subject_id) WHERE state = 'awaiting'` already enforces
+  it, with no new index.
+- **It is CARDLESS FOR ROUTING.** `routedToId` is written by §2's rule
+  (`assigneeId ?? reporterId`) as for every card gate, because 12.3's override
+  is that person's. But the gate asks the AGENT, not the person, so it **never
+  appears on a person's To approve list and raises no notification**: the
+  awaiting-routed read (`awaitingRoutedToWhere`,
+  `lib/repositories/approvalGateRepository.ts`) excludes the kind, as it already
+  excludes a carried merge gate. The person meets it on the card, in the
+  Development frame, and only there.
+
+**The KIND table's row** (§1's MOTIR-4911 amendment):
+
+| kind           | the port shows                                                                                   | fires when                                                                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `agent_review` | the agent's verdict and findings, above the approve-and-merge gate's own port (MOTIR-6817 draws) | the run target's delivery set is **all green** and `Project.reviewAgentEnabled` is true (so the project asks before merging, 12.2a), at a version not yet decided (12.2) |
+
+**The REGISTRY row** (§1's handler table):
+
+| a handler supplies              | for `agent_review`                                                                                                                |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| how to resolve the SUBJECT      | the run target's delivery set at `subjectVersion`, the same members the approve-and-merge gate resolves                           |
+| who it ROUTES to                | §2's rule, written for 12.3's override only — never listed or notified (above)                                                    |
+| which PERMISSION authorises it  | the agent: the review run's token on the verdict route (12.3). A person: `work_item:edit`, the approve-and-merge gate's own floor |
+| which STATUS TRANSITION it owns | **none.** A pass raises the ordinary flow, which owns its own writes; a refusal writes nothing (12.4)                             |
+| what `approve` DOES             | raises the ordinary flow for the SAME version (12.4)                                                                              |
+| what `request_changes` DOES     | records the findings; the card is To fix `changes_requested`; nothing moves and nothing re-runs (12.4)                            |
+| what to RETAIN on approval      | nothing — the findings are text on the row, and the commits are durable on the host                                               |
+
+#### 12.2 WHEN it is raised — the green verdict, INSTEAD of the ordinary flow
+
+The trigger is the all-green verdict on the run target's set — the one
+`lib/services/ciPromotion.ts` judges in `everyDeliveryIsGreen` and settles in
+`settleMergesForCard` — **when `Project.reviewAgentEnabled` is true.** Then,
+and only then, the green verdict raises `agent_review` **INSTEAD OF**:
+
+- **`pull_request_approval`** (§8's MOTIR-5479 amendment, decision 3), in a
+  project that asks before merging.
+- ~~**the `pull-request/auto-merge.requested` emit, in an `auto` project**
+  (`dispatchAutoMerges`; §4's second amendment, decision 9).~~ **Struck the same
+  day by the requester — §12.2a.** An `auto` project has no review agent.
+
+#### 12.2a The review agent and `auto` merging EXCLUDE each other — DECIDED BY THE REQUESTER (Yue, 2026-09-29)
+
+_"Review agent on and Merge automatically can't be true at the same time"_ —
+the requester's note on MOTIR-6816's design gate, which sent back a design that
+drew the switch ON beside _Merge automatically_. A review exists to stand in
+front of a person's approval; a project that merges without asking anyone has
+no such approval for it to stand in front of.
+
+- **`Project.reviewAgentEnabled` may be `true` only while `Project.prMergeMode`
+  is `manual`.** Turning it on in an `auto` project is REFUSED by the switch's
+  write (`approvalGateSettingsService`, a typed `409 REVIEW_AGENT_NEEDS_MANUAL_MERGE`),
+  never silently accepted and never silently switching the merge mode.
+- **`auto` may be chosen only while the review agent is off.** Choosing
+  _Merge automatically_ with it on is REFUSED by the merge-mode write
+  (`projectPrMergeModeService`, `409 MERGE_MODE_REVIEW_AGENT_ON`). Neither write
+  changes the other setting for the person: they turn one off, then the other on.
+- **The establishment default cannot collide**: it writes `prMergeMode` only on a
+  project nothing has decided yet (§7's MOTIR-5174 amendment), and a new project's
+  review agent is off.
+- **So `agent_review` is never raised in an `auto` project**, and nothing below
+  has an `auto` branch. The settings room draws the exclusion on both controls
+  (MOTIR-6816).
+
+**The rule lives in ONE place: `resolveGateSet` (`lib/approvalGates/gateSet.ts`).**
+Which gates a card asks is decided there and nowhere else, and
+`reconcileGatesFor` (`lib/services/gateSetFor.ts`) is the one place a gate row
+is created. The approve-and-merge gate is raised from more than the promotion:
+from a status move into the review band, from the reconcile tick, after a
+queue exit and after every withdrawal's re-raise. **A condition added at the
+promotion alone would be bypassed by all of those.** So `agent_review` joins
+`AwaitableGateKind`, and the predicate's answer for a green set with the switch
+on is: _ask the review, and do not ask the merge question_, until the review at
+this version has passed or been overridden.
+
+- **One review per version.** A version already decided — `approved`,
+  `changes_requested`, or overridden — is never raised again. A redelivered or
+  repeated green verdict at the same version starts nothing: it finds the
+  decided row and raises no gate, so no second review run starts (12.6).
+- **A PRIMARY question is not delayed** — `design_result`, `decision_approval`
+  and `acceptance_result` are still raised on their own triggers (§1, §8's
+  FIFTH AMENDMENT). What the review holds is the MERGE, and that includes the
+  merge a primary's press CARRIES (§8's FIFTH AMENDMENT clause 5, the carry in
+  `resolveGateSet`). **A primary approved while the review is awaiting records
+  its decision and carries nothing yet**; the merge it authorised is settled
+  when the review passes, the same way `settleAfterPrimaryApproval` settles a
+  primary approved before its set was green. So no code merges unreviewed,
+  whichever gate a person pressed.
+- **A GitHub review never decides `agent_review`.** §8's FOURTH AMENDMENT's
+  review sync decides `pull_request_approval` only. A GitHub approval given
+  while the agent is reviewing is RECORDED, as every review is (MOTIR-5597,
+  decision 8), and it is applied to the approve-and-merge gate when a pass
+  raises that gate (`evaluateAfterRaise`). A GitHub approval of a head the agent
+  then sends back applies to nothing: the fix moves the head, and a review
+  counts only at the current commit.
+
+**THE TRIGGER DIFF, written out** (the lesson on collapsing two approvals —
+compare the two gates' triggers before putting one in front of the other):
+
+|                                                                                   | trigger                                                                          |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| the approve-and-merge gate, before this section                                   | the run target's set is **all green** (and `manual`)                             |
+| the approve-and-merge gate, after this section, switch on (`manual` only, §12.2a) | the set is all green **AND the review at this version passed or was overridden** |
+
+**The population that difference strands is exactly _the review could not run_**:
+a green set whose review never produced a verdict — no credits, no model, a
+repository the run cannot read, a run that died or ended without a verdict.
+Without a rule it would sit green, asked of nobody, with no surface saying a
+decision is owed. **12.6 gives it both**: the gate stays awaiting on the card
+and says why, and the person it is routed to can start it again or continue
+without it, on the record.
+
+#### 12.3 WHO decides it — the agent, or the routed person overriding on the record
+
+- **The review agent**, under a new authority member
+  **`ApprovalGateAuthority.review_agent`**. It decides through the run-token
+  verdict route `POST /api/v1/work-items/{key}/agent-review`, never through the
+  MCP, because a run token is refused by the MCP (`lib/mcp/auth.ts`, the
+  `dispatchRunId` arm). The route accepts a verdict only from the token of a
+  `review` run opened for THIS gate (`hosted-agent-run.md` §8). `decidedById` is
+  the run's attributed user (§8 there), and the authority column is what says a
+  machine decided — the same honesty §7a asks of `auto`: the row does not claim
+  a person reviewed the code.
+- **A person, through _Continue without the review_** — the person the card is
+  routed to, by the existing `resolveGateAuthority` set (assignee, the reporter
+  when there is no assignee, or `approval:decide_any`), at the
+  `work_item:edit` floor. It decides the gate `approved` **under their name and
+  authority**, with a **REQUIRED note** (§10a's rule, extended to this press
+  although it is not a refusal: waving a review past is the decision that most
+  needs its reason). The row then says _a person continued without the review,
+  and why_ — never that the agent passed it.
+- **Nobody else.** No other door decides the kind; a GitHub review does not
+  (12.2).
+
+#### 12.4 WHAT each decision does
+
+- **`approved` (a pass, or an override) raises the ordinary flow for the SAME
+  version**, in the decide transaction:
+  - `pull_request_approval` at the reviewed `subjectVersion`, through
+    `reconcileGatesFor`. The agent's review shows in that gate's frame, above its
+    port (MOTIR-6817 draws, MOTIR-6825 builds).
+  - ~~in **`auto`**: the auto-merge emit …~~ **Struck (§12.2a)** — there is no
+    review in an `auto` project, so a pass never emits a merge.
+  - The `agent_review` row is a real decision by a named authority, never a
+    stand-in approval of the merge: the person still decides the merge.
+  - If the set moved between the verdict and the decide transaction, the pass
+    is stale and 12.5's last rule applies: it decides nothing.
+- **`changes_requested` MOVES NO STATUS.** The card stays where CI put it. The
+  gate records the agent's findings (Markdown, required and non-empty) as its
+  note, and **the card is To fix `changes_requested`**: `lib/workItems/fixReason.ts`
+  derives it from a standing refusal at the current delivery-set version,
+  extended from the approve-and-merge gate (`standingMergeRefusalOf`) to this
+  kind, with the review agent as the decider and the findings as the reason.
+  - **The repair is `motir fix <KEY>`**, on the pull requests' own branches, with
+    the findings in its prompt (MOTIR-6822 builds the repair class) — **or the
+    same repair on the HOSTED agent, pressed by a person** (§12.4b).
+  - **Nothing re-runs by itself** — not a hosted build, not a hosted fix, not a
+    second review (Yue, 2026-09-28: the card may have been built on someone's
+    own machine). The next review starts only from the next green version.
+
+#### 12.4b A card SENT BACK can be repaired on the HOSTED agent — DECIDED BY THE REQUESTER (Yue, 2026-09-29)
+
+_"To fix after review should be able to run in the hosted agent too"_ — the
+requester's note on MOTIR-6817's design gate. It reverses the first draft's line
+in 12.9 (_"a hosted `motir fix` … is its own ask"_) for exactly this population.
+
+- **Who it is for:** a card that is To fix `changes_requested` because a REVIEW
+  sent it back — the review agent's `changes_requested` (12.4) or a person's
+  _Request changes_ on the approve-and-merge gate (12.7). Other To-fix reasons are
+  not widened here (see 12.9).
+- **What starts it: a PERSON'S PRESS, never the refusal.** Beside the copyable
+  `motir fix <KEY>`, the Development frame, the To fix banner and the Workbench
+  row offer **Fix on the hosted agent**. It is offered to whoever may start a
+  hosted run on the card today (the Run hosted rule) and runs the SAME repair a
+  local `motir fix` runs: the server's repair claim (one repair at a time), the
+  pull requests' own branches, the findings in the prompt. 12.4's _nothing re-runs
+  by itself_ is untouched — the press is the person choosing to spend.
+- **What it does to the gate:** nothing directly. Its push moves the head, which
+  supersedes the refusal's version (12.5), and the next green version is reviewed
+  again (12.2). A repair that pushes nothing leaves the card To fix, as a local
+  repair that pushes nothing does.
+- **The run itself** — command, credential, mode, what it may push — is
+  `hosted-agent-run.md` §8.6.
+
+#### 12.5 WHEN it is withdrawn
+
+- **A head move, a close, a draft or a red build** supersedes an awaiting
+  `agent_review` exactly as it supersedes `pull_request_approval` — the
+  withdrawals in `lib/services/pullRequestApprovalGates.ts` (head move, close,
+  draft, conflict, CI failure, set change) retire both kinds, each with the
+  `ApprovalGateSupersedeCause` it already writes, and no decision field is
+  touched (§6b). The next all-green verdict raises a fresh review at the new
+  version (12.2).
+- **Switching the review agent OFF** supersedes every awaiting `agent_review`
+  in the project, under a cause of its own (`review_agent_disabled`), and, for
+  each run target whose current set is green, raises the ordinary flow for the
+  current version at once — the approve-and-merge gate. A decided
+  `agent_review` is history and stays.
+- **A superseded review's RUN is CANCELLED.** Whatever superseded the gate — a
+  withdrawal above or the switch — the review run in flight for it is cancelled
+  (`DispatchRunStatus.cancelled`, `hosted-agent-run.md` §2), because its answer
+  can no longer decide anything and it is still being paid for. That is what the
+  switch card's _"reviews in progress are cancelled"_ means (MOTIR-6816).
+- **Switching it ON** asks nothing of a card already holding an awaiting
+  approve-and-merge gate — that question was asked before the switch and stays
+  asked. The next version is reviewed.
+- **A verdict arriving for a superseded gate** — the push landed mid-review —
+  **decides nothing**. It never re-opens, re-decides or raises anything. Where
+  the run is still alive to send it (a gate decided or superseded without the
+  run being cancelled yet, or a verdict about another version), it is recorded
+  on the review RUN as a `review_verdict` event naming the verdict and the
+  version it was about. **Where the supersede already CANCELLED the run** (the
+  rule above), its credential is revoked with it, so the late verdict is
+  refused at authentication and nothing is recorded — the run's own cancelled
+  close is the record (MOTIR-6826 found this; amended 2026-09-29).
+
+#### 12.6 A review that CANNOT RUN
+
+A review cannot run when the start is **refused before anything boots** — the
+organisation has no agent credits, no model is offered (`hosted-agent-run.md`
+§7), a delivery-set repository cannot be read with the run's credential — or
+when the run **ends with no verdict** (it failed, stalled, timed out, was
+cancelled, or exited without submitting one).
+
+- **The gate STAYS `awaiting`, and carries the reason** on the gate row — never
+  in the note, which belongs to whoever decides it (MOTIR-6820 writes it). The
+  Development frame shows _Review could not run_ with that reason (MOTIR-6817).
+- **_Review again_** — a press by the routed person, same authority as the
+  override — re-requests ONE review run for the same gate and version, and
+  clears the reason while it runs. **There is no automatic retry.**
+- **The escape is 12.3's _Continue without the review_.** Nothing is waved
+  through silently: a stranded card is visible on its own page, and leaving it
+  takes a named person and a written reason.
+
+#### 12.7 A person's REQUEST CHANGES on `pull_request_approval` — its repair is `motir fix`
+
+Independently of the switch: a standing `changes_requested` on the
+approve-and-merge gate derives To fix `changes_requested` today, with the repair
+verb **`run`** (`lib/workItems/fixReason.ts`). `run` cannot repair it — the card
+is in the in-progress category, and both claim doors take only the to-do
+category (`lib/workItems/claimOutcome.ts`). **The repair is corrected to
+`fix`**, the same repair 12.4 names for the agent's refusal (MOTIR-6822). An
+acceptance Re-run keeps its own repair.
+
+#### 12.8 §10's row
+
+**§10h gains a row:**
+
+| kind · case    | refusal verb(s), reason REQUIRED (10a)                                                  | verdict at the press (10d) | status written by the refusal                 | planner opens (10f)                                                           |
+| -------------- | --------------------------------------------------------------------------------------- | -------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------- |
+| `agent_review` | the agent's `changes_requested`, findings REQUIRED; a person has no refusal verb (12.3) | none                       | none — To fix, repaired by `motir fix` (12.4) | **none** — the findings are the brief, and the repair is a fix, not a re-plan |
+
+**§10h's `pull_request_approval` row** keeps _status written: none_; its repair
+is `motir fix`, not a run (12.7).
+
+#### 12.9 What this section does NOT decide
+
+- **The review RUN** — its command, mode, attribution, billing, credential,
+  prompt inputs and the optional coding convention. That is
+  `hosted-agent-run.md` §8.
+- **The words and layout** of the switch card, the frame states and the To fix
+  row. MOTIR-6816 and MOTIR-6817 draw them.
+- **Merge mode, the approve-and-merge gate, its press and the merge** (§4, §7,
+  §8; MOTIR-4909, MOTIR-4882). Consumed, not re-decided.
+- **GitHub review sync** (§8's FOURTH AMENDMENT; MOTIR-4910). Motir still posts
+  nothing to GitHub, and the agent's review lives in Motir only.
+- **Automatic re-runs after any review.** Deliberately none. The design-only
+  automatic re-run is Story 9.2's (§10g).
+- ~~**A hosted `motir fix`.** The hosted launcher runs `run`, `continue` and, after
+  this story, `review`. A hosted repair is its own ask.~~ **Reversed by the
+  requester (12.4b):** a card a REVIEW sent back can be repaired on the hosted
+  agent by a person's press. A hosted repair for the OTHER To-fix reasons (red CI,
+  a merge-queue failure) is still not decided here.
+- **Reviewing designs, acceptance videos or plans.** `agent_review` is about a
+  delivery set's code only.
 
 ---
 

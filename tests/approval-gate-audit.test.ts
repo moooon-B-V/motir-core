@@ -448,7 +448,7 @@ describe('decision_source accepts `github` with an UNRESOLVABLE actor', () => {
     expect(values.map((v) => v.enumlabel)).toEqual(['ui', 'api', 'mcp', 'github']);
   });
 
-  it('the authority enum holds §2’s three rungs, plus the TWO values that are not rungs', async () => {
+  it('the authority enum holds §2’s three rungs, plus the THREE values that are not rungs', async () => {
     const values = await adminDb.$queryRaw<Array<{ enumlabel: string }>>`
       SELECT e."enumlabel"
       FROM pg_enum e
@@ -471,12 +471,20 @@ describe('decision_source accepts `github` with an UNRESOLVABLE actor', () => {
     // and `admin` (`approval:decide_any`) would claim an override of a routing that does
     // not exist. Its decider's authority is the permission `ai:decide_plan` ALONE, and
     // the row says so rather than borrowing a rung that is not true of them.
+    //
+    // ⚠️ `review_agent` IS NOT A §2 RUNG, and the title changed a third time rather than
+    // the list growing quietly (Story MOTIR-1626 · MOTIR-6819; ADR §12.3). The review
+    // agent's verdict decides the card's `agent_review` gate as the AGENT, never as a
+    // person: it is no assignee, reporter or `approval:decide_any` holder, and it is
+    // written only by the review run's verdict (`reviewAgent` on the decide door) —
+    // `resolveGateAuthority` never returns it.
     expect(values.map((v) => v.enumlabel)).toEqual([
       'assignee',
       'reporter',
       'admin',
       'github_review',
       'plan_permission',
+      'review_agent',
     ]);
   });
 });

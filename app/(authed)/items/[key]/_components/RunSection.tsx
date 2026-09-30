@@ -68,8 +68,13 @@ import type { ReaderRoutes } from '@/lib/visitor/routes';
 const runHref = (routes: ReaderRoutes, runId: string): string =>
   routes.view(runsHref({ run: runId }));
 
+/** The card's CURRENT run: the newest that is not a review run (see {@link RunSection}). */
+export function currentRunOf<R extends { command: string }>(runs: readonly R[]): R | null {
+  return runs.find((run) => run.command !== 'review') ?? null;
+}
+
 export interface RunSectionProps {
-  /** This card's runs, newest first. The FIRST row is the current run. */
+  /** This card's runs, newest first. The first row that is not a review is the current run. */
   initialRuns: DispatchRunDto[];
   /** The history cursor, or null when the first page is the whole history. */
   initialCursor: string | null;
@@ -103,7 +108,12 @@ export function RunSection({
   const [reconnecting, setReconnecting] = useState(false);
   const [events, setEvents] = useState<DispatchRunEventDto[]>([]);
 
-  const current = runs[0] ?? null;
+  // ⚠️ THE CURRENT RUN IS NEVER A REVIEW RUN (MOTIR-1626; `hosted-agent-run.md` §8.1 /
+  // §8.3). A review reads the pull requests and returns a verdict — it builds nothing and
+  // holds no card, so it is not what "this card's run" means, and drawing it with a build's
+  // phases would read as the card being built again. It stays in the history below, named
+  // by its own command (*motir review*); the Development frame is where its outcome lives.
+  const current = currentRunOf(runs);
   const door = useHostedRun();
   const tContinue = useTranslations('github.development.continue.hosted');
   // R1 names BOTH ways forward only while the part below offers Continue hosted (C7).
@@ -225,11 +235,11 @@ export function RunSection({
         const res = await fetch(`/api/work-items/${encodeURIComponent(itemKey)}/dispatch-runs`);
         if (!res.ok || cancelled) return;
         const body = (await res.json()) as { runs: DispatchRunDto[]; nextCursor: string | null };
-        const next = body.runs[0] ?? null;
+        const next = currentRunOf(body.runs);
         setRuns((prev) => {
           // A NEW current run resumes its own stream from its own cursor, with
           // none of the previous run's events on screen.
-          if (next && prev[0]?.id !== next.id) {
+          if (next && currentRunOf(prev)?.id !== next.id) {
             seqRef.current = next.seq;
             setEvents([]);
           }

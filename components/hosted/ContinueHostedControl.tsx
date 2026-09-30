@@ -96,10 +96,10 @@ export function ContinueHostedAnswer({
     <>
       {refusal ? <Refusal refusal={refusal} viewerId={viewerId} /> : null}
       {continueTarget && models.state === 'unavailable' ? (
-        <ModelsUnavailable onRetry={hosted.reloadModels} />
+        <ModelsUnavailable onRetry={hosted.reloadModels} testIdPrefix="continue-hosted" />
       ) : null}
       {continueTarget && models.state === 'ok' && models.models.length === 0 ? (
-        <ModelsEmpty />
+        <ModelsEmpty testIdPrefix="continue-hosted" />
       ) : null}
     </>
   );
@@ -145,10 +145,18 @@ export function ContinueHostedControl({
   );
 }
 
-function ModelsUnavailable({ onRetry }: { onRetry: () => void }) {
+/** The picker's *could not load the models* notice — shared by every hosted door
+ *  (`HostedDoorNotices`' copy), its test id prefixed by the door's own. */
+export function ModelsUnavailable({
+  onRetry,
+  testIdPrefix,
+}: {
+  onRetry: () => void;
+  testIdPrefix: string;
+}) {
   const t = useTranslations('runs.hosted.picker');
   return (
-    <Notice testId="continue-hosted-models-unavailable">
+    <Notice testId={`${testIdPrefix}-models-unavailable`}>
       <span>{t('unavailableBody')}</span>
       <Button type="button" variant="secondary" size="sm" onClick={onRetry}>
         {t('retry')}
@@ -157,10 +165,11 @@ function ModelsUnavailable({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function ModelsEmpty() {
+/** The picker's *no model can run hosted* notice — shared by every hosted door. */
+export function ModelsEmpty({ testIdPrefix }: { testIdPrefix: string }) {
   const t = useTranslations('runs.hosted.picker');
   return (
-    <Notice testId="continue-hosted-models-empty">
+    <Notice testId={`${testIdPrefix}-models-empty`}>
       <span>{t('emptyBody')}</span>
     </Notice>
   );
@@ -168,7 +177,8 @@ function ModelsEmpty() {
 
 const bold = (chunks: ReactNode) => <b className="font-semibold">{chunks}</b>;
 
-function When({ iso }: { iso: string }) {
+/** A relative time, read once per mount — every hosted door's `<when>`. */
+export function When({ iso }: { iso: string }) {
   const locale = useLocale();
   // Read ONCE per mount, as the continue part's own clock is (ContinuePart.tsx).
   const [now] = useState(() => Date.now());
@@ -193,36 +203,7 @@ function Refusal({
   const testId = `continue-hosted-refused-${refusal.kind}`;
 
   if (refusal.kind === 'notWritable') {
-    const count = refusal.repositories.length;
-    return (
-      <Notice testId={testId}>
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <p className="font-semibold">
-            {refusal.total !== null
-              ? tRun('notWritable.lead', { count, total: refusal.total })
-              : tRun('notWritable.leadNoTotal', { count })}
-          </p>
-          <p>{tRun('notWritable.detail')}</p>
-          <ul className="flex flex-col">
-            {refusal.repositories.map((r) => (
-              <li
-                key={r.repository}
-                className="flex flex-col gap-0.5 border-t border-(--el-border-soft) py-1.5 first:border-t-0"
-              >
-                <span className="font-mono text-xs font-semibold">{r.repository}</span>
-                <span>{r.reason}</span>
-                <Link
-                  className="self-start text-(--el-link) underline"
-                  href={repositoryRowHref(r.repository)}
-                >
-                  {tRun('notWritable.open')}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </Notice>
-    );
+    return <NotWritableNotice refusal={refusal} testId={testId} />;
   }
 
   let title: ReactNode;
@@ -288,8 +269,50 @@ function Refusal({
   );
 }
 
+/** A repository the app cannot write to — Run hosted's per-repository list, shared by
+ *  every hosted door (a continue and a repair both push). */
+export function NotWritableNotice({
+  refusal,
+  testId,
+}: {
+  refusal: Extract<ContinueHostedRefusal, { kind: 'notWritable' }>;
+  testId: string;
+}) {
+  const tRun = useTranslations('runs.hosted.refused');
+  const count = refusal.repositories.length;
+  return (
+    <Notice testId={testId}>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <p className="font-semibold">
+          {refusal.total !== null
+            ? tRun('notWritable.lead', { count, total: refusal.total })
+            : tRun('notWritable.leadNoTotal', { count })}
+        </p>
+        <p>{tRun('notWritable.detail')}</p>
+        <ul className="flex flex-col">
+          {refusal.repositories.map((r) => (
+            <li
+              key={r.repository}
+              className="flex flex-col gap-0.5 border-t border-(--el-border-soft) py-1.5 first:border-t-0"
+            >
+              <span className="font-mono text-xs font-semibold">{r.repository}</span>
+              <span>{r.reason}</span>
+              <Link
+                className="self-start text-(--el-link) underline"
+                href={repositoryRowHref(r.repository)}
+              >
+                {tRun('notWritable.open')}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Notice>
+  );
+}
+
 /** HostedDoorNotices' `notice warn` — nothing failed that the reader did, nothing was spent. */
-function Notice({ testId, children }: { testId: string; children: ReactNode }) {
+export function Notice({ testId, children }: { testId: string; children: ReactNode }) {
   return (
     <div
       role="status"

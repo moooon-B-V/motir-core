@@ -345,7 +345,15 @@ export type VerbNotOfferedReason =
   | 'request_changes_on_plan'
   /** `decline` sent to any kind but `plan_approval`, the one kind that offers it
    *  (ADR §11.4, MOTIR-6035). */
-  | 'decline_on_other_kind';
+  | 'decline_on_other_kind'
+  /** A PERSON's `request_changes` on an `agent_review` gate (ADR §12.3, MOTIR-6819): only
+   *  the review agent refuses it; a person can only continue without the review. */
+  | 'request_changes_on_agent_review'
+  /** A person's `approve` of an `agent_review` gate — *Continue without the review* — with
+   *  no reason (ADR §12.3, MOTIR-6819): waving a review past says why. */
+  | 'override_needs_a_note'
+  /** A review agent's verdict sent to a gate of any other kind (MOTIR-6819). */
+  | 'review_agent_on_other_kind';
 
 /**
  * A decision whose VERB this gate does not offer (Story MOTIR-4914 · Subtask
@@ -371,6 +379,10 @@ export type VerbNotOfferedReason =
  *   · `request_changes_on_plan` — `request_changes` sent to a `plan_approval` gate
  *     (MOTIR-6035, ADR §11.4): a plan is changed by a conversation, not a verb;
  *   · `decline_on_other_kind` — `decline` sent to any kind but `plan_approval`.
+ *   · `request_changes_on_agent_review` — a PERSON's `request_changes` on an
+ *     `agent_review` gate (ADR §12.3): only the review agent refuses one;
+ *   · `override_needs_a_note` — a person's *Continue without the review* with no reason;
+ *   · `review_agent_on_other_kind` — a review agent's verdict on any other kind.
  *
  * ⚠️ NOT THE STALE REFUSAL, even for `unknown_option`. The stamp check runs first,
  * so by the time an option is looked up the options are exactly the ones the

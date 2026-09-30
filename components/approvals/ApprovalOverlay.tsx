@@ -897,6 +897,10 @@ export function ApprovalOverlay() {
             decision={subject.decision ? { document: subject.decision.document, gate } : null}
             // `motir fix` beside the approve, exactly as the page draws it (MOTIR-5806).
             repair={subject.repair ?? null}
+            // AN `agent_review` ADDRESS (§12.3): the review's state above the delivery set, and
+            // its one person's verb — *Continue without the review*, a required note — which
+            // the item page hands over to this frame. Absent for every other kind.
+            agentReview={subject.agentReview ?? null}
             designResult={
               subject.designEvidence ? (
                 <DesignResultPanel

@@ -3111,3 +3111,128 @@ raw hue, no raw shape utility.
 § _Run died_ (D1) and C6 keep `motir continue <KEY>` on the marker for a viewer who cannot edit the
 project, while `claimContinue` refuses that viewer (`assertCanEdit`). This row does not repeat that
 (state 5 offers no command); the marker itself is shipped and is out of this card's scope.
+
+## 32 · TO FIX · SENT BACK BY THE REVIEW AGENT — the agent's reason on the tag, the banner and the row, and `motir fix` for a person's Request changes — MOTIR-6817
+
+> **Revised 2026-09-29 after Request changes.** The product owner sent this design back with:
+> _"To fix after review should be able to run in the hosted agent too."_ Recorded as
+> `docs/decisions/approval-gates.md` **§12.4b** and `hosted-agent-run.md` **§8.6**. The To fix row and
+> the banner — for the review agent's refusal AND a person's Changes requested — now offer **Fix on the
+> hosted agent** beside the copyable `motir fix <KEY>`, reusing the Continue hosted door (§ 31) unchanged,
+> with its running and refused states (Panels 2 and 4).
+
+**The asset:** [`workbench--to-fix--review-agent.mock.html`](./workbench--to-fix--review-agent.mock.html),
+a new delta mock, Panels **1–5**. **It edits no existing mock.** It amends **§ 30**
+([`workbench--to-fix.mock.html`](./workbench--to-fix.mock.html), MOTIR-6599 — the To fix tab, its row
+and its fix line) and the **To fix tag and banner** of MOTIR-6608 (published as `to-fix--tag-and-banner.mock.html` in `design/work-items/`, published only and not
+committed; its committed delta is
+`design/work-items/to-fix--tag-and-banner--run-died.mock.html`, `design/work-items/design-notes.md`
+§ _The TO FIX tag and banner: RUN DIED_). Card **MOTIR-6817**, Story **MOTIR-1626** (9.8, the review
+agent). Behaviour: `docs/decisions/approval-gates.md` **§12.4** (the agent's `changes_requested` is To
+fix `changes_requested`, repaired by `motir fix`) and **§12.7** (a person's Request changes on the
+approve-and-merge gate is ALSO repaired by `motir fix`). Rendered against motir-core `origin/main` @
+`351724043`. The Development frame's own states are `design/github/design-notes.md` **§ 30**.
+
+**The review agent is manual-only** (Yue, 2026-09-29: _Review agent_ and _Merge automatically_ cannot
+both be on), so every sent-back card here sits in a project that asks before merging.
+
+### Access path
+
+Unchanged: the Workbench's **To fix** tab (§ 30, Panel 1 here), the tag on the board card, list and
+tree row and quick-view header, and the banner at the top of the item page. **A sent-back card is
+never on To approve** — an `agent_review` gate is excluded from the awaiting-routed read and notifies
+nobody (§12.1). No new tab, filter value, reason or entry point.
+
+### The panels
+
+| panel | what                                                                                                                    | composes (shipped)                                                                         |
+| ----- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 1     | the strip, To fix tab — the access path                                                                                 | `WorkbenchTabs`' strip, unchanged                                                          |
+| 2     | two To fix rows: **sent back by the review agent**, and a **person's Request changes** now `motir fix`                  | `WorkbenchList`'s row + `WorkbenchFixLine` (glyph · sentence · command chip · copy button) |
+| 3     | the **tag**, label and glyph forms, with the agent's reason in its accessible name                                      | `ToFixTag` (`Pill` on `--el-danger`, `Wrench`)                                             |
+| 4     | the item-page **banner**: the agent's (first findings line + `motir fix`) and the person's (lead and command corrected) | `ToFixBanner` + `CopyableCodeBlock language="shell"`                                       |
+| 5     | zh                                                                                                                      | the same                                                                                   |
+
+### Decisions
+
+| decision                                   | chosen                                                                                                                                                                                                                                                                                                                                         | why                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a new reason?                              | **No.** The agent's refusal IS `changes_requested` (§12.4); only the decider differs                                                                                                                                                                                                                                                           | the priority order, the filter's values and the tag's shape stay as § 30 and § 31 set them. What changes is the WORDS where a decider is named                                                                                                                                                                                                             |
+| the row's glyph                            | `Undo2` in `--el-icon-muted`, as for any refusal                                                                                                                                                                                                                                                                                               | a refusal is not a failure (`RepairFixPart`'s pairing). The Bot glyph stays in the frame, where the agent's findings are                                                                                                                                                                                                                                   |
+| the row's sentence                         | _Sent back by **the review agent** — “{first findings line}”_, the note truncated as § 30 truncates a person's note                                                                                                                                                                                                                            | it answers _who sent it back_ the way the person's row does, and the first line is the findings' own summary. The note is `fixDetail.notePreview`, filled for the agent from the findings' first line with Markdown stripped                                                                                                                               |
+| the tag                                    | the SAME tag; its name **_To fix · sent back by the review agent_**                                                                                                                                                                                                                                                                            | § 30's rule: every reason draws one tag, and the reason is in the accessible name and `title` only. A surface that cannot tell the decider keeps _To fix · changes requested_, which is still true                                                                                                                                                         |
+| the banner                                 | _This needs a fix: the review agent sent it back — “{first findings line}”_, then _Repair it with this command:_ and `motir fix <KEY>`                                                                                                                                                                                                         | the banner's shape is unchanged; the findings in full are in the Development frame's review band one link below (_See its pull requests_), so the banner does not repeat them                                                                                                                                                                              |
+| **a person's Request changes — CORRECTED** | the row's command and the banner's command become **`motir fix <KEY>`**; the banner's lead becomes `toFix.banner.leadFix`                                                                                                                                                                                                                      | **§12.7**: `motir run` cannot claim an in-progress card (`claimOutcome.ts` takes only the to-do category), so § 30 and the shipped banner printed a command that is refused. The verb still comes from `fixDetail.repair`, never from the reason — MOTIR-6822 changes what `repair` holds                                                                  |
+| **Fix on the hosted agent** (§12.4b)       | on the row, § 31's repairs slot: the door LEADS (`HostedModelPicker` + primary `Button`, `Cloud`, label _Fix on the hosted agent_) and the command keeps the right edge. On the banner, the Continue hosted part's order: _Fix it on the hosted agent — no terminal needed:_ + the door, then _Or repair it from your terminal:_ + the command | § 31 already placed a hosted door beside a command on this row (_Continue hosted_ + `motir continue`); the repair uses the same slot, grammar and model picker. The pressing person picks the model (`hosted-agent-run.md` §7). Offered to whoever may start a hosted run on the card; anyone else keeps the command alone, and the banner keeps `leadFix` |
+| never automatic                            | **nothing starts on the refusal itself**                                                                                                                                                                                                                                                                                                       | §12.4: nothing re-runs by itself. A card sits in To fix with both repairs offered until a person presses one                                                                                                                                                                                                                                               |
+| a repair running                           | the row: the door and the command give way to _Being fixed on the hosted agent by **{name}** · {run link}_ (§ 31's sentence-in-the-command's-place grammar). The banner: its lead, door and command give way to _A hosted repair is running — started by **{name}** {when} · {run link}_                                                       | the open repair run IS the one-repair-at-a-time lock (§8.6), so neither repair can be offered while it runs. The card stays To fix until a push moves the head                                                                                                                                                                                             |
+| a press refused                            | the door's own warning notice in the row's notice slot (§ 31 state 6), and under the door on the banner: _Not started — a repair is already running, started by **{name}** {when}._ The could-not-start answers are the door's own, reused                                                                                                     | `ContinueHostedAnswer`'s rule: a door's answers are drawn under that door. The full set is drawn once, in `design/github/approve-and-merge--agent-review.mock.html` Panel 3d                                                                                                                                                                               |
+
+### Primitives composed (no new primitive)
+
+`WorkbenchTabs`' strip; `WorkbenchList`'s row; `WorkbenchFixLine` (the `Undo2` glyph, the sentence, the
+`tf-cmd` chip and the always-visible copy icon-button); `ToFixTag` in both forms; `ToFixBanner` (the
+`--el-danger-surface` frame, the tag's disc, the sentence, the lead, the link to `#development`);
+`CopyableCodeBlock`; and § 31's row repairs slot, notice slot and **Continue hosted door**
+(`ContinueHostedButtonRow` / `ContinueHostedAnswer`), whose `tf-repairs` / `tf-startover` /
+`tf-notice-slot` / `cc-` / `btn` rules are carried verbatim from
+`workbench--to-fix--run-died.mock.html`. The mock's one new rule block, `rv-`, restates `ToFixTag`, `ToFixBanner` and
+`CopyableCodeBlock`'s class strings (plus `rv-run`, the hosted run's link), which § 30's compiled Tailwind block does not carry — no new
+element. Colour: `--el-danger` + `--el-danger-text` (the tag, the ONE legal use of that ink),
+`--el-danger-surface` + `--el-danger-surface-text` (the banner), `--el-code-bg` / `--el-code-text`,
+`--el-icon-muted`, `--el-text` / `--el-text-secondary`. `--el-text-muted` and `--el-text-faint` are not
+used by anything this delta adds.
+
+### Copy — `en` + `zh`
+
+New strings only; zh uses the Workbench's **待修复** and the switch card's **审查代理**.
+
+| key                                      | en                                                                                     | zh                                                                        |
+| ---------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `toFix.tagName.sent_back_by_agent`       | To fix · sent back by the review agent                                                 | 待修复 · 已被审查代理退回                                                 |
+| `toFix.banner.sentBackByAgent`           | This needs a fix: the review agent sent it back — “{note}”                             | 需要修复：审查代理已将它退回——“{note}”                                    |
+| `workbench.toFix.reason.sentBackByAgent` | Sent back by <b>the review agent</b> — “{note}”                                        | 已被<b>审查代理</b>退回——“{note}”                                         |
+| `workbench.toFix.hostedButton`           | Fix on the hosted agent                                                                | 用托管代理修复                                                            |
+| `workbench.toFix.fixingHosted`           | Being fixed on the hosted agent by <b>{name}</b> · <run>{run}</run>                    | <b>{name}</b> 正在用托管代理修复 · <run>{run}</run>                       |
+| `toFix.banner.hostedLead`                | Fix it on the hosted agent — no terminal needed:                                       | 在这里用托管代理修复——无需终端：                                          |
+| `toFix.banner.orTerminal`                | Or repair it from your terminal:                                                       | 或者在终端中修复：                                                        |
+| `toFix.banner.fixingHosted`              | A hosted repair is running — started by <b>{name}</b> <when></when> · <run>{run}</run> | 托管修复正在运行——由 <b>{name}</b> 于<when></when>开始 · <run>{run}</run> |
+
+The refused press's words are `github.development.fix.hosted.refused.taken` / `.takenByYou` and the
+could-not-start answers are `runs.hosted.*`, all listed in `design/github/design-notes.md` § 30 — one
+string set for the door wherever it sits. The row's and banner's door button reads
+`workbench.toFix.hostedButton`, identical to `github.development.fix.hosted.button` (MOTIR-6825 may
+share one key). **Reused, unchanged:** `runs.hosted.door.starting`, `runs.hosted.picker.*`,
+`toFix.banner.leadFix` (_Repair it with this command:_ / _用以下命令修复：_),
+`toFix.banner.toDevelopment`, `workbench.toFix.copyAria` / `copyTooltip` / `toast.*`, and every
+`changesRequested*` sentence. **Retired once MOTIR-6822 lands:** `toFix.banner.leadRun` (_Re-run the work
+item. The new run's prompt carries the reviewer's note:_) — no `repair` value will select it, since an
+acceptance Re-run keeps `fix` and the approve-and-merge refusal moves from `run` to `fix`.
+
+### What this design does NOT decide
+
+- **The frame's states** (reviewing, passed, sent back, could not run, the override) —
+  `design/github/design-notes.md` § 30.
+- **How the tag learns the decider.** `ToFixTag` takes the stored `fixReason` alone today; naming the
+  agent needs the decider from `fixDetail` (or a flag derived from it) on each surface that renders the
+  tag. MOTIR-6825 decides the plumbing; where it is absent, the person's name for the reason stands.
+- **`fixDetail`'s shape for the agent** (the decider, the note preview) and **`fixReason.ts`'s
+  derivation** — MOTIR-6822 / MOTIR-6825, per §12.4.
+- **A filter value for "sent back by the review agent"** — none; _To fix is changes requested_ includes
+  both deciders.
+- **The hosted repair RUN** — its claim, mode, credential and billing are `hosted-agent-run.md` §8.6.
+  The door only starts it, and **nothing starts on the refusal itself** (§12.4). A hosted repair for the
+  OTHER To-fix reasons (CI failed, queue failed, conflicted, run died) is not drawn: §12.4b covers a card a
+  review sent back only, so those rows keep § 30 / § 31 unchanged.
+
+### GIVES / TAKES
+
+| key        | GIVES / TAKES                                                                                                                             |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-6822 | **GIVES** `fixDetail.repair = 'fix'` for both deciders' `changes_requested`, which is what turns § 30's `motir run` into `motir fix` here |
+| MOTIR-6825 | **GIVES** the three strings above and the agent's sentence on the row, the banner and the tag name. **TAKES** the decider on `fixDetail`  |
+| MOTIR-6599 | **TAKES** § 30's changes-requested row: its command is now `motir fix`. Done, not re-opened; its mock stays as a record                   |
+| MOTIR-6608 | **TAKES** the banner's changes-requested lead (`leadRun` → `leadFix`). Done, not re-opened                                                |
+| MOTIR-6817 | this card                                                                                                                                 |
+
+Fixture items use `ACME-n` keys, so they link to nothing.

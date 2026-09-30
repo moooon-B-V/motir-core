@@ -120,6 +120,44 @@ export interface DispatchRunDto {
    * fills it; null for every other command, and absent on the ingest answers.
    */
   continues?: DispatchRunContinuesDto | null;
+  /**
+   * What a HOSTED `fix` run repairs (MOTIR-6929), read from the `run_opened` the
+   * server's repair claim wrote (MOTIR-6928) — the class, every pull request on its
+   * OWN branch at the head it was handed, and the review's findings. A hosted
+   * container adopts the run instead of claiming, so this is how it learns what the
+   * claim decided. Only the single-run read fills it; null for every other command
+   * and for a LOCAL `fix` run (whose `run_opened` the CLI writes, recording none of it).
+   */
+  repair?: DispatchRunRepairDto | null;
+}
+
+/** A hosted repair's decision, as its `run_opened` recorded it (MOTIR-6928 · MOTIR-6929). */
+export interface DispatchRunRepairDto {
+  repairClass: 'ci' | 'acceptance_rerun' | 'review';
+  title: string | null;
+  /** Every pull request, each on its OWN branch — checked out and pushed to, nothing else. */
+  pullRequests: Array<{
+    /** `owner/name`. */
+    repo: string;
+    number: number;
+    url: string;
+    branch: string;
+    baseRef: string | null;
+    /** The head the claim was handed, or null when no check row named one. */
+    headSha: string | null;
+  }>;
+  /** The review's refusal the repair answers — set on a `review` repair. */
+  findings: {
+    gate: 'agent_review' | 'pull_request_approval';
+    gateId: string | null;
+    subjectVersion: string | null;
+    /** VERBATIM and in full. */
+    findingsMd: string | null;
+    reviewerName: string | null;
+    decidedByLabel: string | null;
+    decidedUnderAuthority: string | null;
+    decidedAt: string;
+  } | null;
 }
 
 export interface DispatchRunContinuesDto {

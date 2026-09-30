@@ -89,6 +89,9 @@ export const EVENT_STEP = {
   // The run-found report (MOTIR-6282) — a finding too: what the report
   // concluded on the leg, not a stage the leg passed through.
   unbuildable_reported: null,
+  // A review run's verdict (MOTIR-6821) — what the run CONCLUDED, written by the verdict
+  // route's service; the review leg passes through no build step.
+  review_verdict: null,
 } as const satisfies Record<DispatchEventKind, CardStep | null>;
 
 /**

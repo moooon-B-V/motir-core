@@ -35,6 +35,11 @@ import {
   dispatchRunOpenedSchema,
   dispatchRunSchema,
 } from '@/lib/api/v1/workLoop/schema';
+import {
+  agentReviewBodySchema,
+  agentReviewResultSchema,
+  reviewPromptSchema,
+} from '@/lib/api/v1/workLoop/agentReview';
 
 // The WORK-LOOP operation declarations (Story 11.7 · Subtask 11.7.3 —
 // MOTIR-2237). Paths, verbs and scopes come from ADR Amendment 6 Q1/Q2; the
@@ -1078,6 +1083,77 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     // 404 for an unknown or unreachable item; 422 for a malformed key.
     errorStatuses: [404, 422],
   }),
+
+  // ── The REVIEW RUN (Story MOTIR-1626 · MOTIR-6821; `hosted-agent-run.md` §8) ──────────
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/work-items/{key}/review-prompt',
+    operationId: 'getWorkItemReviewPrompt',
+    summary: 'Get the review prompt a hosted review run is handed',
+    description:
+      'The server-assembled REVIEW prompt for a work item whose delivered code a hosted ' +
+      'review run is judging: the card’s description and explanation, its acceptance ' +
+      'criteria, its published How to test, and every pull request of its delivery set at ' +
+      'the REVIEWED head — the version its `agent_review` gate names, never a later commit — ' +
+      'with the instruction to push nothing, post nothing to GitHub, and submit ONE verdict. ' +
+      'Answers ONLY the credential of a `review` dispatch run, for that run’s own card ' +
+      '(`REVIEW_RUN_TOKEN_REQUIRED` / `DISPATCH_RUN_TOKEN_OUT_OF_SCOPE`, 403). A read.',
+    permission: 'project:browse',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item key, e.g. `ACME-7`.',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: reviewPromptSchema },
+      description: 'The gate, the version under review, its pull requests and the prompt.',
+    },
+    // 403 for a caller that is not this card's review run; 404 for an unknown item or a
+    // card with no review; 422 for a malformed key.
+    errorStatuses: [403, 404, 422],
+  }),
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/agent-review',
+    operationId: 'submitWorkItemAgentReview',
+    summary: 'Submit a hosted review run’s ONE verdict',
+    description:
+      'Decide a work item’s `agent_review` gate as the REVIEW AGENT: `pass` approves it, ' +
+      'which raises the approve-and-merge gate for the same version; `changes_requested` ' +
+      'records `findingsMd` (required, non-empty) as the gate’s note and moves nothing — the ' +
+      'card is To fix. `subjectVersion` must be the version the review prompt named. ONE ' +
+      'verdict per run (`REVIEW_VERDICT_ALREADY_SUBMITTED`, 409). A verdict for a version ' +
+      'the gate no longer asks about, or a gate already superseded or decided, is RECORDED ' +
+      'on the run and decides nothing (`REVIEW_STALE`, 409). Accepts ONLY the credential of ' +
+      'a `review` dispatch run, for that run’s own card.',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item key, e.g. `ACME-7`.',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: agentReviewBodySchema,
+      description: 'The reviewed version, the verdict, a short summary and the findings.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: agentReviewResultSchema },
+      description: 'The gate the verdict decided and its new state.',
+    },
+    // 403 for a caller that is not this card's review run; 404 for an unknown item or a
+    // card with no review; 409 for a second or late verdict; 422 for a malformed body.
+    errorStatuses: [403, 404, 409, 422],
+  }),
 ];
 
 /** The named component schemas this resource contributes to the document. */
@@ -1100,4 +1176,6 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   DispatchRunAppended: dispatchRunAppendedSchema,
   DispatchRunCloseOutPrompt: dispatchRunCloseOutPromptSchema,
   CurrentTestInstructions: currentTestInstructionsSchema,
+  ReviewPrompt: reviewPromptSchema,
+  AgentReviewResult: agentReviewResultSchema,
 };
