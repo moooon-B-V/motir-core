@@ -170,6 +170,13 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
   // (MOTIR-5259 / MOTIR-5260). Neither is ever requested.
   'docs.sentry.io':
     "Sentry's integration-platform documentation, cited in comments in `lib/monitors/` so the adapter's endpoint claims name their source. Comments only — nothing fetches it (the sibling of `evil.test` above)",
+  // The OAuth provider (Story MOTIR-6973). `claude.ai` is named in comments as the
+  // shape of a redirect an MCP client registers for itself. The server never
+  // requests it: after the person presses Approve, THEIR browser carries the code
+  // to the redirect the client registered, which is the person's own choice of
+  // app, not a vendor of ours.
+  'claude.ai':
+    'an MCP client’s own OAuth redirect host, cited in comments in `lib/oauth/` and `lib/rateLimit/` (MOTIR-6982). The server never requests it; the person’s browser follows the redirect they approved',
   'fake.invalid':
     'RFC 2606 invalid TLD, used as the issue permalink the FAKE monitor provider returns (`lib/monitors/providers/fake.ts`). The fake calls no `fetch` at all, and its own test asserts the suite opens no socket',
 };

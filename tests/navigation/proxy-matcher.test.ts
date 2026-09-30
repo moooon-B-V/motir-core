@@ -73,10 +73,10 @@ describe('proxy config.matcher', () => {
     expect(missing).toEqual([]);
   });
 
-  it('lists nothing the signed-in route groups do not serve, except the two deliberate classes', async () => {
+  it('lists nothing the signed-in route groups do not serve, except the three deliberate classes', async () => {
     // The other direction of the same rule. An entry for a path no group serves
     // is either a segment that has since been deleted or a typo, and both make
-    // the list above look more complete than it is. TWO classes of extra entry
+    // the list above look more complete than it is. THREE classes of extra entry
     // are deliberate, and each is enumerated here so that adding a third is a
     // decision somebody writes down rather than a silent widening:
     //
@@ -87,10 +87,13 @@ describe('proxy config.matcher', () => {
     //      headers `motir.co`'s browser-side fetches need. It is matched for
     //      THAT ONLY: `proxy()` answers it and returns before any of the page
     //      logic, so no `/api/*` path takes the session bounce.
+    //   3. The OAuth discovery documents (MOTIR-6982) — `/.well-known/*`, matched
+    //      for the same CORS-only reason: an MCP client reads them cross-origin
+    //      before anyone signs in, and `wellKnownCors` answers and returns first.
     const { config } = await import('@/proxy');
 
     const PUBLIC_REDIRECT_SEGMENTS = ['', 'explore', 'docs', 'legal', 'p'];
-    const CORS_ONLY_SEGMENTS = ['api'];
+    const CORS_ONLY_SEGMENTS = ['api', '.well-known'];
     expect(
       strayProxyEntries(APP, SIGNED_IN_GROUPS, config.matcher).filter(
         (segment) =>

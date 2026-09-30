@@ -6,18 +6,13 @@ import { Copy, TriangleAlert } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Switch } from '@/components/ui/Switch';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { useToast } from '@/components/ui/Toast';
 import type { TokenScopeOrgDTO } from '@/lib/dto/apiTokens';
-import {
-  permissionSlug,
-  type PermissionDomain,
-  type PermissionKey,
-} from '@/lib/permissions/catalog';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import { DEFAULT_TOKEN_GRANT } from '@/lib/tokens/grant';
 import { createToken, type ApiTokenDto, type ExpiryChoice } from './apiTokensClient';
-import { permissionColumnsForTokens, type PermissionMeta } from './permissionMeta';
+import { PermissionPicker } from './PermissionPicker';
 
 // Create + shown-once modal (Story 7.8 · Subtask 7.8.3, + bug 7.21 binding scope,
 // + Subtask 7.7.19 permission scopes) — design `account-settings.mock.html`
@@ -96,21 +91,7 @@ export function CreateTokenModal({
   activeProjectId: string | null;
 }) {
   const t = useTranslations('settings.apiTokens');
-  // The permission LABELS + DESCRIPTIONS are the shipped catalogue copy, so the
-
-  // picker, the list row and the /device screen say the same words.
-
-  const tp = useTranslations('permissions');
-
   const lockedWhy = t('scopes.lockedWhy');
-
-  // The domain groups, split so each column carries half the ROWS — MOTIR-2578's
-
-  // measured 3/3 composition. Balancing by group COUNT instead would put 4 rows
-
-  // against 2 and make the modal taller than the asset was measured at.
-
-  const [leftColumn, rightColumn] = permissionColumnsForTokens();
   const { toast } = useToast();
   const labelId = useId();
   const expiryId = useId();
@@ -247,103 +228,6 @@ export function CreateTokenModal({
   }
 
   const shown = secret !== null;
-
-  // One permission-scope row — icon + name + one-line description on the left,
-  // its Switch on the right. The delete scope renders as its OWN rose danger row
-  // (7.7.18): rose tint + danger glyph + a "· Danger" tag + AA-strong copy, set
-  // apart so granting irreversible deletion is a deliberate, visible act. These
-  // are render helpers (plain functions, not nested components) so they close
-  // over `grantedScopes` / `toggleScope` / `t` without remounting on each keystroke.
-  function renderScopeRow(meta: PermissionMeta) {
-    // A permission this actor cannot confer HERE is DISABLED with its reason,
-    // never hidden (MOTIR-2578 panel 1c): a vanished row reads as a missing
-    // feature and sends someone hunting, while a disabled one teaches the rule
-    // the helper text already states. A workspace owner sees none of these.
-    const locked = !conferrable.has(meta.key);
-    const checked = grantedScopes.has(meta.key) && !locked;
-    // ⚠️ The SHIPPED catalogue copy, not a table written for this screen — the
-    // same strings Roles & permissions renders (MOTIR-2579/-2580).
-    const name = tp(`${permissionSlug(meta.key)}.label`);
-    const desc = tp(`${permissionSlug(meta.key)}.description`);
-    const Icon = meta.Icon;
-    if (meta.danger) {
-      return (
-        <div
-          key={meta.key}
-          className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-tint-rose) px-(--spacing-control-x) py-(--spacing-control-y)"
-        >
-          <div className="flex items-start gap-2.5">
-            <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-(--el-danger)" />
-            <div className="min-w-0 flex-1">
-              <span className="font-sans text-sm font-medium text-(--el-text-strong)">
-                {name}{' '}
-                <span className="font-mono text-[0.625rem] tracking-wide text-(--el-danger) uppercase">
-                  {t('scopes.dangerTag')}
-                </span>
-              </span>
-              <p className="mt-0.5 font-sans text-xs text-(--el-text-strong)">{desc}</p>
-            </div>
-            <Switch
-              checked={checked}
-              disabled={locked}
-              onCheckedChange={() => toggleScope(meta.key)}
-              aria-label={name}
-            />
-          </div>
-          {locked ? (
-            <p className="mt-1 font-sans text-xs text-(--el-text-strong)">{lockedWhy}</p>
-          ) : null}
-        </div>
-      );
-    }
-    return (
-      <div key={meta.key} className="flex items-start gap-2.5 py-2 first:pt-0 last:pb-0">
-        <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-(--el-text-muted)" />
-        <div className="min-w-0 flex-1">
-          <span
-            className={`font-sans text-sm font-medium ${locked ? 'text-(--el-text-faint)' : 'text-(--el-text)'}`}
-          >
-            {name}
-          </span>
-          <p
-            className={`mt-0.5 font-sans text-xs ${locked ? 'text-(--el-text-faint)' : 'text-(--el-text-muted)'}`}
-          >
-            {desc}
-          </p>
-          {locked ? (
-            <p className="mt-0.5 font-sans text-xs text-(--el-text-secondary)">{lockedWhy}</p>
-          ) : null}
-        </div>
-        <Switch
-          checked={checked}
-          disabled={locked}
-          onCheckedChange={() => toggleScope(meta.key)}
-          aria-label={name}
-        />
-      </div>
-    );
-  }
-
-  // One capability group — a mono/uppercase caption over its hairline-separated
-  // safe rows, then any danger row (its own card) below.
-  function renderScopeGroup(domain: PermissionDomain, metas: PermissionMeta[]) {
-    const safe = metas.filter((m) => !m.danger);
-    const danger = metas.filter((m) => m.danger);
-    return (
-      // ⚠️ AA: the domain heading is INFORMATIONAL, so it takes
-      // `--el-text-secondary`, never `--el-text-faint` (2.61 on the white
-      // panel) — the correction MOTIR-2578 made in the asset.
-      <div key={domain} className="flex flex-col gap-2">
-        <div className="font-mono text-[0.625rem] tracking-wide text-(--el-text-secondary) uppercase">
-          {tp(`domain.${domain}`)}
-        </div>
-        {safe.length > 0 ? (
-          <div className="divide-y divide-(--el-border-soft)">{safe.map(renderScopeRow)}</div>
-        ) : null}
-        {danger.map(renderScopeRow)}
-      </div>
-    );
-  }
 
   return (
     <Modal
@@ -533,22 +417,18 @@ export function CreateTokenModal({
               <span className="font-sans text-xs text-(--el-text-muted)">
                 {t('scopes.permissionsHelper')}
               </span>
-              <div
-                role="group"
-                aria-labelledby={permLabelId}
-                className="mt-1 grid grid-cols-2 gap-x-6 gap-y-4"
-              >
-                {/* Two columns, split so neither drives the height alone — the
-                    design's 3/3 (MOTIR-2578). The GROUPS are the catalog's
-                    domains, derived, so a permission added to the grantable set
-                    lands in a column without an edit here. */}
-                <div className="flex flex-col gap-4">
-                  {leftColumn.map((g) => renderScopeGroup(g.domain, g.permissions))}
-                </div>
-                <div className="flex flex-col gap-4">
-                  {rightColumn.map((g) => renderScopeGroup(g.domain, g.permissions))}
-                </div>
-              </div>
+              {/* The shared picker (MOTIR-6985 lifted it out of this modal so the
+                  OAuth consent screen mounts the SAME rows): two columns of the
+                  catalog's domain groups, default all-on-except-delete, the delete
+                  key as its own rose danger card. */}
+              <PermissionPicker
+                labelledBy={permLabelId}
+                conferrable={conferrable}
+                granted={grantedScopes}
+                onToggle={toggleScope}
+                lockedWhy={lockedWhy}
+                dangerTag={t('scopes.dangerTag')}
+              />
               {grantedScopes.size === 0 ? (
                 <p
                   role="alert"
