@@ -132,6 +132,12 @@ const RUN_PATH_FILES = [
   // Each hosted checkout's code graph (MOTIR-6560) — no server call today, listed
   // so one added later is checked against the table like every other.
   'hostedCodegraph.ts',
+  // The hosted REVIEW run (MOTIR-6824): the review prompt and the ONE verdict.
+  'commands/review.ts',
+  'hostedReview.ts',
+  // The hosted REPAIR run (MOTIR-6929): adopts the `fix` run, never claims — the
+  // terminal arm's repair claim is a named denial.
+  'commands/fix.ts',
 ];
 
 /** Client method → the operations it calls, following `this.<method>` hops. */
@@ -180,12 +186,24 @@ describe('the run-token table matches what `motir run` calls (MOTIR-6557 AC2)', 
   });
 
   it('every CLI entry of the table, and every denial, is still called — no stale rows', () => {
-    const cliEntries = RUN_TOKEN_ROUTES.filter((r) => r.calledBy === 'cli').map(
-      (r) => r.operationId!,
-    );
+    // An entry whose CLI caller is still a card's to build (`callerPendingCard`) is not
+    // stale — `motir review` (MOTIR-6824) calls the review run's routes once it lands.
+    const cliEntries = RUN_TOKEN_ROUTES.filter(
+      (r) => r.calledBy === 'cli' && !r.callerPendingCard,
+    ).map((r) => r.operationId!);
     expect(cliEntries.filter((op) => !called.has(op))).toEqual([]);
     expect(Object.keys(RUN_TOKEN_DENIED_CLI_OPERATIONS).filter((op) => !called.has(op))).toEqual(
       [],
     );
+  });
+
+  it('a pending CLI caller is named, and its route is not already called (drop the field)', () => {
+    for (const r of RUN_TOKEN_ROUTES.filter((route) => route.callerPendingCard)) {
+      expect(r.callerPendingCard, r.path).toMatch(/^MOTIR-\d+$/);
+      expect(
+        called.has(r.operationId!),
+        `${r.operationId} is called — drop callerPendingCard`,
+      ).toBe(false);
+    }
   });
 });

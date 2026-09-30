@@ -51,6 +51,15 @@ export default defineConfig({
       // Story MOTIR-6590 · MOTIR-6879 — Continue hosted lifted into a control any
       // surface can place; the door's floor follows the code it moved.
       'tests/components/continue-hosted-control.test.tsx',
+      // Story MOTIR-1626 · MOTIR-6820 — the hosted REVIEW start, its end and its cancel:
+      // `hostedRunService.startReview`, the review arms of the end path, the liveness read,
+      // the read-level git check and `hostedRunModelService.defaultOffered`.
+      'tests/agentReview/agentReviewStart.test.ts',
+      // Story MOTIR-1626 · MOTIR-6930 — *Fix on the hosted agent*: `FixHostedControl`, its
+      // refusal mapping in `hostedModels.ts`, and the runs-changed signal the To fix
+      // banner announces and `HostedRunProvider` listens for — all under this lane's
+      // `components/hosted/**` and provider floors.
+      'tests/components/fix-hosted-door.test.tsx',
     ],
     coverage: {
       provider: 'v8',

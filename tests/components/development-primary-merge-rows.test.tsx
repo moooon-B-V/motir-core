@@ -262,8 +262,9 @@ function reads(over: Partial<LateReads>): LateReads {
     decisionGate: { ...noGate, document: null },
     choiceGate: { ...noGate, body: null },
     confirmGate: { ...noGate, body: null },
+    agentReview: null,
     ...over,
-  };
+  } as LateReads;
 }
 
 async function renderItemPage(r: LateReads) {

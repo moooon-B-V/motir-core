@@ -33,6 +33,8 @@ export function toHomeWorkItemRowDto(row: HomeWorkItemRow, viewerId: string): Ho
     fixReason: row.fixReason,
     fixDetail: toFixDetailDto(row.fixReason, row.fixDetail),
     canContinueHosted: false,
+    canFixHosted: false,
+    repairRun: null,
     priority: row.priority,
     assigneeId: row.assigneeId,
     reporterId: row.reporterId,

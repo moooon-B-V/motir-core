@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import {
   CircleEllipsis,
+  Cloud,
   CircleX,
   CornerLeftUp,
   TriangleAlert,
@@ -13,8 +14,13 @@ import {
 } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import { CopyableCodeBlock } from '@/components/markdown/CopyableCodeBlock';
-import type { RepairPullRequestRefDto, WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
+import type {
+  RepairPullRequestRefDto,
+  RepairRunRefDto,
+  WorkItemRepairViewDto,
+} from '@/lib/dto/workItemRepair';
 import { formatRunInstant } from '@/lib/runs/runClock';
+import { runsHref } from '@/lib/runs/runsAddress';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // THE FIX PART of the Development block (Story MOTIR-5460 · MOTIR-5466), built to
@@ -160,18 +166,39 @@ function FailingLines({ failing }: { failing: RepairPullRequestRefDto[] }) {
  *  false — the part names the review instead. The shipped `pointer` line's recipe, not the
  *  failing line's: a refusal is not a failure. `{count}` is the story's open pull requests,
  *  every one of which the fix is handed. */
-function SentBackLine({ count }: { count: number }) {
+function SentBackLine({ count, by }: { count: number; by: SentBackBy | 'acceptance' }) {
   const t = useTranslations('github.development.fix');
   return (
     <p
       className="flex items-start gap-2 text-[13px] leading-normal text-(--el-text-secondary)"
       data-testid="repair-sent-back-line"
+      data-sent-back-by={by === 'acceptance' ? 'acceptance' : by.by}
     >
       <Undo2 className="mt-0.5 h-4 w-4 shrink-0 text-(--el-icon-muted)" aria-hidden />
-      <span>{t('sentBack', { count })}</span>
+      <span>
+        {by === 'acceptance'
+          ? t('sentBack', { count })
+          : by.by === 'agent'
+            ? t('sentBackByAgent', { count })
+            : by.name
+              ? t.rich('personSentBack', {
+                  name: by.name,
+                  count,
+                  b: (chunks) => <b className="font-semibold text-(--el-text)">{chunks}</b>,
+                })
+              : t('personSentBackAnon', { count })}
+      </span>
     </p>
   );
 }
+
+/**
+ * WHO SENT A `review` REPAIR'S COMMITS BACK (Story MOTIR-1626 · MOTIR-6825; design
+ * `design/github` § 30 Panels 3 and 3e) — the review agent's `changes_requested` on
+ * `agent_review`, or a person's *Request changes* on the approve-and-merge gate (§12.7).
+ * The host reads it off the gate its frame leads with.
+ */
+export type SentBackBy = { by: 'agent' } | { by: 'person'; name: string | null };
 
 /** A member the shipped failing lines name — red checks, a queue exit or a conflict. On a
  *  sent-back story the part is handed EVERY open member, green ones included, so only these
@@ -198,7 +225,14 @@ function Command({
   itemIdentifier,
   many,
   conflict,
+  reviewedAgain = false,
+  hostedDoor = null,
 }: {
+  /** A card a REVIEW sent back (MOTIR-6825): the next green version is reviewed again. */
+  reviewedAgain?: boolean;
+  /** *Fix on the hosted agent* (MOTIR-6930; § 30 Panel 3): it LEADS, under its own lead,
+   *  and the command follows under *Or hand the repair to an agent from your terminal*. */
+  hostedDoor?: ReactNode;
   itemIdentifier: string;
   many: boolean;
   /** A member conflicts (MOTIR-5916): the agent rebases or resolves, and there is nothing
@@ -208,10 +242,23 @@ function Command({
   const t = useTranslations('github.development.fix');
   return (
     <>
-      <p className="text-[13px] leading-normal text-(--el-text)">{t('lead')}</p>
+      {hostedDoor ? (
+        <>
+          <p className="text-[13px] leading-normal text-(--el-text)">{t('hosted.lead')}</p>
+          {hostedDoor}
+          <p className="text-xs leading-normal text-(--el-text-secondary)">
+            {t('hosted.orTerminal')}
+          </p>
+        </>
+      ) : (
+        <p className="text-[13px] leading-normal text-(--el-text)">{t('lead')}</p>
+      )}
       <CopyableCodeBlock language="shell" code={`motir fix ${itemIdentifier}`} />
       <p className="text-xs leading-normal text-(--el-text-secondary)">
-        {t(conflict ? 'howConflict' : many ? 'howMany' : 'how')}
+        {hostedDoor
+          ? t('hosted.eitherWay')
+          : t(conflict ? 'howConflict' : many ? 'howMany' : 'how')}
+        {reviewedAgain ? ` ${t('reviewedAgain')}` : null}
       </p>
       {conflict ? (
         <p className="text-xs leading-normal text-(--el-text-secondary)">{t('rearm')}</p>
@@ -229,12 +276,76 @@ function When({ iso, now }: { iso: string; now: number }) {
   );
 }
 
+/**
+ * A HOSTED REPAIR RUNNING (MOTIR-6930; design § 30 Panel 3b) — § 21's F2 *Fixing* state,
+ * told it is hosted: who pressed, since when, and the run's link. The door and the command
+ * are gone: the open repair run IS the one-repair-at-a-time lock (`hosted-agent-run.md`
+ * §8.6). A local `motir fix` holding the claim draws F2 unchanged.
+ */
+function HostedFixing({
+  repair,
+  run,
+  now,
+}: {
+  repair: Extract<WorkItemRepairViewDto, { state: 'in_progress' }>;
+  run: RepairRunRefDto;
+  now: number;
+}) {
+  const t = useTranslations('github.development.fix.hosted.fixing');
+  return (
+    <>
+      <p
+        className="flex items-start gap-2 text-[13px] leading-normal text-(--el-text-secondary)"
+        data-testid="repair-hosted-fixing"
+      >
+        <Cloud className="mt-0.5 h-4 w-4 shrink-0 text-(--el-icon-muted)" aria-hidden />
+        <span>
+          {t.rich(repair.byViewer ? 'byYou' : 'by', {
+            name: repair.holder?.name ?? '—',
+            label: run.label,
+            b: (chunks) => <b className="font-medium text-(--el-text)">{chunks}</b>,
+            when: () => <When iso={repair.startedAt} now={now} />,
+            run: (chunks) => <RepairRunLink runId={run.id}>{chunks}</RepairRunLink>,
+          })}
+        </span>
+      </p>
+      <p className="text-xs leading-normal text-(--el-text-secondary)">{t('why')}</p>
+    </>
+  );
+}
+
+/** A repair run's label, linked to the run — the review band's `ar-run` (§ 30 Panel 3b). */
+export function RepairRunLink({ runId, children }: { runId: string; children: ReactNode }) {
+  // The READER's address (MOTIR-6888): this body renders on the Visitor tree too.
+  const routes = useReaderRoutes();
+  return (
+    <Link
+      href={routes.view(runsHref({ run: runId }))}
+      className="font-semibold text-(--el-link) underline hover:text-(--el-link-pressed)"
+      data-testid="repair-hosted-run-link"
+    >
+      {children}
+    </Link>
+  );
+}
+
 export function RepairFixPart({
   repair,
   itemIdentifier,
   now,
+  sentBackBy = null,
+  hostedDoor = null,
 }: {
   repair: WorkItemRepairViewDto;
+  /** Who sent a `review` repair's commits back — the host's frame knows (MOTIR-6825). */
+  sentBackBy?: SentBackBy | null;
+  /**
+   * *FIX ON THE HOSTED AGENT* (MOTIR-6930; design § 30 Panels 3–3e) — drawn above the
+   * copyable `motir fix <KEY>` of a card a REVIEW sent back, in the offer state only, and
+   * only where the host passes it: the item page, for a viewer who may press Run hosted.
+   * Absent — anyone else, every other host — the part draws the command alone.
+   */
+  hostedDoor?: ReactNode;
   /** The card's own `MOTIR-<n>` — the command names it. */
   itemIdentifier: string;
   /** The clock the relative times read. Injected by tests; `Date.now()` otherwise. */
@@ -249,7 +360,12 @@ export function RepairFixPart({
   // An acceptance sent back to Re-run names the review, never failing checks (MOTIR-6502);
   // its title and first line are the design's sent-back class (MOTIR-6506). The command,
   // the lead, `how` / `howMany`, in progress and gave up are the shipped ones.
-  const sentBack = repair.state !== 'pointer' && repair.repairClass === 'acceptance_rerun';
+  const acceptanceSentBack =
+    repair.state !== 'pointer' && repair.repairClass === 'acceptance_rerun';
+  // A card a REVIEW sent back (MOTIR-6822's `review` class; § 30 Panels 3 and 3e): its checks
+  // are green, so it names the review — the agent or the person — never failing checks.
+  const reviewSentBack = repair.state !== 'pointer' && repair.repairClass === 'review';
+  const sentBack = acceptanceSentBack || reviewSentBack;
   const failingLines = sentBack ? repair.failing.filter(isFailing) : repair.failing;
 
   const pill =
@@ -280,10 +396,17 @@ export function RepairFixPart({
         </h4>
         {pill}
       </div>
-      {sentBack ? <SentBackLine count={repair.failing.length} /> : null}
+      {acceptanceSentBack ? <SentBackLine count={repair.failing.length} by="acceptance" /> : null}
+      {reviewSentBack && sentBackBy ? (
+        <SentBackLine count={repair.failing.length} by={sentBackBy} />
+      ) : null}
       <FailingLines failing={failingLines} />
 
-      {repair.state === 'in_progress' ? (
+      {repair.state === 'in_progress' && repair.run?.hosted ? (
+        <HostedFixing repair={repair} run={repair.run} now={clock} />
+      ) : null}
+
+      {repair.state === 'in_progress' && !repair.run?.hosted ? (
         <>
           <p className="flex items-start gap-2 text-[13px] leading-normal text-(--el-text-secondary)">
             <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-(--el-icon-muted)" aria-hidden />
@@ -331,6 +454,8 @@ export function RepairFixPart({
             itemIdentifier={itemIdentifier}
             many={repair.failing.length > 1}
             conflict={repair.failing.some((pr) => pr.conflict !== null)}
+            reviewedAgain={reviewSentBack}
+            hostedDoor={reviewSentBack ? hostedDoor : null}
           />
           {!sentBack && repair.failing.some(isEjectedOnly) ? (
             <WhichToUse ejected={repair.failing.filter(isEjectedOnly)} />

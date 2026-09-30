@@ -98,6 +98,12 @@ import type { StampComponent } from '@/lib/approvalGates/stamp';
 export interface GateVerb {
   /** The decision this verb records — the decide door's own vocabulary. */
   decision: GateDecision;
+  /**
+   * The verb's IDENTITY when two verbs record the same decision (MOTIR-6825 — the agent
+   * review's *Review again* and *Continue without the review* both reach `approve`, one
+   * through `perform`). Keys the button; absent, the decision and option do.
+   */
+  id?: string;
   label: string;
   variant: 'primary' | 'secondary';
   /**
@@ -367,6 +373,25 @@ export interface ApprovalGateControlProps {
    * same strip a decided gate uses, and only when the kind supplies one.
    */
   awaitingRecord?: ReactNode;
+  /**
+   * BAND 1's PILL, in the kind's own word, while the question AWAITS (Story MOTIR-1626 ·
+   * MOTIR-6825; `design/github/design-notes.md` § 30) — the agent review's *Reviewing* (sky,
+   * with a spinner) and *Could not run* (peach). Never over a decided or withdrawn gate, and
+   * never while a press is recording. Absent, the shipped awaiting pills.
+   */
+  stateOverride?: { label: ReactNode; pill: PillProps } | null;
+  /**
+   * A KIND'S BAND BETWEEN BAND 1 AND THE PORT (MOTIR-6825; § 30 — § 29's slot): the agent
+   * review's own band — who is reviewing, what it found, why it could not run, or who
+   * continued without it. Absent, nothing renders there.
+   */
+  leadBand?: ReactNode;
+  /**
+   * Band 3's line for a reader who may NOT decide (state `B`), when the kind says who it
+   * waits on in its own words (MOTIR-6825 — *Waiting on the review agent…*). Absent, the
+   * shipped *Waiting on {name}*.
+   */
+  waitingLine?: ReactNode;
 }
 
 type Phase =
@@ -386,7 +411,7 @@ function FrameHeader({
   kindLabel: string;
   subjectMeta: ReactNode;
   pillProps: PillProps;
-  stateLabel: string;
+  stateLabel: ReactNode;
   /** The `section` form: the host's title names the kind, so band 1 does not. */
   sectioned: boolean;
 }) {
@@ -990,6 +1015,9 @@ export function ApprovalGateControl({
   requestedVerb = null,
   onRequestedVerbDone,
   awaitingRecord = null,
+  stateOverride = null,
+  leadBand = null,
+  waitingLine,
 }: ApprovalGateControlProps) {
   const t = useTranslations('approvalGate');
   const tGithub = useTranslations('approvalGate.pullRequestApproval.github');
@@ -1147,39 +1175,45 @@ export function ApprovalGateControl({
     if (verb.perform) onRequestedVerbDone?.();
   }
 
-  const stateLabel = withdrawn
-    ? t('state.withdrawn')
-    : decided
-      ? gate.state === 'approved'
-        ? (approvedStateLabel ?? t('state.approved'))
-        : gate.state === 'overturned'
-          ? t('state.overturned')
-          : gate.state === 'declined'
-            ? t('state.declined')
-            : t('state.changesRequested')
-      : phase.kind === 'pending'
-        ? t('state.recording')
-        : canDecide
-          ? t('state.awaitingYou')
-          : t('state.awaiting');
+  // The kind's own awaiting word (MOTIR-6825), only while nothing is being recorded.
+  const overridden = stateOverride && !withdrawn && !decided && phase.kind !== 'pending';
+  const stateLabel: ReactNode = overridden
+    ? stateOverride.label
+    : withdrawn
+      ? t('state.withdrawn')
+      : decided
+        ? gate.state === 'approved'
+          ? (approvedStateLabel ?? t('state.approved'))
+          : gate.state === 'overturned'
+            ? t('state.overturned')
+            : gate.state === 'declined'
+              ? t('state.declined')
+              : t('state.changesRequested')
+        : phase.kind === 'pending'
+          ? t('state.recording')
+          : canDecide
+            ? t('state.awaitingYou')
+            : t('state.awaiting');
 
   // The four chips a reader must tell apart at a glance. `tone="awaiting"` is
   // the frame's own (added to the primitive by this card); the other three reuse
   // the shipped severities the design's tints already name.
-  const pillProps: PillProps = withdrawn
-    ? // ⚠️ DELIBERATELY COLOURLESS — the design's `pill-gone`, a quiet muted
-      // fill with slate ink. `tone="archived"` already IS that recipe (an
-      // inactive state, not a severity), so this reuses it rather than minting
-      // a fifth tone for the same two tokens. Any hue here would read as a
-      // judgement, and nobody made one.
-      { tone: 'archived' }
-    : decided
-      ? gate.state === 'approved'
-        ? { severity: 'success' }
-        : { severity: 'warning' }
-      : phase.kind === 'pending'
-        ? { severity: 'info' }
-        : { tone: 'awaiting' };
+  const pillProps: PillProps = overridden
+    ? stateOverride.pill
+    : withdrawn
+      ? // ⚠️ DELIBERATELY COLOURLESS — the design's `pill-gone`, a quiet muted
+        // fill with slate ink. `tone="archived"` already IS that recipe (an
+        // inactive state, not a severity), so this reuses it rather than minting
+        // a fifth tone for the same two tokens. Any hue here would read as a
+        // judgement, and nobody made one.
+        { tone: 'archived' }
+      : decided
+        ? gate.state === 'approved'
+          ? { severity: 'success' }
+          : { severity: 'warning' }
+        : phase.kind === 'pending'
+          ? { severity: 'info' }
+          : { tone: 'awaiting' };
 
   // Band 3's left-hand sentence — what approving will DO, who it waits on, or
   // (state `X`) that the verbs return once the subject renders. Hoisted so the
@@ -1187,7 +1221,7 @@ export function ApprovalGateControl({
   const consequenceLine = (
     <span className="text-[13px] text-(--el-text-secondary)">
       {!canDecide
-        ? t('waitingOn', { name: routedToLabel ?? t('theAssignee') })
+        ? (waitingLine ?? t('waitingOn', { name: routedToLabel ?? t('theAssignee') }))
         : portShown
           ? consequence
           : // The asset's `X` footer, verbatim in intent: "The verbs
@@ -1271,6 +1305,8 @@ export function ApprovalGateControl({
           <span className="text-xs">{withdrawnPort.cite}</span>
         </div>
       ) : null}
+      {/* THE KIND'S LEAD BAND (MOTIR-6825; § 30): the agent review, in § 29's slot. */}
+      {leadBand}
       <PortRenderStatusProvider reporter={reporter}>
         <PortBox
           expanded={expanded}
@@ -1543,7 +1579,7 @@ export function ApprovalGateControl({
                     <Button
                       // Keyed by the verb's IDENTITY — a decision and, for a choice,
                       // the option it names (the choice design's TAKES 3).
-                      key={`${verb.decision}:${verb.optionId ?? ''}`}
+                      key={verb.id ?? `${verb.decision}:${verb.optionId ?? ''}`}
                       variant={verb.variant}
                       size="sm"
                       type="button"

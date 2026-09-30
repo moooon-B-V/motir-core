@@ -41,6 +41,11 @@ export const HOSTED_AGENT_ENV_KEYS = [
   'CODEGRAPH_TELEMETRY',
   'GIT_CONFIG_GLOBAL',
   'GIT_TERMINAL_PROMPT',
+  // A hosted REPAIR's push lock (MOTIR-6929, `lockHostedRunToBranches`): the run's hooks
+  // directory in the command scope. Unset in every other run, so absent from the agent's.
+  'GIT_CONFIG_COUNT',
+  'GIT_CONFIG_KEY_0',
+  'GIT_CONFIG_VALUE_0',
 ] as const;
 
 /**
@@ -105,7 +110,18 @@ export function hostedAgentEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
  * ⚠️ READ AT LAUNCH, not at import: the model and the gateway are the run's, and
  * the environment is the one `prepareHostedRun` has pointed at the run's git.
  */
-export function hostedOpenCodeAgent(env: NodeJS.ProcessEnv = process.env): ParsedAgentCommand {
+export function hostedOpenCodeAgent(
+  env: NodeJS.ProcessEnv = process.env,
+  opts: {
+    /**
+     * What the agent is told on top of the server's prompt. Defaults to the BUILD run's
+     * addendum (git is the App, how its pull requests end). A REVIEW run (MOTIR-6824)
+     * passes its own: it opens no pull request and pushes nothing, so the build
+     * addendum would tell it the opposite of its rules.
+     */
+    addendum?: () => string;
+  } = {},
+): ParsedAgentCommand {
   const model = env[HOSTED_MODEL_ENV]?.trim() ?? '';
   const missing = [HOSTED_MODEL_ENV, HOSTED_GATEWAY_URL_ENV, HOSTED_RUN_KEY_ENV].filter(
     (name) => !env[name]?.trim(),
@@ -129,7 +145,7 @@ export function hostedOpenCodeAgent(env: NodeJS.ProcessEnv = process.env): Parse
     // OpenCode appends a piped stdin to its message — the prompt goes on argv only.
     promptOnStdin: false,
     promptArgs: (prompt, promptFile) => {
-      const addendum = hostedPromptAddendum();
+      const addendum = (opts.addendum ?? hostedPromptAddendum)();
       if (Buffer.byteLength(prompt) > MAX_ARGV_PROMPT_BYTES) {
         return [
           '--file',

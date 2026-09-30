@@ -4380,3 +4380,91 @@ confirm is a `dialog` whose initial focus is Cancel.
 Who may be added (every workspace member, as today); whether a project can be switched to Public by
 anyone but a Manager (it cannot — `project:manage_access`); the Visitor's own chrome (MOTIR-6170); and
 dropping `access_level` from the schema (MOTIR-6554).
+
+## Approvals — the Review agent switch — `approvals--review-agent.mock.html` (MOTIR-6816)
+
+A DELTA of `design/projects/approvals.mock.html` (§ ⭐ Approvals, panels 0–3 and 6–8), for Story
+MOTIR-1626 (9.8, the review agent). It adds ONE card to the Approvals room; the room, its rail row and
+its two cards are unchanged and drawn only as context, as they ship at motir-core `origin/main`
+`351724043`.
+
+**Revised 2026-09-29 after the design gate sent the first version back** (Yue: _"Review agent on and
+Merge automatically can't be true at the same time"_). The first version drew the switch ON in an
+`auto` project; this one draws the two settings EXCLUDING each other (panel 2), per
+`docs/decisions/approval-gates.md` §12.2a. Behaviour: `docs/decisions/approval-gates.md` §12 (MOTIR-6815). Built by MOTIR-6823.
+
+### Placement and access path
+
+- **Project settings › Work › Approvals** — the existing rail row (base mock panel 0). No new route,
+  rail row or registry entry.
+- The card is the room's **third**, after _Merging pull requests_, because its copy reads the merge mode
+  above it. Anchor **`#review-agent`**, so the Development frame's settings door (MOTIR-6817) lands on
+  it the way `#merge-mode` and `#acceptance-video` are landed on.
+- **Manage-only, and no read-only state.** The room admits only `workflow:manage` (base mock panel 4,
+  withdrawn 2026-09-13; MOTIR-5393 / MOTIR-5394), so whoever renders the card may change it — exactly
+  as its two siblings render. The card asked for a read-only state "matching how the two existing cards
+  render it"; they render none, so none is drawn.
+
+### Primitives (no new primitive)
+
+| element                  | primitive / token                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| the card                 | `Card` (header / body / footer), composed as `AcceptanceVideoGateCard`                                                         |
+| title + glyph            | `h2` `--el-text`, lucide `Bot` `size-4` beside it, as `PrMergeModeCard` carries `GitMerge`                                     |
+| description              | `--el-text-secondary`, `text-sm`; the merge-mode moment in `<strong>`                                                          |
+| state name / state gloss | `--el-text` `font-medium` / `--el-text-secondary` `text-xs` — a NAME and a CONSEQUENCE, as the acceptance card                 |
+| switch                   | `Switch`, `aria-label` = the title; disabled while saving (`isPending`)                                                        |
+| footer                   | two lines on `--el-surface-soft`, `--el-text-secondary`: `Sparkles` + the billing line; `Info` + the switch-off note (ON only) |
+| saved / refused          | the shipped `useToast` success / error toasts, with the room's own strings                                                     |
+
+### States (panels)
+
+0. **The room** — three cards, Review agent OFF (the default for every project).
+1. **ON** — only possible while the project asks before merging: "before you are asked to approve".
+2. **The exclusion** (§12.2a). **2a** — the project merges automatically: the card reads
+   **Unavailable**, its switch is off and disabled, and the gloss says to choose _Ask before merging_
+   first. **2b** — the review agent is on: _Merge automatically_ is disabled (dimmed, `aria-disabled`),
+   keeps its label and hint, and adds one line saying to turn the review agent off first. Neither control
+   changes the other for the person; the server refuses the same two writes
+   (`409 REVIEW_AGENT_NEEDS_MANUAL_MERGE` / `409 MERGE_MODE_REVIEW_AGENT_ON`), which a racing stale page
+   meets as panel 6's refused state. Both cards read the project's CURRENT pair on the page (the room's
+   existing `projectPrMergeModeService` read plus this switch), and flipping one re-renders the other.
+3. **OFF** — the gloss says what happens instead (the ordinary flow).
+4. **Saving** — optimistic flip, switch disabled while `PATCH /api/projects/[key]/approval-gates`
+   (`{ reviewAgentEnabled }`) is in flight. No spinner.
+5. **Saved** — success toast.
+6. **Refused** — the switch is put BACK to the server's value, error toast.
+
+The switch-off note shows only while ON. It is true because switching off supersedes every awaiting
+review and cancels its run (`approval-gates.md` §12.5). Switching ON asks nothing of a card that already
+holds an approve-and-merge gate (§12.5); no copy is needed for that, because nothing visible changes on
+those cards.
+
+### Strings — `approvals.reviewAgent.*`
+
+| key               | en                                                                                                                                                                                                                                                                                                               | zh                                                                                                                                                                                       |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`           | Review agent                                                                                                                                                                                                                                                                                                     | 审查代理                                                                                                                                                                                 |
+| `desc`            | When a card's pull requests pass their checks, a Motir agent reads the change against the card — its description, acceptance criteria and How to test — **before you are asked to approve it**. If it finds a problem, the card goes to **To fix** with the agent's findings, and nobody is asked to approve it. | 当卡片的拉取请求通过检查后，Motir 代理会对照卡片——它的描述、验收标准和测试方法——审查这次变更，**然后才会请你批准**。如果发现问题，卡片会带着代理的发现进入**待修复**，不会请任何人批准。 |
+| `on`              | On                                                                                                                                                                                                                                                                                                               | 已开启                                                                                                                                                                                   |
+| `off`             | Off                                                                                                                                                                                                                                                                                                              | 已关闭                                                                                                                                                                                   |
+| `onWhat`          | Every card is reviewed before you are asked to approve it.                                                                                                                                                                                                                                                       | 每张卡片都会先经过审查，然后才会请你批准。                                                                                                                                               |
+| `offWhat`         | A card is offered for approval as soon as its checks pass.                                                                                                                                                                                                                                                       | 卡片的检查一通过，就会提交给你批准。                                                                                                                                                     |
+| `unavailable`     | Unavailable                                                                                                                                                                                                                                                                                                      | 不可用                                                                                                                                                                                   |
+| `unavailableWhat` | This project merges automatically, so nothing waits for a review. Choose **Ask before merging** to turn the review agent on.                                                                                                                                                                                     | 该项目会自动合并，因此没有需要等待审查的内容。请选择**合并前询问**以开启审查代理。                                                                                                       |
+| `billingNote`     | Each review is a hosted agent run, paid from your organisation's AI credits.                                                                                                                                                                                                                                     | 每次审查都是一次托管代理运行，费用从你组织的 AI 额度中扣除。                                                                                                                             |
+| `offNote`         | Turning this off cancels reviews in progress — those cards go straight to the ordinary flow.                                                                                                                                                                                                                     | 关闭后，进行中的审查会被取消——这些卡片将直接进入常规流程。                                                                                                                               |
+| `saved`           | Saved                                                                                                                                                                                                                                                                                                            | 已保存                                                                                                                                                                                   |
+| `saveError`       | Couldn't save — try again.                                                                                                                                                                                                                                                                                       | 保存失败，请重试。                                                                                                                                                                       |
+
+**One new string on the merge-mode card** — `approvals.mergeMode.auto.blockedByReviewAgent`: en
+"Turn the review agent off to merge automatically." · zh "关闭审查代理后才能自动合并。"
+
+`To fix` / `待修复` must match the Workbench tab's own string when MOTIR-6823 builds it — read
+`messages/*.json`, and use that tab's word if it differs.
+
+### What this design does NOT decide
+
+The Development frame, To fix and Workbench states (MOTIR-6817); what the review does (`approval-gates.md`
+§12, `hosted-agent-run.md` §8); an organisation with no AI credits, which is a per-review outcome drawn in
+the frame (_Review could not run_), not a state of this switch.

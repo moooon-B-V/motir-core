@@ -331,6 +331,13 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
     }
     return out;
   },
+  // MOTIR-6819 — the REVIEW AGENT's gate is never a row on a person's queue (ADR
+  // `approval-gates.md` §12.1), so it reads nothing: its summary is the kind, as a kind
+  // with no row of its own says. The card's Development frame draws its verdict
+  // (MOTIR-6817 / MOTIR-6825), not this summary.
+  async agent_review(subjectIds) {
+    return new Map(subjectIds.map((subjectId) => [subjectId, { kind: 'agent_review' } as const]));
+  },
   // ⚠️ THE `pull_request_merge` LOADER WAS HERE (MOTIR-4793) and retired with its kind
   // (MOTIR-5616). Its rows are superseded and unregistered now, so they take the
   // not-built-yet summary below with every other kind this build does not render.

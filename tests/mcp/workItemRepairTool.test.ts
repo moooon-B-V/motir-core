@@ -169,6 +169,44 @@ describe('claim_work_item_repair', () => {
     expect(viaTool.runId).toBe(claimed.runId);
   });
 
+  it('a card a REVIEW sent back is claimed as `review`, and the text names the reviewer and carries EVERY finding (MOTIR-6822)', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'sent back' });
+    await setStatus(card.id, 'in_review');
+    const repo = await connectRepairRepo(fx, `web-${randomToken(4)}`);
+    const pr = await deliveredPr(fx, card.id, repo, {
+      headRef: 'subtask/sent-back',
+      checks: { Vitest: 'success' },
+    });
+    const findings = '1. The route has no tenant check.\n2. The empty list drops its header.';
+    await adminDb.approvalGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: card.id,
+        kind: 'agent_review',
+        subjectId: card.id,
+        subjectVersion: `acme/${repo.name}#${pr.number}@${'c'.repeat(40)}`,
+        state: 'changes_requested',
+        decidedById: fx.ownerId,
+        decidedAt: new Date('2026-09-29T10:00:00Z'),
+        decidedByLabel: 'Owner',
+        decisionSource: 'ui',
+        decidedUnderAuthority: 'review_agent',
+        noteMd: findings,
+      },
+    });
+
+    const result = await runClaimWorkItemRepair({ key: card.identifier }, fx.ctx);
+
+    expect(ok<{ repairClass: string }>(result).repairClass).toBe('review');
+    const said = text(result);
+    expect(said).toContain('class review');
+    expect(said).toContain('Review agent sent it back (agent_review)');
+    expect(said).toContain('Address EVERY finding');
+    expect(said).toContain(findings);
+  });
+
   it('beats once at the claim, so the run is on the five-minute lapse from its first second', async () => {
     const fx = await makeWorkItemFixture();
     const card = await redCard(fx);

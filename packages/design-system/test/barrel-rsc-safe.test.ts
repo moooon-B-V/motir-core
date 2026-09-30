@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -75,5 +76,66 @@ describe('dist/index.js is an RSC-safe thin barrel', () => {
     // server-safe export; `theme-context` is the client theme provider.
     expect(barrel).toMatch(/from\s*['"]\.\/theme\/init-script(\.js)?['"]/);
     expect(barrel).toMatch(/from\s*['"]\.\/contexts\/theme-context(\.js)?['"]/);
+  });
+});
+
+// MOTIR-6966 — the `./mock` subpath (MOTIR-6961) is NODE-ONLY: it reads files,
+// imports `react-dom/server` and compiles Tailwind. None of that may reach the
+// main entry, which a Next client component imports. A thin barrel can still
+// leak through a chunk it re-exports, so this walks EVERY module `dist/index.js`
+// reaches through relative imports, not just the barrel's own lines.
+describe('dist/index.js reaches no node-only module (the ./mock subpath stays off it)', () => {
+  const DIST = fileURLToPath(new URL('../dist/', import.meta.url));
+  const SPECIFIER = /(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import\s*['"]([^'"]+)['"]/g;
+
+  function reachable(): { files: string[]; bare: Map<string, string> } {
+    const seen = new Set<string>();
+    const bare = new Map<string, string>();
+    const queue = [path.join(DIST, 'index.js')];
+    while (queue.length > 0) {
+      const file = queue.pop()!;
+      if (seen.has(file)) continue;
+      seen.add(file);
+      // Comments are stripped first: a comment quoting `@import 'tailwindcss'` is not an import.
+      const code = readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+      for (const m of code.matchAll(SPECIFIER)) {
+        const spec = (m[1] ?? m[2])!;
+        if (spec.startsWith('.')) {
+          const target = path.resolve(path.dirname(file), spec);
+          queue.push(target.endsWith('.js') ? target : `${target}.js`);
+        } else if (!bare.has(spec)) {
+          bare.set(spec, path.relative(DIST, file));
+        }
+      }
+    }
+    return { files: [...seen].map((f) => path.relative(DIST, f)), bare };
+  }
+
+  it('walks a real graph, not just the barrel', () => {
+    expect(reachable().files.length).toBeGreaterThan(10);
+  });
+
+  it('imports no react-dom/server, no node: built-in and no tailwindcss compiler', () => {
+    const offenders = [...reachable().bare].filter(
+      ([spec]) =>
+        spec === 'react-dom/server' ||
+        spec.startsWith('node:') ||
+        spec === 'tailwindcss' ||
+        ['fs', 'path', 'url', 'module', 'fs/promises'].includes(spec),
+    );
+    expect(offenders, JSON.stringify(offenders)).toEqual([]);
+  });
+
+  it('never reaches a mock/ chunk', () => {
+    expect(reachable().files.filter((f) => f.startsWith(`mock${path.sep}`))).toEqual([]);
+  });
+
+  it('the guard is live: the ./mock entry itself DOES reach those imports', () => {
+    const mock = readFileSync(path.join(DIST, 'mock', 'renderMock.js'), 'utf8');
+    expect(mock).toMatch(/from\s*['"]react-dom\/server['"]/);
+    expect(mock).toMatch(/from\s*['"](node:)?fs\/promises['"]/);
+    expect(mock).toMatch(/from\s*['"]tailwindcss['"]/);
   });
 });

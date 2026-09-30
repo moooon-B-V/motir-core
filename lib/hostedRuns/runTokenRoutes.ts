@@ -1,9 +1,9 @@
 // THE ROUTES A HOSTED RUN'S OWN CREDENTIAL MAY CALL (MOTIR-6557,
 // `docs/decisions/hosted-run-runs-the-cli-as-the-app.md` §4).
 //
-// The container runs the CLI's own `motir run` / `motir continue`, so a run
-// token must reach exactly what those commands call — for its run and its run's
-// cards, and nothing else. This is the ONE list. Each route here sets
+// The container runs the CLI's own `motir run` / `motir continue` / `motir review`
+// / `motir fix`, so a run token must reach exactly what those commands call — for
+// its run and its run's cards, and nothing else. This is the ONE list. Each route here sets
 // `acceptsRunToken: true` on its `withV1Route`, and no route outside it does;
 // `tests/hostedRuns/runTokenRouteTable.test.ts` holds both directions, and holds
 // the list against the operations the CLI client actually calls on those paths.
@@ -38,6 +38,13 @@ export interface RunTokenRoute {
   binding: RunTokenBinding;
   /** Who in the container calls it. */
   calledBy: 'cli' | 'git_credential_helper';
+  /**
+   * The card that makes the CLI CALL a route that already exists, when no CLI source calls
+   * it yet — the review run's two routes (MOTIR-6821) are built before `motir review`
+   * (MOTIR-6824) calls them. The table test exempts such an entry from its "still called"
+   * check until the card lands and drops this field.
+   */
+  callerPendingCard?: string;
   /**
    * The card that builds the route, when it does not exist yet. The table test
    * requires the route file to exist — and to opt in — once this is absent.
@@ -108,6 +115,25 @@ export const RUN_TOKEN_ROUTES: readonly RunTokenRoute[] = [
     operationId: 'getWorkItemHowToTest',
     method: 'GET',
     path: '/api/v1/work-items/{key}/how-to-test',
+    binding: 'run_cards',
+    calledBy: 'cli',
+  },
+  // A REVIEW run's own two routes (MOTIR-6821; `hosted-agent-run.md` §3's pointer, §8.4).
+  // ⚠️ NARROWER THAN `run_cards`: the service admits ONLY a `command: review` run's token
+  // (`REVIEW_RUN_TOKEN_REQUIRED`) — a build run's token is refused on both — and then the
+  // run's own card, through the same `runTokenScopeService` binding. Called by `motir
+  // review` (MOTIR-6824, `packages/cli/src/commands/review.ts`).
+  {
+    operationId: 'getWorkItemReviewPrompt',
+    method: 'GET',
+    path: '/api/v1/work-items/{key}/review-prompt',
+    binding: 'run_cards',
+    calledBy: 'cli',
+  },
+  {
+    operationId: 'submitWorkItemAgentReview',
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/agent-review',
     binding: 'run_cards',
     calledBy: 'cli',
   },
@@ -219,4 +245,6 @@ export const RUN_TOKEN_DENIED_CLI_OPERATIONS: Readonly<Record<string, string>> =
     'the re-plan a scope run submits when its scope is refused as mis-shaped — plan authoring is not a run token’s; a hosted run reports the refusal instead',
   submitWorkItemExpansion:
     '`--include-planning` / `motir auto` expansion — an AI planning surface, never a hosted run',
+  claimWorkItemRepair:
+    "a terminal `motir fix`'s repair claim — a HOSTED repair's claim is taken by the server when the person presses (MOTIR-6928), and the container ADOPTS the `fix` run it opened, reading the decision back from `getDispatchRun` (MOTIR-6929); a second claim would find the card taken by its own run",
 };

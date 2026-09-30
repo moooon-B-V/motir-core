@@ -99,12 +99,22 @@ export interface RunningDispatchRunHolder {
   id: string;
   startedAt: Date;
   createdById: string | null;
+  /** `hosted` when the run is a container's (a hosted repair — MOTIR-6928), else `local`. */
+  origin: DispatchRun['origin'];
   /** Null when the operator's account has since been deleted (`SET NULL`). */
   createdBy: { id: string; name: string } | null;
 }
 
+/** An open run and the legs it holds among the cards asked about (MOTIR-6930). */
+export interface RunningDispatchRunForItems extends RunningDispatchRunHolder {
+  origin: DispatchRun['origin'];
+  cards: { workItemId: string | null }[];
+}
+
 /** A run's terminal facts and its starter — the repair view's read. */
 export interface LatestDispatchRun extends RunningDispatchRunHolder {
+  /** Where it runs — a `hosted` repair is drawn with its run link (MOTIR-6930). */
+  origin: DispatchRun['origin'];
   status: DispatchRunStatus;
   stopReason: DispatchRun['stopReason'];
   endedAt: Date | null;
@@ -152,6 +162,8 @@ export const dispatchRunRepository = {
     const row = await tx.dispatchRun.findFirst({
       where: {
         status: 'running',
+        // A review run writes no How to test (§8.3), so it is never the record's run.
+        command: { not: 'review' },
         OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }],
       },
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
@@ -202,7 +214,41 @@ export const dispatchRunRepository = {
         id: true,
         startedAt: true,
         createdById: true,
+        origin: true,
         createdBy: { select: { id: true, name: true } },
+      },
+    });
+  },
+
+  /**
+   * The OPEN runs of one command holding a leg for ANY of these work items, newest
+   * first, each with the legs it holds among them (Story MOTIR-1626 · MOTIR-6930) —
+   * the Workbench To fix page and the item page's banner read which sent-back card is
+   * being repaired, and whether on the hosted agent, in ONE query for a page of rows.
+   */
+  async findRunningByCommandForWorkItems(
+    workItemIds: readonly string[],
+    command: DispatchCommand,
+    tx: Prisma.TransactionClient,
+  ): Promise<RunningDispatchRunForItems[]> {
+    if (workItemIds.length === 0) return [];
+    return tx.dispatchRun.findMany({
+      where: {
+        status: 'running',
+        command,
+        cards: { some: { workItemId: { in: [...workItemIds] } } },
+      },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        origin: true,
+        startedAt: true,
+        createdById: true,
+        createdBy: { select: { id: true, name: true } },
+        cards: {
+          where: { workItemId: { in: [...workItemIds] } },
+          select: { workItemId: true },
+        },
       },
     });
   },
@@ -222,6 +268,7 @@ export const dispatchRunRepository = {
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       select: {
         id: true,
+        origin: true,
         status: true,
         stopReason: true,
         startedAt: true,
@@ -233,8 +280,8 @@ export const dispatchRunRepository = {
   },
 
   /**
-   * The NEWEST run of ANY command that holds a leg for this work item or is SCOPED
-   * to it, with everything the continue claim reads about it (MOTIR-6532): its
+   * The NEWEST run of any command but `review` that holds a leg for this work item or
+   * is SCOPED to it, with everything the continue claim reads about it (MOTIR-6532): its
    * liveness columns, its starter, its scope, and the leg naming this item (none
    * for a scoped run's container). Null when the item has never been run.
    */
@@ -243,7 +290,13 @@ export const dispatchRunRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<LatestRunForWorkItem | null> {
     return tx.dispatchRun.findFirst({
-      where: { OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }] },
+      where: {
+        // ⚠️ NEVER A REVIEW RUN (MOTIR-1626; `hosted-agent-run.md` §8.1 / §8.3). A review
+        // builds nothing and holds no card: its end is not the card's run dying, and a
+        // review opened after a build died must not hide that death from To fix.
+        command: { not: 'review' },
+        OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }],
+      },
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       select: {
         id: true,
@@ -339,6 +392,41 @@ export const dispatchRunRepository = {
   ): Promise<DispatchRun | null> {
     return tx.dispatchRun.findUnique({
       where: { workspaceId_idempotencyKey: { workspaceId, idempotencyKey } },
+    });
+  },
+
+  /**
+   * The RUNNING runs whose idempotency key starts with `prefix`, in one workspace —
+   * what a REVIEW run's gate is found by (MOTIR-6820): the server opens every review run
+   * under `agent-review:<gateId>:…`, so the gate's in-flight review is this read. Served
+   * by the `(workspace_id, idempotency_key)` unique index's prefix.
+   */
+  async listRunningByIdempotencyKeyPrefix(
+    workspaceId: string,
+    prefix: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string }>> {
+    return tx.dispatchRun.findMany({
+      where: { workspaceId, status: 'running', idempotencyKey: { startsWith: prefix } },
+      orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
+      select: { id: true },
+    });
+  },
+
+  /**
+   * The LATEST run, in any status, whose idempotency key starts with `prefix` — the
+   * review run an `agent_review` gate's band links (MOTIR-6825): every review run of a
+   * gate is opened under `agent-review:<gateId>:…`, so its newest run is this read.
+   */
+  async findLatestByIdempotencyKeyPrefix(
+    workspaceId: string,
+    prefix: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; command: DispatchRun['command']; startedAt: Date } | null> {
+    return tx.dispatchRun.findFirst({
+      where: { workspaceId, idempotencyKey: { startsWith: prefix } },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: { id: true, command: true, startedAt: true },
     });
   },
 
