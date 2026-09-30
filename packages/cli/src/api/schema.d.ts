@@ -1838,8 +1838,8 @@ export interface components {
             noteMd: string | null;
             decidedAt: string | null;
             decidedByLabel: string | null;
-            decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission" | "review_agent") | null;
-            decisionSource: ("ui" | "api" | "mcp" | "github") | null;
+            decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission" | "review_agent" | "project_setting") | null;
+            decisionSource: ("ui" | "api" | "mcp" | "github" | "system") | null;
             subjectVersion: string | null;
             supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "ci_rerunning" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed" | "review_agent_disabled") | null;
             outcomeRef: string | null;
@@ -5752,8 +5752,8 @@ export interface operations {
                             noteMd: string | null;
                             decidedAt: string | null;
                             decidedByLabel: string | null;
-                            decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission" | "review_agent") | null;
-                            decisionSource: ("ui" | "api" | "mcp" | "github") | null;
+                            decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission" | "review_agent" | "project_setting") | null;
+                            decisionSource: ("ui" | "api" | "mcp" | "github" | "system") | null;
                             subjectVersion: string | null;
                             supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "ci_rerunning" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed" | "review_agent_disabled") | null;
                             outcomeRef: string | null;

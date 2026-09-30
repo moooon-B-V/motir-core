@@ -3,6 +3,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { handlerFor } from '@/lib/approvalGates/registry';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
@@ -819,9 +820,17 @@ async function persistEvidence(
     );
     if (!owed) return (await designEvidenceRepository.findById(evidence.id, tx))!;
 
-    const routedToId = handlerFor('design_result').routeTo({ item: args.item, ctx, tx });
+    // The switch, read under this transaction so it is the value at RAISE time: a flip
+    // never decides a gate already waiting (MOTIR-697; `hosted-design-rerun-and-design-
+    // approval-switch.md` §2f). OFF ⇒ nobody is asked, so the gate is routed to nobody
+    // (§2c: `routedToId` null) and approved below by the system.
+    const project = await projectRepository.findById(args.item.projectId, tx);
+    const systemApproves = project !== null && !project.designApprovalGate;
+    const routedToId = systemApproves
+      ? null
+      : handlerFor('design_result').routeTo({ item: args.item, ctx, tx });
 
-    await approvalGateRepository.create(
+    const raised = await approvalGateRepository.create(
       {
         workspaceId: ctx.workspaceId,
         projectId: args.item.projectId,
@@ -845,6 +854,23 @@ async function persistEvidence(
     // gate must lose the status with it — and the early return above, where the
     // predicate says this card owes no design gate, must not move it at all.
     await moveToReviewWhenUndelivered(args.item, ctx, tx);
+
+    // ⚠️ DESIGN APPROVAL SWITCHED OFF — the gate above is APPROVED BY THE SYSTEM, here,
+    // in this same transaction (Story MOTIR-693 · MOTIR-697;
+    // `docs/decisions/hosted-design-rerun-and-design-approval-switch.md` §2b–§2c). The
+    // question is still asked and recorded — never skipped — so every reader of an
+    // approved design (the retention pin, the republish guard, `list_designs`) sees the
+    // one shape it already reads. `approveBySystem` runs the kind's own `approve`, so
+    // the status effect is a person's approval's exactly: `done` with no open pull
+    // request, nothing with one (the merge still follows `prMergeMode`).
+    //
+    // AFTER the review walk, because an approval writes `done`, and `in_review → done`
+    // is the edge a person's press takes. LAZY import: `approvalGatesService` imports
+    // this service for the pin.
+    if (systemApproves) {
+      const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
+      await approvalGatesService.approveBySystem(raised.id, ctx, tx);
+    }
 
     // Re-read so the caller gets the evidence WITH its just-inserted assets.
     // Non-null by construction: the row was created in THIS transaction, a few

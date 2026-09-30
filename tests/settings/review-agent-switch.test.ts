@@ -142,7 +142,11 @@ describe('the review agent switch — read and write (MOTIR-6818)', () => {
     );
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ acceptanceVideoEnabled: false, reviewAgentEnabled: true });
+    expect(await res.json()).toEqual({
+      acceptanceVideoEnabled: false,
+      reviewAgentEnabled: true,
+      designApprovalGate: true,
+    });
     expect(await stored(s.project.id)).toMatchObject({
       reviewAgentEnabled: true,
       acceptanceVideoEnabled: false,

@@ -280,6 +280,28 @@ export const dispatchRunRepository = {
   },
 
   /**
+   * THE LANE THIS CARD LAST RAN ON (MOTIR-700): the newest run that carried it —
+   * by a leg or as a scope — with the three facts an automatic hosted re-run
+   * reuses: where it executed, who started it, and which model it ran. Null when
+   * the card has never been run.
+   */
+  async findLatestLaneForWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Pick<DispatchRun, 'id' | 'origin' | 'createdById' | 'model'> | null> {
+    return tx.dispatchRun.findFirst({
+      where: {
+        // ⚠️ NEVER A REVIEW RUN (MOTIR-1626): a review builds nothing, so it is not the
+        // lane, the dispatcher or the model that produced the design being re-run.
+        command: { not: 'review' },
+        OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }],
+      },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: { id: true, origin: true, createdById: true, model: true },
+    });
+  },
+
+  /**
    * The NEWEST run of any command but `review` that holds a leg for this work item or
    * is SCOPED to it, with everything the continue claim reads about it (MOTIR-6532): its
    * liveness columns, its starter, its scope, and the leg naming this item (none

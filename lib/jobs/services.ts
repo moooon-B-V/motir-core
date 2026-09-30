@@ -3,6 +3,7 @@ import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService'
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
 import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
+import { designAutoRerunService } from '@/lib/services/designAutoRerunService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
 import { dlqStandingDepthService } from '@/lib/services/dlqStandingDepthService';
@@ -142,6 +143,8 @@ export const jobServices = {
   // The review run's start (Story MOTIR-1626 · MOTIR-6820): one hosted `review` run per
   // request for an awaiting `agent_review` gate.
   agentReviewStart: agentReviewStartService,
+  // The automatic hosted re-run after a design Revise (MOTIR-700).
+  designAutoRerun: designAutoRerunService,
   // The base-branch mergeability re-read (MOTIR-5914): a push to a default branch
   // withdraws the approve-and-merge question over any pull request it put in conflict.
   pullRequestMergeability: pullRequestMergeabilityService,

@@ -6,6 +6,7 @@ import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { approvalGateSettingsService } from '@/lib/services/approvalGateSettingsService';
 import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
 import { projectPrMergeModeService } from '@/lib/services/projectPrMergeModeService';
+import { DesignApprovalGateCard } from './_components/DesignApprovalGateCard';
 import { AcceptanceVideoGateCard } from './_components/AcceptanceVideoGateCard';
 import { MergeModeAndReviewAgentCards } from './_components/MergeModeAndReviewAgentCards';
 import { guardSettingsPage } from '../_guard';
@@ -83,6 +84,13 @@ export default async function ProjectApprovalsPage() {
         projectKey={ctx.project.identifier}
         initialEnabled={settings.acceptanceVideoEnabled}
         entitled={eligibility.reason !== 'no_plan'}
+      />
+
+      {/* The two approval switches together (MOTIR-702; `approvals--design-gate.mock.html`
+          panel 3), then the merge settings that follow every approval. */}
+      <DesignApprovalGateCard
+        projectKey={ctx.project.identifier}
+        initialEnabled={settings.designApprovalGate}
       />
 
       {/* Merge mode, then the REVIEW AGENT (MOTIR-6823) — third, because its copy
