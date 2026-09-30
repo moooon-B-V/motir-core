@@ -96,8 +96,9 @@ describe('create — the terminal server is the machine’s main process (Q2, Q4
     // No credential of the user's, and nothing narrowing a sign-in (Q9).
     expect(Object.keys(spec.terminal!.env)).toEqual(['MOTIR_TERMINAL_KEY']);
 
-    // The clone first, then ONE probe; the record carries the answer for this digest.
-    expect(fleet.execs.map((e) => e.command[0])).toEqual(['runuser', 'motir']);
+    // The clone first, then ONE terminal probe; the record carries the answer for this
+    // digest. The run probes follow it (MOTIR-7026): the launcher, then the sign-in.
+    expect(fleet.execs.map((e) => e.command[0])).toEqual(['runuser', 'motir', 'motir', 'runuser']);
     expect(probes()).toHaveLength(1);
     expect(dto.terminalServer).toBe('present');
     expect(await row(dto.id)).toMatchObject({

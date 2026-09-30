@@ -1,6 +1,7 @@
 import type { ClaimActorDto } from '@/lib/dto/claim';
 import type {
   DispatchCommand,
+  DispatchRunOrigin,
   DispatchRunStatus,
   DispatchStopReason,
 } from '@/generated/prisma/client';
@@ -54,7 +55,8 @@ export type WorkItemContinueRefusal =
 export interface DeadRunDto {
   id: string;
   command: DispatchCommand;
-  origin: 'local' | 'hosted';
+  /** `instance` — a run in the developer's own agent (MOTIR-7023) can die and be continued. */
+  origin: DispatchRunOrigin;
   status: DispatchRunStatus;
   /** Null for a run the claim found lapsed and closed itself (then `abandoned`). */
   stopReason: DispatchStopReason | null;

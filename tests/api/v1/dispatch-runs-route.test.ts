@@ -9,6 +9,7 @@ import {
 import { DISPATCH_RUN_EVENT_BODY_LIMIT_BYTES } from '@/lib/services/dispatchRunService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // The DISPATCH RUN ingest routes (Story MOTIR-1789 · MOTIR-1792) — open, append,
@@ -283,6 +284,21 @@ describe('the dispatch-run ingest routes', () => {
     });
     expect(reasonWithoutSkip.status).toBe(422);
     expect(await reasonWithoutSkip.json()).toMatchObject({ code: 'INVALID_BODY' });
+  });
+
+  it('422 — `origin: "instance"` is refused at the edge and opens nothing (MOTIR-7023)', async () => {
+    const key = await seedCard(caller, 'a card');
+    // Only the SERVER opens a run in an agent, exactly as only the server opens a
+    // hosted one it supervises — a client body naming it is refused.
+    const res = await openRun(caller, {
+      projectKey: caller.projectKey,
+      command: 'run',
+      origin: 'instance',
+      cards: [{ key, disposition: 'queued' }],
+    });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ code: 'INVALID_BODY' });
+    expect(await adminDb.dispatchRun.count()).toBe(0);
   });
 
   it('404 — a project key this token cannot reach', async () => {

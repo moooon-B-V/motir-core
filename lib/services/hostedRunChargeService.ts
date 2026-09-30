@@ -68,6 +68,8 @@ export const hostedRunChargeService = {
 
     const organizationId = await withSystemContext(async (tx) => {
       const run = await dispatchRunRepository.findById(dispatchRunId, tx);
+      // Hosted only. An `instance` run is charged as its agent's machine time, on
+      // the agent's intervals — never per run (`agent-instance-run.md` §5).
       if (!run || run.origin !== 'hosted') return null;
       return workspaceRepository.findOrganizationId(run.workspaceId, tx);
     });

@@ -8,9 +8,17 @@ import { sprintFilter } from './render.js';
 import { CliError } from './errors.js';
 import { requireLink, type FoundLink } from './config/linkConfig.js';
 import { resolveServerUrl } from './serverResolve.js';
-import { resolveCredential } from './config/userConfig.js';
-import { prepareHostedRun } from './hostedGit.js';
-import { hostedLink, hostedWorkspace, readAdoptedRun, type AdoptedRun } from './hostedMode.js';
+import { normalizeServerUrl, resolveCredential } from './config/userConfig.js';
+import { claimAgentRunScratch, prepareHostedRun } from './hostedGit.js';
+import {
+  agentRunWorkspace,
+  hostedLink,
+  hostedWorkspace,
+  isAgentRun,
+  readAdoptedRun,
+  readAgentRunAccess,
+  type AdoptedRun,
+} from './hostedMode.js';
 
 // Shared plumbing for the commands that talk to a linked project: resolve the
 // `.motir.json` binding (walked up from cwd), resolve the server + its
@@ -77,6 +85,7 @@ export async function withHostedProjectSession<T>(
   /** The card the command was given — what the run's pull requests link (MOTIR-6559). */
   targetKey?: string,
 ): Promise<T> {
+  if (isAgentRun()) return withAgentRunSession(runId, fn, targetKey);
   const serverUrl = resolveServerUrl();
   const cred = resolveCredential(serverUrl);
   if (!cred) {
@@ -94,11 +103,47 @@ export async function withHostedProjectSession<T>(
     serverUrl,
     token: cred.token,
     runId,
-    targetKey: targetKey ?? run.legs[0] ?? runId,
+    targetKey: targetKey ?? (run.legs[0] as string),
     client,
   });
   const link = hostedLink(hostedWorkspace(), serverUrl, run.projectKey);
   return fn({ link, serverUrl, projectKey: run.projectKey, client }, run);
+}
+
+/**
+ * The AGENT-MODE twin (MOTIR-7024, `agent-instance-run.md` §2): the same adopt,
+ * the same GitHub setup, with the run's address and token from the launcher's
+ * `run.json` (never the credential ladder, which in a developer's agent is the
+ * developer's own), checkouts under a run-private workspace, a link that is
+ * ALWAYS synthesised there (a `.motir.json` somewhere above it is the
+ * developer's, not the run's), and both directories removed however it ends.
+ */
+async function withAgentRunSession<T>(
+  runId: string,
+  fn: (session: ProjectSession, run: AdoptedRun) => Promise<T>,
+  targetKey: string | undefined,
+): Promise<T> {
+  const access = readAgentRunAccess(runId);
+  const workspace = agentRunWorkspace(runId);
+  const release = claimAgentRunScratch({ stateDir: access.stateDir, workspace });
+  try {
+    const serverUrl = normalizeServerUrl(access.apiUrl);
+    const client = new MotirClient({ serverUrl, token: access.token });
+    const run = await readAdoptedRun(client, runId);
+    await prepareHostedRun({
+      serverUrl,
+      token: access.token,
+      runId,
+      targetKey: targetKey ?? (run.legs[0] as string),
+      client,
+      stateDir: access.stateDir,
+      agentMode: true,
+    });
+    const link = hostedLink(workspace, serverUrl, run.projectKey, () => null);
+    return await fn({ link, serverUrl, projectKey: run.projectKey, client }, run);
+  } finally {
+    release();
+  }
 }
 
 /** The list_ready page size cap (server clamps `limit` to 200). We page at the
