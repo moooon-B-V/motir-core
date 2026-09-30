@@ -975,7 +975,7 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
   it('gives a grown lane the full six legs at the cap (MOTIR-7054)', () => {
     // THE regression this cap exists to prevent: a lane that fills up must get
     // its full parallelism back, not a serial run. MOTIR-2600 sized four legs
-    // for 26 specs. At 87 specs those four ran into the shard job's 40-minute
+    // for 26 specs. At 87 specs those four ran into the shard job's then 40-minute
     // timeout, and a green leg was cancelled out of the merge queue, so the cap
     // is six.
     expect(runGate(87, 'pull_request').shards).toBe('[1,2,3,4,5,6]');

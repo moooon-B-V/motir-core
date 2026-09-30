@@ -14,8 +14,7 @@ import { defineJob } from '../defineJob';
 // motir-ai's purge answers `{ purged: false }` for one it already removed.
 
 /**
- * Daily at 07:30 — a clustered minute, so it opens no new wake-minute. Daily is
- * ample for a seven-year clock; the only thing a missed day costs is one day of
+ * Daily at 07:30. Daily is ample for a seven-year clock; the only thing a missed day costs is one day of
  * over-retention, and the next pass picks it up.
  */
 export const ORGANIZATION_RETENTION_PURGE_CRON = '30 7 * * *';

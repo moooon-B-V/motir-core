@@ -1172,6 +1172,11 @@ async function withdrawGatesOnSynchronize(body: Record<string, unknown>): Promis
       await bindWorkspaceContext(tx, repo.workspaceId);
       const row = await githubPullRequestRepository.findByRepoAndNumber(repo.id, number, tx);
       if (row) {
+        // THE PULL REQUEST IS AT THE NEW HEAD (MOTIR-7005) — stored before anything
+        // reads the set, because the check rows are not: a push to a conflicting pull
+        // request gets no CI, and a head read off the rows would stay at the old green
+        // commit for ever.
+        await githubPullRequestRepository.setHeadSha(row.id, headSha, tx);
         // A NEW HEAD'S MERGEABILITY IS UNCOMPUTED (MOTIR-5913): forget the old head's
         // reading BEFORE the withdrawal's re-ask reads the set, so a push that resolves
         // a conflict makes the member a merge candidate again.

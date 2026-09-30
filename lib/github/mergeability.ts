@@ -7,9 +7,16 @@
 //
 // ⚠️ A CONFLICT IS `dirty` AT THE MEMBER'S CURRENT HEAD, AND NOTHING ELSE. `null` is
 // "not asked / not computed yet" and is never a conflict (the MOTIR-5699 rule for
-// `draft`); a reading taken at an older head says nothing about the current one.
+// `draft`); a reading taken at another head says nothing about the current one.
+//
+// ⚠️ AND THE CURRENT HEAD IS THE PULL REQUEST'S, NOT THE CHECK ROWS' (MOTIR-7005). This
+// used to compare the reading against the newest check run's commit, on the assumption
+// that a reading could only be OLDER than that (a `synchronize` clears it). A push that
+// produced no CI — every push to a conflicting pull request — made the reading NEWER,
+// and the rule inverted: the conflict at the real head was discarded as stale. The head
+// is `lib/github/pullRequestHead.ts`'s.
 
-import { liveRowsAtLatestSha, type PrCheckRunSlice } from './prCiState';
+import { pullRequestHead, type PullRequestHeadSlice } from './pullRequestHead';
 
 /** The stored reading, as the readers see it. */
 export interface StoredMergeability {
@@ -31,10 +38,7 @@ export function isConflictedAt(pr: StoredMergeability, headSha: string | null): 
   return headSha === null || headSha === pr.mergeableStateHeadSha;
 }
 
-/** {@link isConflictedAt} at the head the pull request's check rows name. */
-export function isConflictedAtCurrentHead(
-  pr: StoredMergeability & { checkRuns: PrCheckRunSlice[] },
-): boolean {
-  const head = liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha ?? null;
-  return isConflictedAt(pr, head);
+/** {@link isConflictedAt} at the pull request's head ({@link pullRequestHead}). */
+export function isConflictedAtCurrentHead(pr: StoredMergeability & PullRequestHeadSlice): boolean {
+  return isConflictedAt(pr, pullRequestHead(pr));
 }

@@ -36,15 +36,7 @@ import { defineJob } from '../defineJob';
  * `system.attachment-gc`, 04:00 `system.rate-limit-sweep`, 04:30
  * `system.automation-retention-sweep`, then this one. All of those walk large
  * tables and this one additionally makes an external call per row, so they are
- * still deliberately not stacked on one cold start.
- *
- * ⚠️ RE-TIMED 04:45 → 05:00 (MOTIR-3314), and the "not sharing a slot" property
- * this comment protects SURVIVES INTACT — separation just moved from the minute
- * axis to the HOUR axis. That is the whole reason the cluster has two slots
- * rather than one (`lib/jobs/schedules.ts`): a nightly cascade can be spread a
- * full hour apart while every member still lands on a clustered minute, so the
- * spreading costs no extra wake. Each of the four now has an hour to itself,
- * where 04:15 and 04:45 were thirty minutes apart and 04:10 and 04:15 were five.
+ * still deliberately not stacked: each of the four has an hour to itself.
  */
 export const CODE_GRAPH_OFFBOARD_SWEEP_CRON = '0 5 * * *';
 

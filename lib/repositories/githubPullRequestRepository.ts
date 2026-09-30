@@ -58,6 +58,13 @@ export interface UpsertGithubPullRequestInput {
    *    the flag decides nothing (`merged` answers the lifecycle first).
    */
   draft: boolean | undefined;
+  /**
+   * The host's head commit (MOTIR-7005) — `draft`'s contract exactly: a REQUIRED key
+   * whose value is `undefined` when the writer does not know, which leaves the stored
+   * head alone. The status sync supplies the delivery's; the link door and the
+   * historical backfill do not know it.
+   */
+  headSha: string | undefined;
   /* ⚠️ `linkedManually` WAS A FIELD HERE and is removed by MOTIR-4894. It said
    * the association was DECLARED rather than inferred by the MOTIR-892
    * auto-resolver; MOTIR-3674 deleted that resolver, so the distinction had no
@@ -590,6 +597,24 @@ export const githubPullRequestRepository = {
       where: { id: pullRequestId },
       data: { mergeableState: reading.mergeableState, mergeableStateHeadSha: reading.headSha },
     });
+  },
+
+  /** Store the host's HEAD commit (MOTIR-7005) — the commit `pullRequestHead` reads
+   *  as the pull request's, in place of the newest check row's. Written by a
+   *  `synchronize` delivery (a push, which the status sync does not see) and by every
+   *  host read that learns the head, so a push that produced no CI still moves it.
+   *  One statement; a row already at that head matches nothing. Write path → `tx`. */
+  async setHeadSha(
+    pullRequestId: string,
+    headSha: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubPullRequest.updateMany({
+      // `OR` with the null arm spelled out: SQL's `<>` is not true of a NULL head.
+      where: { id: pullRequestId, OR: [{ headSha: null }, { headSha: { not: headSha } }] },
+      data: { headSha },
+    });
+    return result.count;
   },
 
   /** FORGET a stored mergeability reading — a new head's is uncomputed, so a
