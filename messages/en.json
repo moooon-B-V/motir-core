@@ -3715,6 +3715,57 @@
         "factKeptBy": "Kept"
       }
     },
+    "connectedApps": {
+      "title": "Connected apps",
+      "subtitle": "Apps you've signed into with your Motir account. Each one acts as you, in one workspace, with the scopes you approved.",
+      "columns": {
+        "app": "App",
+        "workspace": "Workspace",
+        "connected": "Connected",
+        "lastUsed": "Last used",
+        "actions": "Actions"
+      },
+      "allProjects": "All projects",
+      "lastUsedNever": "Never",
+      "unnamedApp": "Unnamed app",
+      "unverified": "Unverified",
+      "unverifiedTooltip": "This app registered itself. Motir hasn't verified who publishes it.",
+      "detailLead": "This app can:",
+      "granted": "Granted",
+      "notGranted": "Not granted",
+      "showScopes": "Show scopes for {app}",
+      "hideScopes": "Hide scopes for {app}",
+      "revokeAria": "Revoke {app} in {workspace}",
+      "narrowDates": {
+        "connected": "Connected",
+        "lastUsed": "Last used"
+      },
+      "empty": {
+        "body": "No apps connected. When you add Motir to Claude, or another app that signs in with your Motir account, it appears here.",
+        "link": "How to add Motir to Claude"
+      },
+      "error": {
+        "title": "Couldn't load your connected apps.",
+        "body": "Your tokens above are unaffected. Nothing was revoked."
+      },
+      "revokeConfirm": {
+        "title": "Revoke “{app}”?",
+        "body": "<strong>{app}</strong> loses access to the <strong>{workspace}</strong> workspace now. Its next request is refused, and it will ask you to sign in again. Your tokens and other connected apps are not affected.",
+        "workspace": "Workspace",
+        "scopes": "Scopes",
+        "connected": "Connected",
+        "cancel": "Cancel",
+        "confirm": "Revoke access"
+      },
+      "revoked": {
+        "title": "Access revoked",
+        "body": "{app} can no longer act in {workspace}. Connect it again from {app} to restore it."
+      },
+      "revokeError": {
+        "title": "Couldn't revoke access",
+        "body": "Something went wrong. Please try again."
+      }
+    },
     "apiTokens": {
       "heading": "Tokens",
       "subtitle": "Personal access tokens let your coding agents reach Motir over the MCP server. Each token acts as you — give every agent its own, and revoke any you no longer use.",

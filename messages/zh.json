@@ -3715,6 +3715,57 @@
         "factKeptBy": "已保留"
       }
     },
+    "connectedApps": {
+      "title": "已连接的应用",
+      "subtitle": "你用 Motir 账号登录过的应用。每个应用以你的身份，在一个工作区内，按你批准的范围操作。",
+      "columns": {
+        "app": "应用",
+        "workspace": "工作区",
+        "connected": "连接时间",
+        "lastUsed": "上次使用",
+        "actions": "操作"
+      },
+      "allProjects": "所有项目",
+      "lastUsedNever": "从未",
+      "unnamedApp": "未命名应用",
+      "unverified": "未验证",
+      "unverifiedTooltip": "此应用是自行注册的。Motir 尚未验证其发布者。",
+      "detailLead": "此应用可以：",
+      "granted": "已授予",
+      "notGranted": "未授予",
+      "showScopes": "显示 {app} 的范围",
+      "hideScopes": "隐藏 {app} 的范围",
+      "revokeAria": "撤销 {app} 在 {workspace} 中的访问",
+      "narrowDates": {
+        "connected": "连接于",
+        "lastUsed": "上次使用"
+      },
+      "empty": {
+        "body": "还没有已连接的应用。当你把 Motir 添加到 Claude，或添加其他用 Motir 账号登录的应用时，它会出现在这里。",
+        "link": "如何把 Motir 添加到 Claude"
+      },
+      "error": {
+        "title": "无法加载已连接的应用。",
+        "body": "上方的令牌不受影响。没有任何访问被撤销。"
+      },
+      "revokeConfirm": {
+        "title": "撤销“{app}”？",
+        "body": "<strong>{app}</strong> 将立即失去对 <strong>{workspace}</strong> 工作区的访问。它的下一个请求会被拒绝，并会要求你重新登录。你的令牌和其他已连接的应用不受影响。",
+        "workspace": "工作区",
+        "scopes": "范围",
+        "connected": "连接时间",
+        "cancel": "取消",
+        "confirm": "撤销访问"
+      },
+      "revoked": {
+        "title": "访问已撤销",
+        "body": "{app} 已无法在 {workspace} 中操作。从 {app} 重新连接即可恢复。"
+      },
+      "revokeError": {
+        "title": "无法撤销访问",
+        "body": "出了点问题，请重试。"
+      }
+    },
     "apiTokens": {
       "heading": "令牌",
       "subtitle": "个人访问令牌让你的编码 agent 通过 MCP 服务器连接 Motir。每个令牌都以你的身份执行——给每个 agent 单独分配一个，不再使用的随时吊销。",

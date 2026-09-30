@@ -9,7 +9,17 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 export interface OAuthConnectionDto {
   id: string;
   /** The registered client, as it named itself at registration. */
-  client: { clientId: string; name: string | null; uri: string | null; icon: string | null };
+  client: {
+    clientId: string;
+    name: string | null;
+    uri: string | null;
+    icon: string | null;
+    /** The client registered itself (RFC 7591) — no Motir user owns it. */
+    unverified: boolean;
+    /** The host of its first registered redirect URI — the one fact on the row
+     * the app did not choose. A loopback address reads `localhost`. */
+    host: string | null;
+  };
   workspace: { id: string; name: string };
   organization: { id: string; name: string };
   /** The ONE project it acts in, or null for every project the person can open. */

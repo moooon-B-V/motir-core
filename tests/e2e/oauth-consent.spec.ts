@@ -28,12 +28,16 @@ test.afterAll(async () => {
 
 test('a pending request opens the consent screen, and Approve returns the code', async ({
   page,
+  request,
   baseURL,
 }) => {
   await signUp(page, 'oauth-consent-e2e@example.com');
   await createFirstProject(page, 'Consent E2E');
 
-  const registered = await page.request.post('/api/auth/oauth2/register', {
+  // Registered the way an app does it: anonymously, from its own HTTP client.
+  // NOT `page.request`, which shares the page's session cookie — a cookie-bearing
+  // POST with no Origin is refused by the auth layer's CSRF check (403).
+  const registered = await request.post('/api/auth/oauth2/register', {
     data: {
       client_name: 'Claude Code',
       redirect_uris: [CALLBACK],
