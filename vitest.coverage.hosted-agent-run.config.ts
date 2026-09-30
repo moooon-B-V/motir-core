@@ -51,6 +51,10 @@ export default defineConfig({
       // Story MOTIR-6590 · MOTIR-6879 — Continue hosted lifted into a control any
       // surface can place; the door's floor follows the code it moved.
       'tests/components/continue-hosted-control.test.tsx',
+      // Story MOTIR-6989 · MOTIR-6996 — Run hosted preselects the difficulty's
+      // model; the picker's read (`hostedRunPickerService`) is measured by
+      // `tests/hostedRuns/hostedRunPickerModels.test.ts`, above.
+      'tests/components/run-hosted-from-difficulty.test.tsx',
     ],
     coverage: {
       provider: 'v8',
@@ -131,6 +135,12 @@ export default defineConfig({
           lines: 90,
         },
         'lib/services/hostedRunKeyService.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'lib/services/hostedRunPickerService.ts': {
           statements: 90,
           functions: 90,
           branches: 90,

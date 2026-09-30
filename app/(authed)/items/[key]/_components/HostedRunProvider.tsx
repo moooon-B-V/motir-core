@@ -132,9 +132,10 @@ export function HostedRunProvider({
   children: ReactNode;
 }) {
   // ⚠️ THE MODEL LIST IS ITS OWN CONTEXT (MOTIR-6879): both doors read the one list
-  // `HostedModelsProvider` fetches, so the state below is mounted INSIDE it.
+  // `HostedModelsProvider` fetches, so the state below is mounted INSIDE it. It
+  // reads THIS card's resolved model too (MOTIR-6996), which Run hosted opens on.
   return (
-    <HostedModelsProvider>
+    <HostedModelsProvider workItemKey={itemKey}>
       <HostedRunState
         itemKey={itemKey}
         ready={ready}

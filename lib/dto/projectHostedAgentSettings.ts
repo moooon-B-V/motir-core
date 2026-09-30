@@ -45,3 +45,19 @@ export interface ResolvedWorkItemHostedModelDto {
   /** Whether the card is a parent, so `difficulty` is the highest of its leaves. */
   fromLeaves: boolean;
 }
+
+/**
+ * What the Run hosted picker reads (Story MOTIR-6989 · MOTIR-6996):
+ * `GET /api/hosted-runs/models`'s answer. `resolved` is present only when the
+ * read named a work item — the card's resolved preselection and why — and is
+ * `null` when it could not be resolved; the picker then preselects as it always
+ * did (`default`, else the first offered model).
+ */
+export type HostedPickerModelsDto =
+  | { state: 'unavailable' }
+  | {
+      state: 'ok';
+      models: { id: string; provider: string }[];
+      default: string | null;
+      resolved?: ResolvedWorkItemHostedModelDto | null;
+    };

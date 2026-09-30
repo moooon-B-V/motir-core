@@ -8992,7 +8992,11 @@
         "unavailableBody": "无法加载可以托管运行的模型，因此暂时无法托管运行。",
         "retry": "重试",
         "emptyTrigger": "没有可用的模型",
-        "emptyBody": "目前没有模型可以运行托管工作项，因此无法托管运行。本地运行不受影响。"
+        "emptyBody": "目前没有模型可以运行托管工作项，因此无法托管运行。本地运行不受影响。",
+        "fromDifficulty": "按难度：<b>{difficulty}</b>",
+        "override": "项目为<b>{difficulty}</b>难度设置的模型",
+        "fromLeaves": "其子项中的最高难度：<b>{difficulty}</b>",
+        "overrideFromLeaves": "项目为<b>{difficulty}</b>难度设置的模型（其子项中的最高难度）"
       },
       "notReady": "此工作项就绪后即可托管运行——它还有 {count} 个未完成的阻塞项。",
       "refused": {

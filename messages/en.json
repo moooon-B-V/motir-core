@@ -8996,7 +8996,11 @@
         "unavailableBody": "Couldn’t load the models that can run hosted, so Run hosted is off for now.",
         "retry": "Try again",
         "emptyTrigger": "No model available",
-        "emptyBody": "No model can run a hosted work item right now, so Run hosted is off. Local runs are unaffected."
+        "emptyBody": "No model can run a hosted work item right now, so Run hosted is off. Local runs are unaffected.",
+        "fromDifficulty": "From difficulty: <b>{difficulty}</b>",
+        "override": "Project override for <b>{difficulty}</b>",
+        "fromLeaves": "Highest difficulty among its leaves: <b>{difficulty}</b>",
+        "overrideFromLeaves": "Project override for <b>{difficulty}</b>, the highest difficulty among its leaves"
       },
       "notReady": "Run hosted is available once this work item is ready — it has {count, plural, one {# open blocker} other {# open blockers}}.",
       "refused": {

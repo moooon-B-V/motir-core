@@ -58,7 +58,7 @@ export function ContinueHostedButtonRow({
     <div className="flex flex-wrap items-center gap-2" data-testid="continue-hosted-door">
       <HostedModelPicker
         models={hosted.models}
-        value={hosted.selectedModel}
+        value={hosted.continueModel}
         onChange={hosted.setChosen}
         disabled={starting}
       />
@@ -66,7 +66,7 @@ export function ContinueHostedButtonRow({
         type="button"
         variant="primary"
         size="sm"
-        disabled={!modelsReady || starting || !hosted.selectedModel}
+        disabled={!modelsReady || starting || !hosted.continueModel}
         loading={starting}
         onClick={onPress}
         leftIcon={<Cloud className="size-3.5" aria-hidden="true" />}
