@@ -901,6 +901,16 @@ export default defineConfig({
         // ship un-measured: the defect it fixes lost three cards' whole bodies
         // under a success line. MEASURED on this branch before pinning.
         'lib/mcp/strictInput.ts',
+        // Story MOTIR-6974 · Subtask MOTIR-7003 — the tool HINTS: the table and
+        // its registration seam (a wrong `readOnlyHint: true` lets Claude run a
+        // write without asking), and the two files that carry each tool's title
+        // and hints into the published catalogue (`lib/apiDocs/mcp.ts` and the
+        // generator that writes its leaf). MEASURED on this branch before
+        // pinning: 100 / 100 / 100 for the table and the content module, and
+        // 100 lines / 100 branches / 92.3 functions for the generator.
+        'lib/mcp/toolAnnotations.ts',
+        'lib/apiDocs/mcp.ts',
+        'scripts/generateMcpToolSchemas.ts',
         'app/**/settings/account/_components/permissionMeta.tsx',
         'app/**/settings/account/_components/CreateTokenModal.tsx',
         'app/**/settings/account/_components/apiTokensClient.ts',
@@ -4865,6 +4875,9 @@ export default defineConfig({
         'lib/mcp/scopes.ts': { branches: 90, functions: 90, lines: 90 },
         // Bug MOTIR-3342 — the unknown-argument gate (see the `include` note).
         'lib/mcp/strictInput.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/toolAnnotations.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/apiDocs/mcp.ts': { branches: 90, functions: 90, lines: 90 },
+        'scripts/generateMcpToolSchemas.ts': { branches: 90, functions: 90, lines: 90 },
         'app/**/settings/account/_components/permissionMeta.tsx': {
           branches: 90,
           functions: 90,

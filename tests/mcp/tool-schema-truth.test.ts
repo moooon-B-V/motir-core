@@ -88,6 +88,10 @@ describe('Guard A — the committed schema map is FRESH', () => {
     expect(isMcpToolSchemasStale(generated, `${generated}\n// a hand edit\n`)).toBe(true);
   });
 
+  it('reads a missing committed file as null, which the predicate reports', async () => {
+    expect(await readCommittedMcpToolSchemas('/nonexistent-motir-root')).toBeNull();
+  });
+
   it('REPORTS a missing file rather than passing it', async () => {
     const generated = await generateMcpToolSchemas();
     expect(isMcpToolSchemasStale(generated, null)).toBe(true);

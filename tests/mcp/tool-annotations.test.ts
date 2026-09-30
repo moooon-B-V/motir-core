@@ -120,6 +120,18 @@ describe('annotatedServer — the registration seam', () => {
     expect(register('toString', { title: 'To string' })).toThrow(/"toString".*no row/);
   });
 
+  it('refuses a registration with no config at all, naming the tool', () => {
+    const server = annotatedServer(new McpServer(MCP_SERVER_INFO));
+    expect(() =>
+      (server.registerTool as unknown as (name: string) => void)('get_work_item'),
+    ).toThrow(/"get_work_item".*no title/);
+  });
+
+  it('passes every other property of the server through unwrapped', () => {
+    const inner = new McpServer(MCP_SERVER_INFO);
+    expect(annotatedServer(inner).server).toBe(inner.server);
+  });
+
   it('refuses a missing title, naming the tool', () => {
     expect(register('get_work_item', {})).toThrow(/"get_work_item".*no title/);
   });
