@@ -138,6 +138,8 @@ export interface LockedDispatchRunTerminalState {
   endedAt: Date | null;
   /** Who opened it — the heartbeat's owner check (MOTIR-6528). */
   createdById: string | null;
+  /** The agent an `instance` run is running in — whose idle signal its events bump (MOTIR-7027). */
+  agentInstanceId: string | null;
 }
 
 /** An open run and who started it — the holder a refused repair claim names. */
@@ -668,7 +670,8 @@ export const dispatchRunRepository = {
              "status",
              "stop_reason" AS "stopReason",
              "ended_at"    AS "endedAt",
-             "created_by_id" AS "createdById"
+             "created_by_id" AS "createdById",
+             "agent_instance_id" AS "agentInstanceId"
         FROM "dispatch_run"
        WHERE "id" = ${id}
        FOR UPDATE
@@ -695,27 +698,29 @@ export const dispatchRunRepository = {
   },
 
   /**
-   * The LAPSE REAP's cross-tenant discovery read (MOTIR-6528): LOCAL runs still
-   * `running` whose last heartbeat is older than the cut-off, oldest first.
-   *
-   * ⚠️ LOCAL ONLY, still. An `instance` run (MOTIR-7023) heartbeats too and
-   * `isRunAlive` lapses it by the same rule, but its close must go through the
-   * agent's end path, which revokes its credentials and stops its session
-   * (`agent-instance-run.md` §6) — the reap widening is MOTIR-7027's, with that
-   * end path.
+   * The LAPSE REAP's cross-tenant discovery read (MOTIR-6528): LOCAL and
+   * INSTANCE runs still `running` whose last heartbeat is older than the cut-off,
+   * oldest first. Both heartbeat from the CLI and `isRunAlive` lapses both by the
+   * same rule; the reap closes an `instance` one through the agent's end path,
+   * which revokes its credentials and stops its session (`agent-instance-run.md`
+   * §6, MOTIR-7027).
    *
    * A null heartbeat never matches — a run opened by a CLI that never heartbeats
    * stays on the 12-hour age reap, and a HOSTED run's liveness is its
    * supervision. Same `withSystemContext` contract as
    * {@link listStaleRunningAcrossWorkspaces}: read-only, every write re-binds.
    */
-  async listLapsedLocalRunningAcrossWorkspaces(
+  async listLapsedHeartbeatingRunningAcrossWorkspaces(
     heartbeatBefore: Date,
     take: number,
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRun[]> {
     return tx.dispatchRun.findMany({
-      where: { status: 'running', origin: 'local', lastHeartbeatAt: { lt: heartbeatBefore } },
+      where: {
+        status: 'running',
+        origin: { in: ['local', 'instance'] },
+        lastHeartbeatAt: { lt: heartbeatBefore },
+      },
       orderBy: { lastHeartbeatAt: 'asc' },
       take,
     });

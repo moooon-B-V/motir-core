@@ -31,6 +31,9 @@ export async function armIdleTimer(row: AgentInstance): Promise<void> {
   });
 }
 
+/** How often a run's events may bump its agent's idle signal (`agent-instance-run.md` §6). */
+export const RUN_ACTIVITY_BUMP_MS = 60_000;
+
 export const agentInstanceActivityService = {
   /** Bump the idle signal (§2) — the terminal relay and later runs call it. */
   async touchActivity(instanceId: string): Promise<void> {
@@ -38,6 +41,27 @@ export const agentInstanceActivityService = {
     if (!row) return;
     const moved = await withWorkspaceServiceContext(row.workspaceId, (tx) =>
       agentInstanceRepository.touchActivity(row.id, agentInstanceClock.now(), tx),
+    );
+    if (moved === 1 && row.state === 'running') await armIdleTimer(row);
+  },
+
+  /**
+   * A RUN'S EVENT bumps its agent (`agent-instance-run.md` §6 · MOTIR-7027) — the
+   * same door as {@link touchActivity}, at most once a minute: a run streams
+   * events far more often than the idle window needs to hear about it, and each
+   * bump re-arms the debounced idle timer.
+   */
+  async touchRunActivity(instanceId: string): Promise<void> {
+    const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
+    if (!row) return;
+    const now = agentInstanceClock.now();
+    const moved = await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+      agentInstanceRepository.touchActivityIfStale(
+        row.id,
+        now,
+        new Date(now.getTime() - RUN_ACTIVITY_BUMP_MS),
+        tx,
+      ),
     );
     if (moved === 1 && row.state === 'running') await armIdleTimer(row);
   },

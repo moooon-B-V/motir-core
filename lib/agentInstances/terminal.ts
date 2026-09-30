@@ -129,6 +129,18 @@ export function agentRunLaunchCommand(workItemKey: string, dispatchRunId: string
   return [...AS_NODE, 'run', workItemKey, '--run-id', dispatchRunId];
 }
 
+/**
+ * §6: stop a run's session in the agent — `SIGTERM`, then `SIGKILL` after the
+ * launcher's 10-second grace. Answers `{"result":"stopped"|"not_found"}`; the
+ * caller reads nothing from it, because the run is already closed when it asks.
+ */
+export function agentRunStopCommand(dispatchRunId: string): string[] {
+  return [...AS_NODE, 'stop', '--run-id', dispatchRunId];
+}
+
+/** The stop's exec timeout: the launcher's grace, its own margin, and room for the exec. */
+export const AGENT_RUN_STOP_TIMEOUT_SECONDS = 30;
+
 /** The last line of an exec's stdout that parses as a JSON object, or null. */
 function lastJsonObject(stdout: string): Record<string, unknown> | null {
   const lines = stdout.split('\n').map((l) => l.trim());

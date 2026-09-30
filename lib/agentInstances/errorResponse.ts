@@ -21,6 +21,10 @@ import {
   AgentNotSignedInError,
   AgentProfileCannotRunError,
   AgentRunCardNotReadyError,
+  AgentInstanceRunActiveError,
+  AgentRunAlreadyEndedError,
+  AgentRunCancelForbiddenError,
+  AgentRunNotFoundError,
 } from './errors';
 
 // The agent-instance routes' ONE error mapper (Story MOTIR-6860 · MOTIR-6872).
@@ -48,7 +52,10 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
   if (err instanceof AgentTerminalNotOwnerError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
   }
-  if (err instanceof AgentInstanceNotFoundError) {
+  if (err instanceof AgentRunCancelForbiddenError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
+  }
+  if (err instanceof AgentInstanceNotFoundError || err instanceof AgentRunNotFoundError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }
   if (err instanceof AgentInstanceNameInvalidError || err instanceof AgentProfileNotOfferedError) {
@@ -73,6 +80,20 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
     // refusal names the run holding the agent so the page can link it.
     return NextResponse.json(
       { code: err.code, error: err.message, runId: err.runId, workItemKey: err.workItemKey },
+      { status: 409 },
+    );
+  }
+  if (err instanceof AgentInstanceRunActiveError) {
+    // Hibernate / Delete under a live run (MOTIR-7027, §6) — refused, naming the
+    // run the way the start's busy refusal does, so the page links it the same way.
+    return NextResponse.json(
+      { code: err.code, error: err.message, runId: err.runId, workItemKey: err.workItemKey },
+      { status: 409 },
+    );
+  }
+  if (err instanceof AgentRunAlreadyEndedError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, status: err.status },
       { status: 409 },
     );
   }

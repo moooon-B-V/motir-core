@@ -162,7 +162,8 @@ export const jobServices = {
   // the sweep that reconciles, hibernates, cleans orphans and charges.
   agentInstanceSweep: agentInstanceSweepService,
   // A card's run in a developer's agent (Story MOTIR-6864 · MOTIR-7026): the
-  // launch job's wait for the agent and its launcher exec.
+  // launch job's wait for the agent and its launcher exec; and (MOTIR-7027) the
+  // supervise job's pass.
   agentInstanceRun: agentInstanceRunService,
   // The agent terminal (Story MOTIR-6861 · MOTIR-6940): the sweep's second step
   // deletes terminal tickets past their 60-second life; the third (MOTIR-6959)

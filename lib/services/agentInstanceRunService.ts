@@ -8,12 +8,17 @@ import {
   AgentInstanceWrongProjectError,
   AgentNotSignedInError,
   AgentProfileCannotRunError,
+  AgentRunAlreadyEndedError,
+  AgentRunCancelForbiddenError,
   AgentRunCardNotReadyError,
+  AgentRunNotFoundError,
 } from '@/lib/agentInstances/errors';
 import { profileCanRunCards, profileDisplayName } from '@/lib/agentInstances/profiles';
 import {
   AGENT_RUN_LAUNCH_TIMEOUT_SECONDS,
+  AGENT_RUN_STOP_TIMEOUT_SECONDS,
   agentRunLaunchCommand,
+  agentRunStopCommand,
   isAgentTerminalConfigured,
   parseLaunchAnswer,
 } from '@/lib/agentInstances/terminal';
@@ -33,12 +38,18 @@ import {
   HostedRunRepositoryNotWritableError,
   type RunGitWriteRefusal,
 } from '@/lib/hostedRuns/errors';
-import { latestRunCredentialExpiry } from '@/lib/hostedRuns/limits';
+import {
+  HOSTED_RUN_STALL_WINDOW_MS,
+  HOSTED_RUN_TIMEOUT_MS,
+  hostedRunStallWindowMs,
+  latestRunCredentialExpiry,
+} from '@/lib/hostedRuns/limits';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { toAgentForCardDto } from '@/lib/mappers/agentInstanceRunMappers';
 import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
+import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import {
   dispatchRunRepository,
   type RunningDispatchRunInAgent,
@@ -92,8 +103,29 @@ import {
 // the partial unique index lets one open, and `dispatchRunService.open` names the
 // winner to the loser (`namedAgentBusy`), whose refusal then names its card too.
 //
-// What happens AFTER the launch — the supervise job, the stall window, Cancel,
-// the lost machine and every other close — is MOTIR-7027's, on {@link end}.
+// ── AFTER THE LAUNCH (MOTIR-7027, §6) — EVERY RUN IN AN AGENT ENDS ──────────
+// Every end that is not the CLI's own close goes through ONE path, {@link end}:
+// the run token and the App's git tokens revoked, a closing `log` line naming
+// why, the run closed if it is still open. The paths that reach it, each hung off
+// a TRANSITION rather than a polled state:
+//
+//   * the supervise job (`agent-instance-run/supervise`, {@link supervise}) — the
+//     one case with no transition, a run gone silent: the agent stopped under it
+//     (`failed`), the 15-minute stall or the 12-hour backstop (`timed_out`);
+//   * Cancel by the agent's owner ({@link cancel}) — `cancelled`, then the run's
+//     session stopped in the agent;
+//   * the lifecycle (`agentInstanceLifecycleService`) — a lost machine, a machine
+//     that stopped behind Motir's back, the sweep's backstop and credit stops;
+//   * the lapse reap (`dispatchRunSweepService.reapLapsed`) — a CLI that stopped
+//     heartbeating;
+//   * the launch job, when the agent never came up or refused the launch.
+//
+// The CLI's own close (`POST /api/v1/dispatch-runs/[id]/close`) is the one close
+// that is not the end path's; `dispatchRunService.close` revokes after it commits
+// ({@link revokeCredentials}), and the supervise job's next pass revokes again,
+// which is how a revoke that failed is retried. Whichever path closes first, the
+// others find the run closed and write nothing: the close is a locked
+// compare-and-set, and every revoke is idempotent.
 
 /** What a start request asks for. */
 export interface StartAgentRunInput {
@@ -114,15 +146,75 @@ export function agentRunLaunchKey(dispatchRunId: string): string {
   return `agent-instance-run:${dispatchRunId}`;
 }
 
-/** The ends this card closes a run with (MOTIR-7027 adds the lifecycle's). */
-export type AgentRunEndOutcome = 'failed';
+/** The one idempotency key a run's supervise job is enqueued under (MOTIR-7027). */
+export function agentRunSuperviseKey(dispatchRunId: string): string {
+  return `agent-instance-run/supervise:${dispatchRunId}`;
+}
+
+/** How often the supervise job looks at a running run — the hosted supervisor's poll. */
+export const AGENT_RUN_SUPERVISE_POLL_MS = 60_000;
+
+/** The 12-hour backstop on a run in an agent — the hosted run's (`hosted-agent-run.md`). */
+export const AGENT_RUN_BACKSTOP_MS = HOSTED_RUN_TIMEOUT_MS;
+
+/**
+ * The closing words of each end (`agent-instance-run.md` §6). The stall and the
+ * backstop are the HOSTED run's words, so the item page's *run died* sentence
+ * splits a timed-out run in an agent the way it splits a hosted one (the
+ * `/12[- ]hour|backstop/` test in `workItemContinueService`). The design
+ * (MOTIR-7022 rev 2) left the backstop's words open; these are the hosted
+ * end path's own (`hostedRunService`'s `timed out at the 12-hour backstop`).
+ */
+export const AGENT_RUN_END_DETAIL = {
+  stall: `stalled: no agent output for ${HOSTED_RUN_STALL_WINDOW_MS / 60_000} minutes`,
+  backstop: `timed out at the ${HOSTED_RUN_TIMEOUT_MS / 3_600_000}-hour backstop`,
+  agentStopped: 'the agent stopped',
+  machineLost: 'the agent’s machine was lost',
+  outOfCredits: 'out of credits',
+  cancelled: 'cancelled by the agent’s owner',
+} as const;
+
+/**
+ * How a run in an agent ends when the CLI did not close it (§6). There is no
+ * `succeeded`: the CLI in the agent decides success and closes the run itself.
+ */
+export type AgentRunEndOutcome = 'failed' | 'cancelled' | 'stall' | 'backstop' | 'lapsed';
 
 const CLOSE_FOR: Record<
   AgentRunEndOutcome,
-  { stopReason: 'halted'; status: 'failed'; label: string }
+  {
+    stopReason: 'halted' | 'interrupted' | 'abandoned';
+    status: 'failed' | 'cancelled' | 'timed_out';
+    label: string;
+  }
 > = {
   failed: { stopReason: 'halted', status: 'failed', label: 'failed' },
+  cancelled: { stopReason: 'interrupted', status: 'cancelled', label: 'cancelled' },
+  stall: { stopReason: 'abandoned', status: 'timed_out', label: 'stalled' },
+  backstop: { stopReason: 'abandoned', status: 'timed_out', label: 'backstop' },
+  lapsed: { stopReason: 'abandoned', status: 'timed_out', label: 'stopped reporting' },
 };
+
+/** What {@link agentInstanceRunService.end} did — never a throw. */
+export interface AgentRunEndResult {
+  /** True when THIS call closed the run; false when the CLI (or another path) had. */
+  closed: boolean;
+  /** Run tokens deleted by this call (0 when an earlier close already had). */
+  runCredential: number;
+  /** Whether the run's session in the agent was asked to stop (only when asked for and closed here). */
+  sessionStop: 'stopped' | 'unreachable' | 'not_asked';
+}
+
+/** One pass of the supervise job: stop with a word, or come back at `deferUntil`. */
+export type AgentRunSuperviseVerdict =
+  | 'closed'
+  | 'failed'
+  | 'stalled'
+  | 'backstop'
+  | { deferUntil: Date };
+
+/** The agent states a running run may sit in: up, or coming up for its launch. */
+const AGENT_UP: readonly AgentInstance['state'][] = ['running', 'starting', 'waking'];
 
 function projectKeyOf(identifier: string): string {
   const dash = identifier.lastIndexOf('-');
@@ -468,6 +560,16 @@ export const agentInstanceRunService = {
         },
         { strict: true },
       );
+      // ── 12 · And its supervision (§6, MOTIR-7027): every run in an agent ENDS ─
+      await sendEvent(
+        'agent-instance-run/supervise',
+        {
+          workspaceId: ctx.workspaceId,
+          dispatchRunId: run.id,
+          idempotencyKey: agentRunSuperviseKey(run.id),
+        },
+        { strict: true },
+      );
       return { dispatchRunId: run.id, created: true, woke };
     } catch (err) {
       await this.end(run.id, 'failed', `the run could not start: ${detailOf(err)}`);
@@ -580,33 +682,33 @@ export const agentInstanceRunService = {
   },
 
   /**
-   * THE END PATH of a run in an agent (§6) — revoke the run token and every App
-   * git token, then close the run ONLY IF it is still open (the CLI in the agent
-   * closes the run it adopted), with a `log` line naming why. It mints and revokes
-   * no gateway key: there is none. Idempotent, and never a throw. This card ends
-   * only a launch that failed; MOTIR-7027 adds the lifecycle's ends (the lost
-   * machine, the stall, Cancel) and stops the run's session in the agent.
+   * THE END PATH of a run in an agent (§6) — the ONE function every end but the
+   * CLI's own close calls. Revoke the run token and every App git token FIRST, so
+   * the agent can push and report nothing more; then close the run ONLY IF it is
+   * still open (the CLI in the agent closes the run it adopted), with a `log` line
+   * naming why; then — when asked, and only when this call closed it — stop the
+   * run's session in the agent (`motir agent-terminal stop --run-id`). A stop that
+   * cannot reach the machine is not an error: the credentials are already dead,
+   * and the CLI's next heartbeat is refused `409`, which it treats as closed.
+   *
+   * It mints and revokes no gateway key: there is none. It writes NO card status
+   * on any end — no other end than the CLI's success moves a card
+   * (`run-death-keeps-work.md` §3); closing settles the legs and recomputes the
+   * cards' To fix reason, exactly as a failed hosted run's close does.
+   * Idempotent, and never a throw.
    */
   async end(
     dispatchRunId: string,
     outcome: AgentRunEndOutcome,
     detail: string,
-  ): Promise<{ closed: boolean; runCredential: number }> {
-    let runCredential = 0;
-    try {
-      runCredential = (await runCredentialService.revokeRunCredential(dispatchRunId)).revoked;
-    } catch (err) {
-      /* v8 ignore next 4 -- a database fault mid end-path; the close below still runs */
-      console.error('[agentInstanceRunService] could not revoke the run credential', {
-        dispatchRunId,
-        detail: detailOf(err),
-      });
-    }
-    await revokeRunGitCredentials(dispatchRunId);
+    options: { stopSession?: boolean } = {},
+  ): Promise<AgentRunEndResult> {
+    const runCredential = await this.revokeCredentials(dispatchRunId);
 
     const run = await withSystemContext((tx) => dispatchRunRepository.findById(dispatchRunId, tx));
-    if (!run || run.status !== 'running' || !run.createdById)
-      return { closed: false, runCredential };
+    if (!run || run.status !== 'running' || !run.createdById) {
+      return { closed: false, runCredential, sessionStop: 'not_asked' };
+    }
     const ctx: ServiceContext = { userId: run.createdById, workspaceId: run.workspaceId };
     const close = CLOSE_FOR[outcome];
     try {
@@ -616,7 +718,8 @@ export const agentInstanceRunService = {
           {
             kind: 'log',
             body: `[motir] run in agent ended (${close.label}): ${detail}\n`,
-            data: { end: outcome },
+            // `message` is what the *run died* sentence reads to split a timeout.
+            data: { end: outcome, message: detail },
           },
         ],
         ctx,
@@ -626,17 +729,171 @@ export const agentInstanceRunService = {
         { stopReason: close.stopReason, status: close.status },
         ctx,
       );
-      return { closed: true, runCredential };
     } catch (err) {
-      /* v8 ignore next 6 -- the CLI closed it between the read and the close: its status stands */
+      // The CLI (or another path) closed it between the read and the close: its
+      // status stands, and this call wrote nothing.
       if (!(err instanceof DispatchRunTerminalError)) {
+        /* v8 ignore next 4 -- a database fault mid end-path; the supervise job's next pass retries */
         console.error('[agentInstanceRunService] could not close the run', {
           dispatchRunId,
           detail: detailOf(err),
         });
       }
-      return { closed: false, runCredential };
+      return { closed: false, runCredential, sessionStop: 'not_asked' };
     }
+    const sessionStop = options.stopSession
+      ? await this.stopSession(dispatchRunId, run.agentInstanceId)
+      : 'not_asked';
+    return { closed: true, runCredential, sessionStop };
+  },
+
+  /**
+   * Revoke a run's credentials — its run token and every App git token recorded
+   * for it. Idempotent and never a throw: what it could not revoke stays recorded
+   * and the next call tries again (the supervise job's closed-run pass is that
+   * retry). Returns how many run tokens THIS call deleted.
+   */
+  async revokeCredentials(dispatchRunId: string): Promise<number> {
+    let revoked = 0;
+    try {
+      revoked = (await runCredentialService.revokeRunCredential(dispatchRunId)).revoked;
+    } catch (err) {
+      /* v8 ignore next 4 -- a database fault mid end-path; the supervise job retries it */
+      console.error('[agentInstanceRunService] could not revoke the run credential', {
+        dispatchRunId,
+        detail: detailOf(err),
+      });
+    }
+    await revokeRunGitCredentials(dispatchRunId);
+    return revoked;
+  },
+
+  /**
+   * Stop a run's session in its agent (§1: `motir agent-terminal stop --run-id`).
+   * `unreachable` when the agent is not running, has no handle, or the exec
+   * failed — never a throw, because the run is already closed when this is asked.
+   */
+  async stopSession(
+    dispatchRunId: string,
+    agentInstanceId: string | null,
+  ): Promise<'stopped' | 'unreachable'> {
+    const agent = agentInstanceId ? await readAgent(agentInstanceId) : null;
+    const handle =
+      agent && !agent.deletedAt && agent.state === 'running' ? agentInstanceHandle(agent) : null;
+    if (!handle) return 'unreachable';
+    try {
+      await getPersistentOrchestrator().exec(handle, agentRunStopCommand(dispatchRunId), {
+        timeoutSeconds: AGENT_RUN_STOP_TIMEOUT_SECONDS,
+      });
+      return 'stopped';
+    } catch (err) {
+      console.warn('[agentInstanceRunService] the run session could not be stopped', {
+        dispatchRunId,
+        detail: detailOf(err),
+      });
+      return 'unreachable';
+    }
+  },
+
+  /**
+   * ONE PASS of a run's supervision (§6) — the `agent-instance-run/supervise`
+   * job's body, in the decision's order:
+   *
+   *   1. the run has closed (the CLI, a cancel, the lifecycle, the reap): make
+   *      sure its credentials are dead — the retry of a revoke that failed at the
+   *      close — and stop (`closed`);
+   *   2. the agent is no longer up (hibernated, failed, lost, deleted): close the
+   *      run `failed`, *"the agent stopped"*;
+   *   3. the latest event is older than the stall window (15 minutes): close
+   *      `timed_out` and stop the session;
+   *   4. the run has reached the 12-hour backstop: the same.
+   *
+   * Otherwise `{ deferUntil }`, a minute on — the job DEFERS to it. An agent still
+   * `starting` / `waking` is up: the launch job owns that wait and its deadline.
+   */
+  async supervise(dispatchRunId: string): Promise<AgentRunSuperviseVerdict> {
+    const run = await withSystemContext((tx) => dispatchRunRepository.findById(dispatchRunId, tx));
+    if (!run) return 'closed';
+    if (run.status !== 'running') {
+      await this.revokeCredentials(dispatchRunId);
+      return 'closed';
+    }
+    const agent = run.agentInstanceId ? await readAgent(run.agentInstanceId) : null;
+    if (!agent || agent.deletedAt || !AGENT_UP.includes(agent.state)) {
+      await this.end(dispatchRunId, 'failed', AGENT_RUN_END_DETAIL.agentStopped);
+      return 'failed';
+    }
+    const now = agentInstanceClock.now().getTime();
+    const latest = await withWorkspaceServiceContext(run.workspaceId, (tx) =>
+      dispatchRunEventRepository.findLatestCreatedAt(dispatchRunId, tx),
+    );
+    const lastSign = Math.max(latest?.getTime() ?? 0, run.startedAt.getTime());
+    if (now - lastSign >= hostedRunStallWindowMs()) {
+      await this.end(dispatchRunId, 'stall', AGENT_RUN_END_DETAIL.stall, { stopSession: true });
+      return 'stalled';
+    }
+    if (now - run.startedAt.getTime() >= AGENT_RUN_BACKSTOP_MS) {
+      await this.end(dispatchRunId, 'backstop', AGENT_RUN_END_DETAIL.backstop, {
+        stopSession: true,
+      });
+      return 'backstop';
+    }
+    return { deferUntil: new Date(now + AGENT_RUN_SUPERVISE_POLL_MS) };
+  },
+
+  /**
+   * CANCEL a run in an agent (§6) — ONLY the agent's owner, because nobody else
+   * can reach an agent (`agent-instances.md` §8); a project admin cannot, unlike a
+   * hosted run. The run is closed `cancelled` through {@link end} — its
+   * credentials revoked first — and THEN its session is stopped in the agent. A
+   * machine that cannot be reached leaves the close standing.
+   *
+   * Refuses, each before anything is revoked: a run that does not exist, is in
+   * another workspace, is not a run in an agent, or is on a project the caller
+   * cannot browse (404 — no existence leak); a caller who is not the agent's
+   * owner (403); a run already ended (409). A cancel racing the CLI's own close
+   * resolves to whichever close landed first; the other writes nothing.
+   */
+  async cancel(dispatchRunId: string, ctx: ServiceContext): Promise<{ dispatchRunId: string }> {
+    const run = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      dispatchRunRepository.findById(dispatchRunId, tx),
+    );
+    if (!run || run.workspaceId !== ctx.workspaceId || run.origin !== 'instance') {
+      throw new AgentRunNotFoundError(dispatchRunId);
+    }
+    const agent = run.agentInstanceId ? await readAgent(run.agentInstanceId) : null;
+    const owner = agent?.ownerId ?? run.createdById;
+    if (owner !== ctx.userId) {
+      try {
+        await projectAccessService.assertCanBrowse(run.projectId, ctx);
+      } catch {
+        throw new AgentRunNotFoundError(dispatchRunId);
+      }
+      throw new AgentRunCancelForbiddenError(dispatchRunId);
+    }
+    if (run.status !== 'running') throw new AgentRunAlreadyEndedError(dispatchRunId, run.status);
+    await this.end(dispatchRunId, 'cancelled', AGENT_RUN_END_DETAIL.cancelled, {
+      stopSession: true,
+    });
+    return { dispatchRunId };
+  },
+
+  /**
+   * Close the run RUNNING IN an agent, if there is one, through {@link end} — the
+   * lifecycle's door (§6: the lost machine, the backstop and credit stops, a
+   * machine that stopped behind Motir's back). The machine is going away or gone,
+   * so no session is stopped. Returns whether a run was closed here.
+   */
+  async endRunningInAgent(
+    agent: Pick<AgentInstance, 'id' | 'workspaceId'>,
+    outcome: AgentRunEndOutcome,
+    detail: string,
+  ): Promise<boolean> {
+    const running = await withWorkspaceServiceContext(agent.workspaceId, (tx) =>
+      dispatchRunRepository.findRunningByAgentInstance(agent.id, tx),
+    );
+    if (!running) return false;
+    return (await this.end(running.id, outcome, detail)).closed;
   },
 
   /**

@@ -62,6 +62,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { holdsRecordView, projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
+import { agentInstanceActivityService } from '@/lib/services/agentInstanceActivityService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/context';
@@ -525,6 +526,31 @@ export async function namedAgentBusy(
   return winner ? new DispatchRunAgentBusyError(err.agentInstanceId, winner.id) : err;
 }
 
+/**
+ * Bump a run's agent's idle signal (MOTIR-7027). Best effort: a failure is
+ * logged, never thrown — the events are already committed.
+ */
+async function bumpAgentActivity(agentInstanceId: string): Promise<void> {
+  try {
+    await agentInstanceActivityService.touchRunActivity(agentInstanceId);
+  } catch (err) {
+    console.warn('[dispatchRunService] could not bump the agent’s activity', {
+      agentInstanceId,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/**
+ * Revoke a closed run-in-an-agent's credentials (MOTIR-7027) through the run's
+ * own service — reached by a dynamic import because that service composes this
+ * one. `revokeCredentials` never throws.
+ */
+async function revokeAgentRunCredentials(runId: string): Promise<void> {
+  const { agentInstanceRunService } = await import('@/lib/services/agentInstanceRunService');
+  await agentInstanceRunService.revokeCredentials(runId);
+}
+
 export const dispatchRunService = {
   /**
    * OPEN a run WITH ITS SET.
@@ -729,7 +755,7 @@ export const dispatchRunService = {
       }
     }
 
-    return withWorkspaceContext(
+    const { appended, agentInstanceId } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
         const locked = await dispatchRunRepository.findTerminalStateForUpdate(runId, tx);
@@ -809,15 +835,23 @@ export const dispatchRunService = {
           }
         }
 
-        const appended = await dispatchRunEventRepository.createMany(rows, tx);
+        const created = await dispatchRunEventRepository.createMany(rows, tx);
         return {
-          runId,
-          appended,
-          seq,
-          cards: [...touched.values()].map(toDispatchRunCardDto),
+          agentInstanceId: locked.agentInstanceId,
+          appended: {
+            runId,
+            appended: created,
+            seq,
+            cards: [...touched.values()].map(toDispatchRunCardDto),
+          },
         };
       },
     );
+    // A run in an agent keeps its agent awake (`agent-instance-run.md` §6,
+    // MOTIR-7027): an accepted event bumps the agent's idle signal, at most once a
+    // minute — after the commit, and never a reason to refuse the events.
+    if (agentInstanceId !== null) await bumpAgentActivity(agentInstanceId);
+    return appended;
   },
 
   /**
@@ -1016,9 +1050,16 @@ export const dispatchRunService = {
     cardLocks: RunCardLockMode = 'wait',
   ): Promise<DispatchRunDto> {
     assertRunTokenScope(runId, ctx);
-    return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
-      dispatchRunService.closeWithin(runId, input, ctx, tx, undefined, cardLocks),
+    const closed = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => dispatchRunService.closeWithin(runId, input, ctx, tx, undefined, cardLocks),
     );
+    // A run in an agent loses its credentials at EVERY close, the CLI's own
+    // included (`agent-instance-run.md` §6, MOTIR-7027) — after the close commits,
+    // never able to undo it. A revoke that fails is retried by the run's
+    // supervise job, which finds the run closed and revokes again.
+    if (closed.origin === 'instance') await revokeAgentRunCredentials(runId);
+    return closed;
   },
 
   /**

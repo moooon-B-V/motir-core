@@ -583,7 +583,11 @@ describe('after the open — every failure ends the run and leaves nothing live'
     expect(run.status).toBe('failed');
     expect(await launchJobs()).toEqual([]);
     // The end path is idempotent: a second end closes nothing.
-    expect(await runs.end(run.id, 'failed', 'again')).toEqual({ closed: false, runCredential: 0 });
+    expect(await runs.end(run.id, 'failed', 'again')).toEqual({
+      closed: false,
+      runCredential: 0,
+      sessionStop: 'not_asked',
+    });
   });
 
   it('the launcher refusing ends the run failed and revokes the token; the card keeps its status', async () => {

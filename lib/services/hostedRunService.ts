@@ -43,6 +43,7 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { agentInstanceRunService } from '@/lib/services/agentInstanceRunService';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import {
@@ -1065,6 +1066,7 @@ export const hostedRunService = {
 
   /**
    * CANCEL a running hosted run (MOTIR-6450) — the dispatcher or a project admin.
+   * A run in an agent is handed to `agentInstanceRunService.cancel` (MOTIR-7027).
    *
    * It ends the run through {@link endHostedRun} at once: the gateway key, the run
    * credential and every git token are revoked, so the agent can spend and push
@@ -1083,8 +1085,13 @@ export const hostedRunService = {
     const run = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       dispatchRunRepository.findById(dispatchRunId, tx),
     );
-    // Hosted only: an `instance` run is cancelled through the agent's own end path
-    // (`agent-instance-run.md` §6, MOTIR-7027/7028), never this container stop.
+    // A run in an agent is cancelled through the agent's own end path — its owner
+    // only, and its session stopped in the agent (`agent-instance-run.md` §6,
+    // MOTIR-7027) — never this container stop. One door, so the run panel's Cancel
+    // is the same call whichever kind of run it shows.
+    if (run?.origin === 'instance' && run.workspaceId === ctx.workspaceId) {
+      return agentInstanceRunService.cancel(dispatchRunId, ctx);
+    }
     if (!run || run.workspaceId !== ctx.workspaceId || run.origin !== 'hosted') {
       throw new HostedRunNotFoundError(dispatchRunId);
     }

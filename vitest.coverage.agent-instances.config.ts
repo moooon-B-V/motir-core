@@ -54,6 +54,8 @@ const MEASURED = [
   'lib/services/agentInstanceRunService.ts',
   'lib/mappers/agentInstanceRunMappers.ts',
   'lib/jobs/definitions/agentInstanceRunLaunch.ts',
+  // MOTIR-7027 — the run's supervision; the lifecycle couplings live in files above.
+  'lib/jobs/definitions/agentInstanceRunSupervise.ts',
   'app/api/work-items/[[]id]/agent-runs/**/*.ts',
 ];
 

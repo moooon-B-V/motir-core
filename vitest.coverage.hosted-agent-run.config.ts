@@ -60,6 +60,9 @@ export default defineConfig({
       // banner announces and `HostedRunProvider` listens for — all under this lane's
       // `components/hosted/**` and provider floors.
       'tests/components/fix-hosted-door.test.tsx',
+      // Story MOTIR-6864 · MOTIR-7027 — the cancel route (measured below) also takes a
+      // run in an agent; its instance arm is driven by the agent run's lifecycle suite.
+      'tests/agentInstances/agentInstanceRunLifecycle.test.ts',
     ],
     coverage: {
       provider: 'v8',

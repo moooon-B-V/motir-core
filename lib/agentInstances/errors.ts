@@ -193,3 +193,55 @@ export class AgentNotSignedInError extends Error {
     this.name = 'AgentNotSignedInError';
   }
 }
+
+// ── A live run and the lifecycle (MOTIR-7027 · `agent-instance-run.md` §6) ──
+
+/**
+ * Hibernate or Delete refused while the agent is running a card (409). It names
+ * the run — and its card, when known — so the page can link it and the person
+ * can cancel it first. Nothing was changed.
+ */
+export class AgentInstanceRunActiveError extends Error {
+  readonly code = 'agent_instance_run_active' as const;
+  constructor(
+    readonly instanceId: string,
+    readonly runId: string,
+    readonly workItemKey: string | null,
+    readonly action: 'hibernated' | 'deleted',
+  ) {
+    super(
+      `This agent is running ${workItemKey ?? `run ${runId}`}, so it can’t be ${action}. Cancel the run first.`,
+    );
+    this.name = 'AgentInstanceRunActiveError';
+  }
+}
+
+/** No run in an agent by that id that the caller can see (404) — Cancel's no-leak answer. */
+export class AgentRunNotFoundError extends Error {
+  readonly code = 'agent_run_not_found' as const;
+  constructor(readonly dispatchRunId: string) {
+    super(`No run ${dispatchRunId}.`);
+    this.name = 'AgentRunNotFoundError';
+  }
+}
+
+/** Only the agent's owner may cancel a run in it — `agent-instances.md` §8 (403). */
+export class AgentRunCancelForbiddenError extends Error {
+  readonly code = 'agent_run_cancel_forbidden' as const;
+  constructor(readonly dispatchRunId: string) {
+    super('Only the owner of the agent can cancel a run in it.');
+    this.name = 'AgentRunCancelForbiddenError';
+  }
+}
+
+/** The run in the agent has already ended — there is nothing to cancel (409). */
+export class AgentRunAlreadyEndedError extends Error {
+  readonly code = 'agent_run_already_ended' as const;
+  constructor(
+    readonly dispatchRunId: string,
+    readonly status: string,
+  ) {
+    super(`This run has already ended (${status}).`);
+    this.name = 'AgentRunAlreadyEndedError';
+  }
+}

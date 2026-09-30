@@ -161,6 +161,24 @@ export const agentInstanceRepository = {
   },
 
   /**
+   * Bump the idle signal ONLY IF it is older than `staleBefore` — the run-event
+   * bump, at most once a minute (`agent-instance-run.md` §6). The guard is the
+   * WHERE clause, so concurrent events move it once. `tx` required.
+   */
+  async touchActivityIfStale(
+    id: string,
+    at: Date,
+    staleBefore: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.agentInstance.updateMany({
+      where: { id, ...LIVE, lastActivityAt: { lt: staleBefore } },
+      data: { lastActivityAt: at },
+    });
+    return result.count;
+  },
+
+  /**
    * Record the terminal-server probe (`agent-terminal.md` Q8): whether the image
    * `digest` serves a terminal. Guarded on the digest the row still pins, so a
    * probe that raced an image move can never stamp the new digest with the old
