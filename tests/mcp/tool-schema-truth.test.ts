@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { MCP_TOOL_INPUT_SCHEMAS } from '@/lib/apiDocs/mcpToolSchemas';
+import {
+  MCP_TOOL_ANNOTATIONS,
+  MCP_TOOL_INPUT_SCHEMAS,
+  MCP_TOOL_TITLES,
+} from '@/lib/apiDocs/mcpToolSchemas';
 import { mcpToolRows, type McpCatalogueToolName } from '@/lib/apiDocs/mcp';
 import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import {
   generateMcpToolSchemas,
   isMcpToolSchemasStale,
+  listShippedTools,
   listShippedToolSchemas,
   readCommittedMcpToolSchemas,
 } from '../../scripts/generateMcpToolSchemas';
@@ -132,6 +137,81 @@ describe('Guard B — every served schema is the one the SERVER serves', () => {
     expect(rows.length).toBe(shipped.size);
     expect(
       driftedSchemas([...shipped], (name) => rows.find((r) => r.name === name)?.inputSchema),
+    ).toEqual([]);
+  });
+});
+
+// ── The TITLE and HINT maps (Story MOTIR-6974 · Subtask MOTIR-7002) ────────
+// The same two guards, over the two values the generated leaf gained. Guard A
+// above already covers them (it compares the whole file, byte for byte); these
+// compare each VALUE against a fresh handshake, and drive the predicate over an
+// in-memory edit so it is proved to fire.
+describe('Guard B, for titles and hints — every stored value is the one `tools/list` serves', () => {
+  async function shippedPairs(field: 'title' | 'annotations'): Promise<[string, unknown][]> {
+    return (await listShippedTools()).map((tool): [string, unknown] => [tool.name, tool[field]]);
+  }
+
+  it('the two maps carry exactly the tools the server exposes', async () => {
+    const shipped = (await listShippedTools()).map((tool) => tool.name).sort();
+    expect(Object.keys(MCP_TOOL_TITLES).sort()).toEqual(shipped);
+    expect(Object.keys(MCP_TOOL_ANNOTATIONS).sort()).toEqual(shipped);
+  });
+
+  it('every stored title equals the served one', async () => {
+    expect(
+      driftedSchemas(
+        await shippedPairs('title'),
+        (name) => MCP_TOOL_TITLES[name as McpCatalogueToolName],
+      ),
+      'Run `pnpm generate:mcp-tool-schemas` and commit the result.',
+    ).toEqual([]);
+  });
+
+  it('every stored hint set equals the served one', async () => {
+    expect(
+      driftedSchemas(
+        await shippedPairs('annotations'),
+        (name) => MCP_TOOL_ANNOTATIONS[name as McpCatalogueToolName],
+      ),
+      'Run `pnpm generate:mcp-tool-schemas` and commit the result.',
+    ).toEqual([]);
+  });
+
+  it('FIRES on an edited title — a copy changed in memory', async () => {
+    const shipped = await shippedPairs('title');
+    const victim = shipped[0]![0];
+    const edited = { ...MCP_TOOL_TITLES, [victim]: 'A title nobody registered' };
+    expect(driftedSchemas(shipped, (name) => edited[name as McpCatalogueToolName])).toEqual([
+      victim,
+    ]);
+  });
+
+  it('FIRES on an edited hint — a destructive tool published as read-only', async () => {
+    const shipped = await shippedPairs('annotations');
+    const edited = {
+      ...MCP_TOOL_ANNOTATIONS,
+      delete_work_item: { readOnlyHint: true as const, openWorldHint: false },
+    };
+    expect(driftedSchemas(shipped, (name) => edited[name as McpCatalogueToolName])).toEqual([
+      'delete_work_item',
+    ]);
+  });
+
+  it('REPORTS a regenerated file whose hints moved — the byte guard sees the maps too', async () => {
+    const generated = await generateMcpToolSchemas();
+    const flipped = generated.replace(/(delete_work_item: \{\s*readOnlyHint: )false/, '$1true');
+    expect(flipped).not.toBe(generated);
+    expect(isMcpToolSchemasStale(generated, flipped)).toBe(true);
+  });
+
+  it('the CATALOGUE row carries the title and hints, not just the maps', async () => {
+    const rows = mcpToolRows();
+    const byName = new Map(rows.map((row) => [row.name as string, row]));
+    expect(driftedSchemas(await shippedPairs('title'), (name) => byName.get(name)?.title)).toEqual(
+      [],
+    );
+    expect(
+      driftedSchemas(await shippedPairs('annotations'), (name) => byName.get(name)?.annotations),
     ).toEqual([]);
   });
 });
