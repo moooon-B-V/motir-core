@@ -104,9 +104,23 @@ export function deploymentIdentity(): DeploymentIdentity {
     provider: 'fly',
     app,
     region: nonEmpty(process.env['FLY_REGION']) ?? null,
-    instanceId: nonEmpty(process.env['FLY_MACHINE_ID']) ?? null,
+    instanceId: hostInstanceId() ?? null,
     dashboardUrl: `https://fly.io/apps/${app}`,
   };
+}
+
+/**
+ * THIS PROCESS'S OWN INSTANCE ID ON ITS HOST, or `undefined` when the host injects
+ * none. Unlike `deploymentIdentity()` it does not require the app name: the
+ * terminal relay (MOTIR-6959, `lib/agentTerminal/relay/machineId.ts`) keys its
+ * connection rows on it and falls back to hostname + pid itself, so the provider's
+ * variable is named here, inside this file's registered exception, and nowhere
+ * else in `lib/`.
+ */
+export function hostInstanceId(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string | undefined {
+  return nonEmpty(env['FLY_MACHINE_ID']);
 }
 
 function nonEmpty(value: string | undefined): string | undefined {

@@ -40,10 +40,12 @@ import type { Prisma } from '@/generated/prisma/client';
 function toSettingsDTO(project: {
   acceptanceVideoEnabled: boolean;
   reviewAgentEnabled: boolean;
+  designApprovalGate: boolean;
 }): ApprovalGateSettingsDTO {
   return {
     acceptanceVideoEnabled: project.acceptanceVideoEnabled,
     reviewAgentEnabled: project.reviewAgentEnabled,
+    designApprovalGate: project.designApprovalGate,
   };
 }
 
@@ -141,12 +143,19 @@ export const approvalGateSettingsService = {
       data.acceptanceVideoEnabled = patch.acceptanceVideoEnabled;
     }
     if (patch.reviewAgentEnabled !== undefined) data.reviewAgentEnabled = patch.reviewAgentEnabled;
+    // The design switch is read at RAISE time (MOTIR-697), so writing it never decides
+    // a gate already waiting (§2f).
+    if (patch.designApprovalGate !== undefined) data.designApprovalGate = patch.designApprovalGate;
     if (Object.keys(data).length === 0) {
       const project = await withSystemContext((tx) => projectRepository.findById(projectId, tx));
       if (!project) throw new ProjectNotFoundError(projectId);
       return toSettingsDTO(project);
     }
 
+    // ⚠️ ONLY THE KEYS THE BODY CARRIED. The design switch is read at RAISE time
+    // (MOTIR-697), so writing it never decides a gate already waiting — flipping it
+    // off leaves an in-progress review to its reviewer, and flipping it back on
+    // affects only gates raised afterwards (§2f).
     const updated = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {

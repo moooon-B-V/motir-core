@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils/cn';
+import type { ApprovalGateDecisionSourceDTO } from '@/lib/dto/approvalGate';
 import { isPlainPrimaryClick } from '@/lib/hooks/useOpenPlanningWorkspace';
 import {
   isPickSeedGate,
@@ -53,7 +54,7 @@ export interface RefusalReplanProps {
 
 /** The facts the slot reads off the decided gate. */
 export type RefusalReplanGateFacts = RefusalSeedGateFacts & {
-  decisionSource: 'ui' | 'api' | 'mcp' | 'github' | null;
+  decisionSource: ApprovalGateDecisionSourceDTO | null;
 };
 
 /**

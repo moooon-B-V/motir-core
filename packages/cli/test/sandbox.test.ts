@@ -163,9 +163,12 @@ describe('sandbox Dockerfile', () => {
   });
 
   it('installs git and gh — both are part of the dispatch contract', () => {
-    const aptPackages = dockerfile.slice(
-      dockerfile.indexOf('apt-get install'),
-      dockerfile.indexOf('rm -rf /var/lib/apt/lists'),
+    // Read from the RUNTIME stage (`AS base`): the node-pty build stage
+    // (MOTIR-6938) runs its own apt-get for build tools, earlier in the file.
+    const runtime = dockerfile.slice(dockerfile.indexOf(' AS base'));
+    const aptPackages = runtime.slice(
+      runtime.indexOf('apt-get install'),
+      runtime.indexOf('rm -rf /var/lib/apt/lists'),
     );
     expect(aptPackages).toMatch(/^\s+git \\$/m);
     expect(aptPackages).toMatch(/install -y --no-install-recommends gh \\$/m);
@@ -176,9 +179,10 @@ describe('sandbox Dockerfile', () => {
     // python3 is contract, so a prose match would pass on the explanation of the
     // package rather than on the package.
     const directives = directivesOf(dockerfile);
-    const aptPackages = directives.slice(
-      directives.indexOf('apt-get install'),
-      directives.indexOf('rm -rf /var/lib/apt/lists'),
+    const runtime = directives.slice(directives.indexOf(' AS base'));
+    const aptPackages = runtime.slice(
+      runtime.indexOf('apt-get install'),
+      runtime.indexOf('rm -rf /var/lib/apt/lists'),
     );
     // ⚠️ The FULL interpreter, pinned — NOT `python3-minimal` (MOTIR-6204).
     // `libpython3.11-minimal` is 81 modules rather than the standard library,

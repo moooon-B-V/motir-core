@@ -323,9 +323,18 @@ const CHEAP_FLAGS = new Set(['--version', '-v', '--help', '-h', 'help']);
  */
 const UNATTENDED = new Set(['auto', 'batch']);
 
+/**
+ * Commands that never check. `agent-terminal` is an agent machine's main
+ * process (MOTIR-6938): its `motir` IS the image's, a newer one on npm is not
+ * something that machine can act on, and a registry round-trip on every boot
+ * would only delay the server and put a notice into the machine's shipped logs.
+ */
+const NEVER_CHECKED = new Set(['agent-terminal']);
+
 /** Should a version check run for this argv at all? */
 export function shouldCheckStaleness(argv: readonly string[]): boolean {
   if (argv.length === 0) return false;
+  if (NEVER_CHECKED.has(argv[0] ?? '')) return false;
   return !argv.some((token) => CHEAP_FLAGS.has(token));
 }
 

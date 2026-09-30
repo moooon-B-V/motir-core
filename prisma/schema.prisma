@@ -247,6 +247,10 @@ model User {
   // The agent instances this user OWNS (MOTIR-6870). Cascade — an instance is
   // one developer's machine, and nobody else may open it.
   agentInstances                   AgentInstance[]
+  // Terminal tickets minted for, and terminal connections opened by, this user
+  // (MOTIR-6940). Cascade — both are about the user's own agent.
+  agentTerminalTickets             AgentTerminalTicket[]
+  agentTerminalConnections         AgentTerminalConnection[]
   // Upvotes the user cast on public requests (Story 6.12 · Subtask 6.12.3) —
   // the demand signal the triage queue sorts by (6.12.6). Cascade: a vote is
   // personal substrate, it dies with the user (the apiTokens pattern). Modelled
@@ -1134,6 +1138,8 @@ model Workspace {
   repoDeployments             RepoDeployment[]
   /// Approval gates scoped to this workspace (the routing read's tenancy half).
   approvalGates               ApprovalGate[]
+  /// Automatic hosted re-runs after a design Revise (MOTIR-700).
+  designAutoReruns            DesignAutoRerun[]
   boards                      Board[]
   boardColumns                BoardColumn[]
   boardColumnStatuses         BoardColumnStatus[]
@@ -1265,6 +1271,9 @@ model Workspace {
   /// Users' agent instances in this workspace's projects (MOTIR-6870). Cascade.
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]
+  /// The agent terminal's tickets and connection records (MOTIR-6940). Cascade.
+  agentTerminalTickets        AgentTerminalTicket[]
+  agentTerminalConnections    AgentTerminalConnection[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -1341,6 +1350,14 @@ model Project {
   /// organisation's value, because an org that had deliberately turned acceptance
   /// video OFF must not find every project under it turned back on.
   acceptanceVideoEnabled           Boolean               @default(true) @map("acceptance_video_enabled")
+  /// Whether a published design result WAITS for a person (Story MOTIR-693 ·
+  /// MOTIR-697; `docs/decisions/hosted-design-rerun-and-design-approval-switch.md`
+  /// §2). `true` — the default, and every existing project's value — raises an
+  /// `awaiting` `design_result` gate exactly as before. `false` raises the SAME gate
+  /// and approves it in the publish's own transaction, on the record: no actor,
+  /// `decisionSource = system`, `decidedUnderAuthority = project_setting`. Read at
+  /// RAISE time only, so flipping it never decides a gate already waiting.
+  designApprovalGate               Boolean               @default(true) @map("design_approval_gate")
   /// How this project's pull requests are merged (MOTIR-4880 ·
   /// `docs/decisions/approval-gates.md` §7). PROJECT-scoped because a merge
   /// policy is a property of a codebase and its team, and the merge gate that
@@ -2665,6 +2682,9 @@ model WorkItem {
   testInstructions     TestInstructions[]
   /// Approval gates hanging off this card (the per-card read).
   approvalGates        ApprovalGate[]
+  /// What each Revise on this design card did about an automatic hosted re-run
+  /// (MOTIR-700) — the "re-running" / "skipped" line.
+  designAutoReruns     DesignAutoRerun[]
   // Organisation joins + watchers (Subtask 5.4.1). All three cascade with
   // the issue: label/component joins are pure association rows, watcher rows
   // are notification substrate.
@@ -4911,6 +4931,12 @@ enum ApprovalGateAuthority {
   /// never claims a person reviewed the code. Never resolved by
   /// `resolveGateAuthority`, and unreachable from a person's press.
   review_agent
+  /// Authority conferred by a PROJECT SETTING rather than by any person — the
+  /// design gate a project with design approval switched OFF approves at raise
+  /// time (MOTIR-697; `hosted-design-rerun-and-design-approval-switch.md` §2c).
+  /// ⚠️ NEVER RESOLVED BY `resolveGateAuthority` and unreachable from a route, a
+  /// press or the MCP: its ONE writer is the publish path's system decision.
+  project_setting
 
   @@map("approval_gate_authority")
 }
@@ -4934,6 +4960,13 @@ enum ApprovalGateDecisionSource {
   /// agent called the MCP — and the approving identity may not resolve to a
   /// member at all, which is why `decidedByLabel` is not optional context.
   github
+  /// NOBODY pressed anything: a project setting decided it (MOTIR-697;
+  /// `hosted-design-rerun-and-design-approval-switch.md` §2c). Read with
+  /// `decidedUnderAuthority = project_setting`. "The decisions people made" is every
+  /// row whose source is one of the four above — a `system` row is never in it.
+  /// ⚠️ Never accepted from a caller: the decide door's `source` input excludes it,
+  /// and its ONE writer is the publish path's system decision.
+  system
 
   @@map("approval_gate_decision_source")
 }
@@ -5115,6 +5148,8 @@ model ApprovalGate {
   /// The WORKSPACE-tier read: a workspace's gates by state. Kept for
   /// MOTIR-2920's "what is on me across everything" surface, which is the
   /// caller it was added for.
+  /// The automatic hosted re-run a Revise on this gate caused or skipped (MOTIR-700).
+  designAutoRerun    DesignAutoRerun?
   @@index([workspaceId, state])
   /// THE ROUTING READ's index (MOTIR-4791) — the Approvals tab asks for one
   /// PROJECT's `awaiting` gates, because the Workbench is active-project scoped
@@ -5144,6 +5179,88 @@ model ApprovalGate {
   /// column list and would report a permanent rename (CLAUDE.md's partial-index rule).
   @@index([kind, subjectId, state])
   @@map("approval_gate")
+}
+
+/// WHAT A DESIGN REVISE DID ABOUT AN AUTOMATIC HOSTED RE-RUN (Story MOTIR-693 ·
+/// MOTIR-700; `docs/decisions/hosted-design-rerun-and-design-approval-switch.md` §1).
+///
+/// ONE ROW PER REFUSAL, keyed on the deciding gate — which is what makes the job that
+/// writes it idempotent (a redelivered event finds the row and does nothing) and what
+/// lets the design card say, per Revise, whether a run started or why not (§1g).
+///
+/// Written only for a refusal that WAS a candidate: a Motir-pressed Revise on a card
+/// whose latest dispatch run was hosted. A card last run BYOK or by hand gets no row
+/// at all — nothing was attempted, so there is nothing to say (§1a).
+model DesignAutoRerun {
+  id          String @id @default(cuid())
+  /// Tenant of record — RLS does not traverse foreign keys.
+  workspaceId String @map("workspace_id")
+  workItemId  String @map("work_item_id")
+  /// The `changes_requested` + `revise` design gate this attempt answers. Unique:
+  /// one refusal, one attempt.
+  gateId      String @unique @map("gate_id")
+
+  outcome    DesignAutoRerunOutcome
+  /// Why nothing started. Null exactly when `outcome` is `started`.
+  skipReason DesignAutoRerunSkipReason? @map("skip_reason")
+  /// The run it started. `SET NULL`: the record that a run was started outlives the run.
+  dispatchRunId String? @map("dispatch_run_id")
+  /// Which automatic re-run of this card this was, counting Motir-pressed Revise
+  /// refusals (§1e). The cap reads the same count; storing it lets the line say "2 of 3".
+  ordinal Int
+  /// What the skipped line NAMES, captured when it was written (MOTIR-702; the design's
+  /// `design-result--auto-rerun.mock.html`): the dispatcher's name for
+  /// `no_project_access`, the model for `model_not_offered`, the repository for
+  /// `repository_not_writable`. Null for every other outcome. A record of the moment, so
+  /// the line still says who it was after that person's name changes.
+  detail  String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem    WorkItem     @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  gate        ApprovalGate @relation(fields: [gateId], references: [id], onDelete: Cascade)
+  dispatchRun DispatchRun? @relation(fields: [dispatchRunId], references: [id], onDelete: SetNull)
+
+  /// The card's line: its attempts, newest first.
+  @@index([workItemId, createdAt])
+  @@map("design_auto_rerun")
+}
+
+enum DesignAutoRerunOutcome {
+  /// A hosted run was started, as the last hosted run's dispatcher, with its model.
+  started
+  /// Nothing started; `skipReason` says why and the card waits at To do for a person.
+  skipped
+
+  @@map("design_auto_rerun_outcome")
+}
+
+/// Why an automatic re-run did not start (§1d, §1e). Each is a refusal of the SAME
+/// start path Run hosted takes, except the cap and a missing dispatcher.
+enum DesignAutoRerunSkipReason {
+  /// The card has had its three automatic re-runs (§1e).
+  cap_reached
+  /// The last hosted run's dispatcher no longer exists.
+  dispatcher_gone
+  /// The dispatcher can no longer edit the project.
+  no_project_access
+  /// The organization's CI allowance refused the dispatch.
+  ci_credits_exhausted
+  /// The model the last run used is no longer offered. Never substituted (§1d).
+  model_not_offered
+  /// The model list could not be read.
+  models_unavailable
+  /// The organization is out of credits.
+  out_of_credits
+  /// The credit balance could not be read.
+  credits_unavailable
+  /// A repository the run touches is not writable.
+  repository_not_writable
+  /// The card is not ready or not claimable (for example, a person claimed it first).
+  card_not_ready
+
+  @@map("design_auto_rerun_skip_reason")
 }
 
 /// A comment on a work item (Story 5.1 · Subtask 5.1.1) — the Activity
@@ -10390,6 +10507,8 @@ model DispatchRun {
   /// The GitHub installation tokens handed to this hosted run (MOTIR-6449), recorded
   /// so the end path can revoke every one. Cascade on the FK.
   gitCredentials   DispatchRunGitCredential[]
+  /// The design refusal that started this run automatically, if one did (MOTIR-700).
+  designAutoReruns DesignAutoRerun[]
 
   @@unique([workspaceId, idempotencyKey])
   /// The run list and the `/runs/[id]` read: newest-first per project.
@@ -11392,6 +11511,17 @@ enum AgentInstanceState {
   @@map("agent_instance_state")
 }
 
+/// Whether an instance's pinned image carries the in-image terminal server
+/// (`docs/decisions/agent-terminal.md` Q8 · MOTIR-6939), probed once per digest
+/// on a booted machine. `unknown` until the first probe answers.
+enum AgentTerminalServer {
+  unknown
+  present
+  absent
+
+  @@map("agent_terminal_server")
+}
+
 /// Why a running interval ended (§4).
 enum AgentInstanceIntervalEndReason {
   hibernated
@@ -11456,14 +11586,24 @@ model AgentInstance {
   /// every list excludes it.
   deletedAt      DateTime?          @map("deleted_at")
 
+  /// Does the pinned image serve a terminal (agent-terminal.md Q8)? Probed with
+  /// `motir agent-terminal --help` after a boot whose digest was not probed yet.
+  terminalServer       AgentTerminalServer @default(unknown) @map("terminal_server")
+  /// The image digest `terminalServer` was probed for; null = never probed. A
+  /// digest that differs from `imageDigest` is re-probed on the next boot.
+  terminalServerDigest String?             @map("terminal_server_digest")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  workspace    Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  owner        User                    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  intervals    AgentInstanceInterval[]
+  workspace           Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization        Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project             Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner               User                      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  intervals           AgentInstanceInterval[]
+  /// agent-terminal.md Q3, Q8 (MOTIR-6940): its terminal tickets and connections.
+  terminalTickets     AgentTerminalTicket[]
+  terminalConnections AgentTerminalConnection[]
 
   /// The owner's list: newest first per project.
   @@index([ownerId, projectId, createdAt(sort: Desc)])
@@ -11471,6 +11611,77 @@ model AgentInstance {
   @@index([state, organizationId])
   @@index([workspaceId])
   @@map("agent_instance")
+}
+
+/// A one-shot TERMINAL TICKET (Story MOTIR-6861 · MOTIR-6940,
+/// `docs/decisions/agent-terminal.md` Q3): what the owner's browser presents to
+/// the relay in its first frame. 32 random bytes; ONLY their SHA-256 is stored.
+/// It lives 60 seconds and is consumed by ONE guarded update
+/// (`consumed_at IS NULL AND expires_at > now`), so two relays cannot both
+/// redeem it. Expired rows are deleted by `system.agent-instance-sweep`.
+model AgentTerminalTicket {
+  id          String    @id @default(cuid())
+  /// Tenant of record — carried on the row because RLS does not traverse FKs.
+  workspaceId String    @map("workspace_id")
+  instanceId  String    @map("instance_id")
+  /// The owner it was minted for — the only user the relay will connect.
+  userId      String    @map("user_id")
+  /// Hex SHA-256 of the ticket. The ticket itself is never stored or logged.
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at")
+  consumedAt  DateTime? @map("consumed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instance  AgentInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The sweep's read: every ticket past its life.
+  @@index([expiresAt])
+  @@index([instanceId])
+  @@index([userId])
+  @@index([workspaceId])
+  @@map("agent_terminal_ticket")
+}
+
+/// ONE ROW PER TERMINAL CONNECTION through the relay (MOTIR-6940,
+/// `agent-terminal.md` Q8): who, which agent, when it opened and closed, and why
+/// it closed. Deliberately NOTHING about what flowed — no bytes, no counts, no
+/// frames: the terminal's stream is stored nowhere (Q9 condition 4).
+model AgentTerminalConnection {
+  id             String    @id @default(cuid())
+  workspaceId    String    @map("workspace_id")
+  instanceId     String    @map("instance_id")
+  userId         String    @map("user_id")
+  openedAt       DateTime  @map("opened_at")
+  /// Null while the connection is open.
+  closedAt       DateTime? @map("closed_at")
+  /// The WebSocket close code the browser's socket ended with.
+  closeCode      Int?      @map("close_code")
+  /// The relay's word for why (`AgentTerminalCloseReason`).
+  closeReason    String?   @map("close_reason")
+  /// The relay process holding this connection (MOTIR-6959): `FLY_MACHINE_ID`, or
+  /// hostname+pid off Fly. Its boot closes its own leftovers by it.
+  relayMachineId String?   @map("relay_machine_id")
+  /// Refreshed by the holding relay about once a minute while the row is open
+  /// (MOTIR-6959). An open row not seen for 5 minutes is closed `relay_lost` by
+  /// `system.agent-instance-sweep`, with `closedAt = lastSeenAt`.
+  lastSeenAt     DateTime  @default(now()) @map("last_seen_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instance  AgentInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// An agent's own connection history, newest first.
+  @@index([instanceId, openedAt(sort: Desc)])
+  @@index([userId])
+  @@index([workspaceId])
+  /// The sweep's discovery: open rows (`closed_at IS NULL`) not seen lately.
+  @@index([closedAt, lastSeenAt])
+  /// A relay's boot: its own machine's open rows.
+  @@index([relayMachineId, closedAt])
+  @@map("agent_terminal_connection")
 }
 
 model AgentInstanceInterval {

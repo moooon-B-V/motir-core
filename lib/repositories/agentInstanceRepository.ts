@@ -1,4 +1,9 @@
-import type { AgentInstance, AgentInstanceState, Prisma } from '@/generated/prisma/client';
+import type {
+  AgentInstance,
+  AgentInstanceState,
+  AgentTerminalServer,
+  Prisma,
+} from '@/generated/prisma/client';
 import { RUNNING_STATES } from '@/lib/agentInstances/stateMachine';
 
 // Single Prisma operations on `agent_instance` — one developer's long-lived
@@ -149,6 +154,24 @@ export const agentInstanceRepository = {
     const result = await tx.agentInstance.updateMany({
       where: { id, ...LIVE },
       data: { lastActivityAt: at },
+    });
+    return result.count;
+  },
+
+  /**
+   * Record the terminal-server probe (`agent-terminal.md` Q8): whether the image
+   * `digest` serves a terminal. Guarded on the digest the row still pins, so a
+   * probe that raced an image move can never stamp the new digest with the old
+   * image's answer. `tx` required.
+   */
+  async recordTerminalServer(
+    id: string,
+    probe: { terminalServer: AgentTerminalServer; digest: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.agentInstance.updateMany({
+      where: { id, imageDigest: probe.digest, ...LIVE },
+      data: { terminalServer: probe.terminalServer, terminalServerDigest: probe.digest },
     });
     return result.count;
   },
