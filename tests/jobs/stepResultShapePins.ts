@@ -451,10 +451,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   // MOTIR-6310 WIDENED `template` by one member (`ownership-transferred`) and
   // kept the id for the same reason: every memo already stored carries one of
   // the older members, which is still a member, so the replay reads true.
+  // MOTIR-6921 widened it by one more (`agents-deletion-scheduled`), for the same
+  // reason and with the same id.
   send: {
     file: 'lib/jobs/definitions/emailSend.ts',
     shape:
-      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | undefined; template: "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "organization-deletion-cancelled" | "organization-deletion-reminder" | "organization-deletion-scheduled" | "organization-erased" | "ownership-transferred" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
+      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | undefined; template: "agents-deletion-scheduled" | "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "organization-deletion-cancelled" | "organization-deletion-reminder" | "organization-deletion-scheduled" | "organization-erased" | "ownership-transferred" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
   },
   'settle-runner': {
     file: 'lib/services/ciRunnerBootService.ts',
@@ -501,6 +503,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   'sweep-lost-terminal-connections': {
     file: 'lib/jobs/definitions/agentInstanceSweep.ts',
     shape: '{ closed: number }',
+  },
+  'sweep-agent-plan-lapse': {
+    file: 'lib/jobs/definitions/agentInstanceSweep.ts',
+    shape: '{ deleted: number; errors: number; noticed: number }',
   },
   'sweep-agent-instances': {
     file: 'lib/jobs/definitions/agentInstanceSweep.ts',

@@ -946,6 +946,16 @@
       "lede": "{organization} has been deleted. Its workspaces, projects, members, and the repositories Motir hosted for it have been erased.",
       "kept": "Motir keeps only its billing records, as the law requires, until {year}. They are deleted then too.",
       "footer": "You are receiving this because you were the Owner or an Admin of the organization."
+    },
+    "agentsDeletionScheduled": {
+      "subject": "Your agents in {organization} will be deleted on {date}",
+      "preview": "Your organization’s AI plan has ended — your agents will be deleted on {date}",
+      "greeting": "Hi {name},",
+      "lede": "Your organization’s AI plan has ended. Your agents will be deleted on {date} unless the plan is renewed.",
+      "agents": "{count, plural, one {This agent of yours in {organization} will be deleted, with its home and everything in it:} other {These # agents of yours in {organization} will be deleted, with their homes and everything in them:}}",
+      "renew": "Renewing the AI plan before {date} cancels the deletion. Until then your agents cannot be created or woken, and their storage is still charged every day.",
+      "openBilling": "Renew the AI plan",
+      "footer": "You are receiving this because you own agents in this organization."
     }
   },
   "auth": {
@@ -8915,6 +8925,12 @@
       "credits": "Out of credits",
       "userCap": "Your limit",
       "orgRunningLimit": "Your organization’s limit"
+    },
+    "lapse": {
+      "bannerLead": "Your organization’s AI plan has ended.",
+      "bannerBody": "Your agents will be deleted on {date} unless the plan is renewed.",
+      "renew": "Renew the AI plan",
+      "rowLine": "Will be deleted on {date}"
     },
     "delete": {
       "title": "Delete {name}?",

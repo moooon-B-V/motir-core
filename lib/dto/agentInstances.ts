@@ -74,6 +74,13 @@ export interface AgentInstanceListItemDto extends AgentInstanceDto {
    * any other state, and for a hibernate the person asked for.
    */
   stopReason: AgentInstanceStopReason | null;
+  /**
+   * When the org's AI plan lapsed, the instant this agent will be deleted (ISO,
+   * the start of that UTC day) — the row's "Will be deleted on {date}" line and
+   * the reason its Wake is disabled (`agent-instance-storage.md` §4, MOTIR-6921).
+   * Null when nothing is scheduled.
+   */
+  scheduledDeletionAt: string | null;
 }
 
 /** The hibernations Motir makes on its own, which the page explains. */
@@ -82,4 +89,10 @@ export type AgentInstanceStopReason = 'credits' | 'idle' | 'backstop';
 export interface AgentInstanceListPageDto {
   instances: AgentInstanceListItemDto[];
   total: number;
+  /**
+   * The org's AI plan has ended (MOTIR-6921): the date its agents will be deleted
+   * (ISO), for the page's banner. Null while the plan stands — and always for
+   * Motir's own organisations, which are never scheduled.
+   */
+  planLapse: { deletesOn: string } | null;
 }

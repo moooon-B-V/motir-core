@@ -39,6 +39,7 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
     machineSecondsThisMonth: 72 * 60,
     creditsThisMonth: 72,
     stopReason: null,
+    scheduledDeletionAt: null,
     ...over,
   };
 }
@@ -46,6 +47,7 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
 const page = (instances: AgentInstanceListItemDto[]): AgentInstanceListPageDto => ({
   instances,
   total: instances.length,
+  planLapse: null,
 });
 
 const json = (status: number, body: unknown) =>
@@ -340,6 +342,70 @@ describe('a paid AI plan, and storage in the words (MOTIR-6918, the MOTIR-6916 d
     fireEvent.click(screen.getAllByRole('button', { name: /智能体/ })[0]!);
     const dialog = await screen.findByRole('dialog');
     expect(dialog.textContent).toContain('每天 10 额度');
+  });
+});
+
+describe('the plan has ended (MOTIR-6921, the MOTIR-6916 delta panel E)', () => {
+  const lapsed = (rows: AgentInstanceListItemDto[]): AgentInstanceListPageDto => ({
+    ...page(rows),
+    planLapse: { deletesOn: '2026-10-29T00:00:00.000Z' },
+  });
+
+  it('a banner between the header and the list names the date and links Renew the AI plan', () => {
+    mount(lapsed([agent({ scheduledDeletionAt: '2026-10-29T00:00:00.000Z' })]));
+    const banner = screen.getByRole('status');
+    expect(banner.textContent).toBe(
+      'Your organization’s AI plan has ended.Your agents will be deleted on Oct 29, 2026 unless the plan is renewed. Renew the AI plan',
+    );
+    expect(
+      within(banner).getByRole('link', { name: 'Renew the AI plan' }).getAttribute('href'),
+    ).toBe('/settings/organization/billing');
+    expect(banner.className).toContain('bg-(--el-tint-peach)');
+  });
+
+  it('every row carries its deletion date as its last line, in danger ink', () => {
+    mount(
+      lapsed([
+        agent({ id: 'a1', name: 'yue-claude', scheduledDeletionAt: '2026-10-29T00:00:00.000Z' }),
+        agent({
+          id: 'a2',
+          name: 'yue-codex',
+          state: 'hibernated',
+          stopReason: 'idle',
+          scheduledDeletionAt: '2026-10-29T00:00:00.000Z',
+        }),
+      ]),
+    );
+    const lines = screen.getAllByText('Will be deleted on Oct 29, 2026');
+    // Two rows, each drawn in the table and the narrow cards.
+    expect(lines).toHaveLength(4);
+    expect(lines[0]!.className).toContain('text-(--el-danger-on-surface)');
+  });
+
+  it('Wake is disabled, with the needs-an-AI-plan reason and its link under it; Delete stays', async () => {
+    mount(
+      lapsed([agent({ state: 'hibernated', scheduledDeletionAt: '2026-10-29T00:00:00.000Z' })]),
+    );
+    const menu = await openMenu('yue-claude');
+    const wake = within(menu).getByRole('menuitem', { name: 'Wake' });
+    expect(wake.getAttribute('aria-disabled')).toBe('true');
+    expect(menu.textContent).toContain(
+      'Agents need a paid AI plan (Standard, Pro, Max or Enterprise). Choose an AI plan to create or wake one.',
+    );
+    expect(within(menu).getByRole('link', { name: 'Choose an AI plan' })).toBeTruthy();
+    expect(
+      within(menu).getByRole('menuitem', { name: 'Delete…' }).getAttribute('aria-disabled'),
+    ).toBe('false');
+  });
+
+  it('with the plan standing there is no banner, no date and Wake is offered', async () => {
+    mount(page([agent({ state: 'hibernated' })]));
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText(/Will be deleted on/)).toBeNull();
+    const menu = await openMenu('yue-claude');
+    expect(within(menu).getByRole('menuitem', { name: 'Wake' }).getAttribute('aria-disabled')).toBe(
+      'false',
+    );
   });
 });
 

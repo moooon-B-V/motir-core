@@ -946,6 +946,16 @@
       "lede": "{organization} 已被删除。它的工作区、项目、成员，以及 Motir 为它托管的代码仓库均已清除。",
       "kept": "按照法律要求，Motir 仅保留其账单记录至 {year} 年，届时也将一并删除。",
       "footer": "你收到这封邮件，是因为你曾是该组织的所有者或管理员。"
+    },
+    "agentsDeletionScheduled": {
+      "subject": "你在 {organization} 的智能体将于 {date} 被删除",
+      "preview": "你的组织的 AI 套餐已结束——你的智能体将于 {date} 被删除",
+      "greeting": "{name}，你好：",
+      "lede": "你的组织的 AI 套餐已结束。除非续订套餐，你的智能体将于 {date} 被删除。",
+      "agents": "你在 {organization} 的以下 {count} 个智能体将被删除，包括其主目录及其中的全部内容：",
+      "renew": "在 {date} 之前续订 AI 套餐即可取消删除。在此之前，你的智能体无法创建或唤醒，其存储仍按天收费。",
+      "openBilling": "续订 AI 套餐",
+      "footer": "你收到这封邮件，是因为你在该组织中拥有智能体。"
     }
   },
   "auth": {
@@ -8911,6 +8921,12 @@
       "credits": "额度已用完",
       "userCap": "你的上限",
       "orgRunningLimit": "你的组织的上限"
+    },
+    "lapse": {
+      "bannerLead": "你的组织的 AI 套餐已结束。",
+      "bannerBody": "除非续订套餐，你的智能体将于 {date} 被删除。",
+      "renew": "续订 AI 套餐",
+      "rowLine": "将于 {date} 删除"
     },
     "delete": {
       "title": "删除 {name}？",

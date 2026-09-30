@@ -1106,6 +1106,13 @@ model Organization {
   /// clobber, and 8.1.25's seat accounting can net the included seat out.
   aiIncludedSeat Boolean @default(false)
 
+  /// When this org's paid AI plan LAPSED, as the seat push above reported it
+  /// (`agent-instance-storage.md` §4, MOTIR-6921): set on the push that turns
+  /// `aiIncludedSeat` off, cleared on the one that turns it back on. Every live
+  /// agent instance is scheduled for deletion 30 days from the start of that UTC
+  /// day. Never set for Motir's own orgs (`isMeta` / `internalBilling`, §5).
+  aiPlanLapsedAt DateTime? @map("ai_plan_lapsed_at")
+
   /// The internal dogfood org (moooon B.V.) — the META org. Resolves to the
   /// `meta` entitlement tier (every §4 cap lifted) and disables the AI paywall.
   /// DISTINCT from the future commercial `enterprise` tier: `meta` is never
@@ -11906,6 +11913,15 @@ model AgentInstance {
   /// every list excludes it.
   deletedAt      DateTime?          @map("deleted_at")
 
+  /// `agent-instance-storage.md` §4 (MOTIR-6921): when the org's AI plan lapsed,
+  /// the instant this instance is deleted — the start of the UTC day 30 days on.
+  /// The sweep deletes it through the ordinary delete once it has passed;
+  /// re-subscribing clears it. Null = not scheduled.
+  scheduledDeletionAt DateTime? @map("scheduled_deletion_at")
+  /// When its owner was emailed the date — so the notice goes out once, and a
+  /// failed send is retried by the sweep rather than lost.
+  deletionNoticedAt   DateTime? @map("deletion_noticed_at")
+
   /// Does the pinned image serve a terminal (agent-terminal.md Q8)? Probed with
   /// `motir agent-terminal --help` after a boot whose digest was not probed yet.
   terminalServer       AgentTerminalServer @default(unknown) @map("terminal_server")
@@ -11931,6 +11947,8 @@ model AgentInstance {
   /// The caps and the sweep: running instances fleet-wide and per organisation.
   @@index([state, organizationId])
   @@index([workspaceId])
+  /// The plan-lapse deletion: instances due, and the lapse's schedule per org.
+  @@index([scheduledDeletionAt])
   @@map("agent_instance")
 }
 

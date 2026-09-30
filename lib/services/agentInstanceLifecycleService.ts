@@ -65,6 +65,7 @@ import {
 import { agentInstanceChargeService } from '@/lib/services/agentInstanceChargeService';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { aiPlanGateService } from '@/lib/services/aiPlanGateService';
+import { deletionDateFor } from '@/lib/agentInstances/planLapse';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
@@ -469,6 +470,15 @@ export const agentInstanceLifecycleService = {
     const project = await resolveProject(projectKey, ctx);
     const now = agentInstanceClock.now();
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    // The banner's date (MOTIR-6921), from the org's own recorded lapse — the one
+    // date every scheduled row of this org carries. Never for Motir's own orgs.
+    const org = await withOrgServiceWriteContext(project.organizationId, (tx) =>
+      organizationRepository.findByIdInTx(project.organizationId, tx),
+    );
+    const planLapse =
+      org?.aiPlanLapsedAt && !isUnlimitedAgentOrg(org)
+        ? { deletesOn: deletionDateFor(org.aiPlanLapsedAt).toISOString() }
+        : null;
     return inProject(project, ctx, async (tx) => {
       const scope = { ownerId: ctx.userId, projectId: project.id };
       const rows = await agentInstanceRepository.listLiveForOwner({ ...scope, ...page }, tx);
@@ -501,12 +511,14 @@ export const agentInstanceLifecycleService = {
       }
       return {
         total,
+        planLapse,
         instances: rows.map((row) => ({
           ...toAgentInstanceDto(row),
           profileName: profileDisplayName(row.profileId),
           machineSecondsThisMonth: usage.get(row.id)?.seconds ?? 0,
           creditsThisMonth: usage.get(row.id)?.credits ?? 0,
           stopReason: stopReasonOf(latestClosed.get(row.id) ?? null),
+          scheduledDeletionAt: row.scheduledDeletionAt?.toISOString() ?? null,
         })),
       };
     });
@@ -779,6 +791,21 @@ export const agentInstanceLifecycleService = {
       INSTANCE_INLINE_STOP_WAIT_MS,
       async () => (await this.settleStop(row.id, endReason)) !== 'pending',
     );
+    return true;
+  },
+
+  /**
+   * Delete an instance for the SWEEP — the plan-lapse deletion (MOTIR-6921,
+   * `agent-instance-storage.md` §4): the same guarded move and the same settle as
+   * the owner's delete, so the machine, the volume and the final interval's charge
+   * are handled exactly as there. Returns false when the instance could not enter
+   * `deleting` (it is mid-boot or already going) — the next pass tries again.
+   */
+  async beginDelete(instanceId: string): Promise<boolean> {
+    const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
+    if (!row || row.deletedAt) return false;
+    if (!(await systemTransition(row, statesThatMayEnter('deleting'), 'deleting'))) return false;
+    await this.settleDelete(row.id);
     return true;
   },
 

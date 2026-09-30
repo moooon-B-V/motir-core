@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
-import { Plus, SquareTerminal, TriangleAlert } from 'lucide-react';
+import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
+import { Clock, Plus, SquareTerminal, TriangleAlert } from 'lucide-react';
 import { RunTonePill } from '@/components/runs/RunTonePill';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -15,6 +16,8 @@ import {
 } from '@/lib/agentInstances/presentation';
 import type { AgentInstanceListItemDto, AgentInstanceListPageDto } from '@/lib/dto/agentInstances';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
+import type { Locale } from '@/lib/i18n/locales';
+import { formatDate } from '@/lib/utils/datetime';
 import { AgentPanel, type AgentPanelActions } from './AgentPanel';
 import { AgentRowMenu } from './AgentRowMenu';
 import { CreateAgentDialog, type OfferedProfile } from './CreateAgentDialog';
@@ -302,6 +305,8 @@ export function MyAgentsRoom({
         <div className="self-start sm:self-auto">{newAgent}</div>
       </header>
 
+      {data?.planLapse ? <PlanLapseBanner deletesOn={data.planLapse.deletesOn} /> : null}
+
       {listRefusal ? <RefusalBox refusal={listRefusal} /> : null}
 
       {openId && data !== null ? (
@@ -377,6 +382,48 @@ function RowLine({ line }: { line: { text: string; danger: boolean } | null }) {
       className={`block text-xs ${line.danger ? 'text-(--el-danger-on-surface)' : 'text-(--el-text-secondary)'}`}
     >
       {line.text}
+    </span>
+  );
+}
+
+/**
+ * The org's AI plan has ended (MOTIR-6916 delta, panel E; MOTIR-6921): between
+ * the header and the list, the date every agent will be deleted and the way to
+ * stop it. The date is Billing & plans' format, in UTC — the deletion happens at
+ * the start of that UTC day.
+ */
+function PlanLapseBanner({ deletesOn }: { deletesOn: string }) {
+  const t = useTranslations('myAgents.lapse');
+  const locale = useLocale() as Locale;
+  return (
+    <div
+      role="status"
+      className="flex items-start gap-2.5 rounded-(--radius-card) border border-(--el-warning) bg-(--el-tint-peach) p-(--spacing-card-padding) text-sm text-(--el-text-strong)"
+    >
+      <TriangleAlert
+        className="mt-px size-[18px] flex-none text-(--el-warning)"
+        aria-hidden="true"
+      />
+      <span>
+        <strong className="block">{t('bannerLead')}</strong>
+        {t('bannerBody', { date: formatDate(deletesOn, locale) })}{' '}
+        <Link href="/settings/organization/billing" className="font-semibold text-(--el-link)">
+          {t('renew')}
+        </Link>
+      </span>
+    </div>
+  );
+}
+
+/** A row scheduled for deletion: its date, in danger ink on a surface, as its last line. */
+function DeletionLine({ at }: { at: string | null }) {
+  const t = useTranslations('myAgents.lapse');
+  const locale = useLocale() as Locale;
+  if (!at) return null;
+  return (
+    <span className="mt-1 flex items-center gap-1 text-xs text-(--el-danger-on-surface)">
+      <Clock className="size-3 flex-none" aria-hidden="true" />
+      {t('rowLine', { date: formatDate(at, locale) })}
     </span>
   );
 }
@@ -461,6 +508,7 @@ function AgentTable({
               <td className={td}>
                 <strong className="text-sm text-(--el-text)">{row.name}</strong>
                 <RowLine line={lineFor(row)} />
+                <DeletionLine at={row.scheduledDeletionAt} />
               </td>
               <td className={`${td} text-sm whitespace-nowrap text-(--el-text)`}>
                 {row.profileName}
@@ -484,7 +532,12 @@ function AgentTable({
                 {row.creditsThisMonth}
               </td>
               <td className={`${td} text-right`} {...stop}>
-                <AgentRowMenu name={row.name} state={row.state} onMove={(m) => onMove(row, m)} />
+                <AgentRowMenu
+                  name={row.name}
+                  state={row.state}
+                  wakeNeedsPlan={row.scheduledDeletionAt !== null}
+                  onMove={(m) => onMove(row, m)}
+                />
               </td>
             </tr>
           ))}
@@ -533,7 +586,12 @@ function AgentCards({
           <div className="flex items-center justify-between gap-2">
             <strong className="text-sm text-(--el-text)">{row.name}</strong>
             <span {...stop}>
-              <AgentRowMenu name={row.name} state={row.state} onMove={(m) => onMove(row, m)} />
+              <AgentRowMenu
+                name={row.name}
+                state={row.state}
+                wakeNeedsPlan={row.scheduledDeletionAt !== null}
+                onMove={(m) => onMove(row, m)}
+              />
             </span>
           </div>
           <div className="flex items-center justify-between gap-2 text-sm text-(--el-text-secondary)">
@@ -547,6 +605,7 @@ function AgentCards({
             <span>{t('creditsCount', { count: row.creditsThisMonth })}</span>
           </div>
           <RowLine line={lineFor(row)} />
+          <DeletionLine at={row.scheduledDeletionAt} />
         </li>
       ))}
     </ul>

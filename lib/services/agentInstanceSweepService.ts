@@ -9,6 +9,7 @@ import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@
 import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { agentInstanceChargeService } from '@/lib/services/agentInstanceChargeService';
+import { agentInstanceLapseService } from '@/lib/services/agentInstanceLapseService';
 import {
   agentInstanceClock,
   agentInstanceLifecycleService as lifecycle,
@@ -108,6 +109,32 @@ export const agentInstanceSweepService = {
       return (await lifecycle.beginHibernate(row.id, 'idle')) ? 'idle' : 'noop';
     }
     return 'active';
+  },
+
+  /**
+   * The plan-lapse pass (MOTIR-6921, `agent-instance-storage.md` §4): send every
+   * deletion notice still owed, then delete each agent whose date has passed —
+   * through the lifecycle's ordinary delete, so its machine, its volume and its
+   * final interval's charge are handled as an owner's delete handles them. Never
+   * before the date; never an agent of Motir's own organisations (§5). Never
+   * throws for one instance's failure — it counts it.
+   */
+  async sweepPlanLapse(): Promise<{ noticed: number; deleted: number; errors: number }> {
+    const result = { noticed: 0, deleted: 0, errors: 0 };
+    result.noticed = await agentInstanceLapseService.sendPendingNotices();
+    const due = await agentInstanceLapseService.listDue(agentInstanceClock.now());
+    for (const row of due) {
+      try {
+        if (await lifecycle.beginDelete(row.id)) result.deleted += 1;
+      } catch (err) {
+        result.errors += 1;
+        console.error('[agentInstanceSweep] a plan-lapse deletion failed', {
+          instanceId: row.id,
+          detail: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    return result;
   },
 
   /** One pass of the sweep. Never throws for one instance's failure — it counts it. */
