@@ -50,6 +50,25 @@ const WITH_CARDS = {
 } as const;
 
 /** A RUNNING run in one agent — the active-run read by agent (§5). */
+/**
+ * An agent's LATEST run, whatever its status — My agents' "Last run" line
+ * (MOTIR-7029). A bare row, not the model: the panel reads only these facts.
+ */
+export interface LatestDispatchRunInAgent {
+  id: string;
+  agentInstanceId: string;
+  status: DispatchRunStatus;
+  startedAt: Date;
+  endedAt: Date | null;
+}
+
+/** The card a run works on, as a panel names it: its key and its title. */
+export interface DispatchRunTargetCard {
+  workItemKey: string;
+  /** Null when the work item has since been deleted — the key the run saw stays. */
+  title: string | null;
+}
+
 export interface RunningDispatchRunInAgent {
   id: string;
   agentInstanceId: string;
@@ -229,6 +248,67 @@ export const dispatchRunRepository = {
       select: RUNNING_IN_AGENT_SELECT,
     });
     return rows.map(inAgent);
+  },
+
+  /**
+   * Each agent's LATEST run, whatever its status, in ONE query (MOTIR-7029) — the
+   * My agents panel's "Last run" line after a run closes. `DISTINCT ON` keeps one
+   * row per agent, newest `started_at` first (then `id`, the total order the run
+   * listings use), and rides `dispatch_run_agent_instance_id_started_at_idx`. An
+   * agent that never ran is absent.
+   */
+  async findLatestByAgentInstances(
+    agentInstanceIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<LatestDispatchRunInAgent[]> {
+    if (agentInstanceIds.length === 0) return [];
+    return tx.$queryRaw<LatestDispatchRunInAgent[]>`
+      SELECT DISTINCT ON (agent_instance_id)
+        id,
+        agent_instance_id AS "agentInstanceId",
+        status::text AS status,
+        started_at AS "startedAt",
+        ended_at AS "endedAt"
+      FROM dispatch_run
+      WHERE agent_instance_id = ANY(${[...agentInstanceIds]}::text[])
+      ORDER BY agent_instance_id, started_at DESC, id DESC
+    `;
+  },
+
+  /**
+   * The card each of these runs works on — its KEY and TITLE — in ONE query
+   * (MOTIR-7029): a scope run's scope target, else its first leg. The My agents
+   * panel names the run by both. A run with neither is absent from the map.
+   */
+  async findTargetCards(
+    runIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, DispatchRunTargetCard>> {
+    if (runIds.length === 0) return new Map();
+    const rows = await tx.dispatchRun.findMany({
+      where: { id: { in: [...runIds] } },
+      select: {
+        id: true,
+        scope: { select: { identifier: true, title: true } },
+        cards: {
+          orderBy: { position: 'asc' },
+          take: 1,
+          select: { workItemKey: true, workItem: { select: { title: true } } },
+        },
+      },
+    });
+    const out = new Map<string, DispatchRunTargetCard>();
+    for (const row of rows) {
+      if (row.scope) {
+        out.set(row.id, { workItemKey: row.scope.identifier, title: row.scope.title });
+        continue;
+      }
+      const leg = row.cards[0];
+      if (leg?.workItemKey) {
+        out.set(row.id, { workItemKey: leg.workItemKey, title: leg.workItem?.title ?? null });
+      }
+    }
+    return out;
   },
 
   /**

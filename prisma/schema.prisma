@@ -10531,6 +10531,10 @@ model DispatchRun {
   @@index([projectId, startedAt(sort: Desc)])
   /// The scope's own run history.
   @@index([scopeWorkItemId, startedAt(sort: Desc)])
+  /// An agent's run history, newest first — My agents' LAST-run read per agent
+  /// (MOTIR-7029). Two columns, so it never claims the partial unique index's
+  /// `(agent_instance_id)` list (CLAUDE.md, the partial-index rule).
+  @@index([agentInstanceId, startedAt(sort: Desc)])
   /// The abandoned-run reap's discovery read (MOTIR-1792): the oldest rows still
   /// `running`. Status-first, because `running` is a tiny minority of the table
   /// — the same shape `job_run`'s reap index has.

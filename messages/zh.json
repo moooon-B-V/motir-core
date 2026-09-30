@@ -8914,7 +8914,27 @@
         "body": "它可能已被删除，或者不是你的。只有创建智能体的人才能打开它。",
         "back": "返回我的智能体"
       },
-      "size": "{cols} × {rows}"
+      "size": "{cols} × {rows}",
+      "run": {
+        "live": "正在处理一个工作项",
+        "last": "上次运行",
+        "open": "打开运行",
+        "offWhy": "有运行正在这个智能体中进行时，休眠和删除不可用——请先取消该运行。",
+        "refusedHibernate": "{name} 正在运行 <link>{key}</link>。请先在工作项上取消该运行，然后再让它休眠。",
+        "refusedDelete": "{name} 正在运行 <link>{key}</link>。请先在工作项上取消该运行，然后再删除它。",
+        "sessions": {
+          "label": "终端会话",
+          "shell": "你的 shell",
+          "run": "运行 {key}",
+          "watchOnly": "运行的会话只能观看"
+        },
+        "strip": {
+          "watching": "正在观看 {key} 的运行——只读，输入不会生效。要停止它，请在<link>工作项</link>上使用“取消运行”。",
+          "endedSucceeded": "运行的会话已结束——运行成功，它的拉取请求在工作项上。",
+          "endedFailed": "运行的会话已结束——运行失败。目前的工作在运行的分支上。"
+        },
+        "backToShell": "回到你的 shell"
+      }
     }
   },
   "runs": {

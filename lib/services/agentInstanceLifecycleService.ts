@@ -57,11 +57,23 @@ import {
   revokeInstanceCloneCredential,
 } from '@/lib/github/runGitCredential';
 import { machineCreditsFor } from '@/lib/hostedRuns/machineRate';
-import { toAgentInstanceDto } from '@/lib/mappers/agentInstanceMappers';
-import type { AgentInstanceListPageDto, AgentInstanceStopReason } from '@/lib/dto/agentInstances';
+import {
+  endLineReason,
+  isClosedRunInAgent,
+  toAgentInstanceActiveRunDto,
+  toAgentInstanceDto,
+  toAgentInstanceLastRunDto,
+} from '@/lib/mappers/agentInstanceMappers';
+import type {
+  AgentInstanceActiveRunDto,
+  AgentInstanceLastRunDto,
+  AgentInstanceListPageDto,
+  AgentInstanceStopReason,
+} from '@/lib/dto/agentInstances';
 import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
 import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
+import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import type { AgentRunEndOutcome } from '@/lib/services/agentInstanceRunService';
 import {
@@ -530,6 +542,54 @@ function isTerminalOnQuietly(): boolean {
   }
 }
 
+/**
+ * Each listed agent's live run, and — for an agent with none — its latest closed
+ * run (MOTIR-7029: the panel's run line and its "Last run" face). A BOUNDED number
+ * of queries whatever the count of agents: the running runs, the latest runs of
+ * the idle agents, those runs' cards, and the closing lines of the ones that did
+ * not succeed — each one query, each skipped when it has nothing to ask.
+ */
+async function readAgentRuns(
+  agentIds: readonly string[],
+  tx: Prisma.TransactionClient,
+): Promise<{
+  active: Map<string, AgentInstanceActiveRunDto>;
+  last: Map<string, AgentInstanceLastRunDto>;
+}> {
+  const running = await dispatchRunRepository.findRunningByAgentInstances(agentIds, tx);
+  const busy = new Set(running.map((r) => r.agentInstanceId));
+  const latest = (
+    await dispatchRunRepository.findLatestByAgentInstances(
+      agentIds.filter((id) => !busy.has(id)),
+      tx,
+    )
+  ).filter(isClosedRunInAgent);
+  const targets = await dispatchRunRepository.findTargetCards(
+    [...running, ...latest].map((r) => r.id),
+    tx,
+  );
+  const reasons = new Map<string, string | null>();
+  for (const line of await dispatchRunEventRepository.listEndLinesForRuns(
+    latest.filter((r) => r.status !== 'succeeded').map((r) => r.id),
+    tx,
+  )) {
+    // Newest first: the first line seen for a run is its closing line.
+    if (!reasons.has(line.dispatchRunId)) reasons.set(line.dispatchRunId, endLineReason(line.data));
+  }
+  const active = new Map<string, AgentInstanceActiveRunDto>();
+  for (const run of running) {
+    active.set(run.agentInstanceId, toAgentInstanceActiveRunDto(run, targets.get(run.id) ?? null));
+  }
+  const last = new Map<string, AgentInstanceLastRunDto>();
+  for (const run of latest) {
+    last.set(
+      run.agentInstanceId,
+      toAgentInstanceLastRunDto(run, targets.get(run.id) ?? null, reasons.get(run.id) ?? null),
+    );
+  }
+  return { active, last };
+}
+
 async function waitFor(deadlineMs: number, done: () => Promise<boolean>): Promise<boolean> {
   const deadline = agentInstanceClock.now().getTime() + deadlineMs;
   for (;;) {
@@ -579,6 +639,10 @@ export const agentInstanceLifecycleService = {
           credits: acc.credits + credits,
         });
       }
+      const runs = await readAgentRuns(
+        rows.map((r) => r.id),
+        tx,
+      );
       return {
         total,
         instances: rows.map((row) => ({
@@ -587,6 +651,8 @@ export const agentInstanceLifecycleService = {
           machineSecondsThisMonth: usage.get(row.id)?.seconds ?? 0,
           creditsThisMonth: usage.get(row.id)?.credits ?? 0,
           stopReason: stopReasonOf(latestClosed.get(row.id) ?? null),
+          activeRun: runs.active.get(row.id) ?? null,
+          lastRun: runs.last.get(row.id) ?? null,
         })),
       };
     });

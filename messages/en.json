@@ -8918,7 +8918,27 @@
         "body": "It may have been deleted, or it isn’t one of yours. Only the person who created an agent can open it.",
         "back": "Back to My agents"
       },
-      "size": "{cols} × {rows}"
+      "size": "{cols} × {rows}",
+      "run": {
+        "live": "Running a work item",
+        "last": "Last run",
+        "open": "Open run",
+        "offWhy": "Hibernate and Delete are off while a run is working in this agent — cancel the run first.",
+        "refusedHibernate": "{name} is running <link>{key}</link>. Cancel that run on the work item first, then hibernate it.",
+        "refusedDelete": "{name} is running <link>{key}</link>. Cancel that run on the work item first, then delete it.",
+        "sessions": {
+          "label": "Terminal sessions",
+          "shell": "Your shell",
+          "run": "Run {key}",
+          "watchOnly": "The run’s session is watch-only"
+        },
+        "strip": {
+          "watching": "Watching the run of {key} — read-only, so typing goes nowhere. To stop it, use Cancel run on <link>the work item</link>.",
+          "endedSucceeded": "The run’s session has ended — the run succeeded, and its pull request is on the work item.",
+          "endedFailed": "The run’s session has ended — the run failed. Its work so far is on the run’s branch."
+        },
+        "backToShell": "Back to your shell"
+      }
     }
   },
   "runs": {

@@ -68,6 +68,8 @@ export default defineConfig({
       'tests/components/MyAgentsRoom.test.tsx',
       'tests/agentTerminal/**/*.test.ts',
       'tests/components/AgentPanel.test.tsx',
+      // Story MOTIR-6864 — the agent's live run in its panel (MOTIR-7029).
+      'tests/components/AgentPanelRun.test.tsx',
     ],
     coverage: {
       provider: 'v8',
