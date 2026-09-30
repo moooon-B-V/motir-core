@@ -70,7 +70,7 @@ async function main(): Promise<void> {
 
   const relay = createTerminalRelay({
     allowedOrigin,
-    authorize: (ticket) => agentTerminalRelayService.authorizeConnection(ticket),
+    authorize: (ticket, channel) => agentTerminalRelayService.authorizeConnection(ticket, channel),
     openConnection: (input) =>
       agentTerminalRelayService.openConnection({ ...input, relayMachineId: machineId }),
     closeConnection: (input) => agentTerminalRelayService.closeConnection(input),

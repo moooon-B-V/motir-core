@@ -121,7 +121,71 @@ describe('the ticket route (Q3)', () => {
     vi.stubEnv('MOTIR_RELAY_URL', 'ws://localhost:8080/v1/terminal');
     const body = await ticketFor(id, JSON.stringify({ sessionId: 'ignored' }));
     expect(body.url).toBe('ws://localhost:8080/v1/terminal');
-    expect(Object.keys(body).sort()).toEqual(['expiresAt', 'ticket', 'url']);
+    expect(Object.keys(body).sort()).toEqual(['channel', 'expiresAt', 'ticket', 'url']);
+    expect(body).toMatchObject({ channel: 'terminal' });
+  });
+
+  it('with no body — or none naming a channel — mints a TERMINAL ticket, exactly as before (MOTIR-7013)', async () => {
+    const id = await running();
+    for (const body of [undefined, '', '{}', JSON.stringify({ channel: 'terminal' })]) {
+      const res = await ticketFor(id, body);
+      expect(res).toMatchObject({ channel: 'terminal', url: 'wss://relay.motir.co/v1/terminal' });
+    }
+    const rows = await adminDb.agentTerminalTicket.findMany({});
+    expect(rows.map((r) => r.channel)).toEqual(['terminal', 'terminal', 'terminal', 'terminal']);
+  });
+
+  it('mints a CHAT ticket for the owner of a running agent: stored with its channel, the relay URL on /v1/chat (agent-chat.md Q4)', async () => {
+    const id = await running();
+    const body = await ticketFor(id, JSON.stringify({ channel: 'chat' }));
+    expect(body).toMatchObject({ channel: 'chat', url: 'wss://relay.motir.co/v1/chat' });
+    expect(new Date(body.expiresAt).getTime() - clock.now().getTime()).toBe(60_000);
+    const [row] = await adminDb.agentTerminalTicket.findMany({});
+    expect(row).toMatchObject({
+      channel: 'chat',
+      tokenHash: sha256(body.ticket),
+      userId: fx.ownerId,
+    });
+
+    // A configured relay keeps its host and prefix; only the channel's path moves.
+    vi.stubEnv('MOTIR_RELAY_URL', 'ws://localhost:8080/relay/v1/terminal');
+    expect((await ticketFor(id, JSON.stringify({ channel: 'chat' }))).url).toBe(
+      'ws://localhost:8080/relay/v1/chat',
+    );
+  });
+
+  it('refuses an unknown channel — or a body that is not an object — with 400, and mints nothing', async () => {
+    const id = await running();
+    for (const body of [
+      JSON.stringify({ channel: 'shell' }),
+      JSON.stringify({ channel: 'CHAT' }),
+      JSON.stringify({ channel: null }),
+      JSON.stringify({ channel: ['chat'] }),
+      JSON.stringify(['chat']),
+      'chat',
+      'null',
+    ]) {
+      const res = await post(id, body);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ code: 'BAD_REQUEST' });
+    }
+    expect(await adminDb.agentTerminalTicket.count()).toBe(0);
+  });
+
+  it('refuses a chat ticket exactly as a terminal one: not_owner 403 for a non-owner, not_running 409 for a stopped agent', async () => {
+    const id = await running();
+    const chat = JSON.stringify({ channel: 'chat' });
+    await actAs(await member('admin'));
+    let res = await post(id, chat);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: 'not_owner' });
+
+    await actAs(fx.ownerId);
+    await lifecycle.hibernate(fx.projectIdentifier, id, fx.ctx);
+    res = await post(id, chat);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'not_running' });
+    expect(await adminDb.agentTerminalTicket.count()).toBe(0);
   });
 
   it('refuses another member and a MANAGER alike with not_owner — and gives neither a ticket', async () => {
@@ -272,6 +336,46 @@ describe('the relay’s redeem (Q3)', () => {
     const someoneElse = await member('member');
     expect(await redeemAfter({ ownerId: someoneElse })).toEqual({ ok: false, closeCode: 4403 });
   });
+
+  it('redeems a ticket ONLY on its own channel: the other path is 4401, and the ticket is spent (agent-chat.md Q4)', async () => {
+    fleet.setTerminalAddress('ws://127.0.0.1:7999');
+    const id = await running();
+
+    // A chat ticket on the terminal path, a terminal ticket on the chat path.
+    for (const [minted, presented] of [
+      ['chat', 'terminal'],
+      ['terminal', 'chat'],
+    ] as const) {
+      const { ticket } = await ticketFor(id, JSON.stringify({ channel: minted }));
+      expect(await relayService.authorizeConnection(ticket, presented)).toEqual({
+        ok: false,
+        closeCode: TERMINAL_CLOSE.badTicket,
+      });
+      // Spent where it was presented: not redeemable on its own channel afterwards.
+      expect(await relayService.authorizeConnection(ticket, minted)).toEqual({
+        ok: false,
+        closeCode: TERMINAL_CLOSE.badTicket,
+      });
+    }
+    // With no channel named, a redeem is the terminal's — so a chat ticket is refused.
+    const { ticket: chatTicket } = await ticketFor(id, JSON.stringify({ channel: 'chat' }));
+    expect(await relayService.authorizeConnection(chatTicket)).toEqual({
+      ok: false,
+      closeCode: TERMINAL_CLOSE.badTicket,
+    });
+
+    // On its own path, a chat ticket dials the SAME machine at /v1/chat with a relay token.
+    const row = await adminDb.agentInstance.findUniqueOrThrow({ where: { id } });
+    const { ticket } = await ticketFor(id, JSON.stringify({ channel: 'chat' }));
+    const verdict = await relayService.authorizeConnection(ticket, 'chat');
+    expect(verdict.ok).toBe(true);
+    if (!verdict.ok) return;
+    expect(verdict.target).toMatchObject({ instanceId: id, userId: fx.ownerId, channel: 'chat' });
+    expect(verdict.target.dial.url).toBe('ws://127.0.0.1:7999/v1/chat');
+    expect(verdict.target.dial.headers['x-motir-machine-id']).toBe(row.machineId);
+    expect(verdict.target.dial.headers['authorization']).toMatch(/^Motir-Relay /);
+    fleet.setTerminalAddress(null);
+  });
 });
 
 describe('the connection record and the sweep (Q3, Q8)', () => {
@@ -287,6 +391,7 @@ describe('the connection record and the sweep (Q3, Q8)', () => {
       where: { id: rowId },
     });
     expect(opened).toMatchObject({
+      channel: 'terminal',
       openedAt: clock.now(),
       lastSeenAt: clock.now(),
       relayMachineId: 'relay-a',
@@ -311,6 +416,7 @@ describe('the connection record and the sweep (Q3, Q8)', () => {
       [
         'closeCode',
         'closeReason',
+        'channel',
         'closedAt',
         'createdAt',
         'id',
@@ -322,6 +428,20 @@ describe('the connection record and the sweep (Q3, Q8)', () => {
         'workspaceId',
       ].sort(),
     );
+  });
+
+  it('records a chat connection’s channel on its row (agent-chat.md Q10)', async () => {
+    const id = await running();
+    const rowId = await relayService.openConnection({
+      workspaceId: fx.workspaceId,
+      instanceId: id,
+      userId: fx.ownerId,
+      channel: 'chat',
+      relayMachineId: 'relay-a',
+    });
+    expect(
+      await adminDb.agentTerminalConnection.findUniqueOrThrow({ where: { id: rowId } }),
+    ).toMatchObject({ channel: 'chat', closedAt: null });
   });
 
   it('deletes only tickets past their life, through the sweep job’s own step', async () => {

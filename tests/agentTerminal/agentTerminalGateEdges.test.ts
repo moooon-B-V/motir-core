@@ -91,6 +91,7 @@ function target(url: string): AgentTerminalAuthorization {
       instanceId: 'inst-1',
       userId: 'user-1',
       workspaceId: 'ws-1',
+      channel: 'terminal',
       dial: { url, headers: {} },
     },
   };
