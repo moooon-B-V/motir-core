@@ -26,22 +26,10 @@ import { defineJob } from '../defineJob';
 // over several passes rather than holding one transaction across the backlog.
 
 /**
- * Daily, at 06:00 UTC.
- *
- * ⚠️ THE MINUTE IS NOT A FREE CHOICE — `:00` or `:30`, and nothing else
- * (`SCHEDULE_CLUSTER_MINUTES`). Motir's Postgres suspends when idle and bills by
- * how often it WAKES, and every tick of every scheduled job is a guaranteed
- * write, so the bill is a property of the SET of schedules and no single job's
- * comment can defend it. `tests/jobs/schedule-cluster.test.ts` asserts the
- * resulting quiet gap; the measurement it is priced against is
- * `docs/decisions/application-hosting.md` §21.
- *
- * **This job picked `:10` first, for the load-spreading reason that is correct on
- * an always-on machine and wrong here, and the guard caught it.** Separation
- * between the daily sweeps is bought by the HOUR instead — 06:00 shares its cold
- * start with nothing, sits after the 03:30–05:00 housekeeping band, and lands
- * before the 09:00 health check, so an operator reading that report sees a ledger
- * the reap has already been over.
+ * Daily, at 06:00 UTC. The hour is the choice that matters: 06:00 shares its slot
+ * with nothing, sits after the 03:30–05:00 housekeeping band, and lands before
+ * the 09:00 health check, so an operator reading that report sees a ledger the
+ * reap has already been over.
  *
  * Daily is right on the merits too: what this recovers has ALREADY been wrong for
  * at least six hours and nothing downstream is waiting on it.

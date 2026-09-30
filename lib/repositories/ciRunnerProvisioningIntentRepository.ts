@@ -136,9 +136,9 @@ export const ciRunnerProvisioningIntentRepository = {
    * The oldest intent still awaiting a runner FOR ONE PROJECT — the read behind
    * the admission WAKE (MOTIR-2852).
    *
-   * Scoped to a project because that is the scope a freed slot has: the
-   * per-project cap is what deferred the intent, so a completion in project A
-   * says nothing about whether project B may now boot. Ordered by `queuedAt`
+   * Scoped to a project, the wake's cheapest useful guess: the freed slot is the
+   * ORG's (MOTIR-6907), so a completion in project A may also let the org's
+   * project B boot — that one is left to the provisioning sweep. Ordered by `queuedAt`
    * exactly as {@link listPending} is, and for the same reason — the slot goes to
    * the job GitHub has been holding longest, not to whichever row was written
    * last.
@@ -297,14 +297,25 @@ export const ciRunnerProvisioningIntentRepository = {
     });
   },
 
-  /** Move an intent to a terminal status with the reason it got there. */
+  /**
+   * Move an intent to a terminal status with the reason it got there.
+   *
+   * ⚠️ THE FIRST SETTLE WINS (MOTIR-6908). An intent already `completed` or
+   * `failed` is left as it is, and the answer is `false`. Two paths can reach the
+   * same intent: an org STOP settles it with `credits_exhausted` / `admin_stop`
+   * while its supervisor is still polling, and the supervisor's own settle a
+   * moment later must not overwrite why the container really ended.
+   */
   async settle(
     id: string,
     data: CiRunnerSettleRecord,
     tx: Prisma.TransactionClient,
-  ): Promise<void> {
-    await tx.ciRunnerProvisioningIntent.update({
-      where: { id },
+  ): Promise<boolean> {
+    const { count } = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: {
+        id,
+        status: { notIn: [CI_RUNNER_INTENT_COMPLETED, CI_RUNNER_INTENT_FAILED] },
+      },
       data: {
         status: data.status,
         teardownReason: data.teardownReason,
@@ -314,6 +325,7 @@ export const ciRunnerProvisioningIntentRepository = {
         ...(data.bootLatencyMs === undefined ? {} : { bootLatencyMs: data.bootLatencyMs }),
       },
     });
+    return count === 1;
   },
 
   /**
@@ -335,42 +347,84 @@ export const ciRunnerProvisioningIntentRepository = {
   },
 
   /**
-   * How many runners are IN FLIGHT for one project — the per-project cap's
-   * count (MOTIR-1922).
+   * How many runners are IN FLIGHT for one ORGANISATION — the `ci_runner` term of
+   * the org's pool (MOTIR-6907, `docs/decisions/fleet-per-org-pool.md` §2).
    *
-   * ⚠️ Read UNDER THE PROJECT'S ADMISSION LOCK and inside the same transaction as
-   * the claim it guards, never on its own: it is the read half of a read-derived
+   * ⚠️ Read UNDER THE FLEET ADMISSION LOCK and inside the same transaction as the
+   * claim it guards, never on its own: it is the read half of a read-derived
    * write, and a count taken outside the lock is a snapshot two racers can both
    * act on. See `ciFleetAdmissionLockRepository.lockScope`.
    *
    * "In flight" is `provisioning` + `running` — the same window the reaper uses,
    * and the reason completion frees a slot with no extra bookkeeping: settling an
    * intent to `completed`/`failed` drops it out of this set in the same write
-   * that ends the container.
+   * that ends the container. Rides `[organization_id, status]`.
    */
-  async countInFlightForProject(projectId: string, tx: Prisma.TransactionClient): Promise<number> {
+  async countInFlightForOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
     return tx.ciRunnerProvisioningIntent.count({
-      where: { projectId, status: { in: [...CI_RUNNER_INTENT_IN_FLIGHT] } },
+      where: { organizationId, status: { in: [...CI_RUNNER_INTENT_IN_FLIGHT] } },
     });
   },
 
   /**
+   * Every intent ONE ORGANISATION has in flight — the input of an org STOP
+   * (MOTIR-6908, `fleetStopService.stopOrganization`). Unbounded on purpose: the
+   * org's pool bounds it (500 by default), and a stop that tore down only the
+   * first page would leave the rest running on a zero balance. Rides
+   * `[organization_id, status]`.
+   */
+  async listInFlightForOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<CiRunnerProvisioningIntent[]> {
+    return tx.ciRunnerProvisioningIntent.findMany({
+      where: { organizationId, status: { in: [...CI_RUNNER_INTENT_IN_FLIGHT] } },
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
+  /**
+   * Every CI container whose JOB HAS STARTED and has not settled — the input of
+   * the live charge (MOTIR-6910). A container still booting has run nothing
+   * GitHub would bill, so it accrues nothing yet. Rides `[status, bootedAt]`.
+   */
+  async listStartedInFlight(tx: Prisma.TransactionClient): Promise<CiRunnerProvisioningIntent[]> {
+    return tx.ciRunnerProvisioningIntent.findMany({
+      where: { status: { in: [...CI_RUNNER_INTENT_IN_FLIGHT] }, startedAt: { not: null } },
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
+  /**
+   * Lock ONE intent for the live charge's read-derived write (MOTIR-6910) and
+   * re-read what the decision needs. `FOR UPDATE`, because two ticks that
+   * overlap (a slow one and the next) would otherwise both read the same
+   * checkpoint and both add the minutes since it. Null when the row is gone.
+   */
+  async lockForAccrual(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ status: string; startedAt: Date | null } | null> {
+    const rows = await tx.$queryRaw<{ status: string; started_at: Date | null }[]>`
+      SELECT "status", "started_at" FROM "ci_runner_provisioning_intent"
+      WHERE "id" = ${id}
+      FOR UPDATE
+    `;
+    const row = rows[0];
+    return row ? { status: row.status, startedAt: row.started_at } : null;
+  },
+
+  /**
    * How many CI RUNNERS are in flight across the whole fleet — the `ci_runner`
-   * term of the cross-workload ceiling (MOTIR-1922 / ADR §9.1, generalized by
-   * MOTIR-1997).
+   * term of the fleet-wide census (`fleetCeilingService.census`).
    *
-   * Unscoped ON PURPOSE: no workspace, no org, no project. The invoice this
-   * bounds is Motir's own, and a per-tenant count cannot see the failure mode —
-   * an unbounded number of projects, each individually under its own cap. It is
-   * read under the `fleet` admission lock, which every admission takes, so this
-   * is the most contended read on the path and the one that lock exists for.
-   *
-   * ⚠️ THIS IS NO LONGER THE WHOLE CEILING, and calling it directly is how the
-   * ceiling stops being a bound. Index containers (MOTIR-1981/1990) and hosted
-   * agents (Epic 9) run on the same fleet and write no intent, so the number
-   * that bounds the invoice is the UNION in `fleetCeilingService.census` — this
-   * is one of its terms, registered as `ci_runner` in `lib/ciFleet/workloads.ts`.
-   * Read the total from there.
+   * Since MOTIR-6907 no admission decides on this number: capacity is the
+   * ORGANISATION's pool ({@link countInFlightForOrganization}), and the
+   * fleet-wide total is an operator's reading, not a limit. Read the census from
+   * `lib/ciFleet/workloads.ts`, where this is registered as `ci_runner`.
    */
   async countInFlightFleetWide(tx: Prisma.TransactionClient): Promise<number> {
     return tx.ciRunnerProvisioningIntent.count({

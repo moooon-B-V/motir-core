@@ -1136,6 +1136,15 @@ model Organization {
   /// unlike `isMeta`'s data-flip, classifying an org is an operator's act.
   internalBilling Boolean @default(false) @map("internal_billing")
 
+  /// THIS ORGANISATION'S OWN FLEET POOL — the enterprise override of
+  /// `MOTIR_FLEET_ORG_MAX_IN_FLIGHT` (default 500): how many shared-workload
+  /// containers (CI runners, hosted-agent runs, index containers) the org may
+  /// have in flight at once (`docs/decisions/fleet-per-org-pool.md` §2,
+  /// MOTIR-6907). NULL = the environment's number. Set by platform staff with the
+  /// org, the way its tier is, and never as a per-org env var. `0` is legal and
+  /// means the org boots nothing. Read by `lib/ciFleet/limits.ts` `orgPoolCap`.
+  fleetPoolCap Int? @map("fleet_pool_cap")
+
   /// The git CONNECTIONS this organisation holds, and the REPOSITORIES behind
   /// them (Story MOTIR-4669 · MOTIR-4649) — a repository is connected ONCE, to
   /// the organisation, and which projects use it is visibility configuration.
@@ -1173,6 +1182,10 @@ model Organization {
   // meaningless without the org.
   ciWorkflowRunUsages         CiWorkflowRunUsage[]
   ciPeriodUsages              CiPeriodUsage[]
+  ciLiveAccruals              CiLiveAccrual[]
+  // The attribution reconciler's kills (MOTIR-6925) — SetNull: an audit row
+  // outlives the org it named.
+  fleetMachineKills           FleetMachineKill[]
   // Runner-fleet provisioning intents (Story MOTIR-1916 · MOTIR-1920) — the
   // queued fleet jobs attributed to this org. Cascade for the same reason: an
   // intent is a request to spend on the org's behalf, meaningless without it.
@@ -1408,6 +1421,7 @@ model Workspace {
   // tenant can never read another's consumption. Cascade with the workspace.
   ciWorkflowRunUsages         CiWorkflowRunUsage[]
   ciPeriodUsages              CiPeriodUsage[]
+  ciLiveAccruals              CiLiveAccrual[]
   // Runner-fleet provisioning intents (Story MOTIR-1916 · MOTIR-1920) — the same
   // workspace_id + RLS contract as the two metering tables above.
   ciRunnerProvisioningIntents CiRunnerProvisioningIntent[]
@@ -7569,6 +7583,20 @@ model GithubPullRequest {
   mergeableState        String?             @map("mergeable_state")
   /// The head commit `mergeableState` was read at. See above.
   mergeableStateHeadSha String?             @map("mergeable_state_head_sha")
+  /// The pull request's HEAD COMMIT, as the host last reported it (MOTIR-7005) —
+  /// written by every `pull_request` delivery (`synchronize` included) and by every
+  /// host read (the reconcile tick, the base-branch re-read, the press-time read).
+  ///
+  /// ⚠️ THE CHECK ROWS ARE NOT THE HEAD. A push that produces no CI — which GitHub
+  /// guarantees for a pull request conflicting with its base — leaves the newest
+  /// check rows at the OLD commit, and before this column that commit was read as
+  /// current: a gate was raised over it and the card promoted on its green. Every
+  /// head reader goes through `lib/github/pullRequestHead.ts`, and a member whose
+  /// check rows are not at this head is not green.
+  ///
+  /// ⚠️ NULLABLE, NOT BACKFILLED, and read as UNKNOWN — then the readers fall back
+  /// to the check rows' head, which is what they did before the column existed.
+  headSha               String?             @map("head_sha")
   /// Whether this pull request's association with a work item was DECLARED by a
   /// person or an agent (MOTIR-1596, design/github Panel 5) rather than inferred.
   ///
@@ -9546,6 +9574,8 @@ model CiRunnerProvisioningIntent {
   project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
   githubRepo   GithubRepo?  @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
 
+  liveAccruals CiLiveAccrual[]
+
   /// The idempotency guarantee: a redelivered webhook produces no second intent,
   /// while a RE-RUN (a new attempt) and every sibling JOB of the same run each
   /// get their own.
@@ -9563,6 +9593,93 @@ model CiRunnerProvisioningIntent {
   /// ago must not be swept as an hour-old orphan.
   @@index([status, bootedAt])
   @@map("ci_runner_provisioning_intent")
+}
+
+/// CI IS DEBITED WHILE IT RUNS (Story MOTIR-6906 · MOTIR-6910 ·
+/// `docs/decisions/fleet-per-org-pool.md` §3). One row per live CI container per
+/// debit period: the WHOLE minutes that container accrued since its previous row,
+/// added to the org's `ci_period_usage` in the same transaction so the existing
+/// allowance-then-credits charge sees them before the run ends.
+///
+/// The row is the idempotency record: `(provisioning_intent_id, tick_start)` makes
+/// a replayed or retried tick a no-op, and the per-intent SUM is the checkpoint the
+/// next tick subtracts from, so a late tick never counts a minute twice. When the
+/// run completes, the `workflow_run` meter subtracts this run's sum from GitHub's
+/// figure and adds only the difference (`ciMinutesMeterService.meterWorkflowRun`).
+model CiLiveAccrual {
+  id                   String @id @default(cuid())
+  provisioningIntentId String @map("provisioning_intent_id")
+  organizationId       String @map("organization_id")
+  workspaceId          String @map("workspace_id")
+
+  /// The GitHub run this container served — the completion meter's key.
+  runId      String @map("run_id")
+  runAttempt Int    @map("run_attempt")
+
+  /// The start of the 5-minute debit period this row was written in.
+  tickStart   DateTime @map("tick_start")
+  /// The calendar month (`ci_period_usage.period_start`) the minutes landed in.
+  periodStart DateTime @map("period_start")
+
+  /// Whole minutes, in seconds (always a multiple of 60).
+  accruedSeconds Int @map("accrued_seconds")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  provisioningIntent CiRunnerProvisioningIntent @relation(fields: [provisioningIntentId], references: [id], onDelete: Cascade)
+  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace          Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([provisioningIntentId, tickStart])
+  /// The completion meter's read: what this run was already charged live.
+  @@index([runId, runAttempt])
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@map("ci_live_accrual")
+}
+
+/// THE KILL RECORD (Story MOTIR-6906 · MOTIR-6925, `fleet-per-org-pool.md` §5) —
+/// one row per machine the attribution reconciler destroyed or stopped, for the
+/// platform admin's list (MOTIR-6905) and the audit of what the reconciler did.
+///
+/// ⚠️ WRITTEN BEFORE THE DESTROY. The decision commits first and the provider
+/// call follows (`docs/jobs.md`'s commit-then-effect rule), so a destroy that
+/// throws leaves a row with no `completedAt` and its `failureDetail` — never a
+/// machine killed with no record of why. The next pass decides again and writes
+/// a new row; a machine that keeps failing to die shows up as several.
+model FleetMachineKill {
+  id          String @id @default(cuid())
+  /// The provider app and machine, as the provider listed them.
+  app         String
+  machineId   String @map("machine_id")
+  machineName String @default("") @map("machine_name")
+
+  /// `no_record` · `record_ended` · `org_stopped` — the alert's own words.
+  reason String
+  /// `destroyed`, or `stopped` for an agent instance's persistent machine whose
+  /// record says it should be resting.
+  action String
+
+  /// What matched it, when anything did: the workload and its record's id.
+  /// Null for `no_record`.
+  workload       String?
+  recordRef      String? @map("record_ref")
+  /// The organisation of the matched record — null for `no_record`, and after
+  /// the organisation is deleted (the row outlives it: it is an audit).
+  organizationId String? @map("organization_id")
+
+  machineCreatedAt DateTime? @map("machine_created_at")
+  ageSeconds       Int       @map("age_seconds")
+
+  decidedAt     DateTime  @default(now()) @map("decided_at")
+  completedAt   DateTime? @map("completed_at")
+  failureDetail String?   @map("failure_detail")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, decidedAt])
+  @@index([decidedAt])
+  @@map("fleet_machine_kill")
 }
 
 /// The CONTAINER-SECONDS RECORD (Story MOTIR-1916 · MOTIR-1924) — what ONE fleet
@@ -10005,12 +10122,15 @@ model FleetInFlightSlot {
   /// … ON CONFLICT DO NOTHING` occupies no extra capacity.
   ref String
 
-  /// Attribution for the operator breakdown; never a tenancy boundary (see the
-  /// model comment). Not FKs: a slot must survive the deletion of whatever it
+  /// The organisation whose POOL this slot counts against
+  /// (`docs/decisions/fleet-per-org-pool.md` §2, MOTIR-6907) — REQUIRED since the
+  /// pool became per organisation: a slot with no org would be counted by no
+  /// org's pool, which is a container nothing bounds. The workspace is
+  /// attribution only. Not FKs: a slot must survive the deletion of whatever it
   /// pointed at, because a leaked slot that outlives its owner is exactly the
   /// row `expires_at` exists to age out — a cascade would silently free
   /// capacity a live container is still spending.
-  organizationId String? @map("organization_id")
+  organizationId String  @map("organization_id")
   workspaceId    String? @map("workspace_id")
 
   /// The container this slot stands for, once the workload knows it. Nullable
@@ -10056,6 +10176,8 @@ model FleetInFlightSlot {
   /// The ceiling's read — count live rows for one workload. Ordered
   /// `[workload, expiresAt]` because that is the predicate's shape.
   @@index([workload, expiresAt])
+  /// The per-organisation pool count (MOTIR-6907), read under the fleet lock.
+  @@index([organizationId, expiresAt])
   @@map("fleet_in_flight_slot")
 }
 

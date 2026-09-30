@@ -2,7 +2,7 @@ import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { getGitProvider } from '@/lib/git';
 import { providerSupportsMerge } from '@/lib/git/provider';
 import type { GitProviderId } from '@/lib/git/types';
-import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { pullRequestHead, prCiStateAtHead } from '@/lib/github/pullRequestHead';
 import { isConflictedAt } from '@/lib/github/mergeability';
 import {
   githubPullRequestRepository,
@@ -50,9 +50,9 @@ export interface AutoMergeRequest {
  * head. Asked by the `auto` arm below and by the approve-and-merge gate's own raise, so
  * both modes read one statement of it.
  *
- * ⚠️ A green pull request always HAS a head: `derivePrCiState` answers `passing` only
- * over a non-empty set of rows at the latest sha, so the head is read from that same
- * set rather than checked for separately.
+ * ⚠️ A green pull request always HAS a head: `prCiStateAtHead` answers `passing` only
+ * over a non-empty set of rows AT the pull request's head, so the head exists whenever
+ * the verdict is green and is not checked for separately.
  *
  * ⚠️ AND A DRAFT IS NOT A CANDIDATE (MOTIR-5699). A draft is its author saying *not
  * ready*, and the host refuses to merge one — so a green draft that counted here put an
@@ -66,13 +66,23 @@ export interface AutoMergeRequest {
  * bug MOTIR-5907). A green pull request that no longer combines with its base can only
  * be refused when pressed, so it is asked about nobody — `lib/github/mergeability.ts`
  * holds the rule the three readers share. `null` stays a candidate, for the draft
- * arm's reason: an answer nobody has computed is not a conflict.
+ * arm's reason: an answer nobody has computed is not a conflict. *
+ * ⚠️ AND "GREEN AT ITS HEAD" MEANS THE PULL REQUEST'S HEAD (MOTIR-7005). A push that
+ * produced no check rows leaves the newest rows at the old commit; that commit is not
+ * the pull request, so its green makes nothing a candidate — `prCiStateAtHead` answers
+ * `null` for a head with no rows, and the head returned is the stored one.
  */
 export function mergeCandidateHead(
   pr:
     | (Pick<
         GithubPullRequestWithInstallation,
-        'state' | 'merged' | 'draft' | 'checkRuns' | 'mergeableState' | 'mergeableStateHeadSha'
+        | 'state'
+        | 'merged'
+        | 'draft'
+        | 'headSha'
+        | 'checkRuns'
+        | 'mergeableState'
+        | 'mergeableStateHeadSha'
       > & {
         repo: { provider: string };
       })
@@ -84,11 +94,11 @@ export function mergeCandidateHead(
     pr.merged ||
     pr.draft === true ||
     !providerSupportsMerge(getGitProvider(pr.repo.provider as GitProviderId)) ||
-    derivePrCiState(pr.checkRuns) !== 'passing'
+    prCiStateAtHead(pr) !== 'passing'
   ) {
     return null;
   }
-  const head = liveRowsAtLatestSha(pr.checkRuns)[0]!.commitSha;
+  const head = pullRequestHead(pr)!;
   return isConflictedAt(pr, head) ? null : head;
 }
 

@@ -10,15 +10,11 @@ import type { Prisma } from '@/generated/prisma/client';
 // the FIRST admission for a scope finds none — which is precisely when two
 // racers would both sail through.
 
-/** The one global scope. Every admission locks it, so it serializes the gate. */
+/** The one global scope. Every admission locks it, so it serializes the gate.
+ *  (The per-project scope went with the per-project caps, MOTIR-6907; the
+ *  per-organisation pool is counted under THIS one on purpose —
+ *  `docs/decisions/fleet-per-org-pool.md` §2.) */
 export const FLEET_ADMISSION_SCOPE = 'fleet';
-
-/** The per-project scope's name. A prefixed key rather than a second table:
- *  the two scopes are locked by the same code in the same order and differ only
- *  in what they bound. */
-export function projectAdmissionScope(projectId: string): string {
-  return `project:${projectId}`;
-}
 
 export const ciFleetAdmissionLockRepository = {
   /**

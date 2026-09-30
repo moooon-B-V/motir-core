@@ -17,6 +17,7 @@ import { FLEET_CONTAINER_SIZE, fakeOrchestrator } from '@motir/orchestrator';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // A HOSTED RUN IS CHARGED FOR ITS MACHINE TIME WHEN ITS CONTAINER SETTLES
 // (Story MOTIR-683 · Subtask MOTIR-6514; `docs/decisions/hosted-agent-machine-charge.md`).
@@ -124,6 +125,8 @@ function completingSleep(onSleep?: (ms: number) => void | Promise<void>) {
     }
   };
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   fakeOrchestrator.reset();

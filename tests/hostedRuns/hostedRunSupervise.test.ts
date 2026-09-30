@@ -14,6 +14,7 @@ import { HOSTED_RUN_STALL_DETAIL, hostedRunService } from '@/lib/services/hosted
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { adminDb } from '../helpers/adminDb';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // A HOSTED RUN'S SUPERVISION (Story MOTIR-683 · MOTIR-690) — the durable job's
@@ -172,6 +173,8 @@ async function pass(
 }
 
 const runOf = (id: string) => adminDb.dispatchRun.findUniqueOrThrow({ where: { id } });
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   await truncateAuthTables();

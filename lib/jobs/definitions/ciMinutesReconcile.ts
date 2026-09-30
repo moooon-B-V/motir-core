@@ -41,14 +41,8 @@ import { periodStartFor } from '@/lib/ciMetering/period';
 
 /** 05:30 on the 3rd of each month — still after GitHub's report settles (the
  *  move is LATER, so that property can only have strengthened), and clear of the
- *  whole nightly table-walk cascade, which now ends at 05:00.
- *
- *  ⚠️ RE-TIMED 04:00 → 05:30 (MOTIR-3314). The minute was already clustered; the
- *  move is about the SLOT, not the wake — 04:00 is now the rate-limit sweep's,
- *  and this job is the one member of the set that runs monthly, so on the 3rd it
- *  would have been the only one stacking with a daily table-walk. It gave up
- *  ninety minutes of when, which a monthly reconciliation of the previous month's
- *  billing report does not notice. */
+ *  whole nightly table-walk cascade, which ends at 05:00. Monthly because it
+ *  reconciles the previous month's billing report, which GitHub settles once. */
 export const CI_MINUTES_RECONCILE_CRON = '30 5 3 * *';
 
 /** The calendar month to reconcile, given "now": the PREVIOUS one. Exported for

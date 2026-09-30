@@ -26,6 +26,7 @@ import {
 import { workItemContinueService } from '@/lib/services/workItemContinueService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { adminDb } from '../helpers/adminDb';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // STARTING A HOSTED RUN (Story MOTIR-683 · MOTIR-690) — `hostedRunService.start`
@@ -227,6 +228,8 @@ const startResolved = (key: string) =>
 
 const setDifficulty = (id: string, difficulty: 'trivial' | 'low' | 'medium' | 'high') =>
   adminDb.workItem.update({ where: { id }, data: { difficulty } });
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   await truncateAuthTables();

@@ -16,8 +16,8 @@ import { defineJob } from '../defineJob';
 // hourly for issued", and since MOTIR-6932 that is what runs: the sweep fires
 // every 5 minutes, the in-flight statuses are re-checked on every sweep and
 // `issued` hourly (the staleness windows in `publicAddressCertificatesService`).
-// Until then it sat on the :00/:30 cluster, which existed so a suspend-when-idle
-// database could sleep between ticks; MOTIR-6893 retired that constraint, because
+// Until then it sat on the :00/:30 cluster, which existed so the database could
+// sleep between ticks; MOTIR-6893 retired that constraint, because
 // the database is always on (`docs/decisions/always-on-database-job-cadence.md`).
 //
 // So a domain reaches `issued` within five minutes of the platform issuing it.
@@ -33,7 +33,7 @@ import { defineJob } from '../defineJob';
 // one schedule and the `staleness` window per status is what separates them:
 // a `pending_certificate` row is re-checked whenever it is older than the
 // sweep interval, an `issued` row only hourly. The cost is one query per status,
-// not one wake per cadence.
+// not one schedule per cadence.
 
 /** Every 5 minutes — the recommended cadence for the in-flight statuses. */
 export const PUBLIC_ADDRESS_CERTIFICATE_REFRESH_CRON = '*/5 * * * *';

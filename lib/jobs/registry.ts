@@ -37,8 +37,10 @@ import { monitorBugEnrichOnCreated } from './definitions/monitorBugEnrich';
 import { monitorBugEnrichBackfill } from './definitions/monitorBugEnrichBackfill';
 import { autoPlanCadenceTick } from './definitions/autoPlanCadenceTick';
 import { ciMinutesReconcile } from './definitions/ciMinutesReconcile';
+import { ciLiveCharge } from './definitions/ciLiveCharge';
 import { ciActionsGateSweep } from './definitions/ciActionsGateSweep';
-import { ciRunnerProvisionSweep, ciRunnerBoot, ciRunnerReap } from './definitions/ciRunnerFleet';
+import { ciRunnerProvisionSweep, ciRunnerBoot } from './definitions/ciRunnerFleet';
+import { fleetAttribution } from './definitions/fleetAttribution';
 import { hostedRunSupervise } from './definitions/hostedRunSupervise';
 import {
   statusDerivationOnChildSetChanged,
@@ -127,10 +129,11 @@ export const jobDefinitions = [
   monitorBugEnrichBackfill,
   autoPlanCadenceTick,
   ciMinutesReconcile,
+  ciLiveCharge,
   ciActionsGateSweep,
   ciRunnerProvisionSweep,
   ciRunnerBoot,
-  ciRunnerReap,
+  fleetAttribution,
   hostedRunSupervise,
   planDriftOnTransitioned,
   statusDerivationOnTransitioned,

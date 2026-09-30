@@ -1,5 +1,8 @@
 import {
   createUsageSink,
+  fakeFleetInventory,
+  flyFleetInventory,
+  isFlyInventoryConfigured,
   fakeOrchestrator,
   fakePersistentOrchestrator,
   flyFleetConfig,
@@ -13,6 +16,7 @@ import {
   OrchestratorNotConfiguredError,
   probeImagePull,
   type ContainerOrchestrator,
+  type FleetInventory,
   type OrchestratorProvider,
   type PersistentContainerHandle,
   type PersistentContainerOrchestrator,
@@ -122,6 +126,18 @@ export function persistentTerminalEndpoint(
 /** Can this deployment boot agent instances at all? Never throws. */
 export function isPersistentOrchestratorConfigured(): boolean {
   return selectedOrchestratorProvider() === 'fake' || isFlyInstancesConfigured();
+}
+
+/**
+ * The FLEET INVENTORY (Story MOTIR-6906 · MOTIR-6925) — what the provider says
+ * is running across Motir's whole fleet organisation, for the attribution
+ * reconciler — or null on a deployment that has no fleet to inventory. Selected
+ * by the same `MOTIR_FLEET_ORCHESTRATOR` switch, so a suite that selects the
+ * fake inventories the fakes it booted.
+ */
+export function getFleetInventory(): FleetInventory | null {
+  if (selectedOrchestratorProvider() === 'fake') return fakeFleetInventory;
+  return isFlyInventoryConfigured() ? flyFleetInventory : null;
 }
 
 /** Can this deployment provision containers at all? Never throws — the sweep

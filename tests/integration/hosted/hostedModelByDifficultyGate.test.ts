@@ -8,6 +8,7 @@ import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { grantPaidAiPlan } from '../../helpers/paidAiPlan';
 import { truncateAuthTables, truncateJobRuns } from '../../helpers/db';
 
 // THE STORY'S INTEGRATION GATE (Story MOTIR-6989 · MOTIR-6997) — a hosted run
@@ -211,6 +212,8 @@ async function startWithoutModel(key: string): Promise<string | null> {
   expect(run.origin).toBe('hosted');
   return run.model;
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   await truncateAuthTables();
