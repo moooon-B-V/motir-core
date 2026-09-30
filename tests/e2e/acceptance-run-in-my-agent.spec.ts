@@ -63,15 +63,20 @@ const PR_NUMBER = 70311;
  * takes its `one` / `other` form.
  */
 function plain(template: string, vars: Record<string, string | number> = {}): string {
-  return template
+  let text = template
     .replace(
       /\{(\w+), plural, one \{([^}]*)\} other \{([^}]*)\}\}/g,
       (_, key: string, one: string, other: string) =>
         (Number(vars[key]) === 1 ? one : other).replace('#', String(vars[key])),
     )
-    .replace(/<(\w+)><\/\1>/g, '')
-    .replace(/<\/?\w+>/g, '')
-    .replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key] ?? ''));
+    .replace(/<(\w+)><\/\1>/g, '');
+  // Strip tags until none is left, so a removal can never splice a new one together.
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replace(/<\/?\w+>/g, '');
+  } while (text !== previous);
+  return text.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key] ?? ''));
 }
 
 const main = (page: Page): Locator => page.getByRole('main');
