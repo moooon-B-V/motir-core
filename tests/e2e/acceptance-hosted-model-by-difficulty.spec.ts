@@ -196,7 +196,9 @@ test('a project overrides Low, Run hosted follows the difficulty, and Low is res
 
     await expect(pickerTrigger(page)).toContainText(CAREFUL);
     await expect(pickerTrigger(page)).toHaveAccessibleDescription('Project override for Low');
-    await expect(page.getByRole('main').getByRole('button', { name: 'Run hosted' })).toBeVisible();
+    await expect(
+      page.getByRole('main').getByRole('button', { name: 'Run', exact: true }),
+    ).toBeVisible();
   });
 
   await chapter('A High subtask: Run hosted preselects the platform High model', async () => {

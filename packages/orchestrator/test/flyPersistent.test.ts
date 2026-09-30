@@ -627,6 +627,9 @@ describe('exec — one command inside a running machine (MOTIR-6872)', () => {
       stderr: '',
     });
     expect(calls[0]!.body).toEqual({ cmd: ['true'], timeout: 120 });
+    // stdin rides in the body only when given (MOTIR-7026) — never in argv.
+    await flyPersistentOrchestrator.exec(HANDLE, ['cat'], { stdin: '{"token":"t"}' });
+    expect(calls[1]!.body).toEqual({ cmd: ['cat'], timeout: 120, stdin: '{"token":"t"}' });
     handler = () => json(200, null);
     expect((await flyPersistentOrchestrator.exec(HANDLE, ['true'])).exitCode).toBe(-1);
     handler = () => json(412, { error: 'machine not started' });

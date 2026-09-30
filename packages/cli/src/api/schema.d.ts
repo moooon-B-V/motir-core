@@ -2207,7 +2207,7 @@ export interface components {
                 /** @enum {string} */
                 command: "next" | "run" | "run_scope" | "batch" | "auto" | "fix" | "continue" | "review";
                 /** @enum {string} */
-                origin: "local" | "hosted";
+                origin: "local" | "hosted" | "instance";
                 /** @enum {string} */
                 status: "running" | "succeeded" | "failed" | "cancelled" | "timed_out";
                 stopReason: ("drained" | "completed" | "max" | "halted" | "interrupted" | "replanned" | "gated" | "abandoned") | null;
@@ -2616,7 +2616,7 @@ export interface components {
             /** @enum {string} */
             command: "next" | "run" | "run_scope" | "batch" | "auto" | "fix" | "continue" | "review";
             /** @enum {string} */
-            origin: "local" | "hosted";
+            origin: "local" | "hosted" | "instance";
             scopeWorkItemId: string | null;
             scopeLabel: string | null;
             /** @enum {string} */
@@ -2629,6 +2629,12 @@ export interface components {
             endedAt: string | null;
             lastHeartbeatAt: string | null;
             createdById: string | null;
+            agentInstance: {
+                id: string;
+                name: string;
+                profile: string;
+                profileLabel: string;
+            } | null;
             cards: {
                 id: string;
                 key: string | null;
@@ -2701,7 +2707,7 @@ export interface components {
                 /** @enum {string} */
                 command: "next" | "run" | "run_scope" | "batch" | "auto" | "fix" | "continue" | "review";
                 /** @enum {string} */
-                origin: "local" | "hosted";
+                origin: "local" | "hosted" | "instance";
                 scopeWorkItemId: string | null;
                 scopeLabel: string | null;
                 /** @enum {string} */
@@ -2714,6 +2720,12 @@ export interface components {
                 endedAt: string | null;
                 lastHeartbeatAt: string | null;
                 createdById: string | null;
+                agentInstance: {
+                    id: string;
+                    name: string;
+                    profile: string;
+                    profileLabel: string;
+                } | null;
                 cards: {
                     id: string;
                     key: string | null;

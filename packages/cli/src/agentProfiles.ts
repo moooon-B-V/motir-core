@@ -152,6 +152,27 @@ export interface AgentProfile {
    * profile has no codegraph target at all.
    */
   codegraphConfig: CodegraphConfigPlacement | null;
+  /**
+   * The vendor's documented UNATTENDED invocation — what `motir run` launches
+   * inside one of the developer's own agents (MOTIR-7024,
+   * `docs/decisions/agent-instance-run.md` §3). `null` where the vendor offers
+   * none Motir will drive, which refuses the run as `agent_profile_cannot_run`
+   * before anything starts. Each value cites the vendor page it was read from
+   * (on 2026-09-30); `sandbox/README.md`'s _Auto-approve flags_ is the matrix
+   * it restates, and `<agent> --help` in the built image is the final word.
+   */
+  agentCommand: string | null;
+  /**
+   * How the prompt reaches {@link AgentProfile.agentCommand}: piped on STDIN,
+   * or as its last ARGUMENT. `null` exactly when `agentCommand` is.
+   */
+  agentPrompt: 'stdin' | 'argument' | null;
+  /**
+   * Env vars the unattended form needs ADDED to the session's own environment
+   * (goose's approval mode is a variable, not a flag). Never a credential, and
+   * never anything that narrows or replaces the agent's own sign-in.
+   */
+  agentEnv: Readonly<Record<string, string>>;
 }
 
 /**
@@ -227,6 +248,13 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: ['ANTHROPIC_API_KEY'],
     credentialKnown: true,
     credentialHint: 'Run `claude` once to sign in, or set ANTHROPIC_API_KEY.',
+    // https://code.claude.com/docs/en/cli-reference — `-p, --print`: "Print
+    // response without interactive mode" (piped stdin is the prompt:
+    // `cat file | claude -p`); `--dangerously-skip-permissions`: "Skip permission
+    // prompts. Equivalent to `--permission-mode bypassPermissions`".
+    agentCommand: 'claude -p --dangerously-skip-permissions',
+    agentPrompt: 'stdin',
+    agentEnv: {},
     codegraphTarget: 'claude',
     codegraphConfig: {
       // Claude Code reads its MCP servers from <CLAUDE_CONFIG_DIR>/.claude.json
@@ -266,6 +294,19 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: ['OPENAI_API_KEY'],
     credentialKnown: true,
     credentialHint: 'Run `codex` once to sign in, or set OPENAI_API_KEY.',
+    // https://developers.openai.com/codex/cli/reference (now served at
+    // https://learn.chatgpt.com/docs/developer-commands?surface=cli) — `codex
+    // exec`: "Use `-` to pipe the prompt from stdin"; `--sandbox, -s`:
+    // `read-only | workspace-write | danger-full-access`. ⚠️ DIFFERS FROM THE
+    // DECISION'S `--sandbox workspace-write --ask-for-approval never`, as §3
+    // allows: `--ask-for-approval` is a GLOBAL flag that `codex exec` does not
+    // accept (the reference's exec table omits it, and exec never asks), and
+    // `workspace-write` runs with NO network by default, so the run could never
+    // push or open its pull request. The agent's own machine is the boundary —
+    // the same stance as `claude --dangerously-skip-permissions`.
+    agentCommand: 'codex exec --sandbox danger-full-access -',
+    agentPrompt: 'stdin',
+    agentEnv: {},
     codegraphTarget: 'codex',
     codegraphConfig: {
       // codegraph's default target is ~/.codex/config.toml — INSIDE the `:ro`
@@ -297,6 +338,12 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: [],
     credentialKnown: true,
     credentialHint: 'Run `opencode auth login` to sign in — it writes auth.json.',
+    // https://opencode.ai/docs/cli/ — `opencode run [message..]`; `--auto`:
+    // "Auto-approve permissions that are not explicitly denied". OpenCode appends
+    // a piped stdin to its message, so the prompt goes on argv only.
+    agentCommand: 'opencode run --auto',
+    agentPrompt: 'argument',
+    agentEnv: {},
     codegraphTarget: 'opencode',
     codegraphConfig: {
       // codegraph's default target is ~/.config/opencode/opencode.jsonc —
@@ -334,6 +381,12 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     sandboxMounts: ['~/.kimi-code'],
     credentialEnv: [],
     credentialKnown: false,
+    // https://moonshotai.github.io/kimi-code/en/reference/kimi-command.html —
+    // `-p, --prompt` runs one prompt non-interactively and exits; it "cannot be
+    // used with --yolo … non-interactive mode uses auto permission by default".
+    agentCommand: 'kimi -p',
+    agentPrompt: 'argument',
+    agentEnv: {},
     credentialHint:
       'Run `kimi` once to sign in — it writes <KIMI_CODE_HOME or ~/.kimi-code>/credentials/<profile>.json, whose name follows the active profile, so Motir cannot confirm it.',
     codegraphTarget: null,
@@ -355,6 +408,10 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: [],
     credentialKnown: false,
     credentialHint: 'Sign in with `agy` (its token lives in the OS keyring, not a file).',
+    // Not offered for an agent (`agent-instances.md` §9), so no run is driven.
+    agentCommand: null,
+    agentPrompt: null,
+    agentEnv: {},
     codegraphTarget: 'antigravity',
     codegraphConfig: {
       // This profile mounts NO credential directory at all, so nothing can
@@ -383,6 +440,10 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: ['CURSOR_API_KEY'],
     credentialKnown: true,
     credentialHint: 'Run `cursor-agent login` to sign in, or set CURSOR_API_KEY.',
+    // Not offered for an agent (`agent-instances.md` §9), so no run is driven.
+    agentCommand: null,
+    agentPrompt: null,
+    agentEnv: {},
     codegraphTarget: 'cursor',
     codegraphConfig: {
       // Cursor's credential mount is ~/.local/share/cursor-agent, which does not
@@ -408,6 +469,12 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY'],
     credentialKnown: true,
     credentialHint: 'Give Aider a model key: set ANTHROPIC_API_KEY or OPENAI_API_KEY.',
+    // https://aider.chat/docs/config/options.html — `--message`/`-m`: "Specify a
+    // single message to send the LLM, process reply then exit"; `--yes-always`:
+    // "Always say yes to every confirmation".
+    agentCommand: 'aider --yes-always --message',
+    agentPrompt: 'argument',
+    agentEnv: {},
     codegraphTarget: null,
     codegraphConfig: null,
   },
@@ -426,6 +493,15 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: [],
     credentialKnown: false,
     credentialHint: 'Run `goose configure` to store a provider key.',
+    // https://goose-docs.ai/docs/guides/goose-cli-commands — `goose run`
+    // `-t, --text`: "Input text to provide to goose directly"; `--no-session`:
+    // "Run goose commands without creating or storing a session file". Approval
+    // is the `GOOSE_MODE` VARIABLE (`auto | approve | chat | smart_approve`,
+    // https://goose-docs.ai/docs/guides/environment-variables), set explicitly so
+    // a developer's own `approve` default cannot stop an unattended run.
+    agentCommand: 'goose run --no-session -t',
+    agentPrompt: 'argument',
+    agentEnv: { GOOSE_MODE: 'auto' },
     codegraphTarget: null,
     codegraphConfig: null,
   },
@@ -457,6 +533,13 @@ export interface ParsedAgentCommand {
    * stdin to its argv message would otherwise receive the prompt twice.
    */
   promptOnStdin?: boolean;
+  /**
+   * Text appended to the server's prompt before it is delivered, on EVERY
+   * channel (stdin, the prompt file, and `promptArgs`' prompt). An agent-mode
+   * run's git instructions (MOTIR-7024); the server's prompt stays verbatim
+   * above it.
+   */
+  promptAddendum?: () => string;
 }
 
 /**
@@ -537,4 +620,65 @@ export function codegraphWiredProfiles(): { id: string; target: string }[] {
   return AGENT_PROFILES.filter(
     (p): p is AgentProfile & { codegraphTarget: string } => p.codegraphTarget !== null,
   ).map((p) => ({ id: p.id, target: p.codegraphTarget }));
+}
+
+// ── The unattended agent command (MOTIR-7024) ──────────────────────────────
+
+/**
+ * The Motir and GitHub credentials an agent-mode run never hands its coding
+ * agent (`agent-instance-run.md` §2): the CLI's own token, the run token, a git
+ * token, and the hosted run's gateway pair. Removed from the agent's copy of the
+ * environment, whatever put them there.
+ */
+export const AGENT_RUN_WITHHELD_ENV = [
+  'MOTIR_TOKEN',
+  'MOTIR_RUN_TOKEN',
+  'MOTIR_RUN_KEY',
+  'MOTIR_GATEWAY_URL',
+  'GH_TOKEN',
+  'GITHUB_TOKEN',
+] as const;
+
+/**
+ * A prompt longer than this goes by FILE rather than on argv — Linux refuses a
+ * single argv string past 128 KiB (MAX_ARG_STRLEN), as `hostedAgent.ts` notes.
+ */
+const MAX_ARGV_PROMPT_BYTES = 100 * 1024;
+
+/** A profile by its id (`claude`, `codex`, …), or null for an unknown id. */
+export function agentProfileById(profileId: string): AgentProfile | null {
+  return AGENT_PROFILES.find((p) => p.id === profileId.trim().toLowerCase()) ?? null;
+}
+
+/**
+ * The profile's UNATTENDED command as a launcher, or null when the id is
+ * unknown or the profile has no unattended form (`agentCommand: null`).
+ *
+ * ⚠️ THE ENVIRONMENT IS THE SESSION'S OWN, EXTENDED — never an allow-list. The
+ * agent needs the `CLAUDE_CONFIG_DIR` / `CODEX_HOME` the image set, which is
+ * where its sign-in is (`agent-instance-run.md` §3). What is taken OUT is only
+ * {@link AGENT_RUN_WITHHELD_ENV}; what is put in is only the profile's
+ * `agentEnv`. It is built from `env` at the call, so it carries the run's git
+ * config and `gh` shim when the run has prepared them.
+ */
+export function unattendedAgentCommand(
+  profileId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): ParsedAgentCommand | null {
+  const profile = agentProfileById(profileId);
+  const parsed = parseAgentCommand(profile?.agentCommand ?? undefined);
+  if (!profile || !parsed) return null;
+  const agentEnv: NodeJS.ProcessEnv = { ...env, ...profile.agentEnv };
+  for (const name of AGENT_RUN_WITHHELD_ENV) delete agentEnv[name];
+  if (profile.agentPrompt === 'stdin') return { ...parsed, env: agentEnv };
+  return {
+    ...parsed,
+    env: agentEnv,
+    // An argv agent would also read a piped stdin — the prompt goes on argv only.
+    promptOnStdin: false,
+    promptArgs: (prompt, promptFile) =>
+      Buffer.byteLength(prompt) > MAX_ARGV_PROMPT_BYTES
+        ? [`Carry out the task described in the file ${promptFile} — read it first.`]
+        : [prompt],
+  };
 }

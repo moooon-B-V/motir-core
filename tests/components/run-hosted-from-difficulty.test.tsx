@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import zhMessages from '@/messages/zh.json';
 import { HostedRunProvider } from '@/app/(authed)/items/[key]/_components/HostedRunProvider';
-import { RunHostedButton } from '@/app/(authed)/items/[key]/_components/RunHostedButton';
+import { RunDoorControl } from '@/app/(authed)/items/[key]/_components/RunHostedButton';
 import {
   HostedModelsProvider,
   useHostedModels,
@@ -91,7 +91,7 @@ afterEach(() => {
 async function mountDoor({ zh = false }: { zh?: boolean } = {}) {
   render(
     <HostedRunProvider itemKey="PROD-42" ready openBlockers={0}>
-      <RunHostedButton />
+      <RunDoorControl />
     </HostedRunProvider>,
     zh ? { locale: 'zh', messages: zhMessages } : {},
   );

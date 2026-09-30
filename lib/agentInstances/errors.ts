@@ -126,3 +126,122 @@ export class AgentInstanceNotRunningError extends Error {
     this.name = 'AgentInstanceNotRunningError';
   }
 }
+
+// ── Starting a card's run in an agent (MOTIR-7026 · `agent-instance-run.md` §4) ──
+//
+// The start's own refusals, each raised BEFORE anything is opened, claimed or
+// woken. The rest of the §4 refusal set is shared: `agent_instance_not_found`,
+// `agent_instance_state_conflict`, the wake's `agent_instance_start_refused`
+// (passed through unchanged), `agent_instance_run_active`
+// (`DispatchRunAgentBusyError`) and `hosted_repository_not_writable`.
+
+/** The agent is on another project than the card (409). */
+export class AgentInstanceWrongProjectError extends Error {
+  readonly code = 'agent_instance_wrong_project' as const;
+  constructor(readonly instanceId: string) {
+    super('This agent works on another project, so it can’t run this card.');
+    this.name = 'AgentInstanceWrongProjectError';
+  }
+}
+
+/** The card cannot be run now — its status, or an open blocker, named in `detail` (409). */
+export class AgentRunCardNotReadyError extends Error {
+  readonly code = 'agent_run_card_not_ready' as const;
+  constructor(
+    readonly workItemKey: string,
+    readonly detail: string,
+  ) {
+    super(`${workItemKey} isn’t ready to run: ${detail}.`);
+    this.name = 'AgentRunCardNotReadyError';
+  }
+}
+
+/**
+ * The agent's image predates the run launcher (409) — or was never probed for
+ * its current digest, which §4 reads as the same thing.
+ */
+export class AgentInstanceImageTooOldError extends Error {
+  readonly code = 'agent_instance_image_too_old' as const;
+  constructor(readonly instanceId: string) {
+    super('This agent was made before agents could run cards. Move it to a newer image first.');
+    this.name = 'AgentInstanceImageTooOldError';
+  }
+}
+
+/** The agent's coding agent has no unattended command (§3) (409). */
+export class AgentProfileCannotRunError extends Error {
+  readonly code = 'agent_profile_cannot_run' as const;
+  constructor(
+    readonly profileId: string,
+    displayName: string,
+  ) {
+    super(`${displayName} can’t run a card on its own, so this agent can’t run cards.`);
+    this.name = 'AgentProfileCannotRunError';
+  }
+}
+
+/** The agent's coding agent is not signed in (409). */
+export class AgentNotSignedInError extends Error {
+  readonly code = 'agent_not_signed_in' as const;
+  constructor(
+    readonly instanceId: string,
+    displayName: string,
+  ) {
+    super(
+      `${displayName} isn’t signed in on this agent. Sign in from its terminal, then run again.`,
+    );
+    this.name = 'AgentNotSignedInError';
+  }
+}
+
+// ── A live run and the lifecycle (MOTIR-7027 · `agent-instance-run.md` §6) ──
+
+/**
+ * Hibernate or Delete refused while the agent is running a card (409). It names
+ * the run — and its card, when known — so the page can link it and the person
+ * can cancel it first. Nothing was changed.
+ */
+export class AgentInstanceRunActiveError extends Error {
+  readonly code = 'agent_instance_run_active' as const;
+  constructor(
+    readonly instanceId: string,
+    readonly runId: string,
+    readonly workItemKey: string | null,
+    readonly action: 'hibernated' | 'deleted',
+  ) {
+    super(
+      `This agent is running ${workItemKey ?? `run ${runId}`}, so it can’t be ${action}. Cancel the run first.`,
+    );
+    this.name = 'AgentInstanceRunActiveError';
+  }
+}
+
+/** No run in an agent by that id that the caller can see (404) — Cancel's no-leak answer. */
+export class AgentRunNotFoundError extends Error {
+  readonly code = 'agent_run_not_found' as const;
+  constructor(readonly dispatchRunId: string) {
+    super(`No run ${dispatchRunId}.`);
+    this.name = 'AgentRunNotFoundError';
+  }
+}
+
+/** Only the agent's owner may cancel a run in it — `agent-instances.md` §8 (403). */
+export class AgentRunCancelForbiddenError extends Error {
+  readonly code = 'agent_run_cancel_forbidden' as const;
+  constructor(readonly dispatchRunId: string) {
+    super('Only the owner of the agent can cancel a run in it.');
+    this.name = 'AgentRunCancelForbiddenError';
+  }
+}
+
+/** The run in the agent has already ended — there is nothing to cancel (409). */
+export class AgentRunAlreadyEndedError extends Error {
+  readonly code = 'agent_run_already_ended' as const;
+  constructor(
+    readonly dispatchRunId: string,
+    readonly status: string,
+  ) {
+    super(`This run has already ended (${status}).`);
+    this.name = 'AgentRunAlreadyEndedError';
+  }
+}

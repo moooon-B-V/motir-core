@@ -415,6 +415,37 @@ export interface HostedRunSuperviseData {
 }
 
 /**
+ * The `agent-instance-run/launch` payload (Story MOTIR-6864 · MOTIR-7026,
+ * `docs/decisions/agent-instance-run.md` §4) — one per run started in a
+ * developer's agent, emitted by the start once the run is open and its cards
+ * claimed. The job waits for the agent to come up and runs the launcher.
+ *
+ * ⚠️ IT CARRIES NO SECRET: the run token is minted by the launch step itself and
+ * travels only on the exec's stdin (§2).
+ */
+export interface AgentInstanceRunLaunchData {
+  workspaceId: string;
+  /** The run — `DispatchRun.id`. */
+  dispatchRunId: string;
+  /** `agent-instance-run:<dispatchRunId>` — one launch per run, however often emitted. */
+  idempotencyKey: string;
+}
+
+/**
+ * The `agent-instance-run/supervise` payload (Story MOTIR-6864 · MOTIR-7027,
+ * `docs/decisions/agent-instance-run.md` §6) — one per run started in a
+ * developer's agent, emitted by the start beside the launch. The job polls the
+ * run each minute until it ends. It carries no secret.
+ */
+export interface AgentInstanceRunSuperviseData {
+  workspaceId: string;
+  /** The run — `DispatchRun.id`. */
+  dispatchRunId: string;
+  /** `agent-instance-run/supervise:<dispatchRunId>` — one supervision per run. */
+  idempotencyKey: string;
+}
+
+/**
  * The `agent-instance/idle-check` payload (Story MOTIR-6860 · MOTIR-6873) — the
  * idle TIMER of one agent instance. Emitted when an instance starts running and
  * whenever its activity is bumped; the job is DEBOUNCED on `instanceId`, so it
@@ -565,6 +596,10 @@ export interface JobEventDataMap {
   'hosted-run/supervise': HostedRunSuperviseData;
   /** One agent instance's idle timer (Story MOTIR-6860 · MOTIR-6873). */
   'agent-instance/idle-check': AgentInstanceIdleCheckData;
+  /** The launch of a card's run in a developer's agent (Story MOTIR-6864 · MOTIR-7026). */
+  'agent-instance-run/launch': AgentInstanceRunLaunchData;
+  /** The supervision of a card's run in a developer's agent (Story MOTIR-6864 · MOTIR-7027). */
+  'agent-instance-run/supervise': AgentInstanceRunSuperviseData;
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;
   'work-item/mentioned': WorkItemMentionedData;

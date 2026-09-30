@@ -14,6 +14,7 @@ import {
   type HostedModelsState,
   type HostedRunRefusal,
 } from '@/components/hosted/hostedModels';
+import { useAgentSend, type AgentSendState } from './useAgentSend';
 
 // THE HOSTED-RUN DOOR'S STATE on a work item (Story MOTIR-683 · MOTIR-691;
 // `design/runs/design-notes.md` § Hosted runs).
@@ -55,6 +56,21 @@ export interface HostedDoorRun {
   id: string;
   origin: DispatchRunOrigin;
   status: DispatchRunStatus;
+  /** Who started it — for a run in an agent, the agent's OWNER, the one who may
+   *  cancel it (`agent-instance-run.md` §6; MOTIR-7028). */
+  createdById?: string | null;
+  /** The agent a run in an agent works in, for Cancel's words. */
+  agentName?: string | null;
+}
+
+/**
+ * SEND TO MY AGENT's state (Story MOTIR-6864 · MOTIR-7028) — offered beside Run
+ * where the reader may use agents on the project. The start bar draws it; the Run
+ * section's timeline reads `started` for the new run's *Waking* / *Starting in*.
+ */
+export interface AgentDoorValue extends AgentSendState {
+  /** The project's name — the picker's footer and the empty face name it. */
+  projectName: string;
 }
 
 export interface HostedRunContextValue {
@@ -86,6 +102,8 @@ export interface HostedRunContextValue {
   continueRefusal: ContinueHostedRefusal | null;
   continueStarting: boolean;
   startContinue: () => Promise<void>;
+  /** Send to my agent, or null where the reader is not offered it. */
+  agentDoor: AgentDoorValue | null;
 }
 
 const HostedRunContext = createContext<HostedRunContextValue | null>(null);
@@ -120,6 +138,7 @@ export function HostedRunProvider({
   openBlockers,
   continueView = null,
   viewerId = null,
+  agents = null,
   children,
 }: {
   itemKey: string;
@@ -130,6 +149,9 @@ export function HostedRunProvider({
   continueView?: WorkItemContinueViewDto | null;
   /** The session's user — a `taken` answer naming them reads *you*. */
   viewerId?: string | null;
+  /** Send to my agent's inputs (MOTIR-7028) — offered where the reader holds
+   *  `instance:use` on the project — or null where it is not offered. */
+  agents?: { projectName: string } | null;
   children: ReactNode;
 }) {
   // ⚠️ THE MODEL LIST IS ITS OWN CONTEXT (MOTIR-6879): both doors read the one list
@@ -143,6 +165,7 @@ export function HostedRunProvider({
         openBlockers={openBlockers}
         continueView={continueView}
         viewerId={viewerId}
+        agents={agents}
       >
         {children}
       </HostedRunState>
@@ -156,6 +179,7 @@ function HostedRunState({
   openBlockers,
   continueView,
   viewerId,
+  agents,
   children,
 }: {
   itemKey: string;
@@ -163,6 +187,7 @@ function HostedRunState({
   openBlockers: number;
   continueView: WorkItemContinueViewDto | null;
   viewerId: string | null;
+  agents: { projectName: string } | null;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -223,6 +248,15 @@ function HostedRunState({
     onStateMoved: notifyRunsChanged,
   });
 
+  // SEND TO MY AGENT (MOTIR-7028): a start moves the section to the new run on the
+  // same tick a Run press bumps.
+  const send = useAgentSend(itemKey, notifyRunsChanged);
+  const projectName = agents?.projectName ?? null;
+  const agentDoor = useMemo<AgentDoorValue | null>(
+    () => (projectName === null ? null : { ...send, projectName }),
+    [send, projectName],
+  );
+
   const value = useMemo<HostedRunContextValue>(
     () => ({
       itemKey,
@@ -245,8 +279,10 @@ function HostedRunState({
       continueRefusal: continuePress.refusal,
       continueStarting: continuePress.starting,
       startContinue: continuePress.start,
+      agentDoor,
     }),
     [
+      agentDoor,
       continueTarget,
       viewerId,
       doors.runDoorHidden,

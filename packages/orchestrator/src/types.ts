@@ -679,11 +679,15 @@ export interface PersistentContainerOrchestrator {
    * lifecycle clones a project's repositories into the home (MOTIR-6872) without
    * a credential ever entering the machine's config, env or volume: the command's
    * argv is the only place it travels, for the length of one process.
+   *
+   * `stdin` (`agent-instance-run.md` §1, §2 — MOTIR-7026) is written to the
+   * command's standard input: how a run's credential reaches the agent's run
+   * launcher WITHOUT ever being an argument or an environment variable.
    */
   exec(
     handle: PersistentContainerHandle,
     command: readonly string[],
-    options?: { timeoutSeconds?: number },
+    options?: { timeoutSeconds?: number; stdin?: string },
   ): Promise<PersistentExecResult>;
 
   /**

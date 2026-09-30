@@ -10,6 +10,8 @@ import type {
   DispatchStopReason,
 } from '@/generated/prisma/client';
 import {
+  DispatchRunAgentBusyError,
+  DispatchRunAgentInstanceMismatchError,
   DispatchRunCardsBusyError,
   DispatchRunEventBodyTooLargeError,
   DispatchRunEventLimitError,
@@ -60,6 +62,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { holdsRecordView, projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
+import { agentInstanceActivityService } from '@/lib/services/agentInstanceActivityService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/context';
@@ -68,6 +71,7 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { availableRoomViews, holdsAnyOf, RUN_ACT_PERMISSIONS } from '@/lib/rooms/roomView';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { uniqueViolationConstraints } from '@/lib/prisma/uniqueViolation';
 import { recomputeWorkItemFixReason } from './fixReasonService';
 
 // THE DISPATCH RUN SERVICE (Story MOTIR-1789 · MOTIR-1792) — the WRITE half of
@@ -162,6 +166,13 @@ export interface OpenDispatchRunInput {
   scopeLabel?: string | undefined;
   agent?: string | undefined;
   model?: string | undefined;
+  /**
+   * The developer's own agent the run executes in (MOTIR-7023,
+   * `agent-instance-run.md` §5). REQUIRED when `origin === 'instance'` and
+   * forbidden otherwise. Only the server opens such a run — the ingest route
+   * refuses `origin: 'instance'` — so this is never a client's value.
+   */
+  agentInstanceId?: string | undefined;
   idempotencyKey?: string | undefined;
   /** The run's SET, IN THE RUN'S OWN ORDER. `position` is the array index. */
   cards: OpenDispatchRunCardInput[];
@@ -342,8 +353,12 @@ async function readHostedRunCost(runId: string): Promise<DispatchRunCostDto | nu
   }
 }
 
-/** The end path's closing-line prefix: `[motir] hosted run ended (<label>): `. */
-const HOSTED_END_PREFIX = /^\[motir\] hosted run ended \([^)]*\): /;
+/**
+ * The end paths' closing-line prefix: the hosted run's `[motir] hosted run ended
+ * (<label>): `, or a run in an agent's `[motir] run in agent ended (<label>): `
+ * (`agentInstanceRunService.end`, MOTIR-7027) — both carry `data.end`.
+ */
+const HOSTED_END_PREFIX = /^\[motir\] (?:hosted run|run in agent) ended \([^)]*\): /;
 
 /**
  * How a HOSTED run ended (MOTIR-691): the end path's closing `log` line
@@ -491,6 +506,55 @@ async function recomputeCovered(
   for (const id of covered.legs) await recomputeWorkItemFixReason(id, tx);
 }
 
+/** The partial unique index holding one running run per agent (MOTIR-7023). */
+const AGENT_RUNNING_INDEX = 'dispatch_run_agent_instance_running_key';
+
+/**
+ * A {@link DispatchRunAgentBusyError} raised by a LOST RACE carries no run id: the
+ * unique violation aborted the transaction it was raised in. By the time it
+ * reaches here the winner has committed (PostgreSQL made the loser's insert wait
+ * for it), so a fresh transaction reads it and the error leaves the service naming
+ * it. Every other error passes through unchanged. A caller of
+ * {@link dispatchRunService.openWithin} that owns its own transaction does the
+ * same with this function.
+ */
+export async function namedAgentBusy(
+  err: unknown,
+  bound: { userId: string; workspaceId: string; projectId?: string },
+): Promise<unknown> {
+  if (!(err instanceof DispatchRunAgentBusyError) || err.runId !== null) return err;
+  const winner = await withWorkspaceContext(bound, (tx) =>
+    dispatchRunRepository.findRunningByAgentInstance(err.agentInstanceId, tx),
+  );
+  // The winner may already have closed; the refusal still stands for this open.
+  return winner ? new DispatchRunAgentBusyError(err.agentInstanceId, winner.id) : err;
+}
+
+/**
+ * Bump a run's agent's idle signal (MOTIR-7027). Best effort: a failure is
+ * logged, never thrown — the events are already committed.
+ */
+async function bumpAgentActivity(agentInstanceId: string): Promise<void> {
+  try {
+    await agentInstanceActivityService.touchRunActivity(agentInstanceId);
+  } catch (err) {
+    console.warn('[dispatchRunService] could not bump the agent’s activity', {
+      agentInstanceId,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/**
+ * Revoke a closed run-in-an-agent's credentials (MOTIR-7027) through the run's
+ * own service — reached by a dynamic import because that service composes this
+ * one. `revokeCredentials` never throws.
+ */
+async function revokeAgentRunCredentials(runId: string): Promise<void> {
+  const { agentInstanceRunService } = await import('@/lib/services/agentInstanceRunService');
+  await agentInstanceRunService.revokeCredentials(runId);
+}
+
 export const dispatchRunService = {
   /**
    * OPEN a run WITH ITS SET.
@@ -512,10 +576,14 @@ export const dispatchRunService = {
     const project = await projectsService.getByKey(input.projectKey, ctx);
     await projectAccessService.assertCanEdit(project.id, ctx);
 
-    return withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
-      (tx) => dispatchRunService.openWithin(project.id, input, ctx, tx),
-    );
+    const bound = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id };
+    try {
+      return await withWorkspaceContext(bound, (tx) =>
+        dispatchRunService.openWithin(project.id, input, ctx, tx),
+      );
+    } catch (err) {
+      throw await namedAgentBusy(err, bound);
+    }
   },
 
   /**
@@ -569,6 +637,23 @@ export const dispatchRunService = {
       if (!byKey.has(key)) throw new UnknownDispatchRunCardError(key);
     }
 
+    // A run in an agent names its agent, and only such a run does (§5). The
+    // CHECK constraint holds the second half in the database too.
+    const origin = input.origin ?? 'local';
+    if ((origin === 'instance') !== (input.agentInstanceId !== undefined)) {
+      throw new DispatchRunAgentInstanceMismatchError(origin);
+    }
+    // ONE RUNNING RUN PER AGENT (§5). This read answers the common case with the
+    // running run's id; the partial unique index is the arbiter of the race
+    // between it and the insert below.
+    if (input.agentInstanceId !== undefined) {
+      const running = await dispatchRunRepository.findRunningByAgentInstance(
+        input.agentInstanceId,
+        tx,
+      );
+      if (running) throw new DispatchRunAgentBusyError(input.agentInstanceId, running.id);
+    }
+
     let run;
     try {
       run = await dispatchRunRepository.create(
@@ -576,7 +661,10 @@ export const dispatchRunService = {
           workspace: { connect: { id: ctx.workspaceId } },
           project: { connect: { id: projectId } },
           command: input.command,
-          origin: input.origin ?? 'local',
+          origin,
+          ...(input.agentInstanceId !== undefined
+            ? { agentInstance: { connect: { id: input.agentInstanceId } } }
+            : {}),
           ...(scopeItem ? { scope: { connect: { id: scopeItem.id } } } : {}),
           ...(input.scopeLabel !== undefined ? { scopeLabel: input.scopeLabel } : {}),
           ...(input.agent !== undefined ? { agent: input.agent } : {}),
@@ -590,6 +678,14 @@ export const dispatchRunService = {
       // The narrow window between the read above and this insert. Translate
       // it: a raw `P2002` escaping the service would reach a client as a
       // bare 500 for a condition that has a correct, specific answer.
+      if (
+        input.agentInstanceId !== undefined &&
+        uniqueViolationConstraints(err)?.includes(AGENT_RUNNING_INDEX)
+      ) {
+        // The violation aborted this transaction, so the winner cannot be read
+        // here; `open` names it from a fresh one (`namedAgentBusy`).
+        throw new DispatchRunAgentBusyError(input.agentInstanceId, null);
+      }
       if (
         input.idempotencyKey &&
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -663,7 +759,7 @@ export const dispatchRunService = {
       }
     }
 
-    return withWorkspaceContext(
+    const { appended, agentInstanceId } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
         const locked = await dispatchRunRepository.findTerminalStateForUpdate(runId, tx);
@@ -743,15 +839,23 @@ export const dispatchRunService = {
           }
         }
 
-        const appended = await dispatchRunEventRepository.createMany(rows, tx);
+        const created = await dispatchRunEventRepository.createMany(rows, tx);
         return {
-          runId,
-          appended,
-          seq,
-          cards: [...touched.values()].map(toDispatchRunCardDto),
+          agentInstanceId: locked.agentInstanceId,
+          appended: {
+            runId,
+            appended: created,
+            seq,
+            cards: [...touched.values()].map(toDispatchRunCardDto),
+          },
         };
       },
     );
+    // A run in an agent keeps its agent awake (`agent-instance-run.md` §6,
+    // MOTIR-7027): an accepted event bumps the agent's idle signal, at most once a
+    // minute — after the commit, and never a reason to refuse the events.
+    if (agentInstanceId !== null) await bumpAgentActivity(agentInstanceId);
+    return appended;
   },
 
   /**
@@ -950,9 +1054,16 @@ export const dispatchRunService = {
     cardLocks: RunCardLockMode = 'wait',
   ): Promise<DispatchRunDto> {
     assertRunTokenScope(runId, ctx);
-    return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
-      dispatchRunService.closeWithin(runId, input, ctx, tx, undefined, cardLocks),
+    const closed = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => dispatchRunService.closeWithin(runId, input, ctx, tx, undefined, cardLocks),
     );
+    // A run in an agent loses its credentials at EVERY close, the CLI's own
+    // included (`agent-instance-run.md` §6, MOTIR-7027) — after the close commits,
+    // never able to undo it. A revoke that fails is retried by the run's
+    // supervise job, which finds the run closed and revokes again.
+    if (closed.origin === 'instance') await revokeAgentRunCredentials(runId);
+    return closed;
   },
 
   /**
@@ -1214,9 +1325,12 @@ export const dispatchRunService = {
 
         const base = toDispatchRunDto(run, seq);
         // A HOSTED run's reason line (MOTIR-691) — read in the same transaction,
-        // off the two events that carry it. A local run has neither to read.
+        // off the two events that carry it. A run in an agent has the same two
+        // (MOTIR-7028): its end path (`agent-instance-run.md` §6) writes the same
+        // `data.end` closing line, and the item page and the run modal quote it
+        // verbatim. A local run has neither to read.
         const hostedEnd =
-          base.origin === 'hosted'
+          base.origin === 'hosted' || base.origin === 'instance'
             ? await readHostedEnd(
                 runId,
                 base.cards.map((c) => c.exitCode),
@@ -1237,7 +1351,9 @@ export const dispatchRunService = {
     );
     // A HOSTED run's cost is read from motir-ai AFTER the transaction, never
     // inside it: an outbound call must not hold a connection and the RLS
-    // binding open (MOTIR-689). A local run makes no call and carries no key.
+    // binding open (MOTIR-689). A local run makes no call and carries no key, and
+    // neither does an `instance` run: it has no token cost to read — it is charged
+    // as its agent's machine time (`agent-instance-run.md` §5).
     if (detail.origin !== 'hosted') return detail;
     return { ...detail, cost: await readHostedRunCost(detail.id) };
   },

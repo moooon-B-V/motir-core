@@ -1,5 +1,15 @@
 import type { AgentInstance, AgentInstanceInterval } from '@/generated/prisma/client';
-import type { AgentInstanceDto, AgentInstanceIntervalDto } from '@/lib/dto/agentInstances';
+import type {
+  AgentInstanceActiveRunDto,
+  AgentInstanceDto,
+  AgentInstanceIntervalDto,
+  AgentInstanceLastRunDto,
+} from '@/lib/dto/agentInstances';
+import type {
+  DispatchRunTargetCard,
+  LatestDispatchRunInAgent,
+  RunningDispatchRunInAgent,
+} from '@/lib/repositories/dispatchRunRepository';
 
 // Prisma rows → AGENT INSTANCE DTOs (Story MOTIR-6860 · MOTIR-6870).
 //
@@ -36,4 +46,54 @@ export function toAgentInstanceIntervalDto(row: AgentInstanceInterval): AgentIns
     credits: row.credits,
     chargeOutcome: row.chargeOutcome,
   };
+}
+
+/** The run working in an agent → the panel's run line (MOTIR-7029). */
+export function toAgentInstanceActiveRunDto(
+  run: Pick<RunningDispatchRunInAgent, 'id' | 'startedAt'>,
+  target: DispatchRunTargetCard | null,
+): AgentInstanceActiveRunDto {
+  return {
+    id: run.id,
+    workItemKey: target?.workItemKey ?? null,
+    title: target?.title ?? null,
+    startedAt: run.startedAt.toISOString(),
+  };
+}
+
+/** A latest run that has CLOSED — the only kind the "Last run" line shows. */
+export type ClosedDispatchRunInAgent = LatestDispatchRunInAgent & {
+  status: AgentInstanceLastRunDto['status'];
+};
+
+/** Narrow an agent's latest run to a closed one (a running one is the active run's). */
+export function isClosedRunInAgent(run: LatestDispatchRunInAgent): run is ClosedDispatchRunInAgent {
+  return run.status !== 'running';
+}
+
+/**
+ * An agent's latest CLOSED run → its "Last run" line (MOTIR-7029). The recorded
+ * reason is kept only on a run that did not succeed: a success needs no reason,
+ * and the line shows the title instead.
+ */
+export function toAgentInstanceLastRunDto(
+  run: ClosedDispatchRunInAgent,
+  target: DispatchRunTargetCard | null,
+  reason: string | null,
+): AgentInstanceLastRunDto {
+  return {
+    id: run.id,
+    workItemKey: target?.workItemKey ?? null,
+    title: target?.title ?? null,
+    status: run.status,
+    endedAt: run.endedAt?.toISOString() ?? null,
+    reason: run.status === 'succeeded' ? null : reason,
+  };
+}
+
+/** The recorded reason an end line carries (`data.message`), or null. */
+export function endLineReason(data: unknown): string | null {
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return null;
+  const message = (data as Record<string, unknown>)['message'];
+  return typeof message === 'string' && message.trim() !== '' ? message : null;
 }

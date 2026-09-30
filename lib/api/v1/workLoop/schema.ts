@@ -1969,8 +1969,20 @@ export const dispatchCommandSchema = z.enum([
   'review',
 ]);
 
-/** WHERE the run executed — the discriminator that lets one record serve two writers. */
-export const dispatchRunOriginSchema = z.enum(['local', 'hosted']);
+/**
+ * WHERE the run executed — the discriminator that lets one record serve every
+ * writer. `instance` (MOTIR-7023, `agent-instance-run.md` §5) is a run in one of
+ * the developer's own agents; `agentInstance` on the run names it.
+ */
+export const dispatchRunOriginSchema = z.enum(['local', 'hosted', 'instance']);
+
+/**
+ * The origins a client may OPEN a run with. `instance` is REFUSED here: only the
+ * server opens a run in an agent (MOTIR-7023), exactly as only the server opens
+ * the hosted runs it supervises (`hosted-agent-run.md` §3) — a body naming it is
+ * a 400 and opens nothing.
+ */
+export const dispatchRunIngestOriginSchema = dispatchRunOriginSchema.exclude(['instance']);
 
 /** The run header's own state. `timed_out` is written only by the reap. */
 export const dispatchRunStatusSchema = z.enum([
@@ -2093,6 +2105,21 @@ export const dispatchRunSchema = z.object({
    */
   lastHeartbeatAt: z.string().datetime().nullable(),
   createdById: z.string().nullable(),
+  /**
+   * The developer's own agent the run executed in (MOTIR-7023) — its name and its
+   * coding agent. Null for every `local` and `hosted` run.
+   */
+  agentInstance: z
+    .object({
+      id: z.string(),
+      /** The agent's own name. */
+      name: z.string(),
+      /** The sandbox profile id (`claude`, `codex`, …). */
+      profile: z.string(),
+      /** The profile's display name (`Claude Code`). */
+      profileLabel: z.string(),
+    })
+    .nullable(),
   /** The run's cards, in the run's own stored order. */
   cards: z.array(dispatchRunCardSchema),
   /** The stream's highest `seq`, or `0` — the cursor to resume from. */
@@ -2221,7 +2248,7 @@ export const dispatchRunOpenBodySchema = z
     /** The project this run works in. Case-insensitive. */
     projectKey: z.string().min(1).max(64),
     command: dispatchCommandSchema,
-    origin: dispatchRunOriginSchema.default('local'),
+    origin: dispatchRunIngestOriginSchema.default('local'),
     /** The container or sprint-bearing card the run was pointed at. */
     scopeKey: workItemKeySchema.optional(),
     /** What the CLI printed for the scope, e.g. "the active sprint". */

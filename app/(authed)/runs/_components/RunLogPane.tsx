@@ -167,9 +167,11 @@ export function RunLogPane({ run, events, selectedWorkItemId }: RunLogPaneProps)
           </div>
           <div className="flex items-center gap-2 border-t border-(--el-border-soft) px-(--spacing-card-padding) py-1.5 text-[0.6875rem] text-(--el-text-secondary)">
             <span className="min-w-0 truncate">{t('logCount', { count: lines.length })}</span>
-            {/* A HOSTED run always reports its output (MOTIR-691): there is no
+            {/* A run in Motir's cloud always reports its output (MOTIR-691) —
+                Motir's own, and one in the reader's agent, whose launcher starts
+                the CLI with reporting on (MOTIR-7022 panel 12): there is no
                 `--report-log` choice to describe, so the footer says so. */}
-            {run.origin === 'hosted' ? (
+            {run.origin === 'hosted' || run.origin === 'instance' ? (
               <span className="min-w-0 truncate" data-testid="run-log-hosted-footer">
                 {t('hosted.logFooter')}
               </span>

@@ -245,6 +245,11 @@ export function endedHow(run: {
   if (run.status === 'timed_out' && run.origin === 'hosted') {
     return 'the hosted run stalled or reached its time limit';
   }
+  // A run in the developer's own agent is closed `timed_out` by the same stall
+  // window and 12-hour backstop as a hosted one (`agent-instance-run.md` §6).
+  if (run.status === 'timed_out' && run.origin === 'instance') {
+    return 'the run in the agent stalled or reached its time limit';
+  }
   return `it ended ${run.status}`;
 }
 
@@ -261,7 +266,9 @@ async function diedReason(
   if (run.stopReason === 'interrupted') return 'interrupted';
   if (run.status === 'failed') return 'failed';
   if (run.status === 'cancelled') return 'cancelled';
-  if (run.origin === 'hosted') {
+  // An `instance` run's supervise job closes it with the hosted words — a stall or
+  // the 12-hour backstop (`agent-instance-run.md` §6) — so it splits the same way.
+  if (run.origin === 'hosted' || run.origin === 'instance') {
     const last = await dispatchRunEventRepository.findLatestOfKind(run.id, 'log', tx);
     const message = String((last?.data as { message?: unknown } | null)?.message ?? '');
     return /12[- ]hour|backstop/i.test(message) ? 'backstop' : 'stalled';
@@ -880,6 +887,10 @@ export const workItemContinueService = {
             state: 'continuing',
             holder: actor(verdict.run.createdBy),
             byViewer: verdict.run.createdById === ctx.userId,
+            // `instance` takes the local arm: a continue is opened by a CLI the
+            // developer runs, or hosted by the server — never INTO an agent
+            // (`agent-instance-run.md`, "What this does NOT decide"), so a
+            // continuing run is never an `instance` run.
             origin: verdict.run.origin === 'hosted' ? 'hosted' : 'local',
             startedAt: verdict.run.startedAt.toISOString(),
             branch: typeof data?.branch === 'string' ? data.branch : null,

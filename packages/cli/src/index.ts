@@ -1,6 +1,7 @@
 import { buildProgram } from './program.js';
 import { CliError } from './errors.js';
 import { runHostedPlumbing } from './hostedGit.js';
+import { pinAgentRunStateHome } from './hostedMode.js';
 import { isInteractive, promptLine } from './prompts.js';
 import { announceStaleness, isUnattendedArgv, shouldCheckStaleness } from './staleness.js';
 
@@ -31,6 +32,9 @@ async function main(): Promise<void> {
     process.exitCode = plumbing;
     return;
   }
+  // An agent-mode run (MOTIR-7024) keeps the CLI's own state in the run's
+  // directory, never the developer's home — before anything reads or writes it.
+  pinAgentRunStateHome();
   if (shouldCheckStaleness(argv)) {
     const prompt =
       isUnattendedArgv(argv) || !isInteractive() ? {} : { confirm: (q: string) => promptLine(q) };

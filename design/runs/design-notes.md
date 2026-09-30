@@ -1414,3 +1414,478 @@ reuses the control likewise.
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | the build card(s) blocked by MOTIR-6991 | **GIVES** F1–F6, the stated cases, the decisions, the copy and the tokens. **TAKES** the resolved preselection above on the door's read, and a `provenance` prop on `HostedModelPicker` (rendered by `RunHostedButton` as the row's last child, `aria-describedby` on the trigger). |
 | MOTIR-684 / MOTIR-6789                  | **GIVES** nothing back: their door is composed unchanged except for the line. **TAKES** nothing.                                                                                                                                                                                    |
+
+## Run in my agent — a work item sent to one of the developer's own agents (MOTIR-7022, 2026-09-30)
+
+**Story MOTIR-6864 · design MOTIR-7022.** Gates **MOTIR-7028** (the work item's control, picker, run
+section and run modal) and **MOTIR-7029** (the My agents panel). Two DELTA mocks:
+
+| Delta                                           | Amends                                                                                                                                                                                                                                                                                                                                        | Panels                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`design/runs/run-section--agent.mock.html`**  | MOTIR-684's published result — **`run-section--hosted.mock.html`** and **`run-modal--hosted.mock.html`** (evidence `cmuir8l3w0005hvoiahjxjlkt`, § _Hosted runs_ of that result's notes — published, not committed to this tree; `get_design MOTIR-684` returns them) — themselves deltas on `run-section.mock.html` and `run-modal.mock.html` | (revision 2) 0 the two ways to start · 1 the picker · 2 **the agent already working on a work item** · 3 every agent state and row reason · 4 the start bar's other states · 5 send refusals · 6 wake refusals · 7 starting · 8 running and succeeded · 9 every other end · 10 cancel · 11 the run Motir works, renamed · 12 the modal |
+| **`design/my-agents/my-agents--run.mock.html`** | MOTIR-6937's published result — **`design/my-agents/my-agents--panel.mock.html`** (evidence `cmun5qu1f005qhwoiq14livtw`, commit `5bf46803`), whose notes leave _"Run in my agent (MOTIR-6864)"_ to this card                                                                                                                                  | 1 live run and its session to watch · 2 Hibernate and Delete during a run · 3 the run just ended · 4 the narrow width                                                                                                                                                                                                                  |
+
+> **Revised — see § _Revision 2_ below.** The reviewer sent revision 1 back. Revision 2 replaces this
+> section's door names (_Run in my agent_ → **Send to my agent**, _Run hosted_ → **Run**), moves both
+> doors out of the section header into a start bar, draws the busy agent in its own panel, renames the
+> refusal family (_Not started —_ → **Not sent —**), and takes "hosted" out of every string it draws.
+> Where this section and Revision 2 disagree, Revision 2 is the design.
+
+Neither mock redraws what it amends. The runs delta copies `run-modal--hosted.mock.html`'s four
+`<style>` blocks verbatim (the base assets' blocks + the hosted rules) and adds one block of agent
+rules; the panel delta copies `my-agents--panel.mock.html`'s five blocks verbatim and adds one. Both
+were checked against what ships: `RunHostedButton.tsx`, `HostedDoorNotices.tsx`, `LateSections.tsx`,
+`ContentSectionCard.tsx`, `RunSection.tsx`, `HostedRunParts.tsx` and `RunModal.tsx` for the work
+item; `AgentPanelHeader.tsx`, `AgentTerminal.tsx` and `agentRefusal.tsx` for the panel; and the
+shipped `runs.hosted.*` / `myAgents.*` strings, which this design reuses wherever the meaning is the
+same. (The hosted end lines that ship are _"… This work item stays where it was"_, per
+`run-death-keeps-work.md`, not the _"back in To Do"_ lines the hosted mock drew; this delta draws the
+shipped ones.)
+
+### The behaviour is decided elsewhere, and drawn here
+
+`docs/decisions/agent-instance-run.md` (MOTIR-7021) decides everything this design shows: §1 the run
+session (at most one per agent, listed to every connection, watch-only), §4 the start's checks, the
+agents read and the refusal set, §5 the record (`origin: instance`, the agent on the run, `model =
+null`, machine time only), §6 the live run, every end and Cancel. The wake refusals and their words
+are `agent-instances.md` §5 as reworded by `agent-instance-storage.md` §4 (MOTIR-6914). **On screen
+the thing is an _agent_ and its _coding agent_, never an "instance".**
+
+### Access path (panel 0) — the Run section's header, left of Run hosted
+
+- **Where:** `ContentSectionCard`'s `headerRight` on the Run section — the slot `RunHostedButton`
+  renders into — at the head of the item page's late stack, directly before Development.
+- **Order:** **Run in my agent** · the model picker · **Run hosted**. Run hosted keeps the right end
+  it shipped with and stays the header's one primary button. Run in my agent is `Button` `secondary`
+  `sm` with the `SquareTerminal` glyph and a trailing `ChevronDown`, because it opens a choice.
+- **Where the hosted lane is off** (`hostedDoor` null) the header carries Run in my agent alone.
+- **Shown to:** anyone who can edit the work item where My agents exists (the rail entry's own
+  condition). A person with no agent on the project still sees it (panel 3).
+- **The header wraps.** Three controls do not fit beside _Run — what the agent did_ at the item page's
+  column width, so `ContentSectionCard`'s header row gains `flex-wrap` (row gap 8px) and the gloss
+  becomes `whitespace-nowrap`: the door group drops to its own line, still right-aligned. This is a
+  change to a shared component (every section using `headerRight`); at a width where everything fits
+  nothing moves.
+
+### The picker (panels 1, 2)
+
+The shipped `Popover` (`--radius-card`, `--shadow-elevated`, `--el-page-bg`, `--el-border`, 25rem),
+anchored under the control, right-aligned. Head: **Run {KEY} in one of your agents** · _Choosing an
+agent starts the run. An agent that is asleep wakes first._ One row per agent from `GET
+/api/work-items/[id]/agent-runs/agents` (decision §4), in My agents' order; foot: _Only your agents on
+{project} are listed._ · **Manage in My agents**.
+
+- **Row:** the name (600, `--el-text`), the state pill (`RunTonePill` + `AGENT_STATE_TONE`, the list's),
+  a sub-line _{coding agent} · {sign-in} · {what happens first}_ in `--el-text-secondary`, and — only
+  when it cannot take the run — a reason line in `--el-text` with a link where there is somewhere to
+  go. Row metrics are the Combobox listbox's option (`--spacing-control-x/y`, `--radius-control`); the
+  focused row is `--el-option-active-bg`.
+- **There is no Start button.** Pressing a row that can take the run IS the start; the popover closes
+  on the answer (panel 6). Arrows skip a disabled row; Enter starts; Esc closes and returns focus.
+- **A row that cannot take the run stays listed**, `aria-disabled`, its name dropped to
+  `--el-text-secondary`, its reason in full ink. An agent that vanished from the list would read as an
+  agent that is gone.
+- **Agents on other projects are NOT listed.** An agent is made for one project and holds that
+  project's repositories; its row could never be chosen. The footer says so. The
+  `agent_instance_wrong_project` refusal keeps its words for a stale list (panel 4).
+- **Sign-in is the recorded probe** (§4): _Signed in_ (`CircleCheck`, `--el-success`), _Not signed in_
+  (`CircleAlert`, `--el-warning`), _Sign-in can't be checked_ (`CircleHelp`, `--el-text-secondary`).
+  Signed in and can't-be-checked may start; not signed in may not. Glyphs are `aria-hidden`; the words
+  carry the state.
+
+**Every `AgentInstanceState` (panel 2):**
+
+| State         | Pickable | Sub-line ends with                  | Reason line                                                                       |
+| ------------- | -------- | ----------------------------------- | --------------------------------------------------------------------------------- |
+| `running`     | yes      | _starts now_                        | —                                                                                 |
+| `hibernated`  | yes      | _wakes first_                       | —                                                                                 |
+| `starting`    | yes      | _starts when it's up_               | — (§4: the launch job waits)                                                      |
+| `waking`      | yes      | _starts when it's up_               | —                                                                                 |
+| `failed`      | yes      | _wakes first — it failed last time_ | — (the wake is the same one My agents' **Wake** runs on a failed agent)           |
+| `hibernating` | no       | —                                   | _It's stopping. Choose it again once it's hibernated — it will wake for the run._ |
+| `deleting`    | no       | —                                   | _It's being deleted._                                                             |
+
+**Every row reason the read knows before a press (panel 2):**
+
+| Reason (code)                                      | Reason line                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a run already in it (`agent_instance_run_active`)  | _Already running **{key}**. One run at a time in an agent — wait for it, or cancel it there._ (`{key}` links to the work item)                                                                                                                                                  |
+| not signed in (`agent_not_signed_in`)              | _Sign in first: open {name} and run `{command}` in its terminal._ **Open {name}** — the command per coding agent is `myAgents.panel.signin.signedOut.*`'s (claude: `claude`, then its login slash command; codex: `codex login --device-auth`; opencode: `opencode auth login`) |
+| image too old (`agent_instance_image_too_old`)     | _Made from an older image that can't run work items. Moving it to the newer image — keeping its home and sign-in — is on its way; a new agent can run them now._ No button: MOTIR-6862's update flow is not drawn here                                                          |
+| no unattended command (`agent_profile_cannot_run`) | _{coding agent} can't run a work item on its own — it has no unattended mode Motir can start._                                                                                                                                                                                  |
+
+### The control's other states (panel 3)
+
+- **No agent on the project:** the control opens; the popover reads **You have no agent on {project}
+  yet.** · _An agent is your own coding agent — Claude Code, Codex and others — on your own sign-in, in
+  Motir's cloud. Make one for this project, sign it in, and this work item can run in it._ ·
+  **Create one in My agents** (`Button` secondary, a link to `/my-agents`). It does not open the create
+  dialog in place.
+- **Not ready:** both doors disabled in place; ONE body line for both — _Run in my agent and Run
+  hosted are available once this work item is ready — it has {n} open blockers._ (the agent door
+  alone: _Run in my agent is available once …_). It replaces `runs.hosted.notReady` while both show.
+- **A run is live on the work item, any lane:** the control gives way, as Run hosted does. A live
+  hosted run → **Cancel run**; a live run in an agent → **Cancel run** for the agent's OWNER, nothing
+  for anyone else (§6: only the owner reaches an agent); a live local run → nothing.
+
+### Refusals live on the DOOR (panels 4, 5)
+
+Every check in §4 runs before the run is opened, so a refusal leaves no run: no history row, nothing
+in `/runs`, nothing for the modal. It is the hosted door's `notice warn` (`--el-warning-surface`,
+`--el-warning` glyph, `--el-text-strong`) in the section body. **The family:** every title begins
+**Not started —**, every body ends _Nothing was started and nothing was charged._ The picker re-reads
+its list on any refusal. `hosted_repository_not_writable` is the hosted door's shipped notice,
+unchanged.
+
+| Code (HTTP)                           | Title                                                                        | Body                                                                                                                      |
+| ------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `agent_not_signed_in` (409)           | Not started — {coding agent} isn't signed in on {name}.                      | Open {name} and run `{command}` in its terminal. + the family ending · **Open {name}**                                    |
+| `agent_instance_wrong_project` (409)  | Not started — {name} works on another project.                               | An agent runs work items only from the project it was made for. Choose an agent on {project}, or create one in My agents. |
+| `agent_run_card_not_ready` (409)      | Not started — this work item isn't ready to run.                             | the reason it carries (_It has {n} open blockers._ / _It's {status}._)                                                    |
+| `agent_instance_run_active` (409)     | Not started — {name} is already running **{key}**.                           | One run at a time in an agent. Wait for it to finish, cancel it, or choose another agent.                                 |
+| `agent_instance_image_too_old` (409)  | Not started — {name} was made from an older image that can't run work items. | Moving it to the newer image — keeping its home and sign-in — is on its way. Until then, a new agent can run work items.  |
+| `agent_profile_cannot_run` (409)      | Not started — {coding agent} can't run a work item on its own.               | It has no unattended mode Motir can start. Choose an agent with another coding agent.                                     |
+| `agent_instance_state_conflict` (409) | Not started — {name} is hibernating. / … is being deleted.                   | Choose it again once it's hibernated — it will wake for the run. (deleting: no second sentence)                           |
+| `agent_instance_not_found` (404)      | Not started — that agent isn't available.                                    | It may have been deleted. The list has been refreshed. (one answer for "not yours" and "gone", so nothing leaks)          |
+| `permission_denied` (403)             | Not started — you can't run this work item in an agent.                      | That needs edit access to the work item and permission to use agents on this project.                                     |
+
+**The wake's refusals, passed through UNCHANGED (panel 5).** Title **Not started — {name} couldn't
+wake.**; body = the wake's own sentence, word for word, from `myAgents.refusal.*` (as MOTIR-6914
+rewords them), then the family ending. So My agents' **Wake** and this door can never disagree.
+
+| Wake refusal                          | Body (the wake's own words)                                                                                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `credits` (402)                       | Your organization is out of credits. Agents use credits while they run and for their storage every day, asleep or not. **Add credits** to create or wake an agent. |
+| `credits_unknown` (503)               | Motir could not check your organization's credits just now. Try again in a moment.                                                                                 |
+| `fleet_busy` (429)                    | Motir is running as many machines as it can right now. Try again in a few minutes.                                                                                 |
+| `org_running_limit` (429, MOTIR-6926) | Your organization is running {limit} of its {limit} agents. Hibernate one to start another. (replaces `fleet_busy` when it ships)                                  |
+| `ai_plan_required` (MOTIR-6914)       | Agents need a paid AI plan (Standard, Pro, Max or Enterprise). **Choose an AI plan** to create or wake one.                                                        |
+| `ai_plan_unknown` (MOTIR-6914)        | Motir could not check your organization's AI plan just now. Try again in a moment.                                                                                 |
+| `agent_instances_unavailable` (503)   | My agents aren't available on this deployment.                                                                                                                     |
+
+**Not drawn: `user_cap`.** It is a CREATE refusal (`agentInstanceLifecycleService.create`); a wake
+never raises it, so it cannot reach this door. The card listed it among the wake refusals; the code
+says otherwise.
+
+### Starting (panel 6)
+
+- **During the press:** the chosen row shows the Button's loading state; the control reads
+  **Starting…** (`runs.hosted.door.starting`); Run hosted is disabled.
+- **On the answer** (the route answers with the run id at once, §4): the popover closes, the header
+  becomes **Cancel run**, the pill **Running**, and the six hosted phases appear with **Starting**
+  current. **No new phase, status or event kind** — waking is part of Starting, and its detail line
+  says which: _Waking {name}_ when the pressed row was `hibernated` or `failed`, _Starting in {name}_
+  otherwise. The builder takes that from the pressed row; nothing is re-read to draw it.
+- The first CLI event (`checkout_ready`) moves it to **Cloned**. A live sign-in probe that finds the
+  agent signed out after the wake closes the run **Failed** (panel 8).
+
+### The run in the section and the modal (panels 7–10)
+
+- **The agent, three times:** the **In my agent** lane chip (the hosted chip's shape and ground,
+  `--el-chip-bg` / `--el-text-strong`, the `SquareTerminal` glyph); the line _Working in **{name}** ·
+  {coding agent}_ + **Watch it in My agents** (ended: _Ran in **{name}** · {coding agent}_ + **Open
+  {name}**), both linking `/my-agents?agent=<id>`; and the meta row **Lane** In my agent · **Agent**
+  {name} (the same link) · **Coding agent** {label} · **Elapsed**/**Took**. **No Model** (§5,
+  `model = null`). The Running phase's detail is _{coding agent} · {name}_.
+- **The cost is ONE figure — Machine time** — the run's own duration, `--el-surface-soft` figure as
+  the hosted block draws it, with the line _{name}'s running time — charged with the agent, in
+  credits. No tokens: {coding agent} runs on your own sign-in._ **No Tokens and no Credits figure**:
+  §5 mints no gateway key and writes no usage row, and the credits land on the agent's interval (My
+  agents' list shows them). The head reads _So far — updating while the run is live_ while live.
+- **Ends** use the shipped `runs.hosted.end.*` line, the RECORDED reason verbatim in mono, and
+  `end.stays`:
+
+| `DispatchRunStatus` | Pill      | End line                                              | Recorded reason (the record's, §6)                                      | Timeline mark       |
+| ------------------- | --------- | ----------------------------------------------------- | ----------------------------------------------------------------------- | ------------------- |
+| `running`           | Running   | —                                                     | —                                                                       | current phase       |
+| `succeeded`         | Succeeded | _The run delivered its work._ + pull request headline | —                                                                       | all done            |
+| `failed`            | Failed    | _The agent exited without a pull request._            | `agent exited with code {n}`                                            | danger on its phase |
+| `failed`            | Failed    | _The run's machine stopped before the run closed._    | `the agent stopped` · `the agent's machine was lost` · `out of credits` | danger              |
+| `failed`            | Failed    | _The run couldn't start in the agent._ (new)          | `the coding agent is not signed in`                                     | danger on Starting  |
+| `cancelled`         | Cancelled | _The run was cancelled._                              | `cancelled by {name}`                                                   | pending after       |
+| `timed_out`         | Timed out | _The agent stopped producing output._                 | `stalled: no agent output for 15 minutes`                               | warning (`is-late`) |
+| `timed_out`         | Timed out | _The run reached its time limit._                     | `timed out after 12 hours` (the backstop; MOTIR-7027 fixes the string)  | warning (`is-late`) |
+
+After every end the doors return: **Run in my agent** (never "again" — the next run may be in
+another agent) and **Run hosted** / **Run hosted again** by the hosted rule.
+
+- **Cancel (panel 9):** the hosted **Cancel run** in the same places, owner only; the shipped `Modal`
+  `sm`: **Cancel this run?** · _The run's session in {name} stops and its credentials are revoked. Work
+  it already pushed stays on the run's branch, and this work item stays where it is. {name} keeps
+  running, and your own shells in it are untouched._ · **Keep running** (secondary, focused) ·
+  **Cancel run** (danger).
+- **The modal (panel 10):** title **Run in my agent** `{KEY}`; second line the lane chip · _{name} ·
+  {coding agent}_ (name linked) · _started {time}_; pill, then **Cancel run** (live, owner). The strip
+  under the header: **Cost so far** · _updating_ · _Machine time {d} · {name}'s running time, charged
+  with the agent_ · _No tokens — {coding agent} runs on your own sign-in_ (ended: **Cost**). The log pane
+  keeps the hosted phase chip; its footer: _A run in your agent always reports its output._ · _Deleted
+  after 30 days._ An end shows its end line and recorded reason in a strip under the header.
+
+### The My agents panel (the second mock) — summary
+
+Spec in `design/my-agents/design-notes.md` § _The agent's live run_. In short: a run line in the
+header (**Running a work item** · key · title · **Open run**, on `--el-tint-sky`; after the end **Last
+run** on `--el-muted` with the end pill and the recorded reason); the run's session offered in a
+`Segmented` at the head of the Terminal tab (**Your shell** | **Run {key}**), watch-only with a sky
+strip; Hibernate and Delete off during the run with the reason, and the refusal box if pressed from
+elsewhere; the ended session's last screen with **Back to your shell**; the narrow full view.
+
+### Primitives and tokens
+
+| Element                  | Primitive                          | Tokens                                                                                                                    |
+| ------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Run in my agent**      | `Button` secondary `sm`            | `--el-page-bg`, `--el-button-border`, `--el-text`, `--height-btn-sm`, `--radius-btn`, `--spacing-btn-x-sm`                |
+| the picker               | `Popover`                          | `--el-page-bg`, `--el-border`, `--radius-card`, `--shadow-elevated`; rules `--el-border-soft`                             |
+| a picker row             | the Combobox option metrics        | `--spacing-control-x/y`, `--radius-control`; focused `--el-option-active-bg`; name `--el-text`, sub `--el-text-secondary` |
+| a row's reason / link    | —                                  | `--el-text` · `--el-link`; inline command `--el-code-bg` / `--el-code-text`, `--radius-badge`                             |
+| state pills              | `RunTonePill` + `AGENT_STATE_TONE` | unchanged                                                                                                                 |
+| sign-in glyphs           | lucide, `aria-hidden`              | `--el-success` · `--el-warning` · `--el-text-secondary`                                                                   |
+| the **In my agent** chip | the hosted lane chip               | `--el-chip-bg`, `--el-text-strong`, `--radius-badge`, `--spacing-chip-x/y`                                                |
+| refusal notices          | the hosted `notice warn`           | `--el-warning-surface`, `--el-warning`, `--el-text-strong`                                                                |
+| the machine-time figure  | the hosted `.hxFig`                | `--el-surface-soft`, `--el-border-soft`, `--radius-control`; label/unit `--el-text-secondary`, value `--el-text`          |
+| everything else          | the hosted delta's own             | unchanged                                                                                                                 |
+
+No `--color-*`, no raw radius or height; `--el-text-muted` and `--el-text-faint` are used nowhere.
+
+### Every string, and the i18n key it lands under (`en`; `zh` twins with the build)
+
+**`runs.agent.*` — MOTIR-7028:**
+
+| Key                                                                                                                                    | String                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `door.run` · `door.starting`                                                                                                           | Run in my agent · Starting…                                                                                                                                                                                                                         |
+| `picker.title` · `picker.lead`                                                                                                         | Run {key} in one of your agents · Choosing an agent starts the run. An agent that is asleep wakes first.                                                                                                                                            |
+| `picker.label` · `picker.foot` · `picker.manage`                                                                                       | Your agents · Only your agents on {project} are listed. · Manage in My agents                                                                                                                                                                       |
+| `picker.signin.signedIn` / `.signedOut` / `.unknown`                                                                                   | Signed in · Not signed in · Sign-in can't be checked                                                                                                                                                                                                |
+| `picker.next.now` / `.wakes` / `.whenUp` / `.failed`                                                                                   | starts now · wakes first · starts when it's up · wakes first — it failed last time                                                                                                                                                                  |
+| `picker.off.hibernating` / `.deleting`                                                                                                 | It's stopping. Choose it again once it's hibernated — it will wake for the run. · It's being deleted.                                                                                                                                               |
+| `picker.off.runActive`                                                                                                                 | Already running <link>{key}</link>. One run at a time in an agent — wait for it, or cancel it there.                                                                                                                                                |
+| `picker.off.signedOut`                                                                                                                 | Sign in first: open {name} and run {command} in its terminal. <link>Open {name}</link> (`{command}` is rendered from `myAgents.panel.signin.signedOut.*`'s `<cmd>` values)                                                                          |
+| `picker.off.imageTooOld`                                                                                                               | Made from an older image that can't run work items. Moving it to the newer image — keeping its home and sign-in — is on its way; a new agent can run them now.                                                                                      |
+| `picker.off.cannotRun`                                                                                                                 | {agent} can't run a work item on its own — it has no unattended mode Motir can start.                                                                                                                                                               |
+| `empty.title` · `empty.body` · `empty.create`                                                                                          | You have no agent on {project} yet. · An agent is your own coding agent — Claude Code, Codex and others — on your own sign-in, in Motir's cloud. Make one for this project, sign it in, and this work item can run in it. · Create one in My agents |
+| `notReady` · `notReadyBoth`                                                                                                            | Run in my agent is available once this work item is ready — it has {count, plural, …} open blockers. · Run in my agent and Run hosted are available once …                                                                                          |
+| `refused.nothing`                                                                                                                      | Nothing was started and nothing was charged.                                                                                                                                                                                                        |
+| `refused.{notSignedIn,wrongProject,notReady,runActive,imageTooOld,cannotRun,hibernating,deleting,notFound,permission}.title` / `.body` | the refusal table above                                                                                                                                                                                                                             |
+| `refused.wakeTitle`                                                                                                                    | Not started — {name} couldn't wake. (body: `myAgents.refusal.<key>`, verbatim)                                                                                                                                                                      |
+| `phaseDetail.waking` · `.starting` · `.running`                                                                                        | Waking {name} · Starting in {name} · {agent} · {name}                                                                                                                                                                                               |
+| `lane` · `where.live` · `where.ended` · `where.watch` · `where.open`                                                                   | In my agent · Working in <b>{name}</b> · {agent} · Ran in <b>{name}</b> · {agent} · Watch it in My agents · Open {name}                                                                                                                             |
+| `meta.agent` · `meta.codingAgent`                                                                                                      | Agent · Coding agent (Lane / Elapsed / Took reuse `runs.hosted.meta.*`)                                                                                                                                                                             |
+| `cost.machineDetail`                                                                                                                   | {name}'s running time — charged with the agent, in credits. No tokens: {agent} runs on your own sign-in.                                                                                                                                            |
+| `cost.stripMachine` · `cost.stripNoTokens`                                                                                             | {name}'s running time, charged with the agent · No tokens — {agent} runs on your own sign-in                                                                                                                                                        |
+| `end.notStarted`                                                                                                                       | The run couldn't start in the agent.                                                                                                                                                                                                                |
+| `modalTitle` · `logFooter`                                                                                                             | Run in my agent · A run in your agent always reports its output. · Deleted after 30 days.                                                                                                                                                           |
+| `cancel.body`                                                                                                                          | The run's session in {name} stops and its credentials are revoked. Work it already pushed stays on the run's branch, and this work item stays where it is. {name} keeps running, and your own shells in it are untouched.                           |
+
+Reused unchanged: `runs.hosted.phase.*`, `phaseChip`, `meta.lane/elapsed/took`, `end.*`, `prHeadline`,
+`cancel.title/keep/confirm`, `cost.head/liveHint/stripLive/stripUpdating/machine/unit.*`,
+`refused.notWritable.*`, `runs.runStatus.*`, `myAgents.state.*`, `myAgents.refusal.*`.
+
+**`myAgents.panel.run.*` — MOTIR-7029:** see `design/my-agents/design-notes.md` § _The agent's live
+run_.
+
+The recorded reasons (`agent exited with code {n}`, `the agent stopped`, …) are the RECORD's strings,
+written by MOTIR-7027 and rendered verbatim — never catalogue copy.
+
+### Allocation — who builds each element
+
+| Element                                                                                                                                                                                                 | Builds it                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| the control, the picker, every row face, the no-agent popover, the not-ready line                                                                                                                       | **MOTIR-7028**                                       |
+| the refusal and wake-refusal notices, the re-read on refusal                                                                                                                                            | **MOTIR-7028**                                       |
+| starting (row loading, **Starting…**, the waking / starting detail), the run section faces, the lane chip, the agent line, the meta row, the machine-time figure, the end faces, Cancel and its confirm | **MOTIR-7028**                                       |
+| the run modal's header, strip, phase chip and log footer for `origin: instance`                                                                                                                         | **MOTIR-7028**                                       |
+| `ContentSectionCard`'s header wrap (a shared component)                                                                                                                                                 | **MOTIR-7028** (⚑ not in its title — allocated here) |
+| the agents read with each agent's state, profile label, recorded sign-in and, per row, why it cannot take the run (`code`, plus the active run's `id` + key)                                            | **MOTIR-7026**                                       |
+| the refusal codes with `name`, the run's key and id, the not-ready reason in the 4xx body                                                                                                               | **MOTIR-7026**                                       |
+| the DTO's `agentInstance { id, name, profile, profileLabel }`, `origin: 'instance'`                                                                                                                     | **MOTIR-7023**                                       |
+| the recorded reason strings, and the Hibernate / Delete refusal carrying the run                                                                                                                        | **MOTIR-7027**                                       |
+| the run session listed on attach, tagged with its run id                                                                                                                                                | **MOTIR-7025**                                       |
+| the panel's run line, the session switch, the watch strip, Hibernate / Delete off, the ended faces, the narrow view                                                                                     | **MOTIR-7029**                                       |
+
+**⚑ Flagged — no sibling owns these as written:**
+
+1. **The panel's _Last run_ line** needs the agent's LATEST run whatever its status; decision §5 names
+   only `findRunningByAgentInstance` (running runs). MOTIR-7029 must add a latest-run-by-agent read
+   (or drop the _Last run_ line and show nothing after the end).
+2. **The `timed_out` backstop reason string** is not fixed by the decision; MOTIR-7027 writes it and
+   this design renders whatever it records.
+3. **`/runs`' Agent column** for an instance run (today it prints the run's `agent`, the profile id).
+   Not drawn and not in any sibling's scope; it will read `claude` until someone changes it.
+4. **The My agents LIST row** does not show that an agent is running a work item. Deliberately not
+   drawn: the panel is where a person watches it, and the list's state pill already reads Running.
+
+### What these deltas do NOT draw
+
+Run hosted and every hosted face (MOTIR-684, composed); the model picker; the panel's lifecycle,
+sign-in and terminal states (MOTIR-6937, composed); the image update flow (MOTIR-6862); a _Continue
+in my agent_ control (not decided, §_What this does NOT decide_); starting a run in anyone else's
+agent (never).
+
+## Revision 2 — Run and Send to my agent, and the agent that is already working (MOTIR-7022, 2026-09-30)
+
+**Amends § _Run in my agent_ above** and its mock **`design/runs/run-section--agent.mock.html`**,
+which is regenerated in place (the card's own unapproved delta — revision 1 was published as evidence
+`cmuo158kl0024hwoiw3es2gky` and sent back, and was never a design of record). The My agents mock
+`design/my-agents/my-agents--run.mock.html` is unchanged: it draws no door and says "hosted" nowhere.
+
+### The reviewer's note (Request changes on revision 1), verbatim
+
+> I don't see the design when the agent is already running a work item. And the design to choose run
+> own agent and "run hosted" is not clear, it's confusing. My agent is also hosted. "Run hosted"
+> should be renamed. The user won't care about the term "hosted", it should just be choose a model and
+> a run button. And for "my agent", the term should be more like "Send to my agent"
+
+### What changed, and why
+
+1. **"Hosted" leaves every string this delta draws.** Both paths run in Motir's cloud, so "hosted" did
+   not tell them apart. What a person cares about is **who does the work**, and every surface now says
+   that instead: Motir with the model you picked, or one of your own agents.
+2. **Two named choices, not three header controls (panel 0).** The doors leave `ContentSectionCard`'s
+   `headerRight` and become a **start bar** at the top of the Run section's body, under the caption
+   _Start this work item_, above the history. Two options side by side, each a quiet panel
+   (`--el-surface-soft`, `--el-border-soft`, `--radius-card`, `--spacing-card-padding`) with a title,
+   one lead line saying who works it, and its control:
+
+   | Option               | Glyph            | Lead (`--el-text-secondary`)                                                     | Control                                                                                    |
+   | -------------------- | ---------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+   | **Run**              | `Cloud`          | _Motir works it on a fresh machine, with the model you pick. Billed in credits._ | the shipped model picker (the combo) + **Run** / **Run again** — `Button` primary `sm`     |
+   | **Send to my agent** | `SquareTerminal` | _One of your own agents works it, with its coding agent and your sign-in._       | **Send to my agent** — `Button` secondary `sm` + `ChevronDown`, opens the picker of agents |
+
+   Run is the section's one primary button (the one-press default, as before). Below the section's
+   width the two stack, Run first. Where Motir's own runs are off on a deployment (`hostedDoor` null),
+   the bar shows Send to my agent alone, full width. The section header no longer carries a door; it
+   carries **Cancel run** only while a run is live.
+
+   **The `ContentSectionCard` header wrap that revision 1 allocated to MOTIR-7028 is withdrawn** — the
+   header holds at most one control again, so the shared component does not change.
+
+3. **The busy agent has its own panel (panel 2).** Decision §5 allows one running run per agent. Three
+   faces:
+   - **The picker row.** A busy agent is listed like every other agent, `aria-disabled`, name dropped
+     to `--el-text-secondary`; its pill reads **Working** (the running tone). Under it, a
+     `--el-tint-sky` line in `--el-text-strong`, links `--el-link`: _Working on **{key}** · {title}. It
+     can take another work item once that run ends._ **Open that run**. `{key}` links to the work
+     item; **Open that run** opens the run modal (`/runs?run=<id>`). This replaces revision 1's
+     _Already running {key}_ reason line.
+   - **Sent anyway.** A stale list, a second tab or two sends racing all reach the start, which answers
+     `agent_instance_run_active` with that run's id and key (§4; §5 translates the loser of the
+     unique-index race to the same refusal). The notice sits under the start bar, never in the
+     timeline, because no run was opened: **Not sent — {name} is already working on {key}.** · _An
+     agent works on one work item at a time, and {name} can take this one once that run ends._
+     **Open {key}'s run** _to watch or cancel it, or send this to another agent. Nothing was started
+     and nothing was charged._ The picker re-reads its list, so the row then shows its busy line.
+   - **Every agent busy.** The picker still opens and lists them all as busy, each naming its work
+     item, so the developer can see which run to wait for; **Run** stays one press away beside it.
+
+4. **The refusal family is _Not sent —_** (was _Not started —_) for the agent path, because what
+   failed is the send. Bodies are revision 1's, with "run" reworded to "work" where it named the
+   action. The body ending _Nothing was started and nothing was charged._ is kept. The wake
+   pass-through title is **Not sent — {name} couldn't wake.**, and its body is still
+   `myAgents.refusal.*` word for word.
+5. **The run Motir works is renamed in the section and the modal (panels 11, 12)**, so the two paths
+   read alike:
+   - The lane chip that read _Hosted_ shows the **model** (`Cloud` + `claude-opus-5-5`) beside
+     _Motir is working on it_.
+   - The meta row reads **Worked by** Motir · **Model** · **Elapsed**. There is no _Lane · Hosted_.
+   - The modal title is **Run** `{KEY}` for BOTH paths.
+   - The log footer is _This run always reports its output._ for both.
+   - An agent run reads: chip `SquareTerminal` + _{name} · {coding agent}_, _Your agent is working on
+     it_ + **Watch it in My agents** (ended: _Your agent worked on it_ + **Open {name}**), and meta
+     **Worked by** {name} · **Coding agent** · **Elapsed**/**Took**.
+   - Everything else about the run Motir works (phases, the cost block, ends, cancel) is MOTIR-684's,
+     unchanged.
+
+### The panels (revision 2)
+
+0 the two ways to start: ready, narrow (stacked), and Send-only · 1 the picker · **2 the agent
+already working on a work item: the busy row, sent anyway, every agent busy** · 3 every agent state
+and every other row reason · 4 the start bar's other states: no agent, not ready, and a run already
+live on the work item · 5 every send refusal · 6 the wake's refusals · 7 starting · 8 running and
+succeeded in an agent · 9 failed, cancelled and timed out · 10 cancel · 11 the run Motir works,
+renamed · 12 the run modal.
+
+- **Not ready (panel 4):** both options disabled in place, and ONE line for both: _Run and Send to my
+  agent are available once this work item is ready — it has {n} open blockers._
+- **Starting (panel 7):** the pressed row shows the loading state; the option's button reads
+  **Starting…**; Run is disabled. On the answer the start bar gives way, the header shows **Cancel
+  run**, and the phases appear with Starting current: _Waking {name}_ or _Starting in {name}_.
+- **After an end:** the start bar returns above the result, with **Run again** on Motir's side and
+  **Send to my agent** on the agent side. The agent side never says "again", because the next run may
+  be in another agent.
+
+### Strings — what revision 2 changes (`en`; `zh` twins with the build)
+
+**`runs.start.*` — new, MOTIR-7028** (the bar is shared by both paths):
+
+| Key                        | String                                                                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `caption`                  | Start this work item                                                                                                                        |
+| `run.title` · `run.lead`   | Run · Motir works it on a fresh machine, with the model you pick. Billed in credits.                                                        |
+| `send.title` · `send.lead` | Send to my agent · One of your own agents works it, with its coding agent and your sign-in.                                                 |
+| `notReady`                 | Run and Send to my agent are available once this work item is ready — it has {count, plural, one {# open blocker} other {# open blockers}}. |
+
+**`runs.agent.*` — changed from revision 1's table** (unlisted keys stand as written above):
+
+| Key                                        | Revision 1                                                            | Revision 2                                                                                                                                                                    |
+| ------------------------------------------ | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `door.run` → **`door.send`**               | Run in my agent                                                       | Send to my agent                                                                                                                                                              |
+| `picker.title` · `picker.lead`             | Run {key} in one of your agents · Choosing an agent starts the run. … | Send {key} to one of your agents · Choosing an agent sends it and starts the work. An agent that is asleep wakes first.                                                       |
+| `picker.off.runActive` → **`picker.busy`** | Already running {key}. One run at a time in an agent — …              | Working on <link>{key}</link> · {title}. It can take another work item once that run ends. <run>Open that run</run>                                                           |
+| `picker.busyPill`                          | —                                                                     | Working                                                                                                                                                                       |
+| `empty.body`                               | … and this work item can run in it.                                   | … Make one for this project, sign it in, and you can send work items to it.                                                                                                   |
+| `notReady` · `notReadyBoth`                | Run in my agent … · Run in my agent and Run hosted …                  | `notReady`: Send to my agent is available once this work item is ready — … (bar shows it alone). `notReadyBoth` is retired for `runs.start.notReady`.                         |
+| `refused.*.title`                          | Not started — …                                                       | Not sent — … (e.g. _Not sent — yue-claude is already working on {key}._)                                                                                                      |
+| `refused.runActive.body`                   | One run at a time in an agent. Wait for it to finish, …               | An agent works on one work item at a time, and {name} can take this one once that run ends. <run>Open {key}'s run</run> to watch or cancel it, or send this to another agent. |
+| `refused.wakeTitle`                        | Not started — {name} couldn't wake.                                   | Not sent — {name} couldn't wake.                                                                                                                                              |
+| `lane`                                     | In my agent                                                           | {name} · {agent} (the chip names the agent)                                                                                                                                   |
+| `where.live` · `where.ended`               | Working in {name} · {agent} · Ran in {name} · {agent}                 | Your agent is working on it · Your agent worked on it                                                                                                                         |
+| `meta.agent`                               | Agent                                                                 | Worked by                                                                                                                                                                     |
+| `modalTitle` · `logFooter`                 | Run in my agent · A run in your agent always reports its output.      | retired — both paths use `runs.hosted.modalTitle` / `logFooter` as renamed below                                                                                              |
+
+**`runs.hosted.*` — the shipped keys whose copy changes. MOTIR-7028 ships this rename** (the keys
+keep their names; only the `en` / `zh` values change):
+
+| Key                             | Shipped                                                                     | Revision 2                                                                                       |
+| ------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `door.run` · `door.runAgain`    | Run hosted · Run hosted again                                               | Run · Run again                                                                                  |
+| `picker.footer`                 | The models that can run a hosted work item. The run is billed …             | The models Motir can run this work item with. The run is billed to your organization in credits. |
+| `picker.loadingBody`            | Loading the models that can run hosted…                                     | Loading the models Motir can run it with…                                                        |
+| `picker.unavailableBody`        | Couldn't load the models that can run hosted, so Run hosted is off for now. | Couldn't load the models, so Run is off for now.                                                 |
+| `picker.emptyBody`              | No model can run a hosted work item right now, so Run hosted is off. …      | No model can run this work item right now, so Run is off. Local runs are unaffected.             |
+| `notReady`                      | Run hosted is available once …                                              | Run is available once … (the bar shows it alone); with both, `runs.start.notReady`               |
+| `refused.outOfCredits.body`     | … Run hosted works again once the organization has credits.                 | … Run works again once the organization has credits.                                             |
+| `refused.modelNotOffered.title` | {model} is no longer offered for hosted runs.                               | {model} is no longer offered.                                                                    |
+| `refused.unavailable.title`     | Not started — hosted runs aren't available right now.                       | Not started — Run isn't available right now.                                                     |
+| `refused.bootFailed.title`      | The hosted run couldn't start its machine.                                  | The run couldn't start its machine.                                                              |
+| `meta.hosted`                   | Hosted                                                                      | Motir (read as **Worked by** Motir; the lane chip shows the model)                               |
+| `modalTitle`                    | Hosted run                                                                  | Run                                                                                              |
+| `logFooter`                     | A hosted run always reports its output. · Deleted after 30 days.            | This run always reports its output. · Deleted after 30 days.                                     |
+
+`runs.agent.meta.worked` (new): **Worked by**, shared by both paths' meta rows.
+
+### Allocation — changes to revision 1's table
+
+- **MOTIR-7028** builds the start bar (`runs.start.*`), the busy row and busy refusal, the renamed agent
+  copy, **and the `runs.hosted.*` rename above** (the shipped Run section, the run modal and the model
+  picker).
+- **MOTIR-7028 no longer changes `ContentSectionCard`** (the wrap is withdrawn).
+- **MOTIR-7026's agents read** must carry, for a busy agent, the active run's `id`, its work item's
+  key **and title** (the busy line names the title). The refusal body carries the id and the key, as
+  before.
+
+### ⚑ Flagged — "hosted" still on screen outside this delta (no sibling owns these)
+
+The reviewer's point applies beyond the Run section, but these surfaces are not drawn here and no card
+in MOTIR-6864 owns them. They are follow-ups for the planner:
+
+- `github.development.fix.hosted.*` — _Fix on the hosted agent_
+- `github.development.continue.hosted.*` and `continue.reason.stalled` / `.backstop` — _Continue
+  hosted_
+- `workbench.toFix.fixingHosted*`
+- `repositoryPicker.hostedRuns.*`
+- `approvalGate.agentReview.couldNotRun.reason.*`
+- `issueViews.provenanceSourceHosted`
+- `billing.ai.tagline` / `billing.plans.subtitle` — _hosted agents_
+
+("Self-hosted" in install-mode copy is a different meaning and stays.)
