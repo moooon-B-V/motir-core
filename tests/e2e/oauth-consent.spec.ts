@@ -13,10 +13,9 @@ import { createHash, randomBytes } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { createFirstProject, signUp } from './_helpers/shell-session';
+import { CALLBACK } from './_helpers/oauth-connect-seed';
 
 test.describe.configure({ timeout: 120_000 });
-
-const CALLBACK = 'http://127.0.0.1:53999/callback';
 
 test.beforeEach(async () => {
   await resetDatabase();
