@@ -185,6 +185,33 @@ async function checks(
   );
 }
 
+/** A push moved the pull request's head — GitHub's `synchronize` delivery, which every real
+ *  push sends. The conflict's repair needs it: the `dirty` reading is kept against the head
+ *  Motir STORES (MOTIR-7005), and only a push delivery (or a fresh host read) moves that head;
+ *  check rows at a new commit do not. */
+async function push(page: Page, card: SeededCard, scenario: Scenario, sha: string): Promise<void> {
+  const { number } = PRS[scenario];
+  const payload = pullRequestPayload({
+    action: 'opened',
+    number,
+    title: card.title,
+    headRef: headRefFor(card, scenario),
+    state: 'open',
+    merged: false,
+    repo: WEB_REPO,
+  }) as { pull_request: Record<string, unknown> } & Record<string, unknown>;
+  await deliver(
+    page,
+    'pull_request',
+    {
+      ...payload,
+      action: 'synchronize',
+      pull_request: { ...payload.pull_request, head: { ref: headRefFor(card, scenario), sha } },
+    },
+    `push #${number} to ${sha.slice(0, 7)}`,
+  );
+}
+
 /** The queue removes the pull request for a FAILURE, at its current head — the captured
  *  `dequeued` body, re-addressed to this spec's installation, repository and number. */
 async function queueFails(page: Page, scenario: Scenario): Promise<void> {
@@ -458,6 +485,7 @@ test.describe('To fix on the Workbench', () => {
       // A push that goes green on each: a new head leaves the queue exit, the conflict and
       // the refusal all behind.
       await checks(page, queue, 'queue', 'success', pushedHead('queue'));
+      await push(page, conflict, 'conflict', pushedHead('conflict'));
       await checks(page, conflict, 'conflict', 'success', pushedHead('conflict'));
       await checks(page, sentBack, 'sentBack', 'success', pushedHead('sentBack'));
       for (const card of [queue, conflict, sentBack]) expect(await fixReasonOf(card)).toBeNull();

@@ -375,6 +375,11 @@ async function syncOnce(
       // so a write conditioned on `cr.draft` being true would leave the row
       // asserting a draft-ness the host had already retracted.
       draft: cr.draft,
+      // The host's head commit (MOTIR-7005), written on every delivery that names one
+      // — `synchronize` included — so `pullRequestHead` reads the pull request's own
+      // head rather than the newest check row's commit. `undefined` (not asserted)
+      // when the payload names none, which leaves the stored head alone.
+      headSha: cr.headSha ?? undefined,
       // ⚠️ NO LINK IS WRITTEN HERE, and there is no longer a field to omit
       // (MOTIR-3721 stopped writing it, MOTIR-3757 dropped it). A delivery says
       // what a pull request IS; only `link_pull_request` says which cards it
@@ -1610,6 +1615,8 @@ export async function resyncLinkedPullRequest(
     // MOTIR-4968 had just stopped the webhook door asserting. The row supplies it
     // now, and the null arm above is what keeps that supply honest.
     draft: subject.draft,
+    // The stored head, echoed rather than guessed (MOTIR-7005); null writes nothing.
+    headSha: subject.headSha,
   };
 
   // ROUTED THROUGH THE SEAM, not a literal (MOTIR-5002). The `'implemented'` this

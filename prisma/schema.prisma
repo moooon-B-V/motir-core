@@ -7558,6 +7558,20 @@ model GithubPullRequest {
   mergeableState        String?             @map("mergeable_state")
   /// The head commit `mergeableState` was read at. See above.
   mergeableStateHeadSha String?             @map("mergeable_state_head_sha")
+  /// The pull request's HEAD COMMIT, as the host last reported it (MOTIR-7005) —
+  /// written by every `pull_request` delivery (`synchronize` included) and by every
+  /// host read (the reconcile tick, the base-branch re-read, the press-time read).
+  ///
+  /// ⚠️ THE CHECK ROWS ARE NOT THE HEAD. A push that produces no CI — which GitHub
+  /// guarantees for a pull request conflicting with its base — leaves the newest
+  /// check rows at the OLD commit, and before this column that commit was read as
+  /// current: a gate was raised over it and the card promoted on its green. Every
+  /// head reader goes through `lib/github/pullRequestHead.ts`, and a member whose
+  /// check rows are not at this head is not green.
+  ///
+  /// ⚠️ NULLABLE, NOT BACKFILLED, and read as UNKNOWN — then the readers fall back
+  /// to the check rows' head, which is what they did before the column existed.
+  headSha               String?             @map("head_sha")
   /// Whether this pull request's association with a work item was DECLARED by a
   /// person or an agent (MOTIR-1596, design/github Panel 5) rather than inferred.
   ///

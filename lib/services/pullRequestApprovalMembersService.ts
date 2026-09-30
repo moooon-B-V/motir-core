@@ -7,7 +7,7 @@ import { membersOf } from '@/lib/approvalGates/memberVersion';
 import { deliveryMemberVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { unlandedOutcomeOutranksApproval } from '@/lib/approvalGates/gateSet';
 import { classOfMergeRefusal, classOfQueueExit } from '@/lib/mergeQueue/queueExit';
-import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
 import { githubPullRequestMergeRefusalRepository } from '@/lib/repositories/githubPullRequestMergeRefusalRepository';
 import type { PullRequestApprovalMemberDTO, PullRequestQueueExitDTO } from '@/lib/dto/approvalGate';
@@ -82,7 +82,7 @@ async function approvedMembers(
     // gate raised over the new head, and draw *cannot land* over commits that can.
     const latestExit = pr ? (exits.get(pr.id) ?? null) : null;
     const exit = latestExit !== null && latestExit.headSha === member.headSha ? latestExit : null;
-    const headNow = pr ? liveRowsAtLatestSha([...pr.checkRuns])[0]?.commitSha : undefined;
+    const headNow = pr ? (pullRequestHead(pr) ?? undefined) : undefined;
     // An exit nobody has put back is Queue again's to offer, not Retry's (MOTIR-5634) — and
     // only while the pull request is still at the head it left at, which is what makes
     // reusing the approval honest. The rule is `deliverySet.ts`'s, as every reader's is.

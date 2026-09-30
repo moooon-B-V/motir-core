@@ -152,14 +152,19 @@ describe('the MEMBER VERSION rule, when there is no head', () => {
   // version, which is the only thing that still compares member versions.
   it('a pull request no check has reported on has no version', () => {
     expect(
-      pullRequestSubjectVersion({ number: 7, repo: { owner: 'acme', name: 'web' }, checkRuns: [] }),
+      pullRequestSubjectVersion({
+        number: 7,
+        repo: { owner: 'acme', name: 'web' },
+        headSha: null,
+        checkRuns: [],
+      }),
     ).toBeNull();
   });
 
   it('a caller that KNOWS the head names it, whatever the checks say', () => {
     expect(
       pullRequestSubjectVersion(
-        { number: 7, repo: { owner: 'acme', name: 'web' }, checkRuns: [] },
+        { number: 7, repo: { owner: 'acme', name: 'web' }, headSha: null, checkRuns: [] },
         'deadbeef',
       ),
     ).toBe('acme/web#7@deadbeef');
