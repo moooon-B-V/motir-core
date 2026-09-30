@@ -25,7 +25,7 @@ afterAll(async () => {
 type Ending = {
   status: 'running' | 'failed' | 'cancelled' | 'timed_out';
   stopReason: 'interrupted' | 'abandoned' | 'halted' | null;
-  origin: 'local' | 'hosted';
+  origin: 'local' | 'hosted' | 'instance';
   log?: string;
 };
 
@@ -110,6 +110,7 @@ describe('endedHow (the CONTINUE prompt’s sentence)', () => {
     [{ status: 'failed', stopReason: null, origin: 'local' }, /exited with an error/],
     [{ status: 'cancelled', stopReason: null, origin: 'local' }, /was cancelled/],
     [{ status: 'timed_out', stopReason: null, origin: 'hosted' }, /hosted run stalled/],
+    [{ status: 'timed_out', stopReason: null, origin: 'instance' }, /run in the agent stalled/],
     [{ status: 'timed_out', stopReason: null, origin: 'local' }, /ended timed_out/],
   ])('%o', (ending, sentence) => {
     expect(endedHow(ending)).toMatch(sentence);
