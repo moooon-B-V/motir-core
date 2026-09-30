@@ -1,4 +1,8 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import {
+  fleetAttributionService,
+  FLEET_ATTRIBUTION_GRACE_MS,
+} from '@/lib/services/fleetAttributionService';
 import { join } from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
 import { Prisma } from '@/generated/prisma/client';
@@ -18,7 +22,7 @@ import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunne
 import { ciFleetAdmissionLockRepository } from '@/lib/repositories/ciFleetAdmissionLockRepository';
 import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
-import { fakeOrchestrator } from '@motir/orchestrator';
+import { fakeOrchestrator, FLEET_CONTAINER_SIZE } from '@motir/orchestrator';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { MOTIR_FLEET_RUNNER_FAMILY } from '@/lib/ciMetering/runnerRates';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
@@ -33,6 +37,7 @@ import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // THE STORY GATE for Motir's ephemeral CI runner fleet (Story MOTIR-1916 ·
 // MOTIR-1927) — the coverage the story's SUBTASKS structurally cannot give
@@ -292,6 +297,8 @@ async function statusOf(intentId: string): Promise<string> {
   return row.status;
 }
 
+grantPaidAiPlan();
+
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "ci_workflow_run_usage", "ci_period_usage", "ci_container_usage", "ci_container_period_cost", "fleet_in_flight_slot" RESTART IDENTITY CASCADE',
@@ -316,10 +323,14 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_APP_ID', '999');
   vi.stubEnv('GITHUB_APP_PRIVATE_KEY', APP_PRIVATE_KEY);
   vi.stubEnv('GITHUB_WEBHOOK_SECRET', WEBHOOK_SECRET);
-  // Generous by default: the caps are asserted where a test sets them, never by
-  // accident from a default that happens to bind.
-  vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '50');
-  vi.stubEnv('MOTIR_FLEET_PROJECT_CAP_FREE', '20');
+  // motir-ai is REACHABLE: admission by coverage (MOTIR-6911) reads the balance
+  // and fails closed on one it cannot read, so an unset URL would defer every job.
+  vi.stubEnv('MOTIR_AI_URL', 'https://motir-ai.test');
+  vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
+  // The kill switch disengaged and the org pool at its default: the pool is
+  // asserted where a test sets it, never by accident from a default that binds.
+  vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');
+  vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '');
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   captured = captureJobEvents();
@@ -813,8 +824,12 @@ describe('§3.2 — EXACTLY ONE usage row per provisioned handle, on every path'
     );
     fakeOrchestrator.backdate(handleRef.id, new Date(Date.now() - 60 * 60_000));
 
-    const reap = await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
-    expect(reap.reaped).toBe(1);
+    // The reconciler kills it once its intent's end is a grace behind (MOTIR-6925).
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const reap = await fleetAttributionService.reconcile({
+      now: () => new Date(Date.now() + 3 * 3_600_000),
+    });
+    expect(reap).toMatchObject({ killed: [{ machineId: handleRef.id }] });
 
     const rows = await adminDb.ciContainerUsage.findMany();
     expect(rows).toHaveLength(1);
@@ -822,7 +837,8 @@ describe('§3.2 — EXACTLY ONE usage row per provisioned handle, on every path'
 
     // …and a SECOND reap of the same container adds nothing. Both the `finally`
     // and the reaper can reach one handle; the row is per handle, not per call.
-    await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
+    await ciRunnerBootService.reapContainer(handleRef);
+    await fleetAttributionService.reconcile({ now: () => new Date(Date.now() + 3 * 3_600_000) });
     const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
     expect(ciContainerUsageCount).toBe(1);
   });
@@ -835,8 +851,10 @@ describe('§3.2 — EXACTLY ONE usage row per provisioned handle, on every path'
     expect(ciContainerUsageCount).toBe(1);
 
     // Nothing is left to reap, and the sweep is inert rather than duplicating.
-    const reap = await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
-    expect(reap.reaped).toBe(0);
+    const reap = await fleetAttributionService.reconcile({
+      now: () => new Date(Date.now() + 3 * 3_600_000),
+    });
+    expect(reap).toMatchObject({ killed: [] });
     const ciContainerUsageCount2 = await adminDb.ciContainerUsage.count();
     expect(ciContainerUsageCount2).toBe(1);
   });
@@ -904,14 +922,14 @@ describe('§3.3 — NO RUNNER REUSE', () => {
 describe('§3.4 — the GATE is consulted BEFORE provision, on all three limbs', () => {
   /** The three refusals, each asserted to spend NOTHING: no JIT mint (which
    *  registers a runner at GitHub), no container, no cost row. */
-  it('the PER-PROJECT cap refuses before anything is spent', async () => {
-    vi.stubEnv('MOTIR_FLEET_PROJECT_CAP_FREE', '1');
+  it("the ORG'S POOL refuses before anything is spent", async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
     const fx = await seedTenant();
     await handle(delivery(fx, { jobId: 57_001, runId: 67_001 }));
     await handle(delivery(fx, { jobId: 57_002, runId: 67_002 }));
     const [first, second] = dispatchedIntentIds();
 
-    // The first occupies the project's single slot by staying in flight.
+    // The first occupies the org's single slot by staying in flight.
     expect(
       (
         await ciRunnerAdmissionService.admit(
@@ -922,14 +940,14 @@ describe('§3.4 — the GATE is consulted BEFORE provision, on all three limbs',
 
     const outcome = await ciRunnerBootService.runIntent(second!, FAST);
 
-    expect(outcome).toMatchObject({ outcome: 'gate_deferred', reason: 'project_cap' });
+    expect(outcome).toMatchObject({ outcome: 'gate_deferred', reason: 'org_pool' });
     expect(mintCalls()).toEqual([]);
     expect(fakeOrchestrator.provisioned).toEqual([]);
     const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
     expect(ciContainerUsageCount).toBe(0);
   });
 
-  it('the FLEET-WIDE ceiling refuses before anything is spent', async () => {
+  it('the fleet KILL SWITCH refuses before anything is spent', async () => {
     vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '0');
     const fx = await seedTenant();
     await handle(delivery(fx, { jobId: 57_003, runId: 67_003 }));
@@ -1038,7 +1056,7 @@ describe('§3.5 — the admission LOCK is load-bearing: an executable mutation c
    *
    * So the mutation is applied here rather than described: `lockScope` is
    * replaced with a function that reports success WITHOUT taking `FOR UPDATE` —
-   * precisely the diff "delete the lock" would produce — and the ceiling is
+   * precisely the diff "delete the lock" would produce — and the org's pool is
    * observed to be exceeded. Both directions run in one file, so neither can rot
    * without the other noticing.
    *
@@ -1046,7 +1064,7 @@ describe('§3.5 — the admission LOCK is load-bearing: an executable mutation c
    * waits, inside its own transaction, until all of them have reached the count
    * or a short grace elapses:
    *   * WITH the lock, they cannot be inside together — each waits out the grace
-   *     and the ceiling still binds exactly. Slower, never wrong.
+   *     and the pool still binds exactly. Slower, never wrong.
    *   * WITHOUT it, they arrive together, the barrier releases at once, every one
    *     of them reads the same pre-claim count, and all of them admit.
    */
@@ -1070,11 +1088,11 @@ describe('§3.5 — the admission LOCK is load-bearing: an executable mutation c
   }
 
   async function raceForSlots(): Promise<number> {
-    const tenants = await Promise.all(
-      Array.from({ length: RACERS }, () => seedTenant({ withProjectRepo: true })),
-    );
+    // ONE org, because the pool is the org's: its racers are the ones that
+    // contend for the same number.
+    const fx = await seedTenant({ withProjectRepo: true });
     const intents = await Promise.all(
-      tenants.map((fx, i) =>
+      Array.from({ length: RACERS }, (_, i) =>
         adminDb.ciRunnerProvisioningIntent.create({
           data: {
             workspaceId: fx.workspaceId,
@@ -1097,15 +1115,16 @@ describe('§3.5 — the admission LOCK is load-bearing: an executable mutation c
     );
 
     const arrive = meetingBarrier(RACERS);
-    const realCount = ciRunnerProvisioningIntentRepository.countInFlightFleetWide.bind(
+    const realCount = ciRunnerProvisioningIntentRepository.countInFlightForOrganization.bind(
       ciRunnerProvisioningIntentRepository,
     );
-    vi.spyOn(ciRunnerProvisioningIntentRepository, 'countInFlightFleetWide').mockImplementation(
-      async (tx) => {
-        await arrive();
-        return realCount(tx);
-      },
-    );
+    vi.spyOn(
+      ciRunnerProvisioningIntentRepository,
+      'countInFlightForOrganization',
+    ).mockImplementation(async (organizationId, tx) => {
+      await arrive();
+      return realCount(organizationId, tx);
+    });
 
     const verdicts = await Promise.all(
       intents.map((intent) => ciRunnerAdmissionService.admit(intent)),
@@ -1114,7 +1133,7 @@ describe('§3.5 — the admission LOCK is load-bearing: an executable mutation c
   }
 
   it('WITH the lock, a race over one slot admits exactly one', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', String(CEILING));
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', String(CEILING));
 
     expect(await raceForSlots()).toBe(CEILING);
 
@@ -1124,8 +1143,8 @@ describe('§3.5 — the admission LOCK is load-bearing: an executable mutation c
     expect(inFlight).toBe(CEILING);
   });
 
-  it('WITHOUT the lock, the SAME race overruns the ceiling — the guard is real', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', String(CEILING));
+  it('WITHOUT the lock, the SAME race overruns the pool — the guard is real', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', String(CEILING));
     // THE MUTATION: report the scope as locked without ever taking `FOR UPDATE`.
     // Every other line of the gate is untouched.
     vi.spyOn(ciFleetAdmissionLockRepository, 'lockScope').mockResolvedValue(true);
@@ -1225,8 +1244,8 @@ describe('§3.7 — CROSS-TENANT ISOLATION: one org’s state never decides anot
     expect((await ciRunnerAdmissionService.admit(payingIntent!)).outcome).toBe('admitted');
   });
 
-  it('one org at its PROJECT cap does not consume another org’s allowance', async () => {
-    vi.stubEnv('MOTIR_FLEET_PROJECT_CAP_FREE', '1');
+  it('one org at its POOL does not consume another org’s pool', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
     const a = await seedTenant();
     const b = await seedTenant();
     await handle(delivery(a, { jobId: 59_003, runId: 69_003 }));
@@ -1241,9 +1260,9 @@ describe('§3.7 — CROSS-TENANT ISOLATION: one org’s state never decides anot
     const other = await ciRunnerAdmissionService.admit(intents[2]!);
 
     expect(first.outcome).toBe('admitted');
-    expect(second).toMatchObject({ outcome: 'deferred', reason: 'project_cap' });
-    // B is a different org with its own allowance: A filling its cap must not
-    // reach across.
+    expect(second).toMatchObject({ outcome: 'deferred', reason: 'org_pool' });
+    // B is a different org with its own pool: A filling its pool must not reach
+    // across.
     expect(other.outcome).toBe('admitted');
   });
 
@@ -1327,5 +1346,58 @@ describe('§3.8 — the REGISTRATION-TOKEN path is not merely unused, it is abse
 
     expect(mintCalls()).toHaveLength(1);
     expect(githubCalls.some((c) => c.url.includes('registration-token'))).toBe(false);
+  });
+});
+
+// ── MOTIR-6912 · the seam from ADMISSION to ATTRIBUTION ──────────────────────
+
+describe('seam: what the real admission path boots, the reconciler attributes (MOTIR-6912)', () => {
+  const PAST_GRACE_MS = FLEET_ATTRIBUTION_GRACE_MS + 60_000;
+
+  it('every container two orgs booted survives the pass, and a machine booted with no record dies', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const a = await seedTenant();
+    const b = await seedTenant();
+    await handle(delivery(a, { jobId: 58_001, runId: 68_001 }));
+    await handle(delivery(b, { jobId: 58_002, runId: 68_002 }));
+    const [intentA, intentB] = dispatchedIntentIds();
+
+    // The REAL step 1 — admission, claim, mint, boot — for each org.
+    const bootedA = await ciRunnerBootService.bootIntent(intentA!, FAST);
+    const bootedB = await ciRunnerBootService.bootIntent(intentB!, FAST);
+    expect(bootedA).toMatchObject({ phase: 'supervising' });
+    expect(bootedB).toMatchObject({ phase: 'supervising' });
+    const booted = fakeOrchestrator.liveContainerIds();
+    expect(booted).toHaveLength(2);
+
+    // A machine nobody recorded — the leak the reconciler exists for.
+    const stray = await fakeOrchestrator.provision({
+      orgId: a.organizationId,
+      workspaceId: a.workspaceId,
+      projectId: a.projectId,
+      repoFullName: `${MOTIR_ORG}/acme-web`,
+      workload: 'ci_runner',
+      workflowJobId: 58_999,
+      image: 'motir/runner@sha256:stray',
+      size: FLEET_CONTAINER_SIZE,
+      env: {},
+      timeoutSeconds: 3600,
+      region: 'iad',
+    });
+
+    const pass = await fleetAttributionService.reconcile({
+      now: () => new Date(Date.now() + PAST_GRACE_MS),
+    });
+
+    expect(pass).toMatchObject({
+      outcome: 'reconciled',
+      killed: [{ machineId: stray.id, reason: 'no_record', action: 'destroyed' }],
+    });
+    // Both admitted containers are still running, attributed to their own org.
+    expect(fakeOrchestrator.liveContainerIds().sort()).toEqual([...booted].sort());
+    const kills = await adminDb.fleetMachineKill.findMany();
+    expect(kills).toEqual([
+      expect.objectContaining({ machineId: stray.id, reason: 'no_record', organizationId: null }),
+    ]);
   });
 });

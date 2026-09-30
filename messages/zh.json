@@ -8988,7 +8988,27 @@
         "body": "它可能已被删除，或者不是你的。只有创建智能体的人才能打开它。",
         "back": "返回我的智能体"
       },
-      "size": "{cols} × {rows}"
+      "size": "{cols} × {rows}",
+      "run": {
+        "live": "正在处理一个工作项",
+        "last": "上次运行",
+        "open": "打开运行",
+        "offWhy": "有运行正在这个智能体中进行时，休眠和删除不可用——请先取消该运行。",
+        "refusedHibernate": "{name} 正在运行 <link>{key}</link>。请先在工作项上取消该运行，然后再让它休眠。",
+        "refusedDelete": "{name} 正在运行 <link>{key}</link>。请先在工作项上取消该运行，然后再删除它。",
+        "sessions": {
+          "label": "终端会话",
+          "shell": "你的 shell",
+          "run": "运行 {key}",
+          "watchOnly": "运行的会话只能观看"
+        },
+        "strip": {
+          "watching": "正在观看 {key} 的运行——只读，输入不会生效。要停止它，请在<link>工作项</link>上使用“取消运行”。",
+          "endedSucceeded": "运行的会话已结束——运行成功，它的拉取请求在工作项上。",
+          "endedFailed": "运行的会话已结束——运行失败。目前的工作在运行的分支上。"
+        },
+        "backToShell": "回到你的 shell"
+      }
     }
   },
   "runs": {
@@ -9152,24 +9172,24 @@
     "nonePastMine": "你发起的运行还没有已完成的。",
     "hosted": {
       "door": {
-        "run": "托管运行",
-        "runAgain": "再次托管运行",
+        "run": "运行",
+        "runAgain": "再次运行",
         "starting": "正在启动…"
       },
       "picker": {
         "label": "模型",
         "default": "默认",
         "defaultSecondary": "默认 · {provider}",
-        "footer": "可以运行托管工作项的模型。运行以积分计费给你的组织。",
+        "footer": "Motir 可以用来运行此工作项的模型。运行以积分计费给你的组织。",
         "loadingTrigger": "正在加载模型…",
-        "loadingBody": "正在加载可以托管运行的模型…",
+        "loadingBody": "正在加载 Motir 可以用来运行它的模型…",
         "unavailableTrigger": "模型不可用",
-        "unavailableBody": "无法加载可以托管运行的模型，因此暂时无法托管运行。",
+        "unavailableBody": "无法加载模型，因此暂时无法运行。",
         "retry": "重试",
         "emptyTrigger": "没有可用的模型",
-        "emptyBody": "目前没有模型可以运行托管工作项，因此无法托管运行。本地运行不受影响。"
+        "emptyBody": "目前没有模型可以运行此工作项，因此无法运行。本地运行不受影响。"
       },
-      "notReady": "此工作项就绪后即可托管运行——它还有 {count} 个未完成的阻塞项。",
+      "notReady": "此工作项就绪后即可运行——它还有 {count} 个未完成的阻塞项。",
       "refused": {
         "notReady": {
           "title": "未启动——此工作项还不能运行。",
@@ -9177,10 +9197,10 @@
         },
         "outOfCredits": {
           "title": "未启动——你的组织积分已用完。",
-          "body": "没有启动任何机器，也没有产生任何费用。组织有积分后即可再次托管运行。"
+          "body": "没有启动任何机器，也没有产生任何费用。组织有积分后即可再次运行。"
         },
         "modelNotOffered": {
-          "title": "{model} 已不再提供给托管运行。",
+          "title": "{model} 已不再提供。",
           "body": "没有启动任何运行。列表已刷新——请选择模型后再运行。"
         },
         "notWritable": {
@@ -9190,11 +9210,11 @@
           "open": "在代码仓库中打开"
         },
         "unavailable": {
-          "title": "未启动——托管运行目前不可用。",
+          "title": "未启动——目前无法运行。",
           "body": "没有启动任何机器，也没有产生任何费用。请稍后再试。"
         },
         "bootFailed": {
-          "title": "托管运行未能启动它的机器。",
+          "title": "运行未能启动它的机器。",
           "body": "运行已打开并以失败结束，没有任何东西仍在运行。"
         },
         "failed": {
@@ -9217,14 +9237,14 @@
       },
       "meta": {
         "lane": "通道",
-        "hosted": "托管",
+        "hosted": "Motir",
         "agent": "代理",
         "model": "模型",
         "elapsed": "已用时",
         "took": "耗时"
       },
-      "modalTitle": "托管运行",
-      "logFooter": "托管运行总是会上报其输出。· 30 天后删除。",
+      "modalTitle": "运行",
+      "logFooter": "本次运行总是会上报其输出。· 30 天后删除。",
       "prHeadline": "已打开拉取请求——",
       "end": {
         "succeeded": "运行已交付其工作。",
@@ -9265,9 +9285,155 @@
           "min": "{n} 分钟",
           "s": "{n} 秒"
         }
+      },
+      "where": {
+        "live": "Motir 正在处理",
+        "ended": "Motir 处理过它"
       }
     },
-    "runDied": "此运行已中断——最后一次联系在<b><when></when></b>。其工作保留在分支上；请在下方“开发”中继续。"
+    "runDied": "此运行已中断——最后一次联系在<b><when></when></b>。其工作保留在分支上；请在下方“开发”中继续。",
+    "start": {
+      "caption": "开始此工作项",
+      "run": {
+        "title": "运行",
+        "lead": "Motir 在一台全新的机器上用你选择的模型处理它。以积分计费。"
+      },
+      "send": {
+        "title": "发送到我的代理",
+        "lead": "由你自己的一个代理处理它，使用它的编码代理和你的登录。"
+      },
+      "notReady": "此工作项就绪后即可运行或发送到我的代理——它还有 {count} 个未完成的阻塞项。"
+    },
+    "agent": {
+      "door": {
+        "send": "发送到我的代理",
+        "starting": "正在启动…"
+      },
+      "picker": {
+        "title": "把 {key} 发送给你的一个代理",
+        "lead": "选择一个代理即发送并开始工作。休眠中的代理会先被唤醒。",
+        "label": "你的代理",
+        "foot": "只列出你在 {project} 上的代理。",
+        "manage": "在我的代理中管理",
+        "loading": "正在加载你的代理…",
+        "failed": "无法加载你的代理。",
+        "retry": "重试",
+        "signin": {
+          "signedIn": "已登录",
+          "signedOut": "未登录",
+          "unknown": "无法检查登录状态"
+        },
+        "next": {
+          "now": "立即开始",
+          "wakes": "先唤醒",
+          "whenUp": "启动后开始",
+          "failed": "先唤醒——它上次失败了"
+        },
+        "busyPill": "工作中",
+        "busy": "正在处理 <k>{key}</k> · {title}。那次运行结束后它才能接手其他工作项。<run>打开那次运行</run>",
+        "busyNoTitle": "正在处理 <k>{key}</k>。那次运行结束后它才能接手其他工作项。<run>打开那次运行</run>",
+        "busyUnknown": "正在处理另一个工作项。那次运行结束后它才能接手这个。<run>打开那次运行</run>",
+        "off": {
+          "hibernating": "它正在停止。等它休眠后再选择它——它会为这项工作被唤醒。",
+          "deleting": "它正在被删除。",
+          "signedOut": "请先登录：打开 {name} 并在它的终端中运行 <cmd></cmd>。<link>打开 {name}</link>",
+          "imageTooOld": "它由一个无法处理工作项的旧镜像创建。把它迁移到新镜像（保留它的主目录和登录）的功能即将推出；新建的代理现在就可以处理工作项。",
+          "cannotRun": "{agent} 无法独立处理工作项——它没有 Motir 可以启动的无人值守模式。"
+        }
+      },
+      "command": {
+        "one": "<c>{first}</c>",
+        "two": "<c>{first}</c>，然后 <c>{second}</c>，",
+        "generic": "它的登录命令"
+      },
+      "empty": {
+        "title": "你在 {project} 上还没有代理。",
+        "body": "代理是你自己的编码代理——Claude Code、Codex 等——使用你自己的登录，运行在 Motir 的云中。为这个项目创建一个并登录，就可以把工作项发送给它。",
+        "create": "在我的代理中创建一个"
+      },
+      "refused": {
+        "nothing": "没有启动任何东西，也没有产生任何费用。",
+        "notSignedIn": {
+          "title": "未发送——{agent} 在 {name} 上尚未登录。",
+          "body": "打开 {name} 并在它的终端中运行 <cmd></cmd>。",
+          "open": "打开 {name}"
+        },
+        "wrongProject": {
+          "title": "未发送——{name} 属于另一个项目。",
+          "body": "代理只处理创建它时所属项目的工作。请选择 {project} 上的代理，或在我的代理中创建一个。"
+        },
+        "notReady": {
+          "title": "未发送——此工作项还不能开始。",
+          "body": "它还有 {count} 个未完成的阻塞项。",
+          "bodyState": "它不在等待开始的状态——可能已经在进行中或已完成。"
+        },
+        "runActive": {
+          "title": "未发送——{name} 已经在处理 <k>{key}</k>。",
+          "titleNoKey": "未发送——{name} 已经在处理另一个工作项。",
+          "body": "一个代理一次只处理一个工作项，那次运行结束后 {name} 才能接手这个。<run>打开 {key} 的运行</run>来查看或取消它，或者把它发送给另一个代理。",
+          "bodyNoKey": "一个代理一次只处理一个工作项，那次运行结束后 {name} 才能接手这个。<run>打开那次运行</run>来查看或取消它，或者把它发送给另一个代理。"
+        },
+        "imageTooOld": {
+          "title": "未发送——{name} 由一个无法处理工作项的旧镜像创建。",
+          "body": "把它迁移到新镜像（保留它的主目录和登录）的功能即将推出。在此之前，新建的代理可以处理工作项。"
+        },
+        "cannotRun": {
+          "title": "未发送——{agent} 无法独立处理工作项。",
+          "body": "它没有 Motir 可以启动的无人值守模式。请选择使用其他编码代理的代理。"
+        },
+        "hibernating": {
+          "title": "未发送——{name} 正在休眠。",
+          "body": "等它休眠后再选择它——它会为这项工作被唤醒。"
+        },
+        "deleting": {
+          "title": "未发送——{name} 正在被删除。"
+        },
+        "notFound": {
+          "title": "未发送——那个代理不可用。",
+          "body": "它可能已被删除。列表已刷新。"
+        },
+        "permission": {
+          "title": "未发送——你不能把此工作项发送给代理。",
+          "body": "这需要此工作项的编辑权限，以及在此项目上使用代理的权限。"
+        },
+        "outOfCredits": {
+          "title": "未发送——你的组织积分已用完。"
+        },
+        "failed": {
+          "title": "未发送——Motir 无法发送它。",
+          "body": "请稍后再试。"
+        },
+        "wakeTitle": "未发送——{name} 无法唤醒。"
+      },
+      "phaseDetail": {
+        "waking": "正在唤醒 {name}",
+        "starting": "正在 {name} 中启动",
+        "running": "{agent} · {name}"
+      },
+      "lane": "{name} · {agent}",
+      "laneGone": "已删除的代理",
+      "where": {
+        "live": "你的代理正在处理",
+        "ended": "你的代理处理过它",
+        "watch": "在我的代理中观看",
+        "open": "打开 {name}"
+      },
+      "meta": {
+        "worked": "处理者",
+        "codingAgent": "编码代理"
+      },
+      "cost": {
+        "machineDetail": "{name} 的运行时间——随代理以积分计费。没有令牌：{agent} 使用你自己的登录运行。",
+        "stripMachine": "{name} 的运行时间，随代理计费",
+        "stripNoTokens": "没有令牌——{agent} 使用你自己的登录运行"
+      },
+      "end": {
+        "notStarted": "运行无法在代理中启动。"
+      },
+      "cancel": {
+        "body": "{name} 中本次运行的会话会停止，它的凭据会被吊销。它已经推送的工作会保留在本次运行的分支上，此工作项保持原状。{name} 会继续运行，你在其中的终端不受影响。"
+      }
+    }
   },
   "repositoryPicker": {
     "add": "添加仓库",

@@ -193,14 +193,14 @@ describe('each refusal in its shipped words', () => {
       503,
       { code: 'hosted_runs_unavailable' },
       'unavailable',
-      'Not started — hosted runs aren’t available right now.',
+      'Not started — Run isn’t available right now.',
       false,
     ],
     [
       502,
       { code: 'hosted_run_boot_failed' },
       'bootFailed',
-      'The hosted run couldn’t start its machine.',
+      'The run couldn’t start its machine.',
       true,
     ],
   ] as const)('%i %j → %s', async (status, body, kind, copy, moved) => {
@@ -218,7 +218,7 @@ describe('each refusal in its shipped words', () => {
     await mountTwo();
     await press('a');
     expect(row('a').getByTestId('continue-hosted-refused-modelNotOffered').textContent).toContain(
-      'claude-opus-5 is no longer offered for hosted runs.',
+      'claude-opus-5 is no longer offered.',
     );
     await act(async () => {});
     expect(calls(MODELS)).toHaveLength(2);

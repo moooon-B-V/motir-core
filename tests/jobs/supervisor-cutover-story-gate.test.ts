@@ -18,7 +18,7 @@ import {
   indexPollWaitMs,
 } from '@/lib/services/codeGraphIndexDispatchService';
 import { FLEET_TIME_BUDGETS, pollWaitMs } from '@/lib/services/ciRunnerBootService';
-import { indexInFlightCap, workspaceIndexInFlightCap } from '@/lib/ciFleet/limits';
+import { indexInFlightCap, orgIndexInFlightCap } from '@/lib/ciFleet/limits';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 // The REAL registry, for its side effect — every definition module evaluated, so
@@ -466,10 +466,10 @@ describe('§3 the guards', () => {
     // MOTIR-3417 names these as forbidden ground because a regression there costs
     // money — a cap that silently doubled would double the fleet's invoice with
     // every signal green. Asserted by VALUE, and by the derivation that keeps the
-    // per-workspace bound from drifting from the global one.
+    // per-org bound from drifting from the global one.
     expect(indexInFlightCap()).toBe(6);
-    expect(workspaceIndexInFlightCap(indexInFlightCap())).toBe(3);
-    expect(workspaceIndexInFlightCap(10)).toBe(5);
+    expect(orgIndexInFlightCap(indexInFlightCap())).toBe(3);
+    expect(orgIndexInFlightCap(10)).toBe(5);
   });
 
   it('the debounce key resolver is TOTAL — no arm silently merges unrelated events', () => {

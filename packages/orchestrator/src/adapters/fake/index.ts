@@ -100,6 +100,18 @@ export interface FakeOrchestratorControls {
    *  that ends with this non-empty has found a container the code did not
    *  destroy, which is the failure this whole card is about. */
   liveContainerIds(): string[];
+  /** Every container still on the "provider", as the inventory lists it
+   *  (MOTIR-6925) — the fake fleet app's machines. */
+  inventoryMachines(): Array<{
+    id: string;
+    name: string;
+    region: string;
+    state: string;
+    createdAt: Date;
+  }>;
+  /** Destroy a container WITHOUT a teardown — what the reconciler's destroy does
+   *  to a machine no record owns. Idempotent. */
+  destroyOutsideTeardown(handleId: string): void;
   /** Every teardown, with the reason — how a test asserts the failure PATH taken,
    *  not merely that something was destroyed. */
   readonly teardowns: Array<{ handleId: string; reason: TeardownReason }>;
@@ -277,6 +289,29 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
   liveContainerIds() {
     loadShared();
     return [...machines.values()].filter((m) => !m.gone).map((m) => m.handle.id);
+  },
+
+  inventoryMachines() {
+    loadShared();
+    return [...machines.values()]
+      .filter((m) => !m.gone)
+      .map((m) => ({
+        id: m.handle.id,
+        name: `fake-${m.spec.workload}-${m.handle.id}`,
+        region: m.handle.region,
+        state: m.state,
+        createdAt: m.createdAt,
+      }));
+  },
+
+  destroyOutsideTeardown(handleId) {
+    loadShared();
+    const machine = machines.get(handleId);
+    if (!machine || machine.gone) return;
+    machine.gone = true;
+    machine.state = 'destroyed';
+    machine.stoppedAt = new Date();
+    saveShared();
   },
 
   // ── the port ──────────────────────────────────────────────────────────────

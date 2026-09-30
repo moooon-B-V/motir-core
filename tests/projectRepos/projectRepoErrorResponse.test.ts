@@ -13,6 +13,8 @@ import {
   ProjectRepoStateTransitionError,
   RealizedRepoAlreadyClaimedError,
   RepoTransferRefusedError,
+  AiPlanRequiredError,
+  AiPlanUnknownError,
 } from '@/lib/projectRepos/errors';
 import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
 
@@ -121,6 +123,18 @@ describe('mapProjectRepoError', () => {
     const res = mapProjectRepoError(new RepoTransferRefusedError('repository is archived'));
     expect(res?.status).toBe(502);
     expect((await res!.json()).code).toBe('REPO_TRANSFER_REFUSED');
+  });
+
+  it('answers the paid-AI-plan gate: 402 without a plan, 503 when it cannot be read (MOTIR-6909)', async () => {
+    const required = new AiPlanRequiredError('needs a paid AI plan');
+    const res402 = mapProjectRepoError(required);
+    expect(res402?.status).toBe(402);
+    expect(await res402!.json()).toEqual({ code: 'ai_plan_required', error: required.message });
+
+    const unknown = new AiPlanUnknownError('could not read the plan');
+    const res503 = mapProjectRepoError(unknown);
+    expect(res503?.status).toBe(503);
+    expect(await res503!.json()).toEqual({ code: 'plan_unknown', error: unknown.message });
   });
 
   it('returns NULL for anything it does not know, so the route rethrows into a 500', () => {

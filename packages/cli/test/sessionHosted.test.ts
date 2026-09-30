@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -27,6 +27,8 @@ const HOSTED_ENV = [
   'MOTIR_API_URL',
   'MOTIR_CONFIG_HOME',
   'MOTIR_WORKSPACE',
+  'MOTIR_AGENT_RUN',
+  'MOTIR_HOSTED_STATE',
 ] as const;
 
 let server: TestServer;
@@ -62,6 +64,7 @@ function run(over: { status?: 'running' | 'failed'; endedAt?: string | null } = 
     startedAt: '2026-09-27T00:00:00.000Z',
     endedAt: over.endedAt ?? null,
     createdById: 'user-1',
+    agentInstance: null,
     cards: [card('ACME-3', 2), card('ACME-2', 1)],
     seq: 1,
   };
@@ -171,5 +174,42 @@ describe('withHostedProjectSession', () => {
     );
     expect(prepareHostedRun).not.toHaveBeenCalled();
     expect(fn).not.toHaveBeenCalled();
+  });
+});
+
+describe('withHostedProjectSession in an agent (MOTIR-7024)', () => {
+  function agentMode(): string {
+    const stateDir = mkdtempSync(join(tmpdir(), 'motir-session-state-'));
+    writeFileSync(
+      join(stateDir, 'run.json'),
+      JSON.stringify({ apiUrl: server.url, runId: 'run-7', token: 'run-token' }),
+    );
+    // The run's token comes from run.json alone, never the ladder.
+    delete process.env['MOTIR_RUN_TOKEN'];
+    delete process.env['MOTIR_API_URL'];
+    process.env['MOTIR_AGENT_RUN'] = '1';
+    process.env['MOTIR_HOSTED_STATE'] = stateDir;
+    return stateDir;
+  }
+
+  it('attributes the run’s pull requests to the card the command named', async () => {
+    agentMode();
+
+    await withHostedProjectSession('run-7', async () => undefined, 'ACME-3');
+
+    expect(prepareHostedRun).toHaveBeenCalledWith(
+      expect.objectContaining({ token: 'run-token', targetKey: 'ACME-3', agentMode: true }),
+    );
+  });
+
+  it('attributes them to the run’s FIRST leg when it named none, and removes its state after', async () => {
+    const stateDir = agentMode();
+
+    await withHostedProjectSession('run-7', async () => undefined);
+
+    expect(prepareHostedRun).toHaveBeenCalledWith(
+      expect.objectContaining({ targetKey: 'ACME-2', stateDir, agentMode: true }),
+    );
+    expect(existsSync(stateDir)).toBe(false);
   });
 });

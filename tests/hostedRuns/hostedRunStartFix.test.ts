@@ -29,6 +29,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { grantPaidAiPlan, stubPaidAiPlan } from '../helpers/paidAiPlan';
 import { randomToken } from '../helpers/random';
 import { connectRepairRepo, deliveredPr, setStatus } from '../helpers/repairFixtures';
 
@@ -252,6 +253,8 @@ async function expectCardUntouched(cardId: string, status = 'in_review'): Promis
   const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: cardId } });
   expect(after).toMatchObject({ status, assigneeId: fx.ownerId, implementationSource: null });
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -684,6 +687,7 @@ describe('Fix on the hosted agent — every pre-flight refuses before the lock',
       vi.restoreAllMocks();
       vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
       stub();
+      stubPaidAiPlan();
       const started = await pressFix(card.identifier);
       expect(started.created).toBe(true);
     });

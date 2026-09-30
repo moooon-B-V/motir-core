@@ -107,11 +107,17 @@ export function HostedPhaseList({
   status,
   detail,
   model,
+  startingDetail = null,
+  runningDetail = null,
 }: {
   events: readonly DispatchRunEventDto[];
   status: DispatchRunStatus;
   detail: DispatchRunDetailDto | null;
   model: string | null;
+  /** A run in an agent's *Waking {name}* / *Starting in {name}* (MOTIR-7028). */
+  startingDetail?: string | null;
+  /** A run in an agent's *{coding agent} · {name}*, in place of the model's. */
+  runningDetail?: string | null;
 }) {
   const t = useTranslations('runs.hosted');
   const read = hostedPhaseRead(events, status, detail);
@@ -121,7 +127,9 @@ export function HostedPhaseList({
   const exitCode = detail?.hostedEnd?.exitCode ?? null;
 
   const detailFor = (phase: HostedPhase): ReactNode => {
+    if (phase === 'starting' && startingDetail) return startingDetail;
     if (phase === 'cloned' && repos.length > 0) return repos.join(' · ');
+    if (phase === 'running' && runningDetail) return runningDetail;
     if (phase === 'running' && model) return t('phaseDetail.running', { model });
     if (phase === 'finished' && exitCode !== null) return t('phaseDetail.exit', { code: exitCode });
     if (phase === 'pullRequest' && prs.length > 0) {
