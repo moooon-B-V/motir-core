@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 import { E2E_GITHUB_WEBHOOK_SECRET } from './tests/e2e/_helpers/github-const';
+import { E2E_AI_TO_CORE_SERVICE_TOKEN } from './tests/e2e/_helpers/billing-push';
 import { NEXT_START_KEEP_ALIVE_FLAG } from './tests/e2e/_helpers/server-keep-alive';
 import { generateKeyPairSync } from 'node:crypto';
 import path from 'node:path';
@@ -433,6 +434,9 @@ export default defineConfig({
         E2E_TEST_AI_JOBS: '1',
         MOTIR_AI_JOBS_FIXTURE_PATH,
         MOTIR_AI_SERVICE_TOKEN: 'e2e-acceptance-placeholder-token',
+        // The seat push the agent-billing walk makes (MOTIR-6924) — the literal
+        // lives with the helper that signs with it.
+        MOTIR_AI_TO_CORE_SERVICE_TOKEN: E2E_AI_TO_CORE_SERVICE_TOKEN,
         MOTIR_AI_BILLING_FIXTURE_PATH,
         // The GitHub repo-provisioning + collaborator boundary (MOTIR-1785).
         E2E_TEST_GITHUB_REPOS: '1',

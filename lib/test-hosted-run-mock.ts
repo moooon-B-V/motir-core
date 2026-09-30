@@ -35,6 +35,7 @@
 
 import { appendFixtureFileSync, readFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
+import { recordAgentDebit } from '@/lib/test-billing-mock';
 
 const GITHUB_ORIGIN = 'https://api.github.com';
 
@@ -242,6 +243,16 @@ export function installHostedRunMock(agent: MockAgent): void {
           typeof body['billableSeconds'] === 'number' ? body['billableSeconds'] : 0;
         const externalRef = typeof body['externalRef'] === 'string' ? body['externalRef'] : '';
         journal({ type: 'machine_debit', coreRunId, credits, billableSeconds, externalRef });
+        // An agent INSTANCE's machine time also lands on the billing fixture's
+        // ledger, so the Agents line reads what was charged (MOTIR-6924).
+        if (typeof body['instanceIntervalId'] === 'string') {
+          recordAgentDebit(
+            String(body['coreOrganizationId'] ?? ''),
+            'machine',
+            credits,
+            externalRef,
+          );
+        }
         return reply(200, { idempotent: false });
       })
       .persist();
