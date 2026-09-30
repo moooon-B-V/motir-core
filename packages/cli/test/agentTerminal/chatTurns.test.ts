@@ -536,6 +536,20 @@ describe('the gates, in Q6 order — a refusal spawns nothing', () => {
     expect(r.procs).toHaveLength(1);
   });
 
+  it('skips the file stat when the adapter confirmed the sign-in itself (Claude Code on an API key)', async () => {
+    const r = rig();
+    r.adapter.answer = { supported: true, signedIn: true };
+    r.signIn.state = 'signed_out';
+    const { socket, send } = r.connect();
+    send({ t: 'open' });
+    await settle();
+    expect(socket.of('hello')[0]).toMatchObject({ supported: true, signin: 'signed_in' });
+    send({ t: 'prompt', text: 'a' });
+    await settle();
+    expect(socket.of('error')).toEqual([]);
+    expect(r.procs).toHaveLength(1);
+  });
+
   it('allows ONE running turn per agent: the same session and a different one are both refused', async () => {
     const r = rig();
     const first = r.connect();

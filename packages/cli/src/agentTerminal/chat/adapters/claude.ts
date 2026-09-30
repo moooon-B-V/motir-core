@@ -104,7 +104,13 @@ export const runClaudeAuthStatus: ClaudeProbe = (ctx) =>
     execFile(
       BINARY,
       ['auth', 'status', '--json'],
-      { cwd: ctx.cwd, env, timeout: PROBE_TIMEOUT_MS, maxBuffer: 64 * 1024, windowsHide: true },
+      {
+        cwd: ctx.cwd,
+        env: env as NodeJS.ProcessEnv,
+        timeout: PROBE_TIMEOUT_MS,
+        maxBuffer: 64 * 1024,
+        windowsHide: true,
+      },
       (error, stdout) => {
         const out = typeof stdout === 'string' ? stdout : String(stdout ?? '');
         if (out.trim().length > 0) return resolve(out);
@@ -654,7 +660,9 @@ export function createClaudeChatAdapter(options: ClaudeAdapterOptions = {}): Cha
       if (!status) return UNSUPPORTED;
       lastKind = classifyClaudeAuth(status);
       if (lastKind === 'subscription') return { supported: false, code: 'subscription_signin' };
-      return { supported: true };
+      // An API key or a cloud provider leaves no credential file for the
+      // terminal's stat to find; the probe has confirmed the sign-in instead.
+      return { supported: true, signedIn: true };
     },
 
     turnCommand({ prompt, sessionId }): TurnCommand {

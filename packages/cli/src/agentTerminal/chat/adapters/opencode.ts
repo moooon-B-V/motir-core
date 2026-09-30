@@ -67,7 +67,8 @@ export const execOpencode: OpencodeExec = (args, ctx) =>
     try {
       child = spawnChild(OPENCODE_BINARY, args, {
         cwd: ctx.cwd,
-        env: { ...ctx.env },
+        // The app's tsconfig widens `ProcessEnv` with required keys (NODE_ENV).
+        env: { ...ctx.env } as NodeJS.ProcessEnv,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch {

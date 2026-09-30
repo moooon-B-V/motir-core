@@ -329,7 +329,7 @@ export const runGooseSessionList: GooseListRunner = (ctx) =>
       ['session', 'list', '--format', 'json'],
       {
         cwd: ctx.cwd,
-        env: { ...ctx.env },
+        env: { ...ctx.env } as NodeJS.ProcessEnv,
         timeout: LIST_TIMEOUT_MS,
         maxBuffer: LIST_MAX_BYTES,
         encoding: 'utf8',

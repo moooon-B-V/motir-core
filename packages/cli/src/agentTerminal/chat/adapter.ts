@@ -20,9 +20,8 @@ import { gooseChatAdapter } from './adapters/goose.js';
 // connect, spawning, Stop, one turn per agent, `turn_end`, and never logging a
 // word of it — is the runner's (`turns.ts`), built once.
 //
-// ⚠️ NO ADAPTER IS REGISTERED YET. Until an adapter card lands, every profile
-// answers `unsupported`, which is also aider's permanent answer (Q1: it has no
-// machine-readable output for a chat to follow).
+// A profile with no adapter below answers `unsupported`, which is aider's
+// permanent answer (Q1: it has no machine-readable output for a chat to follow).
 
 /** What an adapter is told about the machine it runs on. */
 export interface ChatContext {
@@ -35,7 +34,16 @@ export interface ChatContext {
 }
 
 /** Q1/Q2: whether a turn may run now. */
-export type ChatSupport = { supported: true } | { supported: false; code: ChatRefusal };
+/**
+ * `signedIn: true` says the adapter's own check has already CONFIRMED a
+ * sign-in the terminal's file stat cannot see — Claude Code on an API key or a
+ * cloud provider keeps no `.credentials.json`, so the stat would answer
+ * `signed_out` and refuse the very sign-in Q2 allows. With it the runner skips
+ * the stat, in `hello` and before a turn alike.
+ */
+export type ChatSupport =
+  | { supported: true; signedIn?: true }
+  | { supported: false; code: ChatRefusal };
 
 /**
  * Q3: how one turn is started. `file` is the vendor binary by its bare name,
@@ -107,8 +115,8 @@ export const CHAT_ENV_ADDITIONS: ReadonlySet<string> = new Set(['GOOSE_MODE']);
 export const UNSUPPORTED: ChatSupport = { supported: false, code: 'unsupported' };
 
 /**
- * The registry, keyed on `MOTIR_SANDBOX_AGENT`. EMPTY until the adapter cards
- * land; each adds its adapter here.
+ * The registry, keyed on `MOTIR_SANDBOX_AGENT`: Q1's five supported profiles,
+ * and nothing for aider.
  */
 export const CHAT_ADAPTERS: readonly ChatAdapter[] = [
   claudeChatAdapter,

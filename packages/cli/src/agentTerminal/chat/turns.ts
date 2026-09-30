@@ -1,6 +1,7 @@
 import { spawn as spawnChild } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
 import type { SignInStatus } from '../signIn.js';
+import type { SignInState } from '../protocol.js';
 import {
   CHAT_ENV_ADDITIONS,
   HISTORY_BUDGET_BYTES,
@@ -473,16 +474,19 @@ export function createChatHub(options: ChatHubOptions): ChatHub {
     }
   };
 
+  /** The terminal's sign-in state, unless the adapter's own check already confirmed one. */
+  const signInFor = async (verdict: ChatSupport): Promise<SignInState> =>
+    verdict.supported && verdict.signedIn ? 'signed_in' : (await readSignIn()).state;
+
   // ── Frames ───────────────────────────────────────────────────────────────
   const hello = async (connection: Connection): Promise<void> => {
     const verdict = await support();
-    const signIn = await readSignIn();
     send(connection, {
       t: 'hello',
       profile: options.profile,
       supported: verdict.supported,
       ...(verdict.supported ? {} : { reason: verdict.code }),
-      signin: signIn.state,
+      signin: await signInFor(verdict),
     });
   };
 
@@ -567,8 +571,9 @@ export function createChatHub(options: ChatHubOptions): ChatHub {
     // Q6's order: support, then the sign-in, then the per-agent limit.
     const verdict = await support();
     if (!verdict.supported) return refuse(connection, verdict.code, 'prompt');
-    const signIn = await readSignIn();
-    if (signIn.state === 'signed_out') return refuse(connection, 'not_signed_in', 'prompt');
+    if ((await signInFor(verdict)) === 'signed_out') {
+      return refuse(connection, 'not_signed_in', 'prompt');
+    }
     if (current) return refuse(connection, 'turn_running', 'prompt');
     // Checked after the awaits, synchronously with the spawn, so two sockets
     // prompting at once cannot both pass the limit.

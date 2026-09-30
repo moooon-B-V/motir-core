@@ -165,7 +165,7 @@ describe('the gate — support() reads `claude auth status --json` (Q2 option b)
   ])('allows %s', async (name) => {
     const { probe, calls } = probeOf(await fixture(name));
     const adapter = createClaudeChatAdapter({ probe });
-    expect(await adapter.support(CTX)).toEqual({ supported: true });
+    expect(await adapter.support(CTX)).toEqual({ supported: true, signedIn: true });
     expect(calls).toEqual([CTX]);
   });
 
