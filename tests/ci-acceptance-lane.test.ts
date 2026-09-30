@@ -958,8 +958,10 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     { specs: 2, legs: 2 },
     { specs: 3, legs: 3 },
     { specs: 4, legs: 4 },
-    { specs: 9, legs: 4 },
-    { specs: 26, legs: 4 },
+    { specs: 6, legs: 6 },
+    { specs: 9, legs: 6 },
+    { specs: 26, legs: 6 },
+    { specs: 87, legs: 6 },
   ])('sizes a $specs-spec lane to $legs leg(s)', ({ specs, legs }) => {
     const out = runGate(specs, 'pull_request');
     expect(out.count).toBe(String(specs));
@@ -970,15 +972,18 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     expect(JSON.parse(out.shards!)).toEqual(Array.from({ length: legs }, (_, i) => i + 1));
   });
 
-  it('keeps MOTIR-2600 whole at the cap — a grown lane gets the sizing it measured', () => {
-    // THE regression this cap exists to prevent. MOTIR-2600 sized four legs
-    // against 26 specs and 25.7 min of test time; a lane that fills up again
-    // must get that shape back byte-for-byte, not a serial run.
-    expect(runGate(26, 'pull_request').shards).toBe('[1,2,3,4]');
+  it('gives a grown lane the full six legs at the cap (MOTIR-7054)', () => {
+    // THE regression this cap exists to prevent: a lane that fills up must get
+    // its full parallelism back, not a serial run. MOTIR-2600 sized four legs
+    // for 26 specs. At 87 specs those four ran into the shard job's then 40-minute
+    // timeout, and a green leg was cancelled out of the merge queue, so the cap
+    // is six.
+    expect(runGate(87, 'pull_request').shards).toBe('[1,2,3,4,5,6]');
+    expect(runGate(6, 'push').shards).toBe('[1,2,3,4,5,6]');
     expect(runGate(4, 'push').shards).toBe('[1,2,3,4]');
   });
 
-  it.each([1, 2, 4])(
+  it.each([1, 2, 4, 6])(
     'emits a valid %i-leg shard list under BSD `seq` too — no trailing separator (MOTIR-5364)',
     (legs) => {
       // The gate used `seq -s,`, which on macOS prints `1,` — so the list was
