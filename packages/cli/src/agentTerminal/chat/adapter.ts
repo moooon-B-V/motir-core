@@ -8,6 +8,7 @@ import { claudeChatAdapter } from './adapters/claude.js';
 import { codexChatAdapter } from './adapters/codex.js';
 import { opencodeChatAdapter } from './adapters/opencode.js';
 import { kimiAdapter } from './adapters/kimi.js';
+import { gooseChatAdapter } from './adapters/goose.js';
 
 // The chat adapter contract (MOTIR-7012 · `docs/decisions/agent-chat.md` Q3,
 // Q5, Q7, Q11).
@@ -114,6 +115,7 @@ export const CHAT_ADAPTERS: readonly ChatAdapter[] = [
   codexChatAdapter,
   opencodeChatAdapter,
   kimiAdapter,
+  gooseChatAdapter,
 ];
 
 /** The adapter serving this machine's profile, or null (answered `unsupported`). */

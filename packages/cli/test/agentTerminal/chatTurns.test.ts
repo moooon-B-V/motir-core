@@ -217,9 +217,9 @@ describe('the pure protocol', () => {
 });
 
 describe('the adapter registry', () => {
-  it('registers at most one adapter per profile, each resolved by its own id, and never aider', () => {
+  it('registers one adapter per supported profile, and none for aider (Q1)', () => {
     const profiles = CHAT_ADAPTERS.map((adapter) => adapter.profile);
-    expect(new Set(profiles).size).toBe(profiles.length);
+    expect([...profiles].sort()).toEqual(['claude', 'codex', 'goose', 'kimi', 'opencode']);
     for (const adapter of CHAT_ADAPTERS) expect(resolveChatAdapter(adapter.profile)).toBe(adapter);
     // Q1: aider has no machine-readable output for a chat to follow.
     expect(resolveChatAdapter('aider')).toBeNull();
