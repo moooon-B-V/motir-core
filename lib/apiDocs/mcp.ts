@@ -3,8 +3,8 @@ import { DEFAULT_TOKEN_GRANT, GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 import { permissionSlug, type PermissionKey } from '@/lib/permissions/catalog';
 import enMessages from '@/messages/en.json';
 import type { GuideBlock } from '@/lib/apiDocs/guide';
-import type { McpToolInputSchema } from './mcpToolSchema';
-import { MCP_TOOL_INPUT_SCHEMAS } from './mcpToolSchemas';
+import type { McpToolHints, McpToolInputSchema } from './mcpToolSchema';
+import { MCP_TOOL_ANNOTATIONS, MCP_TOOL_INPUT_SCHEMAS, MCP_TOOL_TITLES } from './mcpToolSchemas';
 
 // The MCP server documentation, AS DATA (Story MOTIR-2309 · Subtask MOTIR-2325 ·
 // design `design/mcp-server/` · ADR `public-api-conventions.md` Amendment 13).
@@ -52,10 +52,12 @@ import { MCP_TOOL_INPUT_SCHEMAS } from './mcpToolSchemas';
 //
 // ── What is DERIVED and what is AUTHORED (Amendment 13 Q2) ──────────────────
 // Derived: every tool NAME, its gating SCOPE, the catalogue's GROUPING (a tool's
-// group is its own scope), the scope legend, the default grant, and each tool's
-// ARGUMENT SCHEMA (generated from the registry, above). Authored: the
-// reader-facing one-line summaries, because a tool's `title` and `description`
-// live inside its `server.registerTool(...)` call and are not data anywhere.
+// group is its own scope), the scope legend, the default grant, and — generated
+// from the registry's live `tools/list`, above — each tool's ARGUMENT SCHEMA, its
+// `title` and its `annotations` (the read-only / destructive / idempotent /
+// open-world hints, MOTIR-7002). Authored: the reader-facing one-line summaries,
+// because a tool's `description` lives inside its `server.registerTool(...)` call
+// and is not data anywhere.
 //
 // Each authored summary carries a FINGERPRINT of the shipped `title` +
 // `description` it was written against. `tests/mcp/tool-doc-truth.test.ts`
@@ -1139,6 +1141,20 @@ export interface McpToolRow {
    * value.
    */
   inputSchema: McpToolInputSchema;
+  /**
+   * The tool's human name, exactly as `tools/list` serves it (MOTIR-7002) —
+   * 1–64 characters, guarded at the registration seam. Generated, like
+   * `inputSchema`, for the same reason.
+   */
+  title: string;
+  /**
+   * The tool's HINTS, exactly as `tools/list` serves them (MOTIR-7002): whether
+   * it only reads, and for a write whether it is destructive and idempotent,
+   * and whether it reaches a system outside Motir. The classification is
+   * `lib/mcp/toolAnnotations.ts`'s; it reaches this row through the generated
+   * leaf, never by an import.
+   */
+  annotations: McpToolHints;
 }
 
 /** One catalogue group — a permission, and the tools it gates. */
@@ -1169,6 +1185,8 @@ export function mcpCatalogue(): McpCatalogueGroup[] {
       permission: TOOL_PERMISSIONS[name],
       summary: TOOL_SUMMARIES[name].summary,
       inputSchema: MCP_TOOL_INPUT_SCHEMAS[name],
+      title: MCP_TOOL_TITLES[name],
+      annotations: MCP_TOOL_ANNOTATIONS[name],
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 

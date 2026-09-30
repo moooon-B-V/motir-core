@@ -7,6 +7,7 @@ import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 import { permissionSlug, type PermissionKey } from '@/lib/permissions/catalog';
 import type { McpCatalogueToolName, McpToolCatalogueDocument } from '@/lib/apiDocs/mcp';
 import { MCP_TOOL_INPUT_SCHEMAS } from '@/lib/apiDocs/mcpToolSchemas';
+import { listShippedTools } from '../../../scripts/generateMcpToolSchemas';
 import enMessages from '@/messages/en.json';
 
 // GET /api/docs/mcp-tools.json — the PUBLISHED MCP tool catalogue (MOTIR-4194;
@@ -217,12 +218,68 @@ describe('ARGUMENTS — the served document answers "what do I send?" (MOTIR-438
       'permission',
       'tools',
     ]);
+    // `title` and `annotations` are the MOTIR-7002 widening — additive, like
+    // `inputSchema` before them, so the four older keys are all still here.
     expect(Object.keys(group!.tools[0]!).sort()).toEqual([
+      'annotations',
       'inputSchema',
       'name',
       'permission',
       'summary',
+      'title',
     ]);
+  });
+});
+
+describe('HINTS — every tool says what it is before a client calls it (MOTIR-7002)', () => {
+  it('every row carries a title of 1–64 characters', async () => {
+    const { document } = await fetchDocument();
+    for (const tool of document.groups.flatMap((group) => group.tools)) {
+      expect(typeof tool.title, tool.name).toBe('string');
+      expect(tool.title.trim().length, tool.name).toBeGreaterThan(0);
+      expect(tool.title.length, tool.name).toBeLessThanOrEqual(64);
+    }
+  });
+
+  it('every row carries `readOnlyHint`, and every write row both write hints', async () => {
+    const { document } = await fetchDocument();
+    for (const tool of document.groups.flatMap((group) => group.tools)) {
+      const hints = tool.annotations as unknown as Record<string, unknown>;
+      expect(typeof hints.readOnlyHint, tool.name).toBe('boolean');
+      expect(typeof hints.openWorldHint, tool.name).toBe('boolean');
+      if (hints.readOnlyHint === false) {
+        expect(typeof hints.destructiveHint, tool.name).toBe('boolean');
+        expect(typeof hints.idempotentHint, tool.name).toBe('boolean');
+      }
+    }
+  });
+
+  it('the served title and hints are exactly what `tools/list` serves, per tool', async () => {
+    // The claim the catalogue makes is "this is what a client will see", so the
+    // comparison is against a live handshake, not against the table that feeds it.
+    const [{ document }, shipped] = await Promise.all([fetchDocument(), listShippedTools()]);
+    const served = new Map(
+      document.groups.flatMap((group) => group.tools).map((tool) => [tool.name as string, tool]),
+    );
+    expect(served.size).toBe(shipped.length);
+    for (const tool of shipped) {
+      expect(served.get(tool.name)?.title, tool.name).toBe(tool.title);
+      expect(served.get(tool.name)?.annotations, tool.name).toStrictEqual(tool.annotations);
+    }
+  });
+
+  it('the document holds both kinds — a read-only tool and a destructive one', async () => {
+    // A catalogue where every row was one kind would pass the shape checks above
+    // while telling a reader nothing.
+    const { document } = await fetchDocument();
+    const tools = document.groups.flatMap((group) => group.tools);
+    expect(tools.find((tool) => tool.name === 'get_work_item')?.annotations).toMatchObject({
+      readOnlyHint: true,
+    });
+    expect(tools.find((tool) => tool.name === 'delete_work_item')?.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: true,
+    });
   });
 });
 
@@ -271,6 +328,8 @@ describe('TOTALITY — every TOOL_PERMISSIONS key reaches the served document', 
               permission: head!.permission,
               summary: '',
               inputSchema: { type: 'object', properties: {} },
+              title: 'Not a tool',
+              annotations: { readOnlyHint: true, openWorldHint: false },
             },
           ],
         },

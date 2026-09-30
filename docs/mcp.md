@@ -310,6 +310,46 @@ Shared input conventions:
 - Paginated reads take an opaque **`cursor`** in and return a **`nextCursor`**
   out (null at the tail); there is no load-everything path.
 
+### Tool hints
+
+Every tool in `tools/list` carries a human **`title`** and an **`annotations`**
+object (Story MOTIR-6974). An MCP client reads them to decide how carefully to
+treat a call: **Claude runs a read-only tool without asking, and asks before a
+destructive one.** A tool that says nothing is assumed to be a possible write,
+so without these every read would ask for approval.
+
+Each tool's values come from ONE table, `TOOL_ANNOTATIONS` in
+`lib/mcp/toolAnnotations.ts`, injected where tools are registered. A tool with
+no row, no title or a title over 64 characters cannot register. Every field is
+explicit on every tool, because the MCP defaults are the permissive ones. For a
+Motir tool the fields promise:
+
+- **`title`** — the tool's name in words, 1–64 characters, for a client to show
+  a person in place of the snake_case `name`.
+- **`readOnlyHint: true`** — the handler performs **no write** of any kind: no
+  row created, updated or deleted, no job enqueued, no status moved, no counter
+  or timestamp stamped. A tool that writes anything is a write, however it is
+  named. A read-only tool carries only `readOnlyHint` and `openWorldHint`.
+- **`destructiveHint`** (writes only) — `false` only when every write is
+  **additive**: it creates, appends or links, and changes or removes no existing
+  value. `true` for anything that deletes, archives, withdraws, unlinks, closes,
+  moves a status, or overwrites a stored value.
+- **`idempotentHint`** (writes only) — `true` only where a second identical call
+  has no further effect (re-setting the same status, re-linking an existing
+  edge), confirmed from the handler rather than assumed from the verb.
+- **`openWorldHint`** — `true` only where the handler reaches a system outside
+  Motir's own deployment, such as GitHub. Motir's own services, its planning
+  backend and its file store are not the open world.
+
+The hints are a promise about what a tool CAN do, which is what a client needs
+before it asks. They do not replace the token's permissions: a read-only tool is
+still refused to a token that was not granted its permission.
+
+Every tool's values are published in the machine-readable catalogue,
+`GET /api/docs/mcp-tools.json` (each tool object's `title` and `annotations`),
+generated from the same `tools/list` a client receives. This page names no
+per-tool value, so it cannot drift from them.
+
 ### Reads & dispatch
 
 #### `list_ready`
