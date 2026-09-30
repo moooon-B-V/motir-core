@@ -220,3 +220,22 @@ export class ReviewStaleError extends CliError {
     this.name = 'ReviewStaleError';
   }
 }
+
+/**
+ * An agent-mode run (MOTIR-7024) whose agent's profile has no unattended
+ * command — `agent_profile_cannot_run`, the refusal
+ * `docs/decisions/agent-instance-run.md` §3–§4 names. Raised before anything is
+ * claimed or cloned, naming the profile, so the run ends in words rather than
+ * at a prompt nobody will answer.
+ */
+export class AgentProfileCannotRunError extends CliError {
+  readonly code = 'agent_profile_cannot_run' as const;
+  readonly profile: string;
+  constructor(profile: string) {
+    super(`The ${profile} agent has no unattended mode, so it cannot run a card.`, {
+      hint: 'Run the card in an agent created with Claude Code, Codex or another profile that can.',
+    });
+    this.name = 'AgentProfileCannotRunError';
+    this.profile = profile;
+  }
+}
