@@ -4,6 +4,8 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { TriangleAlert } from 'lucide-react';
+import { runsHref } from '@/lib/runs/runsAddress';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // EVERY REFUSAL, IN WORDS (MOTIR-6868 revision 3, panel 5). A route answers a
 // refusal as `{ code, error, reason? }`; the page renders the DESIGN's localised
@@ -20,6 +22,9 @@ export interface AgentRefusal {
 interface RefusalBody {
   code?: string;
   reason?: string;
+  /** `agent_instance_run_active` (MOTIR-7027): the run holding the agent, and its card. */
+  runId?: string;
+  workItemKey?: string | null;
 }
 
 /** The copy key a refused response maps to. Exported for the unit test. */
@@ -35,6 +40,8 @@ export function refusalKey(body: RefusalBody | null): string {
       return 'busy';
   }
   switch (body?.code) {
+    case 'agent_instance_run_active':
+      return 'runActive';
     case 'agent_instance_name_taken':
       return 'nameTaken';
     case 'agent_instance_name_invalid':
@@ -53,8 +60,34 @@ export function refusalKey(body: RefusalBody | null): string {
 /** Build the refusal a failed response should show. */
 export function useAgentRefusal(maxPerUser: number) {
   const t = useTranslations('myAgents.refusal');
-  return (body: RefusalBody | null, name?: string): AgentRefusal => {
+  const tRun = useTranslations('myAgents.panel.run');
+  // The Start bar shares this with the Visitor tree's item page (MOTIR-6888).
+  const routes = useReaderRoutes();
+  return (
+    body: RefusalBody | null,
+    name?: string,
+    action: 'wake' | 'hibernate' | 'delete' = 'hibernate',
+  ): AgentRefusal => {
     const key = refusalKey(body);
+    if (key === 'runActive') {
+      // Hibernate / Delete during a run (MOTIR-7029 panel 2): name the run, link it.
+      const runId = body?.runId ?? '';
+      return {
+        kind: 'refusal',
+        message: tRun.rich(action === 'delete' ? 'refusedDelete' : 'refusedHibernate', {
+          name: name ?? '',
+          key: body?.workItemKey ?? runId,
+          link: (chunks) => (
+            <Link
+              href={routes.view(runsHref({ run: runId }))}
+              className="text-(--el-link) underline"
+            >
+              {chunks}
+            </Link>
+          ),
+        }),
+      };
+    }
     const message =
       key === 'credits'
         ? t.rich('credits', {

@@ -1,7 +1,9 @@
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { DispatchItem, DispatchRunView, MotirClient } from './client.js';
 import { findLink, LINK_FILENAME, type FoundLink } from './config/linkConfig.js';
 import { CliError } from './errors.js';
+import { HOSTED_STATE_ENV, readRunAccess, type HostedRunAccess } from './hostedGit.js';
 
 // THE HOSTED MODE (Story MOTIR-683 · MOTIR-6558) — `motir run` / `motir continue`
 // on a run the SERVER opened, inside a hosted container, with nobody watching.
@@ -184,4 +186,80 @@ export function legAsDispatchItem(detail: {
     assigneeId: item.assigneeId,
     inheritedSessionBranch: null,
   };
+}
+
+// ── AGENT MODE (Story MOTIR-6864 · MOTIR-7024) ─────────────────────────────
+//
+// `docs/decisions/agent-instance-run.md` §1–§3: a card run INSIDE one of the
+// developer's own agents. The terminal server's launcher (MOTIR-7025) opens a
+// run session running `motir run <KEY> --run-id <id>` with `MOTIR_AGENT_RUN=1`
+// and `MOTIR_HOSTED_STATE=/tmp/motir-run-<id>`, having written the run's token
+// to that directory's `run.json` from the exec's stdin. Everything after the
+// adopt is the hosted path above, unchanged; what differs is WHICH agent runs
+// (the image's own, on the developer's sign-in — `resolveAgent`) and WHERE the
+// run's secrets and checkouts sit (never the developer's home, for longer than
+// the run).
+
+/** The env var that puts an adopted run in agent mode — `1` and nothing else. */
+export const AGENT_RUN_ENV_VAR = 'MOTIR_AGENT_RUN';
+
+/** The profile the agent's image was built for (`sandbox/Dockerfile`). */
+export const SANDBOX_AGENT_ENV_VAR = 'MOTIR_SANDBOX_AGENT';
+
+/** Is this process an agent-mode run? Only an exact `1` says so. */
+export function isAgentRun(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env[AGENT_RUN_ENV_VAR]?.trim() === '1';
+}
+
+/** The run's state directory, which the launcher created — refused when absent. */
+export function agentRunStateDir(env: NodeJS.ProcessEnv = process.env): string {
+  const dir = envValue(env, HOSTED_STATE_ENV);
+  if (dir) return dir;
+  throw new CliError(`An agent-mode run needs ${HOSTED_STATE_ENV}.`, {
+    hint: 'A run in an agent is started from the card in Motir, which hands it its state directory.',
+  });
+}
+
+/**
+ * The run's checkouts: `MOTIR_WORKSPACE` when the launcher set it, else
+ * `$HOME/.motir/runs/<runId>` — never the developer's own `$HOME/workspace`
+ * checkouts, whose uncommitted work a run must not touch (§2).
+ */
+export function agentRunWorkspace(
+  runId: string,
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = homedir(),
+): string {
+  return envValue(env, WORKSPACE_ENV_VAR) ?? join(home, '.motir', 'runs', runId);
+}
+
+/**
+ * The run's own address and token, read from the state directory's `run.json`
+ * — NEVER from `MOTIR_TOKEN` / `MOTIR_RUN_TOKEN`, which in a developer's agent
+ * would be the developer's own credential, not the run's (§2: no token in any
+ * environment variable). A `run.json` written for another run is refused.
+ */
+export function readAgentRunAccess(
+  runId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): HostedRunAccess & { stateDir: string } {
+  const stateDir = agentRunStateDir(env);
+  const access = readRunAccess(stateDir);
+  if (access.runId !== runId) {
+    throw new CliError(`The run state in ${stateDir} is for run ${access.runId}, not ${runId}.`, {
+      hint: 'Start the run again from the card in Motir.',
+    });
+  }
+  return { ...access, stateDir };
+}
+
+/**
+ * Point the CLI's own state (the version check, the exclude list) into the
+ * run's state directory, so an agent-mode run writes nothing under the
+ * developer's `~/.local/state`. Called at startup, before anything reads it.
+ */
+export function pinAgentRunStateHome(env: NodeJS.ProcessEnv = process.env): void {
+  if (!isAgentRun(env)) return;
+  const dir = envValue(env, HOSTED_STATE_ENV);
+  if (dir) env['MOTIR_STATE_HOME'] = join(dir, 'cli-state');
 }

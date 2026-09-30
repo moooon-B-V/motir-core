@@ -8,10 +8,21 @@
 //   client → server  {"t":"resize","cols","rows"}            resize the PTY
 //   client → server  {"t":"ping","active"}                   heartbeat (every 20 s)
 //   server → client  {"t":"ready","session","resumed"}       attached; on resume the replay follows
+//                    (+ "kind":"run","runId" when the session is a run's)
+//   server → client  {"t":"sessions","sessions":[{"session","kind","runId"?}]}
+//                                                           every live session — on attach while a run
+//                                                           session is live, and to every attached
+//                                                           connection when one opens or ends (MOTIR-7025)
 //   server → client  {"t":"signin","profile","state"}        sign-in state, on attach and on change
 //   server → client  {"t":"exit","code","signal"}            the shell exited; the session is gone
 //   server → client  {"t":"pong"}
 //   server → client  {"t":"error","code"}                    session_limit | unknown_session | taken_over
+//
+// A session is a person's `shell` (`bash -l`) or a `run`: the one session a
+// card's run lives in (`docs/decisions/agent-instance-run.md` §1), tagged with
+// its run id. A `ready` with no `kind` is a shell, so a panel built before runs
+// existed reads every frame it knew unchanged. A run session is WATCH-ONLY — input frames sent to it are dropped
+// — and is listed so the panel can offer it beside the developer's own shell.
 //
 // Pure: no I/O, so the relay and the panel can read the same shapes.
 
@@ -25,6 +36,15 @@ export const CHAT_PATH = '/v1/chat';
 
 export type SignInState = 'signed_in' | 'signed_out' | 'unknown';
 
+export type SessionKind = 'shell' | 'run';
+
+/** One live session, as the panel lists it. `runId` only on a run session. */
+export interface SessionListing {
+  session: string;
+  kind: SessionKind;
+  runId?: string;
+}
+
 export type ErrorCode = 'session_limit' | 'unknown_session' | 'taken_over';
 
 export type ClientFrame =
@@ -33,7 +53,8 @@ export type ClientFrame =
   | { t: 'ping'; active: boolean };
 
 export type ServerFrame =
-  | { t: 'ready'; session: string; resumed: boolean }
+  | { t: 'ready'; session: string; resumed: boolean; kind?: 'run'; runId?: string }
+  | { t: 'sessions'; sessions: SessionListing[] }
   | { t: 'signin'; profile: string | null; state: SignInState }
   | { t: 'exit'; code: number | null; signal: number | null }
   | { t: 'pong' }

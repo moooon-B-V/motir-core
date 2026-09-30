@@ -164,6 +164,8 @@ function agent(profileId: string): AgentInstanceListItemDto {
     machineSecondsThisMonth: 0,
     creditsThisMonth: 0,
     stopReason: null,
+    activeRun: null,
+    lastRun: null,
   };
 }
 

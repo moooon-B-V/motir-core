@@ -4,7 +4,11 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { ciRunnerAdmissionService } from '@/lib/services/ciRunnerAdmissionService';
+import {
+  ciRunnerAdmissionService,
+  BALANCE_UNAVAILABLE_DETAIL,
+  CREDITS_INSUFFICIENT_DETAIL,
+} from '@/lib/services/ciRunnerAdmissionService';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageRepository';
@@ -15,6 +19,7 @@ import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // THE PROVISIONING GATE against real Postgres (Story MOTIR-1916 · MOTIR-1922).
 //
@@ -25,7 +30,7 @@ import { randomInt } from '../helpers/random';
 // (global `fetch`, the convention the metering suites established), because a
 // credit balance is by definition on the other side of it.
 //
-// ⚠️ WHY THE CAP TESTS CANNOT BE SERIAL. Both caps are read-derived writes —
+// ⚠️ WHY THE POOL TESTS CANNOT BE SERIAL. The pool is a read-derived write —
 // *count what is in flight → decide → claim a slot* — and a serial test passes
 // against an implementation with NO LOCK AT ALL. That is `notes.html` #35's
 // whole point, so the file carries a genuine `Promise.all` race and the lock is
@@ -153,6 +158,8 @@ async function statusOf(intentId: string): Promise<string> {
   return row.status;
 }
 
+grantPaidAiPlan();
+
 beforeEach(async () => {
   await truncateAuthTables();
   vi.setSystemTime(NOW_WITHIN_JULY_2026);
@@ -160,9 +167,9 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
   vi.stubEnv('MOTIR_AI_URL', 'https://ai.test');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
-  // A ceiling high enough that the per-project cases are never accidentally
-  // decided by the fleet ceiling; the fleet cases lower it deliberately.
-  vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '500');
+  // The kill switch disengaged; the pool is the default unless a case sets it.
+  vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');
+  vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '');
   stubMotirAi();
 });
 
@@ -178,46 +185,54 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-// ── Guard 1 · the per-project in-flight cap ─────────────────────────────────
+// ── Guard 1 · the organisation's pool ───────────────────────────────────────
 
-describe('guard 1 — the PER-PROJECT in-flight cap', () => {
-  it('admits and CLAIMS when the project is below its cap', async () => {
+describe("guard 1 — the ORGANISATION'S pool (fleet-per-org-pool.md §2)", () => {
+  it('admits and CLAIMS when the org is below its pool', async () => {
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
 
     const verdict = await ciRunnerAdmissionService.admit(intent);
 
-    expect(verdict.outcome).toBe('admitted');
+    expect(verdict).toMatchObject({ outcome: 'admitted', orgInFlight: 0, orgPool: 500 });
     // The claim is part of the decision, not a later step — the slot is taken
     // the moment the gate says yes, which is what makes the count exact.
     expect(await statusOf(intent.id)).toBe('provisioning');
   });
 
-  it('leaves the intent QUEUED when the project is at its cap', async () => {
+  it('leaves the intent QUEUED, with the §4 words, when the org holds its pool', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '2');
     const fx = await seedTenant();
-    // `free` is the Hobby shape: one concurrent runner.
     await seedIntent(fx, { status: 'running' });
+    await seedIntent(fx, { status: 'provisioning' });
     const queued = await seedIntent(fx);
 
     const verdict = await ciRunnerAdmissionService.admit(queued);
 
-    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'project_cap' });
-    // QUEUED, not failed. A cap must feel like waiting, never like an error —
-    // and pending is what makes the next sweep retry it.
+    expect(verdict).toMatchObject({
+      outcome: 'deferred',
+      reason: 'org_pool',
+      detail: expect.stringContaining(
+        'Your organization is running 2 of its 2 CI containers. This job starts when one finishes.',
+      ),
+    });
+    // QUEUED, not failed. A full pool must feel like waiting, never like an
+    // error — and pending is what makes the next sweep retry it.
     expect(await statusOf(queued.id)).toBe('pending');
   });
 
-  it('reads the cap from the ORG TIER, not from a constant', async () => {
+  it('counts EVERY project of the org — the pool is the org’s, not a project’s', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
     const fx = await seedTenant();
-    vi.stubEnv('MOTIR_FLEET_PROJECT_CAP_FREE', '3');
-    await seedIntent(fx, { status: 'running' });
-    await seedIntent(fx, { status: 'provisioning' });
-    const third = await seedIntent(fx);
+    // Another project of the SAME org, and an intent naming no project at all.
+    await seedIntent(fx, { status: 'running', projectId: null });
+    const queued = await seedIntent(fx);
 
-    expect((await ciRunnerAdmissionService.admit(third)).outcome).toBe('admitted');
+    expect(await ciRunnerAdmissionService.admit(queued)).toMatchObject({ reason: 'org_pool' });
   });
 
-  it('counts only THIS project — a sibling project does not consume the cap', async () => {
+  it('another ORG’s full pool never holds this org’s job', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
     const fx = await seedTenant();
     const other = await seedTenant();
     await seedIntent(other, { status: 'running' });
@@ -226,7 +241,25 @@ describe('guard 1 — the PER-PROJECT in-flight cap', () => {
     expect((await ciRunnerAdmissionService.admit(mine)).outcome).toBe('admitted');
   });
 
+  it('an ENTERPRISE org’s own number replaces the default', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
+    const fx = await seedTenant();
+    await adminDb.organization.update({
+      where: { id: fx.organizationId },
+      data: { fleetPoolCap: 3 },
+    });
+    await seedIntent(fx, { status: 'running' });
+    await seedIntent(fx, { status: 'running' });
+    const third = await seedIntent(fx);
+
+    expect(await ciRunnerAdmissionService.admit(third)).toMatchObject({
+      outcome: 'admitted',
+      orgPool: 3,
+    });
+  });
+
   it('a COMPLETED runner frees the slot and the queued intent proceeds', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
     const fx = await seedTenant();
     const inFlight = await seedIntent(fx, { status: 'running' });
     const queued = await seedIntent(fx);
@@ -244,56 +277,25 @@ describe('guard 1 — the PER-PROJECT in-flight cap', () => {
     });
     expect((await ciRunnerAdmissionService.admit(after)).outcome).toBe('admitted');
   });
-});
 
-// ── Guard 2 · the fleet-wide ceiling ────────────────────────────────────────
-
-describe('guard 2 — the FLEET-WIDE ceiling (ADR §9.1)', () => {
-  // THE CASE PER-PROJECT CAPS CANNOT CATCH, and the reason this guard exists:
-  // every project individually compliant, the fleet as a whole over its bound.
-  // Per-project caps multiply by an unbounded project count; this one does not.
-  it('defers even when EVERY project is below its own cap', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '2');
-    vi.stubEnv('MOTIR_FLEET_PROJECT_CAP_FREE', '10');
-
-    const a = await seedTenant();
-    const b = await seedTenant();
-    const c = await seedTenant();
-    await seedIntent(a, { status: 'running' });
-    await seedIntent(b, { status: 'running' });
-    const queued = await seedIntent(c);
-
-    const verdict = await ciRunnerAdmissionService.admit(queued);
-
-    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'fleet_ceiling' });
-    expect(await statusOf(queued.id)).toBe('pending');
-  });
-
-  it('a COMPLETED runner frees the slot in the FLEET counter too', async () => {
+  it('a busy fleet is NO LONGER a reason to wait — there is no fleet-wide number', async () => {
+    // What the retired ceiling used to decide. A positive MOTIR_FLEET_MAX_IN_FLIGHT
+    // is now inert (§6): only 0 means anything.
     vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '1');
-    vi.stubEnv('MOTIR_FLEET_PROJECT_CAP_FREE', '10');
-
     const a = await seedTenant();
     const b = await seedTenant();
-    const busy = await seedIntent(a, { status: 'running' });
+    await seedIntent(a, { status: 'running' });
+    await seedIntent(a, { status: 'running' });
     const queued = await seedIntent(b);
 
-    expect(await ciRunnerAdmissionService.admit(queued)).toMatchObject({
-      reason: 'fleet_ceiling',
-    });
-
-    await adminDb.ciRunnerProvisioningIntent.update({
-      where: { id: busy.id },
-      data: { status: 'completed', settledAt: new Date() },
-    });
-
-    const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
-      where: { id: queued.id },
-    });
-    expect((await ciRunnerAdmissionService.admit(after)).outcome).toBe('admitted');
+    expect((await ciRunnerAdmissionService.admit(queued)).outcome).toBe('admitted');
   });
+});
 
-  it('ZERO stops the fleet — the product-side kill switch', async () => {
+// ── The kill switch ─────────────────────────────────────────────────────────
+
+describe('the KILL SWITCH (§6)', () => {
+  it('ZERO stops every boot, for every org', async () => {
     vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '0');
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
@@ -302,19 +304,30 @@ describe('guard 2 — the FLEET-WIDE ceiling (ADR §9.1)', () => {
       outcome: 'deferred',
       reason: 'fleet_ceiling',
     });
+    expect(await statusOf(intent.id)).toBe('pending');
+  });
+
+  it('the META org is not exempt from it', async () => {
+    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '0');
+    const fx = await seedTenant({ isMeta: true });
+    const intent = await seedIntent(fx);
+
+    expect(await ciRunnerAdmissionService.admit(intent)).toMatchObject({
+      reason: 'fleet_ceiling',
+    });
   });
 });
 
 // ── The real-concurrency contract ───────────────────────────────────────────
 
-describe('the caps hold under REAL concurrency (notes.html #35)', () => {
-  // ⚠️ MUTATION-CHECK THIS TEST: comment out the `lockScope` calls in
+describe('the pool holds under REAL concurrency (notes.html #35)', () => {
+  // ⚠️ MUTATION-CHECK THIS TEST: comment out the `lockScope` call in
   // `ciRunnerAdmissionService.admit` and it MUST go red. Every racer then reads
   // the same "0 in flight" snapshot and all six claim — the warm-pool TOCTOU a
   // count-then-claim with no shared lock allows, and the exact bug a serial test
   // cannot see.
-  it('never exceeds the PER-PROJECT cap when N intents race', async () => {
-    vi.stubEnv('MOTIR_FLEET_PROJECT_CAP_FREE', '3');
+  it('never exceeds the ORG pool when N intents of one org race', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '3');
     const fx = await seedTenant();
     const intents = await Promise.all([1, 2, 3, 4, 5, 6].map(() => seedIntent(fx)));
 
@@ -324,38 +337,35 @@ describe('the caps hold under REAL concurrency (notes.html #35)', () => {
 
     const admitted = verdicts.filter((v) => v.outcome === 'admitted');
     // Every legitimate race outcome is accepted — WHICH three win is the
-    // scheduler's business. What is asserted is the invariant: the cap is a
+    // scheduler's business. What is asserted is the invariant: the pool is a
     // ceiling, and it is exact because none of the six ever completes.
-    expect(admitted.length).toBeLessThanOrEqual(3);
     expect(admitted).toHaveLength(3);
     expect(verdicts.filter((v) => v.outcome === 'deferred')).toHaveLength(3);
 
     const inFlight = await withSystemContext((tx) =>
-      ciRunnerProvisioningIntentRepository.countInFlightForProject(fx.projectId, tx),
+      ciRunnerProvisioningIntentRepository.countInFlightForOrganization(fx.organizationId, tx),
     );
     expect(inFlight).toBe(3);
   });
 
-  it('never exceeds the FLEET ceiling when intents from DIFFERENT projects race', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '2');
-    vi.stubEnv('MOTIR_FLEET_PROJECT_CAP_FREE', '10');
-    const tenants = await Promise.all([1, 2, 3, 4, 5].map(() => seedTenant()));
-    const intents = await Promise.all(tenants.map((fx) => seedIntent(fx)));
+  it('two orgs racing each hold exactly their OWN pool', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '2');
+    const a = await seedTenant();
+    const b = await seedTenant();
+    const intents = await Promise.all([a, a, a, a, b, b, b, b].map((fx) => seedIntent(fx)));
 
-    const verdicts = await Promise.all(
-      intents.map((intent) => ciRunnerAdmissionService.admit(intent)),
-    );
+    await Promise.all(intents.map((intent) => ciRunnerAdmissionService.admit(intent)));
 
-    expect(verdicts.filter((v) => v.outcome === 'admitted')).toHaveLength(2);
-    const inFlight = await withSystemContext((tx) =>
-      ciRunnerProvisioningIntentRepository.countInFlightFleetWide(tx),
-    );
-    expect(inFlight).toBe(2);
+    for (const fx of [a, b]) {
+      const inFlight = await withSystemContext((tx) =>
+        ciRunnerProvisioningIntentRepository.countInFlightForOrganization(fx.organizationId, tx),
+      );
+      expect(inFlight).toBe(2);
+    }
   });
 
   it('two admissions of the SAME intent produce exactly one claim', async () => {
     const fx = await seedTenant();
-    vi.stubEnv('MOTIR_FLEET_PROJECT_CAP_FREE', '10');
     const intent = await seedIntent(fx);
 
     const verdicts = await Promise.all([
@@ -414,9 +424,9 @@ describe('guard 3 — the ci_credits_exhausted refusal', () => {
     expect((await ciRunnerAdmissionService.admit(intent)).outcome).toBe('admitted');
   });
 
-  // FAIL-OPEN, asserted by making the read throw. Motir's own outage must never
-  // read to a user as "you are out of credits".
-  it('BOOTS AND LOGS when the entitlement read throws', async () => {
+  // FAIL-CLOSED since MOTIR-6911 (`fleet-per-org-pool.md` §3–§4): an
+  // entitlement read that throws means nobody can say the container is paid for.
+  it('DEFERS balance_unavailable AND LOGS when the entitlement read throws', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(ciAllowanceService, 'getEntitlementState').mockRejectedValue(
       new Error('motir-ai unreachable'),
@@ -424,23 +434,119 @@ describe('guard 3 — the ci_credits_exhausted refusal', () => {
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
 
-    expect((await ciRunnerAdmissionService.admit(intent)).outcome).toBe('admitted');
-    expect(await statusOf(intent.id)).toBe('provisioning');
+    expect(await ciRunnerAdmissionService.admit(intent)).toEqual({
+      outcome: 'deferred',
+      reason: 'balance_unavailable',
+      detail: BALANCE_UNAVAILABLE_DETAIL,
+    });
+    expect(await statusOf(intent.id)).toBe('pending');
     expect(error).toHaveBeenCalled();
   });
 });
 
-// ── The asymmetry: the caps fail CLOSED ─────────────────────────────────────
+// ── Admission by coverage (MOTIR-6911) ──────────────────────────────────────
 
-describe('the caps fail CLOSED', () => {
-  // The opposite posture to guard 3, deliberately: an unestablished fleet count
-  // is treated as a FULL fleet, because the failure on the other side is
-  // unbounded spend on an account with no provider-side cap.
-  it('DECLINES AND LOGS when the fleet count throws', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.spyOn(ciRunnerProvisioningIntentRepository, 'countInFlightFleetWide').mockRejectedValue(
-      new Error('connection reset'),
+describe('admission by COVERAGE — running + 1 for one debit period (§3)', () => {
+  /** `n` of the org's CI runners already in flight — the charged containers. */
+  async function running(fx: Fixture, n: number): Promise<void> {
+    for (let i = 0; i < n; i += 1) await seedIntent(fx, { status: 'running' });
+  }
+
+  it('ADMITS at exactly running + 1 periods of credit, and DEFERS one credit less', async () => {
+    const fx = await seedTenant();
+    await meter(fx, POOL_FLOOR_MINUTES); // no included minutes left
+    await running(fx, 2);
+
+    // (2 running + 1) × 5 minutes = 15 credits.
+    stubMotirAi(15);
+    const covered = await seedIntent(fx);
+    expect((await ciRunnerAdmissionService.admit(covered)).outcome).toBe('admitted');
+
+    // Now three run: (3 + 1) × 5 = 20 is needed, and 19 is one short.
+    stubMotirAi(19);
+    const short = await seedIntent(fx);
+    expect(await ciRunnerAdmissionService.admit(short)).toEqual({
+      outcome: 'deferred',
+      reason: 'credits_insufficient',
+      detail: CREDITS_INSUFFICIENT_DETAIL,
+    });
+    // The claim went back: the deferred intent occupies no slot.
+    expect(await statusOf(short.id)).toBe('pending');
+  });
+
+  it('counts the REMAINING included minutes before the balance', async () => {
+    const fx = await seedTenant();
+    await meter(fx, POOL_FLOOR_MINUTES - 7); // 7 included minutes left
+    await running(fx, 1);
+
+    // (1 + 1) × 5 = 10 = 7 minutes + 3 credits.
+    stubMotirAi(3);
+    expect((await ciRunnerAdmissionService.admit(await seedIntent(fx))).outcome).toBe('admitted');
+
+    const fx2 = await seedTenant();
+    await meter(fx2, POOL_FLOOR_MINUTES - 7);
+    await running(fx2, 1);
+    stubMotirAi(2);
+    expect(await ciRunnerAdmissionService.admit(await seedIntent(fx2))).toMatchObject({
+      reason: 'credits_insufficient',
+    });
+  });
+
+  it('another org’s running containers never count against this org’s coverage', async () => {
+    const busy = await seedTenant();
+    await running(busy, 5);
+    const fx = await seedTenant();
+    await meter(fx, POOL_FLOOR_MINUTES);
+
+    stubMotirAi(5); // exactly (0 + 1) × 5
+    expect((await ciRunnerAdmissionService.admit(await seedIntent(fx))).outcome).toBe('admitted');
+  });
+
+  it('DEFERS balance_unavailable when motir-ai cannot be reached — whatever the minutes left', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('ECONNREFUSED');
+      }),
     );
+    const fx = await seedTenant();
+    await meter(fx, 10); // well inside the pool
+    const intent = await seedIntent(fx);
+
+    expect(await ciRunnerAdmissionService.admit(intent)).toEqual({
+      outcome: 'deferred',
+      reason: 'balance_unavailable',
+      detail: BALANCE_UNAVAILABLE_DETAIL,
+    });
+    expect(await statusOf(intent.id)).toBe('pending');
+
+    // ...while the billing panel's read still renders the org: a null balance,
+    // not exhausted.
+    const state = await ciAllowanceService.getEntitlementState(fx.organizationId, new Date());
+    expect(state).toMatchObject({ balance: null, state: 'within_allowance' });
+  });
+
+  it('the META org is bypassed — no coverage is asked of it', async () => {
+    const fx = await seedTenant({ isMeta: true });
+    await meter(fx, POOL_FLOOR_MINUTES + 500);
+    stubMotirAi(0);
+    expect((await ciRunnerAdmissionService.admit(await seedIntent(fx))).outcome).toBe('admitted');
+  });
+});
+
+// ── The asymmetry: the pool fails CLOSED ────────────────────────────────────
+
+describe('the pool fails CLOSED', () => {
+  // The opposite posture to guard 3, deliberately: an unestablished count is
+  // treated as a FULL pool, because the failure on the other side is unbounded
+  // spend on an account with no provider-side cap.
+  it('DECLINES AND LOGS when the org count throws', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(
+      ciRunnerProvisioningIntentRepository,
+      'countInFlightForOrganization',
+    ).mockRejectedValue(new Error('connection reset'));
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
 
@@ -452,12 +558,16 @@ describe('the caps fail CLOSED', () => {
     expect(error).toHaveBeenCalled();
   });
 
-  it('DECLINES when the org tier cannot be resolved', async () => {
+  it('DECLINES AND LOGS when the org’s pool cannot be read', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(organizationRepository, 'findFleetPoolCapInTx').mockRejectedValue(
+      new Error('the org read failed'),
+    );
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
-    vi.spyOn(ciRunnerAdmissionService, 'resolveCaps').mockResolvedValue(null);
 
+    // The real catch, not a stubbed return: an org whose pool cannot be
+    // established must not be handed the default by accident.
     expect(await ciRunnerAdmissionService.admit(intent)).toMatchObject({
       outcome: 'deferred',
       reason: 'gate_unavailable',
@@ -467,23 +577,14 @@ describe('the caps fail CLOSED', () => {
   });
 });
 
-// ── The bypasses, and the one that does NOT exist ───────────────────────────
+// ── What is NEVER bypassed ──────────────────────────────────────────────────
 
 describe('bypasses — and what is NEVER bypassed', () => {
-  it('the META org is exempt from the per-project cap', async () => {
-    const fx = await seedTenant({ isMeta: true });
-    await seedIntent(fx, { status: 'running' });
-    await seedIntent(fx, { status: 'running' });
-    const intent = await seedIntent(fx);
-
-    expect((await ciRunnerAdmissionService.admit(intent)).outcome).toBe('admitted');
-  });
-
-  // ⚠️ THE POINT OF THE WHOLE GUARD. moooon B.V. pays its own AI bill, but a
-  // meta-org runaway costs Motir exactly as much per container-second as any
-  // other org's. The ceiling bounds the INVOICE, so no tenant flag lifts it.
-  it('the META org is NOT exempt from the fleet-wide ceiling', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '2');
+  // ⚠️ moooon B.V. pays its own AI bill, but a meta-org runaway costs Motir
+  // exactly as much per container-second as any other org's. §1: meta keeps the
+  // same pool.
+  it('the META org is NOT exempt from its pool', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '2');
     const fx = await seedTenant({ isMeta: true });
     await seedIntent(fx, { status: 'running' });
     await seedIntent(fx, { status: 'running' });
@@ -491,37 +592,25 @@ describe('bypasses — and what is NEVER bypassed', () => {
 
     expect(await ciRunnerAdmissionService.admit(intent)).toMatchObject({
       outcome: 'deferred',
-      reason: 'fleet_ceiling',
+      reason: 'org_pool',
     });
   });
 
-  it('MOTIR_CLOUD=false lifts the per-project cap — a self-host has no plan', async () => {
+  it('MOTIR_CLOUD=false does NOT lift the pool — it bounds whoever pays', async () => {
     vi.stubEnv('MOTIR_CLOUD', 'false');
-    const fx = await seedTenant();
-    await seedIntent(fx, { status: 'running' });
-    await seedIntent(fx, { status: 'running' });
-    const intent = await seedIntent(fx);
-
-    expect((await ciRunnerAdmissionService.admit(intent)).outcome).toBe('admitted');
-  });
-
-  it('MOTIR_CLOUD=false does NOT lift the fleet ceiling — it bounds whoever pays', async () => {
-    vi.stubEnv('MOTIR_CLOUD', 'false');
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '1');
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
     const fx = await seedTenant();
     await seedIntent(fx, { status: 'running' });
     const intent = await seedIntent(fx);
 
     expect(await ciRunnerAdmissionService.admit(intent)).toMatchObject({
       outcome: 'deferred',
-      reason: 'fleet_ceiling',
+      reason: 'org_pool',
     });
   });
 
-  it('an intent naming NO project skips the per-project cap but not the ceiling', async () => {
+  it('an intent naming NO project is still admitted against its org’s pool', async () => {
     const fx = await seedTenant();
-    // The boot refuses these for a better reason (no runner group, no tenant to
-    // bill); the gate must not invent a per-project cap for a null project.
     const intent = await seedIntent(fx, { projectId: null });
 
     expect((await ciRunnerAdmissionService.admit(intent)).outcome).toBe('admitted');
@@ -534,39 +623,19 @@ describe('the gate refuses when its SERIALIZATION cannot be established', () => 
   /**
    * `lockScope` answering false means the scope's anchor row was not there to
    * lock — a programming error rather than a runtime condition, and the ONE
-   * failure the gate must not read as "the fleet is empty". Everything the caps
-   * decide is read-derived, so an unlocked decision is a decision two racers can
-   * both make.
+   * failure the gate must not read as "the pool is empty".
    */
-  it('DECLINES AND LOGS when the PROJECT scope cannot be locked', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const fx = await seedTenant();
-    const intent = await seedIntent(fx);
-    vi.spyOn(ciFleetAdmissionLockRepository, 'lockScope').mockImplementation(
-      async (scope) => !scope.startsWith('project:'),
-    );
-
-    const verdict = await ciRunnerAdmissionService.admit(intent);
-
-    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'gate_unavailable' });
-    expect(verdict).toMatchObject({ detail: expect.stringContaining('project admission lock') });
-    // FAIL CLOSED: the transaction rolled back, so nothing was claimed.
-    expect(await statusOf(intent.id)).toBe('pending');
-    expect(error).toHaveBeenCalled();
-  });
-
   it('DECLINES AND LOGS when the FLEET scope cannot be locked', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
-    vi.spyOn(ciFleetAdmissionLockRepository, 'lockScope').mockImplementation(async (scope) =>
-      scope.startsWith('project:'),
-    );
+    vi.spyOn(ciFleetAdmissionLockRepository, 'lockScope').mockResolvedValue(false);
 
     const verdict = await ciRunnerAdmissionService.admit(intent);
 
     expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'gate_unavailable' });
     expect(verdict).toMatchObject({ detail: expect.stringContaining('fleet admission lock') });
+    // FAIL CLOSED: the transaction rolled back, so nothing was claimed.
     expect(await statusOf(intent.id)).toBe('pending');
     expect(error).toHaveBeenCalled();
   });
@@ -587,20 +656,7 @@ describe('the gate refuses when its SERIALIZATION cannot be established', () => 
   });
 });
 
-describe('resolveCaps and releaseClaim degrade rather than throwing', () => {
-  it('resolveCaps answers NULL and logs when the org read itself throws', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const fx = await seedTenant();
-    vi.spyOn(organizationRepository, 'findCapContextInTx').mockRejectedValue(
-      new Error('the org read failed'),
-    );
-
-    // The real catch, not a stubbed return: an org whose PLAN cannot be
-    // established must not be handed the largest allowance by default.
-    expect(await ciRunnerAdmissionService.resolveCaps(fx.organizationId)).toBeNull();
-    expect(error).toHaveBeenCalled();
-  });
-
+describe('releaseClaim degrades rather than throwing', () => {
   it('releaseClaim LOGS and returns rather than throwing at its caller', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(ciRunnerProvisioningIntentRepository, 'releaseClaim').mockRejectedValue(

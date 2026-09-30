@@ -9,10 +9,31 @@
 # sign-in check stats (`$CLAUDE_CONFIG_DIR/.credentials.json`,
 # docs/decisions/agent-terminal.md Q7). The file's content is a placeholder.
 #
-# With arguments it is the CHAT's binary (Story MOTIR-6863 · MOTIR-7019): the
-# headless turn and `auth status --json` that docs/decisions/agent-chat.md Q2/Q3
-# record are answered by ../vendor-stub.mjs, which refuses (exit 2) anything else.
+# `claude -p <prompt>` is the UNATTENDED mode a card's run starts it in (Story
+# MOTIR-6864 · MOTIR-7031, `motir-run.py`): it prints its work, then keeps working
+# — a progress line every few seconds — until the file named by
+# `MOTIR_E2E_RELEASE` exists, so the spec decides when the work is done without a
+# clock. Then it says so and exits 0.
+#
+# Any OTHER arguments make it the CHAT's binary (Story MOTIR-6863 · MOTIR-7019):
+# the headless turn (`-p --output-format stream-json …`) and `auth status --json`
+# that docs/decisions/agent-chat.md Q2/Q3 record are answered by
+# ../vendor-stub.mjs, which refuses (exit 2) anything else.
 set -u
+if [ "${1:-}" = "-p" ] && [ "${2:-}" != "--output-format" ]; then
+  echo "Claude Code (stub) · ${2:-no prompt}"
+  echo "Reading the work item and the repository…"
+  echo "Editing src/invoices/export.ts — invoices export as CSV"
+  release="${MOTIR_E2E_RELEASE:-}"
+  waited=0
+  while [ -n "$release" ] && [ ! -e "$release" ]; do
+    sleep 1
+    waited=$((waited + 1))
+    if [ $((waited % 6)) -eq 0 ]; then echo "· still working (${waited}s)"; fi
+  done
+  echo "Tests pass. Committed the change to the run's branch."
+  exit 0
+fi
 if [ "$#" -gt 0 ]; then
   exec node "$(dirname "$0")/../vendor-stub.mjs" claude "$@"
 fi

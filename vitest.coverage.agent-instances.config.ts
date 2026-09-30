@@ -73,6 +73,13 @@ const MEASURED = [
   'app/[(]authed[)]/my-agents/_components/AgentChat.tsx',
   'app/[(]authed[)]/my-agents/_components/useAgentChat.ts',
   'app/[(]authed[)]/my-agents/_components/chat/**/*.{ts,tsx}',
+  // Story MOTIR-6864 — a run in my agent (MOTIR-7026).
+  'lib/services/agentInstanceRunService.ts',
+  'lib/mappers/agentInstanceRunMappers.ts',
+  'lib/jobs/definitions/agentInstanceRunLaunch.ts',
+  // MOTIR-7027 — the run's supervision; the lifecycle couplings live in files above.
+  'lib/jobs/definitions/agentInstanceRunSupervise.ts',
+  'app/api/work-items/[[]id]/agent-runs/**/*.ts',
 ];
 
 export default defineConfig({
@@ -87,6 +94,8 @@ export default defineConfig({
       // Story MOTIR-6863 — the agent chat (MOTIR-7018).
       'tests/agentChat/**/*.test.{ts,tsx}',
       'tests/components/AgentChat.test.tsx',
+      // Story MOTIR-6864 — the agent's live run in its panel (MOTIR-7029).
+      'tests/components/AgentPanelRun.test.tsx',
     ],
     coverage: {
       provider: 'v8',

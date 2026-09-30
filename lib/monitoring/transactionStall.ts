@@ -87,8 +87,6 @@ interface LoopMonitor {
 }
 
 let loopMonitor: LoopMonitor | null = null;
-let poolSource: PoolOccupancy | null = null;
-
 function snapshot(histogram: IntervalHistogram): DelayWindow | null {
   if (histogram.count === 0) return null;
   return {
@@ -145,10 +143,34 @@ function readEventLoopDelay(): DelayWindow | null {
 }
 
 // ── Pool occupancy ───────────────────────────────────────────────────────────
+//
+// ⚠️ ONE REGISTRATION PER PROCESS, NOT PER MODULE INSTANCE (MOTIR-7007). Next
+// compiles `instrumentation.ts` into a DIFFERENT module graph from the route
+// handlers, so this file is evaluated more than once in one server process.
+// `lib/db.ts` — reached from a route — registers its pool in one evaluation; the
+// Sentry `beforeSend` — installed by `sentry.server.config.ts`, reached from
+// instrumentation — reads another. With a module-level `let`, every production
+// P2028 reported the pool as `unmeasured` beside numeric event-loop tags. So the
+// registration lives on `globalThis` under a registered symbol, the shape
+// `lib/blob/s3.ts` and `lib/monitors/providers/fake.ts` (MOTIR-5734) already use
+// for the same boundary.
+//
+// The event-loop monitor above stays module-local ON PURPOSE: in both runtimes it
+// is started and read in the same evaluation (the server's Sentry config, the
+// worker's single bundle), and `tests/monitoring/sentry-init-gate.test.ts` relies
+// on `vi.resetModules()` discarding a monitor an earlier case started.
+
+const POOL_KEY = Symbol.for('motir.transactionStall.pool');
+
+type PoolHolder = { [POOL_KEY]?: PoolOccupancy | null };
+
+function registeredPool(): PoolOccupancy | null {
+  return (globalThis as PoolHolder)[POOL_KEY] ?? null;
+}
 
 /** Register the pool `lib/db.ts` built, so a report can read its occupancy. */
 export function setTransactionStallPool(pool: PoolOccupancy | null): void {
-  poolSource = pool;
+  (globalThis as PoolHolder)[POOL_KEY] = pool;
 }
 
 // ── The tags ─────────────────────────────────────────────────────────────────
@@ -180,7 +202,7 @@ export function transactionStallTags(err: unknown): Record<string, string> | nul
   const half = transactionTimeoutHalf(err);
   if (!half) return null;
   const loop = readEventLoopDelay();
-  const pool = poolSource;
+  const pool = registeredPool();
   return {
     [STALL_TAG.half]: half,
     [STALL_TAG.loopMaxMs]: loop ? String(Math.round(loop.maxMs)) : UNMEASURED,

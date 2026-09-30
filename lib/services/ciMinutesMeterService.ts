@@ -16,6 +16,7 @@ import {
   ciPeriodUsageRepository,
   type OrgPeriodConsumption,
 } from '@/lib/repositories/ciPeriodUsageRepository';
+import { ciLiveAccrualRepository } from '@/lib/repositories/ciLiveAccrualRepository';
 import {
   isCiMeteringEnabled,
   isMotirOwnedRepo,
@@ -78,6 +79,12 @@ export type MeterWorkflowRunOutcome =
       periodStart: Date;
       billableMinutes: number;
       linearEquivalentMinutes: number;
+      /**
+       * What the live charge had already added for this run (MOTIR-6910), in
+       * whole minutes. The rollup received only the difference between GitHub's
+       * figure and this, never both.
+       */
+      liveChargedMinutes: number;
       /** The META org (moooon B.V.). Its minutes are RECORDED like anyone's; this
        *  flag is what the caller hands the CHARGE so the charge can bypass it
        *  (§4.4 · `code-graph-index-fleet.md` §20). */
@@ -359,6 +366,7 @@ export const ciMinutesMeterService = {
     // so the write reads no billing state at all.
     const periodStart = periodStartFor(event.completedAt);
 
+    let liveChargedMinutes = 0;
     try {
       await withSystemContext(async (tx) => {
         await ciWorkflowRunUsageRepository.create(
@@ -382,14 +390,43 @@ export const ciMinutesMeterService = {
           },
           tx,
         );
+        // ⚠️ RECONCILIATION, NOT A SECOND CHARGE (MOTIR-6910 ·
+        // `fleet-per-org-pool.md` §3). A run on Motir's fleet was already added to
+        // the rollup while it ran, a whole minute at a time, by the live charge.
+        // The audit row above keeps GitHub's full figure; the rollup takes only
+        // what GitHub bills beyond what was charged live — the partial last
+        // minute and the per-job rounding. When the live figure is the larger
+        // (container time GitHub does not bill), the excess is NOTED, never
+        // refunded and never charged again. A GitHub-hosted run has no live rows,
+        // so it is metered exactly as before.
+        const liveSeconds = await ciLiveAccrualRepository.sumSecondsForRun(
+          event.runId,
+          event.attempt,
+          tx,
+        );
+        liveChargedMinutes = liveSeconds / 60;
+        if (liveChargedMinutes > usage.linearEquivalentMinutes) {
+          console.warn(
+            '[ciMinutesMeterService] live-charged minutes exceed GitHub’s figure for this run — noted, nothing more charged',
+            {
+              runId: event.runId,
+              runAttempt: event.attempt,
+              liveChargedMinutes,
+              linearEquivalentMinutes: usage.linearEquivalentMinutes,
+            },
+          );
+        }
         await ciPeriodUsageRepository.incrementForPeriod(
           {
             workspaceId: attribution.workspaceId,
             organizationId: attribution.organizationId,
             periodStart,
-            billableMinutes: usage.billableMinutes,
-            rawWallClockSeconds: usage.rawWallClockSeconds,
-            linearEquivalentMinutes: usage.linearEquivalentMinutes,
+            billableMinutes: Math.max(0, usage.billableMinutes - liveChargedMinutes),
+            rawWallClockSeconds: Math.max(0, usage.rawWallClockSeconds - liveSeconds),
+            linearEquivalentMinutes: Math.max(
+              0,
+              usage.linearEquivalentMinutes - liveChargedMinutes,
+            ),
           },
           tx,
         );
@@ -418,6 +455,7 @@ export const ciMinutesMeterService = {
       periodStart,
       billableMinutes: usage.billableMinutes,
       linearEquivalentMinutes: usage.linearEquivalentMinutes,
+      liveChargedMinutes,
       isMeta: attribution.isMeta,
     };
   },

@@ -29,6 +29,7 @@ import { buildFleetCostReadout } from '../../scripts/fleetCostReadoutQuery';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // THE END-TO-END REHEARSAL (Story MOTIR-4336 · MOTIR-4717) — a hosted-agent
 // container ran → rows were written while it ran and when it stopped → "what did
@@ -108,6 +109,8 @@ async function seedNeighbour(workload: FleetWorkloadKind, seconds: number, at: D
     }),
   );
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   fakeOrchestrator.reset();
@@ -219,6 +222,10 @@ describe('the HEALTHY run — boot → checkpoints → settle → the question a
 describe('the LONG run — hours, supervised pass by pass (AC 3)', () => {
   it('bounds the provider reads by the cadence, and the line never lags the container by more than one interval', async () => {
     const HOURS = 3;
+    // Pinned mid-month: the line is read per MONTHLY period, so a start within
+    // HOURS of a month's end would read the next month's empty line (MOTIR-7070).
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-10T12:00:00.000Z'));
     const store = inMemorySupervisionStore();
     const memo = new Map<string, unknown>();
     const steps = {
@@ -252,7 +259,10 @@ describe('the LONG run — hours, supervised pass by pass (AC 3)', () => {
         ).session;
         startedMs ??= new Date(session.handle.createdAt).getTime();
         // What the line says NOW, against what the container has truly accrued NOW.
-        const { agent } = await agentLineAt(new Date(clock.ms));
+        // Read in the container's OWN period: its accrual stays in the period its
+        // run started in, so reading at `clock.ms` would switch to the next, empty
+        // month whenever the simulated hours cross a month boundary.
+        const { agent } = await agentLineAt(new Date(startedMs));
         const trueSeconds = Math.ceil((clock.ms - startedMs) / 1000);
         maxLagSeconds = Math.max(maxLagSeconds, trueSeconds - (agent?.containerSeconds ?? 0));
         // Jump to exactly the instant the pass deferred to — the queue's own wait.

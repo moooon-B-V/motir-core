@@ -46,7 +46,7 @@ export function Strip({
   tone: 'sky' | 'rose' | 'muted';
   alert?: boolean;
   icon: ReactNode;
-  text: string;
+  text: ReactNode;
   action?: ReactNode;
 }) {
   const ground =

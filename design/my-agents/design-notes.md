@@ -802,3 +802,106 @@ including the disabled tab, the placeholder and every `:hover` state.
 - **Leaves to others:** the relay's chat channel and 4411 (MOTIR-7013), the `/v1/chat` server
   (MOTIR-7012), the adapters (MOTIR-7014 and the other adapter cards), _Run in my agent_ (MOTIR-6864),
   and the image update that clears 4411 (MOTIR-6862).
+
+---
+
+## The agent's live run — the panel while a work item runs in the agent (delta, MOTIR-7022)
+
+**Story MOTIR-6864 · design MOTIR-7022.** Gates **MOTIR-7029**. Mock:
+**`design/my-agents/my-agents--run.mock.html`**, a DELTA.
+
+**What it amends.** § _The agent panel — an agent opened beside the list (delta, MOTIR-6937)_ above,
+drawn in **`design/my-agents/my-agents--panel.mock.html`** — MOTIR-6937's published result (evidence
+`cmun5qu1f005qhwoiq14livtw`, commit `5bf46803`), whose _GIVES / TAKES_ leaves _"Run in my agent
+(MOTIR-6864)"_ to this card. That mock is not edited. The delta copies its five `<style>` blocks
+verbatim and adds one; every lifecycle, sign-in and terminal state stays that section's.
+
+**The behaviour** is `docs/decisions/agent-instance-run.md` §1 (the run session: at most one, listed
+to every connection on attach, watch-only, never reaped), §5 (the run read by agent) and §6
+(Hibernate and Delete refused during a run; every end). The work item side — the control, the
+picker, the refusals, the run section and modal — and the full allocation and flagged gaps are
+**`design/runs/design-notes.md` § _Run in my agent_**, drawn in `design/runs/run-section--agent.mock.html`.
+
+| Panel | What it settles                                                                                 |
+| ----- | ----------------------------------------------------------------------------------------------- |
+| 1     | the run line in the header; the run's session offered beside the developer's shell; watching it |
+| 2     | Hibernate and Delete off during the run, and the refusal if pressed from elsewhere              |
+| 3     | the run just ended — the header after, and the watched session's end                            |
+| 4     | the narrow width                                                                                |
+
+### Panel 1 — THE LIVE RUN
+
+- **The run line**, one line under the meta line (`--el-tint-sky`, `--radius-control`,
+  `--spacing-control-x/y`, `--el-text-strong` ink, `aria-live="polite"`): the running pill reading
+  **Running a work item** · the work item's key (mono, linked) and title · **Open run** at the right
+  (`/runs?run=<id>`). Read from the run record by agent and refreshed with the panel's poll — nothing
+  comes through the terminal.
+- **The session switch** at the head of the Terminal tab (a `sessBar` row under the tab strip,
+  `--el-border-soft` rule): the shipped `Segmented` — track `--el-tabnav-track` in an `--el-border`
+  rule, `--radius-btn`, segments `--height-control`, active on `--el-page-bg` with `--el-text-strong`
+  and `--shadow-subtle`, inactive `--el-text-secondary`. **Your shell** (`SquareTerminal`) | **Run
+  {key}** (a 7px `--el-status-in-progress` dot and an `Eye` glyph). At the right, _The run's session is
+  watch-only_ (0.75rem `--el-text-secondary`). The tab strip stays the strip of VIEWS (Terminal, and
+  Chat with MOTIR-6863); both sessions are terminals, so the choice sits inside the Terminal view.
+- **Opening the panel lands on Your shell.** The switch appears as soon as the terminal is live
+  (the server lists the run session on attach) and needs no second connection.
+- **Watching:** the run's screen and replay, **no caret**, input dropped by the server, resize applied.
+  A sky strip (`termStrip`, unchanged): _Watching the run of {key} — read-only, so typing goes nowhere.
+  To stop it, use Cancel run on **the work item**._ Cancel is not offered in the panel: the Run section
+  is the one place that cancels.
+
+### Panel 2 — HIBERNATE AND DELETE DURING A RUN
+
+- Both show their disabled face (`.btnGhost.isOff`: `--el-surface`, `--el-text-secondary`,
+  `aria-disabled`) with one line under the run line: _Hibernate and Delete are off while a run is
+  working in this agent — cancel the run first._ (0.75rem `--el-text-secondary`).
+- Pressed from somewhere that did not know (the list's row menu, a stale tab), the server's
+  `agent_instance_run_active` is shown in the page's refusal box (the rose box, unchanged): _{name} is
+  running **{key}**. Cancel that run on the work item first, then hibernate it._ / _… then delete it._
+
+### Panel 3 — THE RUN JUST ENDED
+
+- The run line turns `--el-muted` and reads the LAST run: the end pill (tone table), **Last run**, the
+  key and title, and on a failure the recorded reason in mono instead of the title, then **Open run**.
+  It stays until the agent's next run replaces it. Hibernate and Delete come back.
+- The run's session exits with the run, so its segment leaves the switch — and with one session left
+  the switch goes, as before this story.
+- If it was being watched: its last screen stays, dimmed (`.term.isPaused`), under the ended strip
+  (`termStrip isEnded`): _The run's session has ended — the run succeeded, and its pull request is on
+  the work item._ / _— the run failed. Its work so far is on the run's branch._ · **Back to your shell**.
+
+### Panel 4 — THE NARROW WIDTH
+
+The base panel 7 full view: the run line wraps (**Open run** on its own line), the disabled actions
+and their reason wrap under the name, the switch fills the width (the `Segmented` `fill` variant) and
+drops its hint — the sky strip says it.
+
+### Strings — `myAgents.panel.run.*` (MOTIR-7029; `zh` twins with the build)
+
+| Key                                                                         | String                                                                                                                                                                             |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `live` · `last` · `open`                                                    | Running a work item · Last run · Open run                                                                                                                                          |
+| `offWhy`                                                                    | Hibernate and Delete are off while a run is working in this agent — cancel the run first.                                                                                          |
+| `refusedHibernate` · `refusedDelete`                                        | {name} is running <link>{key}</link>. Cancel that run on the work item first, then hibernate it. · … then delete it.                                                               |
+| `sessions.label` · `sessions.shell` · `sessions.run` · `sessions.watchOnly` | Terminal sessions · Your shell · Run {key} · The run's session is watch-only                                                                                                       |
+| `strip.watching`                                                            | Watching the run of {key} — read-only, so typing goes nowhere. To stop it, use Cancel run on <link>the work item</link>.                                                           |
+| `strip.endedSucceeded` · `strip.endedFailed`                                | The run's session has ended — the run succeeded, and its pull request is on the work item. · The run's session has ended — the run failed. Its work so far is on the run's branch. |
+| `backToShell`                                                               | Back to your shell                                                                                                                                                                 |
+
+End pills reuse `runs.runStatus.*`; the recorded reason is the record's string, verbatim.
+
+### GIVES / TAKES
+
+- **GIVES MOTIR-7029:** the run line (live and last), the session switch and the watch-only face, the
+  watch strip, the disabled Hibernate / Delete with their reason and the refusal box, the ended
+  session face, the narrow view, and the strings above.
+- **TAKES from MOTIR-7025:** the run session listed on attach, tagged with its run id (the panel matches
+  it to the run line's run). **From MOTIR-7027:** the Hibernate / Delete refusal carrying the run's id and
+  key. **From MOTIR-7023 / MOTIR-7026:** the agent's running run (and, for _Last run_, its latest run —
+  flagged in the runs notes: no sibling builds that read yet).
+
+**Revision 2 (MOTIR-7022, after review).** On the work item the door is now **Send to my agent**,
+beside **Run** (Motir works it with the model you pick), and a busy agent's picker row names the work
+item it is working on — `design/runs/design-notes.md` § _Revision 2_. This panel's delta
+(`my-agents--run.mock.html`) is unchanged: its run line already says _Running a work item_ and names
+the key, and it says "hosted" nowhere.

@@ -841,6 +841,48 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       },
     ],
   },
+  // The run launcher and its probes (MOTIR-7025 · `docs/decisions/agent-instance-run.md`
+  // §1, §4). Not typed by a person: Motir runs them in the agent through a short
+  // `exec`, and `agent-terminal run --help` exiting 0 is the image-capability probe.
+  {
+    path: 'agent-terminal run',
+    signature: '<key>',
+    description:
+      'Open a run session for a card in this agent’s terminal server, and return its id at once.',
+    helpGroup: null,
+    options: [
+      {
+        flags: '--run-id <id>',
+        description: 'The run to open a session for (its credentials are read on stdin).',
+      },
+    ],
+  },
+  {
+    path: 'agent-terminal stop',
+    signature: '',
+    description: 'Stop a run’s session: SIGTERM, then SIGKILL after 10 seconds.',
+    helpGroup: null,
+    options: [{ flags: '--run-id <id>', description: 'The run whose session to stop.' }],
+  },
+  {
+    path: 'agent-terminal status',
+    signature: '',
+    description: 'Report whether a run’s session is running, or how it exited.',
+    helpGroup: null,
+    options: [{ flags: '--run-id <id>', description: 'The run whose session to report.' }],
+  },
+  {
+    path: 'agent-terminal signin',
+    signature: '',
+    description: 'Print whether this agent’s coding agent is signed in, as JSON.',
+    helpGroup: null,
+    options: [
+      {
+        flags: '--json',
+        description: 'Print JSON (the only format; accepted for scripts that ask for it).',
+      },
+    ],
+  },
   {
     path: 'help',
     signature: '[command...]',

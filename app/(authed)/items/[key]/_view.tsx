@@ -403,6 +403,11 @@ export default async function ItemView({
   // THE RUN HOSTED RULE (MOTIR-691) — who may start a hosted run on this card: the Run
   // section's door, Continue hosted and *Fix on the hosted agent* all follow it.
   const canRunHosted = canEdit && !isArchived && statusCategory !== 'done';
+  // SEND TO MY AGENT (Story MOTIR-6864 · MOTIR-7028) — the start bar's second
+  // option, beside Run: the Run rule AND the right to use agents on the project
+  // (`instance:use`, the gate My agents and the agents read both enforce). A
+  // Visitor holds neither.
+  const canSendToAgent = canRunHosted && !isVisitor && held.has('instance:use');
 
   return (
     <EstimationConfigProvider config={estimationConfig} canEdit={canEdit}>
@@ -711,6 +716,7 @@ export default async function ItemView({
                             ? {
                                 ready: detail.readiness.ready,
                                 openBlockers: detail.readiness.openBlockers.length,
+                                agents: canSendToAgent ? { projectName: ctx.project.name } : null,
                               }
                             : null
                         }

@@ -11,7 +11,7 @@ import { codeGraphIndexAdmissionService } from '@/lib/services/codeGraphIndexAdm
 import {
   DEFAULT_INDEX_IN_FLIGHT_CAP,
   indexInFlightCap,
-  workspaceIndexInFlightCap,
+  orgIndexInFlightCap,
 } from '@/lib/ciFleet/limits';
 import { fakeOrchestrator } from '@motir/orchestrator';
 import { githubProvider } from '@/lib/git/providers/github';
@@ -878,8 +878,8 @@ describe('the admission cap queues, and nothing is dropped', () => {
       })
       .mockResolvedValueOnce({
         outcome: 'deferred',
-        reason: 'workspace_index_cap',
-        detail: 'the workspace is at its index cap (3/3, half of the global 6)',
+        reason: 'org_index_cap',
+        detail: 'the organization is at its index cap (3/3, half of the global 6)',
       })
       .mockImplementation(real);
 
@@ -946,8 +946,8 @@ describe('the admission cap queues, and nothing is dropped', () => {
     stubIndexFleet();
     vi.spyOn(codeGraphIndexAdmissionService, 'admit').mockResolvedValue({
       outcome: 'deferred',
-      reason: 'fleet_ceiling',
-      detail: 'the fleet is at its in-flight ceiling (24/24: CI runners 24)',
+      reason: 'org_pool',
+      detail: 'the organization is running 500 of its 500 fleet containers (CI runners 500)',
     });
 
     const engine = new JobTestEngine({ function: codeGraphIndex });
@@ -958,7 +958,7 @@ describe('the admission cap queues, and nothing is dropped', () => {
 
     // The named failure, not a bare throw: the operator reads the reason off it.
     expect((error as Error).message).toContain('admission_deferred');
-    expect((error as Error).message).toContain('fleet_ceiling');
+    expect((error as Error).message).toContain('org_pool');
     expect(fakeOrchestrator.provisioned).toHaveLength(0);
     // The ledger recorded a FAILED run, not a success with an `output.repoRef`.
     const runs = await indexRuns();
@@ -1104,11 +1104,11 @@ describe('the job definition carries NO concurrency number', () => {
   // Where the number went. Both are read from config so an operator can move
   // them against the fleet spend cap with no deploy, and the per-tenant one is
   // DERIVED from the global so the two cannot drift apart.
-  it('puts the numbers in config, with the per-workspace one derived', () => {
+  it('puts the numbers in config, with the per-org one derived', () => {
     expect(indexInFlightCap()).toBe(DEFAULT_INDEX_IN_FLIGHT_CAP);
     vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '10');
     expect(indexInFlightCap()).toBe(10);
-    expect(workspaceIndexInFlightCap(indexInFlightCap())).toBe(5);
+    expect(orgIndexInFlightCap(indexInFlightCap())).toBe(5);
   });
 
   it('exposes the dispatch service on the job DI seam', () => {

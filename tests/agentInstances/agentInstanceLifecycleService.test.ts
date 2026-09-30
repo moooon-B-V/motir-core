@@ -331,8 +331,8 @@ describe('create', () => {
       expect(await slots()).toHaveLength(1);
     });
 
-    it('agents have their OWN pool: CI’s shared ceiling neither refuses them nor counts them', async () => {
-      vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '1');
+    it('agents have their OWN pool: the org’s shared fleet pool neither refuses them nor counts them', async () => {
+      vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
       await create('one');
       await create('two');
       expect(await slots()).toHaveLength(2);

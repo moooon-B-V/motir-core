@@ -44,6 +44,27 @@ export function profileDisplayName(profileId: string): string {
   );
 }
 
+/**
+ * The profiles whose coding agent has an UNATTENDED command, so an agent made
+ * from one can run a card (`agent-instance-run.md` §3, MOTIR-7026). The command
+ * itself is the CLI's (`packages/cli/src/agentProfiles.ts` `agentCommand`), and
+ * this list is its non-null set — data on the `lib` side, never imported from
+ * `packages/cli` (see {@link AGENT_SIGN_IN_HINTS}); a test holds the two equal.
+ */
+export const RUNNABLE_AGENT_PROFILE_IDS: readonly string[] = [
+  'claude',
+  'codex',
+  'opencode',
+  'kimi',
+  'aider',
+  'goose',
+];
+
+/** Whether an agent made from this profile can run a card (§3). */
+export function profileCanRunCards(profileId: string): boolean {
+  return RUNNABLE_AGENT_PROFILE_IDS.includes(profileId);
+}
+
 /** The published sandbox image repository (public; `fleet-image-pull.md` §0). */
 export const SANDBOX_IMAGE_REPOSITORY = 'ghcr.io/moooon-b-v/motir-sandbox';
 

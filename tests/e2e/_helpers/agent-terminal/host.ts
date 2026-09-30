@@ -44,6 +44,21 @@
  *     (`docs/decisions/agent-chat.md` Q8).
  *   - WHAT THE STUB CLIs RECEIVED is recorded per agent at
  *     `<homes>/.calls/<instanceId>.jsonl` (`MOTIR_E2E_STUB_CALLS`), for the spec to read.
+ *
+ * And, for a card's run in the agent (Story MOTIR-6864 · MOTIR-7031):
+ *   - THE EXEC DOOR. Motir reaches a machine's local commands only through the
+ *     orchestrator's `exec` (agent-instance-run.md §1). The fake persistent
+ *     orchestrator POSTs every exec nothing scripted to `POST /exec` here
+ *     (`MOTIR_FAKE_EXEC_URL`), and this host runs it against that machine's run:
+ *     `motir agent-terminal signin | run | stop | status` are `packages/cli`'s REAL
+ *     commands, with the machine's environment, speaking to the machine's REAL
+ *     server over its control socket; the two capability probes (`--help`,
+ *     `run --help`) answer 0 because the commands are here; anything else (the
+ *     boot's clone) answers exit 0 with nothing, as the fake always has.
+ *   - THE RUN SESSION'S `motir run` is `motir-run.py`, which the server spawns on
+ *     a real PTY exactly where the image's CLI would run. It speaks the run's own
+ *     `/api/v1` ingest with the token the launcher wrote, and runs the stub
+ *     `claude -p` as its coding agent (see its header for why it is a stub).
  */
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -63,13 +78,23 @@ import {
   createTerminalServer,
   type TerminalServer,
 } from '../../../../packages/cli/src/agentTerminal/server';
+import { CONTROL_SOCKET_ENV } from '../../../../packages/cli/src/agentTerminal/control';
+import {
+  agentTerminalRunCommand,
+  agentTerminalSignInCommand,
+  agentTerminalStatusCommand,
+  agentTerminalStopCommand,
+} from '../../../../packages/cli/src/commands/agentTerminal';
 import { OFFERED_AGENT_PROFILES, sandboxImageTag } from '../../../../lib/agentInstances/profiles';
+import { AGENT_HOMES, CONTROL_SOCKETS, claudeConfigDir } from './paths';
 
 const HERE = __dirname;
 const STUB_BIN = path.join(HERE, 'bin');
 const BRIDGE = path.join(HERE, 'pty-bridge.py');
+/** What the run session runs in place of the image's `motir` (see the header). */
+const RUN_STUB = path.join(HERE, 'motir-run.py');
 const PORT = Number(process.env['MOTIR_E2E_TERMINAL_HOST_PORT'] ?? 3292);
-const HOMES = process.env['MOTIR_E2E_AGENT_HOMES'] ?? path.join(tmpdir(), 'motir-e2e-agent-homes');
+const HOMES = AGENT_HOMES;
 const SETUP_PATH =
   process.env['MOTIR_E2E_AGENT_SETUP_PATH'] ?? path.join(tmpdir(), 'motir-e2e-agent-setup.json');
 
@@ -177,7 +202,7 @@ function homeFor(instanceId: string, setup: AgentSetup): string {
   if (existsSync(path.join(home, '.bash_profile'))) return home;
   mkdirSync(path.join(home, 'workspace'), { recursive: true });
   // The image's one-time agent-config setup has "already run" for this home.
-  mkdirSync(path.join(home, '.motir-sandbox', 'agent-config', '.claude'), { recursive: true });
+  mkdirSync(claudeConfigDir(home), { recursive: true });
   mkdirSync(path.join(home, '.motir-sandbox', 'agent-config', '.codex'), { recursive: true });
   writeFileSync(path.join(home, '.motir-sandbox', 'agent-config', '.setup-done'), '');
   // A login shell's profile: the stub CLI first on PATH (a distribution's
@@ -197,7 +222,13 @@ interface Booted {
    * server booted for an old one (and the old key: every relay token 401s).
    */
   run: string;
+  /** The instance this machine run serves. */
+  instanceId: string;
   terminal: TerminalServer;
+  /** The machine's process environment — what an `exec`'d command runs with. */
+  env: NodeJS.ProcessEnv;
+  /** Resolves once the run's control socket is listening. */
+  ready: Promise<void>;
 }
 
 function runOf(machine: FakeMachine): string {
@@ -205,8 +236,10 @@ function runOf(machine: FakeMachine): string {
   return `${machine.spec.instanceId}#${machine.starts}#${env[TERMINAL_KEY_ENV] ?? ''}`;
 }
 const booted = new Map<string, Booted>();
+/** Makes each boot's control socket path unique, whatever a machine id or count repeats. */
+let bootSeq = 0;
 
-function boot(machine: FakeMachine): TerminalServer | null {
+function boot(machine: FakeMachine): { terminal: TerminalServer; env: NodeJS.ProcessEnv } | null {
   const machineEnv = { ...(machine.spec.env ?? {}), ...(machine.spec.terminal?.env ?? {}) };
   const key = machineEnv[TERMINAL_KEY_ENV];
   if (!key) return null; // a machine booted without the terminal config serves nothing
@@ -221,23 +254,54 @@ function boot(machine: FakeMachine): TerminalServer | null {
     SHELL: '/bin/bash',
     MOTIR_SANDBOX_AGENT: profileOf(machine),
     // The image entrypoint points both config homes at the agent-config dir.
-    CLAUDE_CONFIG_DIR: path.join(home, '.motir-sandbox', 'agent-config', '.claude'),
+    CLAUDE_CONFIG_DIR: claudeConfigDir(home),
     CODEX_HOME: path.join(home, '.motir-sandbox', 'agent-config', '.codex'),
     MOTIR_E2E_STUB_CALLS: path.join(HOMES, '.calls', `${instanceId}.jsonl`),
     ...setup.env,
     ...machineEnv,
     MOTIR_INSTANCE_ID: instanceId,
     FLY_MACHINE_ID: machine.handle.machineId,
+    // This run's control socket: the server listens on it, and the commands an
+    // exec runs find it here — the image's fixed path, one per machine run.
+    [CONTROL_SOCKET_ENV]: path.join(
+      CONTROL_SOCKETS,
+      `${machine.handle.machineId}-${machine.starts}-${++bootSeq}.sock`,
+    ),
   } as unknown as NodeJS.ProcessEnv;
   const tag = `[terminal-host ${machine.handle.machineId}#${machine.starts}]`;
-  return createTerminalServer({
+  const terminal = createTerminalServer({
     instanceKey: key,
     instanceId,
     machineId: machine.handle.machineId,
     spawnPty,
     env,
+    cli: ['python3', RUN_STUB],
     log: (line) => console.warn(`${tag} ${line}`),
   });
+  return { terminal, env };
+}
+
+/**
+ * The machine's current run, booted on first use — by a terminal connection or by
+ * an exec, whichever reaches it first, exactly as a real machine's server is up
+ * before either. Null for a machine that is not running or serves no terminal.
+ */
+async function ensureBooted(machineId: string): Promise<Booted | null> {
+  const machine = readMachine(machineId);
+  if (!machine || machine.state !== 'running') return null;
+  let current = booted.get(machineId);
+  if (!current || current.run !== runOf(machine)) {
+    // A new run of the machine: the previous run's shells (and its run) end with it.
+    // (A machine id reused by the next test's fleet is a new machine, too.)
+    if (current) void current.terminal.close();
+    const started = boot(machine);
+    if (!started) return null;
+    const ready = started.terminal.listenControl(started.env[CONTROL_SOCKET_ENV] as string);
+    current = { run: runOf(machine), instanceId: machine.spec.instanceId, ...started, ready };
+    booted.set(machineId, current);
+  }
+  await current.ready;
+  return current;
 }
 
 function refuse(socket: Duplex, status: number, reason: string): void {
@@ -248,38 +312,135 @@ function onUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
   socket.on('error', () => socket.destroy());
   const header = req.headers['x-motir-machine-id'];
   const machineId = typeof header === 'string' ? header : null;
-  const machine = machineId ? readMachine(machineId) : null;
-  if (!machineId || !machine || machine.state !== 'running') {
+  if (!machineId) {
     refuse(socket, 502, 'Bad Gateway');
     return;
   }
-  let current = booted.get(machineId);
-  if (!current || current.run !== runOf(machine)) {
-    // A new run of the machine: the previous run's shells end with it.
-    if (current) void current.terminal.close();
-    const terminal = boot(machine);
-    if (!terminal) {
-      refuse(socket, 502, 'Bad Gateway');
-      return;
+  void ensureBooted(machineId).then(
+    (current) => {
+      if (!current) {
+        refuse(socket, 502, 'Bad Gateway');
+        return;
+      }
+      // An image from before the chat: its server 404s the path (agent-chat.md Q8).
+      if (req.url?.startsWith('/v1/chat') && readSetup(current.instanceId).chatServer === false) {
+        refuse(socket, 404, 'Not Found');
+        return;
+      }
+      // The real server's own upgrade handler: it verifies the relay token first.
+      current.terminal.server.emit('upgrade', req, socket, head);
+    },
+    () => refuse(socket, 502, 'Bad Gateway'),
+  );
+}
+
+// ── The exec door (MOTIR-7031) ────────────────────────────────────────────────
+
+interface ExecRequest {
+  machineId: string;
+  command: string[];
+  stdin?: string;
+}
+
+interface ExecResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+/** `--run-id <id>`'s value, if the argv carries one. */
+function runIdOf(args: readonly string[]): string | undefined {
+  const at = args.indexOf('--run-id');
+  return at >= 0 ? args[at + 1] : undefined;
+}
+
+/**
+ * Run one exec on a machine. The launcher's `runuser -u node -- env HOME=… motir …`
+ * prefix is the image's way of becoming the agent's user; here every command
+ * already runs as the agent, with its home, so what matters is what follows
+ * `motir agent-terminal`.
+ */
+async function runExec(request: ExecRequest): Promise<ExecResult | null> {
+  const current = await ensureBooted(request.machineId);
+  if (!current) return null;
+  const at = request.command.findIndex(
+    (part, i) => part === 'motir' && request.command[i + 1] === 'agent-terminal',
+  );
+  if (at < 0) return { exitCode: 0, stdout: '', stderr: '' };
+  const [sub, ...args] = request.command.slice(at + 2);
+  if (sub === undefined || sub === '--help' || args.includes('--help')) {
+    return { exitCode: 0, stdout: '', stderr: '' };
+  }
+  let stdout = '';
+  const out = (text: string) => void (stdout += text);
+  const env = current.env;
+  try {
+    switch (sub) {
+      case 'signin':
+        await agentTerminalSignInCommand({ env, stdout: out });
+        break;
+      case 'run':
+        await agentTerminalRunCommand(
+          args[0] ?? '',
+          { runId: runIdOf(args) },
+          { env, stdout: out, readStdin: async () => request.stdin ?? '' },
+        );
+        break;
+      case 'stop':
+        await agentTerminalStopCommand({ runId: runIdOf(args) }, { env, stdout: out });
+        break;
+      case 'status':
+        await agentTerminalStatusCommand({ runId: runIdOf(args) }, { env, stdout: out });
+        break;
+      default:
+        return { exitCode: 0, stdout: '', stderr: '' };
     }
-    current = { run: runOf(machine), terminal };
-    booted.set(machineId, current);
+    return { exitCode: 0, stdout, stderr: '' };
+  } catch (err) {
+    // The CLI exits 1 with its words on stderr, having printed its JSON answer.
+    const message = err instanceof Error ? err.message : String(err);
+    return { exitCode: 1, stdout, stderr: `${message}\n` };
   }
-  // An image from before the chat: its server 404s the path (agent-chat.md Q8).
-  if (req.url?.startsWith('/v1/chat') && readSetup(machine.spec.instanceId).chatServer === false) {
-    refuse(socket, 404, 'Not Found');
-    return;
-  }
-  // The real server's own upgrade handler: it verifies the relay token first.
-  current.terminal.server.emit('upgrade', req, socket, head);
+}
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let raw = '';
+    req.on('data', (chunk: Buffer) => (raw += chunk.toString('utf8')));
+    req.on('end', () => resolve(raw));
+    req.on('error', reject);
+  });
 }
 
 rmSync(HOMES, { recursive: true, force: true });
 mkdirSync(HOMES, { recursive: true });
+rmSync(CONTROL_SOCKETS, { recursive: true, force: true });
 
-const server = createServer((_req, res) => {
-  res.statusCode = 426;
-  res.end();
+const server = createServer((req, res) => {
+  if (req.method !== 'POST' || req.url !== '/exec') {
+    res.statusCode = 426;
+    res.end();
+    return;
+  }
+  void readBody(req)
+    .then(async (raw) => {
+      const request = JSON.parse(raw) as ExecRequest;
+      const result = await runExec(request);
+      if (!result) {
+        res.statusCode = 412;
+        res.end(JSON.stringify({ error: `machine ${request.machineId} is not running` }));
+        return;
+      }
+      console.warn(
+        `[terminal-host ${request.machineId}] exec ${request.command.slice(-4).join(' ')} → ${result.exitCode}`,
+      );
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify(result));
+    })
+    .catch((err: unknown) => {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+    });
 });
 server.on('upgrade', onUpgrade);
 server.listen(PORT, '127.0.0.1', () => {

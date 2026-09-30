@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, rmSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
+import { HOSTED_STATE_ENV, defaultCliInvocation } from '../hostedGit.js';
 import { resolveChatAdapter, type ChatAdapter, type ChatContext } from './chat/adapter.js';
 import {
   createChatHub,
@@ -10,6 +11,15 @@ import {
   type ChatConnectionHandle,
   type SpawnChat,
 } from './chat/turns.js';
+import {
+  CONTROL_SOCKET,
+  listenControl,
+  runStateDir,
+  runWorkspaceDir,
+  type ControlRequest,
+  type ControlResponse,
+  type ControlServer,
+} from './control.js';
 import { OutputRing, REPLAY_BYTES } from './outputRing.js';
 import {
   CHAT_PATH,
@@ -17,6 +27,8 @@ import {
   encodeServerFrame,
   parseClientFrame,
   type ServerFrame,
+  type SessionKind,
+  type SessionListing,
 } from './protocol.js';
 import type { PtyProcess, SpawnPty } from './pty.js';
 import { NonceMemory, verifyRelayAuthorization } from './relayToken.js';
@@ -40,8 +52,20 @@ import {
 // `Error` message built from any of them. PTY bytes travel between the PTY and
 // the socket and the in-memory replay ring, and nowhere else.
 //
-// Everything with a side effect (the PTY, the clock, `fs.stat`, the log sink)
-// is injected, so the tests drive this module against a fake PTY.
+// THE RUN SESSION (MOTIR-7025 · `docs/decisions/agent-instance-run.md` §1, §2).
+// Besides a person's shells, the server holds at most ONE run session: `motir
+// run <KEY> --run-id <id>` in agent mode, opened on a request over the LOCAL
+// control socket (`control.ts`), never over the relay. It is tagged with its
+// run id, never reaped and never counted against the four shells, watch-only
+// (input frames are dropped, resize applies), and listed to every connection so
+// the panel can offer it. Its environment carries the run's private state
+// directory — where the launcher wrote the run token — and never a token. When
+// its process exits, however it exits, the state and workspace directories are
+// removed.
+//
+// Everything with a side effect (the PTY, the clock, `fs.stat`, the log sink,
+// signalling a process group, removing a directory) is injected, so the tests
+// drive this module against a fake PTY.
 
 /** The env var holding the instance key; it is removed from the shell's env. */
 export const TERMINAL_KEY_ENV = 'MOTIR_TERMINAL_KEY';
@@ -51,6 +75,41 @@ export const MAX_SESSIONS = 4;
 export const SIGNIN_INTERVAL_MS = 5_000;
 /** How long an authenticated connection may wait before its `open` frame. */
 export const OPEN_TIMEOUT_MS = 30_000;
+/** How long a stopped run gets after SIGTERM before SIGKILL (agent-instance-run.md §1). */
+export const RUN_STOP_GRACE_MS = 10_000;
+/** The env var that puts `motir run` in agent mode (agent-instance-run.md §1, §3). */
+export const AGENT_RUN_ENV = 'MOTIR_AGENT_RUN';
+/** The env var naming the run's own checkouts directory (agent-instance-run.md §2). */
+export const RUN_WORKSPACE_ENV = 'MOTIR_WORKSPACE';
+/** The PTY a run session is opened with, before anyone attaches and resizes it. */
+export const RUN_COLS = 120;
+export const RUN_ROWS = 40;
+/** Exited runs whose status is remembered for `status`; the oldest is forgotten first. */
+const EXITED_RUNS_KEPT = 16;
+
+/** Signal a PTY's process GROUP (node-pty starts each child as a session leader). */
+export type SignalGroup = (pid: number, signal: NodeJS.Signals) => void;
+
+export const signalProcessGroup: SignalGroup = (pid, signal) => {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    try {
+      process.kill(pid, signal);
+    } catch {
+      // Already gone.
+    }
+  }
+};
+
+function removeDirQuietly(path: string): void {
+  try {
+    rmSync(path, { recursive: true, force: true });
+  } catch {
+    // Best effort: /tmp is reset on every wake, and the run's credentials are
+    // revoked at its close whatever is left on disk.
+  }
+}
 
 export interface TerminalServerOptions {
   /** MOTIR_TERMINAL_KEY. */
@@ -77,10 +136,22 @@ export interface TerminalServerOptions {
   replayBytes?: number;
   signInIntervalMs?: number;
   openTimeoutMs?: number;
+  /** The command that re-enters this CLI; the run session runs `<cli> run <KEY> --run-id <id>`. */
+  cli?: readonly string[];
+  /** SIGTERM / SIGKILL a run session's process group. */
+  signalGroup?: SignalGroup;
+  /** Remove a run's state and workspace directories when its session ends. */
+  removeDir?: (path: string) => void;
+  /** SIGTERM → SIGKILL grace for a stopped run. */
+  stopGraceMs?: number;
 }
 
 interface Session {
   id: string;
+  /** A person's shell, or the one session a card's run lives in (never reaped). */
+  kind: SessionKind;
+  /** Set on a run session only. */
+  runId?: string;
   pty: PtyProcess;
   ring: OutputRing;
   connection: Attachment | null;
@@ -88,6 +159,18 @@ interface Session {
   detachedAt: number | null;
   /** Monotonic tiebreak for sessions detached in the same millisecond. */
   detachSeq: number;
+}
+
+interface RunRecord {
+  runId: string;
+  session: Session;
+  state: 'running' | 'exited';
+  exitCode: number | null;
+  signal: number | null;
+  /** Resolves once the session's process has exited. */
+  exited: Promise<void>;
+  markExited: () => void;
+  killTimer: NodeJS.Timeout | null;
 }
 
 interface Attachment {
@@ -101,9 +184,13 @@ export interface TerminalServer {
   readonly server: Server;
   /** Start listening; resolves with the bound port. */
   listen(port: number, host?: string): Promise<number>;
+  /** Start the LOCAL control socket the run launcher speaks to (agent-instance-run.md §1). */
+  listenControl(path?: string): Promise<void>;
+  /** Answer one control request — what the socket calls; exposed for tests. */
+  control(request: ControlRequest): Promise<ControlResponse>;
   /** Kill every shell, drop every connection, stop listening. */
   close(): Promise<void>;
-  /** How many live sessions the server holds. */
+  /** How many live sessions the server holds, the run session included. */
   sessionCount(): number;
   /** The running chat turn's number, or null (one per agent). */
   chatTurn(): number | null;
@@ -149,10 +236,15 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
   const replayBytes = options.replayBytes ?? REPLAY_BYTES;
   const signInIntervalMs = options.signInIntervalMs ?? SIGNIN_INTERVAL_MS;
   const openTimeoutMs = options.openTimeoutMs ?? OPEN_TIMEOUT_MS;
+  const stopGraceMs = options.stopGraceMs ?? RUN_STOP_GRACE_MS;
+  const signalGroup = options.signalGroup ?? signalProcessGroup;
+  const removeDir = options.removeDir ?? removeDirQuietly;
   const log = options.log;
   const nonces = new NonceMemory();
   const sessions = new Map<string, Session>();
   const connections = new Set<Attachment>();
+  const runs = new Map<string, RunRecord>();
+  let control: ControlServer | null = null;
   let detachCounter = 0;
   let signInTimer: NodeJS.Timeout | null = null;
   let lastSignIn: SignInStatus | null = null;
@@ -231,6 +323,26 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
   };
 
   // ── Sessions (Q5) ─────────────────────────────────────────────────────────
+  /** A person's shells: what the four-session limit counts. A run session never does. */
+  const shellCount = (): number =>
+    [...sessions.values()].filter((session) => session.kind === 'shell').length;
+
+  const liveRun = (): RunRecord | undefined =>
+    [...runs.values()].find((record) => record.state === 'running');
+
+  const listing = (): SessionListing[] =>
+    [...sessions.values()].map((session) =>
+      session.kind === 'run'
+        ? { session: session.id, kind: 'run', runId: session.runId as string }
+        : { session: session.id, kind: 'shell' },
+    );
+
+  /** Tell every attached connection which sessions exist (a run opened or ended). */
+  const broadcastSessions = (): void => {
+    const sessionsFrame: ServerFrame = { t: 'sessions', sessions: listing() };
+    for (const attachment of attachedConnections()) send(attachment, sessionsFrame);
+  };
+
   const detach = (session: Session): void => {
     session.connection = null;
     session.detachedAt = now();
@@ -255,11 +367,18 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
     session.connection = attachment;
     session.detachedAt = null;
     attachment.session = session;
-    send(attachment, { t: 'ready', session: session.id, resumed });
+    send(
+      attachment,
+      session.kind === 'run'
+        ? { t: 'ready', session: session.id, resumed, kind: 'run', runId: session.runId as string }
+        : { t: 'ready', session: session.id, resumed },
+    );
     if (resumed) {
       const replay = session.ring.snapshot();
       if (replay.length > 0) attachment.ws.send(replay);
     }
+    // The run session is offered to whoever attaches, beside their own shell.
+    if (liveRun()) send(attachment, { t: 'sessions', sessions: listing() });
     log(`agent-terminal: session ${session.id} ${resumed ? 'resumed' : 'attached'}`);
     syncSignInTimer();
     void signInOnAttach(attachment);
@@ -268,6 +387,8 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
   const reapLongestDetached = (): boolean => {
     let victim: Session | null = null;
     for (const session of sessions.values()) {
+      // A run session is never reaped: opening terminals never kills a run.
+      if (session.kind === 'run') continue;
       if (session.connection !== null || session.detachedAt === null) continue;
       if (
         victim === null ||
@@ -284,8 +405,46 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
     return true;
   };
 
+  /** Register a spawned PTY as a session: its output feeds the ring and the attached socket. */
+  const registerSession = (
+    pty: PtyProcess,
+    kind: SessionKind,
+    runId: string | undefined,
+    onExit: (exitCode: number | null, signal: number | null) => void,
+  ): Session => {
+    const session: Session = {
+      id: randomUUID(),
+      kind,
+      ...(runId === undefined ? {} : { runId }),
+      pty,
+      ring: new OutputRing(replayBytes),
+      connection: null,
+      detachedAt: kind === 'run' ? now() : null,
+      detachSeq: 0,
+    };
+    sessions.set(session.id, session);
+    pty.onData((data) => {
+      session.ring.push(data);
+      if (session.connection) session.connection.ws.send(data);
+    });
+    pty.onExit(({ exitCode, signal }) => {
+      if (!sessions.has(session.id)) return;
+      removeSession(session);
+      const connection = session.connection;
+      session.connection = null;
+      if (connection) {
+        connection.session = null;
+        send(connection, { t: 'exit', code: exitCode, signal });
+        connection.ws.close(1000);
+      }
+      log(`agent-terminal: session ${session.id} exited (code ${String(exitCode)})`);
+      onExit(exitCode, signal);
+    });
+    return session;
+  };
+
   const openSession = (attachment: Attachment, cols: number, rows: number): void => {
-    if (sessions.size >= maxSessions && !reapLongestDetached()) {
+    if (shellCount() >= maxSessions && !reapLongestDetached()) {
       send(attachment, { t: 'error', code: 'session_limit' });
       attachment.ws.close(1000);
       log('agent-terminal: open refused (session limit)');
@@ -307,33 +466,136 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
       attachment.ws.close(1011);
       return;
     }
-    const session: Session = {
-      id: randomUUID(),
-      pty,
-      ring: new OutputRing(replayBytes),
-      connection: null,
-      detachedAt: null,
-      detachSeq: 0,
-    };
-    sessions.set(session.id, session);
-    pty.onData((data) => {
-      session.ring.push(data);
-      if (session.connection) session.connection.ws.send(data);
-    });
-    pty.onExit(({ exitCode, signal }) => {
-      if (!sessions.has(session.id)) return;
-      removeSession(session);
-      const connection = session.connection;
-      session.connection = null;
-      if (connection) {
-        connection.session = null;
-        send(connection, { t: 'exit', code: exitCode, signal });
-        connection.ws.close(1000);
-      }
-      log(`agent-terminal: session ${session.id} exited (code ${String(exitCode)})`);
-    });
+    const session = registerSession(pty, 'shell', undefined, () => undefined);
     log(`agent-terminal: session ${session.id} opened (pid ${pty.pid})`);
     attach(attachment, session, false);
+  };
+
+  // ── Runs (agent-instance-run.md §1, §2) ───────────────────────────────────
+  const home = options.env['HOME'] || '/';
+
+  const forgetOldRuns = (): void => {
+    const exited = [...runs.values()].filter((record) => record.state === 'exited');
+    for (const record of exited.slice(0, Math.max(0, exited.length - EXITED_RUNS_KEPT))) {
+      runs.delete(record.runId);
+    }
+  };
+
+  /** The run's environment: a shell's, plus agent mode and its private dirs — never a token. */
+  const runEnv = (runId: string): Record<string, string> => ({
+    ...shellEnv(options.env),
+    [HOSTED_STATE_ENV]: runStateDir(runId),
+    [AGENT_RUN_ENV]: '1',
+    [RUN_WORKSPACE_ENV]: runWorkspaceDir(home, runId),
+  });
+
+  const startRun = (runId: string, workItemKey: string): ControlResponse => {
+    if (closing) return { ok: false, code: 'spawn_failed' };
+    const active = liveRun();
+    if (active) {
+      log(`agent-terminal: run ${runId} refused (run ${active.runId} active)`);
+      return { ok: false, code: 'run_active' };
+    }
+    const cli = options.cli ?? defaultCliInvocation();
+    let pty: PtyProcess;
+    try {
+      pty = options.spawnPty({
+        file: cli[0] as string,
+        args: [...cli.slice(1), 'run', workItemKey, '--run-id', runId],
+        cols: RUN_COLS,
+        rows: RUN_ROWS,
+        cwd: shellCwd(options.env),
+        env: runEnv(runId),
+      });
+    } catch {
+      log(`agent-terminal: run ${runId} failed to start`);
+      removeDir(runStateDir(runId));
+      return { ok: false, code: 'spawn_failed' };
+    }
+    let markExited = (): void => undefined;
+    const exited = new Promise<void>((resolve) => {
+      markExited = resolve;
+    });
+    const record: RunRecord = {
+      runId,
+      // Assigned just below; the exit callback cannot fire before it is.
+      session: null as unknown as Session,
+      state: 'running',
+      exitCode: null,
+      signal: null,
+      exited,
+      markExited,
+      killTimer: null,
+    };
+    runs.set(runId, record);
+    record.session = registerSession(pty, 'run', runId, (exitCode, signal) => {
+      record.state = 'exited';
+      record.exitCode = exitCode;
+      record.signal = signal;
+      if (record.killTimer) clearTimeout(record.killTimer);
+      record.killTimer = null;
+      // However the run ends, its credentials and its checkouts go with it (§2).
+      removeDir(runStateDir(runId));
+      removeDir(runWorkspaceDir(home, runId));
+      log(`agent-terminal: run ${runId} ended (code ${String(exitCode)})`);
+      record.markExited();
+      forgetOldRuns();
+      broadcastSessions();
+    });
+    log(`agent-terminal: run ${runId} session ${record.session.id} opened (pid ${pty.pid})`);
+    broadcastSessions();
+    return { ok: true, session: record.session.id };
+  };
+
+  const stopRun = async (runId: string): Promise<ControlResponse> => {
+    const record = runs.get(runId);
+    if (!record) return { ok: true, result: 'not_found' };
+    if (record.state === 'running') {
+      const pid = record.session.pty.pid;
+      log(`agent-terminal: run ${runId} stopping`);
+      signalGroup(pid, 'SIGTERM');
+      if (!record.killTimer) {
+        record.killTimer = setTimeout(() => {
+          record.killTimer = null;
+          if (record.state !== 'running') return;
+          log(`agent-terminal: run ${runId} killed (grace elapsed)`);
+          signalGroup(pid, 'SIGKILL');
+        }, stopGraceMs);
+        record.killTimer.unref();
+      }
+      // A process that survives even SIGKILL (stuck in the kernel) must not
+      // hold the caller's exec open forever: answer after a bounded wait.
+      await Promise.race([
+        record.exited,
+        new Promise<void>((resolve) => setTimeout(resolve, stopGraceMs + 5_000).unref()),
+      ]);
+    }
+    return { ok: true, result: 'stopped' };
+  };
+
+  const runStatus = (runId: string): ControlResponse => {
+    const record = runs.get(runId);
+    if (!record) return { ok: true, state: 'not_found' };
+    return record.state === 'running'
+      ? { ok: true, state: 'running', session: record.session.id }
+      : {
+          ok: true,
+          state: 'exited',
+          session: record.session.id,
+          exitCode: record.exitCode,
+          signal: record.signal,
+        };
+  };
+
+  const handleControl = async (request: ControlRequest): Promise<ControlResponse> => {
+    switch (request.op) {
+      case 'run':
+        return startRun(request.runId, request.workItemKey);
+      case 'stop':
+        return stopRun(request.runId);
+      case 'status':
+        return runStatus(request.runId);
+    }
   };
 
   const onOpenFrame = (
@@ -359,6 +621,8 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
 
   const onMessage = (attachment: Attachment, data: Buffer, isBinary: boolean): void => {
     if (isBinary) {
+      // A run session is watch-only: a person stops it with Cancel, never a keystroke.
+      if (attachment.session?.kind === 'run') return;
       attachment.session?.pty.write(data);
       return;
     }
@@ -469,9 +733,22 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
         });
       });
     },
+    async listenControl(path = CONTROL_SOCKET) {
+      control = await listenControl(path, handleControl);
+      log('agent-terminal: control socket listening');
+    },
+    control: handleControl,
     async close() {
       closing = true;
       syncSignInTimer();
+      for (const record of runs.values()) {
+        if (record.killTimer) clearTimeout(record.killTimer);
+        record.killTimer = null;
+        // The kill below skips the exit bookkeeping; release any waiting `stop`.
+        record.markExited();
+      }
+      if (control) await control.close();
+      control = null;
       for (const session of [...sessions.values()]) {
         sessions.delete(session.id);
         session.pty.kill();
