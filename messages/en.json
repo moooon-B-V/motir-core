@@ -1246,6 +1246,11 @@
         "ask": {
           "title": "Ask about this project",
           "description": "Answer questions about the plan, docs and work items"
+        },
+        "debug": {
+          "title": "Debug with Motir AI",
+          "description": "Trace a bug to its likely cause and file it in Triage",
+          "prefill": "Something is broken. What happens: \nWhat should happen instead: "
         }
       }
     },
@@ -5550,7 +5555,11 @@
       "submit": "Submit",
       "submitted": "Thanks — your report was submitted",
       "submittedDetail": "Filed as {key}, now waiting in Requested features.",
-      "error": "Couldn’t submit your report. Please try again."
+      "error": "Couldn’t submit your report. Please try again.",
+      "debugOffer": {
+        "action": "Debug with Motir AI",
+        "hint": "<b>Debug with Motir AI</b> starts the debug as soon as you press it and spends Motir AI credits. Motir AI reads the code, names the likely cause, and checks whether a work item already covers this bug."
+      }
     }
   },
   "publicProjects": {
@@ -7195,6 +7204,7 @@
         "validating": "Checking the proposal against your plan…",
         "reading": "Reading your request…",
         "redirected": "Working on the proposal…",
+        "redirectedDebug": "Tracing the bug…",
         "retrieval": "Reading the plan…",
         "laying": "Laying out a level…",
         "authoring": "Writing a work item…",
@@ -7220,6 +7230,14 @@
       "correctedToPlan": "Re-read as a plan change",
       "correctedToAsk": "Re-read as a question",
       "handoff": "Reading it as a plan change — working on the proposal",
+      "handoffDebug": "Reading it as a bug — tracing the likely cause",
+      "debug": {
+        "wroteAnchor": "Wrote the diagnosis onto <chip>{key}</chip>. It stays in Triage, and nothing else changed.",
+        "filed": "Filed <chip>{key}</chip> in Triage with the diagnosis. Nothing else changed.",
+        "enrichedAnchor": "Added the diagnosis to <chip>{key}</chip>, which already covers this bug. Nothing new was filed, and {anchorKey} is left as it is.",
+        "enriched": "Added the diagnosis to <chip>{key}</chip>, which already covers this bug. Nothing new was filed.",
+        "ungrounded": "Couldn't trace this to the code, so nothing was written."
+      },
       "stop": "Stop",
       "stoppingAction": "Stopping…",
       "stopping": "Stopping — finishing this work item first.",
@@ -7232,6 +7250,7 @@
         "submitted": "submit",
         "reading": "reading",
         "redirected": "hand-off",
+        "redirectedDebug": "hand-off",
         "retrieval": "retrieval",
         "searching": "search",
         "drilling": "drill",
@@ -7240,11 +7259,15 @@
         "note": "note",
         "proposed": "proposed",
         "validating": "validate",
+        "matching": "match",
+        "writing": "write",
         "unknown": "frame",
         "retrievalLine": "Read the {family}",
         "retrievalBlockedLine": "Out of lookups — carrying on with what it has.",
         "layingLine": "Laying out {target}",
         "authoringLine": "Writing {title}",
+        "matchingLine": "Checking whether a work item already covers it",
+        "writingLine": "Writing the diagnosis onto {key}",
         "unknownLine": "frame: {frame}",
         "retrievalLineBare": "Read from the plan's sources",
         "family": {

@@ -316,6 +316,19 @@ export interface AskRedirectResponse {
   session: PlanChangeSessionDto;
 }
 
+/**
+ * A RE-RUN that went straight back to diagnosing (MOTIR-7047's resubmit): the turn
+ * already ran as `debug`, so the retry re-runs the SAME diagnosis without asking
+ * the classifier again, and `jobId` names the `debug_bug` job now running. Only
+ * {@link rerunAskTurn} can produce it — and a caller that treats it as the plan
+ * hand-off streams a debug job as a plan edit (the MOTIR-7050 retry gap).
+ */
+export interface AskDebugResponse {
+  outcome: 'debugging';
+  jobId: string;
+  session: PlanChangeSessionDto;
+}
+
 /** Send a NEW user turn through the one door. The body carries the text alone. */
 export async function submitAskTurn(
   body: string,
@@ -335,6 +348,11 @@ export async function submitAskTurn(
    *  Rides only when there is no `sessionId`; a gate that may not seed the project
    *  scope answers `422 SEED_NOT_APPLICABLE`. */
   seedGateId: string | null = null,
+  /** The ONE work item this turn is ABOUT (MOTIR-7047 · ADR AMENDMENT 1, A1.2) —
+   *  the triage bug the report widget just filed, on its seeded debug turn
+   *  (MOTIR-7050). DATA, not an intent: the turn still lands on the project-wide
+   *  thread, and what it turns out to be is still the server's reading. */
+  anchorKey: string | null = null,
 ): Promise<AskSubmitResponse | AskRedirectResponse> {
   return post<AskSubmitResponse | AskRedirectResponse>(
     '/api/ai/ask',
@@ -343,6 +361,7 @@ export async function submitAskTurn(
       isAnswer,
       ...(sessionId ? { sessionId } : {}),
       ...(seedGateId && !sessionId ? { seedGateId } : {}),
+      ...(anchorKey ? { anchorKey } : {}),
     },
     signal,
   );
@@ -359,15 +378,20 @@ export async function submitAskTurn(
  */
 export async function rerunAskTurn(
   turnId: string,
-  options: { flip?: boolean; sessionId?: string | null } = {},
+  /** `anchorKey` is the anchor the turn was FIRST sent with (MOTIR-7050): the
+   *  re-run of a debug turn re-runs the SAME diagnosis, and without it a report
+   *  anchored on its triage bug would be diagnosed as if it had none — and file
+   *  a second bug for it. */
+  options: { flip?: boolean; sessionId?: string | null; anchorKey?: string | null } = {},
   signal?: AbortSignal,
-): Promise<AskSubmitResponse | AskRedirectResponse> {
-  return post<AskSubmitResponse | AskRedirectResponse>(
+): Promise<AskSubmitResponse | AskRedirectResponse | AskDebugResponse> {
+  return post<AskSubmitResponse | AskRedirectResponse | AskDebugResponse>(
     '/api/ai/ask',
     {
       turnId,
       ...(options.flip ? { flip: true } : {}),
       ...(options.sessionId ? { sessionId: options.sessionId } : {}),
+      ...(options.anchorKey ? { anchorKey: options.anchorKey } : {}),
     },
     signal,
   );

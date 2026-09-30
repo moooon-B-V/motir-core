@@ -392,7 +392,14 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                 "Report" triggers drive the same dialog. The widget posts to the
                 6.11.4 intake for the active project; mounted only when there's a
                 project the actor can edit (the intake rejects a viewer 403). */}
-            <ReportProvider projectKey={activeProject?.identifier ?? null} canEdit={canEdit}>
+            <ReportProvider
+              projectKey={activeProject?.identifier ?? null}
+              canEdit={canEdit}
+              // The report widget's "Debug with Motir AI" offer (MOTIR-7050)
+              // rides the ORB's gate, so the two can never disagree about who
+              // may start a Motir AI turn.
+              canDebug={showPlanWithAi}
+            >
               {/* OnboardingResumeProvider (MOTIR-1533) resolves the in-progress
                   onboarding signal ONCE and shares it with the SidebarNav rail
                   row + the ⌘K twin below, so neither fetches on its own. */}

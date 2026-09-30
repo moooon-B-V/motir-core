@@ -88,7 +88,26 @@ describe('aiCalloutActions', () => {
     expect(aiCalloutActions(overlayHref({ kind: 'project' })).map((a) => a.id)).toEqual([
       'plan',
       'ask',
+      'debug',
     ]);
+  });
+
+  it('the debug row (MOTIR-7050): a bug tile, and a PRE-FILL — never a second href', () => {
+    const href = overlayHref({ kind: 'project' });
+    const debug = aiCalloutActions(href).find((a) => a.id === 'debug');
+    expect(debug).toMatchObject({
+      icon: 'bug',
+      titleKey: 'aiCallout.actions.debug.title',
+      descriptionKey: 'aiCallout.actions.debug.description',
+      prefillKey: 'aiCallout.actions.debug.prefill',
+      href,
+    });
+    // Only the debug row pre-fills: the others open the surface as it is.
+    expect(
+      aiCalloutActions(href)
+        .filter((a) => a.prefillKey)
+        .map((a) => a.id),
+    ).toEqual(['debug']);
   });
 
   it('⭐ gives every row the SAME href — the registry is a capability list', () => {

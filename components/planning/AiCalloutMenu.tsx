@@ -3,7 +3,7 @@
 import { type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { MessageCircleQuestion, Sparkles, Wrench, type LucideIcon } from 'lucide-react';
+import { Bug, MessageCircleQuestion, Sparkles, Wrench, type LucideIcon } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/utils/cn';
 import {
@@ -12,7 +12,11 @@ import {
   type AiCalloutIcon,
 } from '@/lib/planning/aiCallout';
 import type { PlanningLaunchContext } from '@/lib/planning/launcher';
-import { useOpenPlanningWorkspace } from '@/lib/hooks/useOpenPlanningWorkspace';
+import {
+  isPlainPrimaryClick,
+  useOpenPlanningWorkspace,
+} from '@/lib/hooks/useOpenPlanningWorkspace';
+import { firstLineCaret, handSurfaceSeed } from '@/lib/planning/surfaceSeed';
 
 /**
  * AiCalloutMenu — the "M" callout's PANEL (MOTIR-1812 / Story 7.24; design @
@@ -43,6 +47,7 @@ export interface AiCalloutMenuProps {
 const ICONS: Record<AiCalloutIcon, LucideIcon> = {
   sparkles: Sparkles,
   'message-circle-question': MessageCircleQuestion,
+  bug: Bug,
   wrench: Wrench,
 };
 
@@ -119,6 +124,14 @@ export function AiCalloutMenu({ context, onSelect }: AiCalloutMenuProps) {
               href={action.href}
               data-action={action.id}
               onClick={(event) => {
+                // A row that PRE-FILLS (MOTIR-7050) hands its text to the surface
+                // before it opens — in page memory, never in the address, so a
+                // reload does not refill it. Only for the click this handler
+                // keeps: a ⌘/middle-click opens a new tab, which starts empty.
+                if (action.prefillKey && isPlainPrimaryClick(event)) {
+                  const text = t(action.prefillKey);
+                  handSurfaceSeed({ kind: 'draft', text, caret: firstLineCaret(text) });
+                }
                 // The popover closes first, so focus return lands on the orb
                 // rather than on a row that is being unmounted.
                 onSelect?.();
