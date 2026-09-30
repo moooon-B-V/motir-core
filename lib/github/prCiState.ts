@@ -46,7 +46,16 @@ export interface PrCheckRunSlice extends SuiteScopedCheckRow {
  * surface renders no CI pill).
  */
 export function derivePrCiState(checkRuns: PrCheckRunSlice[]): PrCiState {
-  const atHead = liveRowsAtLatestSha(checkRuns);
+  return foldHeadCheckRows(liveRowsAtLatestSha(checkRuns));
+}
+
+/**
+ * The precedence above, over rows the caller has ALREADY narrowed to one commit's
+ * live runs. Split out (MOTIR-7005) so `lib/github/pullRequestHead.ts` can fold the
+ * rows at the pull request's STORED head with the same precedence, rather than
+ * re-stating it.
+ */
+export function foldHeadCheckRows(atHead: readonly PrCheckRunSlice[]): PrCiState {
   if (atHead.length === 0) return null;
   if (atHead.some((r) => r.conclusion === 'failure')) return 'failing';
   if (atHead.some((r) => r.conclusion === 'pending')) return 'running';

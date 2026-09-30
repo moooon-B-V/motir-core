@@ -18,10 +18,9 @@ import { defineJob } from '../defineJob';
  * moved reports `null` rather than the old number. Never a wrong count; at worst
  * an absent one.
  *
- * ⚠️ THE MINUTE IS NOT FREE TO PICK. `lib/jobs/schedules.ts` allows minute 0 and
- * 30 only, so every `system.*` cron shares two wake-minutes and the database can
- * suspend between them; a job at :17 re-opens the gap for the whole cluster and
- * nothing alerts. This lands on the existing pair.
+ * Every 5 minutes — the one sub-hourly cadence (`SUB_HOURLY_CADENCE`,
+ * `lib/jobs/schedules.ts`); a different one would have to be named in
+ * `SUB_HOURLY_CADENCE_EXCEPTIONS` with its reason.
  */
 export const CODE_GRAPH_DRIFT_SWEEP_CRON = '*/5 * * * *';
 

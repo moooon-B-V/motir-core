@@ -1030,6 +1030,9 @@ export const githubProvider: GitProvider = {
     const number = typeof pr['number'] === 'number' ? pr['number'] : null;
     const head = asRecord(pr['head']);
     const headRef = typeof head?.['ref'] === 'string' ? head['ref'] : null;
+    // The head COMMIT (MOTIR-7005) — the host's word for where the pull request is,
+    // which the check rows are not: a push that produced no CI leaves them behind.
+    const headSha = typeof head?.['sha'] === 'string' ? head['sha'] : null;
     // The DESTINATION, read as strictly as the source (MOTIR-1873): a merge that
     // does not name a base cannot be judged against the trunk, so it does not
     // normalize at all rather than normalizing into an assumed `main`.
@@ -1044,6 +1047,7 @@ export const githubProvider: GitProvider = {
       merged: pr['merged'] === true,
       headRef,
       baseRef,
+      headSha,
       title: typeof pr['title'] === 'string' ? pr['title'] : null,
       // The DRAFT flag (MOTIR-4968), read in the same idiom as `merged` beside
       // it: GitHub reports a draft as `state: 'open'`, so this boolean is the

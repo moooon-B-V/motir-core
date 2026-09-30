@@ -29,21 +29,9 @@ import { defineJob } from '../defineJob';
 //
 // Hourly, at :30. Hourly is the right grain because the input it reacts to (the
 // ready set draining as work completes) moves on a human timescale, and a project
-// only ever fires once per undecided plan anyway.
-//
-// ⚠️ THE OFFSET RATIONALE IS INVERTED, AND REPLACED IN PLACE (MOTIR-3314). This
-// comment used to read ":20 — clear of the filter-subscription tick (:00), the
-// 09:00 health check, and the 03:30 attachment GC, so a busy top-of-hour never
-// stacks the sweep behind them." Staying clear of the other schedules is correct
-// on an always-on machine and exactly backwards on a compute that suspends when
-// idle, where every distinct offset is another billed wake.
-//
-// WHAT IT GAVE UP: the anti-stacking margin. This tick now shares :30 with the
-// CI-actions gate sweep and the four half-hourly sweeps. That is a real cost and
-// a small one — Inngest runs each as its own function with its own concurrency,
-// and this handler's own work is one indexed scan per opted-in project.
-// WHAT IT BOUGHT: it no longer opens a wake-minute of its own, and its lead over
-// `abandonedPlanSweep` (:00) grew from ten minutes to thirty.
+// only ever fires once per undecided plan anyway. The :30 minute keeps it thirty
+// minutes behind `abandonedPlanSweep` (:00), so a plan that sweep frees this hour
+// unpauses its project in this hour's tick.
 export const AUTO_PLAN_CADENCE_TICK_CRON = '30 * * * *';
 
 export const autoPlanCadenceTick = defineJob(

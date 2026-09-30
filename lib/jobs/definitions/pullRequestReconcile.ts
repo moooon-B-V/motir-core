@@ -15,15 +15,13 @@ import { defineJob } from '../defineJob';
 // second pass finds strictly less than the first.
 
 /**
- * Every 30 minutes, ON the cluster (`lib/jobs/schedules.ts`'s
- * `SCHEDULE_CLUSTER_MINUTES`) — both clustered minutes, so it opens no new
- * wake-minute and the quiet gap is untouched.
+ * Every 5 minutes — the one sub-hourly cadence (`SUB_HOURLY_CADENCE`,
+ * `lib/jobs/schedules.ts`).
  *
  * What it repairs is a card held at In Review by a merge Motir never heard about,
  * with nothing on the card to say so. Worst case for a lost merge is the
- * 10-minute quiet threshold plus the 30-minute gap: repaired inside the hour,
- * without anyone noticing it was stuck. A tighter cadence would re-price the whole
- * schedule (§21) to shave minutes off a failure that is rare by construction.
+ * 10-minute quiet threshold plus the 5-minute gap: repaired within a quarter of
+ * an hour, without anyone noticing it was stuck.
  */
 export const PULL_REQUEST_RECONCILE_CRON = '*/5 * * * *';
 

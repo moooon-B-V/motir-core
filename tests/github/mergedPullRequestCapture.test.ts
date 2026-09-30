@@ -470,6 +470,7 @@ describe('the capture survives the races the handler cannot stage', () => {
       baseRef: 'main',
       title: 'Some change (ACME-1)',
       draft: false, // MOTIR-4968 — a merged pull request is never a draft.
+      headSha: null,
     };
   }
 

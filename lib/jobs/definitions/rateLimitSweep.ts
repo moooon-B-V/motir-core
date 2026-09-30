@@ -24,14 +24,9 @@ import { defineJob } from '../defineJob';
 
 /** 04:00 every day — off-peak, and second in the nightly table-walk cascade
  *  (03:30 attachment GC → 04:00 here → 04:30 automation retention → 05:00
- *  code-graph offboard).
- *
- *  ⚠️ RE-TIMED :10 → :00 (MOTIR-3314). Nothing about this job's cadence or its
- *  cost changed; the MINUTE moved onto `SCHEDULE_CLUSTER_MINUTES` so it stops
- *  opening a wake-minute of its own. What it gave up is ten minutes of when;
- *  what it bought is that the separation from its neighbours is now by HOUR
- *  rather than by minute, which is strictly MORE separation than the old
- *  04:10/04:15 pair had — those were five minutes apart. */
+ *  code-graph offboard). Daily is enough to keep the table bounded — an expired
+ *  counter is dead weight, never a wrong answer — and the hour of its own keeps
+ *  its table walk off its neighbours'. */
 export const RATE_LIMIT_SWEEP_CRON = '0 4 * * *';
 
 export const rateLimitSweep = defineJob(
