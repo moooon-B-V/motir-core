@@ -103,7 +103,7 @@ export async function withHostedProjectSession<T>(
     serverUrl,
     token: cred.token,
     runId,
-    targetKey: targetKey ?? run.legs[0] ?? runId,
+    targetKey: targetKey ?? (run.legs[0] as string),
     client,
   });
   const link = hostedLink(hostedWorkspace(), serverUrl, run.projectKey);
@@ -134,7 +134,7 @@ async function withAgentRunSession<T>(
       serverUrl,
       token: access.token,
       runId,
-      targetKey: targetKey ?? run.legs[0] ?? runId,
+      targetKey: targetKey ?? (run.legs[0] as string),
       client,
       stateDir: access.stateDir,
       agentMode: true,
