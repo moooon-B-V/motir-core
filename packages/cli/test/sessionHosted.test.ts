@@ -64,6 +64,7 @@ function run(over: { status?: 'running' | 'failed'; endedAt?: string | null } = 
     startedAt: '2026-09-27T00:00:00.000Z',
     endedAt: over.endedAt ?? null,
     createdById: 'user-1',
+    agentInstance: null,
     cards: [card('ACME-3', 2), card('ACME-2', 1)],
     seq: 1,
   };
