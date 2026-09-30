@@ -215,9 +215,23 @@ describe('2 · the guards', () => {
     ).toEqual(['a.ts', 'b.ts']);
   });
 
+  // The ONE file allowed to NAME a credential variable: the panel's sign-in hints
+  // (MOTIR-6941), whose Aider entry tells the PERSON which line to write into their
+  // own `~/.env`. It is display copy — no Motir process reads, sets or forwards the
+  // variable — and it is pinned below so no other value in it can slip past.
+  const SIGN_IN_COPY = 'lib/agentInstances/profiles.ts';
+
   it('no story file reads, stores or logs a vendor credential — Motir never touches the user’s sign-in', () => {
     const files = sourcesOf(STORY_FILES);
-    expect(offenders(VENDOR_CREDENTIAL, files)).toEqual([]);
+    expect(offenders(VENDOR_CREDENTIAL, files).filter((f) => f !== SIGN_IN_COPY)).toEqual([]);
+    const copy = files.find((f) => f.file === SIGN_IN_COPY);
+    if (copy) {
+      // Only the Aider hint's inline-code value may carry a credential name, and
+      // only as a placeholder the person fills in themselves.
+      const hits = copy.code.match(new RegExp(VENDOR_CREDENTIAL.source, 'g')) ?? [];
+      expect(hits).toEqual(['ANTHROPIC_API_KEY']);
+      expect(copy.code).toContain("values: ['ANTHROPIC_API_KEY=…', '~/.env']");
+    }
     expect(
       offenders(VENDOR_CREDENTIAL, [
         { file: 'a.ts', code: 'env: { ANTHROPIC_API_KEY: key }' },

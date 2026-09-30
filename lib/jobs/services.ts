@@ -3,6 +3,7 @@ import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService'
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
 import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
+import { designAutoRerunService } from '@/lib/services/designAutoRerunService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
 import { dlqStandingDepthService } from '@/lib/services/dlqStandingDepthService';
@@ -56,6 +57,7 @@ import { organizationErasureSweepService } from '@/lib/services/organizationEras
 import { organizationRetentionPurgeService } from '@/lib/services/organizationRetentionPurgeService';
 import { supervisionSweepService } from '@/lib/services/supervisionSweepService';
 import { agentInstanceSweepService } from '@/lib/services/agentInstanceSweepService';
+import { agentTerminalRelayService } from '@/lib/services/agentTerminalRelayService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
 // (Story 1.6 · Subtask 1.6.2). This is the seam that keeps the 4-layer rule
@@ -146,6 +148,8 @@ export const jobServices = {
   // The review run's start (Story MOTIR-1626 · MOTIR-6820): one hosted `review` run per
   // request for an awaiting `agent_review` gate.
   agentReviewStart: agentReviewStartService,
+  // The automatic hosted re-run after a design Revise (MOTIR-700).
+  designAutoRerun: designAutoRerunService,
   // The base-branch mergeability re-read (MOTIR-5914): a push to a default branch
   // withdraws the approve-and-merge question over any pull request it put in conflict.
   pullRequestMergeability: pullRequestMergeabilityService,
@@ -161,6 +165,10 @@ export const jobServices = {
   // Agent instances (Story MOTIR-6860 · MOTIR-6873): the idle timer's check and
   // the sweep that reconciles, hibernates, cleans orphans and charges.
   agentInstanceSweep: agentInstanceSweepService,
+  // The agent terminal (Story MOTIR-6861 · MOTIR-6940): the sweep's second step
+  // deletes terminal tickets past their 60-second life; the third (MOTIR-6959)
+  // closes connections a dead relay left open.
+  agentTerminalRelay: agentTerminalRelayService,
 };
 
 export type JobServices = typeof jobServices;

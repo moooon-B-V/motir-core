@@ -51,3 +51,38 @@ export const SANDBOX_IMAGE_REPOSITORY = 'ghcr.io/moooon-b-v/motir-sandbox';
 export function sandboxImageTag(profileId: string): string {
   return `${SANDBOX_IMAGE_REPOSITORY}:${profileId}`;
 }
+
+/**
+ * How a person signs each offered coding agent in, from inside the agent's
+ * terminal (Story MOTIR-6861 · MOTIR-6941; `design/my-agents/design-notes.md` §
+ * the agent panel, panel 3). The panel's sign-in line names these as inline
+ * code; the sentence around them is `messages/*.json`'s `myAgents.panel.signin.*`.
+ *
+ * `checkable` is whether the terminal server can tell (`agent-terminal.md` Q7:
+ * the profile has a credential file to stat). For the three it cannot, the
+ * values are what the "can't be checked" line names instead: the command to run,
+ * or — for Aider, which reads a provider key — the line to add and where.
+ *
+ * ⚠️ DATA ON THE `lib` SIDE, NEVER IMPORTED FROM `packages/cli`: only
+ * `lib/apiDocs/cli.ts` and `lib/apiDocs/sandbox.ts` may import from
+ * `packages/cli/**` (`packages/cli/src/commandCatalog.ts`'s header).
+ */
+export interface AgentSignInHint {
+  readonly checkable: boolean;
+  /** The inline-code values the sentence names, in order. */
+  readonly values: readonly string[];
+}
+
+export const AGENT_SIGN_IN_HINTS: Readonly<Record<string, AgentSignInHint>> = {
+  claude: { checkable: true, values: ['claude', '/login'] },
+  codex: { checkable: true, values: ['codex login --device-auth'] },
+  opencode: { checkable: true, values: ['opencode auth login'] },
+  kimi: { checkable: false, values: ['kimi'] },
+  aider: { checkable: false, values: ['ANTHROPIC_API_KEY=…', '~/.env'] },
+  goose: { checkable: false, values: ['goose configure'] },
+};
+
+/** A profile's sign-in hint, or null for a profile the table does not know. */
+export function agentSignInHint(profileId: string): AgentSignInHint | null {
+  return AGENT_SIGN_IN_HINTS[profileId] ?? null;
+}

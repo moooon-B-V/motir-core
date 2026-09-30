@@ -70,7 +70,8 @@ export async function seedMyAgents(tag: string): Promise<MyAgentsSeed> {
     workspaceId: workspace.id,
     organizationId: workspace.organizationId,
     projectId: project.id,
-    projectIdentifier: identifier,
+    // The stored key, not the requested one: `createProject` normalises it (5 characters).
+    projectIdentifier: project.identifier,
   };
 }
 

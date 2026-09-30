@@ -7,11 +7,14 @@ import {
 import {
   AgentInstanceNameInvalidError,
   AgentInstanceNameTakenError,
+  AgentInstanceNoTerminalServerError,
   AgentInstanceNotFoundError,
+  AgentInstanceNotRunningError,
   AgentInstanceStartRefusedError,
   AgentInstanceStateConflictError,
   AgentInstancesUnavailableError,
   AgentProfileNotOfferedError,
+  AgentTerminalNotOwnerError,
 } from './errors';
 
 // The agent-instance routes' ONE error mapper (Story MOTIR-6860 · MOTIR-6872).
@@ -36,6 +39,9 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
   if (err instanceof ProjectAccessDeniedError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
   }
+  if (err instanceof AgentTerminalNotOwnerError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
+  }
   if (err instanceof AgentInstanceNotFoundError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }
@@ -44,7 +50,9 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
   }
   if (
     err instanceof AgentInstanceNameTakenError ||
-    err instanceof AgentInstanceStateConflictError
+    err instanceof AgentInstanceStateConflictError ||
+    err instanceof AgentInstanceNotRunningError ||
+    err instanceof AgentInstanceNoTerminalServerError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }

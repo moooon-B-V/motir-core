@@ -1607,6 +1607,7 @@ const APPROVAL_GATE_AUTHORITY_VALUES = [
   'github_review',
   'plan_permission',
   'review_agent',
+  'project_setting',
 ] as const satisfies readonly ApprovalGateAuthorityDTO[];
 const _gateAuthoritiesTotal: AssertTotal<
   ApprovalGateAuthorityDTO,
@@ -1628,6 +1629,7 @@ const APPROVAL_GATE_SOURCE_VALUES = [
   'api',
   'mcp',
   'github',
+  'system',
 ] as const satisfies readonly ApprovalGateDecisionSourceDTO[];
 const _gateSourcesTotal: AssertTotal<
   ApprovalGateDecisionSourceDTO,

@@ -27,6 +27,11 @@ import {
   AgentProfileNotOfferedError,
 } from '@/lib/agentInstances/errors';
 import { buildCloneCommand } from '@/lib/agentInstances/cloneCommand';
+import {
+  AGENT_TERMINAL_PROBE_COMMAND,
+  agentTerminalMachineConfig,
+  isAgentTerminalConfigured,
+} from '@/lib/agentInstances/terminal';
 import { imageDigestResolver, pinnedImageReference } from '@/lib/agentInstances/imageDigest';
 import {
   isOfferedProfile,
@@ -51,8 +56,12 @@ import type { AgentInstanceListPageDto, AgentInstanceStopReason } from '@/lib/dt
 import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
 import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
+import {
+  agentInstanceActivityService,
+  agentInstanceClock,
+  armIdleTimer,
+} from '@/lib/services/agentInstanceActivityService';
 import { agentInstanceChargeService } from '@/lib/services/agentInstanceChargeService';
-import { sendEvent } from '@/lib/jobs/sendEvent';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -96,12 +105,9 @@ import {
 // are IDEMPOTENT and are also what the 5-minute sweep (MOTIR-6873) calls for any
 // instance still in motion. Charging a closed interval is the sweep's too.
 
-/** The clock, as a seam so a test can move time without sleeping. */
-export const agentInstanceClock = {
-  now: (): Date => new Date(),
-  sleep: (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms)),
-  pollIntervalMs: 1_000,
-};
+// The clock seam and the activity door live in `agentInstanceActivityService`
+// (MOTIR-6940: the terminal relay imports them without this file's graph).
+export { agentInstanceClock };
 
 const STOP_REASONS: readonly string[] = ['credits', 'idle', 'backstop'];
 
@@ -279,14 +285,6 @@ async function closeOpenInterval(
   return closed;
 }
 
-/** (Re)arm the instance's idle timer (§2) — the debounced `agent-instance/idle-check`. */
-async function armIdleTimer(row: AgentInstance): Promise<void> {
-  await sendEvent('agent-instance/idle-check', {
-    workspaceId: row.workspaceId,
-    instanceId: row.id,
-  });
-}
-
 /** A guarded move made by the system (the settle paths): read, check, move. */
 async function systemTransition(
   row: AgentInstance,
@@ -338,6 +336,42 @@ async function cloneRepositories(
     } finally {
       await revokeInstanceCloneCredential(credential.token);
     }
+  }
+}
+
+/**
+ * THE TERMINAL-SERVER PROBE (`docs/decisions/agent-terminal.md` Q8 · MOTIR-6939):
+ * on a booted machine whose pinned digest was not probed yet (a first boot, or a
+ * digest that changed), run `motir agent-terminal --help` through the one `exec`
+ * door and record whether the image serves a terminal. ONCE per digest — an
+ * `absent` is an answer, never retried. It never fails the boot: the agent stays
+ * usable either way, and a probe that could not run leaves `unknown` for the
+ * next boot. Skipped while the terminal is off on this deployment.
+ */
+async function probeTerminalServer(
+  row: AgentInstance,
+  handle: PersistentContainerHandle,
+): Promise<void> {
+  if (row.terminalServerDigest === row.imageDigest) return;
+  try {
+    if (!isAgentTerminalConfigured()) return;
+    const result = await getPersistentOrchestrator().exec(handle, AGENT_TERMINAL_PROBE_COMMAND, {
+      timeoutSeconds: 30,
+    });
+    // A negative code is an exec whose answer carried no exit code: not an answer.
+    if (result.exitCode < 0) return;
+    await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+      agentInstanceRepository.recordTerminalServer(
+        row.id,
+        { terminalServer: result.exitCode === 0 ? 'present' : 'absent', digest: row.imageDigest },
+        tx,
+      ),
+    );
+  } catch (err) {
+    console.warn('[agentInstanceLifecycle] the terminal-server probe did not answer', {
+      instanceId: row.id,
+      detail: describeError(err),
+    });
   }
 }
 
@@ -444,6 +478,8 @@ export const agentInstanceLifecycleService = {
     const imageDigest = await imageDigestResolver.resolve(imageTag);
 
     const instanceId = randomUUID();
+    // Before anything is taken: a misconfigured master key refuses here, loudly.
+    const terminal = agentTerminalMachineConfig(instanceId);
     const intervalId = randomUUID();
     await reserveSlot({
       instanceId,
@@ -509,6 +545,10 @@ export const agentInstanceLifecycleService = {
         region,
         volumeSizeGb: INSTANCE_VOLUME_SIZE_GB,
         mountPath: INSTANCE_HOME_PATH,
+        // agent-terminal.md Q2–Q4: the terminal server as the main process, its
+        // public service, and the per-instance key (`MOTIR_TERMINAL_KEY`) — a key
+        // that opens only this machine's shell, never a credential of the user's.
+        terminal,
       });
       await withWorkspaceServiceContext(project.workspaceId, (tx) =>
         agentInstanceRepository.setHandle(
@@ -545,6 +585,7 @@ export const agentInstanceLifecycleService = {
     if (!handle) throw new AgentInstanceStateConflictError(row.id, row.state, 'woken');
 
     await assertCredits(project.organizationId);
+    const terminal = agentTerminalMachineConfig(row.id);
     const intervalId = randomUUID();
     await reserveSlot({
       instanceId,
@@ -588,6 +629,10 @@ export const agentInstanceLifecycleService = {
     }
 
     try {
+      // agent-terminal.md Q8: an agent whose machine config predates the current
+      // one is brought up to date BEFORE the start (the machine stays stopped
+      // while it is rewritten, its image digest and home volume untouched).
+      if (terminal) await getPersistentOrchestrator().ensureMachineConfig(handle, terminal);
       await getPersistentOrchestrator().start(handle);
     } catch (err) {
       await failInstance(
@@ -711,6 +756,7 @@ export const agentInstanceLifecycleService = {
         return 'failed';
       }
     }
+    await probeTerminalServer(row, handle);
     const fresh = await reload(row);
     if (fresh.state !== row.state) return 'noop';
     await withWorkspaceServiceContext(row.workspaceId, async (tx) => {
@@ -790,12 +836,7 @@ export const agentInstanceLifecycleService = {
 
   /** Bump the idle signal (§2) — the later stories' relay and runs call it. */
   async touchActivity(instanceId: string): Promise<void> {
-    const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
-    if (!row) return;
-    const moved = await withWorkspaceServiceContext(row.workspaceId, (tx) =>
-      agentInstanceRepository.touchActivity(row.id, agentInstanceClock.now(), tx),
-    );
-    if (moved === 1 && row.state === 'running') await armIdleTimer(row);
+    await agentInstanceActivityService.touchActivity(instanceId);
   },
 
   /**

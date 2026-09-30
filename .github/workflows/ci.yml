@@ -2094,6 +2094,10 @@ jobs:
       # The AUTH TOKEN goes through `--build-secret`, not `--build-arg`: a build
       # argument is recorded in the build's metadata and a credential must not
       # be. The Dockerfile mounts it for the single `next build` command.
+      #
+      # `--image-label "$GITHUB_SHA"` names the pushed image
+      # `registry.fly.io/motir-core:<sha>` instead of a timestamp, so the relay
+      # step below can deploy EXACTLY this image to `motir-relay` (MOTIR-6940).
       - name: Build the image and release it
         env:
           NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
@@ -2104,6 +2108,7 @@ jobs:
         run: |
           set -euo pipefail
           flyctl deploy --local-only --app "$FLY_APP" \
+            --image-label "$GITHUB_SHA" \
             --build-arg "NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN" \
             --build-arg "MOTIR_RELEASE=$GITHUB_SHA" \
             --build-arg "SENTRY_ORG=$SENTRY_ORG" \
@@ -2175,6 +2180,32 @@ jobs:
           done
           echo "::error::$url did not answer 200 after 5 attempts — the release is not serving."
           exit 1
+
+      # ── The terminal relay: the SAME image, a second app (MOTIR-6940) ──────
+      # `docs/decisions/agent-terminal.md` Q1: `motir-relay` runs motir-core's
+      # image (`node relay/relay.mjs`, `fly.relay.toml`), deployed right after the
+      # web release it must match, with NO release command — the web release
+      # above already migrated the database it reads.
+      #
+      # ⚠️ GUARDED UNTIL THE APP EXISTS. The app, its `relay.motir.co`
+      # certificate and its secrets are a MANUAL card (the decision's "Owed on
+      # acceptance"). Until an operator has done it and set the repository
+      # variable `MOTIR_RELAY_ENABLED` to `true`, this step is SKIPPED — a deploy
+      # to an app that does not exist would fail every main release for a
+      # feature nobody can reach yet. Once enabled it is NOT continue-on-error: a
+      # relay that did not roll is a red deploy, like the web tier.
+      #
+      # The token: `FLY_RELAY_API_TOKEN` when set (a deploy token scoped to
+      # `motir-relay`, which must also be able to pull `registry.fly.io/motir-core`),
+      # else the job's `FLY_API_TOKEN` (an org-scoped token reaches both apps).
+      - name: Deploy the terminal relay from the same image
+        if: vars.MOTIR_RELAY_ENABLED == 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_RELAY_API_TOKEN || secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          flyctl deploy --app motir-relay --config fly.relay.toml \
+            --image "registry.fly.io/${FLY_APP}:${GITHUB_SHA}"
 
       # ⚠️ A FUNCTION-REGISTRATION STEP STOOD HERE (MOTIR-3418 removed it). The
       # vendor's control plane held its own registry of this app's functions, and

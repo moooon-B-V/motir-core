@@ -1456,6 +1456,9 @@ const REFUSAL_SOURCE_LABEL: Record<NonNullable<LatestRefusalDTO['decisionSource'
   api: 'through the Motir API',
   mcp: 'through Motir MCP',
   github: 'in a GitHub review',
+  // Total over the enum. A system decision is only ever an APPROVAL (MOTIR-697), so
+  // no refusal reaches a prompt with this source.
+  system: 'automatically, by a project setting',
 };
 
 /** What each design verdict tells the next run (MOTIR-6421; `design-refusal-verdict.md`). */

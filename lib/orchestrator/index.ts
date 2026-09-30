@@ -18,7 +18,9 @@ import {
   type ContainerOrchestrator,
   type FleetInventory,
   type OrchestratorProvider,
+  type PersistentContainerHandle,
   type PersistentContainerOrchestrator,
+  type PersistentTerminalEndpoint,
   type RegistryCredentialResolver,
 } from '@motir/orchestrator';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
@@ -100,6 +102,25 @@ export function getPersistentOrchestrator(): PersistentContainerOrchestrator {
     );
   }
   return flyPersistentOrchestrator;
+}
+
+/**
+ * Where the terminal relay dials ONE agent's terminal server
+ * (`docs/decisions/agent-terminal.md` Q2 · MOTIR-6940), through the selected
+ * adapter's `terminalEndpoint`. Deliberately NOT via
+ * {@link getPersistentOrchestrator}: that one refuses without
+ * `FLY_INSTANCES_API_TOKEN`, and the relay holds NO Fly token (Q1) — resolving an
+ * address needs none, since the Fly adapter's answer is pure (the org app's
+ * public hostname plus `fly-force-instance-id`).
+ */
+export function persistentTerminalEndpoint(
+  handle: PersistentContainerHandle,
+): PersistentTerminalEndpoint {
+  const adapter =
+    selectedOrchestratorProvider() === 'fake'
+      ? fakePersistentOrchestrator
+      : flyPersistentOrchestrator;
+  return adapter.terminalEndpoint(handle);
 }
 
 /** Can this deployment boot agent instances at all? Never throws. */

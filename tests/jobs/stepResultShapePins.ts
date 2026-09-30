@@ -494,6 +494,14 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ accrued: number; containers: number; failures: number; organizations: Array<{ accruedMinutes: number; charge: string; organizationId: string }>; outcome: "ticked"; stopped: Array<string>; tickStart: string } | { outcome: "disabled" }',
   },
+  'sweep-agent-terminal-tickets': {
+    file: 'lib/jobs/definitions/agentInstanceSweep.ts',
+    shape: '{ deleted: number }',
+  },
+  'sweep-lost-terminal-connections': {
+    file: 'lib/jobs/definitions/agentInstanceSweep.ts',
+    shape: '{ closed: number }',
+  },
   'sweep-agent-instances': {
     file: 'lib/jobs/definitions/agentInstanceSweep.ts',
     shape:
