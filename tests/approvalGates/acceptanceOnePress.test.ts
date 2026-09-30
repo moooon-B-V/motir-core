@@ -285,3 +285,59 @@ describe('a story run — the receipt is the PRIMARY, and one press also merges 
     expect(kept.workItemId).toBe(story.id);
   });
 });
+
+// Bug MOTIR-7006 — THE PRESS THAT WAS OBSERVED. MOTIR-6989's acceptance gate and its merge
+// gate were both approved at one instant over a pull request GitHub reported `dirty`, and
+// the story read Approved. The acceptance press decides the merge gate too, so it asks the
+// host first, exactly as the merge gate's own press does (MOTIR-5915).
+describe('a conflict found at the ACCEPTANCE press writes nothing (MOTIR-7006)', () => {
+  it('a `dirty` member refuses the press: nothing approved, both questions withdrawn as `conflict`, the story at Implemented, nothing merged', async () => {
+    const { story } = await storyRun();
+    await acceptanceEvidenceService.recordFromUpload(
+      { workItemId: story.id, video: video(), commitSha: 'c0ffee1' },
+      fx.ctx,
+    );
+    const [acceptance, merge] = await gatesOf(story.id);
+    vi.spyOn(github, 'readChangeRequestMergeability').mockImplementation(async (args) =>
+      args.number === 7
+        ? { mergeable: false, mergeableState: 'dirty', headSha: HEAD_WEB }
+        : { mergeable: true, mergeableState: 'clean', headSha: null },
+    );
+    const host = stubHost({
+      7: { outcome: 'merged', commitSha: 'merge-web' },
+      12: { outcome: 'merged', commitSha: 'merge-api' },
+    });
+
+    await expect(
+      pullRequestMergeService.approveAndMerge(
+        { gateId: acceptance!.id, source: 'ui', noteMd: null, stamp: DECIDED_WITHOUT_A_READER },
+        fx.ctx,
+      ),
+    ).rejects.toMatchObject({
+      tag: 'MERGE_CONFLICT',
+      atPress: true,
+      conflicts: [{ pullRequest: 'acme/web#7', baseRef: 'main' }],
+    });
+
+    // Nothing was decided. The conflict took the story out of review through the one entry
+    // point a base push uses (`settleReading`), which withdraws the merge question AND the
+    // acceptance question it no longer owes — both unanswered, both `conflict`.
+    const rows = new Map((await gatesOf(story.id)).map((g) => [g.id, g]));
+    for (const gate of [acceptance!, merge!]) {
+      const row = rows.get(gate.id)!;
+      expect([row.state, row.supersededCause, row.decidedAt]).toEqual([
+        'superseded',
+        'conflict',
+        null,
+      ]);
+    }
+    const receipt = await adminDb.acceptanceEvidence.findFirstOrThrow({
+      where: { workItemId: story.id, isCurrent: true },
+    });
+    expect(receipt.status).toBe('pending');
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } })).status).toBe(
+      'implemented',
+    );
+    expect(host).not.toHaveBeenCalled();
+  });
+});

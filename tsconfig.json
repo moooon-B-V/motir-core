@@ -33,6 +33,10 @@
     "next-env.d.ts",
     "app/**/*.ts",
     "app/**/*.tsx",
+    // A `**` glob never enters a DOT directory, so the OAuth discovery routes
+    // (MOTIR-6982) are named: without this line they would be type-checked by
+    // nobody, and every test importing them fails TS6307.
+    "app/.well-known/**/*.ts",
     "components/**/*.ts",
     "components/**/*.tsx",
     "hooks/**/*.ts",

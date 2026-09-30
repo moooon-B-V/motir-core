@@ -3,6 +3,7 @@ import { betterAuth, type Auth, type BetterAuthOptions } from 'better-auth';
 import { isAPIError } from 'better-auth/api';
 import { prismaAdapter } from '@better-auth/prisma-adapter';
 import { passkey } from '@better-auth/passkey';
+import { oauthProvider } from '@better-auth/oauth-provider';
 import { nextCookies } from 'better-auth/next-js';
 import { deviceAuthorization } from 'better-auth/plugins';
 import { twoFactor } from 'better-auth/plugins/two-factor';
@@ -33,6 +34,14 @@ import {
 } from './twoFactorConfig';
 import { PASSKEY_RESIDENT_KEY, PASSKEY_RP_NAME, PASSKEY_USER_VERIFICATION } from './passkeyConfig';
 import { hash, verify } from './passwords';
+import { mcpOAuthPolicy } from './mcpOAuthPolicy';
+import { CONSENT_REQUIRED_REFERENCE, currentConsentConnection } from '@/lib/oauth/consentContext';
+import {
+  mcpResourceUrl,
+  OAUTH_CONSENT_PAGE,
+  OAUTH_LOGIN_PAGE,
+  OAUTH_SCOPES,
+} from '@/lib/oauth/config';
 
 // Better-Auth instance. Persistence is Postgres via Prisma; password hashing
 // is argon2id (overriding Better-Auth's default scrypt) so the codebase has
@@ -99,10 +108,12 @@ function requiredEnv(name: string): string {
 // needing `--max-old-space-size`.
 export const authOptions: BetterAuthOptions & {
   plugins: [
-    ReturnType<typeof nextCookies>,
     ReturnType<typeof deviceAuthorization>,
     ReturnType<typeof twoFactor>,
     ReturnType<typeof passkey>,
+    ReturnType<typeof mcpOAuthPolicy>,
+    ReturnType<typeof oauthProvider>,
+    ReturnType<typeof nextCookies>,
   ];
 } = {
   database: prismaAdapter(db, { provider: 'postgresql' }),
@@ -444,7 +455,6 @@ export const authOptions: BetterAuthOptions & {
   //     (lastPolledAt + pollingInterval) is the correct guard. An IP-keyed limiter
   //     here would break the normal flow, not an attack.
   plugins: [
-    nextCookies(),
     deviceAuthorization({
       verificationUri: DEVICE_VERIFICATION_PATH,
       expiresIn: DEVICE_CODE_EXPIRES_IN,
@@ -624,6 +634,65 @@ export const authOptions: BetterAuthOptions & {
         residentKey: PASSKEY_RESIDENT_KEY,
       },
     }),
+    // ── Motir as an OAuth 2.1 authorization server for its MCP ───────────────
+    // (Story MOTIR-6973 · Subtask MOTIR-6982). Claude's connector and any other
+    // MCP client discover it from `/.well-known/oauth-protected-resource`,
+    // register themselves (RFC 7591), and run the authorization-code grant with
+    // PKCE to get a token for `<base>/api/mcp`. It is the SUPPORTED package —
+    // Better-Auth's own `oidc-provider` and `mcp` plugins are deprecated in its
+    // favour — and it shares this instance's sessions, so a person signs in with
+    // whatever they already use: password, Google, 2FA, passkey.
+    //
+    // The policy plugin runs FIRST: it refuses a redirect Motir will not honour
+    // at registration and a missing or foreign `resource` at authorize, neither
+    // of which the provider checks (`./mcpOAuthPolicy.ts`).
+    mcpOAuthPolicy(),
+    oauthProvider({
+      loginPage: OAUTH_LOGIN_PAGE,
+      consentPage: OAUTH_CONSENT_PAGE,
+      // The consent decision's CONNECTION (MOTIR-6983). Every consent row, code,
+      // access token and refresh token carries the id of the `api_token` row the
+      // person approved, and the MCP gate resolves a bearer through it to that
+      // row's workspace, project and grant. The id comes from the approval in
+      // progress (`lib/oauth/consentContext.ts`); outside one it is a reference no
+      // consent carries, so every authorization goes to the consent screen, where
+      // the workspace is chosen. `shouldRedirect` is false: there is no step
+      // between signing in and consenting — the workspace picker IS the consent.
+      postLogin: {
+        page: OAUTH_CONSENT_PAGE,
+        shouldRedirect: () => false,
+        consentReferenceId: () => currentConsentConnection() ?? CONSENT_REQUIRED_REFERENCE,
+      },
+      scopes: [...OAUTH_SCOPES],
+      // The only audience a token may be minted for (RFC 8707). The provider
+      // checks a `resource` sent to the token endpoint against this.
+      validAudiences: [mcpResourceUrl()],
+      grantTypes: ['authorization_code', 'refresh_token'],
+      // RFC 7591 dynamic registration, unauthenticated: an MCP client registers
+      // before anyone has signed in. Unauthenticated registration forces
+      // `token_endpoint_auth_method: none` — public clients only — so there is
+      // no client secret to leak and PKCE is always required.
+      allowDynamicClientRegistration: true,
+      allowUnauthenticatedClientRegistration: true,
+      // OPAQUE tokens, stored hashed in `oauth_access_token` /
+      // `oauth_refresh_token`. Revocation is a row the MCP gate no longer finds,
+      // and nothing needs a signing key — so no JWKS, and no new secret to
+      // provision. It also means no OpenID `id_token`: Motir is not offered as a
+      // login provider for other sites.
+      disableJwtPlugin: true,
+      // Registration and token are limited on the SHARED counter instead, per IP
+      // (`lib/rateLimit/authGuard.ts`). The provider's own defaults (5 and 20 a
+      // minute) are per-process and sized for one person — claude.ai registers
+      // and refreshes for all of its users from a handful of egress addresses.
+      rateLimit: { register: false, token: false },
+      // The root `/.well-known/oauth-authorization-server` routes exist
+      // (`app/.well-known/`); the provider warns until told so.
+      silenceWarnings: { oauthAuthServerConfig: true },
+    }),
+    // LAST, as Better-Auth requires of a cookie integration: it forwards the
+    // `Set-Cookie` headers of every `after` hook that runs before it, and the
+    // OAuth provider is the first plugin here to declare one (MOTIR-6982).
+    nextCookies(),
   ],
 };
 

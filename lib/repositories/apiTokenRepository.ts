@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Prisma, type ApiToken } from '@/generated/prisma/client';
 
 /** An `api_token` row with its owning user eager-loaded — the verify lookup's
@@ -11,6 +12,16 @@ export type ApiTokenWithScope = Prisma.ApiTokenGetPayload<{
   include: { workspace: { include: { organization: true } }; project: true };
 }>;
 
+/** An OAuth connection (MOTIR-6983) with its client and scope — the Connected
+ * apps list's row. */
+export type OAuthConnectionWithClient = Prisma.ApiTokenGetPayload<{
+  include: {
+    oauthClient: true;
+    workspace: { include: { organization: true } };
+    project: true;
+  };
+}>;
+
 /** The include the list/create reads share to populate {@link ApiTokenWithScope}. */
 const SCOPE_INCLUDE = {
   workspace: { include: { organization: true } },
@@ -18,6 +29,11 @@ const SCOPE_INCLUDE = {
   // than fetched per row by the mapper: the list is the only reader and it
   // needs the NAME, not the id.
   project: true,
+} satisfies Prisma.ApiTokenInclude;
+
+const CONNECTION_INCLUDE = {
+  ...SCOPE_INCLUDE,
+  oauthClient: true,
 } satisfies Prisma.ApiTokenInclude;
 
 // API-token repository — single Prisma operations on the `api_token` table
@@ -74,7 +90,10 @@ export const apiTokenRepository = {
       // `dispatchRunId: null` — a RUN token (MOTIR-688) is not a credential the
       // person minted or manages: the run mints it and the run's end deletes it.
       // Listing it would offer a revoke control on something mid-run.
-      where: { userId, revokedAt: null, dispatchRunId: null },
+      // `oauthClientId: null` — an OAuth CONNECTION (MOTIR-6983) is managed on
+      // Connected apps, not here: it has no secret to show a prefix of, and its
+      // revoke also ends the app's session.
+      where: { userId, revokedAt: null, dispatchRunId: null, oauthClientId: null },
       orderBy: { createdAt: 'desc' },
       include: SCOPE_INCLUDE,
     });
@@ -91,7 +110,9 @@ export const apiTokenRepository = {
    *
    * `tx` REQUIRED: `api_token_owner_or_system` reads `app.user_id`. */
   async countByUser(userId: string, tx: Prisma.TransactionClient): Promise<number> {
-    return tx.apiToken.count({ where: { userId, revokedAt: null, dispatchRunId: null } });
+    return tx.apiToken.count({
+      where: { userId, revokedAt: null, dispatchRunId: null, oauthClientId: null },
+    });
   },
 
   /** The verify lookup — an equality probe on the unique `token_hash` index
@@ -112,7 +133,12 @@ export const apiTokenRepository = {
     userId: string,
     tx: Prisma.TransactionClient,
   ): Promise<ApiTokenWithScope | null> {
-    return tx.apiToken.findFirst({ where: { id: tokenId, userId }, include: SCOPE_INCLUDE });
+    // An OAuth connection is not a token the PAT surface manages (MOTIR-6983);
+    // it reads as missing here, and Connected apps revokes it.
+    return tx.apiToken.findFirst({
+      where: { id: tokenId, userId, oauthClientId: null },
+      include: SCOPE_INCLUDE,
+    });
   },
 
   /** Persist a freshly-minted token's hash row, returning it with its bound
@@ -124,14 +150,17 @@ export const apiTokenRepository = {
     return tx.apiToken.create({ data: input, include: SCOPE_INCLUDE });
   },
 
-  /** Revoke: DELETE the row (MOTIR-3546). Revocation used to stamp `revokedAt`
+  /** Revoke: DELETE the row (MOTIR-3546). Also the OAuth connection's revoke
+   * (MOTIR-6983), whose access tokens, refresh tokens and consent cascade with it.
+   * Revocation used to stamp `revokedAt`
    * and leave the row "for the audit trail" — a trail nothing ever read, on the
    * one surface whose job is to answer *which of my credentials are live*. The
    * credential list now holds only live credentials, which is what this
    * surface's own mirror does (`design/settings/design-notes.md`).
    *
-   * Deleting is safe here and was checked before it was chosen: `api_token` is
-   * a leaf (no migration carries a `REFERENCES "api_token"`), and the RLS
+   * Deleting is safe here and was checked before it was chosen: the only tables
+   * that reference `api_token` are the OAuth provider's (MOTIR-6983), and they
+   * CASCADE — a deleted connection is meant to take its tokens. And the RLS
    * policy `api_token_owner_or_system` is `FOR ALL`, so an owner DELETE is
    * already permitted without a policy change. Required `tx`. */
   async remove(tokenId: string, tx: Prisma.TransactionClient): Promise<void> {
@@ -151,6 +180,76 @@ export const apiTokenRepository = {
     return count;
   },
 
+  /**
+   * Record an OAuth CONNECTION (MOTIR-6983) — or, when this person already has
+   * one for this client in this workspace and project, REPLACE its grant and
+   * label and return it. One statement, `INSERT … ON CONFLICT` against the
+   * hand-written `api_token_oauth_connection_key` index, so two approvals racing
+   * for the same (person, client, workspace, project) leave ONE row: the loser's
+   * insert becomes an update of the winner's, and both get its id back.
+   *
+   * `inserted` says which happened (`xmax = 0` is true only for a row this
+   * statement created), so a caller can undo exactly what it created and never a
+   * connection someone approved earlier.
+   *
+   * Raw SQL because Prisma's `upsert` needs a unique it can name, and this one is
+   * an expression index behind a predicate. Required `tx`: `api_token` RLS reads
+   * `app.user_id`, which the caller's user context binds.
+   */
+  async upsertOAuthConnection(
+    input: {
+      userId: string;
+      workspaceId: string;
+      projectId: string | null;
+      oauthClientId: string;
+      label: string;
+      tokenHash: string;
+      tokenPrefix: string;
+      scopes: string[];
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; inserted: boolean }> {
+    const rows = await tx.$queryRaw<{ id: string; inserted: boolean }[]>`
+      INSERT INTO "api_token"
+        ("id", "user_id", "workspace_id", "project_id", "oauth_client_id", "label",
+         "token_hash", "token_prefix", "scopes", "created_at")
+      VALUES
+        (${randomUUID()}, ${input.userId}, ${input.workspaceId}, ${input.projectId},
+         ${input.oauthClientId}, ${input.label}, ${input.tokenHash}, ${input.tokenPrefix},
+         ${input.scopes}::text[], NOW())
+      ON CONFLICT ("user_id", "oauth_client_id", "workspace_id", COALESCE("project_id", ''))
+        WHERE "oauth_client_id" IS NOT NULL
+      DO UPDATE SET "scopes" = EXCLUDED."scopes", "label" = EXCLUDED."label"
+      RETURNING "id", (xmax = 0) AS "inserted"`;
+    return rows[0]!;
+  },
+
+  /** A person's OAuth connections, newest first, with the client, the bound
+   * workspace + org and the project — the Connected apps list (MOTIR-6983).
+   * `tx` REQUIRED: RLS narrows to the owner under `withUserContext`. */
+  async findOAuthConnectionsByUser(
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<OAuthConnectionWithClient[]> {
+    return tx.apiToken.findMany({
+      where: { userId, oauthClientId: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      include: CONNECTION_INCLUDE,
+    });
+  },
+
+  /** One OAuth connection by id, scoped to its owner — the revoke ownership probe
+   * (a cross-user id, or a PAT's id, reads as null → the service's 404). */
+  async findOAuthConnectionForUser(
+    connectionId: string,
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<ApiToken | null> {
+    return tx.apiToken.findFirst({
+      where: { id: connectionId, userId, oauthClientId: { not: null } },
+    });
+  },
+
   /** Stamp `lastUsedAt` — the throttled verify touch. Required `tx`. */
   async touchLastUsed(
     tokenId: string,
@@ -163,8 +262,9 @@ export const apiTokenRepository = {
   /**
    * Delete every personal access token this user holds — the erasure sweep's
    * DELETE group (MOTIR-3702). The bulk twin of {@link remove}, and safe for the
-   * same two reasons it is: `api_token` is a leaf (no migration carries a
-   * `REFERENCES "api_token"`), and `api_token_owner_or_system` is `FOR ALL`, so
+   * same two reasons it is: the only references to `api_token` are the OAuth
+   * provider's, which CASCADE (MOTIR-6983 — the person's connected apps go with
+   * their tokens), and `api_token_owner_or_system` is `FOR ALL`, so
    * the owner binding the erasure already holds admits the DELETE.
    *
    * A live bearer credential outlasting the account it authenticates is the
