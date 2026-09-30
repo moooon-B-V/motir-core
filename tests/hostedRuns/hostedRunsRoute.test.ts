@@ -232,8 +232,27 @@ describe('POST /api/work-items/[id]/hosted-runs (AC8)', () => {
     expect(res.status).toBe(404);
   });
 
-  it('400 without a model', async () => {
-    const res = await post('PROD-1', {});
+  // MOTIR-6994: `model` is optional — without one the SERVICE resolves it from
+  // the card's difficulty, so the route forwards no model rather than refusing.
+  it('without a model, the service is asked to resolve one', async () => {
+    const spy = vi
+      .spyOn(hostedRunService, 'start')
+      .mockResolvedValueOnce({ dispatchRunId: 'run-1', created: true });
+    const res = await post('PROD-1', { idempotencyKey: 'k' });
+    expect(res.status).toBe(201);
+    expect(spy.mock.calls[0]![0]).not.toHaveProperty('model');
+  });
+
+  it('a blank model reads as no model', async () => {
+    const spy = vi
+      .spyOn(hostedRunService, 'start')
+      .mockResolvedValueOnce({ dispatchRunId: 'run-1', created: true });
+    await post('PROD-1', { model: '   ' });
+    expect(spy.mock.calls[0]![0]).not.toHaveProperty('model');
+  });
+
+  it('400 on a model that is not a string', async () => {
+    const res = await post('PROD-1', { model: 42 });
     expect(res.status).toBe(400);
   });
 
@@ -255,7 +274,7 @@ describe('POST /api/work-items/[id]/hosted-runs (AC8)', () => {
     expect(res).toBe(gateResponse);
   });
 
-  it('a body `req.json()` cannot parse reads as no model — 400', async () => {
+  it('a body `req.json()` cannot parse is a 400', async () => {
     const res = await POST(
       new Request('https://app.test/api/work-items/PROD-1/hosted-runs', {
         method: 'POST',

@@ -51,7 +51,12 @@ interface Call {
 }
 
 interface Stub {
-  models?: { status?: number; ids?: string[] };
+  models?: {
+    status?: number;
+    ids?: string[];
+    /** The platform's per-difficulty defaults (MOTIR-6990). Absent reads as all-null. */
+    defaultsByDifficulty?: Partial<Record<'trivial' | 'low' | 'medium' | 'high', string | null>>;
+  };
   mayRun?: boolean | 'unanswerable';
   /** `GET /repos/{owner}/{name}/installation` status, by `owner/name`. Default 200. */
   installation?: Record<string, number>;
@@ -81,6 +86,17 @@ function stub(s: Stub = {}): void {
         return json(200, {
           models: ids.map((id) => ({ id, provider: 'anthropic' })),
           default: ids[0] ?? null,
+          ...(s.models?.defaultsByDifficulty
+            ? {
+                defaultsByDifficulty: {
+                  trivial: null,
+                  low: null,
+                  medium: null,
+                  high: null,
+                  ...s.models.defaultsByDifficulty,
+                },
+              }
+            : {}),
         });
       }
       if (url === `${AI}/v1/credits/agent-run-check`) {
@@ -204,6 +220,13 @@ async function expectNothingStarted(): Promise<void> {
 let seq = 0;
 const start = (key: string, model = MODEL) =>
   hostedRunService.start({ workItemKey: key, model, idempotencyKey: `idem-${++seq}` }, fx.ctx);
+
+/** A start with NO model — the server resolves it from the card's difficulty (MOTIR-6994). */
+const startResolved = (key: string) =>
+  hostedRunService.start({ workItemKey: key, idempotencyKey: `idem-${++seq}` }, fx.ctx);
+
+const setDifficulty = (id: string, difficulty: 'trivial' | 'low' | 'medium' | 'high') =>
+  adminDb.workItem.update({ where: { id }, data: { difficulty } });
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -465,6 +488,96 @@ describe('a leaf card — the run it starts', () => {
     const runs = await runRows();
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({ status: 'failed', stopReason: 'halted' });
+  });
+});
+
+describe('no model sent — the server resolves it from difficulty (MOTIR-6994)', () => {
+  const SONNET = 'claude-sonnet-5-5';
+  const OPUS = 'claude-opus-5-5';
+  const LEVELS = { trivial: SONNET, low: SONNET, medium: OPUS, high: OPUS };
+
+  it('a High leaf with the project’s High override runs on the override, in the row and the container', async () => {
+    stub({ models: { ids: [SONNET, OPUS, 'claude-fable-5-1'], defaultsByDifficulty: LEVELS } });
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    await adminDb.project.update({
+      where: { id: fx.projectId },
+      data: { hostedModelHigh: 'claude-fable-5-1' },
+    });
+    const card = await newCard({ kind: 'task', title: 'a hard card' });
+    await setDifficulty(card.id, 'high');
+
+    const started = await startResolved(card.identifier);
+
+    const run = (await runRows())[0]!;
+    expect(run).toMatchObject({ id: started.dispatchRunId, model: 'claude-fable-5-1' });
+    expect(mintCalls()[0]!.body!['models']).toEqual(['claude-fable-5-1']);
+    expect(fakeOrchestrator.specs[0]!.env['MOTIR_MODEL']).toBe('anthropic/claude-fable-5-1');
+    expect(await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).toMatchObject({
+      implementationModel: 'claude-fable-5-1',
+    });
+  });
+
+  it('with no override, a Low leaf runs on the platform’s Low default', async () => {
+    stub({ models: { ids: [OPUS, SONNET], defaultsByDifficulty: LEVELS } });
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const card = await newCard({ kind: 'task', title: 'an easy card' });
+    await setDifficulty(card.id, 'low');
+
+    await startResolved(card.identifier);
+
+    expect((await runRows())[0]!.model).toBe(SONNET);
+  });
+
+  it('a model the caller SENT wins over the resolved one', async () => {
+    stub({ models: { ids: [SONNET, OPUS], defaultsByDifficulty: LEVELS } });
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { hostedModelHigh: OPUS } });
+    const card = await newCard({ kind: 'task', title: 'a hard card' });
+    await setDifficulty(card.id, 'high');
+
+    await start(card.identifier, SONNET);
+
+    expect((await runRows())[0]!.model).toBe(SONNET);
+  });
+
+  it('a parent resolves from its HIGHEST unfinished leaf', async () => {
+    stub({ models: { ids: [SONNET, OPUS], defaultsByDifficulty: LEVELS } });
+    const site = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const story = await newCard({ kind: 'story', title: 'a story' });
+    const easy = await newCard({ kind: 'task', title: 'easy', parentId: story.id });
+    const hard = await newCard({ kind: 'task', title: 'hard', parentId: story.id });
+    await pinRepos(easy.id, [site]);
+    await pinRepos(hard.id, [site]);
+    await setDifficulty(easy.id, 'low');
+    await setDifficulty(hard.id, 'high');
+
+    await startResolved(story.identifier);
+
+    expect((await runRows())[0]!.model).toBe(OPUS);
+  });
+
+  it('the same idempotency key twice still yields one run', async () => {
+    stub({ models: { ids: [SONNET, OPUS], defaultsByDifficulty: LEVELS } });
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const card = await newCard({ kind: 'task', title: 'a card' });
+    const input = { workItemKey: card.identifier, idempotencyKey: 'same-click' };
+
+    const first = await hostedRunService.start(input, fx.ctx);
+    const second = await hostedRunService.start(input, fx.ctx);
+
+    expect(second).toEqual({ dispatchRunId: first.dispatchRunId, created: false });
+    expect(await runRows()).toHaveLength(1);
+  });
+
+  it('nothing offered: HostedModelsUnavailableError, and nothing is opened', async () => {
+    stub({ models: { ids: [] } });
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const card = await newCard({ kind: 'task', title: 'a card' });
+
+    await expect(startResolved(card.identifier)).rejects.toBeInstanceOf(
+      HostedModelsUnavailableError,
+    );
+    await expectNothingStarted();
   });
 });
 
