@@ -38,9 +38,14 @@ import type { MockAgent } from 'undici';
 
 /** What the next `ask_project` job should settle as. */
 export interface AskJobOutcome {
-  intent: 'ask' | 'plan_change';
+  /** `debug` (Story MOTIR-7042 · MOTIR-7051): the classifier read the turn as a
+   *  report of broken behaviour, so the settle dispatches ONE `debug_bug` job. */
+  intent: 'ask' | 'plan_change' | 'debug';
   answer?: string | null;
   citations?: string[];
+  /** A `debug` verdict ECHOES the anchor the turn was sent with (A1.2), which the
+   *  dispatch re-resolves rather than trusts. */
+  anchorKey?: string;
 }
 
 /**
@@ -71,6 +76,22 @@ export interface AuthorBugJobOutcome {
   authoredBug?: unknown;
 }
 
+/**
+ * What the next `debug_bug` job should do (Story MOTIR-7042 · MOTIR-7051).
+ *
+ * ⚠️ `submit: 'out_of_credits'` refuses the SUBMIT ITSELF with motir-ai's `402
+ * out_of_credits` problem — no job exists, which is the only way the typed
+ * out-of-credits error at the debug DISPATCH is reachable through the real client.
+ * The attempt is still recorded (`refused: true`), so the queue is indexed by
+ * submit ATTEMPT and a spec declares the refusal and the retry that follows it.
+ */
+export interface DebugBugJobOutcome {
+  submit?: 'accepted' | 'out_of_credits';
+  /** The job's `debugBug` result unit. Absent ⇒ a success with NO result, which
+   *  the settle does not land — a spec that forgot one sees no card written. */
+  debugBug?: unknown;
+}
+
 export interface AiJobsFixture {
   /**
    * The `ask_project` outcomes, CONSUMED IN ORDER — one per ask job submitted.
@@ -96,10 +117,13 @@ export interface AiJobsFixture {
    * declare one sees an unenriched card rather than an invented one.
    */
   authorBug?: AuthorBugJobOutcome[];
+  /** The `debug_bug` outcomes, CONSUMED IN ORDER — one per submit attempt, the
+   *  last repeating (MOTIR-7051). */
+  debugBug?: DebugBugJobOutcome[];
   /** Appended to by the mock: the job kind of every submit, in order — and
    *  whether it carried a repository set (`context.code`), which is how a walk
    *  shows a CODE-BLIND project's dispatch went without one (MOTIR-5853). */
-  submitted?: { kind: string; hasCode?: boolean }[];
+  submitted?: { kind: string; hasCode?: boolean; refused?: boolean }[];
 }
 
 const json = { headers: { 'content-type': 'application/json' } } as const;
@@ -121,14 +145,19 @@ function readFixture(): AiJobsFixture {
   }
 }
 
+/** How many submits of `kind` came before this one — its queue ordinal. */
+function submitOrdinal(kind: string): number {
+  return (readFixture().submitted ?? []).filter((s) => s.kind === kind).length;
+}
+
 /** Record a submit so the SPEC can read back which job kinds actually ran. */
-function recordSubmit(kind: string, hasCode: boolean): number {
+function recordSubmit(kind: string, hasCode: boolean, refused = false): number {
   const p = fixturePath();
   const f = readFixture();
   const index = (f.submitted ?? []).filter((s) => s.kind === kind).length;
   if (!p) return index;
   try {
-    f.submitted = [...(f.submitted ?? []), { kind, hasCode }];
+    f.submitted = [...(f.submitted ?? []), { kind, hasCode, ...(refused ? { refused } : {}) }];
     writeFixtureFileSync(p, JSON.stringify(f, null, 2));
   } catch {
     // Recording is diagnostic only — never fail the request over it.
@@ -157,6 +186,13 @@ function submitCarriesCode(rawBody: string): boolean {
 function authorBugOutcomeAt(n: number): AuthorBugJobOutcome {
   const queue = readFixture().authorBug ?? [];
   if (queue.length === 0) return { status: 'succeeded' };
+  return queue[Math.min(n, queue.length - 1)]!;
+}
+
+/** The debug outcome for the `n`-th `debug_bug` submit attempt, the last repeating. */
+function debugBugOutcomeAt(n: number): DebugBugJobOutcome {
+  const queue = readFixture().debugBug ?? [];
+  if (queue.length === 0) return {};
   return queue[Math.min(n, queue.length - 1)]!;
 }
 
@@ -252,8 +288,29 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       const rawBody = String(req.body ?? '{}');
       const kind = kindOfSubmit(rawBody);
       notifySubmitObservers(rawBody);
+      // The ONE refusal this seam models at the submit (MOTIR-7051): motir-ai's
+      // own `402 out_of_credits` problem, so the real client maps it.
+      if (
+        kind === 'debug_bug' &&
+        debugBugOutcomeAt(submitOrdinal(kind)).submit === 'out_of_credits'
+      ) {
+        recordSubmit(kind, submitCarriesCode(rawBody), true);
+        const problem: Record<string, unknown> = {
+          type: 'about:blank',
+          title: 'Out of credits',
+          status: 402,
+          code: 'out_of_credits',
+          detail: 'The fixture declared this debug_bug submit out of credits.',
+        };
+        return {
+          statusCode: 402,
+          data: problem,
+          responseOptions: { headers: { 'content-type': 'application/problem+json' } },
+        };
+      }
       const index = recordSubmit(kind, submitCarriesCode(rawBody));
-      return { statusCode: 202, data: { jobId: jobIdFor(kind, index) }, responseOptions: json };
+      const accepted: Record<string, unknown> = { jobId: jobIdFor(kind, index) };
+      return { statusCode: 202, data: accepted, responseOptions: json };
     })
     .persist();
 
@@ -320,25 +377,28 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                 intent: outcome.intent,
                 answer: outcome.answer ?? null,
                 citations: outcome.citations ?? [],
+                ...(outcome.anchorKey ? { anchorKey: outcome.anchorKey } : {}),
               },
             }
-          : kind === 'plan_routing' && routing.message !== ''
-            ? {
-                // The HALT's envelope (MOTIR-4767): nothing was planned, and the
-                // verdict is the whole result. motir-ai also sends an EMPTY plan
-                // delta, because its `ResultEnvelope` type requires that field;
-                // it is omitted here because nothing in THIS tree reads one — the
-                // single proposal→tree write path is `approvePlan` →
-                // `materialize`, and `planChangeArchitecture` asserts repo-wide
-                // that no second one exists, this mock included.
-                onboardingRouting: {
-                  outcome: routing.outcome,
-                  message: routing.message,
-                  ...(routing.keptSteps ? { keptSteps: routing.keptSteps } : {}),
-                  ...(routing.missing ? { missing: routing.missing } : {}),
-                },
-              }
-            : {};
+          : kind === 'debug_bug' && debugBugOutcomeAt(index).debugBug !== undefined
+            ? { debugBug: debugBugOutcomeAt(index).debugBug }
+            : kind === 'plan_routing' && routing.message !== ''
+              ? {
+                  // The HALT's envelope (MOTIR-4767): nothing was planned, and the
+                  // verdict is the whole result. motir-ai also sends an EMPTY plan
+                  // delta, because its `ResultEnvelope` type requires that field;
+                  // it is omitted here because nothing in THIS tree reads one — the
+                  // single proposal→tree write path is `approvePlan` →
+                  // `materialize`, and `planChangeArchitecture` asserts repo-wide
+                  // that no second one exists, this mock included.
+                  onboardingRouting: {
+                    outcome: routing.outcome,
+                    message: routing.message,
+                    ...(routing.keptSteps ? { keptSteps: routing.keptSteps } : {}),
+                    ...(routing.missing ? { missing: routing.missing } : {}),
+                  },
+                }
+              : {};
       const settled: Record<string, unknown> = { status: 'succeeded', result };
       return { statusCode: 200, data: settled, responseOptions: json };
     })
