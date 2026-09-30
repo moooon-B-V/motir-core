@@ -30,6 +30,7 @@ const { apiTokensService } = await import('@/lib/services/apiTokensService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
 const { verifyMcpToken } = await import('@/lib/mcp/auth');
 const mcpRoute = await import('@/app/api/mcp/route');
+const { trackServerWork } = await import('../helpers/serverWork');
 const { DEFAULT_TOKEN_GRANT, GRANTABLE_PERMISSIONS } = await import('@/lib/tokens/grant');
 const { PERMISSIONS } = await import('@/lib/permissions/catalog');
 const { InvalidTokenGrantError } = await import('@/lib/apiTokens/errors');
@@ -76,12 +77,15 @@ async function mcpCall(
     accept: 'application/json, text/event-stream',
   };
   if (bearer) headers['authorization'] = `Bearer ${bearer}`;
-  return mcpRoute.POST(
-    new Request(`${BASE}/api/mcp`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ jsonrpc: '2.0', id: rpcId, method, params }),
-    }),
+  return trackServerWork(
+    mcpRoute.POST(
+      new Request(`${BASE}/api/mcp`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ jsonrpc: '2.0', id: rpcId, method, params }),
+      }),
+    ),
+    'POST /api/mcp',
   );
 }
 

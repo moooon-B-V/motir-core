@@ -69,7 +69,7 @@ test('a pending request opens the consent screen, and Approve returns the code',
   await page.goto(`/api/auth/oauth2/authorize?${authorize.toString()}`);
   await page.waitForURL(/\/oauth\/consent\?/);
   await expect(page.getByRole('heading', { name: 'Connect Claude Code to Motir?' })).toBeVisible();
-  await expect(page.getByText('Unverified')).toBeVisible();
+  await expect(page.getByRole('main').getByText('Unverified')).toBeVisible();
   const approve = page.getByRole('button', { name: 'Approve and connect' });
   await expect(approve).toBeEnabled();
 

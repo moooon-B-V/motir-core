@@ -596,29 +596,31 @@ function RevokeConnectionDialog({
       title={t('revokeConfirm.title', { app: name })}
       size="sm"
     >
-      <div className="flex flex-col gap-4">
-        <div className="flex gap-3 rounded-(--radius-card) bg-(--el-tint-rose) p-(--spacing-card-padding)">
-          <TriangleAlert aria-hidden className="size-4 shrink-0 text-(--el-danger)" />
-          <p className="font-sans text-sm text-(--el-text-strong)">
-            {t.rich('revokeConfirm.body', {
-              app: name,
-              workspace: c.workspace.name,
-              strong: (chunks) => <strong className="font-semibold">{chunks}</strong>,
-            })}
-          </p>
-        </div>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 font-sans text-[13px]">
-          <dt className="text-(--el-text-secondary)">{t('revokeConfirm.workspace')}</dt>
-          <dd className="text-(--el-text)">
-            {workspaceLabel} · {reachLabel}
-          </dd>
-          <dt className="text-(--el-text-secondary)">{t('revokeConfirm.scopes')}</dt>
-          <dd className="text-(--el-text)">
-            {tTokens(`scopes.summary.${summarizeGrant(c.permissions)}`)}
-          </dd>
-          <dt className="text-(--el-text-secondary)">{t('revokeConfirm.connected')}</dt>
-          <dd className="text-(--el-text)">{formatDate(c.createdAt, locale)}</dd>
-        </dl>
+      <div className="flex min-h-0 flex-col gap-4">
+        <Modal.Body className="gap-4">
+          <div className="flex gap-3 rounded-(--radius-card) bg-(--el-tint-rose) p-(--spacing-card-padding)">
+            <TriangleAlert aria-hidden className="size-4 shrink-0 text-(--el-danger)" />
+            <p className="font-sans text-sm text-(--el-text-strong)">
+              {t.rich('revokeConfirm.body', {
+                app: name,
+                workspace: c.workspace.name,
+                strong: (chunks) => <strong className="font-semibold">{chunks}</strong>,
+              })}
+            </p>
+          </div>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 font-sans text-[13px]">
+            <dt className="text-(--el-text-secondary)">{t('revokeConfirm.workspace')}</dt>
+            <dd className="text-(--el-text)">
+              {workspaceLabel} · {reachLabel}
+            </dd>
+            <dt className="text-(--el-text-secondary)">{t('revokeConfirm.scopes')}</dt>
+            <dd className="text-(--el-text)">
+              {tTokens(`scopes.summary.${summarizeGrant(c.permissions)}`)}
+            </dd>
+            <dt className="text-(--el-text-secondary)">{t('revokeConfirm.connected')}</dt>
+            <dd className="text-(--el-text)">{formatDate(c.createdAt, locale)}</dd>
+          </dl>
+        </Modal.Body>
         <Modal.Footer>
           <Button type="button" variant="ghost" onClick={onClose} disabled={revoking}>
             {t('revokeConfirm.cancel')}

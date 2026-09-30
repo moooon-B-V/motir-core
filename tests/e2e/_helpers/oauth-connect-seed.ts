@@ -9,7 +9,7 @@ import {
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { db } from './db-reset';
+import { adminDb } from './db-reset';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -77,11 +77,14 @@ export async function seedOAuthConnect(email: string): Promise<OAuthConnectSeed>
   });
 
   const home = await workspacesService.createWorkspace({ name: 'Moon Labs', ownerUserId: user.id });
-  const { organizationId } = await db.workspace.findUniqueOrThrow({
+  const { organizationId } = await adminDb.workspace.findUniqueOrThrow({
     where: { id: home.workspace.id },
     select: { organizationId: true },
   });
-  await db.organization.update({ where: { id: organizationId }, data: { aiIncludedSeat: true } });
+  await adminDb.organization.update({
+    where: { id: organizationId },
+    data: { aiIncludedSeat: true },
+  });
   const target = await workspacesService.createWorkspace({
     name: 'Ship It',
     ownerUserId: user.id,
@@ -100,7 +103,7 @@ export async function seedOAuthConnect(email: string): Promise<OAuthConnectSeed>
     workspaceId: target.workspace.id,
     actorUserId: user.id,
   });
-  await db.workspaceMembership.update({
+  await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: user.id, workspaceId: home.workspace.id } },
     data: { activeProjectId: homeProject.id },
   });
@@ -120,7 +123,7 @@ export async function seedOAuthConnect(email: string): Promise<OAuthConnectSeed>
 }
 
 async function workspaceLabel(workspaceId: string): Promise<string> {
-  const row = await db.workspace.findUniqueOrThrow({
+  const row = await adminDb.workspace.findUniqueOrThrow({
     where: { id: workspaceId },
     select: { name: true, organization: { select: { name: true } } },
   });

@@ -74,7 +74,7 @@ test('an app connects to the workspace the person picks, reads only there, and R
       page.getByRole('heading', { name: `Connect ${APP_NAME} to Motir?` }),
     ).toBeVisible();
     await expect(page.getByText('Unverified').first()).toBeVisible();
-    await expect(page.getByText(/An app on this computer/)).toBeVisible();
+    await expect(page.getByRole('main').getByText(/An app on this computer/)).toBeVisible();
     await beat();
 
     const picker = page.getByRole('combobox', { name: `Workspace ${APP_NAME} can act in` });
@@ -106,7 +106,7 @@ test('an app connects to the workspace the person picks, reads only there, and R
 
   await chapter('Settings → Account shows the connection, used a moment ago', async () => {
     await openConnectedApps(page);
-    const row = page.getByTestId('connected-app-row');
+    const row = page.getByRole('main').getByTestId('connected-app-row');
     await expect(row).toHaveCount(1);
     await expect(row).toContainText(APP_NAME);
     await expect(row).toContainText(seed.targetWorkspaceName);
@@ -129,7 +129,7 @@ test('an app connects to the workspace the person picks, reads only there, and R
     );
     await dialog.getByRole('button', { name: 'Revoke access' }).click();
     expect((await revoked).status()).toBe(204);
-    await expect(page.getByTestId('connected-app-row')).toHaveCount(0);
+    await expect(page.getByRole('main').getByTestId('connected-app-row')).toHaveCount(0);
     await expect(page.getByText(/No apps connected/).first()).toBeVisible();
     expect((await callTool(accessToken, 'list_projects')).kind).toBe('unauthorized');
     await beat();

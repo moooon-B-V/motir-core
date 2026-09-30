@@ -62,6 +62,7 @@ const { verifyMcpToken } = await import('@/lib/mcp/auth');
 const { mcpResourceUrl } = await import('@/lib/oauth/config');
 const { DEFAULT_TOKEN_GRANT } = await import('@/lib/tokens/grant');
 const mcpRoute = await import('@/app/api/mcp/route');
+const { trackServerWork } = await import('../../helpers/serverWork');
 const authRoute = await import('@/app/api/auth/[...all]/route');
 const consentRoute = await import('@/app/api/oauth/consent/route');
 const connectionsRoute = await import('@/app/api/account/oauth-connections/[id]/route');
@@ -124,8 +125,14 @@ async function answer(input: string | URL | Request, init?: RequestInit): Promis
   const path = url.pathname;
   let res: Response;
   if (path === '/api/mcp') {
-    const handler = mcpRoute[req.method as 'GET' | 'POST' | 'DELETE'];
-    res = handler ? await handler(req) : new Response(null, { status: 405 });
+    // Tracked: the SDK's SSE-stream GET is never awaited by the client (MOTIR-6324).
+    const handler =
+      req.method === 'GET'
+        ? mcpRoute.GET
+        : req.method === 'DELETE'
+          ? mcpRoute.DELETE
+          : mcpRoute.POST;
+    res = await trackServerWork(handler(req as never), `${req.method} ${path}`);
   } else if (path.startsWith('/.well-known/oauth-protected-resource')) {
     res = await protectedResource.GET(req, wellKnownParams(path, 'oauth-protected-resource'));
   } else if (path.startsWith('/.well-known/oauth-authorization-server')) {
@@ -293,16 +300,19 @@ async function callTool(client: Client, name: string, args: Record<string, unkno
 
 /** A raw MCP request with a bearer — what an app's next call looks like on the wire. */
 async function rawMcp(bearer: string): Promise<Response> {
-  return mcpRoute.POST(
-    new Request(MCP_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${bearer}`,
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
-    }),
+  return trackServerWork(
+    mcpRoute.POST(
+      new Request(MCP_URL, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          authorization: `Bearer ${bearer}`,
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+      }),
+    ),
+    'POST /api/mcp',
   );
 }
 

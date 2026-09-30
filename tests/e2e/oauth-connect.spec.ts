@@ -73,7 +73,7 @@ test('a narrowed grant: one project, less than the default, shown that way in Co
   expect(back.searchParams.get('code')).toBeTruthy();
 
   await openConnectedApps(page);
-  const row = page.getByTestId('connected-app-row');
+  const row = page.getByRole('main').getByTestId('connected-app-row');
   await expect(row).toHaveCount(1);
   await expect(row).toContainText(seed.targetProjectName);
   await expect(row).toContainText('Custom');
@@ -122,9 +122,9 @@ test('signed out, the request goes through sign-in and comes back to the same co
 
   await page.goto(pending.url);
   await page.waitForURL(/\/sign-in/);
-  await page.getByPlaceholder('Email address').fill(seed.email);
+  await page.getByRole('main').getByPlaceholder('Email address').fill(seed.email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await page.getByPlaceholder('Password').fill(seed.password);
+  await page.getByRole('main').getByPlaceholder('Password').fill(seed.password);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
   await page.waitForURL(/\/oauth\/consent\?/);
@@ -166,7 +166,7 @@ test('a bad request never reaches consent: a wrong resource goes back to the app
   await expect(
     page.getByRole('heading', { name: 'This connection request can’t be used' }),
   ).toBeVisible();
-  await expect(page.getByText('attacker.example')).toBeVisible();
+  await expect(page.getByRole('main').getByText('attacker.example')).toBeVisible();
   expect(new URL(page.url()).host).not.toBe('attacker.example');
 
   await openConnectedApps(page);

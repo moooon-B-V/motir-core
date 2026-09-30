@@ -172,7 +172,7 @@ rate-limited per IP (`MOTIR_OAUTH_REGISTER_RATE_LIMIT`, default 60 a minute, and
 
 Consent picks **one workspace**, and either **every project** the person can
 open or **one project**. Approving records a **connection**, and a connection
-is an API token in everything but its secret: the same workspace binding, the
+is a token in everything but its secret: the same workspace binding, the
 same project binding, the same grant, the same "last used". An OAuth access
 token resolves to its connection, so a tool called with it runs as the person
 who approved, in that workspace, narrowed by that grant — exactly as a personal
