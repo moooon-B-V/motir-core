@@ -391,8 +391,8 @@
       "description": "Permanently delete a work item and everything beneath it. Cannot be undone."
     },
     "work_item_triage": {
-      "label": "Handle requested features",
-      "description": "Accept, decline, promote or snooze an item in Requested features."
+      "label": "Triage requests",
+      "description": "Accept, decline, promote or snooze an item in Triage."
     },
     "comment_add": {
       "label": "Add comments",
@@ -1107,7 +1107,8 @@
       "git": "Git",
       "github": "GitHub",
       "backlog": "Backlog",
-      "triage": "Requested features",
+      "triage": "Triage",
+      "requestedFeatures": "Requested features",
       "roadmap": "Roadmap",
       "plans": "Plans",
       "resumeOnboarding": "Resume onboarding",
@@ -5394,19 +5395,19 @@
     }
   },
   "triage": {
-    "heading": "Requested features",
-    "count": "{count, plural, other {# waiting}}",
+    "heading": "Triage",
+    "count": "{count, plural, other {# to triage}}",
     "subtitle": "{project} · {key} — incoming bug reports & feature requests, excluded from the tree until you act",
-    "noAccessTitle": "No access to Requested features",
-    "noAccessDescription": "You don’t have access to Requested features for this project.",
-    "loadError": "Couldn’t load Requested features. Please try again.",
+    "noAccessTitle": "No access to Triage",
+    "noAccessDescription": "You don’t have access to Triage for this project.",
+    "loadError": "Couldn’t load Triage. Please try again.",
     "queueLabel": "Queue · newest first",
     "searchPlaceholder": "Search submissions",
     "searchAria": "Search submissions",
     "loadOlder": "Load older",
     "loadingMore": "Loading…",
     "noSearchResults": "No submissions match your search.",
-    "selectPrompt": "Select a request to review",
+    "selectPrompt": "Select a submission to triage",
     "selectPromptBody": "Pick a row from the queue to see its full report and act on it.",
     "detailLoading": "Loading submission…",
     "publicChip": "Public",
@@ -5420,7 +5421,7 @@
     "commentsLabel": "Comments",
     "noComments": "No comments yet.",
     "empty": {
-      "title": "Nothing waiting in Requested features",
+      "title": "Nothing waiting in Triage",
       "description": "New bug reports and feature requests land here — from the in-app “Report” button or a signed-in “Submit a request” on the public project page."
     },
     "actions": {
@@ -5498,7 +5499,7 @@
       "descriptionPlaceholder": "Add any details that help us reproduce or understand it…",
       "submit": "Submit",
       "submitted": "Thanks — your report was submitted",
-      "submittedDetail": "Filed as {key}, now waiting in Requested features.",
+      "submittedDetail": "Filed as {key}, now waiting in Triage.",
       "error": "Couldn’t submit your report. Please try again."
     }
   },

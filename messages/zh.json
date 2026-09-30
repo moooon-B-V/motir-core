@@ -391,8 +391,8 @@
       "description": "永久删除工作项及其下级内容，无法撤销。"
     },
     "work_item_triage": {
-      "label": "处理功能需求",
-      "description": "接受、拒绝、升级或延后「功能需求」中的条目。"
+      "label": "处理分诊",
+      "description": "接受、拒绝、升级或延后「分诊」中的条目。"
     },
     "comment_add": {
       "label": "发表评论",
@@ -1107,7 +1107,8 @@
       "git": "Git",
       "github": "GitHub",
       "backlog": "待办列表",
-      "triage": "功能需求",
+      "triage": "分诊",
+      "requestedFeatures": "功能需求",
       "roadmap": "路线图",
       "plans": "计划",
       "resumeOnboarding": "继续引导",
@@ -5394,19 +5395,19 @@
     }
   },
   "triage": {
-    "heading": "功能需求",
-    "count": "{count, plural, other {# 项待处理}}",
+    "heading": "分诊",
+    "count": "{count, plural, other {# 项待分诊}}",
     "subtitle": "{project} · {key} — 新的缺陷报告与功能请求，在你处理之前不会进入工作项树",
-    "noAccessTitle": "无权访问功能需求",
-    "noAccessDescription": "你没有此项目「功能需求」的访问权限。",
-    "loadError": "无法加载功能需求，请重试。",
+    "noAccessTitle": "无权访问分诊",
+    "noAccessDescription": "你没有此项目「分诊」的访问权限。",
+    "loadError": "无法加载分诊，请重试。",
     "queueLabel": "队列 · 最新优先",
     "searchPlaceholder": "搜索提交",
     "searchAria": "搜索提交",
     "loadOlder": "加载更早",
     "loadingMore": "加载中…",
     "noSearchResults": "没有符合搜索条件的提交。",
-    "selectPrompt": "选择一项请求进行处理",
+    "selectPrompt": "选择一项进行分诊",
     "selectPromptBody": "从队列中选择一行，查看完整报告并进行处理。",
     "detailLoading": "正在加载提交…",
     "publicChip": "公开",
@@ -5420,7 +5421,7 @@
     "commentsLabel": "评论",
     "noComments": "暂无评论。",
     "empty": {
-      "title": "「功能需求」中没有待处理的事项",
+      "title": "「分诊」中没有待处理的事项",
       "description": "新的缺陷报告和功能请求会出现在这里 — 来自应用内的“反馈”按钮，或公开项目页面上已登录用户的“提交请求”。"
     },
     "actions": {
@@ -5498,7 +5499,7 @@
       "descriptionPlaceholder": "补充有助于我们重现或理解的细节……",
       "submit": "提交",
       "submitted": "已收到你的反馈，谢谢",
-      "submittedDetail": "已记为 {key}，正在「功能需求」中等待处理。",
+      "submittedDetail": "已记为 {key}，正在「分诊」中等待处理。",
       "error": "反馈提交失败，请重试。"
     }
   },

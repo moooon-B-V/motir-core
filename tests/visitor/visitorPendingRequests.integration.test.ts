@@ -267,7 +267,7 @@ describe('GET /api/p/[identifier]/requests — the "Load more" door', () => {
     expect(member.status).toBe(409);
     expect(await member.json()).toEqual({
       code: 'VISITOR_ENTERS_PROJECT',
-      href: '/requested-features',
+      href: '/triage',
     });
 
     // Cloud off: not found, even for a consented Visitor.

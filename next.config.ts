@@ -129,27 +129,29 @@ export const LANDING_REDIRECTS = [
 ] as const;
 
 /**
- * The members' inbox rename (MOTIR-6772, Story MOTIR-6171).
+ * The members' inbox address (MOTIR-6772, then MOTIR-7043).
  *
  * A FOURTH sibling, for the reason `LANDING_REDIRECTS` gives: each constant is a
  * named contract some test reads, and this move is neither a landing, a settings
  * page nor a docs page.
  *
- * `/triage` became `/requested-features` because the name "triage" retired
- * everywhere a person reads it (`docs/decisions/public-request-board-retired.md`
- * Decision 4): one list, the members' inbox and the Visitor's view of the same
- * requests, gets one name. The old address is a bookmark in every member's
- * browser, so it keeps landing for ever rather than 404ing.
+ * MOTIR-6772 moved `/triage` to `/requested-features`; MOTIR-7043 moved it BACK
+ * (`docs/decisions/public-request-board-retired.md` Decision 4, AMENDMENT 1): the
+ * members' inbox is Triage again, and only the Visitor's view keeps Requested
+ * features. `/requested-features` was a member's bookmark for two days, so it
+ * keeps landing for ever rather than 404ing. The rule now runs the other way; the
+ * constant keeps its name because tests import it by that name.
  *
  * ⚠️ HERE AND NOT IN THE PAGE TREE. `next.config` redirects run BEFORE
- * `proxy.ts`, so a signed-out browser following `/triage` is redirected to the
- * new address first and only then meets the session bounce — the same answer a
- * signed-in one gets. A route handler at `/triage` would sit behind the proxy's
- * sign-in redirect and answer a signed-out reader with `/sign-in?next=/triage`.
- * 308 for the method-preserving reason `LANDING_REDIRECTS` gives.
+ * `proxy.ts`, so a signed-out browser following `/requested-features` is
+ * redirected to `/triage` first and only then meets the session bounce — the
+ * same answer a signed-in one gets. A route handler would sit behind the proxy's
+ * sign-in redirect and answer a signed-out reader with
+ * `/sign-in?next=/requested-features`. 308 for the method-preserving reason
+ * `LANDING_REDIRECTS` gives.
  */
 export const REQUESTED_FEATURES_REDIRECTS = [
-  { source: '/triage', destination: '/requested-features', permanent: true },
+  { source: '/requested-features', destination: '/triage', permanent: true },
 ] as const;
 
 /**

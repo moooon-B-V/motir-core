@@ -23,12 +23,13 @@ const ROWS: { views: readonly VisitorView[]; to: VisitorView; label: string; ico
   { views: ['board'], to: 'board', label: 'nav.boards', icon: <Columns3 /> },
   { views: ['roadmap'], to: 'roadmap', label: 'nav.roadmap', icon: <Map /> },
   // MOTIR-6769 — the pending feature requests, drawn after Roadmap (MOTIR-6767).
-  // The members' own glyph and label key (`nav.triage` reads "Requested
-  // features" since MOTIR-6772): one list, one name, one mark.
+  // The members' own glyph, under the Visitor's own name: MOTIR-7043 renamed the
+  // members' inbox back to Triage (`nav.triage`), and only this view keeps
+  // Requested features.
   {
     views: ['requested-features'],
     to: 'requested-features',
-    label: 'nav.triage',
+    label: 'nav.requestedFeatures',
     icon: <Inbox />,
   },
   { views: ['plans'], to: 'plans', label: 'nav.plans', icon: <Sparkles /> },

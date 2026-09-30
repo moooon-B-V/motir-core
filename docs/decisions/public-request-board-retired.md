@@ -4,6 +4,8 @@
   MOTIR-6171 was being planned. Revised the same day after the owner requested changes at this
   record's decision gate: the name "triage" retires everywhere, not only where a Visitor looks
   (Decision 4). Approving this record confirms that the direction below is what the owner asked for.
+  **Amended 2026-09-30** (AMENDMENT 1, MOTIR-7043): the members' inbox is Triage again; only the
+  Visitor's view keeps Requested features.
 - **Work item:** MOTIR-6744 (`type: decision`), epic MOTIR-6164
 - **Supersedes:**
   - **MOTIR-4116** (done), which shipped motir.co's Roadmap tab as the feature-request board. The tab
@@ -75,6 +77,11 @@ The owner settled it in four turns on 2026-09-28, and a fifth at this record's d
    - the copy that tells a submitter or a member where a request went (today "the team's triage
      queue", "No items to triage", "Select a submission to triage" and their siblings);
    - every locale's translation of those strings.
+
+   > **⚠️ AMENDED 2026-09-30 — the members' half of this decision is reversed** (AMENDMENT 1 below,
+   > MOTIR-7043). The members' inbox is **Triage** again, at `/triage`; the Visitor's view keeps
+   > **Requested features**.
+
 5. **What stays on motir.co, unchanged:**
    - the "Request a feature" doorway, `/p/<identifier>/requests/new`;
    - each request's own page, `/p/<identifier>/requests/<KEY>`, with its upvote and comment
@@ -154,3 +161,30 @@ amendment of record for the clauses below.
   implementing card's choice. This record renames what people read.
 - **What the old `/triage` address does** once the inbox has moved: redirect or retire. That is the
   implementing card's choice.
+
+## AMENDMENT 1 — the members' inbox is Triage again; the Visitor's view keeps Requested features (MOTIR-7043, 2026-09-30)
+
+**The owner (Yue) reversed the members' half of Decision 4 on 2026-09-30.** The members' inbox is
+called **Triage** again, at `/triage`. The Visitor's view keeps its name and address, **Requested
+features** at `/p/<identifier>/requested-features`. One object now carries two names, one per
+audience, and that is the decision rather than an oversight: the inbox no longer receives only
+feature requests (bug reports arrive there too, and the Debug with Motir AI offer tells a person
+their bug is waiting in Triage), so "Requested features" misnames what a member reads.
+
+- **Members:** the navigation entry, the page heading and the address are Triage and `/triage`. The
+  permission's label and description in the role editor, the report widget's confirmation (_"now
+  waiting in Triage"_) and the inbox's own copy say Triage, in every locale (zh: 分诊).
+- **Visitors and public copy keep "Requested features":** the Visitor view, its navigation entry,
+  the public submit permission's description, the submit confirmation and the FAQ.
+- **The old member address** `/requested-features` is a permanent (308) redirect to `/triage`, served
+  from `next.config` so a signed-out browser gets the same answer as a signed-in one.
+- **A member who opens the Visitor view** is still sent to their own inbox (Decision 2), which is now
+  `/triage`.
+- **Unchanged:** the inbox's behaviour and every internal identifier (`triagedAt`,
+  `work_item:triage`, `triageService`, the `/api/**/triage` routes).
+
+This makes false: Decision 2's _"lands in their own Requested features"_ (read _"their own Triage
+inbox"_), Decision 4's _"the Visitor's view and the members' inbox are both Requested features"_,
+the Rejected entry _"Keep 'Triage' as the members' own name"_, the Consequences bullet _"The members'
+inbox is renamed"_, and the `triage-model.md` entry under _The clauses this record makes false_: the
+surface a member reads is Triage again, which is what `triage-model.md` already says.
