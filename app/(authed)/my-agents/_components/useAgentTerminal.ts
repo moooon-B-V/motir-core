@@ -25,6 +25,33 @@ export const TERMINAL_RETRY_CAP_MS = 10_000;
 
 export type SignInState = 'signed_in' | 'signed_out' | 'unknown';
 
+/**
+ * One live session the terminal server listed (MOTIR-7025 · 7029): a person's
+ * `shell`, or the `run` session a card's run lives in, tagged with its run id.
+ */
+export interface TerminalSessionListing {
+  session: string;
+  kind: 'shell' | 'run';
+  runId?: string;
+}
+
+/** Parse a `sessions` frame's list; anything malformed is dropped, never echoed. */
+export function parseSessionListings(value: unknown): TerminalSessionListing[] {
+  if (!Array.isArray(value)) return [];
+  const out: TerminalSessionListing[] = [];
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) continue;
+    const entry = item as Record<string, unknown>;
+    if (typeof entry['session'] !== 'string') continue;
+    if (entry['kind'] === 'run' && typeof entry['runId'] === 'string') {
+      out.push({ session: entry['session'], kind: 'run', runId: entry['runId'] });
+    } else if (entry['kind'] === 'shell') {
+      out.push({ session: entry['session'], kind: 'shell' });
+    }
+  }
+  return out;
+}
+
 export interface TerminalSignIn {
   profile: string | null;
   state: SignInState;
@@ -99,6 +126,8 @@ export function useAgentTerminal({
 }) {
   const [conn, setConnState] = useState<TerminalConn>({ kind: 'idle' });
   const [signIn, setSignIn] = useState<TerminalSignIn | null>(null);
+  /** The server's session list (MOTIR-7029): the run session is offered from it. */
+  const [sessions, setSessions] = useState<TerminalSessionListing[]>([]);
   /** Has this panel shown the shell at least once? (The connecting face covers a blank terminal only.) */
   const [everLive, setEverLive] = useState(false);
   const connRef = useRef<TerminalConn>(conn);
@@ -174,6 +203,9 @@ export function useAgentTerminal({
           // Fresh or resumed, the screen starts clean: a resume's replay follows
           // as binary and redraws it (Q5).
           sink.current?.reset();
+          // The server follows `ready` with `sessions` while a run is live; a
+          // listing from before this attach may name a run that has since ended.
+          setSessions([]);
           windowStart.current = null;
           attempt.current = 0;
           staleRetried.current = false;
@@ -200,6 +232,9 @@ export function useAgentTerminal({
           }
           return;
         }
+        case 'sessions':
+          setSessions(parseSessionListings(frame['sessions']));
+          return;
         case 'exit':
           writeSession(agentId, null);
           setConn({ kind: 'exited' });
@@ -354,6 +389,7 @@ export function useAgentTerminal({
     teardown();
     wasLive.current = false;
     setSignIn(null);
+    setSessions([]);
     setConn({ kind: 'idle' });
   }, [setConn, teardown]);
 
@@ -390,6 +426,7 @@ export function useAgentTerminal({
   return {
     conn,
     signIn,
+    sessions,
     everLive,
     sendInput,
     sendResize,

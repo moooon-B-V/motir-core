@@ -41,7 +41,7 @@ export const RUN_LEGACY_ALIVE_MS = 12 * 60 * 60 * 1000;
 /** The columns the rule reads — any run row or DTO carries them. */
 export interface RunLivenessInput {
   status: string;
-  origin: 'local' | 'hosted';
+  origin: 'local' | 'hosted' | 'instance';
   startedAt: Date | string;
   lastHeartbeatAt: Date | string | null;
 }
@@ -53,6 +53,9 @@ function ms(at: Date | string): number {
 /** Whether the run is still working, as of `now`. */
 export function isRunAlive(run: RunLivenessInput, now: Date = new Date()): boolean {
   if (run.status !== 'running') return false;
+  // A HOSTED run's liveness is its supervision. A LOCAL run and an INSTANCE run
+  // (MOTIR-7023) both heartbeat from the CLI, so both take the lapse rule below —
+  // `agent-instance-run.md` §6 widens the lapse from `local` to `local | instance`.
   if (run.origin === 'hosted') return true;
   if (run.lastHeartbeatAt !== null) {
     return now.getTime() - ms(run.lastHeartbeatAt) < RUN_HEARTBEAT_LAPSE_MS;

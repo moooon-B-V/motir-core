@@ -33,6 +33,7 @@ import { rehearseHostedAgentMeter } from '../../scripts/rehearseHostedAgentMeter
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // THE STORY'S VITEST GATE (Story MOTIR-4336 · MOTIR-4716) — the seams between the
 // hosted-agent metering seam and the shipped meter, driver and sweep, and the
@@ -75,6 +76,8 @@ function requestFor(
     ...overrides,
   };
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   fakeOrchestrator.reset();

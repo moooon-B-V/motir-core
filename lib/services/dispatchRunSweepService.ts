@@ -11,6 +11,7 @@ import {
   dispatchRunService,
 } from '@/lib/services/dispatchRunService';
 import { heartbeatLapsedBefore } from '@/lib/runs/runLiveness';
+import { agentInstanceRunService } from '@/lib/services/agentInstanceRunService';
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 
 // THE DISPATCH-RUN HOUSEKEEPING (Story MOTIR-1789 · MOTIR-1792) — the two
@@ -89,7 +90,8 @@ export const dispatchRunSweepService = {
    * THE LAPSE REAP (Story MOTIR-6526 · MOTIR-6528, `run-death-keeps-work.md` §2)
    * — closes every LOCAL run whose last heartbeat is older than the lapse window
    * as `abandoned`, with a closing `log` event naming when it was last heard
-   * from.
+   * from. An INSTANCE run (MOTIR-7027) lapses by the same rule and is closed the
+   * same way through the agent's end path, which also revokes its credentials.
    *
    * ⚠️ HOUSEKEEPING, NOT THE VERDICT. `isRunAlive` already reads such a run as
    * dead the moment the window passes — the marker and the continue claim do not
@@ -110,7 +112,7 @@ export const dispatchRunSweepService = {
     const summary: RunLivenessSweepSummary = { runsReaped: 0, runsRacedByClose: 0, runsFailed: 0 };
     const cutoff = heartbeatLapsedBefore(now);
     const lapsed = await withSystemContext((tx) =>
-      dispatchRunRepository.listLapsedLocalRunningAcrossWorkspaces(
+      dispatchRunRepository.listLapsedHeartbeatingRunningAcrossWorkspaces(
         cutoff,
         DISPATCH_RUN_SWEEP_BATCH_SIZE,
         tx,
@@ -118,6 +120,20 @@ export const dispatchRunSweepService = {
     );
     for (const run of lapsed) {
       const ctx = { userId: run.createdById ?? '', workspaceId: run.workspaceId };
+      if (run.origin === 'instance') {
+        // A run in an agent whose CLI went silent (`agent-instance-run.md` §6,
+        // MOTIR-7027): the agent's end path closes it, revokes its credentials and
+        // stops whatever is left of its session in the agent. Never a throw.
+        const ended = await agentInstanceRunService.end(
+          run.id,
+          'lapsed',
+          `no heartbeat since ${run.lastHeartbeatAt!.toISOString()}`,
+          { stopSession: true },
+        );
+        if (ended.closed) summary.runsReaped += 1;
+        else summary.runsRacedByClose += 1;
+        continue;
+      }
       try {
         try {
           await dispatchRunService.appendEvents(

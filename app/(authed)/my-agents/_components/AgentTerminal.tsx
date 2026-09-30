@@ -42,6 +42,7 @@ export function AgentTerminal({
   jumpLabel,
   sizeLabel,
   overlay,
+  watchOnly = false,
 }: {
   sinkRef: RefObject<TerminalSink | null>;
   onData: (data: string) => void;
@@ -54,12 +55,20 @@ export function AgentTerminal({
   sizeLabel: (cols: number, rows: number) => string;
   /** A face drawn over the terminal (connecting, the session limit). */
   overlay?: ReactNode;
+  /**
+   * The run's session (MOTIR-7029): watch-only, so no caret is drawn and no key
+   * is taken — the server drops input to it anyway.
+   */
+  watchOnly?: boolean;
 }) {
   const host = useRef<HTMLDivElement | null>(null);
   const term = useRef<Terminal | null>(null);
   const handlers = useRef({ onData, onResize });
   const sizeLabelRef = useRef(sizeLabel);
+  const inputRef = useRef(inputEnabled);
+  const watchOnlyRef = useRef(watchOnly);
   useLayoutEffect(() => {
+    inputRef.current = inputEnabled;
     handlers.current = { onData, onResize };
     sizeLabelRef.current = sizeLabel;
   });
@@ -122,12 +131,21 @@ export function AgentTerminal({
       const paper =
         (el.parentElement && getComputedStyle(el.parentElement).backgroundColor) || 'Canvas';
       const t = new XTerm({
-        cursorBlink: true,
+        // Whatever input state was asked for before xterm loaded holds from the start.
+        disableStdin: !inputRef.current,
+        ...(watchOnlyRef.current
+          ? {
+              cursorBlink: false,
+              cursorStyle: 'bar' as const,
+              cursorInactiveStyle: 'none' as const,
+            }
+          : { cursorBlink: true }),
         fontFamily: style.fontFamily || 'monospace',
         fontSize: 12,
         lineHeight: 1.2,
         scrollback: 5_000,
-        theme: { background: paper, foreground: ink, cursor: ink },
+        // A watch-only terminal draws no caret: its cursor is painted in the paper.
+        theme: { background: paper, foreground: ink, cursor: watchOnlyRef.current ? paper : ink },
       });
       fit = new Fit();
       t.loadAddon(fit);

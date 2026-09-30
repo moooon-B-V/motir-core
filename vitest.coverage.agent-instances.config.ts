@@ -50,6 +50,13 @@ const MEASURED = [
   'lib/repositories/agentTerminalTicketRepository.ts',
   'lib/repositories/agentTerminalConnectionRepository.ts',
   'lib/mappers/agentTerminalMappers.ts',
+  // Story MOTIR-6864 — a run in my agent (MOTIR-7026).
+  'lib/services/agentInstanceRunService.ts',
+  'lib/mappers/agentInstanceRunMappers.ts',
+  'lib/jobs/definitions/agentInstanceRunLaunch.ts',
+  // MOTIR-7027 — the run's supervision; the lifecycle couplings live in files above.
+  'lib/jobs/definitions/agentInstanceRunSupervise.ts',
+  'app/api/work-items/[[]id]/agent-runs/**/*.ts',
 ];
 
 export default defineConfig({
@@ -61,6 +68,8 @@ export default defineConfig({
       'tests/components/MyAgentsRoom.test.tsx',
       'tests/agentTerminal/**/*.test.ts',
       'tests/components/AgentPanel.test.tsx',
+      // Story MOTIR-6864 — the agent's live run in its panel (MOTIR-7029).
+      'tests/components/AgentPanelRun.test.tsx',
     ],
     coverage: {
       provider: 'v8',

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { mapAgentInstanceError } from '@/lib/agentInstances/errorResponse';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 import {
   HostedRunAlreadyEndedError,
@@ -11,7 +12,9 @@ import { hostedRunService } from '@/lib/services/hostedRunService';
 // cancels a running HOSTED run from the run panel. `hostedRunService.cancel` is
 // the whole behaviour: the run's key, credential and git tokens are revoked and
 // the run closed `cancelled` now; its container is torn down by its supervisor at
-// the next poll.
+// the next poll. A run IN AN AGENT (Story MOTIR-6864 · MOTIR-7027) takes the same
+// door: its owner only, closed `cancelled`, then its session stopped in the agent
+// — whose refusals (`agent_run_*`) the agent-instance mapper answers.
 //
 // Thin HTTP layer (CLAUDE.md 4-layer): the compliant-session gate, ONE service
 // call, the error → status map. A cookie-session route on the app's own `/api`
@@ -42,6 +45,8 @@ export async function POST(
     if (err instanceof HostedRunNotFoundError) return problem(err.code, err.message, 404);
     if (err instanceof HostedRunCancelForbiddenError) return problem(err.code, err.message, 403);
     if (err instanceof HostedRunAlreadyEndedError) return problem(err.code, err.message, 409);
+    const mapped = mapAgentInstanceError(err);
+    if (mapped) return mapped;
     throw err;
   }
 }

@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
@@ -467,7 +468,7 @@ describe('3 · the edges', () => {
       env: { MOTIR_INSTANCE_ID: 'orphan' },
     });
     await fleet.destroyMachine(orphan.app, orphan.machineId);
-    expect((await sweeper.sweep()).orphans).toEqual({ machines: 0, volumes: 0 });
+    expect((await sweeper.sweep()).orphans).toEqual({ volumes: 0 });
   });
 
   it('the list counts an interval begun before this month only from the month’s start', async () => {
@@ -602,9 +603,18 @@ describe('3b · the edges, staged in the database', () => {
       data: { machineId: null, volumeId: null, state: 'failed' },
     });
     clock.advance(20 * MIN);
-    // The real machine and volume are now owned by nobody: both are orphans.
+    // The real machine and volume are now owned by nobody. The MACHINE is the
+    // attribution reconciler's (MOTIR-6925); the sweep keeps only the volume,
+    // which waits while its machine still holds it.
     const first = await sweeper.sweep();
-    expect(first.orphans.machines).toBe(1);
+    expect(first.orphans.volumes).toBe(0);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const reconciled = await fleetAttributionService.reconcile({
+      now: () => new Date(clock.now().getTime() + 20 * MIN),
+    });
+    expect(reconciled).toMatchObject({ killed: [{ reason: 'no_record', action: 'destroyed' }] });
+    const second = await sweeper.sweep();
+    expect(second.orphans.volumes).toBe(1);
   });
 
   it('the charge backstop counts a refusal', async () => {

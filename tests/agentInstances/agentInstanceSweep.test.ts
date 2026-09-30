@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
 import { fakePersistentOrchestrator as fleet } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import { agentInstanceChargeService } from '@/lib/services/agentInstanceChargeService';
@@ -298,7 +299,9 @@ describe('the sweep', () => {
     expect(fleet.liveVolumeIds()).toEqual([]);
   });
 
-  it('destroys an orphan machine no live record owns once it is 15 minutes old, and its volume once detached', async () => {
+  // The orphan MACHINE is the attribution reconciler's since MOTIR-6925
+  // (`fleet-per-org-pool.md` §6); the sweep keeps the VOLUME half.
+  it('leaves an orphan machine to the reconciler, then destroys its volume once detached', async () => {
     await createRunning();
     const row = await instance();
     const orphan = await fleet.provisionPersistent({
@@ -311,15 +314,21 @@ describe('the sweep', () => {
 
     virtualNow += 5 * MIN;
     await lifecycle.touchActivity(row.id);
-    expect((await sweeper.sweep()).orphans).toEqual({ machines: 0, volumes: 0 });
+    expect((await sweeper.sweep()).orphans).toEqual({ volumes: 0 });
 
     virtualNow += 15 * MIN;
     await lifecycle.touchActivity(row.id);
-    // The volume was attached in this pass's inventory, so it waits one pass —
-    // never a volume delete racing its machine's destroy.
-    expect((await sweeper.sweep()).orphans).toEqual({ machines: 1, volumes: 0 });
+    // The volume is still attached to its machine, so it waits — never a volume
+    // delete racing its machine's destroy.
+    expect((await sweeper.sweep()).orphans).toEqual({ volumes: 0 });
+    expect(fleet.liveMachineIds()).toHaveLength(2);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const reconciled = await fleetAttributionService.reconcile({ now: () => new Date(virtualNow) });
+    expect(reconciled).toMatchObject({
+      killed: [{ machineId: orphan.machineId, reason: 'no_record' }],
+    });
     expect(fleet.liveMachineIds()).toEqual([row.machineId]);
-    expect((await sweeper.sweep()).orphans).toEqual({ machines: 0, volumes: 1 });
+    expect((await sweeper.sweep()).orphans).toEqual({ volumes: 1 });
     expect(fleet.liveVolumeIds()).toEqual([row.volumeId]);
     expect((await instance()).state).toBe('running');
   });

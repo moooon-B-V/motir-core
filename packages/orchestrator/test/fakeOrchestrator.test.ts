@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -8,6 +8,7 @@ import {
   type ContainerHandle,
   type ContainerSpec,
   type UsageAttribution,
+  sparedByCaller,
 } from '../src/index';
 
 // THE PORT'S CONTRACT, asserted against the `fake` adapter (Story MOTIR-1916 ·
@@ -518,5 +519,15 @@ describe('with the seam OFF the fake is byte-for-byte the in-memory singleton', 
     expect(process.env['MOTIR_FAKE_CONTAINER_STATE_PATH']).toBeUndefined();
     const handle = await fakeOrchestrator.provision(SPEC);
     expect(handle.id).toBe('fake-machine-1');
+  });
+});
+
+describe('sparedByCaller', () => {
+  it('a spare check that throws a non-Error still spares nothing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const handle = { provider: 'fake' as const, id: 'c-1', region: 'iad', createdAt: new Date() };
+    expect(await sparedByCaller(() => Promise.reject('not an error'), handle)).toBe(false);
+    expect(warn.mock.calls[0]![1]).toMatchObject({ detail: 'unknown' });
+    warn.mockRestore();
   });
 });

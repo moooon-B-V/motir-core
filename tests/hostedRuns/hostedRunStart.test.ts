@@ -26,6 +26,7 @@ import {
 import { workItemContinueService } from '@/lib/services/workItemContinueService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { adminDb } from '../helpers/adminDb';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // STARTING A HOSTED RUN (Story MOTIR-683 · MOTIR-690) — `hostedRunService.start`
@@ -204,6 +205,8 @@ async function expectNothingStarted(): Promise<void> {
 let seq = 0;
 const start = (key: string, model = MODEL) =>
   hostedRunService.start({ workItemKey: key, model, idempotencyKey: `idem-${++seq}` }, fx.ctx);
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   await truncateAuthTables();

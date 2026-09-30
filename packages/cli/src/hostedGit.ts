@@ -3,13 +3,16 @@ import {
   accessSync,
   chmodSync,
   constants as fsConstants,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmdirSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { MotirClient, type RunGitCredentials } from './client.js';
 import { CliError } from './errors.js';
 import { setActiveHostedRun, type HostedAttribution } from './hostedAttribution.js';
@@ -118,7 +121,7 @@ function writePrivate(path: string, content: string): void {
   chmodSync(path, 0o600);
 }
 
-function readRunAccess(stateDir: string): HostedRunAccess {
+export function readRunAccess(stateDir: string): HostedRunAccess {
   try {
     const parsed = JSON.parse(readFileSync(join(stateDir, RUN_FILE), 'utf8')) as HostedRunAccess;
     if (parsed.apiUrl && parsed.runId && parsed.token) return parsed;
@@ -277,6 +280,13 @@ export interface PrepareHostedRunInput {
   stateDir?: string;
   /** The command that re-enters this CLI (tests point it at the source). */
   cli?: readonly string[];
+  /**
+   * AGENT MODE (MOTIR-7024): the run is in one of the developer's own agents,
+   * in a home they keep. `gh`'s own state is redirected into the state
+   * directory, and the Motir tokens leave this process's environment — the
+   * run's token is read from `run.json` by whoever needs it.
+   */
+  agentMode?: boolean;
 }
 
 /**
@@ -307,6 +317,14 @@ export async function prepareHostedRun(input: PrepareHostedRunInput): Promise<Ho
   env['GIT_TERMINAL_PROMPT'] = '0';
   env['PATH'] = [writeGhShim(stateDir, cli), env['PATH'] ?? ''].filter(Boolean).join(delimiter);
   env[HOSTED_STATE_ENV] = stateDir;
+  if (input.agentMode) {
+    // ⚠️ THE DEVELOPER'S `~/.config/gh` IS NEVER WRITTEN (agent-instance-run.md
+    // §2): the real `gh` the shim runs keeps its config and state in the run's
+    // directory, and never checks for an update.
+    env['GH_CONFIG_DIR'] = join(stateDir, 'gh');
+    env['GH_NO_UPDATE_NOTIFIER'] = '1';
+    for (const name of AGENT_MODE_UNSET_ENV) delete env[name];
+  }
 
   return setActiveHostedRun({
     runId: input.runId,
@@ -315,6 +333,69 @@ export async function prepareHostedRun(input: PrepareHostedRunInput): Promise<Ho
     dispatchedBy: issued.dispatchedBy,
     stateDir,
   });
+}
+
+/** The token names an agent-mode run removes from its own environment (MOTIR-7024). */
+export const AGENT_MODE_UNSET_ENV = ['MOTIR_TOKEN', 'MOTIR_RUN_TOKEN'] as const;
+
+// ── AGENT MODE: nothing of the run outlives it (MOTIR-7024) ─────────────────
+
+export interface AgentRunScratch {
+  /** The run's state directory: `run.json`, the helper's cache, `gitconfig`, `bin/gh`. */
+  stateDir: string;
+  /** The run's checkouts — `$HOME/.motir/runs/<runId>` unless the launcher said otherwise. */
+  workspace: string;
+}
+
+/**
+ * Take charge of an agent-mode run's two directories: create the workspace,
+ * and return the one function that removes BOTH — plus any empty parent the
+ * workspace needed that did not exist before — on every way the process ends.
+ *
+ * `agent-instance-run.md` §2: the run lives in a home the developer keeps for
+ * weeks, so what it made there must be gone when it ends. The returned remover
+ * is idempotent and runs from the caller's `finally` (success and failure);
+ * the `exit` listener registered here covers the interrupt handler, which ends
+ * the process with `process.exit` and so never reaches a `finally`. The
+ * terminal server removes the same two directories after the session exits,
+ * which is harmless after this.
+ */
+export function claimAgentRunScratch(
+  scratch: AgentRunScratch,
+  deps: {
+    onExit?: (listener: () => void) => () => void;
+  } = {},
+): () => void {
+  const created: string[] = [];
+  for (let dir = resolve(scratch.workspace); !existsSync(dir); dir = dirname(dir)) {
+    created.push(dir);
+    if (dirname(dir) === dir) break;
+  }
+  mkdirSync(scratch.workspace, { recursive: true, mode: 0o700 });
+  const onExit =
+    deps.onExit ??
+    ((listener: () => void) => {
+      process.on('exit', listener);
+      return () => process.off('exit', listener);
+    });
+  let detach: () => void = () => {};
+  // Every call removes — no "already done" latch — so a write that lands after
+  // an early removal (the interrupt's) is still taken by the `finally`'s.
+  const remove = (): void => {
+    detach();
+    rmSync(scratch.workspace, { recursive: true, force: true });
+    rmSync(scratch.stateDir, { recursive: true, force: true });
+    // Deepest first; a parent that is no longer empty is somebody else's now.
+    for (const dir of created) {
+      try {
+        rmdirSync(dir);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') break;
+      }
+    }
+  };
+  detach = onExit(remove);
+  return remove;
 }
 
 // ── A REVIEW run is READ-ONLY (MOTIR-6824) ─────────────────────────────────

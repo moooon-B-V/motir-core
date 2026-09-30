@@ -21,6 +21,7 @@ import {
   AgentInstanceNameInvalidError,
   AgentInstanceNameTakenError,
   AgentInstanceNotFoundError,
+  AgentInstanceRunActiveError,
   AgentInstanceStartRefusedError,
   AgentInstanceStateConflictError,
   AgentInstancesUnavailableError,
@@ -28,9 +29,14 @@ import {
 } from '@/lib/agentInstances/errors';
 import { buildCloneCommand } from '@/lib/agentInstances/cloneCommand';
 import {
+  AGENT_RUN_LAUNCHER_PROBE_COMMAND,
+  AGENT_SIGN_IN_COMMAND,
+  AGENT_SIGN_IN_TIMEOUT_SECONDS,
   AGENT_TERMINAL_PROBE_COMMAND,
   agentTerminalMachineConfig,
   isAgentTerminalConfigured,
+  parseSignInAnswer,
+  type AgentSignInAnswer,
 } from '@/lib/agentInstances/terminal';
 import { imageDigestResolver, pinnedImageReference } from '@/lib/agentInstances/imageDigest';
 import {
@@ -51,11 +57,25 @@ import {
   revokeInstanceCloneCredential,
 } from '@/lib/github/runGitCredential';
 import { machineCreditsFor } from '@/lib/hostedRuns/machineRate';
-import { toAgentInstanceDto } from '@/lib/mappers/agentInstanceMappers';
-import type { AgentInstanceListPageDto, AgentInstanceStopReason } from '@/lib/dto/agentInstances';
+import {
+  endLineReason,
+  isClosedRunInAgent,
+  toAgentInstanceActiveRunDto,
+  toAgentInstanceDto,
+  toAgentInstanceLastRunDto,
+} from '@/lib/mappers/agentInstanceMappers';
+import type {
+  AgentInstanceActiveRunDto,
+  AgentInstanceLastRunDto,
+  AgentInstanceListPageDto,
+  AgentInstanceStopReason,
+} from '@/lib/dto/agentInstances';
 import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
 import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
+import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import type { AgentRunEndOutcome } from '@/lib/services/agentInstanceRunService';
 import {
   agentInstanceActivityService,
   agentInstanceClock,
@@ -104,6 +124,15 @@ import {
 // in the request and then leaves the rest to the settle functions below, which
 // are IDEMPOTENT and are also what the 5-minute sweep (MOTIR-6873) calls for any
 // instance still in motion. Charging a closed interval is the sweep's too.
+
+// ── A RUN IN THE AGENT (Story MOTIR-6864 · MOTIR-7027, `agent-instance-run.md` §6) ──
+// A running run holds its agent: Hibernate and Delete are REFUSED, naming it
+// (`AgentInstanceRunActiveError`), and the idle check skips the agent. When a
+// machine stops for a reason no person chose — the 12-hour backstop, a credit
+// stop, a machine lost or stopped behind Motir's back — its run is CLOSED FIRST
+// through the run's one end path (`agentInstanceRunService.end`), so the record
+// never shows a running run in a stopped agent. That service imports this one,
+// so it is reached here by a dynamic import ({@link endRunIn}).
 
 // The clock seam and the activity door live in `agentInstanceActivityService`
 // (MOTIR-6940: the terminal relay imports them without this file's graph).
@@ -157,6 +186,15 @@ async function ownInstance(
   );
   if (!row || row.projectId !== project.id) throw new AgentInstanceNotFoundError(instanceId);
   return row;
+}
+
+/**
+ * The persistent handle a row names, or null before `provisionPersistent`
+ * answered. Exported for the run start (MOTIR-7026), which execs its launcher
+ * through the same handle.
+ */
+export function agentInstanceHandle(row: AgentInstance): PersistentContainerHandle | null {
+  return handleOf(row);
 }
 
 function handleOf(row: AgentInstance): PersistentContainerHandle | null {
@@ -307,8 +345,56 @@ async function reload(row: AgentInstance): Promise<AgentInstance> {
   return fresh;
 }
 
-/** Move an instance to `failed` with its reason, closing its interval (`lost`) and releasing its slot. */
-async function failInstance(row: AgentInstance, reason: string): Promise<void> {
+/** The run running in this agent, with the card it works on, or null (§5's read). */
+async function runningRunIn(
+  row: AgentInstance,
+): Promise<{ id: string; workItemKey: string | null } | null> {
+  return withWorkspaceServiceContext(row.workspaceId, async (tx) => {
+    const running = await dispatchRunRepository.findRunningByAgentInstance(row.id, tx);
+    if (!running) return null;
+    const keys = await dispatchRunRepository.findTargetKeys([running.id], tx);
+    return { id: running.id, workItemKey: keys.get(running.id) ?? null };
+  });
+}
+
+/** Refuse a person's Hibernate or Delete while a run is running in the agent (§6). */
+async function assertNoRunningRun(
+  row: AgentInstance,
+  action: 'hibernated' | 'deleted',
+): Promise<void> {
+  const running = await runningRunIn(row);
+  if (running)
+    throw new AgentInstanceRunActiveError(row.id, running.id, running.workItemKey, action);
+}
+
+/**
+ * Close the run running in this agent, if any, through the run's one end path —
+ * BEFORE the machine it runs on is stopped or given up (§6). Never a throw.
+ */
+async function endRunIn(
+  row: AgentInstance,
+  outcome: AgentRunEndOutcome,
+  detail: string,
+): Promise<void> {
+  const { agentInstanceRunService } = await import('@/lib/services/agentInstanceRunService');
+  await agentInstanceRunService.endRunningInAgent(row, outcome, detail);
+}
+
+/** The words a run in an agent is closed with when its machine goes (§6). */
+const RUN_MACHINE_LOST = 'the agent’s machine was lost';
+const RUN_AGENT_STOPPED = 'the agent stopped';
+const RUN_BOOT_FAILED = 'the agent stopped before the run could start';
+
+/**
+ * Move an instance to `failed` with its reason, closing its interval (`lost`) and
+ * releasing its slot — and, first, closing the run running in it `failed` (§6).
+ */
+async function failInstance(
+  row: AgentInstance,
+  reason: string,
+  runDetail: string = RUN_MACHINE_LOST,
+): Promise<void> {
+  await endRunIn(row, 'failed', runDetail);
   await systemTransition(row, ['starting', 'waking', 'running', 'hibernating'], 'failed', {
     failureReason: reason,
   });
@@ -375,6 +461,135 @@ async function probeTerminalServer(
   }
 }
 
+/**
+ * THE SIGN-IN QUERY (`agent-instance-run.md` §4 · MOTIR-7026): ask the agent's
+ * terminal server whether its coding agent is signed in, and record the answer
+ * with its time. Never a throw: an exec that failed or gave no answer returns
+ * null and leaves the recorded value standing — "could not ask" is not an answer.
+ */
+async function probeSignIn(
+  row: AgentInstance,
+  handle: PersistentContainerHandle,
+): Promise<AgentSignInAnswer | null> {
+  try {
+    const state = parseSignInAnswer(
+      await getPersistentOrchestrator().exec(handle, AGENT_SIGN_IN_COMMAND, {
+        timeoutSeconds: AGENT_SIGN_IN_TIMEOUT_SECONDS,
+      }),
+    );
+    if (state === null) return null;
+    await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+      agentInstanceRepository.recordSignIn(
+        row.id,
+        { signInState: state, at: agentInstanceClock.now() },
+        tx,
+      ),
+    );
+    return state;
+  } catch (err) {
+    console.warn('[agentInstanceLifecycle] the sign-in query did not answer', {
+      instanceId: row.id,
+      detail: describeError(err),
+    });
+    return null;
+  }
+}
+
+/**
+ * THE RUN PROBES AT A BOOT (`agent-instance-run.md` §4 · MOTIR-7026), beside the
+ * terminal-server probe: whether the image carries the run launcher — ONCE per
+ * digest, `motir agent-terminal run --help` exiting 0 — and the coding agent's
+ * sign-in, every boot. Never fails the boot. Skipped while the terminal is off:
+ * the launcher is the terminal server's, so there is nothing to ask.
+ */
+async function probeRunCapabilities(
+  row: AgentInstance,
+  handle: PersistentContainerHandle,
+): Promise<void> {
+  if (!isTerminalOnQuietly()) return;
+  try {
+    if (row.runLauncherDigest !== row.imageDigest) {
+      const result = await getPersistentOrchestrator().exec(
+        handle,
+        AGENT_RUN_LAUNCHER_PROBE_COMMAND,
+        { timeoutSeconds: 30 },
+      );
+      if (result.exitCode >= 0) {
+        await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+          agentInstanceRepository.recordRunLauncher(
+            row.id,
+            { runLauncher: result.exitCode === 0 ? 'present' : 'absent', digest: row.imageDigest },
+            tx,
+          ),
+        );
+      }
+    }
+  } catch (err) {
+    console.warn('[agentInstanceLifecycle] the run-launcher probe did not answer', {
+      instanceId: row.id,
+      detail: describeError(err),
+    });
+  }
+  await probeSignIn(row, handle);
+}
+
+/** {@link isAgentTerminalConfigured}, reading a misconfigured key as "off" (the probes never throw). */
+function isTerminalOnQuietly(): boolean {
+  try {
+    return isAgentTerminalConfigured();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Each listed agent's live run, and — for an agent with none — its latest closed
+ * run (MOTIR-7029: the panel's run line and its "Last run" face). A BOUNDED number
+ * of queries whatever the count of agents: the running runs, the latest runs of
+ * the idle agents, those runs' cards, and the closing lines of the ones that did
+ * not succeed — each one query, each skipped when it has nothing to ask.
+ */
+async function readAgentRuns(
+  agentIds: readonly string[],
+  tx: Prisma.TransactionClient,
+): Promise<{
+  active: Map<string, AgentInstanceActiveRunDto>;
+  last: Map<string, AgentInstanceLastRunDto>;
+}> {
+  const running = await dispatchRunRepository.findRunningByAgentInstances(agentIds, tx);
+  const busy = new Set(running.map((r) => r.agentInstanceId));
+  const latest = (
+    await dispatchRunRepository.findLatestByAgentInstances(
+      agentIds.filter((id) => !busy.has(id)),
+      tx,
+    )
+  ).filter(isClosedRunInAgent);
+  const targets = await dispatchRunRepository.findTargetCards(
+    [...running, ...latest].map((r) => r.id),
+    tx,
+  );
+  const reasons = new Map<string, string | null>();
+  for (const line of await dispatchRunEventRepository.listEndLinesForRuns(
+    latest.filter((r) => r.status !== 'succeeded').map((r) => r.id),
+    tx,
+  )) {
+    // Newest first: the first line seen for a run is its closing line.
+    if (!reasons.has(line.dispatchRunId)) reasons.set(line.dispatchRunId, endLineReason(line.data));
+  }
+  const active = new Map<string, AgentInstanceActiveRunDto>();
+  for (const run of running) {
+    active.set(run.agentInstanceId, toAgentInstanceActiveRunDto(run, targets.get(run.id) ?? null));
+  }
+  const last = new Map<string, AgentInstanceLastRunDto>();
+  for (const run of latest) {
+    last.set(
+      run.agentInstanceId,
+      toAgentInstanceLastRunDto(run, targets.get(run.id) ?? null, reasons.get(run.id) ?? null),
+    );
+  }
+  return { active, last };
+}
+
 async function waitFor(deadlineMs: number, done: () => Promise<boolean>): Promise<boolean> {
   const deadline = agentInstanceClock.now().getTime() + deadlineMs;
   for (;;) {
@@ -424,6 +639,10 @@ export const agentInstanceLifecycleService = {
           credits: acc.credits + credits,
         });
       }
+      const runs = await readAgentRuns(
+        rows.map((r) => r.id),
+        tx,
+      );
       return {
         total,
         instances: rows.map((row) => ({
@@ -432,6 +651,8 @@ export const agentInstanceLifecycleService = {
           machineSecondsThisMonth: usage.get(row.id)?.seconds ?? 0,
           creditsThisMonth: usage.get(row.id)?.credits ?? 0,
           stopReason: stopReasonOf(latestClosed.get(row.id) ?? null),
+          activeRun: runs.active.get(row.id) ?? null,
+          lastRun: runs.last.get(row.id) ?? null,
         })),
       };
     });
@@ -660,6 +881,8 @@ export const agentInstanceLifecycleService = {
     if (row.state !== 'running') {
       throw new AgentInstanceStateConflictError(row.id, row.state, 'hibernated');
     }
+    // §6: never under a running run — the person cancels it first.
+    await assertNoRunningRun(row, 'hibernated');
     // The loser of a race (another hibernate, the sweep) read `running` too, but its
     // guarded transition moved nothing: it is refused, never told it succeeded.
     if (!(await this.beginHibernate(row.id, 'hibernated'))) {
@@ -673,6 +896,12 @@ export const agentInstanceLifecycleService = {
    * (MOTIR-6873: `idle`, `backstop`, `credits`). Guarded `running → hibernating`,
    * then `stop`, then a bounded settle. Returns false when the instance was not
    * running (somebody else moved it first) — never an error for the sweep.
+   *
+   * A RUN IN THE AGENT (§6, MOTIR-7027): the backstop and a credit stop still
+   * stop the machine — money and the 12-hour bound hold over a machine running a
+   * card — and close its run FIRST (`timed_out`; `failed`, *"out of credits"*).
+   * Every other reason (a person's Hibernate, the idle check) is REFUSED with
+   * `AgentInstanceRunActiveError`, naming the run, and nothing moves.
    */
   async beginHibernate(
     instanceId: string,
@@ -680,9 +909,19 @@ export const agentInstanceLifecycleService = {
   ): Promise<boolean> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
     if (!row || row.deletedAt || row.state !== 'running') return false;
+    if (endReason === 'backstop') {
+      await endRunIn(row, 'backstop', 'the agent reached its 12-hour backstop');
+    } else if (endReason === 'credits') {
+      await endRunIn(row, 'failed', 'out of credits');
+    } else {
+      await assertNoRunningRun(row, 'hibernated');
+    }
     if (!(await systemTransition(row, ['running'], 'hibernating'))) return false;
     const handle = handleOf(row);
     if (handle) {
+      // §4 (MOTIR-7026): the last sign-in answer before the volume goes quiet is
+      // what a start reads while the agent sleeps. Best effort, never a refusal.
+      if (isTerminalOnQuietly()) await probeSignIn(row, handle);
       try {
         await getPersistentOrchestrator().stop(handle);
       } catch (err) {
@@ -704,6 +943,8 @@ export const agentInstanceLifecycleService = {
     const project = await resolveProject(projectKey, ctx);
     requireLane();
     const row = await ownInstance(project, instanceId, ctx);
+    // §6: never under a running run — the person cancels it first.
+    await assertNoRunningRun(row, 'deleted');
     const moved = await inProject(project, ctx, (tx) =>
       agentInstanceRepository.transition(
         row.id,
@@ -740,6 +981,7 @@ export const agentInstanceLifecycleService = {
       await failInstance(
         row,
         'The machine stopped before it finished starting. Wake to try again, or delete it.',
+        RUN_BOOT_FAILED,
       );
       return 'failed';
     }
@@ -752,11 +994,13 @@ export const agentInstanceLifecycleService = {
         await failInstance(
           row,
           `The project’s repositories could not be cloned: ${describeError(err)}`,
+          RUN_BOOT_FAILED,
         );
         return 'failed';
       }
     }
     await probeTerminalServer(row, handle);
+    await probeRunCapabilities(row, handle);
     const fresh = await reload(row);
     if (fresh.state !== row.state) return 'noop';
     await withWorkspaceServiceContext(row.workspaceId, async (tx) => {
@@ -832,6 +1076,19 @@ export const agentInstanceLifecycleService = {
       agentInstanceRepository.markDeleted(row.id, agentInstanceClock.now(), tx),
     );
     return 'deleted';
+  },
+
+  /**
+   * Ask a RUNNING agent's terminal server for its sign-in now and record it
+   * (`agent-instance-run.md` §4 — the start's live probe). Null when the agent is
+   * not running, has no handle, or the query gave no answer.
+   */
+  async probeSignIn(instanceId: string): Promise<AgentSignInAnswer | null> {
+    const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
+    if (!row || row.deletedAt || row.state !== 'running') return null;
+    const handle = handleOf(row);
+    if (!handle) return null;
+    return probeSignIn(row, handle);
   },
 
   /** Bump the idle signal (§2) — the later stories' relay and runs call it. */
@@ -922,6 +1179,8 @@ export const agentInstanceLifecycleService = {
       return 'failed';
     }
     if (status.state === 'stopped') {
+      // A machine that stopped behind Motir's back takes its run with it (§6).
+      await endRunIn(row, 'failed', RUN_AGENT_STOPPED);
       if (!(await systemTransition(row, ['running'], 'hibernated'))) return 'noop';
       await closeOpenInterval(row, status.stoppedAt ?? agentInstanceClock.now(), 'hibernated');
       return 'hibernated';
