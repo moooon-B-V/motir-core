@@ -14,8 +14,11 @@ import { mapAgentInstanceError } from '@/lib/agentInstances/errorResponse';
 import { imageDigestResolver, pinnedImageReference } from '@/lib/agentInstances/imageDigest';
 import { toAgentInstanceIntervalDto } from '@/lib/mappers/agentInstanceMappers';
 import {
+  AGENT_SIGN_IN_HINTS,
+  agentSignInHint,
   isOfferedProfile,
   NOT_OFFERED_AGENT_PROFILES,
+  OFFERED_AGENT_PROFILES,
   profileDisplayName,
   sandboxImageTag,
 } from '@/lib/agentInstances/profiles';
@@ -150,6 +153,19 @@ describe('profiles and caps', () => {
     expect(profileDisplayName('kimi')).toBe('Kimi Code');
     expect(profileDisplayName('cursor')).toBe('Cursor');
     expect(profileDisplayName('unknown')).toBe('unknown');
+  });
+
+  it('has a sign-in hint for every offered profile, and none for one it does not know', () => {
+    expect(Object.keys(AGENT_SIGN_IN_HINTS).sort()).toEqual(
+      OFFERED_AGENT_PROFILES.map((p) => p.id).sort(),
+    );
+    expect(agentSignInHint('claude')).toEqual({ checkable: true, values: ['claude', '/login'] });
+    expect(agentSignInHint('aider')).toEqual({
+      checkable: false,
+      values: ['ANTHROPIC_API_KEY=…', '~/.env'],
+    });
+    expect(agentSignInHint('cursor')).toBeNull();
+    expect(agentSignInHint('unknown')).toBeNull();
   });
 
   it('reads the agent pool’s safety valve from the environment — default 50, no per-organisation cap', () => {

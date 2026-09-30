@@ -156,7 +156,7 @@ const mcpLatestRefusalSchema = z.object({
   noteMd: z.string().nullable(),
   decidedByLabel: z.string().nullable(),
   decidedAt: z.string(),
-  decisionSource: z.enum(['ui', 'api', 'mcp', 'github']).nullable(),
+  decisionSource: z.enum(['ui', 'api', 'mcp', 'github', 'system']).nullable(),
   refusalVerdict: z.enum(['revise', 're_plan']).nullable(),
   subjectVersion: z.string().nullable(),
 });

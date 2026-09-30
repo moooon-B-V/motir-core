@@ -647,6 +647,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'legal-gone-selfhost.spec.ts': 3.0,
   'link-search-flow.spec.ts': 14.6,
   'member-facing-permissions.spec.ts': 7.7,
+  // MOTIR-7004 — a brand-new spec, ESTIMATED rather than measured: no browser
+  // page at all, two seeds, two MCP sessions and a handful of tool calls plus
+  // one catalogue GET. Rounded UP, because under-estimating unbalances the
+  // bin-packer. Re-measure from the first green CI run that includes it.
+  'mcp-tool-hints.spec.ts': 8.0,
   'migrate-index-fleet.spec.ts': 26.7,
   'modal-scroll-container.spec.ts': 6.0,
   'multi-tenant-isolation.spec.ts': 2.5,

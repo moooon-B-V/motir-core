@@ -471,6 +471,14 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/agentInstanceIdleCheck.ts',
     shape: '"active" | "backstop" | "idle" | "noop"',
   },
+  'sweep-agent-terminal-tickets': {
+    file: 'lib/jobs/definitions/agentInstanceSweep.ts',
+    shape: '{ deleted: number }',
+  },
+  'sweep-lost-terminal-connections': {
+    file: 'lib/jobs/definitions/agentInstanceSweep.ts',
+    shape: '{ closed: number }',
+  },
   'sweep-agent-instances': {
     file: 'lib/jobs/definitions/agentInstanceSweep.ts',
     shape:

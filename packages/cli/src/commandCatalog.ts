@@ -817,6 +817,30 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       },
     ],
   },
+  // The in-agent terminal server (MOTIR-6938 · `docs/decisions/agent-terminal.md`
+  // Q4). Not a command a person types: an agent's machine runs it as its main
+  // process. It is still published, in the default ADDITIONAL group, because
+  // the machine's init guards on `motir agent-terminal --help` and a reader
+  // who finds it in `ps` should find it documented.
+  {
+    path: 'agent-terminal',
+    signature: '',
+    description: 'The terminal server inside a Motir agent image.',
+    helpGroup: HELP_GROUP.additional,
+    options: [],
+  },
+  {
+    path: 'agent-terminal serve',
+    signature: '',
+    description: 'Serve this agent’s shell to Motir’s relay over WebSocket.',
+    helpGroup: null,
+    options: [
+      {
+        flags: '--port <port>',
+        description: 'Port to listen on, on every interface (default 7681).',
+      },
+    ],
+  },
   {
     path: 'help',
     signature: '[command...]',

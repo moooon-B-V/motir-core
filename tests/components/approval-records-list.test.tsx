@@ -213,6 +213,27 @@ describe('the PERSON cell follows the read’s `fullView`, and nothing else', ()
     expect(screen.getAllByText('Decided by').length).toBeGreaterThan(0);
   });
 
+  it('a SYSTEM approval names the setting, never "No one" (MOTIR-702)', () => {
+    // `design-result--system-approved.mock.html` panel 4: a gate the design-approval
+    // switch approved has no decider, and the room says what did decide it.
+    const records = page({
+      fullView: true,
+      sections: {
+        awaiting: { items: [], total: 0 },
+        decided: {
+          items: [
+            decidedRow({ state: 'approved', decidedByLabel: null, decisionSource: 'system' }),
+          ],
+          total: 1,
+        },
+      },
+      total: 1,
+    });
+    renderWithIntl(<ApprovalRecordsList records={records} />);
+    expect(screen.getByText('Approved automatically · design approval off')).toBeTruthy();
+    expect(screen.queryByText('No one')).toBeNull();
+  });
+
   it('uses the full-view grid only in the full view', () => {
     const { unmount } = renderWithIntl(<ApprovalRecordsList records={page({ fullView: true })} />);
     expect(screen.getByTestId('approval-row-gate-d').getAttribute('style')).toContain('200px');

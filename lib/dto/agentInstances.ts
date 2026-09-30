@@ -2,6 +2,7 @@ import type {
   AgentInstanceChargeOutcome,
   AgentInstanceIntervalEndReason,
   AgentInstanceState,
+  AgentTerminalServer,
 } from '@/generated/prisma/client';
 
 // The AGENT INSTANCE DTOs (Story MOTIR-6860 · MOTIR-6870), the shape the
@@ -16,7 +17,12 @@ import type {
 // Motir's handle on its own infrastructure, not something the owner acts on,
 // and publishing them would make them a contract this shape owes stability to.
 
-export type { AgentInstanceChargeOutcome, AgentInstanceIntervalEndReason, AgentInstanceState };
+export type {
+  AgentInstanceChargeOutcome,
+  AgentInstanceIntervalEndReason,
+  AgentInstanceState,
+  AgentTerminalServer,
+};
 
 /** One instance, as its owner sees it. */
 export interface AgentInstanceDto {
@@ -32,6 +38,13 @@ export interface AgentInstanceDto {
   state: AgentInstanceState;
   /** Set on `failed`, in words; null otherwise. */
   failureReason: string | null;
+  /**
+   * Does this agent's image serve a terminal (`agent-terminal.md` Q8)? `absent`
+   * is the typed "this agent's image has no terminal" the panel draws and the
+   * ticket route refuses with (`no_terminal_server`); `unknown` until the first
+   * boot's probe answers (or while the terminal is off on this deployment).
+   */
+  terminalServer: AgentTerminalServer;
   stateChangedAt: string;
   lastActivityAt: string;
   createdAt: string;

@@ -8227,7 +8227,8 @@
     "decidedByOnGithub": "{label} · 在 GitHub 上",
     "viewAria": "显示你的审批或整个项目的审批",
     "readFailedTitle": "无法加载这些审批",
-    "readFailedBody": "请重新加载后重试。"
+    "readFailedBody": "请重新加载后重试。",
+    "decidedBySystem": "已自动批准 · 设计审批已关闭"
   },
   "platformAdmin": {
     "shell": {
@@ -8842,6 +8843,78 @@
       "irreversible": "此操作无法撤销。已使用的机器时间仍会收费。",
       "keep": "保留",
       "confirm": "删除智能体"
+    },
+    "panel": {
+      "label": "智能体",
+      "close": "关闭 {name}",
+      "closeUnavailable": "关闭",
+      "back": "我的智能体",
+      "hibernate": "休眠",
+      "delete": "删除…",
+      "wake": "唤醒",
+      "privacy": "你的登录属于 {agent}，只保存在这个智能体的主目录里。Motir 永远看不到它。",
+      "signin": {
+        "signedIn": "已登录 {agent}",
+        "signedOut": {
+          "claude": "未登录——在终端中运行 <cmd>{first}</cmd>，然后运行 <cmd>{second}</cmd> 以登录",
+          "codex": "未登录——在终端中运行 <cmd>{first}</cmd> 以登录",
+          "opencode": "未登录——在终端中运行 <cmd>{first}</cmd> 以登录",
+          "generic": "未登录——在终端中登录 {agent}"
+        },
+        "unknown": "无法检查 {agent} 的登录状态",
+        "unknownHow": {
+          "kimi": "要登录，请在终端中运行 <cmd>{first}</cmd> 并按它的登录流程操作。",
+          "aider": "Aider 使用你的模型服务商密钥：把 <cmd>{first}</cmd>（或你的服务商的密钥）加入 <cmd>{second}</cmd>。",
+          "goose": "要添加你的模型服务商密钥，请在终端中运行 <cmd>{first}</cmd>。",
+          "generic": "要登录，请在终端中启动 {agent} 并按它的登录流程操作。"
+        }
+      },
+      "tabs": {
+        "label": "智能体视图",
+        "terminal": "终端"
+      },
+      "conn": {
+        "waiting": "等待中",
+        "connecting": "连接中…",
+        "live": "已连接",
+        "reconnecting": "重新连接中…",
+        "lost": "已断开",
+        "ended": "已结束",
+        "closed": "已关闭",
+        "unavailable": "不可用"
+      },
+      "face": {
+        "startingHint": "智能体一启动，终端就会在这里打开。",
+        "hibernatingHint": "终端会随之关闭。你的文件和登录都会保留。",
+        "hibernatedTitle": "{name} 已休眠",
+        "kept": "你的文件和登录都会保留。",
+        "wakingHint": "机器启动后终端会自动连接——无需点击。",
+        "deletingHint": "这个面板会关闭；在智能体彻底删除之前，列表仍会显示它。",
+        "connecting": "正在连接 {name} 的终端…"
+      },
+      "strip": {
+        "reconnecting": "连接中断——正在重新连接到同一个 shell。你的构建仍在运行。",
+        "lost": "无法重新连接。你的 shell 仍在智能体上运行——重新连接即可继续。",
+        "lostMachine": "智能体的机器没有响应。你的文件安全地保存在它的主目录里。",
+        "exited": "shell 已退出。你的文件都还在主目录里。",
+        "takenOver": "这个 shell 现在在另一个标签页中打开。一个 shell 同一时间只响应一个标签页。"
+      },
+      "reconnect": "重新连接",
+      "newShell": "启动新的 shell",
+      "useHere": "在这里使用",
+      "tryAgain": "重试",
+      "jumpLatest": "跳到最新",
+      "sessionLimit": "{name} 已在其他标签页中打开了 4 个终端。请先在那里关闭一个，然后重试。",
+      "noTerminal": {
+        "title": "这个智能体暂时无法打开终端",
+        "body": "它是用较旧的镜像创建的，那时还没有终端。把智能体迁移到新镜像（保留主目录和登录）的功能即将推出。在那之前，新建的智能体都带有终端。"
+      },
+      "unavailable": {
+        "title": "这个智能体不可用",
+        "body": "它可能已被删除，或者不是你的。只有创建智能体的人才能打开它。",
+        "back": "返回我的智能体"
+      },
+      "size": "{cols} × {rows}"
     }
   },
   "runs": {
@@ -9255,7 +9328,9 @@
       "willRepublish": "代理将发布新版本",
       "version": "版本 {version}",
       "filesKept": "已保留文件",
-      "filesNotKept": "未保留文件"
+      "filesNotKept": "未保留文件",
+      "systemApproved": "已自动批准",
+      "systemApprovedWhy": "此项目已关闭设计审批"
     },
     "withdrawn": {
       "port": "该问题已被撤回。",
@@ -10011,6 +10086,35 @@
         "bandNote": "审查代理没有审查这 {count} 个提交。",
         "record": "<b>{name}</b> 决定不经审查继续 · {when}"
       }
+    },
+    "autoRerun": {
+      "started": "正在托管代理上重新运行",
+      "startedCount": "第 {ordinal} 次自动重新运行（共 {cap} 次）",
+      "viewRun": "查看运行",
+      "skipped": "已跳过自动重新运行",
+      "reason": {
+        "cap_reached": "此设计已被退回 {cap} 次。",
+        "dispatcher_gone": "上次运行它的人已不在此工作区。",
+        "no_project_access": "上次运行它的 {detail} 已无法编辑此项目。",
+        "ci_credits_exhausted": "组织的 CI 额度已用完。",
+        "model_not_offered": "它上次使用的模型 {detail} 已不再提供。",
+        "models_unavailable": "无法读取模型列表。",
+        "out_of_credits": "组织的额度已用完。",
+        "credits_unavailable": "无法读取额度余额。",
+        "repository_not_writable": "Motir 无法写入 {detail}。",
+        "card_not_ready": "已有人先领取了此工作项。"
+      },
+      "next": {
+        "cap_reached": "在托管代理上运行",
+        "dispatcher_gone": "在托管代理上运行",
+        "no_project_access": "在托管代理上运行",
+        "ci_credits_exhausted": "账单",
+        "model_not_offered": "选择模型并运行",
+        "models_unavailable": "在托管代理上运行",
+        "out_of_credits": "购买额度",
+        "credits_unavailable": "在托管代理上运行",
+        "repository_not_writable": "仓库"
+      }
     }
   },
   "approvalOverlay": {
@@ -10083,6 +10187,16 @@
       "offNote": "关闭后，进行中的审查会被取消——这些工作项将直接进入常规流程。",
       "saved": "已保存",
       "saveError": "保存失败，请重试。"
+    },
+    "designApproval": {
+      "title": "设计审批",
+      "desc": "已发布的设计结果需等待有人批准。在批准之前，基于该设计的工作无法开始。",
+      "on": "开启",
+      "off": "关闭",
+      "onWhat": "每个已发布的设计都等待有人批准。",
+      "offWhat": "已发布的设计会被自动批准，每次批准都会注明是此设置做出的。",
+      "saved": "已保存",
+      "saveError": "无法保存，请重试。"
     }
   },
   "folders": {
