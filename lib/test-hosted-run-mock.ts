@@ -54,6 +54,10 @@ export interface HostedRunModelsFixture {
    *  MOTIR-6998). Omitted → the field is absent from the answer, exactly as an
    *  older motir-ai serves it (every level null); a missing level is null. */
   defaultsByDifficulty?: Partial<Record<'trivial' | 'low' | 'medium' | 'high', string | null>>;
+  /** Each id's PROVIDER, as motir-ai's entry carries it (MOTIR-7211: a DeepSeek row
+   *  beside the Claude ones). An id not named here is `anthropic`, so a fixture
+   *  that predates the field answers exactly as it did. */
+  providers?: Record<string, string>;
 }
 
 export interface HostedRunUsageFixture {
@@ -211,7 +215,7 @@ export function installHostedRunMock(agent: MockAgent): void {
         const ids = fx?.ids ?? [DEFAULT_MODEL_ID];
         const defaultId = fx?.default !== undefined ? fx.default : (ids[0] ?? null);
         return reply(200, {
-          models: ids.map((id) => ({ id, provider: 'anthropic' })),
+          models: ids.map((id) => ({ id, provider: fx?.providers?.[id] ?? 'anthropic' })),
           default: defaultId,
           ...(fx?.defaultsByDifficulty !== undefined
             ? { defaultsByDifficulty: fx.defaultsByDifficulty }
