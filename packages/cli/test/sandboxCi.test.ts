@@ -391,6 +391,32 @@ describe('the CI jobs that run all of it', () => {
     expect(images).toContain('packages/cli/sandbox/smoke/run.sh --no-build');
   });
 
+  it('give the base job a ceiling the RELEASE lane fits under, and push only after build + smoke', () => {
+    // MOTIR-7217: the release lane's two-platform push of the base takes ~16
+    // min, and the job ran 22m36s / 26m16s / 25m49s on cli-v0.9.0 / 0.10.0 /
+    // 0.11.0 against a 25-minute ceiling. Two of those were cancelled with every
+    // step green, and the verify and README jobs that `need` this one never ran.
+    // Pin the floor at 1.5x the slowest observed run, not at a round number.
+    const from = images.indexOf('\n  sandbox-smoke:\n');
+    expect(from, 'sandbox-images.yml still has a `sandbox-smoke:` job').toBeGreaterThan(-1);
+    const rest = images.slice(from + 1);
+    const next = rest.slice(1).search(/\n {2}[A-Za-z0-9_-]+:\n/);
+    const job = next === -1 ? rest : rest.slice(0, next + 1);
+
+    const ceiling = Number(/^ {4}timeout-minutes: (\d+)$/m.exec(job)?.[1]);
+    const slowestReleaseMinutes = 26 + 16 / 60;
+    expect(ceiling).toBeGreaterThanOrEqual(Math.ceil(1.5 * slowestReleaseMinutes));
+
+    // The publish gate: the push is a LATER step of the job that built and
+    // smoked the image, so a failing build or smoke never reaches it.
+    const build = job.indexOf('- name: Build the base image');
+    const smoke = job.indexOf('- name: Smoke the image');
+    const push = job.indexOf('- name: Push the base image');
+    expect(build).toBeGreaterThan(-1);
+    expect(smoke).toBeGreaterThan(build);
+    expect(push).toBeGreaterThan(smoke);
+  });
+
   it('derive the profile matrix from profiles.json instead of restating it', () => {
     // Restating the agent list in YAML is the drift this whole suite exists to
     // prevent; reading the file means adding an agent extends CI by itself.
