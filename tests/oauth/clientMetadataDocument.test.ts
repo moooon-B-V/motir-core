@@ -63,6 +63,12 @@ describe('discoveredClientHost', () => {
     expect(discoveredClientHost({ clientId: 'mcp_7Qx' })).toBe(null);
   });
 
+  it('is null for a discovered id whose URL has no host', () => {
+    expect(discoveredClientHost({ clientId: 'urn:example:app', clientDiscoveryId: 'cimd' })).toBe(
+      null,
+    );
+  });
+
   it('is null for a discovered id that is not a URL', () => {
     expect(discoveredClientHost({ clientId: 'not a url', clientDiscoveryId: 'cimd' })).toBe(null);
   });

@@ -11,6 +11,16 @@ vi.hoisted(() => {
   process.env['E2E_DISABLE_RATE_LIMIT'] = '1';
 });
 
+// The real transport never runs in this lane; were the seam ever skipped, the
+// call is recorded and fails the test that made it (MOTIR-7175 case 7).
+const realCimdCalls = vi.hoisted(() => [] as string[]);
+vi.mock('@better-auth/cimd/node', () => ({
+  fetchClientMetadataResource: async (url: string) => {
+    realCimdCalls.push(url);
+    throw new Error(`the real CIMD transport was called in the test lane: ${url}`);
+  },
+}));
+
 const { db } = await import('@/lib/db');
 const { adminDb } = await import('../../helpers/adminDb');
 const { truncateAuthTables } = await import('../../helpers/db');
@@ -82,6 +92,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   setClientMetadataTransportForTests(null);
+  expect(realCimdCalls, 'the real CIMD transport must never run here').toEqual([]);
 });
 
 afterAll(async () => {
