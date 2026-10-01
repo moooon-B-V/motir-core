@@ -30,7 +30,7 @@ import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '.
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
-import { setStatus } from '../helpers/repairFixtures';
+import { connectRepairRepo, deliveredPr, setStatus } from '../helpers/repairFixtures';
 
 // MOTIR-7262 — the three CONTINUE tools, entered at the TOOL ADAPTER, over real
 // Postgres: the key resolution, the claim DTO passthrough, the ownership refusal
@@ -389,5 +389,191 @@ describe('dispatch_prompt continueFrom', () => {
         ),
       ),
     ).toBe('CONTINUE_FROM_INVALID');
+  });
+});
+
+describe('what the agent reads — each outcome said as an instruction', () => {
+  it('claimed / mine name the branch, the run to touch and the dead run to continue from', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, deadRunId, branch } = await deadCard(fx);
+    const claimed = await runClaimWorkItemContinue({ key: card.identifier }, fx.ctx);
+    const { runId } = ok<ClaimOut>(claimed);
+    expect(text(claimed)).toContain(`branch ${branch}`);
+    expect(text(claimed)).toContain(`continueFrom ${deadRunId}`);
+    expect(text(claimed)).toContain(`runId ${runId}`);
+    const mine = await runClaimWorkItemContinue({ key: card.identifier }, fx.ctx);
+    expect(text(mine)).toMatch(/RESUME, not a lost race/);
+  });
+
+  it('taken says who and since when, and not to push', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await deadCard(fx);
+    const jo = await member(fx, 'Jo Pace');
+    await runClaimWorkItemContinue({ key: card.identifier }, fx.ctx);
+    const taken = text(await runClaimWorkItemContinue({ key: card.identifier }, jo.ctx));
+    expect(taken).toContain(fx.owner.name);
+    expect(taken).toMatch(/\(since \d{4}-/);
+  });
+
+  it('each refusal says what to do instead', async () => {
+    const fx = await makeWorkItemFixture();
+    const jo = await member(fx, 'Jo Pace');
+
+    // run_alive — the run heard a minute ago, by its dispatcher.
+    const alive = await createTestWorkItem(fx, { kind: 'task', title: 'alive' });
+    await setStatus(alive.id, 'in_progress');
+    await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run',
+        cards: [{ key: alive.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    expect(text(await runClaimWorkItemContinue({ key: alive.identifier }, jo.ctx))).toMatch(
+      /still alive/,
+    );
+
+    // continue_the_parent — names the parent to claim instead.
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'the story' });
+    const leg = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'a leg',
+      parentId: story.id,
+    });
+    await setStatus(leg.id, 'in_progress');
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run_scope',
+        scopeKey: story.identifier,
+        cards: [{ key: leg.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    await dispatchRunService.close(run.id, { stopReason: 'halted' }, fx.ctx);
+    expect(text(await runClaimWorkItemContinue({ key: leg.identifier }, fx.ctx))).toContain(
+      `Claim the continue of ${story.identifier} instead`,
+    );
+
+    // Any other reason is named.
+    const never = await createTestWorkItem(fx, { kind: 'task', title: 'never run' });
+    await setStatus(never.id, 'in_progress');
+    expect(text(await runClaimWorkItemContinue({ key: never.identifier }, fx.ctx))).toContain(
+      '(no_dead_run)',
+    );
+  });
+
+  it('a PARENT continue names what already landed and what is still to run', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'the story' });
+    const landed = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'first',
+      parentId: story.id,
+    });
+    const inFlight = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'second',
+      parentId: story.id,
+    });
+    await setStatus(story.id, 'in_progress');
+    await setStatus(landed.id, 'implemented');
+    await setStatus(inFlight.id, 'in_progress');
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run_scope',
+        scopeKey: story.identifier,
+        cards: [landed, inFlight].map((c) => ({
+          key: c.identifier,
+          disposition: 'queued' as const,
+        })),
+      },
+      fx.ctx,
+    );
+    await dispatchRunService.appendEvents(
+      run.id,
+      [
+        {
+          kind: 'card_settled',
+          workItemKey: landed.identifier,
+          disposition: 'integrated',
+          sessionBranch: 'motir/auto-20260927-0900',
+        },
+      ],
+      fx.ctx,
+    );
+    await adminDb.dispatchRun.update({
+      where: { id: run.id },
+      data: { lastHeartbeatAt: new Date(Date.now() - 8 * 60_000) },
+    });
+
+    const result = await runClaimWorkItemContinue({ key: story.identifier }, fx.ctx);
+    expect(ok<{ mode: string }>(result).mode).toBe('parent');
+    expect(text(result)).toContain(`already landed ${landed.identifier}`);
+    expect(text(result)).toContain(`still to run ${inFlight.identifier}`);
+    // The leg's continue run is the story's own — touch and close accept it from the leg.
+    const { runId } = ok<ClaimOut>(result);
+    expect(
+      ok<RunOut>(
+        await runTouchWorkItemContinue({ key: inFlight.identifier, runId: runId! }, fx.ctx),
+      ).open,
+    ).toBe(true);
+  });
+
+  it('names the open pull request a branch heads, and says `none` for an empty scope list', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await deadCard(fx);
+    const repo = await connectRepairRepo(fx, `web-${randomToken(4)}`);
+    const pr = await deliveredPr(fx, card.id, repo, {
+      headRef: 'subtask/the-pr-head',
+      baseRef: 'main',
+      checks: {},
+    });
+    expect(text(await runClaimWorkItemContinue({ key: card.identifier }, fx.ctx))).toContain(
+      `open pull request https://github.com/acme/${repo.name}/pull/${pr.number}`,
+    );
+
+    // Two dead scope runs: one whose only leg is in flight, one whose only leg landed.
+    for (const legStatus of ['in_progress', 'implemented'] as const) {
+      const story = await createTestWorkItem(fx, { kind: 'story', title: `story ${legStatus}` });
+      const leg = await createTestWorkItem(fx, {
+        kind: 'subtask',
+        title: 'the leg',
+        parentId: story.id,
+      });
+      await setStatus(story.id, 'in_progress');
+      await setStatus(leg.id, legStatus);
+      const { run } = await dispatchRunService.open(
+        {
+          projectKey: fx.projectIdentifier,
+          command: 'run_scope',
+          scopeKey: story.identifier,
+          cards: [{ key: leg.identifier, disposition: 'queued' }],
+        },
+        fx.ctx,
+      );
+      await dispatchRunService.appendEvents(
+        run.id,
+        [
+          {
+            kind: 'card_settled',
+            workItemKey: leg.identifier,
+            disposition: legStatus === 'implemented' ? 'integrated' : 'running',
+            sessionBranch: `motir/auto-${randomToken(6)}`,
+          },
+        ],
+        fx.ctx,
+      );
+      await adminDb.dispatchRun.update({
+        where: { id: run.id },
+        data: { lastHeartbeatAt: new Date(Date.now() - 8 * 60_000) },
+      });
+      const said = text(await runClaimWorkItemContinue({ key: story.identifier }, fx.ctx));
+      expect(said).toContain(
+        legStatus === 'in_progress' ? 'already landed none' : 'still to run none',
+      );
+    }
   });
 });
