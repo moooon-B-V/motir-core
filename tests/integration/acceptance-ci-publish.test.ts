@@ -132,12 +132,15 @@ interface Wire {
 function routeFetch(oidcToken: string | null, wire: Wire) {
   const handler = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
-    if (url.startsWith('https://oidc-request.test/')) {
+    // Matched on the parsed ORIGIN, never a string prefix: `http://motir.test`
+    // is also a prefix of `http://motir.test.evil.example`.
+    const origin = new URL(url).origin;
+    if (origin === new URL(TOKEN_REQUEST_URL).origin) {
       return oidcToken
         ? Response.json({ value: oidcToken })
         : new Response('forbidden', { status: 403 });
     }
-    if (url.startsWith(STORE)) {
+    if (origin === new URL(STORE).origin) {
       wire.puts.push(url);
       const refused = wire.refuse(url);
       return new Response(refused ? 'AccessDenied' : '', {
@@ -145,7 +148,7 @@ function routeFetch(oidcToken: string | null, wire: Wire) {
         headers: { 'x-amz-request-id': `req-${wire.puts.length}` },
       });
     }
-    if (url.startsWith(BASE_URL)) {
+    if (origin === BASE_URL) {
       const m = /\/api\/work-items\/([^/]+)\/acceptance-evidence(\/upload-token)?$/.exec(
         new URL(url).pathname,
       );
@@ -421,9 +424,7 @@ describe('the restored uploader → the real publish routes, over OIDC (MOTIR-72
 
     expect(exit).not.toHaveBeenCalled();
     expect(await currentRows()).toHaveLength(0);
-    expect(
-      fetchMock.mock.calls.some(([u]) => String(u).startsWith(`${BASE_URL}/api/work-items/`)),
-    ).toBe(false);
+    expect(fetchMock.mock.calls.some(([u]) => new URL(String(u)).origin === BASE_URL)).toBe(false);
   });
 });
 
