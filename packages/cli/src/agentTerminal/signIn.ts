@@ -10,12 +10,18 @@ import type { SignInState } from './protocol.js';
 // Motir to collect, store or intermediate a Claude.ai credential, so the check
 // answers only whether the profile's credential FILE exists: `fs.stat` of each
 // path from `agentProfiles.ts` `credentialPaths`, resolved in this process's
-// own environment (the entrypoint gave it CLAUDE_CONFIG_DIR / CODEX_HOME).
+// own environment (the entrypoint gave it CLAUDE_CONFIG_DIR / CODEX_HOME) —
+// or whether one of the profile's `credentialEnv` variables is SET. An API-key
+// sign-in (ANTHROPIC_API_KEY, no credentials file) leaves nothing on disk, and
+// reading it `signed_out` told a working agent to `/login` (MOTIR-7053). The
+// variable is tested for presence only, the same predicate `motir doctor`
+// uses; its value is never read.
 //
-//   signed_in   any path is a regular file of non-zero size
+//   signed_in   a credentialEnv variable is non-empty, or any path is a
+//               regular file of non-zero size
 //   signed_out  otherwise
-//   unknown     the profile pins no path (kimi, aider, goose, …), or there is
-//               no profile at all
+//   unknown     the profile pins no path and no variable is set (kimi, aider,
+//               goose, …), or there is no profile at all
 //
 // A DIRECTORY is never proof of a sign-in (MOTIR-4957), which is why the check
 // is `isFile()`, not existence. The answer is `{ profile, state }` only — no
@@ -47,6 +53,12 @@ export function credentialDirsFromEnv(
   };
 }
 
+/** PRESENCE only: whether the variable is set and non-empty. */
+function hasEnv(env: NodeJS.ProcessEnv, name: string): boolean {
+  const value = env[name];
+  return typeof value === 'string' && value.length > 0;
+}
+
 export async function checkSignIn(
   env: NodeJS.ProcessEnv,
   stat: StatFn = fsStat,
@@ -54,6 +66,9 @@ export async function checkSignIn(
   const id = env['MOTIR_SANDBOX_AGENT']?.trim() || null;
   const profile = id ? AGENT_PROFILES.find((candidate) => candidate.id === id) : undefined;
   if (!profile) return { profile: id, state: 'unknown' };
+  if (profile.credentialEnv.some((name) => hasEnv(env, name))) {
+    return { profile: id, state: 'signed_in' };
+  }
   const paths = profile.credentialPaths(credentialDirsFromEnv(env));
   if (paths.length === 0) return { profile: id, state: 'unknown' };
   for (const path of paths) {

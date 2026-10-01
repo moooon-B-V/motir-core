@@ -41,6 +41,9 @@ describe.skipIf(spawnPty === null)('a real login shell on node-pty', () => {
         MOTIR_TERMINAL_KEY: KEY,
         MOTIR_SANDBOX_AGENT: 'claude',
         CLAUDE_CONFIG_DIR: join(home, 'cfg'),
+        // A set key is a sign-in (MOTIR-7053); the runner's own must not
+        // answer the `signed_out` this suite asserts.
+        ANTHROPIC_API_KEY: '',
       },
     });
   });
