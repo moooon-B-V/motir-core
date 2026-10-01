@@ -1,7 +1,14 @@
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { fakePersistentOrchestrator } from '@motir/orchestrator';
+import { fakeDigestFor } from '@/lib/agentInstances/imageCatalog';
+import { pinnedImageReference } from '@/lib/agentInstances/imageDigest';
+import { sandboxImageTag } from '@/lib/agentInstances/profiles';
 import { adminDb, db } from './db-reset';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
+import { dispatchRunService } from '@/lib/services/dispatchRunService';
+import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestPerson } from './testPerson';
 import { writeHostedRunFixture } from './hosted-run-boundary';
 import { grantPaidAiPlanIfBilled } from './billing';
@@ -112,4 +119,115 @@ export async function seedAgents(seed: MyAgentsSeed, count: number): Promise<voi
       },
     });
   }
+}
+
+// ── THE IMAGE UPDATE (Story MOTIR-6862 · MOTIR-6955) ─────────────────────────
+// The catalog's fake answers live in `MOTIR_FAKE_IMAGE_CATALOG_PATH`, which the
+// lane's webServer re-reads on every call; the fleet's image, liveness and home
+// seams live in the persistent fake's shared state file.
+
+interface FakeCatalog {
+  newest: Record<string, string>;
+  unavailable: boolean;
+}
+
+function catalogPath(): string {
+  const path = process.env['MOTIR_FAKE_IMAGE_CATALOG_PATH'];
+  if (!path)
+    throw new Error('MOTIR_FAKE_IMAGE_CATALOG_PATH is not set — run on the acceptance lane');
+  return path;
+}
+
+function readCatalog(): FakeCatalog {
+  try {
+    return { newest: {}, unavailable: false, ...JSON.parse(readFileSync(catalogPath(), 'utf8')) };
+  } catch {
+    return { newest: {}, unavailable: false };
+  }
+}
+
+function writeCatalog(next: FakeCatalog): void {
+  mkdirSync(dirname(catalogPath()), { recursive: true });
+  writeFileSync(catalogPath(), JSON.stringify(next), 'utf8');
+}
+
+/** "Publish" `version` as the newest image of a profile. */
+export function publishImage(profileId: string, version: string): void {
+  const catalog = readCatalog();
+  writeCatalog({ ...catalog, newest: { ...catalog.newest, [profileId]: version } });
+}
+
+/** Make the registry unreachable (true) or reachable again (false). */
+export function setCatalogUnavailable(unavailable: boolean): void {
+  writeCatalog({ ...readCatalog(), unavailable });
+}
+
+/** Start the catalog clean: nothing published beyond the fake base, reachable. */
+export function resetCatalog(): void {
+  writeCatalog({ newest: {}, unavailable: false });
+}
+
+const imageRefOf = (profileId: string, version: string) =>
+  pinnedImageReference(sandboxImageTag(profileId), fakeDigestFor(profileId, version));
+
+/** Make `version` of a profile fail its liveness check on the fake fleet. */
+export function markVersionFailing(profileId: string, version: string): void {
+  fakePersistentOrchestrator.markImageFailing(imageRefOf(profileId, version));
+}
+
+/** Pin an existing agent to `version` — its record and its fake machine — as if created then. */
+export async function pinAgentToVersion(agentId: string, version: string): Promise<void> {
+  const row = await adminDb.agentInstance.findUniqueOrThrow({ where: { id: agentId } });
+  await adminDb.agentInstance.update({
+    where: { id: agentId },
+    data: { imageDigest: fakeDigestFor(row.profileId, version), imageVersion: version },
+  });
+  await fakePersistentOrchestrator.moveImage(
+    {
+      provider: 'fake',
+      app: row.flyApp!,
+      machineId: row.machineId!,
+      volumeId: row.volumeId!,
+      region: row.region,
+      createdAt: row.createdAt,
+    },
+    imageRefOf(row.profileId, version),
+    { launch: false },
+  );
+}
+
+/** Write a file into an agent's home, through the fake fleet's volume. */
+export async function writeAgentHomeFile(agentId: string, path: string, content: string) {
+  const row = await adminDb.agentInstance.findUniqueOrThrow({ where: { id: agentId } });
+  fakePersistentOrchestrator.writeHomeFile(row.volumeId!, path, content);
+}
+
+/** Read a file from an agent's home, through the fake fleet's volume. */
+export async function readAgentHomeFile(agentId: string, path: string): Promise<string | null> {
+  const row = await adminDb.agentInstance.findUniqueOrThrow({ where: { id: agentId } });
+  return fakePersistentOrchestrator.readHomeFile(row.volumeId!, path);
+}
+
+/**
+ * Record a RUNNING run against an agent on the shared run record (the run story's
+ * `origin: instance`) — what Update's run refusal reads. Returns the card's key.
+ */
+export async function recordRunInAgent(seed: MyAgentsSeed, agentId: string): Promise<string> {
+  const ctx = { userId: seed.userId, workspaceId: seed.workspaceId };
+  const item = await workItemsService.createWorkItem(
+    { projectId: seed.projectId, kind: 'task', title: 'Fix the flaky login test' },
+    ctx,
+  );
+  await dispatchRunService.open(
+    {
+      projectKey: seed.projectIdentifier,
+      command: 'run',
+      origin: 'instance',
+      agentInstanceId: agentId,
+      agent: 'claude',
+      cards: [{ key: item.identifier, disposition: 'queued' }],
+    },
+    ctx,
+  );
+  return item.identifier;
 }

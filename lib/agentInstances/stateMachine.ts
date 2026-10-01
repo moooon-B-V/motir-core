@@ -20,6 +20,7 @@ export const AGENT_INSTANCE_STATES = [
   'waking',
   'failed',
   'deleting',
+  'updating',
 ] as const satisfies readonly AgentInstanceState[];
 
 /**
@@ -33,17 +34,22 @@ export const AGENT_INSTANCE_TRANSITIONS: Readonly<
   // create's first boot: the machine reports running, or the boot fails.
   starting: ['running', 'failed'],
   // Hibernate (owner, idle sweep, backstop, credit refusal); the reconcile
-  // finding the machine already stopped; the reconcile finding it gone; Delete.
-  running: ['hibernating', 'hibernated', 'failed', 'deleting'],
+  // finding the machine already stopped; the reconcile finding it gone; Delete;
+  // Update (`agent-image-update.md` Q6).
+  running: ['hibernating', 'hibernated', 'failed', 'deleting', 'updating'],
   // The machine reports stopped; or the reconcile finds it gone.
   hibernating: ['hibernated', 'failed'],
-  // Wake (or a later story's door into the instance); Delete.
-  hibernated: ['waking', 'deleting'],
+  // Wake (or a later story's door into the instance); Delete; Wake with an
+  // update pinned, which takes the new image at this wake (Q5).
+  hibernated: ['waking', 'deleting', 'updating'],
   // The machine reports running; the start fails or the reconcile finds it gone.
   waking: ['running', 'failed'],
   // Wake, while the machine and volume still exist; Delete.
   failed: ['waking', 'deleting'],
   deleting: [],
+  // Q6: the new image passed (or the rollback reached running); the rollback
+  // failed, or the reconcile found the machine gone.
+  updating: ['running', 'failed'],
 };
 
 /** Whether §4 allows `from → to`. */
@@ -66,6 +72,7 @@ export const RUNNING_STATES = [
   'running',
   'hibernating',
   'waking',
+  'updating',
 ] as const satisfies readonly AgentInstanceState[];
 
 /**

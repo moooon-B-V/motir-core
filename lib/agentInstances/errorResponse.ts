@@ -22,6 +22,8 @@ import {
   AgentProfileCannotRunError,
   AgentRunCardNotReadyError,
   AgentInstanceRunActiveError,
+  AgentInstanceUpToDateError,
+  AgentImageCatalogUnavailableError,
   AgentRunAlreadyEndedError,
   AgentRunCancelForbiddenError,
   AgentRunNotFoundError,
@@ -123,6 +125,17 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
       },
       { status },
     );
+  }
+  if (err instanceof AgentInstanceUpToDateError) {
+    // Update on an agent already on the newest image (`agent-image-update.md` Q8).
+    return NextResponse.json(
+      { code: err.code, error: err.message, version: err.version },
+      { status: 409 },
+    );
+  }
+  if (err instanceof AgentImageCatalogUnavailableError) {
+    // The registry could not be asked: a wait, never "up to date" (Q8).
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 503 });
   }
   if (err instanceof AgentInstancesUnavailableError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 503 });

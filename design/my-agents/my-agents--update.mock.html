@@ -1,0 +1,3965 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · MY AGENTS, delta — updating an agent to a newer image (MOTIR-6862 · MOTIR-6951)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup, DELTA) — THE IMAGE UPDATE on `/my-agents`.
+      Story MOTIR-6862, subtask MOTIR-6951 (design). Gates MOTIR-6953 (the UI).
+
+      A DELTA OVER A DELTA. It amends `my-agents--panel.mock.html` (MOTIR-6937),
+      itself a delta on `my-agents.mock.html` (MOTIR-6868). Neither is edited.
+
+      IT COMPOSES, IT DOES NOT REDRAW. The style blocks and icon symbols below are
+      my-agents--panel.mock.html's own, verbatim; the table, the agent panel, the
+      refusal box, the reason line and the dialog are that asset's markup. One
+      small block at the end adds the version line and the marker, from the same
+      tokens.
+
+      EVERY STATE IS DECIDED ELSEWHERE: docs/decisions/agent-image-update.md
+      (MOTIR-6948) Q1, Q4, Q5, Q6, Q8.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-overlay-scrim: #000000a6;
+      }
+    </style>
+    <style>
+      /* Utility shims — the mock is static HTML, so the handful of Tailwind
+         utilities the shipped components emit are declared here against the SAME
+         tokens. Nothing invents a value. */
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-font-smoothing: antialiased;
+      }
+      body {
+        margin: 0;
+        background: var(--el-page-bg, var(--color-background));
+        color: var(--el-text);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      svg {
+        width: 1em;
+        height: 1em;
+      }
+      .list-none {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .flex {
+        display: flex;
+      }
+      .grid {
+        display: grid;
+      }
+      .inline-flex {
+        display: inline-flex;
+      }
+      .items-center {
+        align-items: center;
+      }
+      .items-start {
+        align-items: flex-start;
+      }
+      .justify-between {
+        justify-content: space-between;
+      }
+      .justify-center {
+        justify-content: center;
+      }
+      .flex-col {
+        flex-direction: column;
+      }
+      .flex-1 {
+        flex: 1 1 0%;
+      }
+      .shrink-0 {
+        flex-shrink: 0;
+      }
+      .min-w-0 {
+        min-width: 0;
+      }
+      .max-w-md {
+        max-width: 28rem;
+      }
+      .truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .uppercase {
+        text-transform: uppercase;
+      }
+      .font-sans {
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      .font-mono {
+        font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+      }
+      .font-serif {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+      }
+      .font-medium {
+        font-weight: 500;
+      }
+      .font-semibold {
+        font-weight: 600;
+      }
+      .tracking-wide {
+        letter-spacing: 0.025em;
+      }
+      .text-xs {
+        font-size: 0.75rem;
+        line-height: 1rem;
+      }
+      .text-sm {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+      }
+      .text-lg {
+        font-size: 1.125rem;
+        line-height: 1.75rem;
+      }
+      .rotate-180 {
+        transform: rotate(180deg);
+      }
+      .opacity-40 {
+        opacity: 0.4;
+      }
+      .relative {
+        position: relative;
+      }
+      .w-6 {
+        width: 1.5rem;
+      }
+      .h-3 {
+        height: 0.75rem;
+      }
+      .w-3 {
+        width: 0.75rem;
+      }
+      .h-4 {
+        height: 1rem;
+      }
+      .w-4 {
+        width: 1rem;
+      }
+      .h-12 {
+        height: 3rem;
+      }
+      .w-12 {
+        width: 3rem;
+      }
+      .dsCard {
+        background: var(--el-surface-raised, var(--color-background));
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .dsPill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+        font-size: 0.75rem;
+        line-height: 1rem;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .dsPillNeutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .dsPillDone {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillProgress {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .dsPillSuccess {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillWarning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      /* mock chrome — not part of the spec */
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 32px 64px;
+      }
+      .sheetHead {
+        border-bottom: 1px solid var(--el-border);
+        padding-bottom: 20px;
+        margin-bottom: 8px;
+      }
+      .sheetHead h1 {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 26px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .sheetHead p {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        padding: 28px 0;
+        border-bottom: 1px dashed var(--el-border);
+      }
+      .panelTitle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 17px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .panelNum {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans, sans-serif);
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+      .panelNote {
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+        max-width: 92ch;
+      }
+      .panelNote code,
+      .panelNote .font-mono {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.94em;
+      }
+      .panelBody {
+        display: grid;
+        grid-template-columns: 18rem 1fr;
+        gap: 28px;
+        align-items: start;
+      }
+      .rail {
+        width: 18rem;
+      }
+      .main {
+        min-width: 0;
+      }
+      /* padding + margin utilities used by the shipped markup */
+      .px-3\.5 {
+        padding-left: 0.875rem;
+        padding-right: 0.875rem;
+      }
+      .py-2\.5 {
+        padding-top: 0.625rem;
+        padding-bottom: 0.625rem;
+      }
+      .px-6 {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+      }
+      .py-10 {
+        padding-top: 2.5rem;
+        padding-bottom: 2.5rem;
+      }
+      .p-0\.5 {
+        padding: 0.125rem;
+      }
+      .p-1 {
+        padding: 0.25rem;
+      }
+      .py-1 {
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+      }
+      .mt-1 {
+        margin-top: 0.25rem;
+      }
+      .mt-1\.5 {
+        margin-top: 0.375rem;
+      }
+      .mt-2 {
+        margin-top: 0.5rem;
+      }
+      .mt-3 {
+        margin-top: 0.75rem;
+      }
+      .mb-1 {
+        margin-bottom: 0.25rem;
+      }
+      .-mt-0\.5 {
+        margin-top: -0.125rem;
+      }
+      .gap-1 {
+        gap: 0.25rem;
+      }
+      .gap-1\.5 {
+        gap: 0.375rem;
+      }
+      .gap-2 {
+        gap: 0.5rem;
+      }
+      .gap-2\.5 {
+        gap: 0.625rem;
+      }
+      .gap-x-2 {
+        column-gap: 0.5rem;
+      }
+      /* the shipped arbitrary-value utilities, spelled out */
+      .text-\[11px\] {
+        font-size: 11px;
+      }
+      .text-\[10px\] {
+        font-size: 10px;
+      }
+      .text-\[13px\] {
+        font-size: 13px;
+      }
+      .text-\[13\.5px\] {
+        font-size: 13.5px;
+      }
+      .h-\[15px\] {
+        height: 15px;
+      }
+      .w-\[15px\] {
+        width: 15px;
+      }
+      .h-\[17px\] {
+        height: 17px;
+      }
+      .w-\[17px\] {
+        width: 17px;
+      }
+      .border {
+        border-width: 1px;
+        border-style: solid;
+      }
+      .border-dashed {
+        border-style: dashed;
+      }
+      .border-\[5px\] {
+        border-width: 5px;
+        border-style: solid;
+      }
+      .rounded-full {
+        border-radius: 9999px;
+      }
+      .grid-cols-\[auto_1fr_auto\] {
+        grid-template-columns: auto 1fr auto;
+      }
+      .shadow-\(--shadow-card\) {
+        box-shadow: var(--shadow-card);
+      }
+      .rounded-\(--radius-control\) {
+        border-radius: var(--radius-control);
+      }
+      .rounded-\(--radius-card\) {
+        border-radius: var(--radius-card);
+      }
+      .px-\(--spacing-control-x\) {
+        padding-left: var(--spacing-control-x);
+        padding-right: var(--spacing-control-x);
+      }
+      .py-\(--spacing-control-y\) {
+        padding-top: var(--spacing-control-y);
+        padding-bottom: var(--spacing-control-y);
+      }
+      .border-\(--el-border\) {
+        border-color: var(--el-border);
+      }
+      .border-\(--el-border-strong\) {
+        border-color: var(--el-border-strong);
+      }
+      .border-\(--el-accent\) {
+        border-color: var(--el-accent);
+      }
+      .bg-\(--el-surface\) {
+        background-color: var(--el-surface);
+      }
+      .bg-\(--el-surface-soft\) {
+        background-color: var(--el-surface-soft);
+      }
+      .bg-\(--el-accent\) {
+        background-color: var(--el-accent);
+      }
+      .text-\(--el-text\) {
+        color: var(--el-text);
+      }
+      .text-\(--el-text-muted\) {
+        color: var(--el-text-muted);
+      }
+      .text-\(--el-text-secondary\) {
+        color: var(--el-text-secondary);
+      }
+      .text-\(--el-text-identifier\) {
+        color: var(--el-text-identifier);
+      }
+      .text-\(--el-icon-muted\) {
+        color: var(--el-icon-muted);
+      }
+      .text-\(--el-success\) {
+        color: var(--el-success);
+      }
+      .text-\(--el-warning\) {
+        color: var(--el-warning);
+      }
+      .text-\(--el-accent-text\) {
+        color: var(--el-accent-text);
+      }
+      /* ⚠️ THE PANEL BODY IS ONE COLUMN HERE. The scaffold this asset inherits
+         its chrome from draws a rail BESIDE a main column (`18rem 1fr`); this
+         surface is a left-column section work item and has no rail, so a single
+         child would otherwise land in the 18rem track and render at a width the
+         product never uses. */
+      .panelBody {
+        display: block;
+      }
+      /* The left column's real width: the item page is a `1fr 18rem` grid with a
+         24px gap inside a 1180px sheet, so `1fr` is ~800px at 1280. Every
+         section work item below is drawn at that width, which is what makes the
+         overflow panels (13–14) measurements rather than illustrations. */
+      .secCard,
+      .panelBody > .grid {
+        max-width: 800px;
+      }
+      .twoUp {
+        max-width: 100%;
+      }
+
+      /* ── Extra utility shims this asset needs, same tokens ─────────────── */
+      .w-full {
+        width: 100%;
+      }
+      .gap-3 {
+        gap: 12px;
+      }
+      .gap-0\.5 {
+        gap: 2px;
+      }
+      .mt-4 {
+        margin-top: 16px;
+      }
+      .mb-2 {
+        margin-bottom: 8px;
+      }
+      .ml-auto {
+        margin-left: auto;
+      }
+      .line-through {
+        text-decoration: line-through;
+      }
+      .overflow-x-auto {
+        overflow-x: auto;
+      }
+      .cursor-grab {
+        cursor: grab;
+      }
+      .select-none {
+        user-select: none;
+      }
+      .whitespace-pre {
+        white-space: pre;
+      }
+      .h-5 {
+        height: 20px;
+      }
+      .w-5 {
+        width: 20px;
+      }
+      .h-\[18px\] {
+        height: 18px;
+      }
+      .w-\[18px\] {
+        width: 18px;
+      }
+      .py-2 {
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+      .px-2 {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+      .text-\[12px\] {
+        font-size: 12px;
+      }
+      .text-\[12\.5px\] {
+        font-size: 12.5px;
+      }
+
+      /* ── The asset's OWN elements ─────────────────────────────────────── */
+      /* A section work item, `ContentSectionCard` markup-for-markup. */
+      .secCard {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card, var(--color-background));
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .secHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft, var(--el-border));
+      }
+      .secBody {
+        padding: 8px var(--spacing-card-padding) 16px;
+      }
+      /* ONE to-do row. A grid so the checkbox, the body and the row actions
+         each get their own track — and so the body track can be `min-w-0`,
+         which is what lets a long command scroll inside itself instead of
+         widening the row. */
+      .todoRow {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: start;
+        gap: 10px;
+        padding: 9px 4px;
+        border-radius: var(--radius-control, 8px);
+      }
+      .todoRow + .todoRow {
+        border-top: 1px solid var(--el-border-soft, var(--el-border));
+      }
+      .todoRow.isHover {
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      /* The shipped `Checkbox` primitive's box. */
+      .cbox {
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+        border: 1px solid var(--el-border-strong, var(--el-border));
+        border-radius: var(--radius-control, 6px);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--el-card, var(--color-background));
+        color: transparent;
+        flex: none;
+      }
+      .cbox.isOn {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .cbox.isInert {
+        border-color: var(--el-border);
+        background: var(--el-muted, var(--color-muted));
+      }
+      /* The command value — mono, scrolling inside ITS OWN box. */
+      /* The INSTRUCTIONS disclosure. Collapsed by default so a list of ten rows
+         reads as ten lines whether or not any of them carries notes; the tell
+         is the chevron, which only renders on a row that HAS notes. */
+      .notesToggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 4px;
+        border: 0;
+        background: none;
+        padding: 0;
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .notesToggle svg {
+        transition: transform 120ms;
+      }
+      .notesToggle.isOpen svg {
+        transform: rotate(90deg);
+      }
+      .notesBody {
+        margin-top: 6px;
+        padding: 8px 12px;
+        border-left: 2px solid var(--el-border-strong, var(--el-border));
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .notesBody ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .notesBody code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        padding: 1px 4px;
+        border-radius: var(--radius-control, 4px);
+        background: var(--el-code-bg, var(--color-surface-soft));
+        color: var(--el-code-text, var(--el-text));
+      }
+      .notesBody a {
+        color: var(--el-link);
+      }
+      /* The MARKDOWN EDITOR, mirrored from `comments.mock.html`'s composer —
+         the shipped `MarkdownEditor` at `size="compact"`, whose button set is
+         bold · italic · strike · inline code · link · bulleted · numbered
+         (`components/ui/MarkdownEditor.tsx`). Not an approximation: the same
+         chrome the comment composer already renders on this page. */
+      .mdEditor {
+        margin-top: 6px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input, 8px);
+        background: var(--el-card, var(--color-background));
+        overflow: hidden;
+      }
+      .mdEditor.isFocused {
+        border-color: var(--focus-ring-color);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .editorToolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        border-bottom: 1px solid var(--el-border);
+        padding: 4px 6px;
+      }
+      .tbIcon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .tbIcon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .editorArea {
+        padding: 8px 12px;
+        min-height: 72px;
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text);
+      }
+      .editorArea ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .fieldLabel {
+        display: block;
+        margin-top: 10px;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .cmdBox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+        min-width: 0;
+      }
+      .cmdVal {
+        /* A `<pre>`, not a `<code>`: `white-space: pre` is only honoured if the
+           markup preserves the line, and a formatter will reflow the contents of
+           an inline element. This is also what the shipped `CodeBlock` renders
+           (`ScrollableRegion as="pre"`). */
+        margin: 0;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow-x: auto;
+        white-space: pre;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.7;
+        padding: 4px 8px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control, 6px);
+        background: var(--el-code-bg, var(--color-surface-soft));
+        color: var(--el-code-text, var(--el-text));
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn, 8px);
+        background: var(--el-card, var(--color-background));
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        padding: 5px 10px;
+        line-height: 1.2;
+      }
+      .btnIcon {
+        padding: 5px;
+      }
+      .btnPrimary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btnDanger {
+        background: var(--el-danger);
+        border-color: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .rowActions {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        color: var(--el-text-secondary);
+      }
+      .execMark {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        line-height: 1.4;
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      .execMark.isAgent {
+        background: var(--el-tint-lavender);
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .addRow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+        padding: 8px 4px 2px;
+        border-top: 1px solid var(--el-border-soft, var(--el-border));
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .inputBox {
+        flex: 1 1 auto;
+        min-width: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input, 8px);
+        padding: 6px 10px;
+        font-size: 13px;
+        color: var(--el-text);
+        background: var(--el-card, var(--color-background));
+      }
+      .inputBox.isFocused {
+        border-color: var(--focus-ring-color);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .dropGap {
+        height: 2px;
+        margin: 2px 4px;
+        border-radius: 2px;
+        background: var(--el-accent);
+      }
+      .ghostRow {
+        opacity: 0.5;
+        border: 1px dashed var(--el-border-strong, var(--el-border));
+        border-radius: var(--radius-control, 8px);
+      }
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+        background: var(--el-page-bg, var(--color-background));
+      }
+      .colLabel {
+        display: block;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin-bottom: 8px;
+      }
+      .twoUp {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .foldRule {
+        position: relative;
+        border-top: 2px dashed var(--el-accent);
+        margin: 4px 0;
+      }
+      .foldRule span {
+        position: absolute;
+        top: -9px;
+        right: 0;
+        font-size: 10px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        background: var(--el-page-bg, var(--color-background));
+        padding: 0 6px;
+        color: var(--el-accent-on-surface, var(--el-text-secondary));
+      }
+      .regionBox {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control, 8px);
+        padding: 10px 12px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      .regionBox.isThis {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .narrow {
+        width: 390px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        background: var(--el-card, var(--color-background));
+      }
+    </style>
+    <style>
+      /* mock chrome — not part of the spec */
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 32px 64px;
+      }
+      .sheetHead {
+        border-bottom: 1px solid var(--el-border);
+        padding-bottom: 20px;
+        margin-bottom: 8px;
+      }
+      .sheetHead h1 {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 26px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .sheetHead p {
+        margin: 0 0 10px;
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        padding: 28px 0;
+        border-bottom: 1px dashed var(--el-border);
+      }
+      .panelTitle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 17px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .panelNum {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans, sans-serif);
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+      .panelNote {
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 92ch;
+      }
+      .panelNote code,
+      .panelNote .font-mono {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.94em;
+      }
+      .stage {
+        max-width: 720px;
+      }
+      .stageWide {
+        max-width: 980px;
+      }
+      .regionBox {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+        padding: 10px 14px;
+        font-size: 12.5px;
+      }
+      .regionBox.is-new {
+        border-color: var(--el-accent-on-surface);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+
+      /* ── the shipped section chrome (ContentSectionCard over Card) ───────── */
+      .secCard {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .secHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-card-padding);
+        padding-bottom: 0;
+      }
+      .secHead h2 {
+        margin: 0;
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-base);
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .secSub {
+        font-size: var(--font-size-sm);
+        color: var(--el-text-secondary);
+      }
+      .secBody {
+        padding: var(--spacing-card-padding);
+      }
+      .secRight {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* ── the run-status pill: ONE vocabulary, tinted background + strong ink ── */
+      .runPill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-xs);
+        font-weight: 500;
+        line-height: 1rem;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .runPill .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        flex: none;
+      }
+      .t-queued {
+        background: var(--el-muted);
+      }
+      .t-queued .dot {
+        background: var(--el-status-todo);
+      }
+      .t-running {
+        background: var(--el-tint-sky);
+      }
+      .t-running .dot {
+        background: var(--el-status-in-progress);
+      }
+      .t-integrated {
+        background: var(--el-tint-mint);
+      }
+      .t-integrated .dot {
+        background: var(--el-status-done);
+      }
+      .t-implemented {
+        background: var(--el-tint-mint);
+      }
+      .t-implemented .dot {
+        background: var(--el-status-done);
+      }
+      .t-failed {
+        background: var(--el-tint-rose);
+      }
+      .t-failed .dot {
+        background: var(--el-danger);
+      }
+      .t-replanned {
+        background: var(--el-tint-lavender);
+      }
+      .t-replanned .dot {
+        background: var(--el-status-planning);
+      }
+      .t-skipped {
+        background: var(--el-muted);
+      }
+      .t-skipped .dot {
+        background: var(--el-text-tertiary);
+      }
+      .t-cancelled {
+        background: var(--el-muted);
+      }
+      .t-cancelled .dot {
+        background: var(--el-status-cancelled);
+      }
+      .t-timedout {
+        background: var(--el-tint-peach);
+      }
+      .t-timedout .dot {
+        background: var(--el-warning);
+      }
+      .t-offline {
+        background: var(--el-tint-peach);
+      }
+      .t-offline .dot {
+        background: var(--el-text-tertiary);
+      }
+
+      /* ── the live timeline ─────────────────────────────────────────────── */
+      .tl {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        position: relative;
+      }
+      .tl::before {
+        content: '';
+        position: absolute;
+        left: 7px;
+        top: 10px;
+        bottom: 10px;
+        width: 1px;
+        background: var(--el-border);
+      }
+      .tlRow {
+        position: relative;
+        display: grid;
+        grid-template-columns: 16px 1fr auto;
+        align-items: baseline;
+        gap: 10px;
+        padding: 6px 0;
+      }
+      .tlDot {
+        width: 9px;
+        height: 9px;
+        margin-left: 3px;
+        border-radius: 9999px;
+        background: var(--el-border-strong);
+        position: relative;
+        top: 4px;
+      }
+      .tlRow.is-done .tlDot {
+        background: var(--el-status-done);
+      }
+      .tlRow.is-now .tlDot {
+        background: var(--el-status-in-progress);
+        box-shadow: 0 0 0 3px var(--el-tint-sky);
+      }
+      .tlRow.is-fail .tlDot {
+        background: var(--el-danger);
+      }
+      .tlRow.is-pending .tlDot {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border-strong);
+      }
+      .tlLabel {
+        font-size: var(--font-size-sm);
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .tlRow.is-pending .tlLabel {
+        color: var(--el-text-secondary);
+      }
+      .tlDetail {
+        display: block;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+      .tlWhen {
+        font-family: var(--font-mono, monospace);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+
+      .metaRow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 14px;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .metaRow .k {
+        color: var(--el-text-tertiary);
+      }
+      .mono {
+        font-family: var(--font-mono, monospace);
+      }
+
+      /* the "one of N" line — the single most useful sentence on this work item */
+      .setLine {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+        padding: 8px 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: var(--font-size-sm);
+      }
+      .setLine a {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .notice {
+        display: flex;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: var(--radius-control);
+        font-size: var(--font-size-sm);
+        color: var(--el-text-strong);
+        margin-bottom: 14px;
+      }
+      .notice.warn {
+        background: var(--el-warning-surface);
+      }
+      .notice.info {
+        background: var(--el-notice-info-bg);
+      }
+      .notice .body {
+        min-width: 0;
+      }
+      .notice .body strong {
+        display: block;
+        margin-bottom: 2px;
+      }
+      .notice .body span {
+        color: var(--el-text-strong);
+      }
+
+      /* the recent-runs list */
+      .runList {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .runList li {
+        display: grid;
+        grid-template-columns: 8.5rem 1fr auto auto;
+        align-items: center;
+        gap: 12px;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: var(--font-size-sm);
+      }
+      .runList .when {
+        color: var(--el-text-secondary);
+        font-size: var(--font-size-xs);
+        white-space: nowrap;
+      }
+      .runList .who {
+        color: var(--el-text-secondary);
+        font-size: var(--font-size-xs);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .runList .dur {
+        font-family: var(--font-mono, monospace);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .listFoot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding-top: 12px;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+      }
+
+      .btnGhost {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-button-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-sm);
+        cursor: pointer;
+      }
+
+      /* the collapsed log console */
+      .console {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        overflow: hidden;
+        margin-top: 14px;
+      }
+      .consoleHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        background: var(--el-surface-soft);
+        border: 0;
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-sm);
+        color: var(--el-text);
+        cursor: pointer;
+        text-align: left;
+      }
+      .consoleHead .chev {
+        transition: transform var(--transition-duration);
+      }
+      .consoleHead.is-open .chev {
+        transform: rotate(90deg);
+      }
+      .consoleHead .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .consoleBody {
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        font-family: var(--font-mono, monospace);
+        font-size: 11.5px;
+        line-height: 1.65;
+        padding: 10px 12px;
+        max-height: 190px;
+        overflow: auto;
+        border-top: 1px solid var(--el-border);
+      }
+      .consoleFoot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: var(--el-surface-soft);
+        border-top: 1px solid var(--el-border);
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+      }
+
+      .emptyBox {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 26px 20px;
+        color: var(--el-text-secondary);
+      }
+      .emptyBox .glyph {
+        width: 40px;
+        height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-card);
+        background: var(--el-muted);
+        color: var(--el-icon-muted);
+        margin-bottom: 12px;
+      }
+      .emptyBox .glyph svg {
+        width: 20px;
+        height: 20px;
+      }
+      .emptyBox h3 {
+        margin: 0 0 4px;
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .emptyBox p {
+        margin: 0;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+        max-width: 46ch;
+        line-height: 1.6;
+      }
+
+      .toneTable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      .toneTable th,
+      .toneTable td {
+        text-align: left;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: middle;
+      }
+      .toneTable th {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+        font-size: 11.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .toneTable td.mono {
+        color: var(--el-text-secondary);
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+      .caption {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        margin: 8px 0 0;
+      }
+    </style>
+
+    <style>
+      /* ── Surfaces this area did not need until now ───────────────────────
+         The run SECTION is a panel inside a page somebody else owns, so the
+         first mock needed no page header, no table and no rail. These two are
+         PAGES. Everything below is composed from the same tokens as above —
+         no new colour, no raw radius, no fixed control height.               */
+
+      /* A page header, not a section work item: `/runs` and `/runs?run=&lt;id&gt;` own their
+         own top of page, where the section composed into one.                */
+      .pgHead {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .pgTitle {
+        font-family: var(--font-serif), Georgia, serif;
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .pgSub {
+        font-size: 0.8125rem;
+        color: var(--el-text-secondary);
+        margin: 0.125rem 0 0;
+      }
+      .crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.8125rem;
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .crumb svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* The shipped TableShell grammar, copied from
+         app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx:
+         a rounded, bordered, horizontally scrollable wrapper over a plain
+         table; secondary ink in the head, body ink in the cells.             */
+      .tblWrap {
+        overflow-x: auto;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .tbl {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .tbl thead {
+        background: var(--el-surface);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .tbl th {
+        text-align: left;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        white-space: nowrap;
+      }
+      .tbl td {
+        font-size: 0.875rem;
+        color: var(--el-text);
+        vertical-align: middle;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .tbl tbody tr + tr td {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .tbl tbody tr.is-link:hover td {
+        background: var(--el-surface-soft);
+      }
+      .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .dim {
+        color: var(--el-text-secondary);
+      }
+
+      /* The current / past switch — the shipped `Segmented` primitive's shape. */
+      .seg {
+        display: inline-flex;
+        padding: 2px;
+        gap: 2px;
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+      }
+      .seg button {
+        font: inherit;
+        font-size: 0.8125rem;
+        border: 0;
+        cursor: pointer;
+        color: var(--el-text-secondary);
+        background: transparent;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .seg button[aria-current='true'] {
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-weight: 600;
+        box-shadow: var(--shadow-subtle);
+      }
+
+      /* The sidebar rail, drawn only so the ACCESS PATH is visible rather than
+         described. Its rows are the shipped rail's shape, not a new one.      */
+      .rail {
+        width: 232px;
+        padding: var(--spacing-control-y);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+      }
+      .railRow {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8125rem;
+        color: var(--el-text-secondary);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+      }
+      .railRow svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .railRow.is-new {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .railRow.is-active {
+        background: var(--el-muted);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      /* A skeleton row, for the loading face. Not a state the run section
+         needed: it filled with the item page's ONE settle, and these pages
+         own their own wait.                                                  */
+      .skel {
+        height: 12px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+      }
+
+      /* ⚠️ THE STAGE IS WIDER HERE THAN IN run-section.mock.html, and that is a
+         property of the SUBJECT rather than a preference. That asset draws a
+         SECTION inside a page somebody else owns, so its 720px stage is the
+         real width of the thing it draws. These two are PAGES: a run's set is a
+         seven-column table and squeezing it into a section's width would be
+         drawing the wrong measurement. 980px is the area's own `.stageWide`,
+         reused rather than invented. */
+      .stage {
+        max-width: 980px;
+      }
+
+      /* Cells whose content is a single token — a command, a timestamp, a
+         duration — never wrap: a wrapped `motir run` reads as two words and a
+         wrapped `18m 04s` reads as two numbers. The flexible cells are the
+         scope and the leg summary, which are prose and should wrap. */
+      .tbl td.nw,
+      .tbl th.nw {
+        white-space: nowrap;
+      }
+    </style>
+    <style>
+      /* ── THE PANEL DELTA (MOTIR-6937) ─────────────────────────────────────
+         Only what the right-half panel adds. The four blocks above are
+         my-agents.mock.html's own (themselves runs-index.mock.html's, verbatim);
+         the rules below that carry the base asset's own vocabulary — .cardRow,
+         .refusal, .dialog, .iconBtn, .progressNote, .reason — are copied from
+         its fifth block unchanged, so the list rows, the refusal box and the
+         delete confirmation this board shows are the approved ones. Everything
+         else is new, from the same tokens: no new colour, no raw radius. */
+      :root {
+        /* Declared exactly as my-agents.mock.html declares it (CLAUDE.md —
+           danger AS text on a surface, never --el-danger-text off a fill). */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+      }
+
+      /* ── copied VERBATIM from my-agents.mock.html's fifth block ────────── */
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+      .dialog {
+        max-width: 560px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        background: var(--el-card, var(--color-background));
+        box-shadow: var(--shadow-modal);
+        overflow: hidden;
+      }
+      .dialogHead {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .dialogTitle {
+        font-family: var(--font-serif), Georgia, serif;
+        font-size: 1.125rem;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .dialogBody {
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 0.875rem;
+        font-size: 0.875rem;
+        color: var(--el-text);
+      }
+      .dialogFoot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        padding: var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .refusal svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+      }
+      .refusal {
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-start;
+        font-size: 0.8125rem;
+        color: var(--el-text-strong);
+        background: var(--el-tint-rose);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .refusal.isWait {
+        background: var(--el-tint-peach);
+      }
+      .refusal a {
+        color: var(--el-link);
+      }
+      .iconBtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-btn-sm);
+        height: var(--height-btn-sm);
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+      }
+      .iconBtn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .reason {
+        display: block;
+        font-size: 0.75rem;
+        color: var(--el-danger-on-surface);
+        margin-top: 0.25rem;
+        white-space: normal;
+      }
+      .progressNote {
+        display: block;
+        font-size: 0.75rem;
+        color: var(--el-text-secondary);
+        margin-top: 0.25rem;
+      }
+      .narrowStage {
+        max-width: 390px;
+      }
+      .cardRow {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+        font-size: 0.8125rem;
+      }
+      .cardRow + .cardRow {
+        margin-top: 0.5rem;
+      }
+      .cardTop {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+      }
+      .cardName {
+        font-weight: 600;
+        color: var(--el-text);
+      }
+
+      /* ── NEW: the two-column mode ─────────────────────────────────────────
+         The stage is wider than the list page's 980px because the SUBJECT is:
+         a 340px list column plus a panel whose terminal holds 80+ columns. */
+      .stageSplit {
+        max-width: 1240px;
+      }
+      /* The address the open agent lives at — drawn so the reader SEES it. */
+      .addr {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+        color: var(--el-text);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        margin-bottom: 0.875rem;
+      }
+      .addr svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .split {
+        display: grid;
+        grid-template-columns: 340px minmax(0, 1fr);
+        gap: 1rem;
+        margin-top: 1rem;
+        align-items: start;
+      }
+      /* The row that is open. Lavender is the area's "this one" ground (the
+         create dialog's selected radio row); the accent border is the mark a
+         reader finds without reading. --el-text / --el-text-secondary on it,
+         exactly as that radio row carries them. */
+      .cardRow.isSelected {
+        background: var(--el-tint-lavender);
+        border-color: var(--el-accent);
+      }
+      .cardRow.isClickable {
+        cursor: pointer;
+      }
+      .cardRow.isClickable:hover {
+        background: var(--el-surface-soft);
+      }
+      /* The row focus returns to when the panel closes. */
+      .tbl tbody tr.isReturnFocus td {
+        background: var(--el-surface-soft);
+      }
+      .tbl tbody tr.isReturnFocus td:first-child {
+        box-shadow: inset 3px 0 0 var(--el-accent);
+      }
+
+      /* ── NEW: the agent panel ──────────────────────────────────────────── */
+      .agentPanel {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card, var(--color-background));
+        overflow: hidden;
+      }
+      .apHead {
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+        padding: var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .apTop {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+      }
+      .apName {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin: 0;
+        font-family: var(--font-serif), Georgia, serif;
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .apMeta {
+        margin: 0.125rem 0 0;
+        font-size: 0.8125rem;
+        color: var(--el-text-secondary);
+      }
+      .apActions {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        flex: none;
+      }
+      .btnGhost svg {
+        width: 14px;
+        height: 14px;
+      }
+      .btnGhost.isPrimary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        border-color: var(--el-accent);
+      }
+      .btnGhost.isDanger {
+        color: var(--el-danger-on-surface);
+      }
+      /* Disabled while the agent is in motion — the row menu's own rule
+         (disabled, not hidden). Secondary ink, never faint: it is still read. */
+      .btnGhost.isOff {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        cursor: not-allowed;
+      }
+
+      /* The sign-in status, and the one sentence about it (§9). */
+      .signin {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        font-size: 0.8125rem;
+        color: var(--el-text);
+      }
+      .signin > svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .glyphOk {
+        color: var(--el-success);
+      }
+      .glyphWarn {
+        color: var(--el-warning);
+      }
+      .glyphUnknown {
+        color: var(--el-text-secondary);
+      }
+      .signinSub {
+        display: block;
+        margin-top: 0.125rem;
+        font-size: 0.75rem;
+        color: var(--el-text-secondary);
+      }
+      .kbd {
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-badge);
+        padding: 0 0.3rem;
+        white-space: nowrap;
+      }
+      .privacyLine {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin: 0;
+        font-size: 0.75rem;
+        color: var(--el-text-secondary);
+      }
+      .privacyLine svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin: 1px 1px 0;
+      }
+      /* The moment it turns: the signed-in line lands on the mint ground once. */
+      .signin.isJustTurned {
+        background: var(--el-tint-mint);
+        border-radius: var(--radius-control);
+        padding: 0.25rem 0.5rem;
+        margin: -0.25rem -0.5rem;
+        color: var(--el-text-strong);
+      }
+
+      /* The tab strip — the shipped WorkbenchTabs track, one tab today. */
+      .tabRow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.5rem var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .tabTrack {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-tabnav-track);
+      }
+      .tabOn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        padding: 0.25rem 0.625rem;
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .tabGlyph {
+        display: inline-flex;
+        color: var(--el-tabnav-active);
+      }
+      .tabGlyph svg {
+        width: 14px;
+        height: 14px;
+      }
+      /* The connection's own word, at the strip's right end. */
+      .conn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.75rem;
+        color: var(--el-text-secondary);
+      }
+      .connDot {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        background: var(--el-status-todo);
+      }
+      .connDot.isLive {
+        background: var(--el-status-done);
+      }
+      .connDot.isBusy {
+        background: var(--el-status-in-progress);
+      }
+      .connDot.isLost {
+        background: var(--el-danger);
+      }
+      .connDot.isEnded {
+        background: var(--el-status-cancelled);
+      }
+
+      /* A strip above the terminal for a connection that is not plain live. */
+      .termStrip {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8125rem;
+        color: var(--el-text-strong);
+        background: var(--el-tint-sky);
+        padding: var(--spacing-control-y) var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .termStrip > svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .termStrip.isLost {
+        background: var(--el-tint-rose);
+      }
+      .termStrip.isEnded {
+        background: var(--el-muted);
+      }
+      .termStrip .stripText {
+        flex: 1;
+        min-width: 0;
+      }
+
+      /* The terminal. The code ground and ink are the design system's own
+         (--el-code-bg / --el-code-text), so it follows the theme like every
+         code block does. */
+      .term {
+        position: relative;
+        height: 320px;
+        overflow: hidden;
+        padding: 10px 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        font-family: var(--font-mono, monospace);
+        font-size: 12px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        word-break: break-all;
+        /* A terminal is pinned to its latest line: history leaves at the top. */
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+      }
+      /* The transcript is a <pre>, so a formatter never reflows it. */
+      .term pre {
+        margin: 0;
+        font: inherit;
+        white-space: inherit;
+        word-break: inherit;
+      }
+      .term.isShort {
+        height: 168px;
+      }
+      .term.isTall {
+        height: 400px;
+      }
+      .term.isNarrow {
+        height: 360px;
+        font-size: 11.5px;
+      }
+      /* Scrolled up: the reader is reading history, so the view is not pinned. */
+      .term.isScrolledUp {
+        justify-content: flex-start;
+      }
+      .term.isPaused {
+        opacity: 0.6;
+      }
+      .ps {
+        font-weight: 700;
+      }
+      .caret {
+        display: inline-block;
+        width: 0.6em;
+        height: 1.15em;
+        vertical-align: text-bottom;
+        background: var(--el-code-text);
+      }
+      /* Centred words inside an empty terminal (waking, connecting, failed …). */
+      .termCenter {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        flex: 1;
+        text-align: center;
+        white-space: normal;
+        word-break: normal;
+        font-family: var(--font-sans, sans-serif);
+        font-size: 0.8125rem;
+        color: var(--el-code-text);
+      }
+      .termCenter > svg {
+        width: 22px;
+        height: 22px;
+      }
+      .termCenter strong {
+        font-size: 0.875rem;
+      }
+      .termCenter .reason {
+        margin: 0;
+        font-size: 0.8125rem;
+      }
+      .termCenter .refusal {
+        text-align: left;
+        max-width: 440px;
+      }
+      /* Scroll and size, drawn: a thumb, and the size readout while resizing. */
+      .termThumb {
+        position: absolute;
+        right: 3px;
+        top: 38%;
+        width: 5px;
+        height: 34%;
+        border-radius: var(--radius-badge);
+        background: var(--el-border-strong);
+      }
+      .sizeTag {
+        position: absolute;
+        right: 12px;
+        bottom: 10px;
+        padding: 0 0.375rem;
+        font-size: 11px;
+        font-family: var(--font-mono, monospace);
+        color: var(--el-text);
+        background: var(--el-card, var(--color-background));
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+      }
+      .termStrip .btnGhost,
+      .jumpLatest {
+        word-break: normal;
+        white-space: nowrap;
+        flex: none;
+      }
+      .jumpLatest {
+        position: absolute;
+        right: 16px;
+        bottom: 10px;
+        font-family: var(--font-sans, sans-serif);
+      }
+
+      /* Faces laid side by side, each a labelled small panel. */
+      .faceGrid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1.25rem 1rem;
+      }
+      .faceGrid .dialog {
+        max-width: none;
+      }
+      .apBody {
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        font-size: 0.875rem;
+        color: var(--el-text);
+      }
+      .apBody p {
+        margin: 0;
+      }
+      .apBody .emptyGlyphSm {
+        display: inline-flex;
+        color: var(--el-text-secondary);
+      }
+      .apBody .emptyGlyphSm svg {
+        width: 28px;
+        height: 28px;
+      }
+      .panelClosing {
+        opacity: 0.55;
+      }
+    </style>
+    <style>
+      /* ── THE UPDATE DELTA (MOTIR-6951) ───────────────────────────────────
+         Only what the image update adds. Every block above is
+         my-agents--panel.mock.html's own, verbatim (MOTIR-6937, approved
+         cmun5qu1f005qhwoiq14livtw). New rules use the same tokens: no new
+         colour, no raw radius. */
+      .ver {
+        font-family: var(--font-mono), ui-monospace, monospace;
+        font-size: 0.75rem;
+        color: var(--el-text-secondary);
+      }
+      .updMark {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        background: var(--el-tint-sky);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        white-space: nowrap;
+      }
+      .updMark svg {
+        width: 0.875rem;
+        height: 0.875rem;
+      }
+      .updMark.isPending {
+        background: var(--el-tint-lavender);
+      }
+      .updMark.isUnknown {
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft);
+      }
+      .verLine {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.375rem;
+        margin-top: 0.25rem;
+      }
+      /* Three actions (Update, Hibernate, Delete) do not fit beside the name in
+         the half-width panel: the header wraps them onto their own line rather
+         than clipping, the same wrap MOTIR-6937 panel 7 draws at the narrow width. */
+      .apTop {
+        flex-wrap: wrap;
+      }
+      .apTop > div:first-child {
+        flex: 1 1 14rem;
+        min-width: 14rem;
+      }
+      .apName {
+        white-space: nowrap;
+      }
+      .apHead > .apActions {
+        flex-wrap: wrap;
+      }
+      .keepList {
+        margin: 0;
+        padding-left: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+      <symbol
+        id="i-terminal"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m7 11 2-2-2-2" />
+        <path d="M11 13h4" />
+        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+      </symbol>
+      <symbol
+        id="i-plus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 12h14" />
+        <path d="M12 5v14" />
+      </symbol>
+      <symbol
+        id="i-more"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="1" />
+        <circle cx="19" cy="12" r="1" />
+        <circle cx="5" cy="12" r="1" />
+      </symbol>
+      <symbol
+        id="i-power"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 2v10" />
+        <path d="M18.4 6.6a9 9 0 1 1-12.77.04" />
+      </symbol>
+      <symbol
+        id="i-trash"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 6h18" />
+        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      </symbol>
+      <symbol
+        id="i-moon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+      </symbol>
+      <symbol
+        id="i-x"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+      </symbol>
+      <symbol
+        id="i-alert"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+        />
+        <path d="M12 9v4" />
+        <path d="M12 17h.01" />
+      </symbol>
+      <symbol
+        id="i-check"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="m9 12 2 2 4-4" />
+      </symbol>
+      <symbol
+        id="i-circle-alert"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 8v4" />
+        <path d="M12 16h.01" />
+      </symbol>
+      <symbol
+        id="i-help"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+        <path d="M12 17h.01" />
+      </symbol>
+      <symbol
+        id="i-lock"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </symbol>
+      <symbol
+        id="i-arrow-left"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m12 19-7-7 7-7" />
+        <path d="M19 12H5" />
+      </symbol>
+      <symbol
+        id="i-rotate"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+        <path d="M21 3v5h-5" />
+      </symbol>
+      <symbol
+        id="i-loader"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+      </symbol>
+      <symbol
+        id="i-package"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m7.5 4.27 9 5.15" />
+        <path
+          d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+        />
+        <path d="m3.3 7 8.7 5 8.7-5" />
+        <path d="M12 22V12" />
+      </symbol>
+      <symbol
+        id="i-link"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </symbol>
+      <symbol
+        id="i-chevron-down"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m6 9 6 6 6-6" />
+      </symbol>
+
+      <symbol
+        id="i-arrow-up-circle"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="m16 12-4-4-4 4" />
+        <path d="M12 16V8" />
+      </symbol>
+      <symbol
+        id="i-refresh"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+        <path d="M21 3v5h-5" />
+        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+        <path d="M8 16H3v5" />
+      </symbol>
+    </svg>
+
+    <div class="sheet">
+      <div class="sheetHead">
+        <h1>
+          MY AGENTS, delta — updating an agent to a newer image —
+          <span class="font-mono">/my-agents?agent=&lt;id&gt;</span>
+        </h1>
+        <p>
+          MOTIR-6862 · MOTIR-6951. It amends
+          <span class="font-mono">design/my-agents/my-agents--panel.mock.html</span> (MOTIR-6937,
+          approved), which stays a record and is not edited. It draws only what the image update
+          adds: the version and the <em>Update available</em> marker on the row and in the panel
+          header, Update beside Hibernate and Delete, the confirmation, the updating state, the
+          update waiting for a hibernated agent’s wake, the refusals, the rolled-back failure, the
+          image-too-old call to action, and the narrow width.
+        </p>
+        <p>
+          <strong>Every state is the decision’s</strong> —
+          <span class="font-mono">docs/decisions/agent-image-update.md</span> (MOTIR-6948): the
+          catalog’s three answers are Q1, the rollback Q4, the hibernated update Q5,
+          <em>Updating</em> Q6, the refusals Q8. The copy is this card’s.
+        </p>
+      </div>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">1</span>THE ACCESS PATH — the marker on the row, and Update in the
+          panel header beside Hibernate and Delete.
+        </h2>
+        <p class="panelNote">
+          On the list, the <strong>Coding agent</strong> cell gains the agent’s
+          <strong>version</strong> (mono, secondary) and, when a newer image exists, the
+          <strong>Update available → &lt;version&gt;</strong> marker beside it (sky tint, strong
+          text — AA on the tint). The row stays the door to the panel (MOTIR-6937 panel 1,
+          unchanged).
+        </p>
+        <p class="panelNote">
+          In the open panel the same version line sits under the meta line, and
+          <strong>Update</strong> is the FIRST action, before Hibernate and Delete, shown only while
+          an update is available. It opens the confirmation (panel 3). <em>Up to date</em> shows the
+          version and no marker; <em>could not check</em> is a quiet grey chip, never a claim that
+          the agent is current (decision Q1).
+        </p>
+        <div class="stage stageSplit">
+          <span class="colLabel"
+            >A · The list — up to date, update available, could not check, and the access path</span
+          >
+          <div class="tblWrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th class="nw">Coding agent</th>
+                  <th class="nw">Project</th>
+                  <th class="nw">State</th>
+                  <th class="nw num">Machine time this month</th>
+                  <th class="nw num">Credits</th>
+                  <th class="nw num"><span class="visually-hidden">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="is-link">
+                  <td><strong>yue-claude</strong></td>
+                  <td class="nw">
+                    Claude Code<span class="verLine"
+                      ><span class="ver">0.9.0</span
+                      ><span class="updMark"
+                        ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg>Update
+                        available → 0.10.0</span
+                      ></span
+                    >
+                  </td>
+                  <td class="nw dim">motir</td>
+                  <td class="nw">
+                    <span class="runPill t-implemented"><span class="dot"></span>Running</span>
+                  </td>
+                  <td class="nw num">1h 12m</td>
+                  <td class="nw num">72</td>
+                  <td class="nw num">
+                    <span class="iconBtn" role="img" aria-label="Actions for yue-claude"
+                      ><svg aria-hidden="true"><use href="#i-more" /></svg
+                    ></span>
+                  </td>
+                </tr>
+                <tr class="is-link">
+                  <td><strong>yue-codex</strong></td>
+                  <td class="nw">
+                    Codex<span class="verLine"><span class="ver">0.10.0</span></span>
+                  </td>
+                  <td class="nw dim">motir</td>
+                  <td class="nw">
+                    <span class="runPill t-cancelled"><span class="dot"></span>Hibernated</span>
+                  </td>
+                  <td class="nw num">1h 12m</td>
+                  <td class="nw num">72</td>
+                  <td class="nw num">
+                    <span class="iconBtn" role="img" aria-label="Actions for yue-codex"
+                      ><svg aria-hidden="true"><use href="#i-more" /></svg
+                    ></span>
+                  </td>
+                </tr>
+                <tr class="is-link">
+                  <td><strong>review-bot</strong></td>
+                  <td class="nw">
+                    OpenCode<span class="verLine"
+                      ><span class="ver">0.8.0</span
+                      ><span class="updMark isUnknown">Could not check for updates</span></span
+                    >
+                  </td>
+                  <td class="nw dim">motir</td>
+                  <td class="nw">
+                    <span class="runPill t-cancelled"><span class="dot"></span>Hibernated</span>
+                  </td>
+                  <td class="nw num">1h 12m</td>
+                  <td class="nw num">72</td>
+                  <td class="nw num">
+                    <span class="iconBtn" role="img" aria-label="Actions for review-bot"
+                      ><svg aria-hidden="true"><use href="#i-more" /></svg
+                    ></span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="caption">
+            Three rows, three answers from the catalog: a newer version (marker), the newest
+            (version only), the registry unreachable (could not check).
+          </p>
+        </div>
+        <div class="stage stageSplit">
+          <div class="faceGrid">
+            <div>
+              <span class="colLabel">B · Panel header — Update available (running)</span>
+              <div class="agentPanel" role="region" aria-label="Agent">
+                <div class="apHead">
+                  <div class="apTop">
+                    <div>
+                      <h3 class="apName">
+                        yue-claude
+                        <span class="runPill t-implemented"><span class="dot"></span>Running</span>
+                      </h3>
+                      <p class="apMeta">Claude Code <span class="ver">0.9.0</span> · motir</p>
+                      <span class="verLine"
+                        ><span class="updMark"
+                          ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg>Update
+                          available → 0.10.0</span
+                        ></span
+                      >
+                    </div>
+                    <div class="apActions">
+                      <span class="btnGhost isPrimary"
+                        ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg>
+                        Update</span
+                      ><span class="btnGhost"
+                        ><svg aria-hidden="true"><use href="#i-moon" /></svg> Hibernate</span
+                      ><span class="btnGhost isDanger"
+                        ><svg aria-hidden="true"><use href="#i-trash" /></svg> Delete…</span
+                      ><span class="iconBtn" role="img" aria-label="Close yue-claude"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                  <p class="privacyLine">
+                    <svg aria-hidden="true"><use href="#i-lock" /></svg
+                    ><span
+                      >Your sign-in belongs to Claude Code and stays in this agent’s home. Motir
+                      never sees it.</span
+                    >
+                  </p>
+                </div>
+                <div class="tabRow">
+                  <nav class="tabTrack" aria-label="Agent views">
+                    <span class="tabOn" aria-current="page"
+                      ><span class="tabGlyph" aria-hidden="true"
+                        ><svg aria-hidden="true"><use href="#i-terminal" /></svg></span
+                      >Terminal</span
+                    >
+                  </nav>
+                  <span class="conn"
+                    ><span class="connDot isLive" aria-hidden="true"></span>Live</span
+                  >
+                </div>
+                <div class="term isShort" role="region" aria-label="Terminal">
+                  <pre><span class="ps">node@yue-claude:~/workspace$</span> <span class="caret"></span></pre>
+                </div>
+              </div>
+            </div>
+            <div>
+              <span class="colLabel">C · Panel header — up to date: no marker, no Update</span>
+              <div class="agentPanel" role="region" aria-label="Agent">
+                <div class="apHead">
+                  <div class="apTop">
+                    <div>
+                      <h3 class="apName">
+                        yue-codex
+                        <span class="runPill t-implemented"><span class="dot"></span>Running</span>
+                      </h3>
+                      <p class="apMeta">Codex <span class="ver">0.10.0</span> · motir</p>
+                    </div>
+                    <div class="apActions">
+                      <span class="btnGhost"
+                        ><svg aria-hidden="true"><use href="#i-moon" /></svg> Hibernate</span
+                      ><span class="btnGhost isDanger"
+                        ><svg aria-hidden="true"><use href="#i-trash" /></svg> Delete…</span
+                      ><span class="iconBtn" role="img" aria-label="Close yue-codex"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                  <p class="privacyLine">
+                    <svg aria-hidden="true"><use href="#i-lock" /></svg
+                    ><span
+                      >Your sign-in belongs to Codex and stays in this agent’s home. Motir never
+                      sees it.</span
+                    >
+                  </p>
+                </div>
+                <div class="tabRow">
+                  <nav class="tabTrack" aria-label="Agent views">
+                    <span class="tabOn" aria-current="page"
+                      ><span class="tabGlyph" aria-hidden="true"
+                        ><svg aria-hidden="true"><use href="#i-terminal" /></svg></span
+                      >Terminal</span
+                    >
+                  </nav>
+                  <span class="conn"
+                    ><span class="connDot isLive" aria-hidden="true"></span>Live</span
+                  >
+                </div>
+                <div class="term isShort" role="region" aria-label="Terminal">
+                  <pre><span class="ps">node@yue-codex:~/workspace$</span> <span class="caret"></span></pre>
+                </div>
+              </div>
+            </div>
+            <div>
+              <span class="colLabel">D · Panel header — could not check for updates</span>
+              <div class="agentPanel" role="region" aria-label="Agent">
+                <div class="apHead">
+                  <div class="apTop">
+                    <div>
+                      <h3 class="apName">
+                        review-bot
+                        <span class="runPill t-implemented"><span class="dot"></span>Running</span>
+                      </h3>
+                      <p class="apMeta">OpenCode <span class="ver">0.8.0</span> · motir</p>
+                      <span class="verLine"
+                        ><span class="updMark isUnknown">Could not check for updates</span></span
+                      >
+                    </div>
+                    <div class="apActions">
+                      <span class="btnGhost"
+                        ><svg aria-hidden="true"><use href="#i-moon" /></svg> Hibernate</span
+                      ><span class="btnGhost isDanger"
+                        ><svg aria-hidden="true"><use href="#i-trash" /></svg> Delete…</span
+                      ><span class="iconBtn" role="img" aria-label="Close review-bot"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                  <p class="privacyLine">
+                    <svg aria-hidden="true"><use href="#i-lock" /></svg
+                    ><span
+                      >Your sign-in belongs to OpenCode and stays in this agent’s home. Motir never
+                      sees it.</span
+                    >
+                  </p>
+                </div>
+                <div class="tabRow">
+                  <nav class="tabTrack" aria-label="Agent views">
+                    <span class="tabOn" aria-current="page"
+                      ><span class="tabGlyph" aria-hidden="true"
+                        ><svg aria-hidden="true"><use href="#i-terminal" /></svg></span
+                      >Terminal</span
+                    >
+                  </nav>
+                  <span class="conn"
+                    ><span class="connDot isLive" aria-hidden="true"></span>Live</span
+                  >
+                </div>
+                <div class="term isShort" role="region" aria-label="Terminal">
+                  <pre><span class="ps">node@review-bot:~/workspace$</span> <span class="caret"></span></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">2</span>EVERY UPDATE STATE ON THE ROW — updating, waiting for the
+          next wake, rolled back.
+        </h2>
+        <p class="panelNote">
+          <strong>Updating</strong> is a new lifecycle value (decision Q6), drawn with the busy tone
+          Waking already uses (RunTonePill <span class="font-mono">t-running</span>). A hibernated
+          agent that took the update shows <strong>&lt;version&gt; on next wake</strong> in place of
+          the marker (Q5). A rolled-back agent keeps its old version, shows the failure in words
+          under its name (the base asset’s <span class="font-mono">.reason</span> line), and is
+          still offered the update (Q4).
+        </p>
+        <div class="stage stageSplit">
+          <div class="tblWrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th class="nw">Coding agent</th>
+                  <th class="nw">Project</th>
+                  <th class="nw">State</th>
+                  <th class="nw num">Machine time this month</th>
+                  <th class="nw num">Credits</th>
+                  <th class="nw num"><span class="visually-hidden">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="is-link">
+                  <td><strong>yue-claude</strong></td>
+                  <td class="nw">
+                    Claude Code<span class="verLine"><span class="ver">0.9.0 → 0.10.0</span></span>
+                  </td>
+                  <td class="nw dim">motir</td>
+                  <td class="nw">
+                    <span class="runPill t-running"><span class="dot"></span>Updating</span>
+                  </td>
+                  <td class="nw num">1h 12m</td>
+                  <td class="nw num">72</td>
+                  <td class="nw num">
+                    <span class="iconBtn" role="img" aria-label="Actions for yue-claude"
+                      ><svg aria-hidden="true"><use href="#i-more" /></svg
+                    ></span>
+                  </td>
+                </tr>
+                <tr class="is-link">
+                  <td><strong>yue-codex</strong></td>
+                  <td class="nw">
+                    Codex<span class="verLine"
+                      ><span class="ver">0.9.0</span
+                      ><span class="updMark isPending"
+                        ><svg aria-hidden="true"><use href="#i-refresh" /></svg>0.10.0 on next
+                        wake</span
+                      ></span
+                    >
+                  </td>
+                  <td class="nw dim">motir</td>
+                  <td class="nw">
+                    <span class="runPill t-cancelled"><span class="dot"></span>Hibernated</span>
+                  </td>
+                  <td class="nw num">1h 12m</td>
+                  <td class="nw num">72</td>
+                  <td class="nw num">
+                    <span class="iconBtn" role="img" aria-label="Actions for yue-codex"
+                      ><svg aria-hidden="true"><use href="#i-more" /></svg
+                    ></span>
+                  </td>
+                </tr>
+                <tr class="is-link">
+                  <td>
+                    <strong>night-shift</strong
+                    ><span class="reason"
+                      >The update to 0.10.0 didn’t work: claude --version exited 127. Your agent is
+                      back on 0.9.0.</span
+                    >
+                  </td>
+                  <td class="nw">
+                    Claude Code<span class="verLine"
+                      ><span class="ver">0.9.0</span
+                      ><span class="updMark"
+                        ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg>Update
+                        available → 0.10.0</span
+                      ></span
+                    >
+                  </td>
+                  <td class="nw dim">motir</td>
+                  <td class="nw">
+                    <span class="runPill t-implemented"><span class="dot"></span>Running</span>
+                  </td>
+                  <td class="nw num">1h 12m</td>
+                  <td class="nw num">72</td>
+                  <td class="nw num">
+                    <span class="iconBtn" role="img" aria-label="Actions for night-shift"
+                      ><svg aria-hidden="true"><use href="#i-more" /></svg
+                    ></span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">3</span>THE CONFIRMATION — naming both versions, what is kept, and
+          what happens next.
+        </h2>
+        <p class="panelNote">
+          Pressing <strong>Update</strong> opens the page’s own dialog shape (the Delete
+          confirmation’s, MOTIR-6937 panel 2). It names the current and the target version and lists
+          what is KEPT. A running agent is told it restarts; a hibernated one that it takes the new
+          version the next time it wakes. <strong>Not now</strong> closes it and calls nothing.
+        </p>
+        <div class="stage stageSplit">
+          <div class="faceGrid">
+            <div>
+              <span class="colLabel">Running agent</span>
+              <div class="dialog" role="alertdialog" aria-label="Update yue-claude to 0.10.0?">
+                <div class="dialogHead">
+                  <h3 class="dialogTitle">Update yue-claude to 0.10.0?</h3>
+                  <span class="iconBtn" role="img" aria-label="Close"
+                    ><svg aria-hidden="true"><use href="#i-x" /></svg
+                  ></span>
+                </div>
+                <div class="dialogBody">
+                  <p style="margin: 0">
+                    Claude Code 0.9.0 → <strong>0.10.0</strong>. The agent restarts on the new
+                    version, which takes about a minute. It keeps:
+                  </p>
+                  <ul class="keepList">
+                    <li>its home and every file in it, including the cloned repositories;</li>
+                    <li>its coding agent’s sign-in;</li>
+                    <li>its chat sessions.</li>
+                  </ul>
+                  <p style="margin: 0; color: var(--el-text-secondary)">
+                    If the new version doesn’t start, the agent goes back to 0.9.0 and tells you
+                    why.
+                  </p>
+                </div>
+                <div class="dialogFoot">
+                  <span class="btnGhost">Not now</span>
+                  <span class="btnGhost isPrimary"
+                    ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg> Update and
+                    restart</span
+                  >
+                </div>
+              </div>
+            </div>
+            <div>
+              <span class="colLabel">Hibernated agent</span>
+              <div class="dialog" role="alertdialog" aria-label="Update yue-codex to 0.10.0?">
+                <div class="dialogHead">
+                  <h3 class="dialogTitle">Update yue-codex to 0.10.0?</h3>
+                  <span class="iconBtn" role="img" aria-label="Close"
+                    ><svg aria-hidden="true"><use href="#i-x" /></svg
+                  ></span>
+                </div>
+                <div class="dialogBody">
+                  <p style="margin: 0">
+                    Codex 0.9.0 → <strong>0.10.0</strong>. It stays asleep and takes the new version
+                    the next time it wakes. It keeps:
+                  </p>
+                  <ul class="keepList">
+                    <li>its home and every file in it, including the cloned repositories;</li>
+                    <li>its coding agent’s sign-in;</li>
+                    <li>its chat sessions.</li>
+                  </ul>
+                  <p style="margin: 0; color: var(--el-text-secondary)">
+                    If the new version doesn’t start at that wake, the agent goes back to 0.9.0 and
+                    tells you why.
+                  </p>
+                </div>
+                <div class="dialogFoot">
+                  <span class="btnGhost">Not now</span>
+                  <span class="btnGhost isPrimary"
+                    ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg> Update on next
+                    wake</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">4</span>UPDATING — the restart in the terminal, every action
+          disabled until the agent is back.
+        </h2>
+        <p class="panelNote">
+          While the agent is <strong>Updating</strong>, the terminal shows MOTIR-6937’s
+          <em>Reconnecting…</em> face (panel 5, unchanged): the machine reboots onto the new image
+          and the shell comes back. Update, Hibernate and Delete are disabled (<span
+            class="font-mono"
+            >aria-disabled</span
+          >) and the panel follows the agent until it leaves the state — to Running on the new
+          version, or Running with the rollback line (panel 6).
+        </p>
+        <div class="stage stageSplit">
+          <div class="faceGrid">
+            <div>
+              <span class="colLabel">Updating a running agent</span>
+              <div class="agentPanel" role="region" aria-label="Agent">
+                <div class="apHead">
+                  <div class="apTop">
+                    <div>
+                      <h3 class="apName">
+                        yue-claude
+                        <span class="runPill t-running"><span class="dot"></span>Updating</span>
+                      </h3>
+                      <p class="apMeta">
+                        Claude Code <span class="ver">0.9.0 → 0.10.0</span> · motir
+                      </p>
+                    </div>
+                    <div class="apActions">
+                      <span class="btnGhost isPrimary isOff" aria-disabled="true"
+                        ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg>
+                        Update</span
+                      ><span class="btnGhost isOff" aria-disabled="true"
+                        ><svg aria-hidden="true"><use href="#i-moon" /></svg> Hibernate</span
+                      ><span class="btnGhost isDanger isOff" aria-disabled="true"
+                        ><svg aria-hidden="true"><use href="#i-trash" /></svg> Delete…</span
+                      ><span class="iconBtn" role="img" aria-label="Close yue-claude"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                  <p class="privacyLine">
+                    <svg aria-hidden="true"><use href="#i-lock" /></svg
+                    ><span
+                      >Your sign-in belongs to Claude Code and stays in this agent’s home. Motir
+                      never sees it.</span
+                    >
+                  </p>
+                </div>
+                <div class="tabRow">
+                  <nav class="tabTrack" aria-label="Agent views">
+                    <span class="tabOn" aria-current="page"
+                      ><span class="tabGlyph" aria-hidden="true"
+                        ><svg aria-hidden="true"><use href="#i-terminal" /></svg></span
+                      >Terminal</span
+                    >
+                  </nav>
+                  <span class="conn"
+                    ><span class="connDot isBusy" aria-hidden="true"></span>Reconnecting…</span
+                  >
+                </div>
+                <div class="term isShort" role="region" aria-label="Terminal">
+                  <div class="termCenter">
+                    <strong>Updating to 0.10.0</strong
+                    ><span
+                      >The agent is restarting on the new version. Your home and sign-in stay where
+                      they are.</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <span class="colLabel">Updated — back and live on 0.10.0</span>
+              <div class="agentPanel" role="region" aria-label="Agent">
+                <div class="apHead">
+                  <div class="apTop">
+                    <div>
+                      <h3 class="apName">
+                        yue-claude
+                        <span class="runPill t-implemented"><span class="dot"></span>Running</span>
+                      </h3>
+                      <p class="apMeta">Claude Code <span class="ver">0.10.0</span> · motir</p>
+                    </div>
+                    <div class="apActions">
+                      <span class="btnGhost"
+                        ><svg aria-hidden="true"><use href="#i-moon" /></svg> Hibernate</span
+                      ><span class="btnGhost isDanger"
+                        ><svg aria-hidden="true"><use href="#i-trash" /></svg> Delete…</span
+                      ><span class="iconBtn" role="img" aria-label="Close yue-claude"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                  <p class="privacyLine">
+                    <svg aria-hidden="true"><use href="#i-lock" /></svg
+                    ><span
+                      >Your sign-in belongs to Claude Code and stays in this agent’s home. Motir
+                      never sees it.</span
+                    >
+                  </p>
+                </div>
+                <div class="tabRow">
+                  <nav class="tabTrack" aria-label="Agent views">
+                    <span class="tabOn" aria-current="page"
+                      ><span class="tabGlyph" aria-hidden="true"
+                        ><svg aria-hidden="true"><use href="#i-terminal" /></svg></span
+                      >Terminal</span
+                    >
+                  </nav>
+                  <span class="conn"
+                    ><span class="connDot isLive" aria-hidden="true"></span>Live</span
+                  >
+                </div>
+                <div class="term isShort" role="region" aria-label="Terminal">
+                  <pre><span class="ps">node@yue-claude:~/workspace$</span> <span class="caret"></span></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">5</span>UPDATED, HIBERNATED — the version it takes at its next
+          wake.
+        </h2>
+        <p class="panelNote">
+          A hibernated agent that accepted the update stays <strong>Hibernated</strong> (decision
+          Q5). The marker becomes <strong>0.10.0 on next wake</strong> and Update leaves the header.
+          Waking it goes through <em>Updating</em> (panel 4) rather than Waking, because the new
+          image is checked at that wake.
+        </p>
+        <div class="stage stageSplit">
+          <div class="faceGrid">
+            <div>
+              <span class="colLabel">Hibernated, update waiting for the wake</span>
+              <div class="agentPanel" role="region" aria-label="Agent">
+                <div class="apHead">
+                  <div class="apTop">
+                    <div>
+                      <h3 class="apName">
+                        yue-codex
+                        <span class="runPill t-cancelled"><span class="dot"></span>Hibernated</span>
+                      </h3>
+                      <p class="apMeta">Codex <span class="ver">0.9.0</span> · motir</p>
+                      <span class="verLine"
+                        ><span class="updMark isPending"
+                          ><svg aria-hidden="true"><use href="#i-refresh" /></svg>0.10.0 on next
+                          wake</span
+                        ></span
+                      >
+                    </div>
+                    <div class="apActions">
+                      <span class="btnGhost"
+                        ><svg aria-hidden="true"><use href="#i-power" /></svg> Wake</span
+                      ><span class="btnGhost isDanger"
+                        ><svg aria-hidden="true"><use href="#i-trash" /></svg> Delete…</span
+                      ><span class="iconBtn" role="img" aria-label="Close yue-codex"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                  <p class="privacyLine">
+                    <svg aria-hidden="true"><use href="#i-lock" /></svg
+                    ><span
+                      >Your sign-in belongs to Codex and stays in this agent’s home. Motir never
+                      sees it.</span
+                    >
+                  </p>
+                </div>
+                <div class="tabRow">
+                  <nav class="tabTrack" aria-label="Agent views">
+                    <span class="tabOn" aria-current="page"
+                      ><span class="tabGlyph" aria-hidden="true"
+                        ><svg aria-hidden="true"><use href="#i-terminal" /></svg></span
+                      >Terminal</span
+                    >
+                  </nav>
+                  <span class="conn"
+                    ><span class="connDot isEnded" aria-hidden="true"></span>Closed</span
+                  >
+                </div>
+                <div class="term isShort" role="region" aria-label="Terminal">
+                  <div class="termCenter">
+                    <span>This agent is asleep. It moves to 0.10.0 when it wakes.</span
+                    ><span class="btnGhost"
+                      ><svg aria-hidden="true"><use href="#i-power" /></svg> Wake</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">6</span>THE REFUSALS — in the decision’s words, inside the panel.
+        </h2>
+        <p class="panelNote">
+          Every refusal lands in the terminal area in the base asset’s refusal box: rose for a stop,
+          peach for a wait (MOTIR-6937 panel 6). <strong>A run is active</strong> names the run’s
+          work item and links it, in the same words the panel already uses for a refused Hibernate
+          (MOTIR-7022; decision Q8, <span class="font-mono">agent_instance_run_active</span>).
+          <strong>Already on the newest</strong> answers a stale page.
+          <strong>A transitional state</strong> names the state. <strong>Could not check</strong> is
+          a wait (<span class="font-mono">agent_image_catalog_unavailable</span>). The wording
+          follows MOTIR-6916’s refusal register.
+        </p>
+        <div class="stage stageSplit">
+          <div class="faceGrid">
+            <div>
+              <span class="colLabel">A run is active (names and links the run)</span>
+              <div class="agentPanel" role="region" aria-label="Agent">
+                <div class="apHead">
+                  <div class="apTop">
+                    <div>
+                      <h3 class="apName">
+                        yue-claude
+                        <span class="runPill t-implemented"><span class="dot"></span>Running</span>
+                      </h3>
+                      <p class="apMeta">Claude Code <span class="ver">0.9.0</span> · motir</p>
+                      <span class="verLine"
+                        ><span class="updMark"
+                          ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg>Update
+                          available → 0.10.0</span
+                        ></span
+                      >
+                    </div>
+                    <div class="apActions">
+                      <span class="btnGhost isPrimary"
+                        ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg>
+                        Update</span
+                      ><span class="btnGhost"
+                        ><svg aria-hidden="true"><use href="#i-moon" /></svg> Hibernate</span
+                      ><span class="btnGhost isDanger"
+                        ><svg aria-hidden="true"><use href="#i-trash" /></svg> Delete…</span
+                      ><span class="iconBtn" role="img" aria-label="Close yue-claude"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                  <p class="privacyLine">
+                    <svg aria-hidden="true"><use href="#i-lock" /></svg
+                    ><span
+                      >Your sign-in belongs to Claude Code and stays in this agent’s home. Motir
+                      never sees it.</span
+                    >
+                  </p>
+                </div>
+                <div class="tabRow">
+                  <nav class="tabTrack" aria-label="Agent views">
+                    <span class="tabOn" aria-current="page"
+                      ><span class="tabGlyph" aria-hidden="true"
+                        ><svg aria-hidden="true"><use href="#i-terminal" /></svg></span
+                      >Terminal</span
+                    >
+                  </nav>
+                  <span class="conn"
+                    ><span class="connDot isLive" aria-hidden="true"></span>Live</span
+                  >
+                </div>
+                <div class="term isShort" role="region" aria-label="Terminal">
+                  <div class="termCenter">
+                    <div class="refusal" role="alert">
+                      <svg aria-hidden="true"><use href="#i-alert" /></svg
+                      ><span
+                        >yue-claude is running <a href="#">MOTIR-123</a>. Cancel that run on the
+                        work item first, then update it.</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <span class="colLabel">Already on the newest version</span>
+              <div class="agentPanel" role="region" aria-label="Agent">
+                <div class="apHead">
+                  <div class="apTop">
+                    <div>
+                      <h3 class="apName">
+                        yue-codex
+                        <span class="runPill t-implemented"><span class="dot"></span>Running</span>
+                      </h3>
+                      <p class="apMeta">Codex <span class="ver">0.10.0</span> · motir</p>
+                    </div>
+                    <div class="apActions">
+                      <span class="btnGhost"
+                        ><svg aria-hidden="true"><use href="#i-moon" /></svg> Hibernate</span
+                      ><span class="btnGhost isDanger"
+                        ><svg aria-hidden="true"><use href="#i-trash" /></svg> Delete…</span
+                      ><span class="iconBtn" role="img" aria-label="Close yue-codex"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                  <p class="privacyLine">
+                    <svg aria-hidden="true"><use href="#i-lock" /></svg
+                    ><span
+                      >Your sign-in belongs to Codex and stays in this agent’s home. Motir never
+                      sees it.</span
+                    >
+                  </p>
+                </div>
+                <div class="tabRow">
+                  <nav class="tabTrack" aria-label="Agent views">
+                    <span class="tabOn" aria-current="page"
+                      ><span class="tabGlyph" aria-hidden="true"
+                        ><svg aria-hidden="true"><use href="#i-terminal" /></svg></span
+                      >Terminal</span
+                    >
+                  </nav>
+                  <span class="conn"
+                    ><span class="connDot isLive" aria-hidden="true"></span>Live</span
+                  >
+                </div>
+                <div class="term isShort" role="region" aria-label="Terminal">
+                  <div class="termCenter">
+                    <div class="refusal" role="alert">
+                      <svg aria-hidden="true"><use href="#i-alert" /></svg
+                      ><span>This agent already runs the newest version (0.10.0).</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <span class="colLabel">A transitional state</span>
+              <div class="agentPanel" role="region" aria-label="Agent">
+                <div class="apHead">
+                  <div class="apTop">
+                    <div>
+                      <h3 class="apName">
+                        review-bot
+                        <span class="runPill t-running"><span class="dot"></span>Waking</span>
+                      </h3>
+                      <p class="apMeta">OpenCode <span class="ver">0.8.0</span> · motir</p>
+                      <span class="verLine"
+                        ><span class="updMark"
+                          ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg>Update
+                          available → 0.10.0</span
+                        ></span
+                      >
+                    </div>
+                    <div class="apActions">
+                      <span class="btnGhost isPrimary isOff" aria-disabled="true"
+                        ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg>
+                        Update</span
+                      ><span class="btnGhost isDanger isOff" aria-disabled="true"
+                        ><svg aria-hidden="true"><use href="#i-trash" /></svg> Delete…</span
+                      ><span class="iconBtn" role="img" aria-label="Close review-bot"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                  <p class="privacyLine">
+                    <svg aria-hidden="true"><use href="#i-lock" /></svg
+                    ><span
+                      >Your sign-in belongs to OpenCode and stays in this agent’s home. Motir never
+                      sees it.</span
+                    >
+                  </p>
+                </div>
+                <div class="tabRow">
+                  <nav class="tabTrack" aria-label="Agent views">
+                    <span class="tabOn" aria-current="page"
+                      ><span class="tabGlyph" aria-hidden="true"
+                        ><svg aria-hidden="true"><use href="#i-terminal" /></svg></span
+                      >Terminal</span
+                    >
+                  </nav>
+                  <span class="conn"
+                    ><span class="connDot isBusy" aria-hidden="true"></span>Connecting…</span
+                  >
+                </div>
+                <div class="term isShort" role="region" aria-label="Terminal">
+                  <div class="termCenter">
+                    <div class="refusal" role="alert">
+                      <svg aria-hidden="true"><use href="#i-alert" /></svg
+                      ><span>This agent is waking, so it can’t be updated right now.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <span class="colLabel">Could not check (a wait)</span>
+              <div class="agentPanel" role="region" aria-label="Agent">
+                <div class="apHead">
+                  <div class="apTop">
+                    <div>
+                      <h3 class="apName">
+                        review-bot
+                        <span class="runPill t-implemented"><span class="dot"></span>Running</span>
+                      </h3>
+                      <p class="apMeta">OpenCode <span class="ver">0.8.0</span> · motir</p>
+                      <span class="verLine"
+                        ><span class="updMark isUnknown">Could not check for updates</span></span
+                      >
+                    </div>
+                    <div class="apActions">
+                      <span class="btnGhost"
+                        ><svg aria-hidden="true"><use href="#i-moon" /></svg> Hibernate</span
+                      ><span class="btnGhost isDanger"
+                        ><svg aria-hidden="true"><use href="#i-trash" /></svg> Delete…</span
+                      ><span class="iconBtn" role="img" aria-label="Close review-bot"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                  <p class="privacyLine">
+                    <svg aria-hidden="true"><use href="#i-lock" /></svg
+                    ><span
+                      >Your sign-in belongs to OpenCode and stays in this agent’s home. Motir never
+                      sees it.</span
+                    >
+                  </p>
+                </div>
+                <div class="tabRow">
+                  <nav class="tabTrack" aria-label="Agent views">
+                    <span class="tabOn" aria-current="page"
+                      ><span class="tabGlyph" aria-hidden="true"
+                        ><svg aria-hidden="true"><use href="#i-terminal" /></svg></span
+                      >Terminal</span
+                    >
+                  </nav>
+                  <span class="conn"
+                    ><span class="connDot isLive" aria-hidden="true"></span>Live</span
+                  >
+                </div>
+                <div class="term isShort" role="region" aria-label="Terminal">
+                  <div class="termCenter">
+                    <div class="refusal isWait" role="alert">
+                      <svg aria-hidden="true"><use href="#i-alert" /></svg
+                      ><span
+                        >Motir couldn’t check for a newer version just now. Try again in a few
+                        minutes.</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">7</span>FAILED AND ROLLED BACK — back on the old version, the
+          reason in words, the update still offered.
+        </h2>
+        <p class="panelNote">
+          When the new image fails its check, the agent is
+          <strong>Running on its previous version</strong> (decision Q4). The reason sits under the
+          version line in the base asset’s <span class="font-mono">.reason</span> style (danger on
+          surface, AA), and <strong>Update</strong> stays, so the owner can try again once a fixed
+          release lands. If the rollback itself fails the agent is <em>Failed</em> with that reason
+          — MOTIR-6937 panel 4’s failed face, unchanged, with its Wake.
+        </p>
+        <div class="stage stageSplit">
+          <div class="faceGrid">
+            <div>
+              <span class="colLabel">Rolled back</span>
+              <div class="agentPanel" role="region" aria-label="Agent">
+                <div class="apHead">
+                  <div class="apTop">
+                    <div>
+                      <h3 class="apName">
+                        night-shift
+                        <span class="runPill t-implemented"><span class="dot"></span>Running</span>
+                      </h3>
+                      <p class="apMeta">Claude Code <span class="ver">0.9.0</span> · motir</p>
+                      <span class="verLine"
+                        ><span class="updMark"
+                          ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg>Update
+                          available → 0.10.0</span
+                        ></span
+                      >
+                      <span class="reason"
+                        >The update to 0.10.0 didn’t work: claude --version exited 127. Your agent
+                        is back on 0.9.0.</span
+                      >
+                    </div>
+                    <div class="apActions">
+                      <span class="btnGhost isPrimary"
+                        ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg>
+                        Update</span
+                      ><span class="btnGhost"
+                        ><svg aria-hidden="true"><use href="#i-moon" /></svg> Hibernate</span
+                      ><span class="btnGhost isDanger"
+                        ><svg aria-hidden="true"><use href="#i-trash" /></svg> Delete…</span
+                      ><span class="iconBtn" role="img" aria-label="Close night-shift"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                  <p class="privacyLine">
+                    <svg aria-hidden="true"><use href="#i-lock" /></svg
+                    ><span
+                      >Your sign-in belongs to Claude Code and stays in this agent’s home. Motir
+                      never sees it.</span
+                    >
+                  </p>
+                </div>
+                <div class="tabRow">
+                  <nav class="tabTrack" aria-label="Agent views">
+                    <span class="tabOn" aria-current="page"
+                      ><span class="tabGlyph" aria-hidden="true"
+                        ><svg aria-hidden="true"><use href="#i-terminal" /></svg></span
+                      >Terminal</span
+                    >
+                  </nav>
+                  <span class="conn"
+                    ><span class="connDot isLive" aria-hidden="true"></span>Live</span
+                  >
+                </div>
+                <div class="term isShort" role="region" aria-label="Terminal">
+                  <pre><span class="ps">node@night-shift:~/workspace$</span> <span class="caret"></span></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">8</span>IMAGE TOO OLD — its call to action becomes Update.
+        </h2>
+        <p class="panelNote">
+          MOTIR-6937 panel 6 drew <em>This agent can’t open a terminal yet</em> with no action,
+          pointing at this story. Where an update is available, the terminal area now offers
+          <strong>Update to &lt;version&gt;</strong>, which opens the same confirmation (panel 3).
+          Where none is (the registry could not be checked), the base copy stands.
+        </p>
+        <div class="stage stageSplit">
+          <div class="faceGrid">
+            <div>
+              <span class="colLabel">Image too old, update available</span>
+              <div class="agentPanel" role="region" aria-label="Agent">
+                <div class="apHead">
+                  <div class="apTop">
+                    <div>
+                      <h3 class="apName">
+                        early-bird
+                        <span class="runPill t-implemented"><span class="dot"></span>Running</span>
+                      </h3>
+                      <p class="apMeta">Claude Code <span class="ver">0.3.0</span> · motir</p>
+                      <span class="verLine"
+                        ><span class="updMark"
+                          ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg>Update
+                          available → 0.10.0</span
+                        ></span
+                      >
+                    </div>
+                    <div class="apActions">
+                      <span class="btnGhost isPrimary"
+                        ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg>
+                        Update</span
+                      ><span class="btnGhost"
+                        ><svg aria-hidden="true"><use href="#i-moon" /></svg> Hibernate</span
+                      ><span class="btnGhost isDanger"
+                        ><svg aria-hidden="true"><use href="#i-trash" /></svg> Delete…</span
+                      ><span class="iconBtn" role="img" aria-label="Close early-bird"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                  <p class="privacyLine">
+                    <svg aria-hidden="true"><use href="#i-lock" /></svg
+                    ><span
+                      >Your sign-in belongs to Claude Code and stays in this agent’s home. Motir
+                      never sees it.</span
+                    >
+                  </p>
+                </div>
+                <div class="tabRow">
+                  <nav class="tabTrack" aria-label="Agent views">
+                    <span class="tabOn" aria-current="page"
+                      ><span class="tabGlyph" aria-hidden="true"
+                        ><svg aria-hidden="true"><use href="#i-terminal" /></svg></span
+                      >Terminal</span
+                    >
+                  </nav>
+                  <span class="conn"
+                    ><span class="connDot isEnded" aria-hidden="true"></span>Unavailable</span
+                  >
+                </div>
+                <div class="term isShort" role="region" aria-label="Terminal">
+                  <div class="termCenter">
+                    <svg aria-hidden="true"><use href="#i-package" /></svg
+                    ><strong>This agent can’t open a terminal yet</strong
+                    ><span
+                      >It was made from an older image, from before the terminal existed. Update it
+                      to 0.10.0 to get the terminal. Its home and sign-in are kept.</span
+                    ><span class="btnGhost isPrimary"
+                      ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg> Update to
+                      0.10.0</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">9</span>THE NARROW WIDTH — the marker under the name, Update first
+          among the wrapped actions.
+        </h2>
+        <p class="panelNote">
+          At the narrow width the panel takes the whole view (MOTIR-6937 panel 7). The version line
+          and marker wrap under the meta line; the actions wrap under the name with
+          <strong>Update</strong> first. The list’s narrow cards carry the same version line under
+          the coding agent.
+        </p>
+        <div class="stage narrowStage">
+          <div class="addr">
+            <svg aria-hidden="true"><use href="#i-link" /></svg
+            ><span>/my-agents?agent=cmzq4r8…</span>
+          </div>
+          <div class="agentPanel" role="region" aria-label="Agent">
+            <div class="apHead">
+              <a class="crumb" href="#"
+                ><svg aria-hidden="true"><use href="#i-arrow-left" /></svg> My agents</a
+              >
+              <div class="apTop">
+                <div>
+                  <h3 class="apName">
+                    yue-claude
+                    <span class="runPill t-implemented"><span class="dot"></span>Running</span>
+                  </h3>
+                  <p class="apMeta">Claude Code <span class="ver">0.9.0</span> · motir</p>
+                  <span class="verLine"
+                    ><span class="updMark"
+                      ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg>Update
+                      available → 0.10.0</span
+                    ></span
+                  >
+                </div>
+                <span class="iconBtn" role="img" aria-label="Close yue-claude"
+                  ><svg aria-hidden="true"><use href="#i-x" /></svg
+                ></span>
+              </div>
+              <div class="apActions">
+                <span class="btnGhost isPrimary"
+                  ><svg aria-hidden="true"><use href="#i-arrow-up-circle" /></svg> Update</span
+                ><span class="btnGhost"
+                  ><svg aria-hidden="true"><use href="#i-moon" /></svg> Hibernate</span
+                ><span class="btnGhost isDanger"
+                  ><svg aria-hidden="true"><use href="#i-trash" /></svg> Delete…</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="cardRow isClickable" style="margin-top: 1rem">
+            <div class="cardTop">
+              <span class="cardName">yue-codex</span
+              ><span class="iconBtn" role="img" aria-label="Actions for yue-codex"
+                ><svg aria-hidden="true"><use href="#i-more" /></svg
+              ></span>
+            </div>
+            <div class="cardTop">
+              <span class="dim">Codex · motir</span
+              ><span class="runPill t-cancelled"><span class="dot"></span>Hibernated</span>
+            </div>
+            <span class="verLine"
+              ><span class="ver">0.9.0</span
+              ><span class="updMark isPending"
+                ><svg aria-hidden="true"><use href="#i-refresh" /></svg>0.10.0 on next wake</span
+              ></span
+            >
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

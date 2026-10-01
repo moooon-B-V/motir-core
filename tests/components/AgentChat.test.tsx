@@ -140,6 +140,10 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
     activeRun: null,
     lastRun: null,
     scheduledDeletionAt: null,
+    imageVersion: '1.0.0',
+    update: null,
+    pendingImageVersion: null,
+    updateFailureReason: null,
     ...over,
   };
 }

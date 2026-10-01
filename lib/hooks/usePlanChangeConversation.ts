@@ -318,17 +318,20 @@ export interface PlanChangeConversationState {
   /**
    * The work item each ask turn SENT FROM HERE was anchored on, by user-turn id
    * (MOTIR-7050) — the report widget's triage bug on its seeded debug turn. The
-   * rail draws it as the turn's target row. Client-held because the turn DTO does
-   * not carry the anchor: a reloaded thread keeps the words and loses the chip.
-   * Optional so a state built by hand (every rail test) needs no change.
+   * rail draws it as the turn's target row. The send-time SEED only: the turn
+   * DTO carries the persisted anchor (`anchorKey`, MOTIR-7064) and the rail reads
+   * that first, so a reloaded thread keeps the chip; this covers a turn whose DTO
+   * has not come back with one. Optional so a state built by hand (every rail
+   * test) needs no change.
    */
   turnAnchors?: Readonly<Record<string, string>>;
   /**
    * What each DEBUG turn landed, by its `debug_bug` job id (MOTIR-7049's settle,
    * rendered by MOTIR-7050) — the one card written, or none. The assistant turn
    * carrying the diagnosis shares that job id, so the rail finds its OUTCOME LINE
-   * here. Client-held for the same reason as {@link turnAnchors}: the landing is
-   * the settle's answer, not a field of the persisted turn.
+   * here as the FALLBACK: the reply turn's DTO carries the persisted landing
+   * (`debugLanding`, MOTIR-7064), which the rail reads first and a reload keeps.
+   * Kept as the fallback for a state built without it (every rail test).
    */
   debugLandings?: Readonly<Record<string, DebugLandingDto>>;
 }
@@ -1701,8 +1704,13 @@ export function usePlanChangeConversation({
         outOfCredits: false,
       }));
       // The turn keeps its anchor through a correction too: "Answer this
-      // instead" under a diagnosis answers about the same triage bug.
-      const anchorKey = stateRef.current.turnAnchors?.[turnId] ?? null;
+      // instead" under a diagnosis answers about the same triage bug. The
+      // PERSISTED anchor first (MOTIR-7064), so a correction after a reload
+      // still carries it.
+      const anchorKey =
+        stateRef.current.session?.turns.find((t) => t.id === turnId)?.anchorKey ??
+        stateRef.current.turnAnchors?.[turnId] ??
+        null;
       await runAsk(
         (signal) =>
           rerunAskTurn(

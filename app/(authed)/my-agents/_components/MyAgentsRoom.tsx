@@ -21,7 +21,9 @@ import { formatDate } from '@/lib/utils/datetime';
 import { AgentPanel, TAB_PARAM, type AgentPanelActions, type AgentPanelTab } from './AgentPanel';
 import { AgentRowMenu } from './AgentRowMenu';
 import { CreateAgentDialog, type OfferedProfile } from './CreateAgentDialog';
+import { AgentImageVersion } from './AgentImageVersion';
 import { DeleteAgentDialog } from './DeleteAgentDialog';
+import { UpdateAgentDialog } from './UpdateAgentDialog';
 import { RefusalBox, useAgentRefusal, type AgentRefusal } from './agentRefusal';
 
 // THE MY AGENTS ROOM (Story MOTIR-6860 · MOTIR-6874) — the client island behind
@@ -66,7 +68,11 @@ const POLL_MS = 2_000;
  */
 export const RUN_POLL_MS = 5_000;
 
-type Action = { kind: 'create' } | { kind: 'move'; id: string } | { kind: 'delete'; id: string };
+type Action =
+  | { kind: 'create' }
+  | { kind: 'move'; id: string }
+  | { kind: 'delete'; id: string }
+  | { kind: 'update'; id: string };
 
 export function MyAgentsRoom({
   projectKey,
@@ -99,6 +105,8 @@ export function MyAgentsRoom({
   const [pending, setPending] = useState<Action | null>(null);
   const [createRefusal, setCreateRefusal] = useState<AgentRefusal | null>(null);
   const [deleteRefusal, setDeleteRefusal] = useState<AgentRefusal | null>(null);
+  const [updateTarget, setUpdateTarget] = useState<AgentInstanceListItemDto | null>(null);
+  const [updateRefusal, setUpdateRefusal] = useState<AgentRefusal | null>(null);
   const [listRefusal, setListRefusal] = useState<AgentRefusal | null>(null);
   /** The agent the list's refusal is about: shown in its panel when that one is open. */
   const [listRefusalFor, setListRefusalFor] = useState<string | null>(null);
@@ -237,6 +245,34 @@ export function MyAgentsRoom({
     await load();
   }
 
+  /**
+   * UPDATE (MOTIR-6953, `agent-image-update.md` Q2–Q8): one call, then the
+   * server's answer. The dialog closes and the list re-reads itself; while the
+   * agent is `updating` the page polls it (AGENT_STATES_IN_MOTION) until it is
+   * back — never an optimistic "updated".
+   */
+  async function onConfirmUpdate() {
+    if (!updateTarget) return;
+    const target = updateTarget;
+    setPending({ kind: 'update', id: target.id });
+    const result = await send(`${base}/${encodeURIComponent(target.id)}/update`, {
+      method: 'POST',
+    });
+    setPending(null);
+    if (!result.ok) {
+      setUpdateRefusal(refusalFor(result.body, target.name, 'update', target.state));
+      await load();
+      return;
+    }
+    setUpdateTarget(null);
+    await load();
+  }
+
+  const openUpdate = useCallback((row: AgentInstanceListItemDto) => {
+    setUpdateRefusal(null);
+    setUpdateTarget(row);
+  }, []);
+
   // The panel's own doors, all through this island so the list re-reads itself.
   const onMoveRef = useRef(onMove);
   useLayoutEffect(() => {
@@ -247,6 +283,7 @@ export function MyAgentsRoom({
       onClose: closeAgent,
       onHibernate: (row) => void onMoveRef.current(row, 'hibernate'),
       onDelete: (row) => void onMoveRef.current(row, 'delete'),
+      onUpdate: openUpdate,
       onWake: async (row) => {
         const result = await send(`${base}/${encodeURIComponent(row.id)}/wake`, {
           method: 'POST',
@@ -259,7 +296,7 @@ export function MyAgentsRoom({
     // `refusalFor` is rebuilt each render from the same translator; the doors
     // need only the routes and the list's reader.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [base, closeAgent, load],
+    [base, closeAgent, load, openUpdate],
   );
 
   const total = data?.total ?? 0;
@@ -365,6 +402,15 @@ export function MyAgentsRoom({
         storageCreditsPerDay={storageCreditsPerDay}
         onCreate={(input) => void onCreate(input)}
       />
+      <UpdateAgentDialog
+        agent={updateTarget}
+        onOpenChange={(open) => {
+          if (!open) setUpdateTarget(null);
+        }}
+        pending={pending?.kind === 'update'}
+        refusal={updateRefusal}
+        onConfirm={() => void onConfirmUpdate()}
+      />
       <DeleteAgentDialog
         name={deleteTarget?.name ?? null}
         onOpenChange={(open) => {
@@ -389,6 +435,16 @@ function useRowLine() {
         text: reason.includes(wayOut) ? reason : `${reason} ${wayOut}`.trim(),
         danger: true,
       };
+    }
+    if (row.state === 'updating') {
+      return {
+        text: t('update.updating.title', { to: row.pendingImageVersion ?? '' }),
+        danger: false,
+      };
+    }
+    // The update delta, panel 2: a rolled-back agent says why, under its name.
+    if (row.state === 'running' && row.updateFailureReason) {
+      return { text: row.updateFailureReason, danger: true };
     }
     if (row.state === 'hibernated' && row.stopReason) {
       return { text: t(`stop.${row.stopReason}`), danger: false };
@@ -542,6 +598,7 @@ function AgentTable({
               </td>
               <td className={`${td} text-sm whitespace-nowrap text-(--el-text)`}>
                 {row.profileName}
+                <AgentImageVersion agent={row} />
               </td>
               <td className={`${td} text-sm whitespace-nowrap text-(--el-text-secondary)`}>
                 {projectName}
@@ -630,6 +687,7 @@ function AgentCards({
             </span>
             <RunTonePill tone={AGENT_STATE_TONE[row.state]}>{t(`state.${row.state}`)}</RunTonePill>
           </div>
+          <AgentImageVersion agent={row} />
           <div className="flex items-center justify-between gap-2 text-sm text-(--el-text-secondary)">
             <span>{t('thisMonth', { time: formatMachineTime(row.machineSecondsThisMonth) })}</span>
             <span>{t('creditsCount', { count: row.creditsThisMonth })}</span>

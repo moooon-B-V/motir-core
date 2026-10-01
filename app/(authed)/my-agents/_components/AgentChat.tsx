@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   CircleAlert,
+  CircleArrowUp,
   LoaderCircle,
   Lock,
   MessageSquare,
@@ -105,6 +106,7 @@ export function useChatArea({
   lifecycle,
   chat,
   onOpenTerminal,
+  onUpdate,
   reconnect,
 }: {
   agent: AgentInstanceListItemDto;
@@ -114,9 +116,12 @@ export function useChatArea({
   lifecycle: TabArea | null;
   chat: Chat;
   onOpenTerminal: () => void;
+  /** Open the Update confirmation — the no-chat-server face's way out (MOTIR-6953). */
+  onUpdate: () => void;
   reconnect: () => void;
 }): TabArea {
   const t = useTranslations('myAgents.panel');
+  const tUpdate = useTranslations('myAgents.update');
   if (lifecycle) return lifecycle;
 
   const conn = chat.conn;
@@ -131,7 +136,19 @@ export function useChatArea({
           icon={<Package className={FACE_ICON} aria-hidden="true" />}
           title={t('chat.noServer.title')}
         >
-          <span className="max-w-[30rem]">{t('chat.noServer.body')}</span>
+          {agent.update && agent.update !== 'unknown' ? (
+            // The way out is the update, where one is offered (as on the terminal's face).
+            <>
+              <span className="max-w-[30rem]">
+                {t('chat.noServer.update', { to: agent.update.version })}
+              </span>
+              <Button size="sm" leftIcon={<CircleArrowUp aria-hidden="true" />} onClick={onUpdate}>
+                {tUpdate('actionTo', { to: agent.update.version })}
+              </Button>
+            </>
+          ) : (
+            <span className="max-w-[30rem]">{t('chat.noServer.body')}</span>
+          )}
         </ChatFace>
       ),
     };

@@ -65,6 +65,29 @@ export function profileCanRunCards(profileId: string): boolean {
   return RUNNABLE_AGENT_PROFILE_IDS.includes(profileId);
 }
 
+/**
+ * Each offered profile's LIVENESS command (`agent-image-update.md` Q3,
+ * MOTIR-6952): what an image update runs inside the new image before it keeps
+ * it — exit 0 within the bound means the coding agent runs. A copy of
+ * `packages/cli/sandbox/smoke/profiles.json`'s `liveness`, which the image's own
+ * release smoke runs; `tests/agentInstances/agentInstanceUpdate.test.ts` fails
+ * the moment the two disagree. Data on the `lib` side, never imported from
+ * `packages/cli` (the note below).
+ */
+export const AGENT_LIVENESS_COMMANDS: Readonly<Record<string, readonly string[]>> = {
+  claude: ['claude', '--version'],
+  codex: ['codex', '--version'],
+  opencode: ['opencode', '--version'],
+  kimi: ['kimi', '--version'],
+  aider: ['aider', '--version'],
+  goose: ['goose', '--version'],
+};
+
+/** The liveness command for a profile; an unknown profile is checked with `motir --version`. */
+export function livenessCommandFor(profileId: string): readonly string[] {
+  return AGENT_LIVENESS_COMMANDS[profileId] ?? ['motir', '--version'];
+}
+
 /** The published sandbox image repository (public; `fleet-image-pull.md` §0). */
 export const SANDBOX_IMAGE_REPOSITORY = 'ghcr.io/moooon-b-v/motir-sandbox';
 

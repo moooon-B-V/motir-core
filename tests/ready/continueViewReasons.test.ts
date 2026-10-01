@@ -182,20 +182,59 @@ describe('the died reason of a run closed by its real end path (MOTIR-7061)', ()
 });
 
 describe('endedHow (the CONTINUE prompt’s sentence)', () => {
-  it.each<[Ending, RegExp]>([
-    [{ status: 'running', stopReason: null, origin: 'local' }, /stopped reporting/],
-    [{ status: 'timed_out', stopReason: 'abandoned', origin: 'local' }, /stopped reporting/],
+  // The prompt-level rows driven through the REAL end paths are in
+  // `tests/dispatch/dispatchPromptContinue.test.ts` (MOTIR-7085); this is the
+  // sentence table over the `timeout` its caller resolves.
+  it.each<[Ending, 'stalled' | 'backstop' | null, RegExp]>([
+    [{ status: 'running', stopReason: null, origin: 'local' }, null, /stopped reporting/],
+    [{ status: 'timed_out', stopReason: 'abandoned', origin: 'local' }, null, /stopped reporting/],
     [
       { status: 'cancelled', stopReason: 'interrupted', origin: 'local' },
+      null,
       /stopped from its terminal/,
     ],
-    [{ status: 'failed', stopReason: null, origin: 'local' }, /exited with an error/],
-    [{ status: 'cancelled', stopReason: null, origin: 'local' }, /was cancelled/],
-    [{ status: 'timed_out', stopReason: null, origin: 'hosted' }, /hosted run stalled/],
-    [{ status: 'timed_out', stopReason: null, origin: 'instance' }, /run in the agent stalled/],
-    [{ status: 'timed_out', stopReason: null, origin: 'local' }, /ended timed_out/],
-  ])('%o', (ending, sentence) => {
-    expect(endedHow(ending)).toMatch(sentence);
+    [{ status: 'failed', stopReason: null, origin: 'local' }, null, /exited with an error/],
+    [{ status: 'cancelled', stopReason: null, origin: 'local' }, null, /was cancelled/],
+    [
+      { status: 'timed_out', stopReason: 'abandoned', origin: 'hosted' },
+      'stalled',
+      /^the hosted run stalled — it produced no output/,
+    ],
+    [
+      { status: 'timed_out', stopReason: 'abandoned', origin: 'hosted' },
+      'backstop',
+      /^the hosted run reached its 12-hour time limit/,
+    ],
+    [
+      { status: 'timed_out', stopReason: 'abandoned', origin: 'instance' },
+      'stalled',
+      /^the run in the agent stalled — it produced no output/,
+    ],
+    [
+      { status: 'timed_out', stopReason: 'abandoned', origin: 'instance' },
+      'backstop',
+      /^the run in the agent reached its 12-hour time limit/,
+    ],
+    // A lapse closes `abandoned` too, and resolves no timeout.
+    [{ status: 'timed_out', stopReason: 'abandoned', origin: 'hosted' }, null, /stopped reporting/],
+    [
+      { status: 'timed_out', stopReason: 'abandoned', origin: 'instance' },
+      null,
+      /stopped reporting/,
+    ],
+    [
+      { status: 'timed_out', stopReason: null, origin: 'hosted' },
+      null,
+      /hosted run stalled or reached its time limit/,
+    ],
+    [
+      { status: 'timed_out', stopReason: null, origin: 'instance' },
+      null,
+      /run in the agent stalled or reached its time limit/,
+    ],
+    [{ status: 'timed_out', stopReason: null, origin: 'local' }, null, /ended timed_out/],
+  ])('%o, timeout %s', (ending, timeout, sentence) => {
+    expect(endedHow(ending, timeout)).toMatch(sentence);
   });
 });
 

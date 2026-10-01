@@ -8918,7 +8918,8 @@
       "hibernated": "Hibernated",
       "waking": "Waking",
       "failed": "Failed",
-      "deleting": "Deleting"
+      "deleting": "Deleting",
+      "updating": "Updating"
     },
     "progress": {
       "starting": "Booting — cloning the project’s repositories into the home",
@@ -9133,7 +9134,8 @@
         },
         "noServer": {
           "title": "This agent can’t chat yet",
-          "body": "It was made from an older image, from before the chat existed. Moving an agent to the newer image — keeping its home and sign-in — is on its way. Until then, its terminal works, and a new agent has the chat."
+          "body": "It was made from an older image, from before the chat existed. Moving an agent to the newer image — keeping its home and sign-in — is on its way. Until then, its terminal works, and a new agent has the chat.",
+          "update": "It was made from an older image, from before the chat existed. Update it to {to} to chat. Its home and sign-in are kept."
         },
         "face": {
           "connecting": "Connecting to {name}’s chat…",
@@ -9155,6 +9157,7 @@
         "offWhy": "Hibernate and Delete are off while a run is working in this agent — cancel the run first.",
         "refusedHibernate": "{name} is running <link>{key}</link>. Cancel that run on the work item first, then hibernate it.",
         "refusedDelete": "{name} is running <link>{key}</link>. Cancel that run on the work item first, then delete it.",
+        "refusedUpdate": "{name} is running <link>{key}</link>. Cancel that run on the work item first, then update it.",
         "sessions": {
           "label": "Terminal sessions",
           "shell": "Your shell",
@@ -9167,6 +9170,39 @@
           "endedFailed": "The run’s session has ended — the run failed. Its work so far is on the run’s branch."
         },
         "backToShell": "Back to your shell"
+      }
+    },
+    "update": {
+      "available": "Update available → {to}",
+      "unknown": "Could not check for updates",
+      "nextWake": "{to} on next wake",
+      "earlierBuild": "an earlier build",
+      "action": "Update",
+      "actionTo": "Update to {to}",
+      "confirm": {
+        "title": "Update {name} to {to}?",
+        "introRunning": "{agent} {from} → {to}. The agent restarts on the new version, which takes about a minute. It keeps:",
+        "introHibernated": "{agent} {from} → {to}. It stays asleep and takes the new version the next time it wakes. It keeps:",
+        "keep1": "its home and every file in it, including the cloned repositories;",
+        "keep2": "its coding agent’s sign-in;",
+        "keep3": "its chat sessions.",
+        "rollback": "If the new version doesn’t start, the agent goes back to {from} and tells you why.",
+        "rollbackWake": "If the new version doesn’t start at that wake, the agent goes back to {from} and tells you why.",
+        "notNow": "Not now",
+        "running": "Update and restart",
+        "hibernated": "Update on next wake"
+      },
+      "updating": {
+        "title": "Updating to {to}",
+        "body": "The agent is restarting on the new version. Your home and sign-in stay where they are."
+      },
+      "imageTooOld": {
+        "body": "It was made from an older image, from before the terminal existed. Update it to {to} to get the terminal. Its home and sign-in are kept."
+      },
+      "refused": {
+        "upToDate": "This agent already runs the newest version ({version}).",
+        "state": "This agent is {state}, so it can’t be updated right now.",
+        "unknown": "Motir couldn’t check for a newer version just now. Try again in a few minutes."
       }
     }
   },

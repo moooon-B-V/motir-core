@@ -1,7 +1,7 @@
 import { Prisma, PrismaClient } from '@/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
-import { setTransactionStallPool } from '@/lib/monitoring/transactionStall';
+import { registerTransactionStallPool } from '@/lib/monitoring/transactionStall';
 
 // Dev-mode singleton: Next.js hot-reload would otherwise create a new
 // PrismaClient on every reload and leak connections. Stash on globalThis
@@ -47,7 +47,9 @@ const created: { client: PrismaClient; pool: Pool | null } = globalForPrisma.pri
 
 export const db = created.client;
 // Hand the pool to the transaction-timeout reporter (it never imports this file).
-setTransactionStallPool(created.pool);
+// It ADDS: the Next server evaluates this module once per Turbopack runtime, each
+// evaluation with its own pool, and the report sums them all (MOTIR-7073).
+if (created.pool) registerTransactionStallPool(created.pool);
 
 /**
  * The `pg.Pool` behind `db` — READ-ONLY use: its occupancy counters
