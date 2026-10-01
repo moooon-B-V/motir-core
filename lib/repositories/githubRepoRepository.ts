@@ -486,6 +486,40 @@ export const githubRepoRepository = {
     return result.count;
   },
 
+  /** Record that the repository's last index was REFUSED FOR SIZE (MOTIR-7129):
+   *  the graph's uncompressed size and the supported maximum, and when. Shown to
+   *  the customer, unlike the pause above. The graph that exists is untouched —
+   *  the refused run published nothing. */
+  async markIndexRefusedForSize(
+    repoRef: string,
+    args: { sizeBytes: number; capBytes: number; at?: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const [owner, name] = splitRepoRef(repoRef);
+    if (!owner) return 0;
+    const result = await tx.githubRepo.updateMany({
+      where: { owner, name },
+      data: {
+        indexRefusedSizeBytes: BigInt(args.sizeBytes),
+        indexRefusedCapBytes: BigInt(args.capBytes),
+        indexRefusedAt: args.at ?? new Date(),
+      },
+    });
+    return result.count;
+  },
+
+  /** Clear a recorded size refusal — a later run indexed (MOTIR-7129). A
+   *  repository with no refusal is not written, so the count is 0 for it. */
+  async clearIndexRefusal(repoRef: string, tx: Prisma.TransactionClient): Promise<number> {
+    const [owner, name] = splitRepoRef(repoRef);
+    if (!owner) return 0;
+    const result = await tx.githubRepo.updateMany({
+      where: { owner, name, indexRefusedAt: { not: null } },
+      data: { indexRefusedSizeBytes: null, indexRefusedCapBytes: null, indexRefusedAt: null },
+    });
+    return result.count;
+  },
+
   /** One repo by its INTERNAL id — the lookup a link write does after a picker
    *  hands back an id it read from `listByOrganization` (MOTIR-4678). Returns
    *  null when the id names nothing the current RLS context admits, which is the

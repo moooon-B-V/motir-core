@@ -71,6 +71,10 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
       // MOTIR-4593's index pause — part of the shape, irrelevant to name resolution.
       indexPausedReason: null,
       indexPausedAt: null,
+      // MOTIR-7129's size refusal — part of the shape, irrelevant to name resolution.
+      indexRefusedSizeBytes: null,
+      indexRefusedCapBytes: null,
+      indexRefusedAt: null,
       id: 'gr-1',
       provider: 'github',
       workspaceId: 'ws-1',

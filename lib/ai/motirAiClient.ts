@@ -1148,7 +1148,35 @@ export interface CodeGraphRunVerdict {
    * absent must read as *nobody measured this*, never as an instantaneous run.
    */
   timings: CodeGraphRunTimings | null;
+  /**
+   * WHY THE RUN FAILED, as motir-ai recorded it (MOTIR-6786 · MOTIR-7129) — `null`
+   * when it recorded no failure, or an older motir-ai that never sends one.
+   *
+   * ⚠️ IT DESCRIBES THE RUN'S LATEST FAILED ATTEMPT, AND A LATER PUBLISH DOES NOT
+   * CLEAR IT: a non-null `indexMode` beside it means the run was re-dispatched and
+   * published in the end. Read the two together.
+   */
+  failure: CodeGraphRunFailure | null;
 }
+
+/**
+ * One run's recorded failure (MOTIR-7129). `failureClass` is motir-ai's: the
+ * container's exit-code classes (`UPLOAD`, `GRANT`, `BUILD`, …) and motir-ai's own
+ * `GRAPH_TOO_LARGE` (MOTIR-7127), the one class that carries the two sizes.
+ */
+export interface CodeGraphRunFailure {
+  failureClass: string;
+  message: string;
+  /** Null when the request never got a response. */
+  httpStatus: number | null;
+  /** The graph's uncompressed size, in bytes — only on `GRAPH_TOO_LARGE`. */
+  sizeBytes: number | null;
+  /** The supported maximum it was refused against — only on `GRAPH_TOO_LARGE`. */
+  capBytes: number | null;
+}
+
+/** The class motir-ai records when the upload grant refuses a graph for size (MOTIR-7127). */
+export const GRAPH_TOO_LARGE_FAILURE = 'GRAPH_TOO_LARGE';
 
 /**
  * One run's self-measured cost, as motir-ai stored it (MOTIR-5101).
@@ -1233,6 +1261,7 @@ export async function fetchCodeGraphRunVerdict(input: {
         ? verdict.fallbackReason
         : null;
     const timings = parseRunTimings(verdict.timings);
+    const failure = parseRunFailure(verdict.failure);
 
     // A body that carries NOTHING tells us nothing — report it as absent rather
     // than as a verdict whose every field is null, so the caller has one shape to
@@ -1244,7 +1273,15 @@ export async function fetchCodeGraphRunVerdict(input: {
     // unrecognised, which motir-ai stores as `null` by design — carries a
     // perfectly good measurement, and the old two-term test threw the whole
     // verdict away before anyone could read it.
-    if (indexMode === null && fallbackReason === null && timings === null) return null;
+    //
+    // ⚠️ AND SO IS THE FAILURE SINCE MOTIR-7129, for the same reason: a failed run
+    // never publishes, so its verdict carries no mode, no reason and no timings —
+    // the three-term test returned `null` for EVERY failed run and the failure
+    // motir-ai has stored since MOTIR-6786 never reached this side. A body with
+    // none of the four is still `null`.
+    if (indexMode === null && fallbackReason === null && timings === null && failure === null) {
+      return null;
+    }
 
     return {
       repoRef: typeof verdict.repoRef === 'string' ? verdict.repoRef : input.repoRef,
@@ -1253,6 +1290,7 @@ export async function fetchCodeGraphRunVerdict(input: {
       indexMode,
       fallbackReason,
       timings,
+      failure,
     };
   } catch {
     // Deliberately total. See the doc block: a settled run must not fail on a
@@ -1260,6 +1298,33 @@ export async function fetchCodeGraphRunVerdict(input: {
     // that has nothing to report — both mean "no container mode recorded".
     return null;
   }
+}
+
+/**
+ * The `failure` half of a verdict body, validated field by field (MOTIR-7129).
+ *
+ * The same discipline as {@link parseRunTimings}: a field of the wrong type becomes
+ * `null`, never a coerced value. A failure needs a class and a message to be one at
+ * all, so a body missing either is no failure; every other field is kept or
+ * nulled on its own. A size must be a finite, non-negative number — the numbers
+ * reach a customer-facing row (`GithubRepo.indexRefusedSizeBytes`).
+ */
+function parseRunFailure(value: unknown): CodeGraphRunFailure | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw['failureClass'] !== 'string' || raw['failureClass'].length === 0) return null;
+  if (typeof raw['message'] !== 'string') return null;
+
+  const size = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null;
+  const httpStatus = raw['httpStatus'];
+  return {
+    failureClass: raw['failureClass'],
+    message: raw['message'],
+    httpStatus: typeof httpStatus === 'number' && Number.isInteger(httpStatus) ? httpStatus : null,
+    sizeBytes: size(raw['sizeBytes']),
+    capBytes: size(raw['capBytes']),
+  };
 }
 
 /**

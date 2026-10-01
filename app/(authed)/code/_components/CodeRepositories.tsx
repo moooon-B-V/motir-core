@@ -1,11 +1,12 @@
 import Link from 'next/link';
-import { getTranslations } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { FolderGit2, TriangleAlert } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { GithubMark } from '@/components/icons/GithubMark';
 import { GitlabMark } from '@/components/icons/GitlabMark';
 import type { CodeContextRepoDTO } from '@/lib/dto/codeContext';
+import { formatGraphSize } from '@/lib/codeGraph/formatGraphSize';
 
 // THE REPOSITORIES SECTION (Story MOTIR-1754 · MOTIR-1768).
 //
@@ -93,6 +94,10 @@ function driftLine(
  * others — `refreshIsStuck` is the one place that judgement is made.
  */
 function notUpdatingLine(repo: CodeContextRepoDTO, t: (k: string) => string): string | null {
+  // ⚠️ A SIZE REFUSAL REPLACES THIS LINE (MOTIR-7132, design/code-context §17.3).
+  // A refused run fails, so `refreshFailing` is true on every refused row too,
+  // and a row carries ONE warning — the specific one.
+  if (repo.graphTooLarge !== null) return null;
   // Only a graph that EXISTS can fail to update. `never` has its own chip and
   // its own answer — the first index is the connect path's, not a refresh.
   if (repo.indexState === 'never' || repo.indexState === 'indexing') return null;
@@ -100,8 +105,55 @@ function notUpdatingLine(repo: CodeContextRepoDTO, t: (k: string) => string): st
   return t('notUpdating');
 }
 
+/**
+ * ⚠️ THE LAST INDEX WAS REFUSED FOR SIZE, AND THE ROW SAYS WHY (Story MOTIR-7092 ·
+ * MOTIR-7132; design/code-context §17, `code-context--graph-too-large.mock.html`).
+ *
+ * A full-width block, the row's LAST child: the title in the warning ink with the
+ * shipped `TriangleAlert` (the same register as the `notUpdating` line it
+ * replaces — the graph Motir plans against still exists, so not red), then the
+ * last-graph sentence and the remedy in the secondary ink.
+ *
+ * Rendered in EVERY pill state, `indexing` included: the run may be refused
+ * again, and the title is past tense, so it stays true until a run indexes and
+ * the settle clears it (§17.6). In `never` there is no last graph, so that
+ * sentence is left out (§17.4). Like §10.1's line, it promises nothing about when.
+ */
+function RefusedForSizeBlock({
+  repo,
+  refusal,
+  locale,
+  t,
+}: {
+  repo: CodeContextRepoDTO;
+  refusal: NonNullable<CodeContextRepoDTO['graphTooLarge']>;
+  locale: string;
+  t: Awaited<ReturnType<typeof getTranslations<'code.repositories'>>>;
+}) {
+  return (
+    <div className="flex basis-full items-start gap-1.5 font-sans text-sm">
+      <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-(--el-warning)" aria-hidden />
+      <div className="flex min-w-0 flex-col gap-1">
+        <p className="text-(--el-warning-text)">
+          {t('refusedForSize.title', {
+            size: formatGraphSize(refusal.sizeBytes, locale),
+            cap: formatGraphSize(refusal.capBytes, locale),
+          })}
+        </p>
+        <p className="text-(--el-text-secondary)">
+          {repo.indexState === 'never' ? null : <>{t('refusedForSize.lastGraph')} </>}
+          {t.rich('refusedForSize.remedy', {
+            code: (chunks) => <code className="font-mono text-xs text-(--el-text)">{chunks}</code>,
+          })}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export async function CodeRepositories({ repos }: { repos: CodeContextRepoDTO[] }) {
   const t = await getTranslations('code.repositories');
+  const locale = await getLocale();
   const labels = {
     indexed: t('index.indexed'),
     stale: t('index.stale'),
@@ -177,6 +229,15 @@ export async function CodeRepositories({ repos }: { repos: CodeContextRepoDTO[] 
                   <TriangleAlert className="h-3.5 w-3.5 text-(--el-warning)" aria-hidden />
                   {notUpdating}
                 </span>
+              ) : null}
+
+              {repo.graphTooLarge !== null ? (
+                <RefusedForSizeBlock
+                  repo={repo}
+                  refusal={repo.graphTooLarge}
+                  locale={locale}
+                  t={t}
+                />
               ) : null}
             </li>
           );
