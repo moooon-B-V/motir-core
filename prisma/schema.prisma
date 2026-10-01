@@ -8545,6 +8545,24 @@ model PlanChangeTurn {
   /// its own transaction, so nothing committed; a claim that outlives a crash
   /// stays set — the landing fails CLOSED rather than filing a second bug.
   debugLandingClaimedAt DateTime?             @map("debug_landing_claimed_at")
+  /// The work item a `user` turn was ANCHORED on (MOTIR-7064; ADR AMENDMENT 1 ·
+  /// A1.2) — the report widget's triage bug on its seeded debug turn — as the
+  /// IDENTIFIER the ask door resolved it to ("MOTIR-812"), never the raw string
+  /// the client posted. The rail draws it as the turn's target chip, so a
+  /// reloaded thread keeps the chip as well as the words. Null on every other
+  /// role and on an unanchored turn (the orb, an ordinary question). An
+  /// IDENTIFIER, not an FK, for the reason `citations` gives: the record of what
+  /// the turn was about must not cascade away with the card.
+  anchorKey             String?               @map("anchor_key")
+  /// What a `debug` turn LANDED (MOTIR-7064; ADR AMENDMENT 1 · A1.4), on the
+  /// `assistant` turn that carries its diagnosis — `{ outcome, workItemKey,
+  /// title, createdInTriage }`, the settle's `DebugLandingDto` as it was when
+  /// the reply was appended (the title is that moment's; the rail prefers the
+  /// thread's live reference). Written in the SAME append as the reply, so a
+  /// reply never exists without it. It is what renders the turn's outcome line
+  /// after a reload. Null on every other turn — every non-debug reply, and every
+  /// `user` / `system` turn.
+  debugLanding          Json?                 @map("debug_landing")
   /// The work items an `assistant` ANSWER rests on, as work-item IDENTIFIERS
   /// ("MOTIR-812"), in the order the answer cites them. Empty on every other
   /// role and on an answer the graphs could not support.

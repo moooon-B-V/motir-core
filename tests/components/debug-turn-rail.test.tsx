@@ -389,8 +389,9 @@ describe('the debug turn, FINISHED — the outcome line (panels 2–4)', () => {
   });
 
   it('draws the ordinary answer foot for a debug reply the rail holds no landing for', () => {
-    // A reloaded thread: the turn DTO carries no landing, so the reply reads as
-    // an ordinary cited answer rather than inventing an outcome.
+    // Neither the turn DTO nor the hook carries a landing (a reply written before
+    // MOTIR-7064 persisted one), so the reply reads as an ordinary cited answer
+    // rather than inventing an outcome.
     const state = debugged({
       outcome: 'diagnose',
       workItemKey: 'PROD-412',
@@ -399,6 +400,109 @@ describe('the debug turn, FINISHED — the outcome line (panels 2–4)', () => {
     });
     renderRail({ session: state.session });
 
+    expect(screen.queryByTestId('plan-change-debug-outcome')).toBeNull();
+    expect(screen.getByTestId('plan-change-citation-count').textContent).toBe(
+      'Answered from 1 work item',
+    );
+  });
+});
+
+// MOTIR-7064 — a RELOADED thread. The hook's in-memory seed (`turnAnchors`) and
+// the settle's landing (`debugLandings`) are gone; only the session DTO the
+// reload read is left, so the chip and the outcome line must come from the turns.
+describe('the debug turn after a RELOAD — drawn from the turn DTOs alone', () => {
+  /** The thread as the server returns it: the anchor on the user turn, the
+   *  landing on the reply — and nothing in the hook's client-held state. */
+  function reloadedThread(landing: DebugLandingDto, anchorKey: string | null) {
+    const user = turn('user', REPORT, { jobId: 'debug-1', intent: 'debug', anchorKey });
+    const reply = turn('assistant', '**Likely cause:** the drop handler clamps the column index.', {
+      jobId: 'debug-1',
+      citations: landing.workItemKey ? [landing.workItemKey] : [],
+      debugLanding: landing,
+    });
+    return { session: session([user, reply]) };
+  }
+
+  it.each<[string, DebugLandingDto, string | null, string]>([
+    [
+      'diagnose onto the anchor',
+      {
+        outcome: 'diagnose',
+        workItemKey: 'PROD-412',
+        title: 'Board drag drops the card one column short',
+        createdInTriage: false,
+      },
+      'PROD-412',
+      'Wrote the diagnosis onto PROD-412Board drag drops the card one column short. It stays in Triage, and nothing else changed.',
+    ],
+    [
+      'diagnose from the orb',
+      {
+        outcome: 'diagnose',
+        workItemKey: 'PROD-414',
+        title: 'Drag drops one column short',
+        createdInTriage: true,
+      },
+      null,
+      'Filed PROD-414Drag drops one column short in Triage with the diagnosis. Nothing else changed.',
+    ],
+    [
+      'enrich_existing on the widget path',
+      {
+        outcome: 'enrich_existing',
+        workItemKey: 'PROD-318',
+        title: 'Last board column rejects drops',
+        createdInTriage: false,
+      },
+      'PROD-412',
+      'Added the diagnosis to PROD-318Last board column rejects drops, which already covers this bug. Nothing new was filed, and PROD-412 is left as it is.',
+    ],
+    [
+      'ungrounded',
+      { outcome: 'ungrounded', workItemKey: null, title: null, createdInTriage: false },
+      'PROD-412',
+      "Couldn't trace this to the code, so nothing was written.",
+    ],
+  ])('%s: the same outcome line as before the reload', (_label, landing, anchorKey, text) => {
+    renderRail(reloadedThread(landing, anchorKey));
+
+    const line = screen.getByTestId('plan-change-debug-outcome');
+    expect(line.getAttribute('data-outcome')).toBe(landing.outcome);
+    expect(line.textContent).toBe(text);
+    expect(screen.queryByTestId('plan-change-citation-count')).toBeNull();
+  });
+
+  it('puts the persisted anchor on the user turn as its key chip', () => {
+    renderRail(
+      reloadedThread(
+        {
+          outcome: 'diagnose',
+          workItemKey: 'PROD-412',
+          title: 'Board drag drops the card one column short',
+          createdInTriage: false,
+        },
+        'PROD-412',
+      ),
+    );
+    expect(screen.getByText('Targeting 1 item')).toBeTruthy();
+  });
+
+  it('an ordinary ask thread (no anchor, no landing) renders exactly as before', () => {
+    const user = turn('user', 'What is in the sprint?', {
+      jobId: 'ask-1',
+      intent: 'ask',
+      anchorKey: null,
+      debugLanding: null,
+    });
+    const reply = turn('assistant', 'Two cards.', {
+      jobId: 'ask-1',
+      citations: ['PROD-1'],
+      anchorKey: null,
+      debugLanding: null,
+    });
+    renderRail({ session: session([user, reply]) });
+
+    expect(screen.queryByText('Targeting 1 item')).toBeNull();
     expect(screen.queryByTestId('plan-change-debug-outcome')).toBeNull();
     expect(screen.getByTestId('plan-change-citation-count').textContent).toBe(
       'Answered from 1 work item',

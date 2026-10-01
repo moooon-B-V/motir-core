@@ -74,6 +74,23 @@ export interface PlanChangeTurnDto {
    * detail page and the comment thread use rather than a second treatment.
    */
   citations: string[];
+  /**
+   * The work item a `user` turn was ANCHORED on (MOTIR-7064) — the report
+   * widget's triage bug on its seeded debug turn — as its identifier. The rail
+   * draws it as the turn's target chip. Null on every other turn.
+   *
+   * Optional (absent reads as null) so a turn built by hand — every rail test —
+   * needs no change; the mapper always sets it.
+   */
+  anchorKey?: string | null;
+  /**
+   * What a `debug` turn LANDED (MOTIR-7064), on the `assistant` turn carrying its
+   * diagnosis — the same {@link DebugLandingDto} the settle returned, persisted
+   * with the reply so the OUTCOME LINE survives a reload. Null on every other
+   * turn, which is what keeps a non-debug reply rendering as an ordinary answer.
+   * Optional for the reason {@link anchorKey} is.
+   */
+  debugLanding?: DebugLandingDto | null;
   authorId: string | null;
   createdAt: string;
 }
