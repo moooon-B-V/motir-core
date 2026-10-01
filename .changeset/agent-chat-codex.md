@@ -1,5 +1,0 @@
----
-'@motir/cli': minor
----
-
-The chat beside the terminal now works on a Codex agent (MOTIR-7015). A prompt runs the agent's own `codex exec --json`, unwrapped, in `$HOME/workspace`, with the prompt on stdin and the sandbox set to `workspace-write` (a `-c` override, the only flag beyond the headless and resume forms); Motir adds no environment variable and no sign-in flag, so it chats on a ChatGPT sign-in and on an API key alike. Each event becomes a transcript event: the agent's message as text, a command with its output and exit code, a file change as an edit row per path, MCP calls and web searches as tool rows, errors as inline notices, and anything unrecognised as a quiet `other` row — reasoning and token usage are dropped. Stop ends the turn as stopped. The session list is read from Codex's own rollouts under `$CODEX_HOME/sessions`, only those begun in `$HOME/workspace`, newest first, at most 50, each titled by its first prompt; resuming one runs `codex exec resume <id>` and draws its earlier turns from the same rollout. Nothing is logged.
