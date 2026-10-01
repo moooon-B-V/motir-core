@@ -72,6 +72,37 @@ export const planChangeTurnRepository = {
     return tx.planChangeTurn.update({ where: { id }, data });
   },
 
+  /** CLAIM a `debug` turn's one write (MOTIR-7049): stamp `debugLandingClaimedAt`
+   *  ONLY while it is still null — a compare-and-set in one statement. Returns
+   *  whether THIS call claimed it. Called under the session's row lock, so two
+   *  concurrent settles of one `debug_bug` job are serialised and exactly one
+   *  sees `true`. The fourth mutable field of a turn, and like the other three a
+   *  record of what Motir DID, never of what the person said. */
+  async claimDebugLanding(
+    id: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.planChangeTurn.updateMany({
+      where: { id, workspaceId, debugLandingClaimedAt: null },
+      data: { debugLandingClaimedAt: new Date() },
+    });
+    return count === 1;
+  },
+
+  /** RELEASE a claim whose write was refused inside its own transaction, so
+   *  nothing committed and a later settle may try again (MOTIR-7049). */
+  async releaseDebugLanding(
+    id: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.planChangeTurn.updateMany({
+      where: { id, workspaceId },
+      data: { debugLandingClaimedAt: null },
+    });
+  },
+
   /** The session's FULL thread in `seq` order — the ordering contract every
    *  consumer (the resume payload, the accumulated intent) depends on, applied
    *  here ONCE rather than at each call site. Workspace-scoped: a session id from
