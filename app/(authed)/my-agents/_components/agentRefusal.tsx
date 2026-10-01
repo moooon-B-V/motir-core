@@ -25,6 +25,8 @@ interface RefusalBody {
   /** `agent_instance_run_active` (MOTIR-7027): the run holding the agent, and its card. */
   runId?: string;
   workItemKey?: string | null;
+  /** `agent_instance_up_to_date` (MOTIR-6953): the version the agent already runs. */
+  version?: string | null;
 }
 
 /** The copy key a refused response maps to. Exported for the unit test. */
@@ -42,6 +44,10 @@ export function refusalKey(body: RefusalBody | null): string {
   switch (body?.code) {
     case 'agent_instance_run_active':
       return 'runActive';
+    case 'agent_instance_up_to_date':
+      return 'upToDate';
+    case 'agent_image_catalog_unavailable':
+      return 'catalogUnknown';
     case 'agent_instance_name_taken':
       return 'nameTaken';
     case 'agent_instance_name_invalid':
@@ -61,31 +67,57 @@ export function refusalKey(body: RefusalBody | null): string {
 export function useAgentRefusal(maxPerUser: number) {
   const t = useTranslations('myAgents.refusal');
   const tRun = useTranslations('myAgents.panel.run');
+  const tUpdate = useTranslations('myAgents.update.refused');
+  const tState = useTranslations('myAgents.state');
   // The Start bar shares this with the Visitor tree's item page (MOTIR-6888).
   const routes = useReaderRoutes();
   return (
     body: RefusalBody | null,
     name?: string,
-    action: 'wake' | 'hibernate' | 'delete' = 'hibernate',
+    action: 'wake' | 'hibernate' | 'delete' | 'update' = 'hibernate',
+    /** The agent's state as the page knew it — named by an Update's state refusal. */
+    state?: string,
   ): AgentRefusal => {
     const key = refusalKey(body);
+    // Update's own refusals (`agent-image-update.md` Q8, MOTIR-6953).
+    if (key === 'upToDate') {
+      return { kind: 'refusal', message: tUpdate('upToDate', { version: body?.version ?? '' }) };
+    }
+    if (key === 'catalogUnknown') return { kind: 'busy', message: tUpdate('unknown') };
+    if (
+      action === 'update' &&
+      key === 'conflict' &&
+      body?.code === 'agent_instance_state_conflict'
+    ) {
+      return {
+        kind: 'refusal',
+        message: tUpdate('state', { state: state ? tState(state).toLowerCase() : '' }),
+      };
+    }
     if (key === 'runActive') {
       // Hibernate / Delete during a run (MOTIR-7029 panel 2): name the run, link it.
       const runId = body?.runId ?? '';
       return {
         kind: 'refusal',
-        message: tRun.rich(action === 'delete' ? 'refusedDelete' : 'refusedHibernate', {
-          name: name ?? '',
-          key: body?.workItemKey ?? runId,
-          link: (chunks) => (
-            <Link
-              href={routes.view(runsHref({ run: runId }))}
-              className="text-(--el-link) underline"
-            >
-              {chunks}
-            </Link>
-          ),
-        }),
+        message: tRun.rich(
+          action === 'delete'
+            ? 'refusedDelete'
+            : action === 'update'
+              ? 'refusedUpdate'
+              : 'refusedHibernate',
+          {
+            name: name ?? '',
+            key: body?.workItemKey ?? runId,
+            link: (chunks) => (
+              <Link
+                href={routes.view(runsHref({ run: runId }))}
+                className="text-(--el-link) underline"
+              >
+                {chunks}
+              </Link>
+            ),
+          },
+        ),
       };
     }
     const message =
