@@ -400,16 +400,7 @@ export async function GET(req: Request): Promise<Response> {
     // a gone subject is somebody's answer and stays Panel 4b. A failed withdrawal leaves
     // the read exactly as it was; the next open observes it again.
     if (subject.state === 'gone' && read.gate?.state === 'awaiting') {
-      const withdrawn = await approvalGatesService
-        .withdrawGoneQuestionsOnWorkItem(item.id, ctx)
-        .catch((err: unknown) => {
-          console.error('[approval-gate] could not withdraw a gate whose subject is gone', {
-            key,
-            kind,
-            err,
-          });
-          return new Set<string>();
-        });
+      const withdrawn = await approvalGatesService.withdrawGoneQuestionsOnWorkItem(item.id, ctx);
       if (withdrawn.size > 0) {
         read = await readGate();
         subject = await readSubject(kind, read.gate, item, ctx);

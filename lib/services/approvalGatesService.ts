@@ -1665,6 +1665,9 @@ export const approvalGatesService = {
    * through is not always its own: a design or acceptance question asked beside an
    * awaiting merge question is ported by the MERGE gate's delivery set, and when that set
    * has emptied it is the merge gate whose subject is gone.
+   *
+   * Like the list reads, a withdrawal that fails is logged and never fails the read that
+   * observed it: the gate stays as it was, and the next open observes it again.
    */
   async withdrawGoneQuestionsOnWorkItem(
     workItemId: string,
@@ -1673,7 +1676,7 @@ export const approvalGatesService = {
     const awaiting = await withWorkspaceContext(ctx, (tx) =>
       approvalGateRepository.findAwaitingByWorkItem(workItemId, tx),
     );
-    return this.withdrawGoneQuestions(
+    return withdrawObservedGone(
       awaiting.map((gate) => gate.id),
       ctx,
     );
