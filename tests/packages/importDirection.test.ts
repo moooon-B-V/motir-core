@@ -19,8 +19,8 @@ import { describe, expect, it } from 'vitest';
 //      package's export list a lie, because the surface a consumer can reach is
 //      no longer the surface the package declares.
 //
-// Both predicates are ZERO across `design-system`, `cli`, `brand` and
-// `orchestrator`, so §3 records a property the repository has rather than a debt
+// Both predicates are ZERO across `design-system`, `cli`, `brand`,
+// `orchestrator` and `pages`, so §3 records a property the repository has rather than a debt
 // it intends to pay. This file is what keeps that true.
 //
 // Mould: `tests/ciFleet/orchestratorPortBoundary.test.ts` — the same source
@@ -121,8 +121,11 @@ describe('the app imports packages by name, and no package imports the app (MOTI
     // A guard that walks nothing passes forever. Pin that every package this
     // repository has is actually being read.
     const roots = packageSourceRoots();
-    expect(roots.length).toBeGreaterThanOrEqual(4);
+    expect(roots.length).toBeGreaterThanOrEqual(5);
     expect(roots).toContain(join('packages', 'orchestrator', 'src'));
+    // MOTIR-5759: the pages package is scanned too, named so a rename or a
+    // move out of `packages/` fails here rather than shrinking the scan.
+    expect(roots).toContain(join('packages', 'pages', 'src'));
     expect(roots).toContain(join('packages', 'design-system', 'src'));
     expect(roots.flatMap((r) => walk(join(root, r))).length).toBeGreaterThan(50);
   });
