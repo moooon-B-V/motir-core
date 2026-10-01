@@ -511,9 +511,10 @@ export const usersService = {
 
   /**
    * Step 2 of a verified email change (Subtask 8.8.22): the user clicked the
-   * emailed link. Validates the single-use token, then swaps `User.email` (and
-   * re-keys the credential account's `accountId` so a freed address can be
-   * reused at signup — see `accountRepository.updateCredentialAccountId`).
+   * emailed link. Validates the single-use token, then swaps `User.email`. The
+   * credential account is NOT re-keyed: since better-auth 1.7 its `accountId` is
+   * the user id, which is what email sign-in looks it up by, so it never held
+   * the address and a freed address cannot collide on it (MOTIR-7171).
    *
    * The token is consumed (deleted) whether or not it's still valid in time, so
    * a leaked link can't be replayed. A second guard against the `User.email`
@@ -559,7 +560,6 @@ export const usersService = {
 
       try {
         await userRepository.updateEmail(request.userId, request.newEmail, tx);
-        await accountRepository.updateCredentialAccountId(request.userId, request.newEmail, tx);
       } catch (err) {
         // Backstop for the narrow race where a fresh signup claimed the address
         // between the re-read and the swap. The tx aborts here, so the consume

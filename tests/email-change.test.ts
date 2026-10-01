@@ -179,7 +179,7 @@ describe('requestEmailChange — concurrency (the uniqueness race)', () => {
 });
 
 describe('confirmEmailChange', () => {
-  it('swaps the email, verifies it, re-keys the credential account, and consumes the token', async () => {
+  it('swaps the email, verifies it, leaves the credential keyed by the user id, and consumes the token', async () => {
     const user = await makeUser('old@example.com');
     const { token } = await usersService.requestEmailChange(user.id, 'new@example.com');
 
@@ -190,12 +190,13 @@ describe('confirmEmailChange', () => {
     expect(updated!.email).toBe('new@example.com');
     expect(updated!.emailVerified).toBe(true);
 
-    // The credential account's accountId tracks the new email, so the freed old
-    // address can be reused at signup without a (providerId, accountId) clash.
+    // The credential account stays keyed by the user id — better-auth 1.7's
+    // email sign-in finds it there (MOTIR-7171), and it never held an address
+    // a later sign-up could collide on.
     const credential = await adminDb.account.findFirst({
       where: { userId: user.id, providerId: 'credential' },
     });
-    expect(credential!.accountId).toBe('new@example.com');
+    expect(credential!.accountId).toBe(user.id);
 
     // Single-use: the token is gone, and a replay is rejected.
     expect(await emailChangeRequestRepository.findByTokenUnsafe(token)).toBeNull();

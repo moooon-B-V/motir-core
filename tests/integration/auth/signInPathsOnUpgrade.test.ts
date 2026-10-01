@@ -26,6 +26,7 @@ const { adminDb } = await import('../../helpers/adminDb');
 const { truncateAuthTables } = await import('../../helpers/db');
 const { createTestUser, TEST_PASSWORD } = await import('../../fixtures/userFixtures');
 const authRoute = await import('@/app/api/auth/[...all]/route');
+const { usersService } = await import('@/lib/services/usersService');
 const { BASE } = await import('../../helpers/oauthFlow');
 
 beforeEach(async () => {
@@ -95,6 +96,21 @@ describe('email and password', () => {
       where: { userId: user.id, providerId: 'credential' },
     });
     expect(account.accountId).toBe(user.id);
+  });
+
+  it('signs in at the NEW address after a confirmed email change', async () => {
+    // 1.6 re-keyed the credential to the new address on confirm; under 1.7 that
+    // re-key made the account unfindable and the person could not sign in.
+    const user = await createTestUser();
+    const { token } = await usersService.requestEmailChange(user.id, 'moved@example.com');
+    await usersService.confirmEmailChange(token);
+
+    const res = await post('/sign-in/email', {
+      email: 'moved@example.com',
+      password: TEST_PASSWORD,
+    });
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect(cookieOf(res)).toContain('session_token');
   });
 });
 
