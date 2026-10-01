@@ -632,3 +632,101 @@ beside **Run** (Motir works it with the model you pick), and a busy agent's pick
 item it is working on — `design/runs/design-notes.md` § _Revision 2_. This panel's delta
 (`my-agents--run.mock.html`) is unchanged: its run line already says _Running a work item_ and names
 the key, and it says "hosted" nowhere.
+
+## Updating an agent to a newer image (delta, MOTIR-6951)
+
+**Design system — read before drawing.** `package.json` depends on `@motir/design-system`
+(`workspace:*`) and `app/globals.css` line 13 imports `@motir/design-system/theme.css`, so the
+project is **on Motir Design** (branch (a)). This delta reuses the area's own markup and tokens, at
+the axes the panel mock was drawn at. No part was missing from the package.
+
+**What it amends.** `my-agents--update.mock.html` is a delta on `my-agents--panel.mock.html`
+(MOTIR-6937, approved version `cmun5qu1f005qhwoiq14livtw`), which is itself a delta on
+`my-agents.mock.html` (MOTIR-6868). Neither is edited.
+
+- **Composed, not redrawn:**
+  - the panel mock's five style blocks and icon symbols, verbatim;
+  - the list table and narrow cards;
+  - the agent panel: its header, tab row, terminal, the refusal box (rose for a stop, peach for a
+    wait), the `.reason` line, and the dialog shape of the Delete confirmation;
+  - the narrow-width layout (MOTIR-6937 panel 7);
+  - the image-too-old face (panel 6).
+- **Its own:** one small style block, with the version line, the update marker, and the header
+  wrap that lets three actions fit the half-width panel. Plus two icons (`i-arrow-up-circle`,
+  `i-refresh`). Only `--el-*` and shape tokens are used, and no colour is invented.
+
+**Every state is decided in `docs/decisions/agent-image-update.md` (MOTIR-6948).** The update
+operation that produces each state is [MOTIR-6952](motir:cmun6el6a00g4hwoibmcyr4uv).
+
+| #   | state                                                                                                       | where         | decision                    | mock panel |
+| --- | ----------------------------------------------------------------------------------------------------------- | ------------- | --------------------------- | ---------- |
+| 1   | Up to date: version only, no marker, no Update                                                              | row, header   | Q1                          | 1A, 1C     |
+| 2   | Update available → version: marker, Update enabled                                                          | row, header   | Q1                          | 1A, 1B     |
+| 3   | Could not check for updates: a grey chip, never "up to date"                                                | row, header   | Q1                          | 1A, 1D     |
+| 4   | Confirm: both versions, what is kept, restart vs next wake                                                  | dialog        | Q2, Q5                      | 3          |
+| 5   | Updating: busy tone, terminal Reconnecting…, all actions disabled                                           | row, header   | Q6                          | 2, 4       |
+| 6   | Updated, hibernated: "version on next wake"                                                                 | row, header   | Q5                          | 2, 5       |
+| 7   | Refused: run active (names and links the run), already newest, transitional state, could not check (a wait) | panel         | Q8                          | 6          |
+| 8   | Failed and rolled back: previous version, the reason in words, Update still offered                         | row, header   | Q4                          | 2, 7       |
+| 9   | Image too old: the call to action becomes Update to version                                                 | terminal area | Q3 (`agent-terminal.md` Q8) | 8          |
+| 10  | Narrow width: the marker under the meta line, Update first among the wrapped actions                        | panel, cards  | —                           | 9          |
+
+**The access path.**
+
+- **On the row:** the version sits in the **Coding agent** cell (mono, `--el-text-secondary`), with
+  the marker beside it. The whole row is still the door to the panel (MOTIR-6937 panel 1).
+- **In the panel header:** **Update** is the FIRST action, before Hibernate and Delete. It shows
+  only while an update is available, and it opens the confirmation.
+- **The marker** is `--el-tint-sky` with `--el-text-strong` text (AA on the tint). The
+  next-wake marker is `--el-tint-lavender`. The could-not-check chip is `--el-surface-soft` with
+  `--el-text-secondary`.
+- **Updating** uses the busy tone Waking already uses (`t-running`).
+
+**Copy — en and zh.** `{name}` is the agent's name, `{from}` and `{to}` the two versions, `{key}`
+the run's work item.
+
+| key (proposed `myAgents.update.*`) | en                                                                                                                                       | zh                                                                                   |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `available`                        | Update available → {to}                                                                                                                  | 可更新 → {to}                                                                        |
+| `unknown`                          | Could not check for updates                                                                                                              | 无法检查更新                                                                         |
+| `nextWake`                         | {to} on next wake                                                                                                                        | 下次唤醒时更新到 {to}                                                                |
+| `state.updating`                   | Updating                                                                                                                                 | 更新中                                                                               |
+| `action`                           | Update                                                                                                                                   | 更新                                                                                 |
+| `actionTo`                         | Update to {to}                                                                                                                           | 更新到 {to}                                                                          |
+| `confirm.title`                    | Update {name} to {to}?                                                                                                                   | 将 {name} 更新到 {to}？                                                              |
+| `confirm.introRunning`             | {from} → {to}. The agent restarts on the new version, which takes about a minute. It keeps:                                              | {from} → {to}。智能体将以新版本重启，大约需要一分钟。以下内容会保留：                |
+| `confirm.introHibernated`          | {from} → {to}. It stays asleep and takes the new version the next time it wakes. It keeps:                                               | {from} → {to}。它会保持休眠，下次唤醒时使用新版本。以下内容会保留：                  |
+| `confirm.keep1`                    | its home and every file in it, including the cloned repositories;                                                                        | 主目录及其中的所有文件，包括克隆的仓库；                                             |
+| `confirm.keep2`                    | its coding agent’s sign-in;                                                                                                              | 编码智能体的登录状态；                                                               |
+| `confirm.keep3`                    | its chat sessions.                                                                                                                       | 聊天会话。                                                                           |
+| `confirm.rollback`                 | If the new version doesn’t start, the agent goes back to {from} and tells you why.                                                       | 如果新版本无法启动，智能体会回到 {from} 并告诉你原因。                               |
+| `confirm.rollbackWake`             | If the new version doesn’t start at that wake, the agent goes back to {from} and tells you why.                                          | 如果新版本在那次唤醒时无法启动，智能体会回到 {from} 并告诉你原因。                   |
+| `confirm.notNow`                   | Not now                                                                                                                                  | 暂不                                                                                 |
+| `confirm.running`                  | Update and restart                                                                                                                       | 更新并重启                                                                           |
+| `confirm.hibernated`               | Update on next wake                                                                                                                      | 下次唤醒时更新                                                                       |
+| `updating.title`                   | Updating to {to}                                                                                                                         | 正在更新到 {to}                                                                      |
+| `updating.body`                    | The agent is restarting on the new version. Your home and sign-in stay where they are.                                                   | 智能体正在以新版本重启。你的主目录和登录状态保持不变。                               |
+| `hibernated.body`                  | This agent is asleep. It moves to {to} when it wakes.                                                                                    | 该智能体正在休眠，唤醒时会更新到 {to}。                                              |
+| `refused.runActive`                | {name} is running <link>{key}</link>. Cancel that run on the work item first, then update it.                                            | {name} 正在运行 <link>{key}</link>。请先在工作项上取消该运行，然后再更新它。         |
+| `refused.upToDate`                 | This agent already runs the newest version ({to}).                                                                                       | 该智能体已经是最新版本（{to}）。                                                     |
+| `refused.state`                    | This agent is {state}, so it can’t be updated right now.                                                                                 | 该智能体当前{state}，暂时无法更新。                                                  |
+| `refused.unknown`                  | Motir couldn’t check for a newer version just now. Try again in a few minutes.                                                           | Motir 暂时无法检查新版本。请几分钟后重试。                                           |
+| `rolledBack`                       | The update to {to} didn’t work: {reason}. Your agent is back on {from}.                                                                  | 更新到 {to} 未成功：{reason}。你的智能体已回到 {from}。                              |
+| `imageTooOld.body`                 | It was made from an older image, from before the terminal existed. Update it to {to} to get the terminal. Its home and sign-in are kept. | 它基于终端出现之前的旧镜像创建。更新到 {to} 即可使用终端，主目录和登录状态都会保留。 |
+
+**Wording notes.**
+
+- The run-active refusal reuses the panel's existing run-refusal sentence shape
+  (`myAgents.panel.run.refusedHibernate`, MOTIR-7022), so Hibernate, Delete and Update say it the
+  same way.
+- The could-not-check refusal follows MOTIR-6916's register for a wait ("Try again in a few
+  minutes").
+- `{reason}` is the server's words (`updateFailureReason`), shown as sent.
+- If the rollback itself fails, the agent is `Failed` with that reason and Wake: MOTIR-6937 panel
+  4's failed face, unchanged.
+
+**Does NOT draw:**
+
+- the page outside the agent row and the panel header;
+- the terminal's own states, which stay MOTIR-6937 panel 5's;
+- any surface for choosing a version other than the newest (decision Q1: none is offered).
