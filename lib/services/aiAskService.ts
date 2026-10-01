@@ -322,10 +322,11 @@ export const aiAskService = {
             PROJECT_SCOPE,
             trimmed,
             seeded,
-            { isAnswer: opts.isAnswer === true },
+            { isAnswer: opts.isAnswer === true, anchorKey: anchor },
           )
         : await planChangeSessionsService.startWithFirstTurn(ctx, PROJECT_SCOPE, trimmed, {
             isAnswer: opts.isAnswer === true,
+            anchorKey: anchor,
           });
       const first = started.turns.at(-1);
       if (!first) throw new PlanChangeTurnNotFoundError('(the turn just appended)');
@@ -388,6 +389,9 @@ export const aiAskService = {
       // pending is still a fact about the affordance, and the transcript keeps
       // facts rather than tidying them away.
       isAnswer: opts.isAnswer === true,
+      // The RESOLVED anchor (MOTIR-7064), on the turn itself, so a reloaded
+      // thread still draws the chip the person sent it with.
+      anchorKey: anchor,
     });
     const turn = appended.turns.at(-1);
     if (!turn) throw new PlanChangeTurnNotFoundError('(the turn just appended)');

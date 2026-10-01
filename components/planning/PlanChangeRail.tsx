@@ -565,11 +565,7 @@ export function PlanChangeRail({
             turn={turn}
             userTurns={userTurns}
             targetKeys={
-              turnTargetKeys.length > 0
-                ? turnTargetKeys
-                : turnAnchors[turn.id]
-                  ? [turnAnchors[turn.id] as string]
-                  : EMPTY_KEYS
+              turnTargetKeys.length > 0 ? turnTargetKeys : anchorKeysOf(turn, turnAnchors)
             }
             workItemRefs={state.session?.workItemRefs ?? {}}
             debugOutcome={debugOutcomeFor(turn, turns, debugLandings, turnAnchors)}
@@ -993,12 +989,35 @@ function originatingUserTurn(
 const EMPTY_KEYS: readonly string[] = [];
 
 /**
+ * The work item a turn was anchored on (MOTIR-7050), or null. The PERSISTED
+ * anchor first (MOTIR-7064) — it is what a reloaded thread has — and the
+ * hook's send-time seed only for a turn the server has not echoed one on.
+ */
+function anchorOf(
+  turn: PlanChangeTurnDto,
+  anchors: Readonly<Record<string, string>>,
+): string | null {
+  return turn.anchorKey ?? anchors[turn.id] ?? null;
+}
+
+/** A project-thread turn's target row: its anchor, or nothing. */
+function anchorKeysOf(
+  turn: PlanChangeTurnDto,
+  anchors: Readonly<Record<string, string>>,
+): readonly string[] {
+  const key = anchorOf(turn, anchors);
+  return key ? [key] : EMPTY_KEYS;
+}
+
+/**
  * What a DEBUG turn landed, for the assistant turn that carries its diagnosis
  * (MOTIR-7050) — or null for every other turn.
  *
- * Joined by the `debug_bug` job id: the landing is keyed by it, and the reply
- * MOTIR-7049 appends carries it. The anchor is read off the USER turn the reply
- * came out of (joined by the same job id, `originatingUserTurn`), because the
+ * The landing is read off the reply turn itself (`debugLanding`, persisted with
+ * it — MOTIR-7064), so a reloaded thread draws the same line; the settle's
+ * in-memory landing, joined by the `debug_bug` job id the reply carries, is only
+ * the fallback. The anchor is read off the USER turn the reply came out of
+ * (joined by the same job id, `originatingUserTurn`), because the
  * enriched-anchor copy names that triage bug as the card left as it is.
  */
 function debugOutcomeFor(
@@ -1008,10 +1027,10 @@ function debugOutcomeFor(
   anchors: Readonly<Record<string, string>>,
 ): DebugOutcome | null {
   if (turn.role !== 'assistant' || !turn.jobId) return null;
-  const landing = landings[turn.jobId];
+  const landing = turn.debugLanding ?? landings[turn.jobId];
   if (!landing) return null;
   const origin = originatingUserTurn(turns, turn);
-  return { landing, anchorKey: origin ? (anchors[origin.id] ?? null) : null };
+  return { landing, anchorKey: origin ? anchorOf(origin, anchors) : null };
 }
 
 /** The LAST assistant turn on the thread, or null. Only that one carries the
