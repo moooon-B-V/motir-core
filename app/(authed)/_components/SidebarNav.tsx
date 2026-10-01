@@ -531,14 +531,14 @@ export function SidebarNav({
         // inbox of un-acted-on bug reports & feature requests. `Inbox` is the
         // 6.11 design-notes glyph; sits after Dashboard (it followed Backlog
         // directly until MOTIR-4799 moved Dashboard between them). Called
-        // Requested features, at `/requested-features`, since MOTIR-6772: the
-        // name "triage" retired everywhere a person reads it
-        // (`docs/decisions/public-request-board-retired.md` Decision 4). The
-        // message KEY keeps its old name; only its value changed.
+        // Triage, at `/triage`: MOTIR-6772 renamed it Requested features and
+        // MOTIR-7043 renamed it back — the Visitor's view of the same requests
+        // keeps that name (`docs/decisions/public-request-board-retired.md`
+        // Decision 4, AMENDMENT 1).
         icon: <Inbox />,
         label: t('nav.triage'),
-        href: '/requested-features',
-        active: isActive(pathname, '/requested-features'),
+        href: '/triage',
+        active: isActive(pathname, '/triage'),
       },
       {
         icon: <BarChart3 />,

@@ -166,7 +166,7 @@ describe('a seeded role renders exactly what it holds', () => {
       '/boards',
       '/backlog',
       '/reports',
-      '/requested-features',
+      '/triage',
       '/code',
     ]) {
       expect(shell.navRows, href).toContain(href);
@@ -187,7 +187,7 @@ describe('a seeded role renders exactly what it holds', () => {
     // it rather than being denied the door (MOTIR-1768).
     // Two became ONE with MOTIR-6332: `/plans` opens on `plan:view_any`, which a
     // viewer holds (MOTIR-6328) — and so do Approvals and Runs, on theirs.
-    for (const gone of ['/requested-features']) {
+    for (const gone of ['/triage']) {
       expect(shell.navRows, gone).not.toContain(gone);
     }
     for (const room of ['/plans', '/approvals', '/runs']) {

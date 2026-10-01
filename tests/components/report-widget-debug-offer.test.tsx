@@ -90,7 +90,7 @@ describe('offered — a Bug, for an actor who may debug', () => {
     // The two lines the Toast would have said head the panel instead.
     const status = screen.getByRole('status');
     expect(status.textContent).toContain('Thanks — your report was submitted');
-    expect(status.textContent).toContain('Filed as PROD-412, now waiting in Requested features.');
+    expect(status.textContent).toContain('Filed as PROD-412, now waiting in Triage.');
     const filed = screen.getByTestId('report-debug-filed');
     expect(filed.textContent).toContain('PROD-412');
     expect(filed.textContent).toContain(TITLE);

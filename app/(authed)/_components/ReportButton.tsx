@@ -18,7 +18,7 @@ import { useProjectAccess } from './ProjectAccessProvider';
  *     crowded the bar. Mirrors NotificationBell's token-correct icon-button
  *     grammar (`--radius-control` + a `--height-control` square box). It is
  *     `hidden md:inline-flex`: MOTIR-2373 DISPLACED it from the below-`md` bar,
- *     because it has no ⌘K action and `/requested-features`' inbox CTA is a different act
+ *     because it has no ⌘K action and `/triage`' inbox CTA is a different act
  *     (reporting from the queue, not about the screen you are on) — so it needed
  *     a drawn home, not a citation.
  *   - `display="drawer"`: that drawn home — the SAME icon button, re-homed in
