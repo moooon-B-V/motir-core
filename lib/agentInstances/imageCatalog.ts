@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { listImageTags, probeImagePull } from '@motir/orchestrator';
 import { selectedOrchestratorProvider } from '@/lib/orchestrator';
 import { sandboxImageTag, SANDBOX_IMAGE_REPOSITORY } from './profiles';
@@ -101,6 +102,8 @@ const fakeNewest = new Map<string, string>();
 function fakeNewestVersion(profileId: string): string | null {
   const set = fakeNewest.get(profileId);
   if (set) return set;
+  const shared = readSharedCatalog()?.newest?.[profileId];
+  if (typeof shared === 'string') return shared;
   const raw = process.env['MOTIR_FAKE_IMAGE_NEWEST'];
   if (!raw) return null;
   try {
@@ -111,6 +114,30 @@ function fakeNewestVersion(profileId: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * THE CROSS-PROCESS SEAM (MOTIR-6955): `MOTIR_FAKE_IMAGE_CATALOG_PATH` names a
+ * JSON file — `{ "newest": { "claude": "0.6.0" }, "unavailable": false }` — read
+ * on every call, so an E2E spec (a separate process) changes what the lane's web
+ * server answers MID-TEST, as the fake fleet's own state file does.
+ */
+function readSharedCatalog(): {
+  newest?: Record<string, unknown>;
+  unavailable?: unknown;
+} | null {
+  const path = process.env['MOTIR_FAKE_IMAGE_CATALOG_PATH'];
+  if (!path) return null;
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, never>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function fakeIsUnavailable(): boolean {
+  return fakeUnavailable || readSharedCatalog()?.unavailable === true;
 }
 
 function isFake(): boolean {
@@ -182,7 +209,7 @@ export const imageCatalog = {
     options: { fresh?: boolean } = {},
   ): Promise<PublishedImage | CatalogUnknown> {
     if (isFake()) {
-      if (fakeUnavailable) return 'unknown';
+      if (fakeIsUnavailable()) return 'unknown';
       const version = fakeNewestVersion(profileId) ?? FAKE_BASE_VERSION;
       return { version, digest: fakeDigestFor(profileId, version) };
     }
@@ -202,7 +229,7 @@ export const imageCatalog = {
   /** The version a digest carries for a profile, null when no tag names it, or `unknown`. */
   async versionOf(profileId: string, digest: string): Promise<string | null | CatalogUnknown> {
     if (isFake()) {
-      if (fakeUnavailable) return 'unknown';
+      if (fakeIsUnavailable()) return 'unknown';
       if (digest === fakeDigestFor(profileId, FAKE_BASE_VERSION)) return FAKE_BASE_VERSION;
       const newest = fakeNewestVersion(profileId);
       return newest && digest === fakeDigestFor(profileId, newest) ? newest : null;
