@@ -24,7 +24,7 @@
 
 import { test, expect } from './_helpers/acceptance-video';
 import type { Page } from '@playwright/test';
-import { resetDatabase, db, adminDb } from './_helpers/db-reset';
+import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
@@ -64,15 +64,15 @@ test('a repository too large to index says why on /code, then returns to normal 
 
   await signUp(page, EMAIL);
   const local = EMAIL.split('@')[0]!;
-  const user = await db.user.findFirstOrThrow({ where: { email: EMAIL } });
-  const ws = await db.workspace.findFirstOrThrow({ where: { name: `${local}'s Workspace` } });
+  const user = await adminDb.user.findFirstOrThrow({ where: { email: EMAIL } });
+  const ws = await adminDb.workspace.findFirstOrThrow({ where: { name: `${local}'s Workspace` } });
   const project = await projectsService.createProject({
     workspaceId: ws.id,
     actorUserId: user.id,
     name: 'Acme',
     identifier: 'ACME',
   });
-  await db.workspaceMembership.update({
+  await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: user.id, workspaceId: ws.id } },
     data: { activeProjectId: project.id },
   });

@@ -22,7 +22,7 @@
 // `clearIndexRefusal`). The job path itself is proven by MOTIR-7133's suite.
 
 import { expect, test, type Page } from '@playwright/test';
-import { resetDatabase, db, adminDb } from './_helpers/db-reset';
+import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
@@ -66,15 +66,15 @@ test.afterAll(async () => {
 async function seedTenant(page: Page): Promise<Tenant> {
   await signUp(page, EMAIL);
   const local = EMAIL.split('@')[0]!;
-  const user = await db.user.findFirstOrThrow({ where: { email: EMAIL } });
-  const ws = await db.workspace.findFirstOrThrow({ where: { name: `${local}'s Workspace` } });
+  const user = await adminDb.user.findFirstOrThrow({ where: { email: EMAIL } });
+  const ws = await adminDb.workspace.findFirstOrThrow({ where: { name: `${local}'s Workspace` } });
   const project = await projectsService.createProject({
     workspaceId: ws.id,
     actorUserId: user.id,
     name: 'Too Large Demo',
     identifier: 'TLG',
   });
-  await db.workspaceMembership.update({
+  await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: user.id, workspaceId: ws.id } },
     data: { activeProjectId: project.id },
   });
