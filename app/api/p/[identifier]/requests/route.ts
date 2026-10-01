@@ -48,10 +48,7 @@ export async function GET(
   const gate = await requireCompliantSession();
   if (!gate.ok) return gate.response;
   if (verdict.kind === 'enter') {
-    return NextResponse.json(
-      { code: 'VISITOR_ENTERS_PROJECT', href: '/requested-features' },
-      { status: 409 },
-    );
+    return NextResponse.json({ code: 'VISITOR_ENTERS_PROJECT', href: '/triage' }, { status: 409 });
   }
   if (verdict.kind === 'consent') {
     return NextResponse.json({ code: 'VISITOR_CONSENT_REQUIRED' }, { status: 403 });

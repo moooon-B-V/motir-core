@@ -3500,7 +3500,7 @@
   --el-label-6: var(--color-tint-yellow);
   /* Avatar ramp — KEEP the named keys (peach…yellow): they are addressed BY NAME, as
      literal `bg-(--el-avatar-<key>)` class strings, by
-     `app/(authed)/requested-features/_components/TriageAvatar.tsx` (a hash of the display name
+     `app/(authed)/triage/_components/TriageAvatar.tsx` (a hash of the display name
      indexes a fixed six-entry array — its ORDER is load-bearing too) and by the
      `--el-avatar-fallback` initial tiles in
      `app/(authed)/settings/workspace/_components/gitSettingsPrimitives.tsx` and

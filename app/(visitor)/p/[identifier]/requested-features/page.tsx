@@ -13,7 +13,7 @@ import { RequestedFeaturesList } from './_components/RequestedFeaturesList';
  * Page one renders here, on the server, from the read MOTIR-6768 shipped; "Load
  * more" pages through its door. The layout has already settled the reader
  * (not-found → sign-in → consent), and a member following this address is sent
- * to their own `/requested-features` by `proxy.ts` through `lib/visitor/routes.ts`.
+ * to their own `/triage` by `proxy.ts` through `lib/visitor/routes.ts`.
  * The ONE write offered is the upvote, on the existing public-request act route —
  * no Manager action exists on this page.
  */

@@ -40,7 +40,7 @@ export class VisitorConsentRequiredError extends Error {
 
 /**
  * The reader can ENTER the project: they read its requests in their own
- * Requested features inbox (`/requested-features`), not as its Visitor.
+ * Triage inbox (`/triage`), not as its Visitor.
  */
 export class VisitorEntersProjectError extends Error {
   readonly code = 'VISITOR_ENTERS_PROJECT' as const;
