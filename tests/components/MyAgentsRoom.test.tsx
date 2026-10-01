@@ -31,6 +31,8 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
     imageDigest: 'sha256:abc',
     imageVersion: '1.0.0',
     update: null,
+    pendingImageVersion: null,
+    updateFailureReason: null,
     region: 'iad',
     state: 'running',
     failureReason: null,

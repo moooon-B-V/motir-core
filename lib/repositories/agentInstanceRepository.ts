@@ -34,11 +34,37 @@ export interface AgentInstanceHandleColumns {
 }
 
 /** What a guarded transition may write beside the new state. */
+/** The image-update columns a patch carries, only where the patch names them. */
+function imagePatch(patch: AgentInstanceTransitionPatch): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of [
+    'imageDigest',
+    'imageVersion',
+    'targetImageDigest',
+    'targetImageVersion',
+    'updateFailureReason',
+    'updateFailedAt',
+  ] as const) {
+    if (patch[key] !== undefined) out[key] = patch[key];
+  }
+  return out;
+}
+
 export interface AgentInstanceTransitionPatch {
   /** `failed`'s reason in words; `null` clears it (a later wake). */
   failureReason?: string | null;
   /** Bump the idle signal in the same write (create and wake do). */
   lastActivityAt?: Date;
+  /**
+   * The image-update fields (`agent-image-update.md` Q6, MOTIR-6952), written in
+   * the same guarded move as the state they belong to. `null` clears.
+   */
+  imageDigest?: string;
+  imageVersion?: string | null;
+  targetImageDigest?: string | null;
+  targetImageVersion?: string | null;
+  updateFailureReason?: string | null;
+  updateFailedAt?: Date | null;
 }
 
 /** One page of the owner's list. */
@@ -133,7 +159,26 @@ export const agentInstanceRepository = {
         stateChangedAt: at,
         ...(patch.failureReason !== undefined ? { failureReason: patch.failureReason } : {}),
         ...(patch.lastActivityAt ? { lastActivityAt: patch.lastActivityAt } : {}),
+        ...imagePatch(patch),
       },
+    });
+    return result.count;
+  },
+
+  /**
+   * Write image-update fields WITHOUT a state move, guarded on the state the
+   * caller read (MOTIR-6952): Update on a hibernated agent pins its target, and a
+   * rollback records its reason while the agent stays `updating`. `tx` required.
+   */
+  async patchImage(
+    id: string,
+    inStates: readonly AgentInstanceState[],
+    patch: AgentInstanceTransitionPatch,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.agentInstance.updateMany({
+      where: { id, state: { in: [...inStates] }, ...LIVE },
+      data: imagePatch(patch),
     });
     return result.count;
   },

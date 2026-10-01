@@ -56,6 +56,13 @@ export interface AgentInstanceDto {
    * be asked — which the page shows as "could not check", NEVER as up to date.
    */
   update: AgentImageUpdateDto;
+  /**
+   * The version an update is moving to (`updating`), or that a hibernated agent
+   * takes at its next wake (Q5); null when no update is pinned.
+   */
+  pendingImageVersion: string | null;
+  /** The last update's failure in words (Q4) — a rollback's reason; null otherwise. */
+  updateFailureReason: string | null;
   region: string;
   state: AgentInstanceState;
   /** Set on `failed`, in words; null otherwise. */

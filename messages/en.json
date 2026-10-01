@@ -8838,7 +8838,8 @@
       "hibernated": "Hibernated",
       "waking": "Waking",
       "failed": "Failed",
-      "deleting": "Deleting"
+      "deleting": "Deleting",
+      "updating": "Updating"
     },
     "progress": {
       "starting": "Booting — cloning the project’s repositories into the home",

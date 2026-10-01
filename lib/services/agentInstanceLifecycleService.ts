@@ -24,7 +24,9 @@ import {
   AgentInstanceRunActiveError,
   AgentInstanceStartRefusedError,
   AgentInstanceStateConflictError,
+  AgentInstanceUpToDateError,
   AgentInstancesUnavailableError,
+  AgentImageCatalogUnavailableError,
   AgentProfileNotOfferedError,
 } from '@/lib/agentInstances/errors';
 import { buildCloneCommand } from '@/lib/agentInstances/cloneCommand';
@@ -39,9 +41,10 @@ import {
   type AgentSignInAnswer,
 } from '@/lib/agentInstances/terminal';
 import { imageDigestResolver, pinnedImageReference } from '@/lib/agentInstances/imageDigest';
-import { imageCatalog } from '@/lib/agentInstances/imageCatalog';
+import { compareVersions, imageCatalog } from '@/lib/agentInstances/imageCatalog';
 import {
   isOfferedProfile,
+  livenessCommandFor,
   profileDisplayName,
   sandboxImageTag,
 } from '@/lib/agentInstances/profiles';
@@ -73,7 +76,10 @@ import type {
 } from '@/lib/dto/agentInstances';
 import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
 import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
-import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
+import {
+  agentInstanceRepository,
+  type AgentInstanceTransitionPatch,
+} from '@/lib/repositories/agentInstanceRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import type { AgentRunEndOutcome } from '@/lib/services/agentInstanceRunService';
@@ -329,7 +335,7 @@ async function systemTransition(
   row: AgentInstance,
   from: readonly AgentInstanceState[],
   to: AgentInstanceState,
-  patch: { failureReason?: string | null; lastActivityAt?: Date } = {},
+  patch: AgentInstanceTransitionPatch = {},
 ): Promise<boolean> {
   const moved = await withWorkspaceServiceContext(row.workspaceId, (tx) =>
     agentInstanceRepository.transition(row.id, from, to, agentInstanceClock.now(), patch, tx),
@@ -361,7 +367,7 @@ async function runningRunIn(
 /** Refuse a person's Hibernate or Delete while a run is running in the agent (§6). */
 async function assertNoRunningRun(
   row: AgentInstance,
-  action: 'hibernated' | 'deleted',
+  action: 'hibernated' | 'deleted' | 'updated',
 ): Promise<void> {
   const running = await runningRunIn(row);
   if (running)
@@ -396,9 +402,17 @@ async function failInstance(
   runDetail: string = RUN_MACHINE_LOST,
 ): Promise<void> {
   await endRunIn(row, 'failed', runDetail);
-  await systemTransition(row, ['starting', 'waking', 'running', 'hibernating'], 'failed', {
-    failureReason: reason,
-  });
+  await systemTransition(
+    row,
+    ['starting', 'waking', 'running', 'hibernating', 'updating'],
+    'failed',
+    {
+      failureReason: reason,
+      // An update that ends in `failed` (its rollback failed) pins nothing more.
+      targetImageDigest: null,
+      targetImageVersion: null,
+    },
+  );
   await closeOpenInterval(row, agentInstanceClock.now(), 'lost');
 }
 
@@ -636,6 +650,98 @@ async function toDtoWithImage(row: AgentInstance): Promise<AgentInstanceDto> {
   return toAgentInstanceDto(row, image.get(row.id) ?? UNKNOWN_IMAGE);
 }
 
+// ── THE IMAGE UPDATE (`docs/decisions/agent-image-update.md` Q2–Q8, MOTIR-6952) ──
+
+/** Q3: the new image must report started within this, or it is rolled back. */
+export const UPDATE_START_DEADLINE_MS = 5 * 60_000;
+/** Q4: the rollback must reach `running` within this, or the agent is `failed`. */
+export const UPDATE_ROLLBACK_DEADLINE_MS = 5 * 60_000;
+
+/** The digest-pinned reference a machine boots for one of this agent's digests. */
+function imageRef(row: AgentInstance, digest: string): string {
+  return pinnedImageReference(row.imageTag, digest);
+}
+
+/** A version as words: the recorded one, or "its previous build" when none was. */
+function versionWords(version: string | null): string {
+  return version ?? 'its previous build';
+}
+
+/**
+ * Before a wake starts a STOPPED machine, put the right image on it (Q4, Q5):
+ * the pinned TARGET when this wake applies an update, else the record's own
+ * digest — which is how a wake after a failed rollback puts the agent back on
+ * the image it last ran. A machine already on that image is left untouched. A
+ * move that is refused while applying a target is not fatal: the wake boots the
+ * old image and the update's settle reports the refusal as a rollback.
+ */
+async function alignMachineImage(
+  row: AgentInstance,
+  handle: PersistentContainerHandle,
+  target: string | null,
+): Promise<void> {
+  const orchestrator = getPersistentOrchestrator();
+  const want = imageRef(row, target ?? row.imageDigest);
+  const status = await orchestrator.describePersistent(handle);
+  if (!status.image || status.image === want) return;
+  try {
+    await orchestrator.moveImage(handle, want, { launch: false });
+  } catch (err) {
+    if (!target) throw err;
+    await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+      agentInstanceRepository.patchImage(
+        row.id,
+        ['updating'],
+        {
+          updateFailureReason:
+            `The update to ${row.targetImageVersion ?? 'the newer version'} didn’t work: ` +
+            `${describeError(err)}. Your agent is back on ${versionWords(row.imageVersion)}.`,
+          updateFailedAt: agentInstanceClock.now(),
+        },
+        tx,
+      ),
+    );
+  }
+}
+
+/**
+ * Q4: the new image failed. Record the reason (the agent STAYS `updating`, its
+ * `updateFailedAt` starting the rollback's clock), then move the machine back to
+ * the record's digest — the one it ran before, because `imageDigest` changes
+ * only on success. A rollback that cannot even be asked for fails the agent.
+ * Never touches the volume.
+ */
+async function beginRollback(row: AgentInstance, detail: string): Promise<void> {
+  const reason =
+    `The update to ${row.targetImageVersion ?? 'the newer version'} didn’t work: ${detail}. ` +
+    `Your agent is back on ${versionWords(row.imageVersion)}.`;
+  const recorded = await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+    agentInstanceRepository.patchImage(
+      row.id,
+      ['updating'],
+      { updateFailureReason: reason, updateFailedAt: agentInstanceClock.now() },
+      tx,
+    ),
+  );
+  if (recorded !== 1) return;
+  const handle = handleOf(row);
+  /* v8 ignore next -- an updating agent always has a handle. */
+  if (!handle) return;
+  try {
+    await getPersistentOrchestrator().moveImage(handle, imageRef(row, row.imageDigest), {
+      launch: true,
+    });
+  } catch (err) {
+    await failInstance(
+      row,
+      `The update to ${row.targetImageVersion ?? 'the newer version'} didn’t work, and your ` +
+        `agent couldn’t be brought back on ${versionWords(row.imageVersion)}: ${describeError(err)}. ` +
+        'Wake to try again, or delete it.',
+      RUN_MACHINE_LOST,
+    );
+  }
+}
+
 export const agentInstanceLifecycleService = {
   /** The caller's own live instances on the project, newest first, one page (§4, §8). */
   async list(
@@ -739,6 +845,10 @@ export const agentInstanceLifecycleService = {
     await assertCredits(project.organizationId);
     const imageTag = sandboxImageTag(input.profileId);
     const imageDigest = await imageDigestResolver.resolve(imageTag);
+    // Q1, Q6: the version is recorded at create, best effort — a registry that
+    // cannot name it leaves it null, to be named by digest at read.
+    const named = await imageCatalog.versionOf(input.profileId, imageDigest).catch(() => null);
+    const imageVersion = named === 'unknown' ? null : named;
 
     const instanceId = randomUUID();
     // Before anything is taken: a misconfigured master key refuses here, loudly.
@@ -768,6 +878,7 @@ export const agentInstanceLifecycleService = {
             profileId: input.profileId,
             imageTag,
             imageDigest,
+            imageVersion,
             region,
           },
           tx,
@@ -844,6 +955,11 @@ export const agentInstanceLifecycleService = {
     const from = statesThatMayEnter('waking');
     if (!from.includes(row.state))
       throw new AgentInstanceStateConflictError(row.id, row.state, 'woken');
+    // Q5: a hibernated agent with an update pinned takes the new image at THIS
+    // wake, and its liveness is checked here — so it enters `updating`, not `waking`.
+    const target = row.state === 'hibernated' ? row.targetImageDigest : null;
+    const to: AgentInstanceState = target ? 'updating' : 'waking';
+    const enterFrom: AgentInstanceState[] = target ? ['hibernated'] : from;
     const handle = handleOf(row);
     if (!handle) throw new AgentInstanceStateConflictError(row.id, row.state, 'woken');
 
@@ -861,8 +977,8 @@ export const agentInstanceLifecycleService = {
     const moved = await inProject(project, ctx, async (tx) => {
       const n = await agentInstanceRepository.transition(
         row.id,
-        from,
-        'waking',
+        enterFrom,
+        to,
         now,
         { failureReason: null, lastActivityAt: now },
         tx,
@@ -896,6 +1012,7 @@ export const agentInstanceLifecycleService = {
       // one is brought up to date BEFORE the start (the machine stays stopped
       // while it is rewritten, its image digest and home volume untouched).
       if (terminal) await getPersistentOrchestrator().ensureMachineConfig(handle, terminal);
+      await alignMachineImage(row, handle, target);
       await getPersistentOrchestrator().start(handle);
     } catch (err) {
       await failInstance(
@@ -904,9 +1021,10 @@ export const agentInstanceLifecycleService = {
       );
       return await toDtoWithImage(await reload(row));
     }
-    await waitFor(
-      INSTANCE_INLINE_BOOT_WAIT_MS,
-      async () => (await this.settleBoot(instanceId)) !== 'pending',
+    await waitFor(INSTANCE_INLINE_BOOT_WAIT_MS, async () =>
+      target
+        ? (await this.settleUpdate(instanceId)) !== 'pending'
+        : (await this.settleBoot(instanceId)) !== 'pending',
     );
     return await toDtoWithImage(await reload(row));
   },
@@ -1060,6 +1178,249 @@ export const agentInstanceLifecycleService = {
   },
 
   /**
+   * UPDATE an agent to the newest published image (`agent-image-update.md` Q2–Q8,
+   * MOTIR-6952), on its owner's say-so.
+   *
+   * - A RUNNING agent moves `running → updating` (keeping its interval and slot,
+   *   running no admission — Q7), its machine is moved to the new digest on the
+   *   SAME volume, and the settle checks liveness: `running` on the new image, or
+   *   rolled back to the old one with the reason in words.
+   * - A HIBERNATED agent changes no machine: the target is pinned on the record
+   *   and the agent stays `hibernated`; its next wake applies it (Q5).
+   *
+   * Refused, moving nothing: not the caller's (404), a run running in it, already
+   * on the newest, any other state, and a registry that could not be asked.
+   */
+  async update(
+    projectKey: string,
+    instanceId: string,
+    ctx: ServiceContext,
+  ): Promise<AgentInstanceDto> {
+    const project = await resolveProject(projectKey, ctx);
+    requireLane();
+    const row = await ownInstance(project, instanceId, ctx);
+    if (row.state !== 'running' && row.state !== 'hibernated') {
+      throw new AgentInstanceStateConflictError(row.id, row.state, 'updated');
+    }
+    // Q1: the newest AT the press, bypassing the cache — this is what is pinned.
+    const newest = await imageCatalog.newestFor(row.profileId, { fresh: true });
+    if (newest === 'unknown') throw new AgentImageCatalogUnavailableError();
+    const named =
+      row.imageVersion ?? (await imageCatalog.versionOf(row.profileId, row.imageDigest));
+    const current = named === 'unknown' ? null : named;
+    if (
+      newest.digest === row.imageDigest ||
+      (current !== null && compareVersions(newest.version, current) <= 0)
+    ) {
+      throw new AgentInstanceUpToDateError(row.id, current);
+    }
+    await assertNoRunningRun(row, 'updated');
+
+    const pin: AgentInstanceTransitionPatch = {
+      targetImageDigest: newest.digest,
+      targetImageVersion: newest.version,
+      updateFailureReason: null,
+      updateFailedAt: null,
+      // A version named only by the catalog is recorded now, so the rollback's
+      // words and the success's record agree on what the agent ran.
+      ...(row.imageVersion === null && current !== null ? { imageVersion: current } : {}),
+    };
+
+    if (row.state === 'hibernated') {
+      const pinned = await inProject(project, ctx, (tx) =>
+        agentInstanceRepository.patchImage(row.id, ['hibernated'], pin, tx),
+      );
+      if (pinned !== 1) {
+        throw new AgentInstanceStateConflictError(row.id, (await reload(row)).state, 'updated');
+      }
+      return await toDtoWithImage(await reload(row));
+    }
+
+    // Running: the guarded move and the run check in ONE transaction, so a run
+    // opened before the move commits is seen here and the move is undone (Q8).
+    const moved = await inProject(project, ctx, async (tx) => {
+      const n = await agentInstanceRepository.transition(
+        row.id,
+        ['running'],
+        'updating',
+        agentInstanceClock.now(),
+        pin,
+        tx,
+      );
+      if (n !== 1) return 0;
+      const running = await dispatchRunRepository.findRunningByAgentInstance(row.id, tx);
+      if (running) {
+        const keys = await dispatchRunRepository.findTargetKeys([running.id], tx);
+        // Thrown INSIDE the transaction, so the guarded move above rolls back.
+        throw new AgentInstanceRunActiveError(
+          row.id,
+          running.id,
+          keys.get(running.id) ?? null,
+          'updated',
+        );
+      }
+      return n;
+    });
+    if (moved !== 1) {
+      throw new AgentInstanceStateConflictError(row.id, (await reload(row)).state, 'updated');
+    }
+
+    const fresh = await reload(row);
+    const handle = handleOf(fresh);
+    if (handle) {
+      try {
+        await getPersistentOrchestrator().moveImage(handle, imageRef(fresh, newest.digest), {
+          launch: true,
+        });
+      } catch (err) {
+        // The machine did not take the new image: nothing to undo on it, so the
+        // settle finds it on the old digest and reports the refusal (Q4).
+        await withWorkspaceServiceContext(fresh.workspaceId, (tx) =>
+          agentInstanceRepository.patchImage(
+            fresh.id,
+            ['updating'],
+            {
+              updateFailureReason:
+                `The update to ${newest.version} didn’t work: ${describeError(err)}. ` +
+                `Your agent is back on ${versionWords(fresh.imageVersion)}.`,
+              updateFailedAt: agentInstanceClock.now(),
+            },
+            tx,
+          ),
+        );
+      }
+    }
+    await waitFor(
+      INSTANCE_INLINE_BOOT_WAIT_MS,
+      async () => (await this.settleUpdate(instanceId)) !== 'pending',
+    );
+    return await toDtoWithImage(await reload(row));
+  },
+
+  /**
+   * SETTLE AN UPDATE (`updating`), idempotently — inline after Update and the
+   * wake that applies one, and by the sweep for one left in motion (Q6). It
+   * reads WHERE THE MACHINE IS rather than remembering what it did:
+   *
+   * - gone / failed → `failed`, the interval closed `lost`;
+   * - on the TARGET, not rolling back → once started, the liveness check (Q3):
+   *   `running` with `imageDigest` ← target, or the rollback begins; not started
+   *   within {@link UPDATE_START_DEADLINE_MS} → the rollback begins;
+   * - on the RECORD's digest → a rollback (or a move that never landed): once
+   *   started, `running` with the reason; not started within
+   *   {@link UPDATE_ROLLBACK_DEADLINE_MS} → `failed`.
+   *
+   * The volume is never touched on any branch.
+   */
+  async settleUpdate(instanceId: string): Promise<'running' | 'failed' | 'pending' | 'noop'> {
+    const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
+    if (!row || row.deletedAt || row.state !== 'updating') return 'noop';
+    const handle = handleOf(row);
+    /* v8 ignore next -- an updating agent always has a handle. */
+    if (!handle) return 'pending';
+    const orchestrator = getPersistentOrchestrator();
+    let status;
+    try {
+      status = await orchestrator.describePersistent(handle);
+    } catch {
+      return 'pending';
+    }
+    if (status.state === 'gone') {
+      await failInstance(
+        row,
+        'The machine was lost during the update. Your home is kept only while its volume exists — delete the agent and create a new one.',
+      );
+      return 'failed';
+    }
+    const now = agentInstanceClock.now().getTime();
+    const target = row.targetImageDigest;
+    const onTarget = target !== null && status.image === imageRef(row, target);
+    const rollingBack = row.updateFailureReason !== null;
+
+    if (onTarget && !rollingBack) {
+      if (status.state !== 'running') {
+        if (now - row.stateChangedAt.getTime() < UPDATE_START_DEADLINE_MS) return 'pending';
+        await beginRollback(row, 'the new version did not start within 5 minutes');
+        return 'pending';
+      }
+      // Q3: the coding agent runs, and the terminal did not disappear. The boot
+      // probes run for the NEW digest — which also records its run launcher
+      // (`agent-instance-run.md` Owed on acceptance).
+      const liveness = await orchestrator.checkLiveness(handle, livenessCommandFor(row.profileId));
+      const asTarget: AgentInstance = { ...row, imageDigest: target };
+      const terminalBefore = row.terminalServer;
+      await probeTerminalServer(asTarget, handle);
+      await probeRunCapabilities(asTarget, handle);
+      const probed = await reload(row);
+      const terminalLost =
+        terminalBefore === 'present' &&
+        probed.terminalServerDigest === target &&
+        probed.terminalServer === 'absent';
+      if (!liveness.alive || terminalLost) {
+        await beginRollback(
+          row,
+          liveness.alive ? 'the new version has no terminal server' : liveness.detail,
+        );
+        return 'pending';
+      }
+      const moved = await systemTransition(row, ['updating'], 'running', {
+        imageDigest: target,
+        imageVersion: row.targetImageVersion,
+        targetImageDigest: null,
+        targetImageVersion: null,
+        updateFailureReason: null,
+        updateFailedAt: null,
+        lastActivityAt: agentInstanceClock.now(),
+      });
+      if (!moved) return 'noop';
+      await armIdleTimer(row);
+      return 'running';
+    }
+
+    // On the record's digest: a rollback, or a move that never landed.
+    if (status.state === 'running') {
+      const moved = await systemTransition(row, ['updating'], 'running', {
+        targetImageDigest: null,
+        targetImageVersion: null,
+        updateFailureReason:
+          row.updateFailureReason ??
+          `The update to ${row.targetImageVersion ?? 'the newer version'} was interrupted. ` +
+            `Your agent is still on ${versionWords(row.imageVersion)}.`,
+        updateFailedAt: row.updateFailedAt ?? agentInstanceClock.now(),
+        lastActivityAt: agentInstanceClock.now(),
+      });
+      if (!moved) return 'noop';
+      // The probes for the digest it is back on (already recorded, usually a no-op).
+      await probeTerminalServer(row, handle);
+      await armIdleTimer(row);
+      return 'running';
+    }
+    const since = (row.updateFailedAt ?? row.stateChangedAt).getTime();
+    if (now - since < UPDATE_ROLLBACK_DEADLINE_MS) {
+      // A machine left stopped mid-rollback is started on the record's digest.
+      if (status.state === 'stopped' && rollingBack) {
+        try {
+          if (status.image !== imageRef(row, row.imageDigest)) {
+            await orchestrator.moveImage(handle, imageRef(row, row.imageDigest), { launch: false });
+          }
+          await orchestrator.start(handle);
+        } catch {
+          // Next pass, or the deadline below.
+        }
+      }
+      return 'pending';
+    }
+    await failInstance(
+      row,
+      `The update to ${row.targetImageVersion ?? 'the newer version'} didn’t work, and your agent ` +
+        `couldn’t be brought back on ${versionWords(row.imageVersion)}: it did not start. ` +
+        'Wake to try again, or delete it.',
+      RUN_MACHINE_LOST,
+    );
+    return 'failed';
+  },
+
+  /**
    * SETTLE A STOP (`hibernating`), idempotently: once Fly reports the machine
    * stopped, close the interval at Fly's stop instant with `endReason` and move
    * to `hibernated`. A machine found gone fails the instance (`lost`). Called
@@ -1151,7 +1512,10 @@ export const agentInstanceLifecycleService = {
    */
   async rollInterval(instanceId: string): Promise<'rolled' | 'noop'> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
-    if (!row || row.deletedAt || row.state !== 'running') return 'noop';
+    // `updating` rolls too: its machine runs, and is charged (Q7).
+    if (!row || row.deletedAt || (row.state !== 'running' && row.state !== 'updating')) {
+      return 'noop';
+    }
     const now = agentInstanceClock.now();
     const rolled = await withWorkspaceServiceContext(row.workspaceId, async (tx) => {
       const open = await agentInstanceIntervalRepository.findOpen(row.id, tx);
