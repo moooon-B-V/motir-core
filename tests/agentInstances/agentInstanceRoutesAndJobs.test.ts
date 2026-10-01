@@ -33,6 +33,7 @@ const collection = await import('@/app/api/projects/[key]/instances/route');
 const one = await import('@/app/api/projects/[key]/instances/[id]/route');
 const wake = await import('@/app/api/projects/[key]/instances/[id]/wake/route');
 const hibernate = await import('@/app/api/projects/[key]/instances/[id]/hibernate/route');
+const update = await import('@/app/api/projects/[key]/instances/[id]/update/route');
 
 beforeEach(async () => {
   await setUpHarness();
@@ -137,6 +138,7 @@ describe('the routes', () => {
       await collection.POST(post(base(), { name: 'x', profileId: 'claude' }), keyParams()),
       await wake.POST(post(`${base()}/x/wake`), idParams('x')),
       await hibernate.POST(post(`${base()}/x/hibernate`), idParams('x')),
+      await update.POST(post(`${base()}/x/update`), idParams('x')),
       await one.DELETE(new Request(`${base()}/x`, { method: 'DELETE' }), idParams('x')),
     ]) {
       expect(res2.status).toBe(401);
@@ -153,6 +155,7 @@ describe('the routes', () => {
       ],
       ['wake', () => wake.POST(post(`${base()}/x/wake`), idParams('x'))],
       ['hibernate', () => hibernate.POST(post(`${base()}/x/hibernate`), idParams('x'))],
+      ['update', () => update.POST(post(`${base()}/x/update`), idParams('x'))],
       ['delete', () => one.DELETE(new Request(`${base()}/x`, { method: 'DELETE' }), idParams('x'))],
     ] as const) {
       const spy = vi

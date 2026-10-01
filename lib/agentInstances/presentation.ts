@@ -21,6 +21,8 @@ export const AGENT_STATE_TONE: Record<AgentInstanceState, RunTone> = {
   waking: 'running',
   failed: 'failed',
   deleting: 'queued',
+  // The busy tone Waking uses (`design/my-agents/design-notes.md`, the update delta).
+  updating: 'running',
 };
 
 /**
@@ -39,6 +41,7 @@ export const AGENT_STATES_IN_MOTION: ReadonlySet<AgentInstanceState> = new Set([
   'hibernating',
   'waking',
   'deleting',
+  'updating',
 ]);
 
 /** The row menu's three moves. */

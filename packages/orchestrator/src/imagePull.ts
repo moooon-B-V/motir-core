@@ -451,3 +451,76 @@ export async function probeImagePull(
     };
   }
 }
+
+/** What {@link listImageTags} answered: the repository's tags, or why it could not tell. */
+export type ImageTagListing =
+  | {
+      readonly ok: true;
+      readonly registry: string;
+      readonly repository: string;
+      readonly tags: readonly string[];
+    }
+  | {
+      readonly ok: false;
+      readonly reason: 'unparseable' | 'unauthorized' | 'unreachable' | 'refused';
+      readonly detail: string;
+    };
+
+/**
+ * Every tag of a PUBLIC repository, read ANONYMOUSLY — `GET /v2/<name>/tags/list`
+ * behind the same challenge → anonymous-token dance {@link probeImagePull} makes
+ * (`docs/decisions/agent-image-update.md` Q1, MOTIR-6949). Measured 2026-10-01
+ * against `ghcr.io/moooon-b-v/motir-sandbox`: 117 tags, `claude` … `claude-0.10.0`.
+ *
+ * `repository` is a reference WITHOUT a tag or digest (`ghcr.io/owner/name`); a
+ * tag on it is ignored. NEVER THROWS: a registry that cannot be read is an answer
+ * the caller shows as "could not check", never as an empty list.
+ */
+export async function listImageTags(repository: string): Promise<ImageTagListing> {
+  const parsed = parseImageReference(repository);
+  if (!parsed) {
+    return {
+      ok: false,
+      reason: 'unparseable',
+      detail: `"${repository}" is not an image reference`,
+    };
+  }
+  const base = `https://${parsed.registry}/v2/${parsed.repository}/tags/list?n=1000`;
+  try {
+    const accept = 'application/json';
+    let res = await registryFetch(base, { accept });
+    if (res.status === 401) {
+      const challenge = parseBearerChallenge(res.headers.get('www-authenticate'));
+      const token = challenge ? await anonymousToken(challenge) : null;
+      if (!token) {
+        return {
+          ok: false,
+          reason: 'unauthorized',
+          detail: 'the registry refused an anonymous token to list this repository',
+        };
+      }
+      res = await registryFetch(base, { accept, authorization: `Bearer ${token}` });
+    }
+    if (!res.ok) {
+      return {
+        ok: false,
+        reason: 'refused',
+        detail: `the registry refused the tag list (HTTP ${res.status})`,
+      };
+    }
+    const body: unknown = await res.json().catch(() => null);
+    const tags =
+      body && typeof body === 'object' && Array.isArray((body as Record<string, unknown>)['tags'])
+        ? ((body as Record<string, unknown>)['tags'] as unknown[]).filter(
+            (t): t is string => typeof t === 'string',
+          )
+        : [];
+    return { ok: true, registry: parsed.registry, repository: parsed.repository, tags };
+  } catch (err) {
+    return {
+      ok: false,
+      reason: 'unreachable',
+      detail: `the registry could not be reached: ${detailOf(err)}`,
+    };
+  }
+}

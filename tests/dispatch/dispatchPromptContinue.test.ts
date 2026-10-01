@@ -1,8 +1,15 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { ContinueFromInvalidError } from '@/lib/dispatchRuns/errors';
+import {
+  agentInstanceRunService,
+  type AgentRunEndOutcome,
+} from '@/lib/services/agentInstanceRunService';
 import { dispatchPromptService } from '@/lib/services/dispatchPromptService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
+import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
+import { hostedRunService, type HostedRunEndOutcome } from '@/lib/services/hostedRunService';
+import { workItemContinueService } from '@/lib/services/workItemContinueService';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -217,5 +224,124 @@ describe('getDispatchPrompt with continueFrom — a run across repositories', ()
       text.replaceAll(id, 'RUN').replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z/g, 'TIME');
     expect(norm(perRepo.prompt, run.id)).toBe(norm(single.prompt, legacy));
     expect(perRepo.prompt).toContain('Its work is on the branch task/one.');
+  });
+});
+
+// HOW THE DEAD RUN ENDED, AS THE CONTINUE PROMPT SAYS IT (MOTIR-7085). Both end
+// paths close a stall and the 12-hour backstop `abandoned` — the stop reason a
+// lapse writes too — so the sentence is driven through the REAL end paths here,
+// never a hand-built `stopReason: null` row.
+describe('getDispatchPrompt with continueFrom — how the dead run ended', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function openWithBranch(fx: WorkItemFixture, origin: 'local' | 'hosted') {
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'the card' });
+    await setStatus(card.id, 'in_progress');
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run',
+        origin,
+        cards: [{ key: card.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    await dispatchRunService.appendEvents(
+      run.id,
+      [
+        {
+          kind: 'checkout_ready',
+          workItemKey: card.identifier,
+          disposition: 'running',
+          data: { branch: 'subtask/the-work' },
+        },
+      ],
+      fx.ctx,
+    );
+    return { card, runId: run.id };
+  }
+
+  async function endedBy(
+    end:
+      | { origin: 'hosted'; outcome: HostedRunEndOutcome }
+      | { origin: 'instance'; outcome: AgentRunEndOutcome },
+  ) {
+    const fx = await makeWorkItemFixture();
+    const { card, runId } = await openWithBranch(fx, end.origin === 'hosted' ? 'hosted' : 'local');
+    if (end.origin === 'hosted') {
+      // The revocations call out; every one of them answering "failed" is still an end.
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response('{}', { status: 503 })),
+      );
+      const ended = await hostedRunService.endHostedRun(runId, end.outcome, 'the end detail');
+      expect(ended.closed).toBe(true);
+    } else {
+      await adminDb.dispatchRun.update({ where: { id: runId }, data: { origin: 'instance' } });
+      const ended = await agentInstanceRunService.end(runId, end.outcome, 'the end detail');
+      expect(ended.closed).toBe(true);
+    }
+    return (await prompt(fx, card.identifier, runId)).prompt;
+  }
+
+  it.each<[HostedRunEndOutcome, string]>([
+    [
+      'stall',
+      'It ended: the hosted run stalled — it produced no output for too long — and was stopped.',
+    ],
+    ['backstop', 'It ended: the hosted run reached its 12-hour time limit and was stopped.'],
+    ['lost_supervision', 'It ended: the run stopped reporting (no heartbeat reached Motir).'],
+  ])('a hosted run ended %s', async (outcome, sentence) => {
+    expect(await endedBy({ origin: 'hosted', outcome })).toContain(sentence);
+  });
+
+  it.each<[AgentRunEndOutcome, string]>([
+    [
+      'stall',
+      'It ended: the run in the agent stalled — it produced no output for too long — and was stopped.',
+    ],
+    ['backstop', 'It ended: the run in the agent reached its 12-hour time limit and was stopped.'],
+    ['lapsed', 'It ended: the run stopped reporting (no heartbeat reached Motir).'],
+  ])('a run in an agent ended %s', async (outcome, sentence) => {
+    expect(await endedBy({ origin: 'instance', outcome })).toContain(sentence);
+  });
+
+  it('a local run the lapse reap closed stopped reporting', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, runId } = await openWithBranch(fx, 'local');
+    await adminDb.dispatchRun.update({
+      where: { id: runId },
+      data: { lastHeartbeatAt: new Date(Date.now() - 24 * 60 * 60_000) },
+    });
+    expect((await dispatchRunSweepService.reapLapsed()).runsReaped).toBe(1);
+
+    const text = (await prompt(fx, card.identifier, runId)).prompt;
+    expect(text).toContain('It ended: the run stopped reporting (no heartbeat reached Motir).');
+  });
+
+  it('a run in an agent the continue takeover closed stopped reporting', async () => {
+    // A hosted run never lapses (its liveness is its supervision); a run in an
+    // agent does, and the takeover closes it `timed_out` + `abandoned` with no `end`.
+    const fx = await makeWorkItemFixture();
+    const { card, runId } = await openWithBranch(fx, 'local');
+    await adminDb.dispatchRun.update({
+      where: { id: runId },
+      data: { origin: 'instance', lastHeartbeatAt: new Date(Date.now() - 24 * 60 * 60_000) },
+    });
+    const claim = await workItemContinueService.claimContinue(
+      fx.projectId,
+      card.identifier,
+      fx.ctx,
+    );
+    expect(claim).toMatchObject({ outcome: 'claimed' });
+    expect(await adminDb.dispatchRun.findUnique({ where: { id: runId } })).toMatchObject({
+      status: 'timed_out',
+      stopReason: 'abandoned',
+    });
+
+    const text = (await prompt(fx, card.identifier, runId)).prompt;
+    expect(text).toContain('It ended: the run stopped reporting (no heartbeat reached Motir).');
   });
 });

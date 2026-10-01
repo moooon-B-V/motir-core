@@ -230,27 +230,59 @@ function openedBranches(
 /**
  * How a dead run ended, in the words the CONTINUE prompt hands the next agent.
  * Read off the stop reason first (it says WHY), then the status.
+ *
+ * ⚠️ `timeout` FIRST, BEFORE THE `abandoned` SHORTCUT (MOTIR-7085) — the same order
+ * as {@link diedReason}, for the same reason: both end paths close a stall and the
+ * 12-hour backstop `abandoned`, so read first, the stall and the backstop were
+ * unreachable and the agent continuing a stalled run was told it lost its
+ * heartbeat. `timeout` is {@link runTimeoutReason}'s answer for this run.
  */
-export function endedHow(run: {
-  status: string;
-  stopReason: string | null;
-  origin: string;
-}): string {
-  if (run.status === 'running' || run.stopReason === 'abandoned') {
+export function endedHow(
+  run: {
+    status: string;
+    stopReason: string | null;
+    origin: string;
+  },
+  timeout: 'stalled' | 'backstop' | null,
+): string {
+  if (run.status === 'running') return 'the run stopped reporting (no heartbeat reached Motir)';
+  // A run in the developer's own agent is closed `timed_out` by the same stall
+  // window and 12-hour backstop as a hosted one (`agent-instance-run.md` §6).
+  const who =
+    run.origin === 'hosted'
+      ? 'the hosted run'
+      : run.origin === 'instance'
+        ? 'the run in the agent'
+        : null;
+  if (run.status === 'timed_out' && who !== null && timeout !== null) {
+    return timeout === 'backstop'
+      ? `${who} reached its 12-hour time limit and was stopped`
+      : `${who} stalled — it produced no output for too long — and was stopped`;
+  }
+  if (run.stopReason === 'abandoned') {
     return 'the run stopped reporting (no heartbeat reached Motir)';
   }
   if (run.stopReason === 'interrupted') return 'it was stopped from its terminal';
   if (run.status === 'failed') return 'the agent exited with an error';
   if (run.status === 'cancelled') return 'it was cancelled';
-  if (run.status === 'timed_out' && run.origin === 'hosted') {
-    return 'the hosted run stalled or reached its time limit';
-  }
-  // A run in the developer's own agent is closed `timed_out` by the same stall
-  // window and 12-hour backstop as a hosted one (`agent-instance-run.md` §6).
-  if (run.status === 'timed_out' && run.origin === 'instance') {
-    return 'the run in the agent stalled or reached its time limit';
-  }
+  if (run.status === 'timed_out' && who !== null) return `${who} stalled or reached its time limit`;
   return `it ended ${run.status}`;
+}
+
+/**
+ * A hosted or agent `timed_out` run's timeout — the stall watchdog or the 12-hour
+ * backstop — read off its closing `log` line; `null` for every other run, and for
+ * one that LAPSED rather than timed out. What {@link diedReason} and
+ * {@link endedHow} both split on, so the marker and the prompt cannot disagree.
+ */
+export async function runTimeoutReason(
+  run: Pick<LatestRunForWorkItem, 'id' | 'status' | 'origin' | 'stopReason'>,
+  tx: Prisma.TransactionClient,
+): Promise<'stalled' | 'backstop' | null> {
+  if (run.status !== 'timed_out' || (run.origin !== 'hosted' && run.origin !== 'instance')) {
+    return null;
+  }
+  return timeoutReason(run, tx);
 }
 
 /**
@@ -270,10 +302,8 @@ async function diedReason(
   if (run.status === 'running') return 'lapsed';
   // An `instance` run's supervise job closes it with the hosted words — a stall or
   // the 12-hour backstop (`agent-instance-run.md` §6) — so it splits the same way.
-  if (run.status === 'timed_out' && (run.origin === 'hosted' || run.origin === 'instance')) {
-    const timeout = await timeoutReason(run, tx);
-    if (timeout !== null) return timeout;
-  }
+  const timeout = await runTimeoutReason(run, tx);
+  if (timeout !== null) return timeout;
   if (run.stopReason === 'abandoned') return 'lapsed';
   if (run.stopReason === 'interrupted') return 'interrupted';
   if (run.status === 'failed') return 'failed';
@@ -292,7 +322,7 @@ async function diedReason(
  * since …` — and otherwise is read by its words, the 12-hour backstop naming itself.
  */
 async function timeoutReason(
-  run: LatestRunForWorkItem,
+  run: Pick<LatestRunForWorkItem, 'id' | 'stopReason'>,
   tx: Prisma.TransactionClient,
 ): Promise<'stalled' | 'backstop' | null> {
   const last = await dispatchRunEventRepository.findLatestOfKind(run.id, 'log', tx);

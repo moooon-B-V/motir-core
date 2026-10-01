@@ -10,7 +10,11 @@ import {
   type FindingsPolicy,
 } from '@/lib/dispatch/promptTemplate';
 import { ContinueFromInvalidError } from '@/lib/dispatchRuns/errors';
-import { endedHow, resolveContinueBranch } from '@/lib/services/workItemContinueService';
+import {
+  endedHow,
+  resolveContinueBranch,
+  runTimeoutReason,
+} from '@/lib/services/workItemContinueService';
 import type { DispatchPromptDto, DispatchRepoDto } from '@/lib/dto/dispatch';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { listDispatchRepoNames, resolveDispatchRepoForItem } from '@/lib/workItems/dispatchRepo';
@@ -300,7 +304,7 @@ async function resolveContinueFrom(
     if (branch === null) throw new ContinueFromInvalidError(runId, 'unknown');
     return {
       deadRunId: run.id,
-      endedHow: endedHow(run),
+      endedHow: endedHow(run, await runTimeoutReason(run, tx)),
       lastHeardAt: (run.lastHeartbeatAt ?? run.endedAt ?? run.startedAt).toISOString(),
       dispatcherName: run.createdBy?.name ?? null,
       branch,

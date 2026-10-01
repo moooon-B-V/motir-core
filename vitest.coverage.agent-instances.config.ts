@@ -104,6 +104,8 @@ export default defineConfig({
       'tests/components/AgentDialogs.test.tsx',
       'tests/components/AgentTerminal.test.tsx',
       'tests/components/useAgentTerminal.test.tsx',
+      // The image update (Story MOTIR-6862 · MOTIR-6954).
+      'tests/components/MyAgentsUpdate.test.tsx',
     ],
     coverage: {
       provider: 'v8',
