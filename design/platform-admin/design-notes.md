@@ -1049,3 +1049,89 @@ by-workspace and by-model usage rollup; MOTIR-732 keeps the Usage & cost page.
 - **Any customer-facing surface.** `design/billing/ci-line.mock.html` is the customer's CI line and is
   referenced only as the thing this must never resemble or feed.
 - **Hard gate B's live list or figures** — MOTIR-5280.
+
+# AMENDMENT 2026-10-01 — the estate overview, Usage & cost and the drill-down, redrawn and published (MOTIR-7237)
+
+**Mock:** `design/platform-admin/console--estate-usage-drilldown.mock.html` — a DELTA. It amends this file's
+**Panel 2** (estate overview), **Panels 4–5** (Usage & cost) and **Panels 6 and 11** (the drill-down and the
+org page's reserved regions). Those panels were drawn by MOTIR-728, which closed before design results were
+published, so they were never approved; this delta is what MOTIR-731, MOTIR-732, MOTIR-733 and the fleet-COGS
+delta MOTIR-5285 build against. The older panels stay as the record of June's drawing — where they disagree
+with this section, this section wins.
+
+## What changed, and why
+
+|               | was (Panels 2 / 4–6 / 11)                                    | now (D1–D7)                                                                                             | why                                                                                                                     |
+| ------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Shell nav     | Overview · Usage & cost · Tenants; Monitoring "10.2"         | the SHIPPED nav: Overview · Usage & cost · Tenants · Users · Monitoring; Governance "10.3"              | Users and Monitoring shipped (MOTIR-1167, MOTIR-4595). Usage & cost goes live with MOTIR-732 (it ships as "soon" today) |
+| Paging        | "Page 1 of 9,784", "Showing 1–5 of 48,920"                   | **Newer / Older** and **Show more**, no totals                                                          | a total over an unbounded cross-tenant stream is a scan; keyset only (finding #57)                                      |
+| Period        | "this month" fixed                                           | a period control (D1: 7 days / 30 days / this month) and a month control (D3–D5)                        | every delta and every figure is relative to one chosen window                                                           |
+| Spend columns | one Tokens column                                            | **Planning** and **Coding** columns, Credits total                                                      | the two spines come from different meters (MOTIR-7238) and an operator asks which one moved                             |
+| Unattributed  | absent                                                       | an **Unattributed coding spend** row inside each org (D3, D5), never summed into a workspace or project | hosted runs charged before they carried a workspace/project (MOTIR-7240) roll up to their org only                      |
+| Runs feed     | planning/coding jobs only, from a source nobody built        | merged with tenant events under ONE cursor; runs from `GET /v1/platform/runs` (MOTIR-7239)              | the producer now exists and is named                                                                                    |
+| Drill-down    | Panel 6's standalone page; Panel 11's three reserved regions | fills Panel 11's org page in place (D5) and adds a workspace level (D6)                                 | the org page shipped (MOTIR-4566); a second org page would duplicate it                                                 |
+| motir-ai down | Panel 7(d): the whole page errors                            | partial: Motir's own data renders and the missing half says so (D2a, D7b–c)                             | an operator debugging an incident needs the half that still works                                                       |
+
+## The panels
+
+- **D1 — Estate overview (MOTIR-731).** Four counts (orgs, workspaces, projects, users), each with "+N in the
+  last {period}". The activity feed merges new orgs / workspaces / projects with planning and coding runs,
+  newest first. A coding run with no workspace/project shows its org and "(unattributed)". Rows open D5 / D6.
+- **D2 — Overview states.** (a) runs unavailable: counts + tenant events render, a note above the feed names the
+  missing half with Retry; (b) empty estate; (c) loading (`aria-live` region).
+- **D3 — Usage & cost · by tenancy (MOTIR-732).** Month control; segmented control (By tenancy / By model &
+  consumers — MOTIR-5285 adds a third option later); hero figure split planning + coding; the org → workspace →
+  project tree with Members / Planning / Coding / Share / Credits; the unattributed row; Show more orgs.
+- **D4 — Usage & cost · by model & consumers (MOTIR-732).** Per-model rows split by spine; top consumers by
+  credits, each opening D5.
+- **D5 — Drill-down · org (MOTIR-733).** The shipped org page, its header / classification control / Index &
+  fleet cost card unchanged. The reserved regions become Usage & cost (by workspace + unattributed, a link into
+  D3), Members (keyset, roles read-only), Recent jobs (runs slice for this org); a new Workspaces card opens D6.
+  The audited-read banner stays. Status is display-only (Story 10.3 acts on it).
+- **D6 — Drill-down · workspace (MOTIR-733).** a page one level beneath the org page (its route is MOTIR-733’s to add): projects with
+  spend, members, recent jobs (attributed runs only). The project page is the same minus the Projects card.
+- **D7 — States.** No spend in the month; Usage & cost with motir-ai unreachable; a drill-down usage card
+  unavailable while Motir's own cards render; loading.
+
+## Primitives composed (no hand-rolling)
+
+The mock's style block and icon sprite are copied verbatim from `console.mock.html`; every element is one of
+its existing components: the admin shell (`admin-nav`, `adminbar`, staff mark, search), `card` / `card-head` /
+`card-foot` (`Card`), `tbl` and `tbl tree` (`Table`), `pill` (`Pill` tones per entity / run kind), `segmented`
+(`Segmented`), `usebar`, `stat-grid` stats, `scope` breadcrumb, `audit-banner`, `note`, `states-grid` /
+`state` / `state err` (`EmptyState`, error state), `sk` skeletons. No new class and no new colour is introduced.
+
+## Colour roles
+
+Unchanged from Panels 2/4–6/11: entity tints `ent-org` / `ent-ws` / `ent-proj` / `ent-user` for avatars and
+icons; run kinds `pill-plan` (planning) and `pill-code` (coding); the unattributed row is deliberately neutral
+(`pill-neutral`, a "?" avatar with no tint) so it never reads as a tenant.
+
+## Copy strings (en — the `platformAdmin` namespace)
+
+| key                                              | en                                                                                                                                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `overview.period.7d` / `.30d` / `.month`         | 7 days / 30 days / This month                                                                                                                                                  |
+| `overview.stat.delta`                            | +{count} in the last {period}                                                                                                                                                  |
+| `overview.feed.title`                            | Recent estate activity                                                                                                                                                         |
+| `overview.feed.subtitle`                         | New tenants, and planning and coding runs, across every organization — newest first.                                                                                           |
+| `overview.feed.runsUnavailable`                  | Runs are unavailable right now. The usage service didn’t answer, so planning and coding runs are missing from this feed. New tenants still show — they come from Motir itself. |
+| `overview.feed.unattributed`                     | (unattributed)                                                                                                                                                                 |
+| `overview.empty.title`                           | No tenants yet                                                                                                                                                                 |
+| `pager.newer` / `pager.older` / `pager.showMore` | Newer / Older / Show more                                                                                                                                                      |
+| `usage.col.planning` / `.coding` / `.credits`    | Planning / Coding / Credits                                                                                                                                                    |
+| `usage.unattributed.name`                        | Unattributed coding spend                                                                                                                                                      |
+| `usage.unattributed.badge`                       | Not in a project                                                                                                                                                               |
+| `usage.empty.title`                              | No usage in {month}                                                                                                                                                            |
+| `usage.error.title`                              | Couldn’t load usage                                                                                                                                                            |
+| `usage.error.body`                               | The usage service didn’t respond, so this month’s figures aren’t available. Nothing is zero — the figures simply aren’t loaded.                                                |
+| `drill.workspaces.title`                         | Workspaces · {count}                                                                                                                                                           |
+| `drill.members.title`                            | Members · {count}                                                                                                                                                              |
+| `drill.jobs.title`                               | Recent jobs                                                                                                                                                                    |
+| `drill.usageUnavailable`                         | Usage isn’t available right now. Members and workspaces below are unaffected.                                                                                                  |
+
+## What this amendment does NOT draw
+
+- **The fleet & index COGS segment** — MOTIR-5285, drawn as its own delta on D3/D4.
+- **Any governance action** (suspend, grant, impersonate, tier change) — Story 10.3.
+- **The operator lessons console** — Story 10.5 (MOTIR-1408).
