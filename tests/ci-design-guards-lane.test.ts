@@ -272,9 +272,11 @@ describe('the design-asset guard lane (MOTIR-2442)', () => {
     // The permission existed solely for the keyless OIDC identity the publish
     // step used (MOTIR-2668). With the step gone it grants a capability with no
     // consumer, which is how a retired mechanism leaves a live credential
-    // behind. `authenticateGithubOidc` is untouched — the acceptance-video
-    // publisher still uses it, from its OWN workflow's own `id-token: write`,
-    // which is why this assertion is scoped to THIS job and not to the file.
+    // behind. `authenticateGithubOidc` is untouched — the acceptance-receipt
+    // publisher uses it again since MOTIR-7253 (restored after MOTIR-4096
+    // retired it), from its OWN workflow's shard job and its own
+    // `id-token: write`, which is why this assertion is scoped to THIS job and
+    // not to the file.
     expect(guardCode).not.toMatch(/id-token:\s*write/);
   });
 

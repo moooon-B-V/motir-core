@@ -1,23 +1,19 @@
 # Acceptance-video recording + upload (BYOK)
 
-> ## ⚠️ THE TWO PIECES THIS GUIDE HANDS YOU NO LONGER EXIST IN THIS REPOSITORY
+> ## The uploader and its Action are back (MOTIR-7253, 2026-10-01)
 >
-> **Retired 2026-09-01 by MOTIR-4096** (`docs/decisions/acceptance-video.md`, the
-> 2026-09-01 amendment). `scripts/upload-acceptance-video.mjs` and
-> `.github/actions/upload-acceptance-video/` are DELETED: Motir's own receipt is
-> published by the **agent**, over the Motir MCP surface, not by CI. This page is
-> kept rather than deleted because **the SERVER side is unchanged and still
-> shipped** — the publish endpoint, its eligibility and cap checks, the keyless
-> GitHub-OIDC auth and the `integration` PAT fallback all work exactly as
-> described below, and an external CI is still welcome to use them.
->
-> **So read it as a PROTOCOL, not as a set of files to `uses:`.** Everything about
-> the recording half is current (the Playwright lane, the `chapter()` harness, the
-> `acceptance-story.json` sidecar, the watchability floor and the size caps).
-> Everything that says "the uploader" or "the Action" now describes a client you
-> would have to write: the requests it makes, and the responses it must handle,
-> are what this page pins. `nextjs-prisma-vercel-starter` still vendors a copy of
-> the Action; MOTIR-4097 retires that one.
+> `scripts/upload-acceptance-video.mjs` and `.github/actions/upload-acceptance-video/`
+> were retired on 2026-09-01 (MOTIR-4096), when the agent took over publishing over
+> MCP, and RESTORED on 2026-10-01: for the repositories Motir writes itself —
+> motir-core and every project generated from `nextjs-prisma-vercel-starter` — CI
+> publishes the receipt again, from a green `pull_request` run, over keyless GitHub
+> OIDC only (`docs/decisions/acceptance-video.md`, the 2026-10-01 amendment). Two
+> things differ from the copy this page first described: `producedByKey` is no longer
+> an input — the script sends the PR's own card key, so a CI and an MCP publish of
+> one commit collapse to one receipt — and a closed story's
+> `ACCEPTANCE_EVIDENCE_STORY_CLOSED` refusal is reported as skipped. The MCP door
+> (`create_acceptance_upload` + `publish_acceptance_result`) stays open for every
+> other repository.
 
 Story **MOTIR-1627** closes the review loop with a human **acceptance gate**: a
 story's E2E, on a green run, records a short **video**; CI ships it to the story
@@ -76,15 +72,14 @@ jobs:
         run: pnpm exec playwright test --config playwright.acceptance.config.ts
 
       - name: Publish the acceptance video (green only)
-        if: success()
+        if: success() && github.event_name == 'pull_request'
         uses: ./.github/actions/upload-acceptance-video
         with:
           # Resolve the target story from the PR instead of a hardcoded key
           # (MOTIR-1684): the PR's `MOTIR-<id>` → its parent story.
           pr-ref: ${{ github.head_ref }}
           pr-title: ${{ github.event.pull_request.title }}
-          fallback-story-key: MOTIR-1627 # used on push-to-main / no PR id
-          produced-by: MOTIR-1638
+          fallback-story-key: MOTIR-1627 # used when nothing else resolves a story
           # Publish only the specs THIS PR changed (MOTIR-1937 — see below).
           changed-specs: ${{ steps.owned-specs.outputs.specs }}
           # no `token:` — keyless OIDC. base-url defaults to https://app.motir.co
@@ -186,14 +181,14 @@ to MOTIR-1627 and is never mis-attributed to an unrelated PR); **(3)** the PR's
 `pr-ref` + `pr-title` + `fallback-story-key`, or self-declare via the harness —
 not a hardcoded `story-key`.
 
-## Fallback — the `MOTIR_UPLOAD_TOKEN` secret (unconnected repos)
+## Fallback — a `MOTIR_PUBLISH_TOKEN` secret (unconnected repos only)
 
 If your repo is **not** connected via the Motir GitHub App, authenticate with a
 token instead of OIDC:
 
 1. In Motir, mint a **token** scoped to **`integration`** (Settings → Account →
    Tokens), bound to the workspace that owns the story.
-2. Add it to your repo as the **`MOTIR_UPLOAD_TOKEN`** secret and pass it to the
+2. Add it to your repo as a **`MOTIR_PUBLISH_TOKEN`** secret and pass it to the
    Action — you can then drop the `id-token: write` permission:
 
 ```yaml
@@ -202,8 +197,7 @@ token instead of OIDC:
   uses: ./.github/actions/upload-acceptance-video
   with:
     story-key: MOTIR-1627
-    produced-by: MOTIR-1638
-    token: ${{ secrets.MOTIR_UPLOAD_TOKEN }}
+    token: ${{ secrets.MOTIR_PUBLISH_TOKEN }}
 ```
 
 Same endpoint (`POST /api/work-items/<storyKey>/acceptance-evidence`) and the
