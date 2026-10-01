@@ -1,5 +1,5 @@
 import { FLEET_CONTAINER_SIZE, type TeardownReason } from '@motir/orchestrator';
-import { checkAgentRunCredits } from '@/lib/ai/motirAiClient';
+import { checkAgentRunCredits, type AgentModel } from '@/lib/ai/motirAiClient';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { DispatchRunTerminalError } from '@/lib/dispatchRuns/errors';
 import { gateIdOfReviewRunKey } from '@/lib/agentReview/reviewRunKey';
@@ -328,8 +328,11 @@ function detailOf(err: unknown): string {
 
 /** What the pre-flights settled — the inputs the boot needs. */
 interface HostedRunPreflight {
-  /** The model the run takes — the dispatcher's choice, or a review's default. */
+  /** The model the run takes — the dispatcher's choice, or a review's default. BARE. */
   model: string;
+  /** Its offered entry, carrying the PROVIDER OpenCode's `--model` is spelled with
+   *  (MOTIR-7208; `hosted-agent-run.md` §7). Read in the same call that validated it. */
+  offered: AgentModel;
   organizationId: string;
   repositories: RunRepository[];
   fleet: ReturnType<typeof hostedAgentFleetConfig>;
@@ -358,13 +361,11 @@ async function preflight(
   await ciAllowanceService.assertDispatchAllowed(ctx);
 
   // ── 2 · The model, live — never a cache ──────────────────────────────────
-  let model: string;
-  if (input.model === undefined) {
-    model = await hostedRunModelService.defaultOffered();
-  } else {
-    await hostedRunModelService.assertOffered(input.model);
-    model = input.model;
-  }
+  const offered =
+    input.model === undefined
+      ? await hostedRunModelService.defaultOffered()
+      : await hostedRunModelService.assertOffered(input.model);
+  const model = offered.id;
 
   // ── 3 · Credits — the gateway's own balance rule ────────────────────────
   const organizationId = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -391,7 +392,7 @@ async function preflight(
   }
   // The fleet, last of the reads: an unconfigured deployment opens nothing.
   const fleet = hostedAgentFleetConfig();
-  return { model, organizationId, repositories, fleet };
+  return { model, offered, organizationId, repositories, fleet };
 }
 
 /**
@@ -462,7 +463,9 @@ async function launch(
       MOTIR_RUN_TOKEN: runCredential.token,
       MOTIR_GATEWAY_URL: runKey.containerEnv.MOTIR_GATEWAY_URL,
       MOTIR_RUN_KEY: runKey.containerEnv.MOTIR_RUN_KEY,
-      MOTIR_MODEL: toOpenCodeModel(input.model),
+      // The ONE prefixed spelling — the offered entry's own provider (MOTIR-7208).
+      // The key above, `DispatchRun.model` and the stamped provenance stay BARE.
+      MOTIR_MODEL: toOpenCodeModel(checked.offered),
       ...extraEnv,
     },
     region: fleet.region,

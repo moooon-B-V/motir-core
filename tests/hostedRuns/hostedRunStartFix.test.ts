@@ -88,7 +88,10 @@ function stub(s: Stub = {}): void {
       if (url === `${AI}/v1/agent-models`) {
         const ids = s.models?.ids ?? [MODEL];
         return json(200, {
-          models: ids.map((id) => ({ id, provider: 'anthropic' })),
+          models: ids.map((id) => ({
+            id,
+            provider: id.startsWith('deepseek') ? 'deepseek' : 'anthropic',
+          })),
           default: ids[0] ?? null,
         });
       }
@@ -715,4 +718,23 @@ describe('Fix on the hosted agent — how it ends moves no card', () => {
       expect(again.dispatchRunId).not.toBe(started.dispatchRunId);
     });
   }
+});
+
+// ── MOTIR-7208: a DeepSeek offered entry — the env is <provider>/<id>, the key BARE ──
+const DEEPSEEK = 'deepseek-v4-pro';
+
+describe('Fix on the hosted agent with a DeepSeek model (MOTIR-7208)', () => {
+  it('boots MOTIR_MODEL=deepseek/<id> and mints the key for the bare id', async () => {
+    const { card } = await sentBackCard('agent_review');
+    stub({ models: { ids: [MODEL, DEEPSEEK] } });
+
+    const started = await pressFix(card.identifier, { model: DEEPSEEK });
+
+    expect(started.created).toBe(true);
+    expect(fakeOrchestrator.specs[0]!.env).toMatchObject({
+      MOTIR_MODEL: `deepseek/${DEEPSEEK}`,
+      MOTIR_RUN_MODE: 'fix',
+    });
+    expect(mintCalls()[0]!.body!['models']).toEqual([DEEPSEEK]);
+  });
 });
