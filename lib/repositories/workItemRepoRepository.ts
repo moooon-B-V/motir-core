@@ -132,6 +132,63 @@ export const workItemRepoRepository = {
     return rows.map((r) => r.projectRepoId);
   },
 
+  /**
+   * Per repository a CONTAINER's live leaves reference: how many leaves target
+   * it, and how many of those SHIPPED WITHOUT A CHANGE REQUEST — in a
+   * done-category status and carrying no linked delivery at all (MOTIR-7180).
+   *
+   * The same walk and the same leaf rule as {@link listDerivedRefsForContainer}
+   * (non-archived, childless, the container itself excluded), so it reasons
+   * about exactly the leaves that put each repository into the container's set.
+   * A done category is read from the leaf's own project workflow, never from a
+   * status key, because a project may name its done statuses anything.
+   *
+   * A repository no leaf references does not appear, and a leaf container
+   * (no children) returns `[]`.
+   */
+  async listLeafSettlementForContainer(
+    containerId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ projectRepoId: string; leaves: number; settled: number }[]> {
+    const rows = await tx.$queryRaw<{ projectRepoId: string; leaves: bigint; settled: bigint }[]>`
+      WITH RECURSIVE descendants AS (
+        SELECT w."id", w."archivedAt"
+          FROM "work_item" w
+          WHERE w."id" = ${containerId} AND w."workspaceId" = ${workspaceId}
+        UNION ALL
+        SELECT c."id", c."archivedAt"
+          FROM "work_item" c
+          JOIN descendants d ON c."parentId" = d."id"
+          WHERE c."workspaceId" = ${workspaceId} AND c."archivedAt" IS NULL
+      )
+      SELECT wir."project_repo_id" AS "projectRepoId",
+             COUNT(*) AS "leaves",
+             COUNT(*) FILTER (
+               WHERE ws."category" = 'done'
+                 AND NOT EXISTS (
+                   SELECT 1 FROM "work_item_delivery" del WHERE del."work_item_id" = leaf."id"
+                 )
+             ) AS "settled"
+        FROM descendants d
+        JOIN "work_item" leaf ON leaf."id" = d."id"
+        JOIN "work_item_repository" wir ON wir."work_item_id" = d."id"
+        LEFT JOIN "workflow_status" ws
+               ON ws."project_id" = leaf."projectId" AND ws."key" = leaf."status"
+       WHERE d."id" <> ${containerId}
+         AND d."archivedAt" IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM "work_item" k
+            WHERE k."parentId" = d."id" AND k."archivedAt" IS NULL
+         )
+       GROUP BY wir."project_repo_id"`;
+    return rows.map((r) => ({
+      projectRepoId: r.projectRepoId,
+      leaves: Number(r.leaves),
+      settled: Number(r.settled),
+    }));
+  },
+
   /** Drop one item's references. Paired with {@link createMany} by the service:
    *  a repository SET is replaced wholesale, never patched element by element
    *  (which is why `position` is an ordinal and not a fractional index). */

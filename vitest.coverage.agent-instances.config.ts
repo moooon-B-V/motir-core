@@ -33,6 +33,12 @@ import baseConfig from './vitest.config';
 //   * `scripts/relay.ts` is the relay's process entrypoint (monitoring init, listen,
 //     drain on SIGTERM) — it is bundled and run, not imported, like
 //     `scripts/worker.ts`; everything it wires is measured here.
+//
+// ⚠️ THE GLOBS NEVER SPELL A ROUTE GROUP. `(authed)` is an extglob group to the
+// coverage matcher, which matches `authed` WITHOUT the parentheses, so
+// `app/(authed)/…` measured nothing — the My agents UI and `agentFigures.ts` sat
+// outside this floor from the day they were listed (MOTIR-7062). A route-group
+// segment is `*` here instead, as in `vitest.coverage.agent-instance-run.config.ts`.
 
 const FLOOR = { statements: 90, functions: 90, branches: 90, lines: 90 } as const;
 
@@ -47,9 +53,9 @@ const MEASURED = [
   'lib/jobs/definitions/agentInstanceIdleCheck.ts',
   'lib/jobs/definitions/agentInstanceSweep.ts',
   'app/api/projects/[[]key]/instances/**/*.ts',
-  'app/(authed)/my-agents/**/*.tsx',
+  'app/*/my-agents/**/*.tsx',
   // Story MOTIR-6861 — the agent terminal (MOTIR-6942).
-  'app/(authed)/my-agents/**/*.ts',
+  'app/*/my-agents/**/*.ts',
   'lib/agentTerminal/**/*.ts',
   'lib/services/agentTerminalService.ts',
   'lib/services/agentTerminalRelayService.ts',
@@ -66,7 +72,7 @@ const MEASURED = [
   'lib/jobs/definitions/agentInstanceStorageCharge.ts',
   'lib/services/agentInstanceLapseService.ts',
   'lib/emailTemplates/agentsDeletionScheduled.tsx',
-  'app/(authed)/settings/organization/billing/_components/agentFigures.ts',
+  'app/*/settings/organization/billing/_components/agentFigures.ts',
   // Story MOTIR-6864 — a run in my agent (MOTIR-7026).
   'lib/services/agentInstanceRunService.ts',
   'lib/mappers/agentInstanceRunMappers.ts',
@@ -89,6 +95,15 @@ export default defineConfig({
       'tests/components/agentFigures.test.ts',
       // Story MOTIR-6864 — the agent's live run in its panel (MOTIR-7029).
       'tests/components/AgentPanelRun.test.tsx',
+      // The run's live session watch the panel leans on — its own suite, which
+      // the lane never ran until the globs measured `useRunSessionWatch.ts` (MOTIR-7062).
+      'tests/components/useRunSessionWatch.test.tsx',
+      // MOTIR-7062 — the page, its wait, the dialogs' ways out, the terminal and
+      // its socket's edges, which the room's suites never reached.
+      'tests/components/MyAgentsPage.test.tsx',
+      'tests/components/AgentDialogs.test.tsx',
+      'tests/components/AgentTerminal.test.tsx',
+      'tests/components/useAgentTerminal.test.tsx',
       // The image update (Story MOTIR-6862 · MOTIR-6954).
       'tests/components/MyAgentsUpdate.test.tsx',
     ],
