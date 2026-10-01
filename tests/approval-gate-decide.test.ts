@@ -200,18 +200,16 @@ describe('approvalGatesService.decide — approve, the terminal act (ADR §8 Wor
 
   it('the transition and the decision are ONE transaction — a failing effect rolls the decision back', async () => {
     const { item, gate } = await designSubtaskWithGate();
-    // Cancel the card: `cancelled` is terminal and the default workflow has no
-    // `cancelled → done` edge, so the effect's transition is refused.
+    // Put the card back at `todo` behind the funnel's back: the default workflow has
+    // no `todo → done` edge, so the effect's transition is refused.
     //
-    // ⚠️ AS A SYSTEM WRITE, since MOTIR-5527 (ADR `approval-gates.md` §6d
-    // AMENDMENT, rule 6): a HAND move to Cancelled now withdraws the question, so
-    // the gate would be `superseded` and the door would refuse it before ever
-    // running the effect — a different refusal from the rollback this test is
-    // about. A system write withdraws nothing, which keeps the gate `awaiting`
-    // and the effect the thing that fails.
-    await withWorkspaceContext(fx.ctx, (tx) =>
-      workItemsService.applyStatusTransition(item.id, 'cancelled', fx.ctx, tx, { system: true }),
-    );
+    // ⚠️ NOT CANCELLED, since MOTIR-7109. This test used to cancel the card as a
+    // SYSTEM write, which MOTIR-5527's pull-back rule exempted — but a move to
+    // Cancelled now withdraws the question whoever writes it, and the door refuses
+    // a gate on a cancelled card outright. Either refusal lands before the effect
+    // runs, which is a different refusal from the rollback this test is about. A
+    // raw status write keeps the gate `awaiting` and the effect the thing that fails.
+    await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'todo' } });
 
     await expect(
       approvalGatesService.decide(

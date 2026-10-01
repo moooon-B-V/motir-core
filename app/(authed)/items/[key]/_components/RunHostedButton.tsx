@@ -1,10 +1,13 @@
 'use client';
 
+import { useId } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { HostedRunCancel } from '@/app/(authed)/runs/_components/HostedRunCancel';
 import { isLiveRun } from '@/lib/runs/timeline';
 import { HostedModelPicker } from './HostedModelPicker';
+import { HostedModelProvenance } from '@/components/hosted/HostedModelPicker';
+import { provenanceFor } from '@/components/hosted/hostedModels';
 import { useHostedRun } from './HostedRunProvider';
 
 // THE RUN SECTION'S HEADER DOOR (Story MOTIR-683 · MOTIR-691; revised by
@@ -44,10 +47,17 @@ export function RunHostedButton() {
  * RUN — the start bar's first option's control: the model picker and **Run**
  * (**Run again** once a run in Motir's cloud has ended). Disabled, never hidden,
  * on a card that is not ready — its reason is one line under the bar.
+ *
+ * ⚠️ THE SOURCE LINE (MOTIR-6996; design § Run hosted — the picker says where its
+ * model came from). While the picker holds the card's RESOLVED model, the row's
+ * last child says why — its difficulty, a project override, or a parent's
+ * leaves. It goes when the person picks another model (F6), and comes back if
+ * they re-pick it. `items-start` keeps the button level with the trigger.
  */
 export function RunDoorControl() {
   const t = useTranslations('runs.hosted.door');
   const door = useHostedRun();
+  const lineId = useId();
   if (!door) return null;
   const run = door.currentRun;
   const modelsReady = door.models.state === 'ok' && door.models.models.length > 0;
@@ -56,14 +66,17 @@ export function RunDoorControl() {
   // "Run again" after a run in Motir's cloud — Motir's own, or one in an agent —
   // never after a local one.
   const again = run?.origin === 'hosted' || run?.origin === 'instance';
+  const provenance = provenanceFor(door.models, door.selectedModel);
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-2" data-testid="run-hosted-door">
+    <div className="flex min-w-0 flex-wrap items-start gap-2" data-testid="run-hosted-door">
       <HostedModelPicker
         models={door.models}
         value={door.selectedModel}
         onChange={door.selectModel}
         disabled={!door.ready || door.starting}
+        provenance={provenance}
+        describedBy={lineId}
       />
       <Button
         type="button"
@@ -78,6 +91,7 @@ export function RunDoorControl() {
       >
         {door.starting ? t('starting') : again ? t('runAgain') : t('run')}
       </Button>
+      <HostedModelProvenance provenance={provenance} id={lineId} />
     </div>
   );
 }

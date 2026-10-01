@@ -16,6 +16,7 @@ import {
   INSTANCE_SLOT_TTL_SECONDS,
   INSTANCE_VOLUME_SIZE_GB,
   instanceMaxRunning,
+  isUnlimitedAgentOrg,
 } from '@/lib/agentInstances/config';
 import {
   AgentInstanceNameInvalidError,
@@ -90,6 +91,10 @@ import {
 } from '@/lib/services/agentInstanceActivityService';
 import { agentInstanceChargeService } from '@/lib/services/agentInstanceChargeService';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { aiPlanGateService } from '@/lib/services/aiPlanGateService';
+import { deletionDateFor } from '@/lib/agentInstances/planLapse';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -229,6 +234,56 @@ function describeError(err: unknown): string {
 }
 
 /**
+ * The paid-AI-plan gate (`agent-instance-storage.md` §1, MOTIR-6918): agents are an
+ * AI-plan feature, so create and wake ask it FIRST — before the per-user cap, the
+ * credits and any Fly call — and a tracker-only or Free-AI-tier organisation is
+ * told it needs a plan, never that it is out of credits. The answer is the shared
+ * gate's ({@link aiPlanGateService.hasPaidAiPlan}): it owns the paid statuses, the
+ * self-hosted pass and Motir's own organisations (`isMeta` / `internalBilling`,
+ * answered from their row without asking motir-ai), so none of that is re-derived
+ * here. An answer it could not read refuses too — "could not ask" is never "yes".
+ */
+async function assertPaidAiPlan(organizationId: string): Promise<void> {
+  const answer = await aiPlanGateService.hasPaidAiPlan(organizationId);
+  if (answer === 'unknown') {
+    throw new AgentInstanceStartRefusedError(
+      'ai_plan_unknown',
+      'Motir could not check your organization’s AI plan just now. Try again in a moment.',
+    );
+  }
+  if (!answer) {
+    throw new AgentInstanceStartRefusedError(
+      'ai_plan_required',
+      'Agents need a paid AI plan (Standard, Pro, Max or Enterprise). Choose an AI plan to create or wake one.',
+    );
+  }
+}
+
+/**
+ * Is this one of Motir's own organisations, which have NO agent limits
+ * (AMENDMENT 3, {@link isUnlimitedAgentOrg})? Read once per create, wake and sweep
+ * pass from the org's own row. A row that cannot be read answers `false`: the
+ * limits then apply, which is the side of the question that spends nothing.
+ */
+export async function readUnlimitedAgentOrg(organizationId: string): Promise<boolean> {
+  try {
+    const org = await withOrgServiceWriteContext(organizationId, (tx) =>
+      organizationRepository.findByIdInTx(organizationId, tx),
+    );
+    return org ? isUnlimitedAgentOrg(org) : false;
+  } catch (err) {
+    console.error(
+      '[agentInstanceLifecycleService] could not read the organization — limits apply',
+      {
+        organizationId,
+        detail: describeError(err),
+      },
+    );
+    return false;
+  }
+}
+
+/**
  * The credit pre-flight (§5): may this organisation start a machine? A self-hosted
  * build charges nothing and asks nothing. An answer that could not be obtained
  * refuses too, with different words — "could not ask" is never "yes".
@@ -245,24 +300,26 @@ async function assertCredits(organizationId: string): Promise<void> {
   if (!verdict.mayRun) {
     throw new AgentInstanceStartRefusedError(
       'credits',
-      'Your organization’s credits can’t start a machine right now. Add credits to create or wake an agent.',
+      'Your organization is out of credits. Agents use credits while they run and for their storage every day, asleep or not. Add credits to create or wake an agent.',
     );
   }
 }
 
 /**
- * Take a slot in the agents' OWN pool for one machine run, with the pool's safety
- * valve decided under the fleet admission lock (§6, AMENDMENT 2). There is no
- * per-organisation cap: credits decide who may run. The slot is keyed on the RUN
- * (`runId`, the id of the run's first interval), because the running charge splits
- * one run into several intervals. Returns nothing on success; throws the refusal
- * in words otherwise.
+ * Take a slot in the agents' OWN pool for one machine run, with the organisation's
+ * running cap decided under the fleet admission lock (§6, AMENDMENTS 2 and 3). The
+ * cap is counted per ORGANISATION ({@link instanceMaxRunning}), so one org at its
+ * limit never refuses another; Motir's own organisations (`unlimited`) have none.
+ * The slot is keyed on the RUN (`runId`, the id of the run's first interval),
+ * because the running charge splits one run into several intervals. Returns
+ * nothing on success; throws the refusal in words otherwise.
  */
 async function reserveSlot(input: {
   instanceId: string;
   runId: string;
   organizationId: string;
   workspaceId: string;
+  unlimited: boolean;
 }): Promise<void> {
   const maxRunning = instanceMaxRunning();
   const verdict = await fleetCeilingService.reserve({
@@ -272,17 +329,36 @@ async function reserveSlot(input: {
     organizationId: input.organizationId,
     workspaceId: input.workspaceId,
     ttlSeconds: INSTANCE_SLOT_TTL_SECONDS,
-    guard: async (tx) => {
-      const running = await agentInstanceRepository.countRunning({}, tx);
-      return running >= maxRunning ? 'agent_pool_full' : null;
-    },
+    ...(input.unlimited
+      ? {}
+      : {
+          guard: async (tx: Prisma.TransactionClient) => {
+            const running = await agentInstanceRepository.countRunning(
+              { organizationId: input.organizationId },
+              tx,
+            );
+            return running >= maxRunning ? ORG_RUNNING_CAP : null;
+          },
+        }),
   });
   if (verdict.outcome !== 'deferred') return;
+  if (verdict.reason === 'workload_cap' && verdict.detail === ORG_RUNNING_CAP) {
+    throw new AgentInstanceStartRefusedError(
+      'org_running_cap',
+      `Your organization is running ${maxRunning} of its ${maxRunning} agents. Hibernate one to start another.`,
+      maxRunning,
+    );
+  }
+  // The operator's kill switch, or an admission that could not be evaluated —
+  // Motir's own pause, never another organisation's agents.
   throw new AgentInstanceStartRefusedError(
     'fleet_busy',
     'Motir is running as many machines as it can right now. Try again in a few minutes.',
   );
 }
+
+/** The guard's answer when the organisation's running cap refuses. */
+const ORG_RUNNING_CAP = 'org_running_cap';
 
 function releaseSlot(instanceId: string, runId: string): Promise<boolean> {
   return fleetCeilingService.release('agent_instance', instanceId, runId);
@@ -752,6 +828,15 @@ export const agentInstanceLifecycleService = {
     const project = await resolveProject(projectKey, ctx);
     const now = agentInstanceClock.now();
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    // The banner's date (MOTIR-6921), from the org's own recorded lapse — the one
+    // date every scheduled row of this org carries. Never for Motir's own orgs.
+    const org = await withOrgServiceWriteContext(project.organizationId, (tx) =>
+      organizationRepository.findByIdInTx(project.organizationId, tx),
+    );
+    const planLapse =
+      org?.aiPlanLapsedAt && !isUnlimitedAgentOrg(org)
+        ? { deletesOn: deletionDateFor(org.aiPlanLapsedAt).toISOString() }
+        : null;
     const page_ = await inProject(project, ctx, async (tx) => {
       const scope = { ownerId: ctx.userId, projectId: project.id };
       const rows = await agentInstanceRepository.listLiveForOwner({ ...scope, ...page }, tx);
@@ -794,12 +879,14 @@ export const agentInstanceLifecycleService = {
     const { usage, latestClosed, runs } = page_;
     return {
       total: page_.total,
+      planLapse,
       instances: page_.rows.map((row) => ({
         ...toAgentInstanceDto(row, image.get(row.id) ?? UNKNOWN_IMAGE),
         profileName: profileDisplayName(row.profileId),
         machineSecondsThisMonth: usage.get(row.id)?.seconds ?? 0,
         creditsThisMonth: usage.get(row.id)?.credits ?? 0,
         stopReason: stopReasonOf(latestClosed.get(row.id) ?? null),
+        scheduledDeletionAt: row.scheduledDeletionAt?.toISOString() ?? null,
         activeRun: runs.active.get(row.id) ?? null,
         lastRun: runs.last.get(row.id) ?? null,
       })),
@@ -824,13 +911,17 @@ export const agentInstanceLifecycleService = {
       throw new AgentProfileNotOfferedError(input.profileId, profileDisplayName(input.profileId));
     }
 
-    const mine = await withSystemContext((tx) =>
-      agentInstanceRepository.countLiveForOwnerEverywhere(ctx.userId, tx),
-    );
+    await assertPaidAiPlan(project.organizationId);
+    const unlimited = await readUnlimitedAgentOrg(project.organizationId);
+    const mine = unlimited
+      ? 0
+      : await withSystemContext((tx) =>
+          agentInstanceRepository.countLiveForOwnerEverywhere(ctx.userId, tx),
+        );
     if (mine >= INSTANCE_MAX_PER_USER) {
       throw new AgentInstanceStartRefusedError(
         'user_cap',
-        `You already have ${INSTANCE_MAX_PER_USER} agents. Delete one to create another.`,
+        `You already have ${INSTANCE_MAX_PER_USER} agents. Each one is charged for its storage every day, even asleep. Delete one to create another.`,
       );
     }
     const clash = await inProject(project, ctx, async (tx) => {
@@ -842,7 +933,7 @@ export const agentInstanceLifecycleService = {
     });
     if (clash) throw new AgentInstanceNameTakenError(name);
 
-    await assertCredits(project.organizationId);
+    if (!unlimited) await assertCredits(project.organizationId);
     const imageTag = sandboxImageTag(input.profileId);
     const imageDigest = await imageDigestResolver.resolve(imageTag);
     // Q1, Q6: the version is recorded at create, best effort — a registry that
@@ -859,6 +950,7 @@ export const agentInstanceLifecycleService = {
       runId: intervalId,
       organizationId: project.organizationId,
       workspaceId: project.workspaceId,
+      unlimited,
     });
 
     const orchestrator = getPersistentOrchestrator();
@@ -963,7 +1055,9 @@ export const agentInstanceLifecycleService = {
     const handle = handleOf(row);
     if (!handle) throw new AgentInstanceStateConflictError(row.id, row.state, 'woken');
 
-    await assertCredits(project.organizationId);
+    await assertPaidAiPlan(project.organizationId);
+    const unlimited = await readUnlimitedAgentOrg(project.organizationId);
+    if (!unlimited) await assertCredits(project.organizationId);
     const terminal = agentTerminalMachineConfig(row.id);
     const intervalId = randomUUID();
     await reserveSlot({
@@ -971,6 +1065,7 @@ export const agentInstanceLifecycleService = {
       runId: intervalId,
       organizationId: project.organizationId,
       workspaceId: project.workspaceId,
+      unlimited,
     });
 
     const now = agentInstanceClock.now();
@@ -1095,6 +1190,21 @@ export const agentInstanceLifecycleService = {
       INSTANCE_INLINE_STOP_WAIT_MS,
       async () => (await this.settleStop(row.id, endReason)) !== 'pending',
     );
+    return true;
+  },
+
+  /**
+   * Delete an instance for the SWEEP — the plan-lapse deletion (MOTIR-6921,
+   * `agent-instance-storage.md` §4): the same guarded move and the same settle as
+   * the owner's delete, so the machine, the volume and the final interval's charge
+   * are handled exactly as there. Returns false when the instance could not enter
+   * `deleting` (it is mid-boot or already going) — the next pass tries again.
+   */
+  async beginDelete(instanceId: string): Promise<boolean> {
+    const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
+    if (!row || row.deletedAt) return false;
+    if (!(await systemTransition(row, statesThatMayEnter('deleting'), 'deleting'))) return false;
+    await this.settleDelete(row.id);
     return true;
   },
 

@@ -157,6 +157,7 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
     machineSecondsThisMonth: 72 * 60,
     creditsThisMonth: 72,
     stopReason: null,
+    scheduledDeletionAt: null,
     activeRun: null,
     lastRun: null,
     ...over,
@@ -168,6 +169,7 @@ const codex = (over: Partial<AgentInstanceListItemDto> = {}) =>
 const page = (instances: AgentInstanceListItemDto[]): AgentInstanceListPageDto => ({
   instances,
   total: instances.length,
+  planLapse: null,
 });
 
 const json = (status: number, body: unknown) =>
@@ -607,9 +609,7 @@ describe('close codes and refusals (panel 6)', () => {
       json(402, { code: 'agent_instance_start_refused', reason: 'credits', error: 'x' });
     await mount(undefined, { openAgentId: 'a2' });
     const alert = within(panel()).getByRole('alert');
-    expect(alert.textContent).toContain(
-      'Your organization’s credits can’t start a machine right now.',
-    );
+    expect(alert.textContent).toContain('Your organization is out of credits.');
     expect(within(panel()).getByRole('button', { name: 'Wake' })).toBeTruthy();
     expect(ticketCalls()).toBe(0);
   });

@@ -12,6 +12,7 @@ import {
   type RunRepository,
 } from '@/lib/github/runGitCredential';
 import {
+  HostedModelsUnavailableError,
   HostedRunAlreadyEndedError,
   HostedRunBootFailedError,
   HostedRunCancelForbiddenError,
@@ -56,6 +57,7 @@ import {
 } from '@/lib/services/hostedAgentContainerService';
 import { hostedRunKeyService } from '@/lib/services/hostedRunKeyService';
 import { hostedRunModelService, toOpenCodeModel } from '@/lib/services/hostedRunModelService';
+import { projectHostedAgentSettingsService } from '@/lib/services/projectHostedAgentSettingsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -98,7 +100,14 @@ import {
 /** What a start request asks for. `model` is the BARE gateway id. */
 export interface StartHostedRunInput {
   workItemKey: string;
-  model: string;
+  /**
+   * The bare model id the person picked. ABSENT means "the server chooses"
+   * (Story MOTIR-6989 · MOTIR-6994): the card's model is resolved from its
+   * difficulty — a parent's highest among its unfinished leaves — through the
+   * project's overrides and motir-ai's defaults (`resolveForWorkItem`), then
+   * checked exactly as a sent model is. A sent model always wins.
+   */
+  model?: string;
   idempotencyKey: string;
   /**
    * `run` (the default) starts a READY card. `continue` (MOTIR-6792) resumes a
@@ -109,6 +118,9 @@ export interface StartHostedRunInput {
    */
   mode?: 'run' | 'continue' | 'fix';
 }
+
+/** A start whose model is settled — sent by the person, or resolved by the server. */
+type ResolvedStartInput = StartHostedRunInput & { model: string };
 
 /**
  * What a REVIEW start asks for (Story MOTIR-1626 · MOTIR-6820; `hosted-agent-run.md` §8.1)
@@ -390,7 +402,7 @@ async function preflight(
  */
 async function launch(
   run: { id: string; startedAt: string },
-  input: Pick<StartHostedRunInput, 'model'>,
+  input: Pick<ResolvedStartInput, 'model'>,
   target: { identifier: string; projectId: string; legIds: string[] },
   checked: HostedRunPreflight,
   ctx: ServiceContext,
@@ -504,7 +516,7 @@ async function launch(
  * shared end path, which never writes the card — so it is continuable again.
  */
 async function startContinue(
-  input: StartHostedRunInput,
+  input: ResolvedStartInput,
   identifier: string,
   projectId: string,
   ctx: ServiceContext,
@@ -592,6 +604,25 @@ async function startContinue(
 }
 
 /**
+ * The model a start runs on (MOTIR-6994): the person's pick when they sent one
+ * (trimmed), else the card's resolution — a leaf's difficulty, a parent's highest
+ * among its unfinished leaves. Nothing to resolve (motir-ai offers no model) is
+ * `HostedModelsUnavailableError`, the same refusal the picker path answers; the
+ * resolved id is then checked by the pre-flight exactly as a sent one is.
+ */
+async function settleModel(
+  sent: string | undefined,
+  workItemId: string,
+  ctx: ServiceContext,
+): Promise<string> {
+  const picked = sent?.trim();
+  if (picked) return picked;
+  const resolved = await projectHostedAgentSettingsService.resolveForWorkItem(workItemId, ctx);
+  if (!resolved) throw new HostedModelsUnavailableError('no model is offered');
+  return resolved.model;
+}
+
+/**
  * FIX ON THE HOSTED AGENT (Story MOTIR-1626 · MOTIR-6928; `hosted-agent-run.md` §8.6,
  * `approval-gates.md` §12.4b) — {@link startContinue}'s order, around the REPAIR claim.
  *
@@ -610,7 +641,7 @@ async function startContinue(
  * repair that pushes nothing leaves the card To fix.
  */
 async function startFix(
-  input: StartHostedRunInput,
+  input: ResolvedStartInput,
   identifier: string,
   projectId: string,
   ctx: ServiceContext,
@@ -887,12 +918,14 @@ export const hostedRunService = {
     // A CONTINUE of a dead run (MOTIR-6792) — the card is In Progress by design,
     // so it takes the continue claim's path instead of the readiness below.
     if (input.mode === 'continue') {
-      return startContinue(input, identifier, project.id, ctx, options, now());
+      const model = await settleModel(input.model, item.id, ctx);
+      return startContinue({ ...input, model }, identifier, project.id, ctx, options, now());
     }
     // A REPAIR of a card a review sent back (MOTIR-6928) — the card is In Review or
     // Implemented by design, so it takes the repair claim's path, not the readiness below.
     if (input.mode === 'fix') {
-      return startFix(input, identifier, project.id, ctx, options);
+      const model = await settleModel(input.model, item.id, ctx);
+      return startFix({ ...input, model }, identifier, project.id, ctx, options);
     }
 
     // ── 1 · READY — a leaf by the keyed claim's rule, a parent by the scope claim's ──
@@ -934,7 +967,9 @@ export const hostedRunService = {
       }
       legIds = [item.id];
     }
-    const checked = await preflight(input, project.id, legIds, ctx);
+    // ── 1b · The model — the person's pick, else the card's difficulty ───────
+    const model = await settleModel(input.model, item.id, ctx);
+    const checked = await preflight({ model }, project.id, legIds, ctx);
 
     // ── 4 · Open the run, one leg per card, idempotent on the key ───────────
     const legKeys = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
@@ -949,7 +984,7 @@ export const hostedRunService = {
         command,
         origin: 'hosted',
         agent: 'opencode',
-        model: input.model,
+        model,
         idempotencyKey: input.idempotencyKey,
         cards: legKeys.map((key) => ({ key, disposition: 'queued' as const })),
         ...(isParent ? { scopeKey: identifier, scopeLabel: item.title } : {}),
@@ -965,7 +1000,7 @@ export const hostedRunService = {
         [
           {
             kind: 'run_opened',
-            data: { command, key: identifier, origin: 'hosted', model: input.model },
+            data: { command, key: identifier, origin: 'hosted', model },
           },
         ],
         ctx,
@@ -988,7 +1023,7 @@ export const hostedRunService = {
       }
       await launch(
         run,
-        input,
+        { model },
         { identifier, projectId: project.id, legIds },
         checked,
         ctx,

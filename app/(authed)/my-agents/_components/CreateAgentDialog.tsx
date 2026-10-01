@@ -26,6 +26,7 @@ export function CreateAgentDialog({
   profiles,
   pending,
   refusal,
+  storageCreditsPerDay = null,
   onCreate,
 }: {
   open: boolean;
@@ -34,6 +35,9 @@ export function CreateAgentDialog({
   profiles: readonly OfferedProfile[];
   pending: boolean;
   refusal: AgentRefusal | null;
+  /** The storage rate (`agent-instance-storage.md` §2) on a cloud build; `null`
+   *  where no storage is charged (self-hosted), which drops the price's storage clause. */
+  storageCreditsPerDay?: number | null;
   onCreate: (input: { name: string; profileId: string }) => void;
 }) {
   const t = useTranslations('myAgents.create');
@@ -113,7 +117,14 @@ export function CreateAgentDialog({
 
           <div className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-sky) px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-strong)">
             <Info className="mt-0.5 size-4 flex-none" aria-hidden="true" />
-            <span>{t.rich('price', { b: (chunks) => <strong>{chunks}</strong> })}</span>
+            <span>
+              {storageCreditsPerDay === null
+                ? t.rich('price', { b: (chunks) => <strong>{chunks}</strong> })
+                : t.rich('priceWithStorage', {
+                    perDay: storageCreditsPerDay,
+                    b: (chunks) => <strong>{chunks}</strong>,
+                  })}
+            </span>
           </div>
 
           {refusal ? <RefusalBox refusal={refusal} /> : null}

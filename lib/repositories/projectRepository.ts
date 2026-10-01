@@ -123,6 +123,14 @@ export const PROJECT_FOLDER_POINTERS = [
   'plannerBugDestinationFolderId',
 ] as const satisfies readonly (keyof Prisma.ProjectWhereInput)[];
 
+/** The four per-difficulty hosted-agent model override columns (MOTIR-6993). */
+export interface ProjectHostedModelOverridesRow {
+  hostedModelTrivial: string | null;
+  hostedModelLow: string | null;
+  hostedModelMedium: string | null;
+  hostedModelHigh: string | null;
+}
+
 export const projectRepository = {
   /**
    * Read a project by id. Optionally takes `tx` when the caller is already
@@ -1131,6 +1139,51 @@ export const projectRepository = {
    * `aiPlannerModel: null` clears the per-project override back to the platform
    * default.
    */
+  /**
+   * A project's four hosted-agent model overrides, one per leaf difficulty
+   * (Story MOTIR-6989 · MOTIR-6993). NULL = use the platform default for that
+   * level. Read by `projectHostedAgentSettingsService`, inside its transaction
+   * or standalone.
+   */
+  async findHostedModelOverrides(
+    id: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ProjectHostedModelOverridesRow | null> {
+    const client = tx ?? dbRead;
+    return client.project.findUnique({
+      where: { id },
+      select: {
+        hostedModelTrivial: true,
+        hostedModelLow: true,
+        hostedModelMedium: true,
+        hostedModelHigh: true,
+      },
+    });
+  },
+
+  /**
+   * Write any subset of the four hosted-agent model overrides (MOTIR-6993); an
+   * absent field is untouched and `null` resets that level to the platform
+   * default. `tx` REQUIRED — the service validates against motir-ai's offered
+   * list and gates on `ai:configure` in the same transaction.
+   */
+  async updateHostedModelOverrides(
+    id: string,
+    data: Partial<ProjectHostedModelOverridesRow>,
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectHostedModelOverridesRow> {
+    return tx.project.update({
+      where: { id },
+      data,
+      select: {
+        hostedModelTrivial: true,
+        hostedModelLow: true,
+        hostedModelMedium: true,
+        hostedModelHigh: true,
+      },
+    });
+  },
+
   async updateAiSettings(
     id: string,
     data: {

@@ -144,8 +144,34 @@ export interface BillingStatusDTO {
    * UNAVAILABLE, never zero spend. The panel must render the two differently.
    */
   search: SearchSpendDTO | null;
+  /**
+   * The Agents line (MOTIR-6920, `docs/decisions/agent-instance-storage.md` §6,
+   * `design/billing/design-notes.md` "Delta 2026-09-29"): this month's machine
+   * and storage credits for the org's agents, off the same `getOrgUsage` read.
+   */
+  agents: AgentsBillingDTO;
   /** The purchasable prices the storefront renders + checkout routes through. */
   catalog: BillingCatalog;
+}
+
+/** This month's agent credits, by kind. */
+export interface AgentSpendDTO {
+  machineMonthSpend: number;
+  storageMonthSpend: number;
+}
+
+export interface AgentsBillingDTO {
+  /**
+   * `null` = FIGURES UNAVAILABLE (the boundary did not report `agentMachine` /
+   * `agentStorage`), never zero spend — the `search` rule, applied here.
+   */
+  spend: AgentSpendDTO | null;
+  /**
+   * Whether the org may run agents at all: a paid AI plan (`active` /
+   * `past_due`), or a meta / internal-billing org, which §5 of the record lets
+   * through the agent limits. False draws the "Agents need a paid AI plan" note.
+   */
+  hasPaidAiPlan: boolean;
 }
 
 /** A started Stripe session — the hosted URL the client redirects to. */

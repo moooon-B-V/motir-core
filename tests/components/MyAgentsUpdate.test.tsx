@@ -42,6 +42,7 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
     machineSecondsThisMonth: 60,
     creditsThisMonth: 1,
     stopReason: null,
+    scheduledDeletionAt: null,
     activeRun: null,
     lastRun: null,
     ...over,
@@ -51,6 +52,7 @@ const UPDATE = { version: '0.5.0', digest: 'sha256:def' };
 const page = (instances: AgentInstanceListItemDto[]): AgentInstanceListPageDto => ({
   instances,
   total: instances.length,
+  planLapse: null,
 });
 const json = (status: number, body: unknown) =>
   ({ ok: status < 400, status, json: async () => body }) as Response;

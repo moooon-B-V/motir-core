@@ -946,6 +946,16 @@
       "lede": "{organization} 已被删除。它的工作区、项目、成员，以及 Motir 为它托管的代码仓库均已清除。",
       "kept": "按照法律要求，Motir 仅保留其账单记录至 {year} 年，届时也将一并删除。",
       "footer": "你收到这封邮件，是因为你曾是该组织的所有者或管理员。"
+    },
+    "agentsDeletionScheduled": {
+      "subject": "你在 {organization} 的智能体将于 {date} 被删除",
+      "preview": "你的组织的 AI 套餐已结束——你的智能体将于 {date} 被删除",
+      "greeting": "{name}，你好：",
+      "lede": "你的组织的 AI 套餐已结束。除非续订套餐，你的智能体将于 {date} 被删除。",
+      "agents": "你在 {organization} 的以下 {count} 个智能体将被删除，包括其主目录及其中的全部内容：",
+      "renew": "在 {date} 之前续订 AI 套餐即可取消删除。在此之前，你的智能体无法创建或唤醒，其存储仍按天收费。",
+      "openBilling": "续订 AI 套餐",
+      "footer": "你收到这封邮件，是因为你在该组织中拥有智能体。"
     }
   },
   "auth": {
@@ -1825,6 +1835,7 @@
       "fields": "字段",
       "components": "组件",
       "aiPlanning": "AI规划",
+      "hostedAgent": "托管智能体",
       "rules": "规则",
       "repositories": "代码仓库",
       "monitoring": "监控",
@@ -3720,6 +3731,35 @@
         "factKeptBy": "已保留"
       }
     },
+    "hostedAgent": {
+      "title": "托管智能体",
+      "pageDescription": "托管运行使用哪个模型。“托管运行”会根据工作项的难度预选模型；发起运行的人仍可以选择其他模型。",
+      "card": {
+        "title": "按难度选择模型",
+        "subtitle": "除非你覆盖，否则每个难度都使用平台默认模型。父工作项使用其叶子工作项中最高难度对应的模型。"
+      },
+      "col": {
+        "difficulty": "难度",
+        "model": "模型",
+        "source": "来源"
+      },
+      "modelFor": "{difficulty}难度的模型",
+      "source": {
+        "default": "平台默认",
+        "override": "覆盖"
+      },
+      "optionDefault": "{difficulty}难度的平台默认",
+      "reset": "恢复默认",
+      "withdrawn": "已保存的模型 <id>{model}</id> 已不再提供，因此{difficulty}难度的运行使用平台默认模型。恢复默认即可清除它。",
+      "noDifficulty": "没有难度的工作项使用平台默认模型 <id>{model}</id>——即“托管运行”标记为<b>默认</b>的模型。",
+      "readOnlyBanner": "只有项目管理员可以更改托管智能体设置。",
+      "unavailableBody": "无法连接 Motir AI，因此暂时无法显示或更改托管模型。在它恢复响应之前，托管运行不可用。",
+      "emptyBody": "目前没有模型可以运行托管工作项，因此没有可选的模型。",
+      "savedTitle": "托管智能体设置已保存",
+      "savedDesc": "新的托管运行将使用这些模型。",
+      "errorTitle": "无法保存",
+      "saveError": "你的托管智能体设置未保存，请重试。"
+    },
     "connectedApps": {
       "title": "已连接的应用",
       "subtitle": "你用 Motir 账号登录过的应用。每个应用以你的身份，在一个工作区内，按你批准的范围操作。",
@@ -3969,6 +4009,7 @@
         "components": "模块由项目管理员管理。如需新增或修改，请联系管理员。",
         "bugs": "本项目缺陷的归档位置由项目管理员管理。如需更改，请联系管理员。",
         "ai-planning": "本项目的 AI 规划——节奏与规划模型——由项目管理员配置。如需调整，请联系管理员。",
+        "hosted-agent": "托管运行使用哪个模型，只向能在此项目上发起托管运行的人显示。如需查看，请联系项目管理员。",
         "automation": "项目自动化由项目管理员管理。如需修改规则，请联系管理员。",
         "monitoring": "本项目的错误监控连接由可管理集成的成员负责。如需连接或重新连接 Sentry，请联系项目管理员。"
       }
@@ -6124,6 +6165,21 @@
       "optionMoveCost": "需要一个你自己的 GitHub 账号、在 GitHub 上确认接收转移（并非即时完成），以及重新安装 Motir 应用以保证派发继续可用。",
       "optionMoveCta": "迁移仓库",
       "viewUsage": "查看用量与费用"
+    },
+    "agents": {
+      "name": "智能体",
+      "tagline": "你的组织托管的智能体——它们的机器时长和存储。",
+      "perUse": "按用量",
+      "machineLabel": "机器时长",
+      "storageLabel": "存储",
+      "totalLabel": "本月合计",
+      "creditsUnit": "积分",
+      "rate": "机器时长按每运行一分钟 1 积分计费。存储按每个智能体每天 10 积分计费，无论是否休眠。两者都从你的 Motir AI 余额中扣除。",
+      "zero": "本月没有智能体运行或存在。机器时长按每运行一分钟 1 积分计费。存储按每个智能体每天 10 积分计费，无论是否休眠。",
+      "noPlan": "智能体需要付费 AI 方案（Standard、Pro、Max 或 Enterprise）。",
+      "choosePlan": "选择 AI 方案",
+      "unavailable": "智能体数据暂时无法显示。你的智能体仍在计费——这是显示问题，不是计费问题。",
+      "unavailableValue": "不可用"
     },
     "search": {
       "name": "Motir 搜索",
@@ -8837,6 +8893,7 @@
     "newAgent": "新建智能体",
     "emptyTitle": "还没有智能体",
     "emptyBody": "每个都是你自己的编码智能体——Claude Code、Codex 等——运行在 Motir 云端自己的机器上，带着这个项目的代码，并用你自己的账号登录。Motir 只收取机器时间费用，你停止使用后它会自动休眠。",
+    "emptyBodyWithStorage": "每个都是你自己的编码智能体——Claude Code、Codex 等——运行在 Motir 云端的独立机器上，带有本项目的代码，并使用你自己的账号登录。Motir 在它运行时收取机器时间费用，每天收取存储费用；你停止使用后它会休眠。",
     "loadFailed": "无法加载你的智能体。请刷新重试——它们没有任何变化。",
     "col": {
       "name": "名称",
@@ -8886,6 +8943,7 @@
       "codingAgent": "编码智能体",
       "vendorHint": "编码智能体的模型用量由其供应商向你收费，而不是 Motir。Motir 永远看不到你的登录信息。",
       "price": "运行时 <b>每分钟 1 额度</b>。30 分钟未使用后自动休眠，休眠期间不收费。",
+      "priceWithStorage": "运行时<b>每分钟 1 额度</b>，存储<b>每天 {perDay} 额度</b>，无论运行还是休眠。闲置 30 分钟后自动休眠。",
       "cancel": "取消",
       "submit": "创建智能体"
     },
@@ -8898,9 +8956,12 @@
       "goose": "使用你自己的模型服务商密钥。使用 Claude 模型时，用你的 Anthropic API 密钥。"
     },
     "refusal": {
-      "credits": "你的组织额度目前无法启动机器。<link>充值额度</link>后即可创建或唤醒智能体。",
+      "aiPlanRequired": "智能体需要付费 AI 套餐（Standard、Pro、Max 或 Enterprise）。<link>选择 AI 套餐</link>后即可创建或唤醒智能体。",
+      "aiPlanUnknown": "Motir 暂时无法查询你的组织的 AI 套餐。请稍后重试。",
+      "credits": "你的组织额度已用完。智能体运行时消耗额度，其存储每天也消耗额度，无论是否休眠。<link>充值额度</link>后即可创建或唤醒智能体。",
       "creditsUnknown": "Motir 暂时无法查询你的组织额度。请稍后重试。",
-      "userCap": "你已经有 {count} 个智能体。删除一个后才能再创建。",
+      "userCap": "你已经有 {count} 个智能体。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
+      "orgRunningLimit": "你的组织正在运行 {limit} 个智能体，已达上限 {limit} 个。休眠一个后才能启动另一个。",
       "busy": "Motir 当前运行的机器已达上限。请几分钟后重试。",
       "notOffered": "暂不提供该编码智能体：其条款尚不允许平台托管它。请选择其他编码智能体。",
       "nameTaken": "你在这个项目上已经有一个名为 {name} 的智能体。",
@@ -8908,6 +8969,19 @@
       "unavailable": "此部署不提供“我的智能体”。",
       "conflict": "该智能体在你查看时发生了变化。列表现已更新。",
       "generic": "出错了，请重试。"
+    },
+    "refusalTitle": {
+      "aiPlanRequired": "需要 AI 套餐",
+      "aiPlanUnknown": "无法查询你的 AI 套餐",
+      "credits": "额度已用完",
+      "userCap": "你的上限",
+      "orgRunningLimit": "你的组织的上限"
+    },
+    "lapse": {
+      "bannerLead": "你的组织的 AI 套餐已结束。",
+      "bannerBody": "除非续订套餐，你的智能体将于 {date} 被删除。",
+      "renew": "续订 AI 套餐",
+      "rowLine": "将于 {date} 删除"
     },
     "delete": {
       "title": "删除 {name}？",
@@ -9222,7 +9296,11 @@
         "unavailableBody": "无法加载模型，因此暂时无法运行。",
         "retry": "重试",
         "emptyTrigger": "没有可用的模型",
-        "emptyBody": "目前没有模型可以运行此工作项，因此无法运行。本地运行不受影响。"
+        "emptyBody": "目前没有模型可以运行此工作项，因此无法运行。本地运行不受影响。",
+        "fromDifficulty": "按难度：<b>{difficulty}</b>",
+        "override": "项目为<b>{difficulty}</b>难度设置的模型",
+        "fromLeaves": "其子项中的最高难度：<b>{difficulty}</b>",
+        "overrideFromLeaves": "项目为<b>{difficulty}</b>难度设置的模型（其子项中的最高难度）"
       },
       "notReady": "此工作项就绪后即可运行——它还有 {count} 个未完成的阻塞项。",
       "refused": {

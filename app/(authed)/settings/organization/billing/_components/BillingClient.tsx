@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowUpRight,
+  Bot,
   Check,
   ChevronRight,
   Coins,
@@ -34,6 +35,7 @@ import type { BillingStatusDTO } from '@/lib/dto/billing';
 import type { AiPlanCatalogEntry, BillingCadence } from '@/lib/billing/catalog';
 import { ciLineFigures, type CiLineVariant } from './ciFigures';
 import { searchLineFigures } from './searchFigures';
+import { agentLineFigures } from './agentFigures';
 
 // The §4 free-tier scale caps the Motir (free) line draws — mirrors
 // `lib/billing/entitlements.ts` PM_ENTITLEMENTS.free (the locked ADR §4 numbers).
@@ -502,6 +504,9 @@ function HomeView({
         redirecting={redirecting}
       />
       {ciPaused ? null : ciLine}
+      {/* Agents sits after ③ and before ④ whether or not CI is hoisted: it has
+          no paused state, so it never joins the hoist (MOTIR-6917 delta). */}
+      <AgentsLine data={data} t={t} canManage={canManage} goPlans={goPlans} />
       <MotirSearchLine data={data} t={t} />
       <PaymentCard t={t} canManage={canManage} portal={portal} redirecting={redirecting} />
     </>
@@ -1092,6 +1097,132 @@ function CiPausedDecision({ t, goPlans }: { t: T; goPlans: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// Agents line — machine time and storage for the org's agents (MOTIR-6920; the
+// asset is `design/billing/billing--agents-line.mock.html`, `design-notes.md`
+// "Delta 2026-09-29"). Search's figure band with a third figure for the sum; no
+// meter (no pool) and no paused state (storage is never refused for balance).
+function AgentsLine({
+  data,
+  t,
+  canManage,
+  goPlans,
+}: {
+  data: BillingStatusDTO;
+  t: T;
+  canManage: boolean;
+  goPlans: () => void;
+}) {
+  const agents = agentLineFigures(data.agents);
+  const noPlan = agents.variant === 'no_plan' || agents.variant === 'no_plan_with_charges';
+  const unavailable = agents.variant === 'unavailable';
+
+  const figure = (label: string, value: number | null, headline: boolean) => (
+    <div
+      className={
+        headline
+          ? 'flex min-w-0 flex-col gap-0.5 border-l border-(--el-border) pl-7'
+          : 'flex min-w-0 flex-col gap-0.5'
+      }
+    >
+      <span className="font-sans text-xs text-(--el-text-secondary)">{label}</span>
+      {value === null ? (
+        // ⚠️ AN EM-DASH, NEVER A ZERO — the Search line's rule.
+        <span
+          className="font-sans text-xl font-medium tracking-wide text-(--el-text-secondary)"
+          aria-label={t('agents.unavailableValue')}
+        >
+          &mdash;
+        </span>
+      ) : (
+        <span
+          className={
+            headline
+              ? 'font-sans text-xl font-semibold text-(--el-text) tabular-nums'
+              : 'font-sans text-xl font-medium text-(--el-text-secondary) tabular-nums'
+          }
+        >
+          {fmt(value)}
+          <span className="ml-1 font-sans text-sm font-medium text-(--el-text-secondary)">
+            {t('agents.creditsUnit')}
+          </span>
+        </span>
+      )}
+    </div>
+  );
+
+  return (
+    <Card
+      data-testid="billing-agents-line"
+      header={
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {/* mint, lavender, peach and sky are ①–④; rose and yellow are
+                states. Sage is the one shipped tint left (MOTIR-5140). */}
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-sage) text-(--el-text-strong)">
+              <Bot className="h-4 w-4" aria-hidden />
+            </span>
+            <div>
+              <h2 className="font-sans text-base font-semibold text-(--el-text)">
+                {t('agents.name')}
+              </h2>
+              <p className="font-sans text-xs text-(--el-text-muted)">{t('agents.tagline')}</p>
+            </div>
+          </div>
+          {noPlan ? null : <Pill tone="neutral">{t('agents.perUse')}</Pill>}
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {agents.showFigures ? (
+          <div className="flex flex-wrap items-end gap-7">
+            {figure(t('agents.machineLabel'), agents.machine, false)}
+            {figure(t('agents.storageLabel'), agents.storage, false)}
+            {figure(t('agents.totalLabel'), agents.total, true)}
+          </div>
+        ) : null}
+
+        {agents.variant === 'figures' ? (
+          <p className="font-sans text-xs text-(--el-text-secondary)">
+            {agents.nothingCharged ? t('agents.zero') : t('agents.rate')}
+          </p>
+        ) : null}
+
+        {agents.showNoPlanNote ? (
+          <div className="flex items-start gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding)">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-secondary)" aria-hidden />
+            <p className="font-sans text-xs text-(--el-text-secondary)">
+              {t('agents.noPlan')}{' '}
+              {/* The page has no plan-picker URL: it is the in-page plans view,
+                  opened the way ②'s own button opens it. Owner-only, as ②'s is. */}
+              {canManage ? (
+                <button
+                  type="button"
+                  onClick={goPlans}
+                  className="font-sans text-xs font-medium text-(--el-link) hover:underline"
+                >
+                  {t('agents.choosePlan')}
+                </button>
+              ) : null}
+            </p>
+          </div>
+        ) : null}
+
+        {unavailable ? (
+          <div className="flex items-start gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding)">
+            <AlertTriangle
+              className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-secondary)"
+              aria-hidden
+            />
+            <p className="font-sans text-xs text-(--el-text-secondary)">
+              {t('agents.unavailable')}
+            </p>
+          </div>
+        ) : null}
+      </div>
+    </Card>
   );
 }
 

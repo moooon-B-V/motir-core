@@ -1106,6 +1106,13 @@ model Organization {
   /// clobber, and 8.1.25's seat accounting can net the included seat out.
   aiIncludedSeat Boolean @default(false)
 
+  /// When this org's paid AI plan LAPSED, as the seat push above reported it
+  /// (`agent-instance-storage.md` §4, MOTIR-6921): set on the push that turns
+  /// `aiIncludedSeat` off, cleared on the one that turns it back on. Every live
+  /// agent instance is scheduled for deletion 30 days from the start of that UTC
+  /// day. Never set for Motir's own orgs (`isMeta` / `internalBilling`, §5).
+  aiPlanLapsedAt DateTime? @map("ai_plan_lapsed_at")
+
   /// The internal dogfood org (moooon B.V.) — the META org. Resolves to the
   /// `meta` entitlement tier (every §4 cap lifted) and disables the AI paywall.
   /// DISTINCT from the future commercial `enterprise` tier: `meta` is never
@@ -1227,6 +1234,7 @@ model Organization {
   /// Agent instances billed to this organisation (MOTIR-6870). Cascade.
   agentInstances         AgentInstance[]
   agentInstanceIntervals AgentInstanceInterval[]
+  agentInstanceStorageCharges AgentInstanceStorageCharge[]
 
   @@map("organization")
 }
@@ -1449,6 +1457,7 @@ model Workspace {
   /// Users' agent instances in this workspace's projects (MOTIR-6870). Cascade.
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]
+  agentInstanceStorageCharges AgentInstanceStorageCharge[]
   /// The agent terminal's tickets and connection records (MOTIR-6940). Cascade.
   agentTerminalTickets        AgentTerminalTicket[]
   agentTerminalConnections    AgentTerminalConnection[]
@@ -1694,6 +1703,17 @@ model Project {
   /// in the settings panel means "back to the default" rather than "the empty
   /// model".
   aiPlannerModel                   String?               @map("ai_planner_model")
+  /// HOSTED-AGENT MODEL OVERRIDES per leaf DIFFICULTY (Story MOTIR-6989 ·
+  /// MOTIR-6993). NULL — the default — means "use the platform default for that
+  /// level", which motir-ai serves as `defaultsByDifficulty` on
+  /// `GET /v1/agent-models`; core keeps no copy of the model list. The same
+  /// nullable-string shape as `aiPlannerModel`, and no FK for the same reason:
+  /// the vocabulary lives in motir-ai. A saved id that motir-ai has since
+  /// withdrawn is SKIPPED by `resolveHostedModel`, never an error.
+  hostedModelTrivial               String?               @map("hosted_model_trivial")
+  hostedModelLow                   String?               @map("hosted_model_low")
+  hostedModelMedium                String?               @map("hosted_model_medium")
+  hostedModelHigh                  String?               @map("hosted_model_high")
   /// RECORD PLANNING MISTAKES — whether this project's planner writes down what
   /// it got wrong (Story MOTIR-3331 · MOTIR-3349). When enabled, a planning run
   /// that corrects itself captures a TENANT lesson for this project
@@ -5047,7 +5067,7 @@ enum ApprovalGateSupersedeCause {
   /// 2): a workflow run the raise could not see, a re-run, an App reporting late. The
   /// verdict is not in, so the question waits for the next green.
   ci_rerunning
-  /// The work was pulled out of review, or moved to Cancelled.
+  /// The work was pulled out of review, moved to Cancelled, or archived (MOTIR-7109).
   pulled_back
   /// A person re-opened a decided design gate (AMENDMENT 6 Q3's door back).
   /// Written ONLY by MOTIR-5659's backfill: this row predates the column.
@@ -11980,6 +12000,15 @@ model AgentInstance {
   /// every list excludes it.
   deletedAt      DateTime?          @map("deleted_at")
 
+  /// `agent-instance-storage.md` §4 (MOTIR-6921): when the org's AI plan lapsed,
+  /// the instant this instance is deleted — the start of the UTC day 30 days on.
+  /// The sweep deletes it through the ordinary delete once it has passed;
+  /// re-subscribing clears it. Null = not scheduled.
+  scheduledDeletionAt DateTime? @map("scheduled_deletion_at")
+  /// When its owner was emailed the date — so the notice goes out once, and a
+  /// failed send is retried by the sweep rather than lost.
+  deletionNoticedAt   DateTime? @map("deletion_noticed_at")
+
   /// Does the pinned image serve a terminal (agent-terminal.md Q8)? Probed with
   /// `motir agent-terminal --help` after a boot whose digest was not probed yet.
   terminalServer       AgentTerminalServer @default(unknown) @map("terminal_server")
@@ -12014,6 +12043,7 @@ model AgentInstance {
   /// agent-terminal.md Q3, Q8 (MOTIR-6940): its terminal tickets and connections.
   terminalTickets     AgentTerminalTicket[]
   terminalConnections AgentTerminalConnection[]
+  storageCharges      AgentInstanceStorageCharge[]
   /// agent-instance-run.md §5 (MOTIR-7023): the runs executed in this agent.
   dispatchRuns        DispatchRun[]
 
@@ -12022,6 +12052,8 @@ model AgentInstance {
   /// The caps and the sweep: running instances fleet-wide and per organisation.
   @@index([state, organizationId])
   @@index([workspaceId])
+  /// The plan-lapse deletion: instances due, and the lapse's schedule per org.
+  @@index([scheduledDeletionAt])
   @@map("agent_instance")
 }
 
@@ -12140,4 +12172,42 @@ model AgentInstanceInterval {
   @@index([chargeOutcome, endedAt])
   @@index([workspaceId])
   @@map("agent_instance_interval")
+}
+
+// ONE UTC DAY OF AN AGENT INSTANCE'S STORAGE, charged (Story MOTIR-6914 ·
+// MOTIR-6919; `docs/decisions/agent-instance-storage.md` §2). One row per
+// (instance, day) on which the instance existed at any moment — running,
+// hibernated or failed — written by the daily storage charge before it asks
+// motir-ai, so a charge motir-ai could not take stays `pending` and is asked
+// again with the same key. Workspace-scoped tenant data under RLS (the migration).
+model AgentInstanceStorageCharge {
+  id              String @id @default(cuid())
+  workspaceId     String @map("workspace_id")
+  organizationId  String @map("organization_id")
+  agentInstanceId String @map("agent_instance_id")
+
+  /// The UTC calendar day charged.
+  day     DateTime @db.Date
+  /// The record's daily rate at the moment the row was written.
+  credits Int
+
+  /// The debit's idempotency key: `agent-storage:<instance id>:<YYYY-MM-DD>`.
+  /// Unique, so one instance is charged at most once per day.
+  chargeReference String                     @unique @map("charge_reference")
+  chargeOutcome   AgentInstanceChargeOutcome @default(pending) @map("charge_outcome")
+  chargeDetail    String?                    @map("charge_detail")
+  chargeAttempts  Int                        @default(0) @map("charge_attempts")
+  chargedAt       DateTime?                  @map("charged_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agentInstance AgentInstance @relation(fields: [agentInstanceId], references: [id], onDelete: Cascade)
+
+  /// The charge pass's discovery read: rows still `pending`, oldest day first.
+  @@index([chargeOutcome, day])
+  @@index([workspaceId])
+  @@map("agent_instance_storage_charge")
 }

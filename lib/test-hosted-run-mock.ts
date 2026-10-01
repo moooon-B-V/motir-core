@@ -35,6 +35,7 @@
 
 import { appendFixtureFileSync, readFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
+import { recordAgentDebit } from '@/lib/test-billing-mock';
 
 const GITHUB_ORIGIN = 'https://api.github.com';
 
@@ -49,6 +50,10 @@ export interface HostedRunModelsFixture {
   ids?: string[];
   /** The preselected id. Defaults to `ids[0]`. */
   default?: string | null;
+  /** motir-ai's platform default per leaf difficulty (Story MOTIR-6989 ·
+   *  MOTIR-6998). Omitted → the field is absent from the answer, exactly as an
+   *  older motir-ai serves it (every level null); a missing level is null. */
+  defaultsByDifficulty?: Partial<Record<'trivial' | 'low' | 'medium' | 'high', string | null>>;
 }
 
 export interface HostedRunUsageFixture {
@@ -208,6 +213,9 @@ export function installHostedRunMock(agent: MockAgent): void {
         return reply(200, {
           models: ids.map((id) => ({ id, provider: 'anthropic' })),
           default: defaultId,
+          ...(fx?.defaultsByDifficulty !== undefined
+            ? { defaultsByDifficulty: fx.defaultsByDifficulty }
+            : {}),
         });
       })
       .persist();
@@ -242,6 +250,16 @@ export function installHostedRunMock(agent: MockAgent): void {
           typeof body['billableSeconds'] === 'number' ? body['billableSeconds'] : 0;
         const externalRef = typeof body['externalRef'] === 'string' ? body['externalRef'] : '';
         journal({ type: 'machine_debit', coreRunId, credits, billableSeconds, externalRef });
+        // An agent INSTANCE's machine time also lands on the billing fixture's
+        // ledger, so the Agents line reads what was charged (MOTIR-6924).
+        if (typeof body['instanceIntervalId'] === 'string') {
+          recordAgentDebit(
+            String(body['coreOrganizationId'] ?? ''),
+            'machine',
+            credits,
+            externalRef,
+          );
+        }
         return reply(200, { idempotent: false });
       })
       .persist();

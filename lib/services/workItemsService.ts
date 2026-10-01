@@ -78,6 +78,7 @@ import { decisionConfirmationGateService } from '@/lib/services/decisionConfirma
 import { asksTheConfirmQuestion } from '@/lib/approvalGates/decisionConfirmationHandler';
 import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { APPROVED_STATUS_KEY, heldMoves } from '@/lib/approvalGates/heldMoves';
+import { withdrawQuestionsOnArchive } from '@/lib/approvalGates/withdrawOnArchive';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { planTargetLockService, readPlanHoldWithin } from '@/lib/services/planTargetLockService';
 import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
@@ -3481,8 +3482,25 @@ export const workItemsService = {
         },
         system: false,
       });
-    if (awaitingGates.length > 0 && pullsTheWorkBack) {
-      {
+    // ⚠️ AND A MOVE TO CANCELLED WITHDRAWS THE QUESTION ON EVERY ROUTE (MOTIR-7109).
+    // Rule 6 above exempts a system write, which left a card CANCELLED by the parent
+    // cascade, the importer or any other system mover holding an `awaiting` gate a
+    // person could still approve — with whatever status and merge that approval
+    // carries — for work nobody intends to finish. Cancelled abandons the work
+    // whoever writes it, so it withdraws whoever writes it, every kind alike. The
+    // decide door's OWN move to Cancelled (an overturn) keeps its deciding gate,
+    // which is still `awaiting` until the door's final write; every OTHER question
+    // on the card goes.
+    const abandonsTheWork = toStatusKey === ROADMAP_CANCELLED_KEY;
+    if (awaitingGates.length > 0 && (pullsTheWorkBack || abandonsTheWork)) {
+      if (opts.decidingGateId) {
+        await approvalGateRepository.supersedeOtherAwaitingByWorkItem(
+          workItemId,
+          opts.decidingGateId,
+          'pulled_back',
+          tx,
+        );
+      } else {
         await approvalGateRepository.supersedeAllAwaitingByWorkItem(
           workItemId,
           // The WORK moved backwards under the question — out of review, or to
@@ -4291,6 +4309,9 @@ export const workItemsService = {
       if (!current || current.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
       await projectAccessService.assertPermission(current.projectId, ctx, 'work_item:archive', tx);
 
+      // Archiving abandons the work, so every question still waiting on it is
+      // withdrawn — gates first, in the decide door's lock order (MOTIR-7109).
+      await withdrawQuestionsOnArchive(id, tx);
       const row = await workItemRepository.archive(id, tx); // throws WorkItemNotFoundError if absent
       // An archived card is waiting on no repair (MOTIR-6602).
       await recomputeWorkItemFixReason(id, tx);

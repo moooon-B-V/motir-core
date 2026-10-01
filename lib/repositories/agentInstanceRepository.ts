@@ -326,6 +326,28 @@ export const agentInstanceRepository = {
   },
 
   /**
+   * Every instance that EXISTED at some moment in `[from, to)` — the daily storage
+   * charge's discovery (`agent-instance-storage.md` §2), across tenants, so it runs
+   * under `withSystemContext`. Existed means created before `to` and either deleted
+   * at or after `from`, or not deleted and not mid-delete: a row still `deleting`
+   * with no `deletedAt` is left for the pass after its delete completes, which
+   * charges it through `deletedAt` for every day it stood.
+   */
+  async listExistedBetween(
+    from: Date,
+    to: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance[]> {
+    return tx.agentInstance.findMany({
+      where: {
+        createdAt: { lt: to },
+        OR: [{ deletedAt: { gte: from } }, { deletedAt: null, state: { not: 'deleting' } }],
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /**
    * Every live record in one instance app — the reconcile's "who owns this
    * machine / volume" read. Deleted rows are excluded, so a machine or volume
    * that only a deleted record names is an orphan.
@@ -365,5 +387,83 @@ export const agentInstanceRepository = {
     // The `where` already excludes null; the narrowing is for the type, not the data.
     /* v8 ignore next */
     return rows.flatMap((r) => (r.flyApp ? [r.flyApp] : []));
+  },
+  // ── The plan-lapse deletion (MOTIR-6921, `agent-instance-storage.md` §4) ──
+
+  /** An org's live instances — the lapse schedules and clears them (a system read). */
+  async listLiveForOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance[]> {
+    return tx.agentInstance.findMany({
+      where: { organizationId, ...LIVE },
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
+  /**
+   * Schedule the bound workspace's live instances of one org for deletion at
+   * `at`. Only rows not already scheduled — a repeated lapse keeps its date.
+   */
+  async scheduleDeletion(
+    organizationId: string,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const { count } = await tx.agentInstance.updateMany({
+      where: { organizationId, scheduledDeletionAt: null, ...LIVE },
+      data: { scheduledDeletionAt: at },
+    });
+    return count;
+  },
+
+  /** Clear the bound workspace's schedule for one org — the plan was renewed. */
+  async clearScheduledDeletion(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const { count } = await tx.agentInstance.updateMany({
+      where: { organizationId, scheduledDeletionAt: { not: null } },
+      data: { scheduledDeletionAt: null, deletionNoticedAt: null },
+    });
+    return count;
+  },
+
+  /** Record that the owner was told — only a row still scheduled and not yet told. */
+  async markDeletionNoticed(
+    ids: readonly string[],
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const { count } = await tx.agentInstance.updateMany({
+      where: { id: { in: [...ids] }, scheduledDeletionAt: { not: null }, deletionNoticedAt: null },
+      data: { deletionNoticedAt: at },
+    });
+    return count;
+  },
+
+  /** Live, scheduled instances whose owner has not been told yet (a system read). */
+  async listScheduledUnnoticed(
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance[]> {
+    return tx.agentInstance.findMany({
+      where: { scheduledDeletionAt: { not: null }, deletionNoticedAt: null, ...LIVE },
+      orderBy: { scheduledDeletionAt: 'asc' },
+      take,
+    });
+  },
+
+  /** Live instances whose deletion date has passed, oldest first (a system read). */
+  async listDueForDeletion(
+    now: Date,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance[]> {
+    return tx.agentInstance.findMany({
+      where: { scheduledDeletionAt: { lte: now }, ...LIVE },
+      orderBy: { scheduledDeletionAt: 'asc' },
+      take,
+    });
   },
 };

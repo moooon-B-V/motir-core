@@ -21,7 +21,9 @@ import { hostedRunService } from '@/lib/services/hostedRunService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 
 // POST /api/work-items/[id]/hosted-runs (Story MOTIR-683 · MOTIR-690) — START a
-// hosted run on a card: `{ model, idempotencyKey?, mode? }` → `201 { dispatchRunId }`.
+// hosted run on a card: `{ model?, idempotencyKey?, mode? }` → `201 { dispatchRunId }`.
+// Without `model` the server runs the card on the model its difficulty resolves
+// to (Story MOTIR-6989 · MOTIR-6994); with one, the person's pick wins.
 // `mode: 'continue'` (Story MOTIR-6527 · MOTIR-6792) resumes a card whose last run
 // died — Continue hosted — and adds the continue claim's refusals, each a 409
 // `hosted_continue_*` (`taken` naming its holder). `mode: 'fix'` (Story MOTIR-1626 ·
@@ -60,8 +62,15 @@ export async function POST(
     idempotencyKey?: unknown;
     mode?: unknown;
   } | null;
+  if (body === null || typeof body !== 'object') {
+    return problem('BAD_REQUEST', 'The body must be a JSON object.', 400);
+  }
+  // `model` is OPTIONAL (MOTIR-6994): absent or blank, the server resolves it
+  // from the card's difficulty. Present, it must be a string — and it wins.
+  if (body?.model !== undefined && body.model !== null && typeof body.model !== 'string') {
+    return problem('BAD_REQUEST', '`model` must be a model id.', 400);
+  }
   const model = typeof body?.model === 'string' ? body.model.trim() : '';
-  if (!model) return problem('BAD_REQUEST', '`model` must be a model id.', 400);
   const mode = body?.mode ?? 'run';
   if (mode !== 'run' && mode !== 'continue' && mode !== 'fix') {
     return problem('BAD_REQUEST', '`mode` must be "run", "continue" or "fix".', 400);
@@ -73,7 +82,7 @@ export async function POST(
 
   try {
     const started = await hostedRunService.start(
-      { workItemKey: key, model, idempotencyKey, mode },
+      { workItemKey: key, ...(model ? { model } : {}), idempotencyKey, mode },
       gate.ctx,
     );
     return NextResponse.json(

@@ -11,6 +11,7 @@ import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestPerson } from './testPerson';
 import { writeHostedRunFixture } from './hosted-run-boundary';
+import { grantPaidAiPlanIfBilled } from './billing';
 
 // MY AGENTS — the acceptance seed (Story MOTIR-6860 · MOTIR-6877).
 //
@@ -33,7 +34,13 @@ export interface MyAgentsSeed {
   projectIdentifier: string;
 }
 
-export async function seedMyAgents(tag: string): Promise<MyAgentsSeed> {
+export async function seedMyAgents(
+  tag: string,
+  opts: {
+    /** `false` seeds a tracker-only org — no paid AI plan (MOTIR-6924's first case). */
+    paidAiPlan?: boolean;
+  } = {},
+): Promise<MyAgentsSeed> {
   fakePersistentOrchestrator.reset();
   setCredits(true);
   const owner = await createTestPerson({
@@ -45,6 +52,8 @@ export async function seedMyAgents(tag: string): Promise<MyAgentsSeed> {
     name: 'Agents',
     ownerUserId: owner.id,
   });
+  // Agents are an AI-plan feature (MOTIR-6918): create and wake ask the plan first.
+  if (opts.paidAiPlan !== false) grantPaidAiPlanIfBilled(workspace.organizationId);
   const identifier = `AG${tag.slice(-4).toUpperCase()}`;
   const project = await projectsService.createProject({
     workspaceId: workspace.id,

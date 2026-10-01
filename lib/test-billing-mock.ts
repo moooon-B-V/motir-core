@@ -146,6 +146,16 @@ export interface BillingFixtureEntry {
    * Optional, so every existing fixture keeps a readable balance.
    */
   usageUnavailable?: boolean;
+  /**
+   * The org's AGENT spend this period (Story MOTIR-6914 · MOTIR-6924), as
+   * `/v1/usage` reports it in `agentMachine` / `agentStorage`. OPTIONAL, and the
+   * omission is meaningful exactly as `search`'s is: absent ⇒ no agent blocks on
+   * the wire, the rolling-deploy shape the Agents line renders as UNAVAILABLE.
+   * The fixture file is the LEDGER for it — the storage debit below and the
+   * hosted-run mock's machine debit both add to it ({@link recordAgentDebit}), so
+   * a charge the app server makes is the figure the billing page reads next.
+   */
+  agents?: { machine: number; storage: number; keys?: string[] };
 }
 
 /** The fixture file shape: `coreOrganizationId` → its motir-ai billing state. */
@@ -211,6 +221,35 @@ function debitFixtureBalance(coreOrganizationId: string, credits: number): numbe
   return balanceAfter;
 }
 
+/**
+ * Record one agent debit on an org's fixture ledger (MOTIR-6924): the credits
+ * land in `agents.machine` or `agents.storage` and come off the balance, as the
+ * real ledger's `agent_machine` / `agent_storage` kinds do. Idempotent on `key`,
+ * as motir-ai is (`agent-storage:<instance>:<day>`, the interval's reference).
+ * Answers whether this call was the one that recorded it.
+ */
+export function recordAgentDebit(
+  coreOrganizationId: string,
+  kind: 'machine' | 'storage',
+  credits: number,
+  key: string,
+): boolean {
+  const path = process.env['MOTIR_AI_BILLING_FIXTURE_PATH'];
+  if (!path) return true;
+  const fixture = readFixture();
+  const entry = fixture[coreOrganizationId] ?? { ...FREE_DEFAULT };
+  const agents = entry.agents ?? { machine: 0, storage: 0 };
+  const keys = agents.keys ?? [];
+  if (keys.includes(key)) return false;
+  fixture[coreOrganizationId] = {
+    ...entry,
+    balance: entry.balance - credits,
+    agents: { ...agents, [kind]: agents[kind] + credits, keys: [...keys, key] },
+  };
+  writeFixtureFileSync(path, JSON.stringify(fixture));
+  return true;
+}
+
 export function installBillingBoundaryMock(agent: MockAgent): void {
   const origin = (process.env['MOTIR_AI_URL'] ?? '').replace(/\/+$/, '');
   if (!origin) {
@@ -267,6 +306,13 @@ export function installBillingBoundaryMock(agent: MockAgent): void {
           // UNAVAILABLE, and defaulting it to zeroes here would make the one
           // state this whole story distinguishes unreachable in the lane.
           ...(e.search ? { search: e.search } : {}),
+          // The same rule for the Agents line (MOTIR-6924): absent stays absent.
+          ...(e.agents
+            ? {
+                agentMachine: { totalSpend: e.agents.machine, monthSpend: e.agents.machine },
+                agentStorage: { totalSpend: e.agents.storage, monthSpend: e.agents.storage },
+              }
+            : {}),
           ...(e.searchRuns
             ? {
                 searchRuns: {
@@ -297,6 +343,33 @@ export function installBillingBoundaryMock(agent: MockAgent): void {
     .reply((req) => {
       const e = entryFor(queryOrgId(req.path));
       return { statusCode: 200, data: e.subscription, responseOptions: json };
+    })
+    .persist();
+
+  // POST /v1/credits/agent-storage — one agent's storage for one UTC day, the
+  // `agent_storage` kind (Story MOTIR-6914 · MOTIR-6919, driven by MOTIR-6924's
+  // walk). Keyed on the instance and the day, as motir-ai builds it.
+  pool
+    .intercept({ path: '/v1/credits/agent-storage', method: 'POST' })
+    .reply((req) => {
+      const body = JSON.parse(String(req.body ?? '{}')) as {
+        coreOrganizationId?: string;
+        instanceId?: string;
+        day?: string;
+        credits?: number;
+      };
+      const org = body.coreOrganizationId ?? '';
+      const fresh = recordAgentDebit(
+        org,
+        'storage',
+        body.credits ?? 0,
+        `agent-storage:${body.instanceId}:${body.day}`,
+      );
+      return {
+        statusCode: 200,
+        data: { idempotent: !fresh, balanceCredits: entryFor(org).balance },
+        responseOptions: json,
+      };
     })
     .persist();
 

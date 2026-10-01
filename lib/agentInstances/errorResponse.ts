@@ -106,11 +106,23 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
     );
   }
   if (err instanceof AgentInstanceStartRefusedError) {
-    // 402 for money, 429 for a cap: a client can tell "add credits" from "wait
-    // or free one" by status alone, and `reason` names the exact rule.
-    const status = err.reason === 'credits' ? 402 : err.reason === 'credits_unknown' ? 503 : 429;
+    // 402 for money (no paid AI plan, or no credits — as Motir Studio's establish
+    // answers `ai_plan_required`), 503 for an answer that could not be read, 429
+    // for a cap: a client can tell "pay" from "try again" from "wait or free one"
+    // by status alone, and `reason` names the exact rule.
+    const status =
+      err.reason === 'credits' || err.reason === 'ai_plan_required'
+        ? 402
+        : err.reason === 'credits_unknown' || err.reason === 'ai_plan_unknown'
+          ? 503
+          : 429;
     return NextResponse.json(
-      { code: err.code, error: err.message, reason: err.reason },
+      {
+        code: err.code,
+        error: err.message,
+        reason: err.reason,
+        ...(err.limit !== undefined ? { limit: err.limit } : {}),
+      },
       { status },
     );
   }

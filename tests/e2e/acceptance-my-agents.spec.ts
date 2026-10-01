@@ -162,7 +162,7 @@ test.describe('My agents', () => {
     await menu.getByRole('menuitem', { name: copy.menu.wake }).click();
     expect((await woke).status()).toBe(402);
     const refusal = page.getByRole('alert').filter({ hasText: 'credits' });
-    await expect(refusal).toContainText('Your organization’s credits can’t start a machine');
+    await expect(refusal).toContainText('Your organization is out of credits.');
     await expect(refusal.getByRole('link', { name: 'Add credits' })).toHaveAttribute(
       'href',
       '/settings/organization/billing',
@@ -175,9 +175,7 @@ test.describe('My agents', () => {
     const created = instancesResponse(page, 'POST', '/instances');
     await dialog.getByRole('button', { name: copy.create.submit }).click();
     expect((await created).status()).toBe(402);
-    await expect(dialog.getByRole('alert')).toContainText(
-      'Your organization’s credits can’t start a machine',
-    );
+    await expect(dialog.getByRole('alert')).toContainText('Your organization is out of credits.');
   });
 
   test('a viewer sees no door and the page refuses them', async ({ page }) => {
@@ -198,8 +196,8 @@ test.describe('My agents', () => {
     const created = instancesResponse(page, 'POST', '/instances');
     await dialog.getByRole('button', { name: copy.create.submit }).click();
     expect((await created).status()).toBe(429);
-    await expect(dialog.getByRole('alert')).toHaveText(
-      'You already have 10 agents. Delete one to create another.',
+    await expect(dialog.getByRole('alert')).toContainText(
+      'You already have 10 agents. Each one is charged for its storage every day, even asleep. Delete one to create another.',
     );
   });
 

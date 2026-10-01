@@ -190,6 +190,17 @@ export function setOrgBillingState(organizationId: string, entry: BillingFixture
   writeFileSync(fixturePath(), JSON.stringify(fixture), 'utf8');
 }
 
+/** Change PART of one org's state, keeping the rest — above all its `agents`
+ *  ledger, which the app server's own debits have been writing (MOTIR-6924). */
+export function patchOrgBillingState(
+  organizationId: string,
+  patch: Partial<BillingFixtureEntry>,
+): void {
+  const fixture = readFixture();
+  fixture[organizationId] = { ...(fixture[organizationId] ?? freeOrgState()), ...patch };
+  writeFileSync(fixturePath(), JSON.stringify(fixture), 'utf8');
+}
+
 /** Reset the fixture file to empty (every org free) — call in beforeEach so a
  *  prior test's state never leaks. */
 export function resetBillingFixture(): void {
