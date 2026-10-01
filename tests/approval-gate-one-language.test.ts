@@ -327,7 +327,9 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
     {
       method: 'supersedeAllAwaitingByWorkItem',
       writes: 'superseded',
-      callers: ['lib/services/workItemsService.ts'],
+      // …and, since MOTIR-7109, archiving a card, which abandons the work exactly as a
+      // move to Cancelled does but never reaches the status funnel.
+      callers: ['lib/approvalGates/withdrawOnArchive.ts', 'lib/services/workItemsService.ts'],
     },
     // Story MOTIR-6070 · MOTIR-6423 (`docs/decisions/design-refusal-verdict.md` §2): a
     // refusal that SENDS THE WORK BACK to To do withdraws the card's OTHER awaiting
@@ -344,6 +346,9 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       callers: [
         'lib/approvalGates/acceptanceResultHandler.ts',
         'lib/approvalGates/returnToTodo.ts',
+        // …and, since MOTIR-7109, the funnel's move to Cancelled made BY the decide door
+        // (an overturn), which withdraws every other question but the one being decided.
+        'lib/services/workItemsService.ts',
       ],
     },
     // Story MOTIR-6012 (ADR `approval-gates.md` §11.7): the CARD-LESS plan gate's raise

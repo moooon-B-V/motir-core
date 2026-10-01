@@ -2136,6 +2136,18 @@ export const approvalGatesService = {
           locked.decidedByLabel,
         );
       }
+      // 3a · REFUSE A QUESTION ABOUT ABANDONED WORK (MOTIR-7109). Archiving a card or
+      //      moving it to Cancelled withdraws its `awaiting` gates in the same
+      //      transaction (`withdrawQuestionsOnArchive`, the funnel's Cancelled rule), so
+      //      this is the BACKSTOP for a gate that predates those writers or reached the
+      //      card some other way: approving it would write a status and merge pull
+      //      requests for work nobody intends to finish. Read off the item locked-read
+      //      above, every kind alike. Refused as WITHDRAWN — the reader should leave,
+      //      not look again — with the cause the withdrawing writers record, and with
+      //      no `superseded` row behind it, as three other raise sites already do.
+      if (item && (item.archivedAt !== null || item.status === CANCELLED_STATUS_KEY)) {
+        throw new ApprovalGateSupersededError(input.gateId, 'pulled_back');
+      }
 
       // 3b · REFUSE A STALE PRESS (Story MOTIR-5232 · Subtask MOTIR-5234; ADR §6b's
       //      MOTIR-5234 amendment) — the question is live, and what the reader was
@@ -2559,6 +2571,10 @@ export const approvalGatesService = {
     }
     const item = await workItemRepository.findById(locked.workItemId, tx);
     if (!item || item.workspaceId !== ctx.workspaceId) throw new ApprovalGateNotFoundError(gateId);
+    // The door's step 3a backstop (MOTIR-7109): no system approval of abandoned work.
+    if (item.archivedAt !== null || item.status === CANCELLED_STATUS_KEY) {
+      throw new ApprovalGateSupersededError(gateId, 'pulled_back');
+    }
 
     const handler = handlerFor(locked.kind);
     const statuses = await workflowsRepository.findStatuses(item.projectId, ctx.workspaceId, tx);
