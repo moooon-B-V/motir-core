@@ -146,12 +146,13 @@ ALTER TABLE "two_factor" ADD COLUMN     "failed_verification_count" INTEGER DEFA
 ADD COLUMN     "locked_until" TIMESTAMP(3);
 
 -- Backfill: credential accounts keyed by the user id, as 1.7 looks them up.
+-- (Better-Auth's own `account` table keeps camelCase column names.)
 UPDATE "account" a
-   SET "account_id" = a."user_id"
- WHERE a."provider_id" = 'credential'
-   AND a."account_id" <> a."user_id"
+   SET "accountId" = a."userId"
+ WHERE a."providerId" = 'credential'
+   AND a."accountId" <> a."userId"
    AND NOT EXISTS (
      SELECT 1 FROM "account" b
-      WHERE b."provider_id" = 'credential'
-        AND b."account_id" = a."user_id"
+      WHERE b."providerId" = 'credential'
+        AND b."accountId" = a."userId"
    );
