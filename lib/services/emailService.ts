@@ -53,6 +53,10 @@ import {
   type OrganizationDeletionScheduledEmailProps,
 } from '@/lib/emailTemplates/organizationDeletionScheduled';
 import {
+  agentsDeletionScheduledEmail,
+  type AgentsDeletionScheduledEmailProps,
+} from '@/lib/emailTemplates/agentsDeletionScheduled';
+import {
   organizationDeletionCancelledEmail,
   type OrganizationDeletionCancelledEmailProps,
 } from '@/lib/emailTemplates/organizationDeletionCancelled';
@@ -128,7 +132,12 @@ export type TransactionalEmail =
       template: 'organization-deletion-reminder';
       data: OrganizationDeletionReminderEmailProps;
     }
-  | { to: string; template: 'organization-erased'; data: OrganizationErasedEmailProps };
+  | { to: string; template: 'organization-erased'; data: OrganizationErasedEmailProps }
+  | {
+      to: string;
+      template: 'agents-deletion-scheduled';
+      data: AgentsDeletionScheduledEmailProps;
+    };
 
 /** Every template discriminant — handy for exhaustiveness + tests. */
 export type EmailTemplate = TransactionalEmail['template'];
@@ -187,6 +196,9 @@ export const EMAIL_TEMPLATE_CLASS: Record<EmailTemplate, EmailTemplateClass> = {
   'organization-deletion-cancelled': 'essential',
   'organization-deletion-reminder': 'essential',
   'organization-erased': 'essential',
+  // An org's AI plan ended (MOTIR-6921): the reader loses their agents' homes on
+  // the date unless the plan is renewed — never budgeted away.
+  'agents-deletion-scheduled': 'essential',
   'mention-notification': 'notification',
   'watcher-comment-notification': 'notification',
   'watcher-transition-notification': 'notification',
@@ -325,6 +337,8 @@ async function renderTemplate(message: TransactionalEmail) {
       return organizationDeletionReminderEmail(message.data);
     case 'organization-erased':
       return organizationErasedEmail(message.data);
+    case 'agents-deletion-scheduled':
+      return agentsDeletionScheduledEmail(message.data);
     default: {
       // Exhaustiveness guard: a new template arm without a case here is a
       // compile error, not a silent fall-through.

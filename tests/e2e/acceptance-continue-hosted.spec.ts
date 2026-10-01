@@ -97,7 +97,8 @@ const phase = (page: Page, name: string): Locator => page.locator(`li[data-phase
 
 const modelsResponse = (page: Page) =>
   page.waitForResponse(
-    (res) => res.url().endsWith('/api/hosted-runs/models') && res.request().method() === 'GET',
+    (res) =>
+      new URL(res.url()).pathname === '/api/hosted-runs/models' && res.request().method() === 'GET',
     { timeout: 30_000 },
   );
 const startResponse = (page: Page, itemKey: string) =>

@@ -202,7 +202,9 @@ test('the Motir orb opens the AI callout, and Plan with AI reaches the workspace
 
     // The panel is the callout — its "Motir AI" header, and the Plan row with
     // its description. Both read INSIDE the panel.
-    await expect(callout(page).getByText('Motir AI')).toBeVisible();
+    // EXACT: the menu's rows contain the name too ("Debug with Motir AI",
+    // MOTIR-7050), so a substring match no longer resolves to the header alone.
+    await expect(callout(page).getByText('Motir AI', { exact: true })).toBeVisible();
     await expect(planRow(page)).toBeVisible();
     await expect(callout(page).getByText('Generate, expand or re-plan the project')).toBeVisible();
 

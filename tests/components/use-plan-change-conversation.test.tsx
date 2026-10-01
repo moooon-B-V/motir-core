@@ -397,12 +397,15 @@ describe('usePlanChangeConversation — a turn', () => {
     });
 
     // ONE door and no intent on the wire (MOTIR-1343 · ADR §1): the client posts
-    // the text and the `isAnswer` affordance flag, and nothing else.
+    // the text and the `isAnswer` affordance flag, and nothing else — the
+    // optional seed gate and anchor (MOTIR-7050) are absent, so neither rides.
     expect(submitAsk).toHaveBeenCalledWith(
       'Add recurring invoices.',
       expect.anything(),
       false,
       's1',
+      null,
+      null,
     );
     expect(append).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();

@@ -303,3 +303,108 @@ that signed-in surface belongs to Story 6.12.)
   `components/issues/IssueTypeIcon.tsx`, `app/globals.css` (the `--el-*` +
   `[data-display-style]` token layers), `motir-core/CLAUDE.md` § colour + shape
   tokens.
+
+## The Debug with Motir AI offer on the report widget's success state (MOTIR-7045, 2026-09-30)
+
+**Design system check (first, per the design-system rule).** `package.json` depends on
+`@motir/design-system` `workspace:*`, and `app/globals.css` imports `@motir/design-system/theme.css`.
+**Verdict: the project is on Motir Design**, so the mock is built from the package's primitives and
+its `--el-*` / shape tokens. The token blocks were extracted from `packages/design-system/theme.css`,
+not typed by hand. **Axes:** the root layout (`app/layout.tsx`) sets `data-style`, `data-palette` and
+`data-type` on `<html>` from the signed-in person's applied appearance
+(`appearancePreferenceService.getApplied`), so the project has no fixed axis values. The mock draws the
+base values (no axis attribute). Every element routes through a token, so any applied axis re-skins it.
+
+**Mock:** [`report-widget--debug-offer.mock.html`](report-widget--debug-offer.mock.html), a DELTA.
+**Amends:** [`triage.mock.html`](triage.mock.html) panel 3 and § _Panel 3 — the in-app report widget
+(the 6.11.7 surface — signed-in member)_ above, which ends "Confirms with a `Toast`". That mock is a
+record and is not edited. **Decision:** `docs/decisions/conversation-turn-intent.md` AMENDMENT 1, A1.3
+(the widget's accept is the one seeded send) and A1.4 (one card written, no status moved). **What the
+press opens** is drawn in `design/ai-chat/debug-turn.mock.html` (see that area's notes).
+
+**Read first:** `app/(authed)/_components/ReportWidgetModal.tsx` (a 201 fires a success `Toast` with
+`widget.submitted` / `widget.submittedDetail`, then closes), `ReportProvider.tsx` (the modal is mounted
+only when `canEdit`), `ReportButton.tsx` (a read-only actor sees a disabled Report control), and
+`app/(authed)/layout.tsx` (`showPlanWithAi` = `isMotirAiConfigured()` AND an active project AND
+`ai:plan`, the orb's gate).
+
+### Panel 1 — the access path (unchanged)
+
+The shell's Report icon button (`ReportButton display="shell"`: `--radius-control`,
+`h/w --height-control`, glyph `Bug`) opens the widget. The form (`Segmented` Bug / Feature, `Input`
+Title, `Textarea` What happened?, footer Cancel + Submit) is drawn as it ships and does not change.
+
+### Panel 2 — offered: the widget stays open on a success state
+
+When the offer applies, the widget does **not** close on the 201, and **no Toast fires**. Its body
+becomes the success state below, in the same `Modal` (size md, `--radius-modal`, `--shadow-modal`,
+`--spacing-card-padding`, title "Report something" unchanged).
+
+_Why not the Toast's action slot:_ a Toast dismisses itself after 5 s and holds one short label. That
+is too little time and too little room for a control that starts paid work, and the helper line the
+decision requires would not fit.
+
+| Element           | Primitive                                        | Copy (exact)                                                                                                                                                                                        | Colour · shape                                                                                                                    |
+| ----------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| confirmation      | `CircleCheckBig` + two lines, `role="status"`    | "Thanks — your report was submitted" (`triage.widget.submitted`) / "Filed as {key}, now waiting in Requested features." (`triage.widget.submittedDetail`, wording unchanged)                        | glyph `--el-success` · title `--el-text` 14px medium · detail `--el-text-secondary` 13px                                          |
+| filed row         | `IssueTypeIcon type="bug"` + mono key + title    | e.g. "PROD-412 · Board drag drops the card one column short"                                                                                                                                        | `--el-card` fill, `--el-border`, `--radius-control`, `--spacing-control-x/y` · key `--el-text-identifier` · glyph `--el-type-bug` |
+| helper line       | `<p>`, the button's `aria-describedby`           | "**Debug with Motir AI** starts the debug as soon as you press it and spends Motir AI credits. Motir AI reads the code, names the likely cause, and checks whether a card already covers this bug." | `--el-text-secondary` on `--el-page-bg` (the lead-in in `--el-text`, semibold)                                                    |
+| footer, secondary | `Button variant="ghost"`                         | "Close" (`common.close`)                                                                                                                                                                            | `--el-text`, hover `--el-surface` · `--radius-btn`, `--height-btn-md`                                                             |
+| footer, primary   | `Button variant="primary"`, left icon `Sparkles` | "Debug with Motir AI"                                                                                                                                                                               | `--el-accent` / `--el-accent-text` · `--radius-btn`, `--height-btn-md`, `--spacing-btn-x`                                         |
+| footer            | `Modal.Footer`                                   | —                                                                                                                                                                                                   | `border-t --el-border`, `mt/pt --spacing-md` (the primitive's own values)                                                         |
+
+New keys: `triage.widget.debugOffer.action` = "Debug with Motir AI" and
+`triage.widget.debugOffer.hint` = the helper line above.
+
+**The press is the go (A1.3 condition 2).** The helper line says, before the press, that pressing
+starts the debug and spends credits. It is the button's accessible description. The label is a verb
+phrase and not a navigation.
+
+**What the press does.** It closes the widget, then opens the Motir AI overlay on the **project**
+conversation (`useOpenPlanningWorkspace` with the project context, the same href the orb's rows use).
+It sends ONE turn through the shipped `autoSendTurn` seam, claimed once under `autoSendKey` so a
+remount or a second open cannot send it twice. The turn is `{ body, targets: [<the new bug's key>] }`
+and carries no intent field (§1). The body is the person's **title**, a blank line, and their
+**description**, word for word. With no description, it is the title alone. Motir adds no preamble
+(A1.3 condition 1). **Close** closes the widget and sends nothing.
+
+### Panel 3 — not rendered
+
+The offer, and with it the success panel, is **not rendered** in three cases. In each, the widget
+does exactly what it ships today: it closes and fires the success Toast (`border --el-success`, glyph
+`--el-success`, title `--el-text`, description `--el-text-muted` on `--el-page-bg`, close glyph
+`--el-text-muted`, `--radius-card`, `--shadow-elevated`). Nothing is dimmed or disabled, and no
+"ask an admin" line appears.
+
+- **(a) No right to run Motir AI:** the actor lacks `ai:plan`. The widget itself already needs
+  `work_item:edit`, so a person without edit rights never reaches a success state at all (the Report
+  button is disabled for them). The only rights state the offer adds is `ai:plan`.
+- **(b) Motir AI not configured:** `isMotirAiConfigured()` is false.
+- **(c) A Feature:** the offer is for the Bug kind only.
+
+The gate is the one the layout already computes for the orb (`showPlanWithAi`). It is passed to
+`ReportProvider` beside `canEdit`. A disabled button would promise work the person cannot start. It
+would also cost a tab stop and a screen-reader announcement, which is the same argument the orb
+registry makes for a dead row.
+
+**Out of credits is not a hide case.** The offer renders, the press sends, and the rail shows the
+shipped paywall (`design/ai-chat/debug-turn.mock.html` panel 5).
+
+### Panel 4 — the hand-off
+
+The first thing the person sees in the rail is their own turn. It is a user bubble headed "turn 1",
+with the shipped target row ("Targeting 1 item" + `PlanningTargetKeyChip` tone `on-accent`,
+`--el-accent-pressed` / `--el-accent-text`, `--radius-badge`, `--spacing-chip-x`) and their title and
+description. Below it is the "Sent to Motir AI" marker. The rail head keeps the project mode pill
+(`plan`), and there is no item header.
+
+### Copy index (this section)
+
+"Debug with Motir AI" · the helper line above · "Close" (existing) · "Thanks — your report was
+submitted" / "Filed as {key}, now waiting in Requested features." (existing, unchanged).
+
+> **Naming note.** The card asks for the inbox to be named **Triage** in new copy. The helper line
+> names no inbox, and the rail's outcome lines say "Triage". The shipped `submittedDetail`
+> (which the card says not to change), the nav label and the inbox heading all still say
+> **"Requested features"**. So the success panel reads "Requested features" while the rail reads
+> "Triage". Reconciling the two is a copy decision outside this card.

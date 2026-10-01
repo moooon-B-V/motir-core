@@ -79,6 +79,8 @@ const REGISTRY_KEYS: string[] = [
     ...CONTEXTS.flatMap((c) => aiCalloutActions(overlayHref(c))).flatMap((a) => [
       a.titleKey,
       a.descriptionKey,
+      // A row's PRE-FILL is copy too (MOTIR-7050) — held to the same en + zh bar.
+      ...(a.prefillKey ? [a.prefillKey] : []),
     ]),
   ]),
 ];
@@ -280,7 +282,7 @@ describe('a new action is ONE registry entry — the components hardcode nothing
     // component change.
     const code = codeOf(MENU_COMPONENT);
     expect(code).toMatch(/Record<AiCalloutIcon, LucideIcon>/);
-    for (const icon of ['sparkles', 'message-circle-question', 'wrench']) {
+    for (const icon of ['sparkles', 'message-circle-question', 'bug', 'wrench']) {
       expect(code, `the icon map must cover "${icon}"`).toContain(icon);
     }
   });

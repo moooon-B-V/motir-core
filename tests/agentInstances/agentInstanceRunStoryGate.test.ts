@@ -674,7 +674,9 @@ const REFUSALS: RefusalCase[] = [
     beforeWake: false,
   },
   {
-    name: 'the wake’s full agent pool, passed through',
+    // The organisation's OWN running cap since MOTIR-6926 (agent-instances.md
+    // AMENDMENT 3) — no longer a fleet-wide `fleet_busy`.
+    name: 'the wake’s full organisation running cap, passed through',
     arrange: async () => {
       const agentId = await sleepingAgent();
       await agent('holds-the-only-slot');
@@ -683,7 +685,7 @@ const REFUSALS: RefusalCase[] = [
     },
     status: 429,
     code: 'agent_instance_start_refused',
-    extra: { reason: 'fleet_busy' },
+    extra: { reason: 'org_running_cap', limit: 1 },
     beforeWake: false,
   },
 ];
@@ -805,13 +807,17 @@ describe('5 · no gateway key, no usage row — machine time is the agent’s in
 
     expect(mint).not.toHaveBeenCalled();
     expect(revoke).not.toHaveBeenCalled();
-    // Nothing asked motir-ai for a run key or a run's usage — only the credit check
-    // and the machine debits went out.
+    // Nothing asked motir-ai for a run key or a run's usage — only the paid-plan
+    // read (MOTIR-6918), the credit check and the machine debits went out.
     const aiPaths = new Set(
       stub.calls.filter((c) => c.url.startsWith(AI)).map((c) => new URL(c.url).pathname),
     );
     expect([...aiPaths].sort()).toEqual(
-      ['/v1/credits/agent-machine', '/v1/credits/agent-run-check'].filter((p) => aiPaths.has(p)),
+      [
+        '/v1/credits/agent-machine',
+        '/v1/credits/agent-run-check',
+        '/v1/stripe/subscription',
+      ].filter((p) => aiPaths.has(p)),
     );
     // Every machine debit is an INTERVAL's, one per charged interval, none a run's.
     const charged = closed.filter((i) => i.chargeOutcome === 'charged');

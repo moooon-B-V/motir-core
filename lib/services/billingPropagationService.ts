@@ -6,6 +6,7 @@ import { toScaledTrackerStateDTO, toAiIncludedSeatDTO } from '@/lib/mappers/bill
 import type { SetScaledTrackerStateInput } from '@/lib/billing/scaledTrackerState';
 import type { SetAiIncludedSeatInput } from '@/lib/billing/aiIncludedSeat';
 import type { ScaledTrackerStateDTO, AiIncludedSeatDTO } from '@/lib/dto/billing';
+import { agentInstanceLapseService } from '@/lib/services/agentInstanceLapseService';
 
 // Billing-propagation service (Story 8.1.4c) — the motir-core consumer side of
 // scaled-tracker subscription propagation. motir-ai's Stripe webhook (8.1.4b)
@@ -57,6 +58,12 @@ export const billingPropagationService = {
       const org = await withOrgServiceWriteContext(input.organizationId, (tx) =>
         organizationRepository.updateAiIncludedSeat(input.organizationId, input.included, tx),
       );
+      // The seat is on exactly while the org holds a paid AI plan, so this push
+      // is also the plan's lapse and its return (`agent-instance-storage.md` §4,
+      // MOTIR-6921): after the seat has committed, schedule or clear the org's
+      // agents' deletion. Motir's own organisations are never scheduled (§5).
+      if (input.included) await agentInstanceLapseService.clearLapse(input.organizationId);
+      else await agentInstanceLapseService.recordLapse(input.organizationId, new Date());
       return toAiIncludedSeatDTO(org);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {

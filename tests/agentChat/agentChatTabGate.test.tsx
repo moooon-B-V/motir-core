@@ -166,6 +166,7 @@ function agent(profileId: string): AgentInstanceListItemDto {
     stopReason: null,
     activeRun: null,
     lastRun: null,
+    scheduledDeletionAt: null,
   };
 }
 
@@ -385,7 +386,7 @@ async function mountChat(profile: string) {
     <MyAgentsRoom
       projectKey="MOTIR"
       projectName="motir"
-      initial={{ instances: listed, total: 1 }}
+      initial={{ instances: listed, total: 1, planLapse: null }}
       profiles={Object.entries(PROFILE_NAMES).map(([id, name]) => ({ id, name }))}
       maxPerUser={10}
       openAgentId="a1"

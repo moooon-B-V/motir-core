@@ -477,3 +477,59 @@ volume storage is ever charged.
 | Your limit         | _"You already have 10 agents…"_              | unchanged                                             |
 | Motir is busy      | the fleet-wide 8, or CI's ceiling            | the agent pool's safety valve only                    |
 | Not enough credits | at create / wake only                        | at create / wake, **and within a pass while running** |
+
+## AMENDMENT 3 — the running cap is each organisation's own, and Motir's own organisations have no agent limits (MOTIR-6926, 2026-09-30)
+
+Decided by the product owner on 2026-09-29 and recorded in
+[MOTIR-6902](motir:cmumft28b009phvoi3as70ybt)'s brief (`agent-instance-storage.md` §3 and §5). Two
+changes to AMENDMENT 2 §3; everything else in AMENDMENT 2 stands.
+
+### 1 · `MOTIR_INSTANCE_MAX_RUNNING` is counted per organisation
+
+_"50 is not enough for all motir orgs for sure, motir is multi tenants, we should change
+MOTIR_INSTANCE_MAX_RUNNING to per org."_ AMENDMENT 2 kept the variable as ONE count across every
+organisation, so one busy organisation could make every other one read _"Motir is busy"_.
+
+- `MOTIR_INSTANCE_MAX_RUNNING` keeps its name and its default of **50**, and now means **running
+  agent instances ONE organisation may hold**.
+- It is counted under the same fleet admission lock that takes the agent slot, keyed on the slot's
+  organisation (`reserveSlot` in `agentInstanceLifecycleService`), so two creates racing for an
+  organisation's last slot cannot both take it, and another organisation's create in the same instant
+  is not counted against it.
+- Reaching it refuses `org_running_cap`, worded as the My agents delta draws it (MOTIR-6916): _"Your
+  organization is running {limit} of its {limit} agents. Hibernate one to start another."_ The number
+  travels on the refusal (`limit`), never typed into copy.
+- **There is no fleet-wide agent cap any more.** `fleet_busy` (_"Motir is busy"_) answers only the
+  operator's kill switch, `MOTIR_FLEET_MAX_IN_FLIGHT=0`, which still stops every boot of every
+  workload ([MOTIR-6907](motir:cmumkykha000whwshso5thqxq)), or an admission that could not be
+  evaluated.
+
+### 2 · Motir's meta and internal organisations have no agent limits
+
+_"meta org and internal org have no limit."_ An organisation with `Organization.isMeta` OR
+`Organization.internalBilling` (`isUnlimitedAgentOrg` in `lib/agentInstances/config.ts`, the one
+predicate) skips:
+
+- the per-person cap (`user_cap`, 10 live agents);
+- the per-organisation running cap (1);
+- the credit pre-flight at create and wake, and the sweep's hibernate on `credits`.
+
+It is **still charged exactly like any organisation**: every machine interval and every daily storage
+debit lands on its ledger, and an internal organisation's are offset by motir-ai's `internal_offset`
+(`internal-billing-classification.md`), so its usage stays true. Neither flag gains a meaning here;
+this reads both and sets neither. The paid-AI-plan answer for the same two is the shared gate's
+(`aiPlanGateService`, MOTIR-6909), and their exemption from plan-lapse deletion is MOTIR-6921's.
+
+### What AMENDMENT 2 kept
+
+The charge while the machine runs (§1), the agents' own pool outside CI's shared ceiling (§2), and the
+per-person cap for every other organisation are unchanged.
+
+### What a person sees
+
+| Refusal                   | AMENDMENT 2                       | Now                                                    |
+| ------------------------- | --------------------------------- | ------------------------------------------------------ |
+| Your organization's limit | —                                 | at the organisation's own `MOTIR_INSTANCE_MAX_RUNNING` |
+| Motir is busy             | the fleet-wide safety valve       | the operator's kill switch only                        |
+| Your limit                | 10 per person                     | 10 per person, except in Motir's own organisations     |
+| Out of credits            | at create / wake and in the sweep | the same, except in Motir's own organisations          |

@@ -48,6 +48,12 @@ export const agentInstanceSweep = defineJob(
     await ctx.step.run('sweep-lost-terminal-connections', () =>
       services.agentTerminalRelay.sweepLostConnections(),
     );
+    // MOTIR-6921 (`agent-instance-storage.md` §4): a lapsed AI plan's owed notices
+    // re-sent, and the agents whose deletion date has passed deleted through the
+    // ordinary delete. Its own step, for the same memoized-shape reason.
+    await ctx.step.run('sweep-agent-plan-lapse', () =>
+      services.agentInstanceSweep.sweepPlanLapse(),
+    );
     return summary;
   },
 );

@@ -666,7 +666,7 @@ describe('each refusal renders its own words, and the section shows no run', () 
     );
     const n = screen.getByTestId('agent-refused-wake');
     expect(n.textContent).toContain('Not sent — yue-sleepy couldn’t wake.');
-    expect(n.textContent).toContain('Your organization’s credits can’t start a machine right now.');
+    expect(n.textContent).toContain('Your organization is out of credits.');
     expect(within(n).getByText('Add credits').getAttribute('href')).toBe(
       '/settings/organization/billing',
     );

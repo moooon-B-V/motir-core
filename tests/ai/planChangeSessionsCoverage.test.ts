@@ -316,6 +316,7 @@ describe('planChangeMappers — no Prisma row crosses the boundary', () => {
       isAnswer: false,
       intent: null,
       intentCorrected: false,
+      debugLandingClaimedAt: null,
       citations: [],
       authorId: 'u1',
       createdAt: now,
@@ -323,5 +324,50 @@ describe('planChangeMappers — no Prisma row crosses the boundary', () => {
 
     const dto = toPlanChangeSessionDto(row, [turn(1), turn(0)]);
     expect(dto.turns.map((t) => t.seq)).toEqual([1, 0]);
+  });
+});
+
+describe('planChangeSessionsService — the debug-landing claim (MOTIR-7049)', () => {
+  // The landing's one-card guarantee rests on this compare-and-set. The landing
+  // suite drives the CLAIM; RELEASE runs only when a write is refused inside its
+  // own transaction, which nothing there provokes — so its contract is pinned
+  // here directly: a released claim can be taken again, a held one cannot.
+  it('claims once, refuses a second claim, and can be claimed again only after a release', async () => {
+    await openCurrent(ctx(fx));
+    const appended = await planChangeSessionsService.appendTurn(
+      'saving a comment drops the mention',
+      ctx(fx),
+      current,
+      { intent: 'debug' },
+    );
+    const turn = appended.turns.at(-1)!;
+
+    expect(await planChangeSessionsService.claimDebugLanding(turn.id, ctx(fx), current)).toBe(true);
+    expect(await planChangeSessionsService.claimDebugLanding(turn.id, ctx(fx), current)).toBe(
+      false,
+    );
+
+    await planChangeSessionsService.releaseDebugLanding(turn.id, ctx(fx), current);
+    const released = await adminDb.planChangeTurn.findUnique({ where: { id: turn.id } });
+    expect(released?.debugLandingClaimedAt).toBeNull();
+
+    expect(await planChangeSessionsService.claimDebugLanding(turn.id, ctx(fx), current)).toBe(true);
+  });
+
+  it('never claims a turn that did not run as debug', async () => {
+    await openCurrent(ctx(fx));
+    const appended = await planChangeSessionsService.appendTurn(
+      'what is left in the sprint?',
+      ctx(fx),
+      current,
+      { intent: 'ask' },
+    );
+    const turn = appended.turns.at(-1)!;
+
+    expect(await planChangeSessionsService.claimDebugLanding(turn.id, ctx(fx), current)).toBe(
+      false,
+    );
+    const row = await adminDb.planChangeTurn.findUnique({ where: { id: turn.id } });
+    expect(row?.debugLandingClaimedAt).toBeNull();
   });
 });

@@ -131,6 +131,7 @@ function agent(): AgentInstanceListItemDto {
     stopReason: null,
     activeRun: null,
     lastRun: null,
+    scheduledDeletionAt: null,
   };
 }
 
@@ -204,7 +205,7 @@ async function mount() {
     <MyAgentsRoom
       projectKey="MOTIR"
       projectName="motir"
-      initial={{ instances: [agent()], total: 1 }}
+      initial={{ instances: [agent()], total: 1, planLapse: null }}
       profiles={[{ id: 'claude', name: 'Claude Code' }]}
       maxPerUser={10}
       openAgentId="a1"

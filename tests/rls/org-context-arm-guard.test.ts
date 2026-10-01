@@ -177,6 +177,31 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'the defect and the fix are indistinguishable — so the arm is what makes it observable and ' +
       '`tests/github/siblingWorkspaceAttribution.test.ts` is what observes it.',
   },
+  'lib/services/agentInstanceLapseService.ts#readOrg': {
+    tables: ['organization'],
+    source: 'scan',
+    why: 'the org row read for its flags, its name and its lapse (MOTIR-6921) — organization_active',
+  },
+  'lib/services/agentInstanceLapseService.ts#recordLapse': {
+    tables: ['organization'],
+    source: 'scan',
+    why: 'UPDATE (set-if-unset) + re-read of the org row — organization_mutate_active / organization_active',
+  },
+  'lib/services/agentInstanceLapseService.ts#clearLapse': {
+    tables: ['organization'],
+    source: 'scan',
+    why: 'UPDATE + RETURNING on the org row — organization_mutate_active / organization_active',
+  },
+  'lib/services/agentInstanceLifecycleService.ts#readUnlimitedAgentOrg': {
+    tables: ['organization'],
+    source: 'scan',
+    why: 'the org row read for `isMeta` / `internalBilling` (MOTIR-6926) — organization_active',
+  },
+  'lib/services/agentInstanceLifecycleService.ts#list': {
+    tables: ['organization'],
+    source: 'scan',
+    why: 'the org row read for the plan-lapse banner date (MOTIR-6921) — organization_active',
+  },
   'lib/services/aiPlanGateService.ts#hasPaidAiPlan': {
     tables: ['organization'],
     source: 'scan',

@@ -37,6 +37,13 @@ interface ReportContextValue {
    * re-read if you cache the queue".
    */
   submissionsChangedAt: number;
+  /**
+   * Bump {@link submissionsChangedAt} from OUTSIDE the widget — a debug turn
+   * that filed a bug into Triage from the AI conversation (MOTIR-7049). The
+   * server cannot reach this client tick, so the surface that saw the write
+   * reports it here.
+   */
+  notifySubmissionsChanged: () => void;
 }
 
 const ReportContext = createContext<ReportContextValue | null>(null);
@@ -44,12 +51,22 @@ const ReportContext = createContext<ReportContextValue | null>(null);
 export function ReportProvider({
   projectKey,
   canEdit = true,
+  canDebug = false,
   children,
 }: {
   /** The active project's identifier, or null when there's no active project. */
   projectKey: string | null;
   /** Whether the actor may EDIT the active project (Story 6.4.6). */
   canEdit?: boolean;
+  /**
+   * Whether a bug report may be followed by the "Debug with Motir AI" offer
+   * (MOTIR-7050; `design/triage/design-notes.md` § the offer, panel 3). It is the
+   * orb's own gate, computed once by the layout (`showPlanWithAi`: Motir AI
+   * configured AND an active project AND `ai:plan`) and handed down here beside
+   * `canEdit` rather than re-derived — the offer and the orb must agree on who
+   * may start a Motir AI turn. False → the widget closes and toasts as it ships.
+   */
+  canDebug?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -61,8 +78,15 @@ export function ReportProvider({
   const notifySubmitted = useCallback(() => setSubmissionsChangedAt((n) => n + 1), []);
 
   const value = useMemo<ReportContextValue>(
-    () => ({ open, setOpen, openReport, canReport: Boolean(projectKey), submissionsChangedAt }),
-    [open, openReport, projectKey, submissionsChangedAt],
+    () => ({
+      open,
+      setOpen,
+      openReport,
+      canReport: Boolean(projectKey),
+      submissionsChangedAt,
+      notifySubmissionsChanged: notifySubmitted,
+    }),
+    [open, openReport, projectKey, submissionsChangedAt, notifySubmitted],
   );
 
   return (
@@ -74,6 +98,7 @@ export function ReportProvider({
           onOpenChange={setOpen}
           projectKey={projectKey}
           onSubmitted={notifySubmitted}
+          canDebug={canDebug}
         />
       )}
     </ReportContext.Provider>
@@ -86,4 +111,11 @@ export function useReport(): ReportContextValue {
     throw new Error('useReport must be used inside <ReportProvider>');
   }
   return ctx;
+}
+
+/** The report context, or `null` outside a {@link ReportProvider} — for a
+ *  surface that is mounted both inside the authenticated shell and without it
+ *  (the planning workspace's tests render it bare), and only NOTIFIES. */
+export function useOptionalReport(): ReportContextValue | null {
+  return useContext(ReportContext);
 }

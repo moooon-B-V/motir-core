@@ -17,6 +17,7 @@ import { notificationsService } from '@/lib/services/notificationsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { resumeGateEnabled } from '@/lib/onboarding/resumeVisibility';
 import { isCloud, isCloudBilling } from '@/lib/billing/availability';
+import { isHostedRunsAvailable } from '@/lib/hostedRuns/availability';
 import { resolveReconsentHold } from '@/lib/legal/reconsentGate';
 import { legalIndexUrl as resolveLegalIndexUrl } from '@/lib/legal/links';
 import { docsIndexUrl as resolveDocsIndexUrl } from '@/lib/docs/links';
@@ -306,6 +307,9 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // The slot is then simply empty, which is the correct rendering of a
   // capability this build does not have.
   const publicProjectsAvailable = isCloud();
+  // The settings registry's hosted-runs axis (MOTIR-6995): the Hosted agent room
+  // exists only on a build that runs hosted agents. A build fact, not a live read.
+  const hostedRunsAvailable = isHostedRunsAvailable();
   const buildInPublicProjectKey =
     publicProjectsAvailable && canManage && activeProject && activeProject.accessMode !== 'public'
       ? activeProject.identifier
@@ -392,7 +396,14 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                 "Report" triggers drive the same dialog. The widget posts to the
                 6.11.4 intake for the active project; mounted only when there's a
                 project the actor can edit (the intake rejects a viewer 403). */}
-            <ReportProvider projectKey={activeProject?.identifier ?? null} canEdit={canEdit}>
+            <ReportProvider
+              projectKey={activeProject?.identifier ?? null}
+              canEdit={canEdit}
+              // The report widget's "Debug with Motir AI" offer (MOTIR-7050)
+              // rides the ORB's gate, so the two can never disagree about who
+              // may start a Motir AI turn.
+              canDebug={showPlanWithAi}
+            >
               {/* OnboardingResumeProvider (MOTIR-1533) resolves the in-progress
                   onboarding signal ONCE and shares it with the SidebarNav rail
                   row + the ⌘K twin below, so neither fetches on its own. */}
@@ -493,6 +504,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                           billingAvailable={cloudBilling}
                           workspaceTierRevealed={workspaceTierRevealed}
                           publicProjectsAvailable={publicProjectsAvailable}
+                          hostedRunsAvailable={hostedRunsAvailable}
                           helpMenu={
                             <HelpMenu docsIndexUrl={docsIndexUrl} legalIndexUrl={legalIndexUrl} />
                           }
@@ -610,6 +622,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                         billingAvailable={cloudBilling}
                         workspaceTierRevealed={workspaceTierRevealed}
                         publicProjectsAvailable={publicProjectsAvailable}
+                        hostedRunsAvailable={hostedRunsAvailable}
                       />
                     </SidebarDrawer>
 
@@ -624,6 +637,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       settingsPermissions={settingsPermissions}
                       aiPlanningConfigured={aiPlanningConfigured}
                       publicProjectsAvailable={publicProjectsAvailable}
+                      hostedRunsAvailable={hostedRunsAvailable}
                       isOrgAdmin={activeOrg ? orgCan(activeOrg.role, 'manageOrgSettings') : false}
                     />
 

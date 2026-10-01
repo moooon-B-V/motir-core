@@ -8,6 +8,7 @@ import {
   PROJECT_SETTINGS_NAV,
   PROJECT_SETTINGS_RETIRED_ROUTES,
   PROJECT_SETTINGS_ROOT,
+  settingsEntryViewKey,
   toSettingsNavPermissions,
   visibleSettingsNav,
 } from '@/lib/settings/projectSettingsNav';
@@ -66,8 +67,10 @@ describe('every settings destination is guarded (MOTIR-2469)', () => {
     // MOTIR-5394); MOTIR-5278's browse view is reverted.
     // MOTIR-5278 had widened this pattern so the approvals page could import
     // `settingsEntryKeys` beside the guard. That page imports the guard alone again.
+    // MOTIR-6995 widens it again for the one room with a distinct view key
+    // (Hosted agent), whose page reads its WRITE key through `settingsEntryKeys`.
     expect(source, `${file} does not import guardSettingsPage`).toMatch(
-      /import \{ guardSettingsPage \} from '\.{1,2}(\/\.\.)*\/_guard';/,
+      /import \{ guardSettingsPage(, settingsEntryKeys)? \} from '\.{1,2}(\/\.\.)*\/_guard';/,
     );
     // Called AND its refusal returned — importing it and ignoring the answer is
     // the shape that would pass a weaker assertion while shipping unguarded.
@@ -196,7 +199,9 @@ describe('the refusal DECISION, over every destination × role (MOTIR-2469)', ()
         // MOTIR-5278 had read the entry's VIEW key here.
         // The invariant, stated once: refused EXACTLY when the key is absent.
         // Not "usually", and never on a different key than the rail hid it on.
-        expect(refusal === null).toBe(held.has(entry.permission));
+        // MOTIR-6995 — read through the entry's effective VIEW key: Hosted agent
+        // declares `work_item:edit`; every other entry's view key IS `permission`.
+        expect(refusal === null).toBe(held.has(settingsEntryViewKey(entry)));
       },
     );
   }
@@ -210,12 +215,20 @@ describe('the refusal DECISION, over every destination × role (MOTIR-2469)', ()
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
   // MOTIR-5278 had inverted this to "refused everything but Approvals".
-  it('a MEMBER is refused everything, each with its OWN copy key', () => {
-    const keys = PROJECT_SETTINGS_NAV.map(
+  // MOTIR-6995 — bar ONE room: Hosted agent opens on `work_item:edit`, which a
+  // member holds, so a member stands in it read-only (design MOTIR-6991).
+  it('a MEMBER is refused everything but Hosted agent, each with its OWN copy key', () => {
+    const refused = PROJECT_SETTINGS_NAV.filter((entry) => entry.id !== 'hosted-agent');
+    const keys = refused.map(
       (entry) => resolveSettingsRefusal(entry.id, BUILTIN_ROLE_PERMISSIONS.member)!.descriptionKey,
     );
     expect(keys.every(Boolean)).toBe(true);
     expect(new Set(keys).size, 'two destinations share a copy key').toBe(keys.length);
+    expect(resolveSettingsRefusal('hosted-agent', BUILTIN_ROLE_PERMISSIONS.member)).toBeNull();
+    // Its refusal copy still exists, for the actor who lacks the view key.
+    expect(
+      resolveSettingsRefusal('hosted-agent', BUILTIN_ROLE_PERMISSIONS.viewer)!.descriptionKey,
+    ).toBe('noAccess.section.hosted-agent');
   });
 
   it('the back action of a PARTIAL role points at a page that role can open', () => {

@@ -112,7 +112,8 @@ async function fixReasonOf(card: SeededHostedCard): Promise<string | null> {
 
 const modelsResponse = (page: Page) =>
   page.waitForResponse(
-    (res) => res.url().endsWith('/api/hosted-runs/models') && res.request().method() === 'GET',
+    (res) =>
+      new URL(res.url()).pathname === '/api/hosted-runs/models' && res.request().method() === 'GET',
     { timeout: 60_000 },
   );
 

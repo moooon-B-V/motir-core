@@ -8,6 +8,7 @@ import {
   agentInstanceLifecycleService as lifecycle,
 } from '@/lib/services/agentInstanceLifecycleService';
 import { agentInstanceSweepService as sweeper } from '@/lib/services/agentInstanceSweepService';
+import { _resetAiPlanCache } from '@/lib/services/aiPlanGateService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -48,6 +49,15 @@ function stubFetch(): void {
       if (url === `${AI}/v1/credits/agent-run-check`) {
         return json(200, { balanceCredits: mayRun ? 100 : 0, mayRun });
       }
+      // The paid-AI-plan gate create and wake ask first (MOTIR-6918): a paid org.
+      if (url.startsWith(`${AI}/v1/stripe/subscription?`)) {
+        return json(200, {
+          status: 'active',
+          currentPeriodEnd: null,
+          priceId: null,
+          planTier: null,
+        });
+      }
       if (url === `${AI}/v1/credits/agent-machine`) {
         if (debitAnswer === 'unavailable') return json(503, { code: 'internal_error' });
         if (debitAnswer === 'out_of_credits') {
@@ -77,6 +87,7 @@ beforeEach(async () => {
   mayRun = true;
   debitAnswer = 'ok';
   debitExhausts = false;
+  _resetAiPlanCache();
   vi.stubEnv('MOTIR_CLOUD', 'true');
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
   vi.stubEnv('MOTIR_AI_URL', `${AI}/`);
@@ -395,5 +406,38 @@ describe('the running charge (AMENDMENT 2)', () => {
     expect(all.at(-1)).toMatchObject({ endReason: 'backstop' });
     expect(new Set(all.map((i) => i.runId)).size).toBe(1);
     expect(all.reduce((sum, i) => sum + (i.billableSeconds ?? 0), 0)).toBe(12 * 60 * 60);
+  });
+});
+
+describe('Motir’s own organisations are never stopped for credits (AMENDMENT 3, MOTIR-6926)', () => {
+  for (const flag of ['isMeta', 'internalBilling'] as const) {
+    it(`an ${flag} org runs on at a zero balance — and is still charged every whole minute`, async () => {
+      await adminDb.organization.update({
+        where: { id: fx.workspace.organizationId },
+        data: { [flag]: true },
+      });
+      const dto = await createRunning();
+      mayRun = false;
+      virtualNow += 30 * MIN;
+      await lifecycle.touchActivity(dto.id);
+      const summary = await sweeper.sweep();
+      expect(summary.hibernated.credits).toBe(0);
+      expect((await instance()).state).toBe('running');
+      // Never asked: the credit gate is skipped, not answered.
+      expect(calls.filter((c) => c.url.endsWith('/v1/credits/agent-run-check'))).toEqual([]);
+      // The ledger still gets the machine time.
+      expect(summary.rolled).toBe(1);
+      expect(debits()).toHaveLength(1);
+      expect(debits()[0]!.body).toMatchObject({
+        coreOrganizationId: fx.workspace.organizationId,
+        credits: 30,
+      });
+    });
+  }
+
+  it('an ordinary org beside it is still stopped', async () => {
+    await createRunning();
+    mayRun = false;
+    expect((await sweeper.sweep()).hibernated.credits).toBe(1);
   });
 });

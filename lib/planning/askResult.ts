@@ -17,12 +17,21 @@
 
 /** What an `ask_project` result says, once read defensively. */
 export interface AskOutcome {
-  /** Which intent the turn RAN AS — `plan_change` is the redirect. */
-  intent: 'ask' | 'plan_change';
+  /** Which intent the turn RAN AS — `plan_change` and `debug` (MOTIR-7047 · the
+   *  ADR's AMENDMENT 1) are the two redirects. */
+  intent: 'ask' | 'plan_change' | 'debug';
   /** The answer body, or null on a redirect and on an empty utterance. */
   answer: string | null;
   /** Work-item keys the answer rests on. Always `[]` on a redirect. */
   citations: string[];
+  /**
+   * On a `debug` redirect ONLY: the anchor the handler echoed back (the request's
+   * `context.anchorKey`), key-shaped, or null when the turn had none or the echo
+   * was not a key. Absent on `ask` / `plan_change`. It is a CLAIM from across the
+   * boundary, so the dispatch re-resolves and re-gates it before forwarding it —
+   * this read only guarantees its shape.
+   */
+  anchorKey?: string | null;
 }
 
 // Bounds applied on READ, not merely trusted from the producer — this text
@@ -85,6 +94,18 @@ export function readAskOutcome(result: unknown): AskOutcome | null {
   // The redirect: no answer and no citations, whatever else the field carried.
   if (ask['intent'] === 'plan_change') {
     return { intent: 'plan_change', answer: null, citations: [] };
+  }
+  // The second redirect (MOTIR-7047): the turn reported broken behaviour. Same
+  // shape — nothing answered, nothing cited — plus the echoed anchor, which is
+  // kept only when it is a key and never trimmed into one.
+  if (ask['intent'] === 'debug') {
+    const anchor = ask['anchorKey'];
+    return {
+      intent: 'debug',
+      answer: null,
+      citations: [],
+      anchorKey: typeof anchor === 'string' && WORK_ITEM_KEY.test(anchor) ? anchor : null,
+    };
   }
 
   return {

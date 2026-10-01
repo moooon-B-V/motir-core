@@ -3,6 +3,7 @@ import {
   Bot,
   Box,
   Bug,
+  Cloud,
   Columns3,
   FolderGit2,
   Gauge,
@@ -75,8 +76,9 @@ export function toSettingsNavPermissions(
  * per-actor; a capability that a whole BUILD does not have is neither, so the
  * caller supplies it.
  *
- * Today it carries one fact, deliberately typed as a named field rather than a
- * bare boolean so the next capability joins it without changing a signature.
+ * It carries named fields rather than a bare boolean so the next capability
+ * joins it without changing a signature — which is how `hostedRunsAvailable`
+ * (MOTIR-6995) joined `publicProjectsAvailable`.
  */
 export interface SettingsNavAvailability {
   /**
@@ -85,6 +87,20 @@ export interface SettingsNavAvailability {
    * and threaded to the client surfaces that filter the registry.
    */
   publicProjectsAvailable: boolean;
+  /**
+   * Whether this build runs HOSTED AGENTS at all — `isHostedRunsAvailable()`,
+   * resolved on the SERVER beside `publicProjectsAvailable` (Story MOTIR-6989 ·
+   * MOTIR-6995; `design/settings/design-notes.md` § Hosted agent room). It drops
+   * every {@link SettingsNavEntry.hostedRunsOnly} row.
+   *
+   * OPTIONAL, and absent means `false`: it defaults CLOSED like the field above,
+   * so a caller that has not threaded it hides the room rather than offering a
+   * door onto a route that answers 404.
+   *
+   * ⚠️ A BUILD fact, never Motir AI's live health: an outage keeps the row and
+   * the room draws it (its unavailable state).
+   */
+  hostedRunsAvailable?: boolean;
 }
 
 /**
@@ -97,11 +113,19 @@ export interface SettingsNavAvailability {
  * The same shape as `SidebarNav`'s own `workspaceTierRevealed` prop, and for the
  * same reason.
  */
-const NO_CLOUD_CAPABILITIES: SettingsNavAvailability = { publicProjectsAvailable: false };
+const NO_CLOUD_CAPABILITIES: SettingsNavAvailability = {
+  publicProjectsAvailable: false,
+  hostedRunsAvailable: false,
+};
 
 /** Whether `entry` exists at all on a deployment with these capabilities. */
-function isEntryAvailable(entry: SettingsNavEntry, available: SettingsNavAvailability): boolean {
-  return !entry.cloudOnly || available.publicProjectsAvailable;
+export function isSettingsEntryAvailable(
+  entry: SettingsNavEntry,
+  available: SettingsNavAvailability,
+): boolean {
+  if (entry.cloudOnly && !available.publicProjectsAvailable) return false;
+  if (entry.hostedRunsOnly && available.hostedRunsAvailable !== true) return false;
+  return true;
 }
 
 export interface SettingsNavEntry {
@@ -191,6 +215,14 @@ export interface SettingsNavEntry {
    * regardless of the flag: the page exists in the tree either way.
    */
   cloudOnly?: true;
+  /**
+   * This room exists ONLY on a build that runs hosted agents
+   * ({@link SettingsNavAvailability.hostedRunsAvailable}) — the same second axis
+   * as {@link cloudOnly}, one capability over (Story MOTIR-6989 · MOTIR-6995).
+   * Absent off such a build whatever the actor holds, and the destination answers
+   * `notFound()`; the totality test pairs the route regardless.
+   */
+  hostedRunsOnly?: true;
   /**
    * Routes reached by DRILLING DOWN from this entry, which deliberately get no
    * rail row of their own (Subtask MOTIR-2263 — the role DETAIL screen). Each
@@ -536,6 +568,41 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     ],
   },
   {
+    id: 'hosted-agent',
+    group: 'automation',
+    href: '/settings/project/hosted-agent',
+    // `Cloud` — the glyph the Run hosted button carries, so the row and the door
+    // it configures read as one thing (design panel 0).
+    icon: Cloud,
+    labelKey: 'nav.hostedAgent',
+    // Story MOTIR-6989 · MOTIR-6995, drawn by MOTIR-6991
+    // (`design/settings/hosted-agent.mock.html` · `design/settings/design-notes.md`
+    // § Hosted agent room). Which model a hosted run uses per difficulty. DIRECTLY
+    // UNDER AI planning: both rooms choose a model Motir runs on this project's
+    // behalf. Its own room rather than a card there — a different consumer, a
+    // different audience (the view key below) and a different failure face.
+    //
+    // VERIFIED: `projectHostedAgentSettingsService.update` asserts `ai:configure`
+    // — the key AI planning's writes assert. It gates the selects, Reset and the
+    // Save footer; the page reads it through `settingsEntryKeys('hosted-agent')`.
+    permission: 'ai:configure',
+    // ⚠️ A DISTINCT VIEW KEY, DECIDED BY THE APPROVED DESIGN (MOTIR-6991), AND IT
+    // BRINGS THE AREA DOOR BACK FOR ORDINARY MEMBERS on a hosted build.
+    // `work_item:edit` is the key the hosted START asserts (`assertCanEdit` in
+    // `hostedRunService`): whoever may press Run hosted may read which model it
+    // will run on, and a member who sees *Project override for High* on the
+    // picker has somewhere to find out what it means (the read-only panel 5).
+    // VERIFIED: `projectHostedAgentSettingsService.get` asserts
+    // `work_item:edit`. Its evidence row is in
+    // `tests/settings/projectSettingsNav.test.ts`'s VIEW_KEY_EVIDENCE, and the
+    // suites that pinned *a member is offered no settings area* now say which
+    // build they mean.
+    viewPermission: 'work_item:edit',
+    // A BUILD fact (MOTIR-6995): absent off a deployment that runs no hosted
+    // agents, and the route 404s there. Motir AI being DOWN keeps the row.
+    hostedRunsOnly: true,
+  },
+  {
     id: 'automation',
     group: 'automation',
     href: '/settings/project/automation',
@@ -631,7 +698,7 @@ export function visibleSettingsNav(
   available: SettingsNavAvailability = NO_CLOUD_CAPABILITIES,
 ): SettingsNavEntry[] {
   return entries.filter(
-    (entry) => isEntryAvailable(entry, available) && held.has(settingsEntryViewKey(entry)),
+    (entry) => isSettingsEntryAvailable(entry, available) && held.has(settingsEntryViewKey(entry)),
   );
 }
 
@@ -656,7 +723,7 @@ export function hasVisibleSettingsArea(
   entries: SettingsNavEntry[] = PROJECT_SETTINGS_NAV,
 ): boolean {
   return entries.some(
-    (entry) => isEntryAvailable(entry, available) && held.has(settingsEntryViewKey(entry)),
+    (entry) => isSettingsEntryAvailable(entry, available) && held.has(settingsEntryViewKey(entry)),
   );
 }
 

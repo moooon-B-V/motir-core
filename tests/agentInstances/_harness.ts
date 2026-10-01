@@ -2,6 +2,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { vi } from 'vitest';
 import { fakePersistentOrchestrator as fleet } from '@motir/orchestrator';
 import { agentInstanceClock } from '@/lib/services/agentInstanceLifecycleService';
+import { _resetAiPlanCache } from '@/lib/services/aiPlanGateService';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -25,6 +26,9 @@ export interface StubCall {
 export const stub = {
   calls: [] as StubCall[],
   mayRun: true as boolean | 'unanswerable',
+  /** The org's AI subscription as motir-ai reports it (MOTIR-6918's plan gate):
+   *  a Stripe status, `null` for none, or `'unanswerable'` for a 503. */
+  plan: 'active' as string | null,
   debit: 'ok' as 'ok' | 'unavailable' | 'refused',
   /** `GET /repos/{owner}/{name}/installation` status by `owner/name` (MOTIR-7026); default 200. */
   installation: {} as Record<string, number>,
@@ -48,7 +52,9 @@ export async function setUpHarness(): Promise<void> {
   fx = await makeWorkItemFixture();
   stub.calls = [];
   stub.mayRun = true;
+  stub.plan = 'active';
   stub.debit = 'ok';
+  _resetAiPlanCache();
   stub.installation = {};
   vi.stubEnv('MOTIR_CLOUD', 'true');
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
@@ -81,6 +87,15 @@ export async function setUpHarness(): Promise<void> {
       if (url === `${AI}/v1/credits/agent-run-check`) {
         if (stub.mayRun === 'unanswerable') return json(503, { code: 'internal_error' });
         return json(200, { balanceCredits: stub.mayRun ? 100 : 0, mayRun: stub.mayRun });
+      }
+      if (url.startsWith(`${AI}/v1/stripe/subscription?`)) {
+        if (stub.plan === 'unanswerable') return json(503, { code: 'internal_error' });
+        return json(200, {
+          status: stub.plan,
+          currentPeriodEnd: null,
+          priceId: null,
+          planTier: null,
+        });
       }
       if (url === `${AI}/v1/credits/agent-machine`) {
         if (stub.debit === 'unavailable') return json(503, { code: 'internal_error' });

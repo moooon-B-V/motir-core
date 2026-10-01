@@ -159,6 +159,7 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
     machineSecondsThisMonth: 72 * 60,
     creditsThisMonth: 72,
     stopReason: null,
+    scheduledDeletionAt: null,
     activeRun: null,
     lastRun: null,
     ...over,
@@ -170,6 +171,7 @@ const codex = (over: Partial<AgentInstanceListItemDto> = {}) =>
 const page = (instances: AgentInstanceListItemDto[]): AgentInstanceListPageDto => ({
   instances,
   total: instances.length,
+  planLapse: null,
 });
 
 const json = (status: number, body: unknown) =>

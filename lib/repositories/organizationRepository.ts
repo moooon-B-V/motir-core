@@ -360,4 +360,24 @@ export const organizationRepository = {
   ): Promise<Organization> {
     return tx.organization.update({ where: { id }, data: { aiIncludedSeat: included } });
   },
+
+  /**
+   * Record or clear the AI-plan lapse (MOTIR-6921). Setting writes only when no
+   * lapse is recorded, so a repeated seat-off push keeps the FIRST lapse day and
+   * with it every agent's deletion date. Returns the org as it now stands.
+   */
+  async setAiPlanLapsedAt(
+    id: string,
+    at: Date | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<Organization> {
+    if (at !== null) {
+      await tx.organization.updateMany({
+        where: { id, aiPlanLapsedAt: null },
+        data: { aiPlanLapsedAt: at },
+      });
+      return tx.organization.findUniqueOrThrow({ where: { id } });
+    }
+    return tx.organization.update({ where: { id }, data: { aiPlanLapsedAt: null } });
+  },
 };

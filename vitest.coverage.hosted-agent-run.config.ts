@@ -51,6 +51,16 @@ export default defineConfig({
       // Story MOTIR-6590 · MOTIR-6879 — Continue hosted lifted into a control any
       // surface can place; the door's floor follows the code it moved.
       'tests/components/continue-hosted-control.test.tsx',
+      // Story MOTIR-6989 · MOTIR-6996 — Run hosted preselects the difficulty's
+      // model; the picker's read (`hostedRunPickerService`) is measured by
+      // `tests/hostedRuns/hostedRunPickerModels.test.ts`, above.
+      'tests/components/run-hosted-from-difficulty.test.tsx',
+      // Story MOTIR-6989 · MOTIR-6997 — the story's integration gate (settings
+      // save → models read → a real start, across a withdrawn override), plus
+      // the resolver's and the settings service's own suites.
+      'tests/integration/hosted/**/*.test.ts',
+      'tests/hosted/resolveHostedModel.test.ts',
+      'tests/hosted/projectHostedAgentSettingsMappers.test.ts',
       // Story MOTIR-1626 · MOTIR-6820 — the hosted REVIEW start, its end and its cancel:
       // `hostedRunService.startReview`, the review arms of the end path, the liveness read,
       // the read-level git check and `hostedRunModelService.defaultOffered`.
@@ -92,6 +102,11 @@ export default defineConfig({
         'app/**/_components/ContinueHostedDoor.tsx',
         'app/**/_components/HostedRunProvider.tsx',
         'components/hosted/**',
+        // Story MOTIR-6989 · MOTIR-6997. `hostedRunPickerService.ts` is already
+        // matched by `lib/services/hostedRun*.ts` above.
+        'lib/hosted/resolveHostedModel.ts',
+        'lib/services/projectHostedAgentSettingsService.ts',
+        'lib/mappers/projectHostedAgentSettingsMappers.ts',
         // Story MOTIR-6864 · MOTIR-7028 — the start bar, Send to my agent and its
         // picker, the send's press, the header's Cancel, and a run in an agent's parts.
         'app/**/_components/StartBar.tsx',
@@ -190,6 +205,12 @@ export default defineConfig({
           branches: 90,
           lines: 90,
         },
+        'lib/services/hostedRunPickerService.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
         'lib/services/hostedRunModelService.ts': {
           statements: 90,
           functions: 90,
@@ -239,6 +260,25 @@ export default defineConfig({
           lines: 90,
         },
         'app/api/dispatch-runs/**/cancel/route.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        // Story MOTIR-6989 · MOTIR-6997 — the model-by-difficulty surface.
+        'lib/hosted/resolveHostedModel.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'lib/services/projectHostedAgentSettingsService.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'lib/mappers/projectHostedAgentSettingsMappers.ts': {
           statements: 90,
           functions: 90,
           branches: 90,

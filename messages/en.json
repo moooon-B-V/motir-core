@@ -946,6 +946,16 @@
       "lede": "{organization} has been deleted. Its workspaces, projects, members, and the repositories Motir hosted for it have been erased.",
       "kept": "Motir keeps only its billing records, as the law requires, until {year}. They are deleted then too.",
       "footer": "You are receiving this because you were the Owner or an Admin of the organization."
+    },
+    "agentsDeletionScheduled": {
+      "subject": "Your agents in {organization} will be deleted on {date}",
+      "preview": "Your organization’s AI plan has ended — your agents will be deleted on {date}",
+      "greeting": "Hi {name},",
+      "lede": "Your organization’s AI plan has ended. Your agents will be deleted on {date} unless the plan is renewed.",
+      "agents": "{count, plural, one {This agent of yours in {organization} will be deleted, with its home and everything in it:} other {These # agents of yours in {organization} will be deleted, with their homes and everything in them:}}",
+      "renew": "Renewing the AI plan before {date} cancels the deletion. Until then your agents cannot be created or woken, and their storage is still charged every day.",
+      "openBilling": "Renew the AI plan",
+      "footer": "You are receiving this because you own agents in this organization."
     }
   },
   "auth": {
@@ -1246,6 +1256,11 @@
         "ask": {
           "title": "Ask about this project",
           "description": "Answer questions about the plan, docs and work items"
+        },
+        "debug": {
+          "title": "Debug with Motir AI",
+          "description": "Trace a bug to its likely cause and file it in Triage",
+          "prefill": "Something is broken. What happens: \nWhat should happen instead: "
         }
       }
     },
@@ -1820,6 +1835,7 @@
       "fields": "Fields",
       "components": "Components",
       "aiPlanning": "AI planning",
+      "hostedAgent": "Hosted agent",
       "rules": "Rules",
       "repositories": "Repositories",
       "monitoring": "Monitoring",
@@ -3715,6 +3731,35 @@
         "factKeptBy": "Kept"
       }
     },
+    "hostedAgent": {
+      "title": "Hosted agent",
+      "pageDescription": "Which model a hosted run uses. Run hosted preselects it from the work item’s difficulty; whoever starts the run can still pick another.",
+      "card": {
+        "title": "Model by difficulty",
+        "subtitle": "Each difficulty runs on the platform default unless you override it. A parent work item uses the model of the highest difficulty among its leaves."
+      },
+      "col": {
+        "difficulty": "Difficulty",
+        "model": "Model",
+        "source": "Source"
+      },
+      "modelFor": "Model for {difficulty}",
+      "source": {
+        "default": "Platform default",
+        "override": "Override"
+      },
+      "optionDefault": "Platform default for {difficulty}",
+      "reset": "Reset to default",
+      "withdrawn": "The saved model, <id>{model}</id>, is no longer offered, so {difficulty} runs use the platform default. Reset to clear it.",
+      "noDifficulty": "A work item with no difficulty runs on the platform default, <id>{model}</id> — the model Run hosted marks <b>Default</b>.",
+      "readOnlyBanner": "Only a project admin can change hosted agent settings.",
+      "unavailableBody": "Couldn’t reach Motir AI, so the hosted models can’t be shown or changed right now. Hosted runs are off until it answers.",
+      "emptyBody": "No model can run a hosted work item right now, so there is nothing to choose.",
+      "savedTitle": "Hosted agent settings saved",
+      "savedDesc": "New hosted runs use these models.",
+      "errorTitle": "Couldn’t save",
+      "saveError": "Your hosted agent settings weren’t saved. Please try again."
+    },
     "connectedApps": {
       "title": "Connected apps",
       "subtitle": "Apps you've signed into with your Motir account. Each one acts as you, in one workspace, with the scopes you approved.",
@@ -3964,6 +4009,7 @@
         "components": "Components are managed by project admins. Ask an admin if one needs adding or changing.",
         "bugs": "Where this project's bugs are filed is managed by project admins. Ask an admin if the destination needs changing.",
         "ai-planning": "AI planning for this project — its cadence and its planner model — is configured by project admins. Ask an admin if it needs changing.",
+        "hosted-agent": "Which model a hosted run uses is shown to people who can start a hosted run on this project. Ask a project admin if you need to see it.",
         "automation": "Project automation is managed by project admins. Ask an admin if you need a rule changed.",
         "monitoring": "This project's error-monitor connection is managed by people who can manage integrations. Ask a project admin if Sentry needs connecting or reconnecting."
       }
@@ -5550,7 +5596,11 @@
       "submit": "Submit",
       "submitted": "Thanks — your report was submitted",
       "submittedDetail": "Filed as {key}, now waiting in Requested features.",
-      "error": "Couldn’t submit your report. Please try again."
+      "error": "Couldn’t submit your report. Please try again.",
+      "debugOffer": {
+        "action": "Debug with Motir AI",
+        "hint": "<b>Debug with Motir AI</b> starts the debug as soon as you press it and spends Motir AI credits. Motir AI reads the code, names the likely cause, and checks whether a work item already covers this bug."
+      }
     }
   },
   "publicProjects": {
@@ -6115,6 +6165,21 @@
       "optionMoveCost": "Needs a GitHub account you own, a transfer you accept on GitHub (it isn't instant), and re-installing the Motir app so dispatch keeps working.",
       "optionMoveCta": "Move repositories",
       "viewUsage": "View Usage & cost"
+    },
+    "agents": {
+      "name": "Agents",
+      "tagline": "The agents your organization hosts — their machine time and their storage.",
+      "perUse": "Per use",
+      "machineLabel": "Machine time",
+      "storageLabel": "Storage",
+      "totalLabel": "Total this month",
+      "creditsUnit": "credits",
+      "rate": "Machine time is 1 credit per running minute. Storage is 10 credits per agent per day, asleep or not. Both draw from your Motir AI balance.",
+      "zero": "No agents ran or existed this month. Machine time is 1 credit per running minute. Storage is 10 credits per agent per day, asleep or not.",
+      "noPlan": "Agents need a paid AI plan (Standard, Pro, Max or Enterprise).",
+      "choosePlan": "Choose an AI plan",
+      "unavailable": "Agent figures aren’t available right now. Your agents are still being charged — this is the display, not the billing.",
+      "unavailableValue": "Unavailable"
     },
     "search": {
       "name": "Motir Search",
@@ -7195,6 +7260,7 @@
         "validating": "Checking the proposal against your plan…",
         "reading": "Reading your request…",
         "redirected": "Working on the proposal…",
+        "redirectedDebug": "Tracing the bug…",
         "retrieval": "Reading the plan…",
         "laying": "Laying out a level…",
         "authoring": "Writing a work item…",
@@ -7220,6 +7286,14 @@
       "correctedToPlan": "Re-read as a plan change",
       "correctedToAsk": "Re-read as a question",
       "handoff": "Reading it as a plan change — working on the proposal",
+      "handoffDebug": "Reading it as a bug — tracing the likely cause",
+      "debug": {
+        "wroteAnchor": "Wrote the diagnosis onto <chip>{key}</chip>. It stays in Triage, and nothing else changed.",
+        "filed": "Filed <chip>{key}</chip> in Triage with the diagnosis. Nothing else changed.",
+        "enrichedAnchor": "Added the diagnosis to <chip>{key}</chip>, which already covers this bug. Nothing new was filed, and {anchorKey} is left as it is.",
+        "enriched": "Added the diagnosis to <chip>{key}</chip>, which already covers this bug. Nothing new was filed.",
+        "ungrounded": "Couldn't trace this to the code, so nothing was written."
+      },
       "stop": "Stop",
       "stoppingAction": "Stopping…",
       "stopping": "Stopping — finishing this work item first.",
@@ -7232,6 +7306,7 @@
         "submitted": "submit",
         "reading": "reading",
         "redirected": "hand-off",
+        "redirectedDebug": "hand-off",
         "retrieval": "retrieval",
         "searching": "search",
         "drilling": "drill",
@@ -7240,11 +7315,15 @@
         "note": "note",
         "proposed": "proposed",
         "validating": "validate",
+        "matching": "match",
+        "writing": "write",
         "unknown": "frame",
         "retrievalLine": "Read the {family}",
         "retrievalBlockedLine": "Out of lookups — carrying on with what it has.",
         "layingLine": "Laying out {target}",
         "authoringLine": "Writing {title}",
+        "matchingLine": "Checking whether a work item already covers it",
+        "writingLine": "Writing the diagnosis onto {key}",
         "unknownLine": "frame: {frame}",
         "retrievalLineBare": "Read from the plan's sources",
         "family": {
@@ -8818,6 +8897,7 @@
     "newAgent": "New agent",
     "emptyTitle": "No agents yet",
     "emptyBody": "Each is your own coding agent — Claude Code, Codex and others — on its own machine in Motir’s cloud, with this project’s code and signed in with your own account. Motir charges only its machine time, and it sleeps when you stop using it.",
+    "emptyBodyWithStorage": "Each is your own coding agent — Claude Code, Codex and others — on its own machine in Motir’s cloud, with this project’s code and signed in with your own account. Motir charges its machine time while it runs and its storage every day, and it sleeps when you stop using it.",
     "loadFailed": "We couldn’t load your agents. Refresh to try again — nothing about them has changed.",
     "col": {
       "name": "Name",
@@ -8866,6 +8946,7 @@
       "codingAgent": "Coding agent",
       "vendorHint": "The coding agent’s model usage is billed to you by its vendor, not by Motir. Motir never sees your sign-in.",
       "price": "<b>1 credit per minute</b> while it runs. It hibernates after 30 minutes without use and costs nothing while hibernated.",
+      "priceWithStorage": "<b>1 credit per minute</b> while it runs, and <b>{perDay} credits a day</b> for its storage, running or hibernated. It hibernates after 30 minutes without use.",
       "cancel": "Cancel",
       "submit": "Create agent"
     },
@@ -8878,9 +8959,12 @@
       "goose": "Uses your own model provider key. For Claude models, your Anthropic API key."
     },
     "refusal": {
-      "credits": "Your organization’s credits can’t start a machine right now. <link>Add credits</link> to create or wake an agent.",
+      "aiPlanRequired": "Agents need a paid AI plan (Standard, Pro, Max or Enterprise). <link>Choose an AI plan</link> to create or wake one.",
+      "aiPlanUnknown": "Motir could not check your organization’s AI plan just now. Try again in a moment.",
+      "credits": "Your organization is out of credits. Agents use credits while they run and for their storage every day, asleep or not. <link>Add credits</link> to create or wake an agent.",
       "creditsUnknown": "Motir could not check your organization’s credits just now. Try again in a moment.",
-      "userCap": "You already have {count} agents. Delete one to create another.",
+      "userCap": "You already have {count} agents. Each one is charged for its storage every day, even asleep. Delete one to create another.",
+      "orgRunningLimit": "Your organization is running {limit} of its {limit} agents. Hibernate one to start another.",
       "busy": "Motir is running as many machines as it can right now. Try again in a few minutes.",
       "notOffered": "That coding agent isn’t offered: its terms don’t yet allow a platform to host it. Choose another coding agent.",
       "nameTaken": "You already have an agent called {name} on this project.",
@@ -8888,6 +8972,19 @@
       "unavailable": "My agents aren’t available on this deployment.",
       "conflict": "That agent changed while you were looking. The list is up to date now.",
       "generic": "Something went wrong. Try again."
+    },
+    "refusalTitle": {
+      "aiPlanRequired": "Needs an AI plan",
+      "aiPlanUnknown": "Couldn’t check your AI plan",
+      "credits": "Out of credits",
+      "userCap": "Your limit",
+      "orgRunningLimit": "Your organization’s limit"
+    },
+    "lapse": {
+      "bannerLead": "Your organization’s AI plan has ended.",
+      "bannerBody": "Your agents will be deleted on {date} unless the plan is renewed.",
+      "renew": "Renew the AI plan",
+      "rowLine": "Will be deleted on {date}"
     },
     "delete": {
       "title": "Delete {name}?",
@@ -9249,7 +9346,11 @@
         "unavailableBody": "Couldn’t load the models, so Run is off for now.",
         "retry": "Try again",
         "emptyTrigger": "No model available",
-        "emptyBody": "No model can run this work item right now, so Run is off. Local runs are unaffected."
+        "emptyBody": "No model can run this work item right now, so Run is off. Local runs are unaffected.",
+        "fromDifficulty": "From difficulty: <b>{difficulty}</b>",
+        "override": "Project override for <b>{difficulty}</b>",
+        "fromLeaves": "Highest difficulty among its leaves: <b>{difficulty}</b>",
+        "overrideFromLeaves": "Project override for <b>{difficulty}</b>, the highest difficulty among its leaves"
       },
       "notReady": "Run is available once this work item is ready — it has {count, plural, one {# open blocker} other {# open blockers}}.",
       "refused": {

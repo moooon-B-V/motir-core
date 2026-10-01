@@ -37,7 +37,8 @@ export function useContinueHosted(
   opts: UseContinueHostedOptions = {},
 ): UseContinueHostedValue {
   const hostedModels = useHostedModels();
-  const selectedModel = hostedModels?.selectedModel ?? null;
+  // The preselect Continue hosted always had — not the card's resolution (MOTIR-6996).
+  const selectedModel = hostedModels?.continueModel ?? null;
   const reloadModels = hostedModels?.reloadModels;
   const { onStarted, onStateMoved } = opts;
   const [refusal, setRefusal] = useState<ContinueHostedRefusal | null>(null);

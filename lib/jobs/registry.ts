@@ -66,6 +66,7 @@ import { pullRequestAutoMerge } from './definitions/pullRequestAutoMerge';
 import { agentReviewRequested } from './definitions/agentReviewRequested';
 import { designAutoRerun } from './definitions/designAutoRerun';
 import { pullRequestBaseMoved } from './definitions/pullRequestBaseMoved';
+import { pullRequestHeadMoved } from './definitions/pullRequestHeadMoved';
 import {
   monitorConnectionPoll,
   monitorIssueReconcileTick,
@@ -80,6 +81,7 @@ import { agentInstanceIdleCheck } from './definitions/agentInstanceIdleCheck';
 import { agentInstanceRunLaunch } from './definitions/agentInstanceRunLaunch';
 import { agentInstanceRunSupervise } from './definitions/agentInstanceRunSupervise';
 import { agentInstanceSweep } from './definitions/agentInstanceSweep';
+import { agentInstanceStorageCharge } from './definitions/agentInstanceStorageCharge';
 
 // EVERY JOB THIS IMAGE KNOWS (Story 1.6 · Subtask 1.6.2; re-based onto the
 // Postgres engine by Story MOTIR-3418).
@@ -164,6 +166,8 @@ export const jobDefinitions = [
   agentReviewRequested,
   designAutoRerun,
   pullRequestBaseMoved,
+  // The head-push re-read beside it (MOTIR-7063): a push onto a base already moved.
+  pullRequestHeadMoved,
   // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick and
   // its per-connection fan-out.
   monitorIssueReconcileTick,
@@ -180,4 +184,6 @@ export const jobDefinitions = [
   agentInstanceRunLaunch,
   agentInstanceRunSupervise,
   agentInstanceSweep,
+  // Agent storage (Story MOTIR-6914 · MOTIR-6919): one debit per agent per UTC day.
+  agentInstanceStorageCharge,
 ];

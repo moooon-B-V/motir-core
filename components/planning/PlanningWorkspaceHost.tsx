@@ -47,6 +47,13 @@ import type { PlanningLaunch } from '@/lib/planning/launcher';
 import type { PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { fetchPlanningAnchor } from '@/lib/planning/planningAnchorClient';
+import { useOptionalReport } from '@/app/(authed)/_components/ReportProvider';
+import {
+  debugAutoSendKey,
+  peekSurfaceSeed,
+  releaseSurfaceSeed,
+  type SurfaceSeed,
+} from '@/lib/planning/surfaceSeed';
 import {
   followFromPlan,
   followFromTarget,
@@ -240,6 +247,26 @@ export function PlanningWorkspaceHost({
   const tPlanReview = useTranslations('planReview');
   const refresh = useCoordinatedRefresh();
 
+  // ── THE SURFACE SEED (MOTIR-7050) ───────────────────────────────────────────
+  // What the door that opened this workspace handed it besides its address: the
+  // orb's "Debug with Motir AI" template (a draft, unsent) or the report widget's
+  // accept (the ONE seeded send, anchored on the triage bug just filed). Read once
+  // — a pure PEEK in the initializer, so a double render reads the same seed — and
+  // RELEASED on mount, so a second host (a re-target, a close and reopen) finds
+  // nothing to take. Only on the PROJECT conversation: both doors open it, and an
+  // item thread has no ask door to send a report through. A gate's own seed (a
+  // refusal's draft, a pick's send) outranks it; the two never meet in practice.
+  const [surfaceSeed] = useState<SurfaceSeed | null>(() =>
+    launch.itemKey === null && anchorId === null && !initialDraft && !autoSendTurn
+      ? peekSurfaceSeed()
+      : null,
+  );
+  useEffect(() => {
+    releaseSurfaceSeed(surfaceSeed);
+  }, [surfaceSeed]);
+  const seedDraft = surfaceSeed?.kind === 'draft' ? surfaceSeed : null;
+  const seedSend = surfaceSeed?.kind === 'send' ? surfaceSeed : null;
+
   // The turn's TARGET SET (MOTIR-1491). It lives HERE, not in the rail, because
   // both panes read it: the composer collects it and the canvas rings it. The
   // entrance's item seeds it as the INITIAL target — not a locked one, so the
@@ -365,6 +392,7 @@ export function PlanningWorkspaceHost({
     setGuardOpen(false);
     closeBypassingGuard();
   }, [refresh, closeBypassingGuard]);
+  const report = useOptionalReport();
   const { state, send, retry, correctTurn, approve, discard, stop } = usePlanChangeConversation({
     onApproved,
     anchorId,
@@ -375,11 +403,22 @@ export function PlanningWorkspaceHost({
     // the first send carries.
     sessionIsResume,
     seedGateId,
+    // A debug turn that filed a bug into Triage (MOTIR-7049) bumps the inbox's
+    // refetch tick — the one surface `router.refresh()` cannot reach.
+    onTriageChanged: report?.notifySubmissionsChanged,
   });
 
   // The rail sends TEXT; the anchors come from the set this host owns, so the
   // rail never has to know how a turn is scoped.
   const sendTargeted = useCallback((text: string) => void send(text, targets), [send, targets]);
+  // The widget's seeded send goes through the ASK DOOR on the project thread
+  // (an empty target set), carrying the triage bug as its anchor — the one
+  // route on which the server reads a turn as a report (ADR AMENDMENT 1, A1.2).
+  const seedAnchorKey = seedSend?.anchorKey ?? null;
+  const sendSeeded = useCallback(
+    (text: string) => void send(text, [], { anchorKey: seedAnchorKey }),
+    [send, seedAnchorKey],
+  );
   const targetIds = targets.map((target) => target.id);
 
   const index = useMemo(() => indexPlanReview(state.review), [state.review]);
@@ -859,6 +898,17 @@ export function PlanningWorkspaceHost({
           {...(justReturnedFromOnboarding ? { justReturnedFromOnboarding: true } : {})}
           {...(initialDraft ? { initialDraft } : {})}
           {...(autoSendTurn ? { autoSendTurn, autoSendKey: seedGateId } : {})}
+          {...(seedDraft
+            ? { initialDraft: seedDraft.text, initialDraftCaret: seedDraft.caret }
+            : {})}
+          {...(seedSend
+            ? {
+                autoSendTurn: seedSend.body,
+                autoSendKey: debugAutoSendKey(seedSend.anchorKey),
+                autoSendIntoThread: true,
+                onAutoSend: sendSeeded,
+              }
+            : {})}
           {...(followUp ? { followUp } : {})}
           state={state}
           index={index}

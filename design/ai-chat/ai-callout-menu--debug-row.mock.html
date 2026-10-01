@@ -1,0 +1,1217 @@
+<!doctype html>
+<!--
+  design/ai-chat/ai-callout-menu--debug-row.mock.html — MOTIR-7045 (story MOTIR-7042)
+
+  DELTA on `design/ai-chat/ai-callout-menu.mock.html` (MOTIR-1811) panels 3–4
+  (the menu and the row anatomy) and on `design/ai-chat/design-notes.md`
+  § "The Motir callout — the orb becomes a TRIGGER". Only what changes is drawn:
+  a THIRD row in the callout, and what that row opens — the one Motir AI surface
+  with the composer PRE-FILLED and nothing sent.
+
+  Read before drawing, and mirrored here:
+    - lib/planning/aiCallout.ts — the registry; one href for every row, the
+      icon is a NAME mapped in AiCalloutMenu, and a capability that has not
+      landed is not registered (no dimmed row).
+    - components/planning/AiCalloutMenu.tsx — HEADER_STYLE, MINI_ORB_STYLE,
+      PRIMARY_TILE_STYLE / TILE_STYLE (accent 11% over the page), the row's
+      --radius-control / --spacing-control-x/y, hover --el-surface, active
+      --el-muted, the inset focus outline.
+    - components/planning/PlanWithAIFab.tsx — ORB_STYLE, h-14 w-14, fixed
+      right-5 bottom-5; mounted only when `showPlanWithAi` (Motir AI configured,
+      an active project, `ai:plan`).
+    - components/planning/PlanChangeRail.tsx — `initialDraft` (pre-fill and
+      wait, MOTIR-6210): the starter chips hide while a seed is in the field.
+    - components/planning/PlanChangeComposer.tsx — the field, the Search
+      trigger at bottom-left, Send.
+
+  Decision the asset carries: docs/decisions/conversation-turn-intent.md §5 and
+  AMENDMENT 1 A1.3 — a callout row seeds TEXT only and sends nothing.
+
+  TOKENS ARE EXTRACTED, NOT TYPED: the three blocks below are the declarations
+  of packages/design-system/theme.css's @theme, [data-theme='dark'] and
+  :root,[data-appearance-scope] blocks, comments stripped.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Motir AI callout — the Debug with Motir AI row</title>
+    <style>
+      /* ── Tier 0 (light) — extracted from packages/design-system/theme.css @theme ── */
+      :root {
+        --orb-lit-mix: 26%;
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --width-rail-chrome: 20px;
+        --spacing-rail-inset: 0px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      /* ── Tier 0 (dark) — theme.css [data-theme='dark'] ── */
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      /* ── Tier 3 (--el-*) — theme.css :root,[data-appearance-scope] ── */
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-notif-access-refused: var(--color-warning);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob: var(--color-primary-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-choice: var(--color-charcoal);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 30px 26px 44px;
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── board chrome ─────────────────────────────────────────────── */
+      .board {
+        max-width: 1140px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .boardhead h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        letter-spacing: -0.01em;
+        color: var(--el-text-strong);
+      }
+      .boardhead p {
+        margin: 0;
+        max-width: 92ch;
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .boardhead p + p {
+        margin-top: 8px;
+      }
+      .panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .panel-label {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .panel-label .n {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .panel-label h2 {
+        margin: 0;
+        font-size: 15px;
+        color: var(--el-text-strong);
+      }
+      .panel-label .cap {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .panel-body {
+        padding: 18px;
+      }
+      .cols {
+        display: grid;
+        gap: 22px;
+        align-items: start;
+      }
+      .c2 {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+      .c3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .sub {
+        margin: 0 0 8px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .note {
+        margin: 10px 0 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        padding: 0 4px;
+        border-radius: var(--radius-kbd);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+      }
+      .stage {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 20px 16px;
+        border-radius: var(--radius-card);
+        background: var(--el-canvas);
+      }
+      .quote {
+        margin: 8px 0 0;
+        padding: 10px 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--el-text);
+      }
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      table.spec th {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--el-border);
+        text-align: left;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      table.spec td {
+        padding: 7px 8px;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: top;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .ic {
+        display: block;
+        width: 15px;
+        height: 15px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .glyph {
+        display: block;
+      }
+
+      /* ── the page corner, the orb (PlanWithAIFab) ────────────────── */
+      .corner {
+        position: relative;
+        width: 100%;
+        max-width: 380px;
+        height: 400px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .corner .menu {
+        position: absolute;
+        right: 20px;
+        bottom: 88px;
+      }
+      .orb {
+        position: absolute;
+        right: 20px;
+        bottom: 20px;
+        display: inline-flex;
+        width: 56px;
+        height: 56px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        color: var(--el-accent-text);
+        background-image: radial-gradient(
+          circle at 33% 27%,
+          color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+          var(--el-accent) 56%,
+          color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+        );
+        box-shadow:
+          inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent),
+          0 8px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent),
+          0 0 28px -2px color-mix(in srgb, var(--el-highlight) 55%, transparent);
+      }
+
+      /* ── AiCalloutMenu, composed from the shipped classes ────────── */
+      .menu {
+        width: 288px;
+        padding-bottom: 4px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+      }
+      .menu-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--el-border);
+        background-image: linear-gradient(
+          135deg,
+          color-mix(in srgb, var(--el-accent) 10%, var(--el-page-bg)),
+          color-mix(in srgb, var(--el-highlight) 10%, var(--el-page-bg))
+        );
+      }
+      .miniorb {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: 9999px;
+        color: var(--el-accent-text);
+        background-image: linear-gradient(
+          135deg,
+          var(--el-accent),
+          color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+        );
+      }
+      .menu-head .nm {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .menu-rows {
+        padding: 4px;
+      }
+      .row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        text-align: left;
+      }
+      .row.is-hover {
+        background: var(--el-surface);
+      }
+      .row.is-focus {
+        background: var(--el-surface);
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: -2px;
+      }
+      .row.is-active {
+        background: var(--el-muted);
+      }
+      .tile {
+        display: inline-grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        flex: none;
+        border-radius: var(--radius-control);
+        background-color: color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg));
+        color: var(--el-accent-on-surface);
+      }
+      .tile.primary {
+        background-color: var(--el-accent);
+        background-image: linear-gradient(
+          135deg,
+          var(--el-accent),
+          color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+        );
+        color: var(--el-accent-text);
+      }
+      .rtext {
+        min-width: 0;
+      }
+      .rt {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.375;
+        color: var(--el-text);
+      }
+      .rd {
+        display: block;
+        margin-top: 1px;
+        font-size: 11.5px;
+        line-height: 1.375;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── the rail (PlanChangeRail) and composer (PlanChangeComposer) ── */
+      .rail {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: 352px;
+        min-height: 400px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        overflow: hidden;
+      }
+      .railhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .railhead .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        background: var(--el-success);
+      }
+      .railhead .lbl {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .railhead .pill {
+        margin-left: auto;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .turns {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+      }
+      .turn {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .av {
+        display: inline-flex;
+        flex: none;
+        width: 28px;
+        height: 28px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .bub {
+        padding: 8px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-chat-bubble-ai);
+        color: var(--el-text);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .composer {
+        border-top: 1px solid var(--el-border);
+        padding: 12px;
+      }
+      .cfield {
+        position: relative;
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+      }
+      .cinput {
+        flex: 1;
+        min-width: 0;
+        min-height: var(--height-input);
+        padding: var(--spacing-input-y) var(--spacing-input-x) var(--spacing-input-y) 32px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .caret {
+        display: inline-block;
+        width: 1px;
+        height: 14px;
+        margin-left: 1px;
+        vertical-align: -2px;
+        background: var(--el-text);
+      }
+      .ctrigger {
+        position: absolute;
+        left: 6px;
+        bottom: 6px;
+        display: inline-flex;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+      }
+      .csend {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 12px;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g id="i-bug">
+          <path d="M12 20v-9" />
+          <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M21 21a4 4 0 0 0-3.81-4" />
+          <path d="M21 5a4 4 0 0 1-3.55 3.97" />
+          <path d="M22 13h-4" />
+          <path d="M3 21a4 4 0 0 1 3.81-4" />
+          <path d="M3 5a4 4 0 0 0 3.55 3.97" />
+          <path d="M6 13H2" />
+          <path d="m8 2 1.88 1.88" />
+          <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13" />
+        </g>
+        <g id="i-sparkles">
+          <path
+            d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+          />
+          <path d="M20 2v4" />
+          <path d="M22 4h-4" />
+          <circle cx="4" cy="20" r="2" />
+        </g>
+        <g id="i-question">
+          <path
+            d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.8-.9L3 20.5l1.5-5.2A8.5 8.5 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"
+          />
+          <path d="M10.1 9.4a2 2 0 0 1 3.9.6c0 1.3-2 2-2 2" />
+          <path d="M12 15.5h.01" />
+        </g>
+        <g id="i-search">
+          <path d="m21 21-4.34-4.34" />
+          <circle cx="11" cy="11" r="8" />
+        </g>
+        <g id="i-send">
+          <path
+            d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+          />
+          <path d="m21.854 2.147-10.94 10.939" />
+        </g>
+        <path
+          id="i-mark"
+          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+          fill="currentColor"
+        />
+      </defs>
+    </svg>
+
+    <div class="board">
+      <header class="boardhead">
+        <h1>Motir AI callout — the Debug with Motir AI row</h1>
+        <p>
+          <b>MOTIR-7045 · story MOTIR-7042.</b> The orb's callout gains a <b>third row</b>,
+          <b>Debug with Motir AI</b>. Like the two rows above it, it opens the one Motir AI surface
+          at the same href. Unlike the report widget's offer, it <b>sends nothing</b>. It puts a
+          short template in the composer and waits for the person to describe the bug.
+        </p>
+        <p>
+          <b>Delta on</b> <code>ai-callout-menu.mock.html</code> panels 3–4 (the menu and the row
+          anatomy). The orb, the popover, its header, its keyboard model and the two shipped rows
+          are unchanged and are reproduced only so the new row has its context.
+        </p>
+      </header>
+
+      <!-- ═══════════════ 1 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">1</span>
+          <h2>The access path — the orb, open, with the third row</h2>
+          <span class="cap">access path</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <div class="stage">
+                <div class="corner">
+                  <div class="menu" role="dialog" aria-label="Motir AI">
+                    <div class="menu-head">
+                      <span class="miniorb" aria-hidden="true"
+                        ><svg class="glyph" viewBox="0 0 24 24" width="12" height="12">
+                          <use href="#i-mark" /></svg
+                      ></span>
+                      <span class="nm">Motir AI</span>
+                    </div>
+                    <div class="menu-rows">
+                      <div class="row">
+                        <span class="tile primary" aria-hidden="true"
+                          ><svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+                        ></span>
+                        <span class="rtext">
+                          <span class="rt">Plan with AI</span>
+                          <span class="rd">Generate, expand or re-plan the project</span>
+                        </span>
+                      </div>
+                      <div class="row">
+                        <span class="tile" aria-hidden="true"
+                          ><svg class="ic" viewBox="0 0 24 24"><use href="#i-question" /></svg
+                        ></span>
+                        <span class="rtext">
+                          <span class="rt">Ask about this project</span>
+                          <span class="rd"
+                            >Answer questions about the plan, docs and work items</span
+                          >
+                        </span>
+                      </div>
+                      <div class="row is-hover" data-action="debug">
+                        <span class="tile" aria-hidden="true"
+                          ><svg class="ic" viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                        ></span>
+                        <span class="rtext">
+                          <span class="rt">Debug with Motir AI</span>
+                          <span class="rd"
+                            >Trace a bug to its likely cause and file it in Triage</span
+                          >
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <span class="orb" aria-label="Motir AI"
+                    ><svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      width="26"
+                      height="26"
+                      aria-hidden="true"
+                    >
+                      <use href="#i-mark" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="note">
+                <b>One registry entry, one glyph mapping, two message keys.</b> The row is a third
+                object in <code>aiCalloutActions(href)</code>:
+                <code
+                  >{ id: 'debug', icon: 'bug', titleKey: 'aiCallout.actions.debug.title',
+                  descriptionKey: 'aiCallout.actions.debug.description', href }</code
+                >. It has the <b>same</b> <code>href</code> as the other two rows.
+                <code>AiCalloutIcon</code> gains <code>'bug'</code>, and
+                <code>AiCalloutMenu</code>'s <code>ICONS</code> record maps it to lucide
+                <code>Bug</code>. The record is exhaustive, so the type will not compile without the
+                mapping.
+              </p>
+              <p class="note">
+                <b>Position 3, ordinary tile.</b> Only position 1 wears the filled hero tile. This
+                row takes the accent-tint tile (<code>--el-accent</code> 11% over
+                <code>--el-page-bg</code>, glyph <code>--el-accent-on-surface</code>), as “Ask about
+                this project” does. The registry comment reserved position 3 for “Help with a task”
+                (<code>wrench</code>), which has not landed. When it does, it takes position 4.
+              </p>
+              <p class="note">
+                <b>No gate of its own.</b> The orb is mounted only when
+                <code>showPlanWithAi</code> holds: Motir AI configured, an active project, and
+                <code>ai:plan</code>. That is exactly the set of people who may send a debug turn,
+                so the row needs no per-row check. It never appears dimmed. When the gate fails, the
+                orb is not rendered at all, and neither is its menu.
+              </p>
+              <table class="spec">
+                <tr>
+                  <th>Element</th>
+                  <th>Copy</th>
+                  <th>Colour · shape</th>
+                </tr>
+                <tr>
+                  <td>row title</td>
+                  <td>Debug with Motir AI</td>
+                  <td><code>--el-text</code>, 13px semibold</td>
+                </tr>
+                <tr>
+                  <td>row description</td>
+                  <td>Trace a bug to its likely cause and file it in Triage</td>
+                  <td><code>--el-text-secondary</code>, 11.5px (never muted)</td>
+                </tr>
+                <tr>
+                  <td>tile</td>
+                  <td>lucide <code>Bug</code></td>
+                  <td>
+                    <code>color-mix(--el-accent 11%, --el-page-bg)</code> ·
+                    <code>--el-accent-on-surface</code> · <code>--radius-control</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>row box</td>
+                  <td><code>&lt;Link&gt;</code>, the shared href</td>
+                  <td>
+                    <code>--radius-control</code>, <code>--spacing-control-x/y</code> · hover
+                    <code>--el-surface</code>
+                  </td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════ 2 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">2</span>
+          <h2>What the row opens — the composer pre-filled, nothing sent</h2>
+          <span class="cap">seed · text only</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <div class="stage">
+                <div class="rail">
+                  <div class="railhead">
+                    <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span>
+                    <span class="pill">plan</span>
+                  </div>
+                  <div class="turns">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg class="glyph" viewBox="0 0 24 24" width="13" height="13">
+                          <use href="#i-mark" /></svg
+                      ></span>
+                      <div class="bub">
+                        Opened on Motir. What should change — or what would you like to know?
+                      </div>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="cfield">
+                      <div class="cinput">
+                        Something is broken. What happens: <span class="caret"></span><br />What
+                        should happen instead:
+                      </div>
+                      <span class="ctrigger" aria-label="Search work items to plan"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-search" /></svg
+                      ></span>
+                      <span class="csend"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-send" /></svg
+                        >Send</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="sub">The exact pre-fill (two lines)</p>
+              <div class="quote">
+                Something is broken. What happens:<br />What should happen instead:
+              </div>
+              <p class="note">
+                Message key <code>shell.aiCallout.actions.debug.prefill</code>. The two lines are
+                separated by one newline, and each line ends in a colon followed by a single space.
+                The field takes focus with the caret at the <b>end of the first line</b>, so the
+                person types what happens and then arrows down. The shipped multi-line composer
+                (MOTIR-6236) grows to fit the two lines.
+              </p>
+              <p class="note">
+                <b>Why a template and not a starter chip.</b> The ask row seeds nothing and grew the
+                starter set instead. That works for a question, which the person can type from
+                scratch. A bug report has a shape, and the widget already asks for it: “Steps,
+                expected vs. actual”. The two lines are that shape. Once filled in, they are what
+                the classifier reads as <code>debug</code> (A1.1: a turn that reports broken
+                behaviour).
+              </p>
+              <p class="note">
+                <b>Nothing is sent (§5, A1.3).</b> This row uses the shipped
+                <code>initialDraft</code> seam, the refusal re-plan's “pre-fill and wait”
+                (MOTIR-6210). The seed is the draft's initial value and nothing more. The person may
+                edit it or clear it, and while it is in the field the starter chips stay hidden. No
+                intent crosses the wire. It is not <code>autoSendTurn</code>, because these words
+                are Motir's, not the person's.
+              </p>
+              <p class="note">
+                <b>The thread and its chrome are unchanged.</b> The rail opens on the project
+                conversation with its shipped opener and mode pill. It shows no item header, no
+                debug mode and no intent control.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════ 3 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">3</span>
+          <h2>The new row's states — rest, hover, keyboard focus, pressed</h2>
+          <span class="cap">row states</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c3">
+            <div>
+              <p class="sub">rest · hover</p>
+              <div class="stage">
+                <div class="menu">
+                  <div class="menu-rows">
+                    <div class="row">
+                      <span class="tile" aria-hidden="true"
+                        ><svg class="ic" viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                      ></span>
+                      <span class="rtext">
+                        <span class="rt">Debug with Motir AI</span>
+                        <span class="rd"
+                          >Trace a bug to its likely cause and file it in Triage</span
+                        >
+                      </span>
+                    </div>
+                    <div class="row is-hover">
+                      <span class="tile" aria-hidden="true"
+                        ><svg class="ic" viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                      ></span>
+                      <span class="rtext">
+                        <span class="rt">Debug with Motir AI</span>
+                        <span class="rd"
+                          >Trace a bug to its likely cause and file it in Triage</span
+                        >
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="sub">focus-visible · pressed</p>
+              <div class="stage">
+                <div class="menu">
+                  <div class="menu-rows">
+                    <div class="row is-focus">
+                      <span class="tile" aria-hidden="true"
+                        ><svg class="ic" viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                      ></span>
+                      <span class="rtext">
+                        <span class="rt">Debug with Motir AI</span>
+                        <span class="rd"
+                          >Trace a bug to its likely cause and file it in Triage</span
+                        >
+                      </span>
+                    </div>
+                    <div class="row is-active">
+                      <span class="tile" aria-hidden="true"
+                        ><svg class="ic" viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                      ></span>
+                      <span class="rtext">
+                        <span class="rt">Debug with Motir AI</span>
+                        <span class="rd"
+                          >Trace a bug to its likely cause and file it in Triage</span
+                        >
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="note">
+                The states are the shipped row's classes, unchanged. Hover is
+                <code>--el-surface</code>. Focus-visible uses the same fill plus an inset 2px
+                <code>--focus-ring-color</code> outline. Pressed is <code>--el-muted</code>. The
+                description stays <code>--el-text-secondary</code> in every state: it measures
+                6.24:1 on <code>--el-surface</code> and 6.18:1 on <code>--el-muted</code>, where
+                muted would fail.
+              </p>
+              <p class="note">
+                <b>Keyboard.</b> Nothing changes. The row is a third tab stop in DOM order inside
+                the Radix dialog popover. Esc closes the popover and focus returns to the orb.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

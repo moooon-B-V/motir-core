@@ -21,8 +21,11 @@ export type PlanChangeTurnRoleDto = 'user' | 'system' | 'assistant';
  * text and reads back what Motir resolved (ADR §1). A field of this type
  * appearing on a REQUEST body would be the mode the design deliberately does not
  * have, re-entering through the back door.
+ *
+ * `debug` (MOTIR-7047 · the ADR's AMENDMENT 1) is the third reading: the turn
+ * reported broken behaviour, and a `debug_bug` job ran for it.
  */
-export type PlanChangeTurnIntentDto = 'plan_change' | 'ask';
+export type PlanChangeTurnIntentDto = 'plan_change' | 'ask' | 'debug';
 
 /** One turn on the thread, in `seq` order (0-based, gapless). `jobId` is set on a
  *  `system` submission marker and on an `assistant` turn (the job that produced
@@ -208,4 +211,32 @@ export interface EarlierSessionDto {
 export interface ResumableSessionDto {
   session: PlanChangeSessionDto | null;
   earlier: EarlierSessionDto | null;
+}
+
+/**
+ * What a settled `debug` turn LANDED (Story MOTIR-7042 · MOTIR-7049; ADR
+ * `conversation-turn-intent.md` AMENDMENT 1 · A1.4) — the rail's account of the
+ * one card the turn touched. Exactly one of A1.4's rows:
+ *
+ *  * `enrich_existing` — an existing card covers the defect; the diagnosis was
+ *    added to it as a comment. `workItemKey` / `title` are that card.
+ *  * `diagnose` — no card covers it; the diagnosis was written onto the anchored
+ *    triage bug, or onto ONE bug filed into Triage for it (`createdInTriage`).
+ *  * `ungrounded` — the report could not be grounded in the code, so NOTHING was
+ *    written; `workItemKey` and `title` are null.
+ */
+export interface DebugLandingDto {
+  outcome: 'enrich_existing' | 'diagnose' | 'ungrounded';
+  /** The one card the turn touched, or null when it wrote nothing. */
+  workItemKey: string | null;
+  /** That card's current title, or null when it wrote nothing (or the card is
+   *  gone by the time a replayed settle reads it). */
+  title: string | null;
+  /**
+   * Whether this turn FILED a new bug into Triage (the orb path). The triage
+   * inbox is a client island that refetches only on `ReportProvider`'s
+   * `submissionsChangedAt` tick, which the server cannot bump — so the client
+   * bumps it when this is true.
+   */
+  createdInTriage: boolean;
 }

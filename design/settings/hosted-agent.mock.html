@@ -1,0 +1,3088 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Hosted agent — the model a hosted run uses, by difficulty (MOTIR-6991)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE `HOSTED AGENT` ROOM: the project-settings
+      surface that shows, and lets a project admin override, which model a hosted
+      run uses for each difficulty (Trivial · Low · Medium · High), and the
+      settings-rail row that opens it. Card MOTIR-6991.
+
+      ── WHAT THIS ASSET DECIDES, AND WHAT IT ONLY COMPOSES ──
+      It COMPOSES shipped surfaces and re-specifies none of them:
+        · design/projects/settings-area.mock.html owns the area chrome — the rail,
+          its groups, the pane, the eyebrow/serif-title head;
+        · design/projects/bug-destination.mock.html is the nearest room of this
+          tier. Its token, chrome, primitive and room-shell layers are spliced in
+          VERBATIM, so the two assets cannot drift apart;
+        · the per-row select is the shipped `Combobox` (packages/design-system),
+          composed exactly as `PlannerModelField` (the AI planning room) and
+          `HostedModelPicker` (Run hosted) compose it — `searchable={false}`, the
+          model id as the label, the provider as `secondary`;
+        · the card is `components/settings/SettingsCard.tsx`, with the AI planning
+          room's explicit Save footer; the callouts are that room's `Callout`
+          (plain · peach), and its read-only banner.
+      What it ADDS is this room's content: the four difficulty rows, their source
+      pills, Reset to default, the withdrawn-override line, and the rail row.
+
+      ── TOKENS ──
+      Colour flows through `--el-*` element tokens and shape through the
+      element-semantic shape tokens; no Tier-0 `--color-*` and no raw
+      `rounded-md` / `p-2` / `h-9` appears in any product element below. The only
+      raw values authored anywhere are the non-semantic board backdrop and the
+      panel scaffolding inherited from the bug-destination asset.
+
+      ── ICONS ──
+      Every symbol in the sheet is EXTRACTED from the installed
+      `lucide-react@1.16.0` and carries its provenance comment.
+    -->
+    <style>
+      /* ═══ TOKENS — generated from @motir/design-system/theme.css ═══ */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        /* ADDED by MOTIR-4674, verbatim from packages/design-system/theme.css:
+           the ink for danger text ON a page surface. --el-danger-text is legal
+           ONLY on an element carrying bg-(--el-danger), and raw --el-danger is
+           under AA on the dark page in three palettes. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      /* ═══ MOCK BOARD CHROME (not product UI — the panel scaffolding) ═══ */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f2f1ee;
+        color: var(--el-page-text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          'Helvetica Neue',
+          Arial,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .board {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 40px 24px 72px;
+      }
+      .board > header {
+        margin-bottom: 32px;
+      }
+      .board h1 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 30px;
+        line-height: 1.2;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .board > header p {
+        margin: 0 0 10px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 84ch;
+      }
+      .panel-label {
+        margin: 44px 0 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+        border-top: 1px solid var(--el-border);
+        padding-top: 14px;
+      }
+      .panel-label b {
+        color: var(--el-text);
+        font-weight: 700;
+      }
+      .panel-note {
+        margin: 0 0 14px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 88ch;
+      }
+      .panel-note b {
+        color: var(--el-text);
+      }
+      .panel {
+        margin-bottom: 8px;
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      code.k {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+      }
+      svg.i {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      svg.i.sm {
+        width: 14px;
+        height: 14px;
+      }
+      svg.i.lg {
+        width: 18px;
+        height: 18px;
+      }
+      svg.gh {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        fill: currentColor;
+      }
+      svg.gh.lg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* ═══ SHIPPED PRIMITIVES — classes mirror the cva recipes ═══ */
+      /* Button (packages/design-system/src/components/ui/Button.tsx) */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border: 0;
+        cursor: pointer;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding-inline: var(--spacing-btn-x);
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        border: 1px solid var(--el-button-border);
+        color: var(--el-text);
+      }
+      .btn-ghost {
+        color: var(--el-text);
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding-inline: var(--spacing-btn-x-sm);
+        font-size: 12px;
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      /* Card */
+      .card {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+      }
+      /* Pill */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-neutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .pill-done {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-warning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .pill-danger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      /* Input + FormField */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .field > label {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .helper {
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-helper);
+        margin: 0;
+      }
+      .helper.xs {
+        font-size: 12px;
+      }
+      /* SectionLabel */
+      .eyebrow {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      /* Spinner */
+      .spin {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        border-radius: 9999px;
+        border: 2px solid var(--el-border-strong);
+        border-top-color: var(--el-accent);
+      }
+      .link {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      /* QuietAction — the shipped RepositoryRow affordance */
+      .quiet {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        gap: 6px;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      /* Combobox trigger */
+      .combo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-input-border);
+        background: var(--el-page-bg);
+        padding-inline: var(--spacing-input-x);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .combo.disabled {
+        opacity: 0.6;
+      }
+      .listbox {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+      }
+      .listbox .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .listbox .opt.active {
+        background: var(--el-option-active-bg);
+      }
+      /* ⚠️ --el-text-secondary, not --el-text-muted (MOTIR-4674). This rule was
+         carried over from takeover.mock.html and never exercised in this asset;
+         the picker is its first use, and muted is 4.12:1 on
+         --el-option-active-bg — the surface an ACTIVE option paints. */
+      .listbox .opt .sub {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      /* ⚠️ --el-text-eyebrow, not --el-text-faint (MOTIR-4674). Same story as
+         `.opt .sub` above — carried over, never exercised, and the picker's two
+         SEGMENT headings are the information the whole panel turns on, so they
+         are not decoration. Faint clears AA on no surface at all. */
+      .listbox .grp {
+        padding: 8px var(--spacing-control-x) 4px;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      /* Modal */
+      .modal {
+        border-radius: var(--radius-modal);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        max-width: 34rem;
+      }
+      .modal-head {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .modal-head h4 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 20px;
+        font-weight: 600;
+        line-height: 1.25;
+        color: var(--el-text);
+      }
+      .modal-foot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .scrim {
+        border-radius: var(--radius-card);
+        background: var(--el-canvas);
+        padding: 28px;
+        display: flex;
+        justify-content: center;
+      }
+
+      /* ═══ THE ROOM — /settings/project/repositories ═══ */
+      .settings {
+        display: grid;
+        grid-template-columns: 15rem 1fr;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        overflow: hidden;
+        min-height: 460px;
+      }
+      .set-rail {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        border-right: 1px solid var(--el-sidebar-border);
+        background: var(--el-sidebar-bg);
+        padding: 20px 12px;
+      }
+      .set-rail .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .set-rail .grp > .h {
+        padding: 6px var(--spacing-control-x) 2px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .rail-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .rail-row svg {
+        color: var(--el-icon-muted);
+      }
+      .rail-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .rail-row.active svg {
+        color: var(--el-icon-active);
+      }
+      .set-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding: 28px;
+        min-width: 0;
+      }
+      .pane-head {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .pane-head h3 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pane-head p {
+        margin: 0;
+        max-width: 68ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      /* callouts — every fill a palette token */
+      .note {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        padding: 12px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .note svg {
+        color: var(--el-icon-muted);
+        margin-top: 2px;
+        flex: none;
+      }
+      .note .door {
+        display: block;
+        margin-top: 4px;
+        font-size: 13px;
+      }
+      .banner {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .banner.warn {
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+      }
+      .banner.warn svg {
+        color: var(--el-warning);
+        margin-top: 2px;
+        flex: none;
+      }
+      .banner.info {
+        background: var(--el-notice-info-bg);
+        color: var(--el-text-strong);
+      }
+      .banner.info svg {
+        color: var(--el-info);
+        margin-top: 2px;
+        flex: none;
+      }
+      .banner b {
+        font-weight: 600;
+      }
+      /* The access-path panel — the monitoring asset's grammar */
+      .rail-solo {
+        display: grid;
+        grid-template-columns: 15rem 1fr;
+        gap: 24px;
+        align-items: start;
+      }
+      .rail-solo .set-rail {
+        border: 1px solid var(--el-sidebar-border);
+        border-radius: var(--radius-card);
+      }
+      .callout {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-width: 0;
+      }
+      .statetable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .statetable th,
+      .statetable td {
+        text-align: left;
+        vertical-align: top;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .statetable th {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+        background: var(--el-surface-soft);
+      }
+      .statetable td:first-child {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .lands {
+        margin: 12px 0 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 96ch;
+      }
+      .lands b {
+        color: var(--el-text);
+      }
+
+      /* ═══ ADDED BY THIS ASSET — the Hosted agent room ═══ */
+      /* SettingsCard (components/settings/SettingsCard.tsx): full-bleed head
+         divider, body at --spacing-card-padding, optional --el-surface-soft foot. */
+      .scard {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+        max-width: 46rem;
+      }
+      .scard-head {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .scard-head > svg {
+        color: var(--el-icon-heading);
+        margin-top: 1px;
+      }
+      .scard-head h4 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      /* SettingsCard ships this subtitle in --el-text-muted on --el-card; the
+         mock raises it to --el-text-secondary, which holds AA on every surface. */
+      .scard-head p {
+        margin: 2px 0 0;
+        max-width: 58ch;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .scard-body {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 20px var(--spacing-card-padding);
+      }
+      .scard-foot {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .scard-foot .hint {
+        margin-right: auto;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      /* The AI planning room's Callout — plain / peach. Text at 12px. */
+      .co {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        padding: 10px 14px;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .co > svg {
+        margin-top: 2px;
+        flex: none;
+      }
+      .co.plain {
+        background: var(--el-surface);
+        border-color: var(--el-border);
+        color: var(--el-text-secondary);
+      }
+      .co.plain > svg {
+        color: var(--el-icon-muted);
+      }
+      .co.peach {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .co.peach > svg {
+        color: var(--el-warning);
+      }
+      .co .co-act {
+        margin-top: 8px;
+      }
+      .co b {
+        font-weight: 600;
+      }
+      .mono-id {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+      }
+
+      /* THE DIFFICULTY ROWS — a grid, three named areas; stacks in the narrow pane */
+      .dm-list {
+        display: flex;
+        flex-direction: column;
+      }
+      .dm-cols,
+      .dm-row {
+        display: grid;
+        grid-template-columns: 6.5rem minmax(0, 18rem) minmax(0, 1fr);
+        grid-template-areas: 'diff cbx src';
+        column-gap: 16px;
+        align-items: center;
+      }
+      .dm-cols {
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--el-border);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      .dm-row {
+        align-items: start;
+        row-gap: 8px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .dm-diff,
+      .dm-src {
+        min-height: var(--height-control);
+      }
+      .dm-diff {
+        display: flex;
+        align-items: center;
+        grid-area: diff;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .dm-cbx {
+        grid-area: cbx;
+        min-width: 0;
+      }
+      .dm-src {
+        grid-area: src;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      /* The withdrawn-override line — its own row under the select + source */
+      .dm-gone {
+        grid-column: 2 / -1;
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .dm-gone > svg {
+        color: var(--el-warning);
+        margin-top: 2px;
+      }
+      .dm-gone s {
+        color: var(--el-text-secondary);
+      }
+      /* Combobox trigger — the shipped recipe: h-(--height-control)
+         rounded-(--radius-input) border-(--el-border) bg-(--el-page-bg)
+         px-(--spacing-control-x) text-sm; disabled:opacity-50 */
+      .cbx {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-control);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding-inline: var(--spacing-control-x);
+        font: inherit;
+        font-size: 14px;
+        color: var(--el-text);
+        text-align: left;
+      }
+      .cbx[disabled] {
+        opacity: 0.5;
+      }
+      .cbx .lbl {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--el-text);
+      }
+      .cbx .sec {
+        margin-left: auto;
+        font-size: 12px;
+        white-space: nowrap;
+        color: var(--el-text-identifier);
+      }
+      .cbx .ph {
+        color: var(--el-text-muted);
+      }
+      .cbx > svg {
+        margin-left: auto;
+        color: var(--el-icon-muted);
+      }
+      .cbx .sec + svg {
+        margin-left: 0;
+      }
+      /* The open menu — shipped: rounded-(--radius-card) bg-(--el-page-bg) p-1
+         shadow-(--shadow-elevated) border-(--el-border) max-w-[18rem]. Drawn IN
+         FLOW under its trigger, so it covers no row a reviewer needs to read. */
+      .menu {
+        margin-top: 4px;
+        width: 100%;
+        max-width: 18rem;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .menu .opt.active {
+        background: var(--el-option-active-bg);
+      }
+      .menu .opt .col {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .menu .opt .desc {
+        font-size: 12px;
+        line-height: 1.35;
+        color: var(--el-text-secondary);
+      }
+      .menu .opt .sec {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .menu .opt .ck {
+        color: var(--el-accent-on-surface);
+      }
+      /* The source pill — Pill: neutral for Platform default, lavender for Override */
+      .pill-lav {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      /* Button ghost sm with a leftIcon (Reset to default) */
+      .btn-ghost.btn-sm svg {
+        width: 14px;
+        height: 14px;
+        color: var(--el-icon-muted);
+      }
+      /* Skeleton bar (loading) — the arrival frame's block, on --el-muted */
+      .sk {
+        display: inline-block;
+        height: 20px;
+        width: 7.5rem;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+      }
+      /* The narrow pane (~400px): rows stack, the select takes the full width */
+      .narrow {
+        max-width: 400px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 20px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .narrow .scard-body,
+      .narrow .scard-head,
+      .narrow .scard-foot {
+        padding-inline: 16px;
+      }
+      .narrow .dm-cols {
+        display: none;
+      }
+      .narrow .dm-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+          'diff src'
+          'cbx cbx';
+      }
+      .narrow .dm-gone {
+        grid-column: 1 / -1;
+      }
+      .narrow .dm-src {
+        justify-content: flex-end;
+      }
+      .narrow .pane-head h3 {
+        font-size: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="sr" aria-hidden="true">
+      <defs>
+        <!-- lucide `sliders-horizontal` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-sliders-horizontal" viewBox="0 0 24 24">
+          <path d="M10 5H3" />
+          <path d="M12 19H3" />
+          <path d="M14 3v4" />
+          <path d="M16 17v4" />
+          <path d="M21 12h-9" />
+          <path d="M21 19h-5" />
+          <path d="M21 5h-7" />
+          <path d="M8 10v4" />
+          <path d="M8 12H3" />
+        </symbol>
+        <!-- lucide `folder-git-2` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-folder-git-2" viewBox="0 0 24 24">
+          <path d="M18 19a5 5 0 0 1-5-5v8" />
+          <path
+            d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"
+          />
+          <circle cx="13" cy="12" r="2" />
+          <circle cx="20" cy="19" r="2" />
+        </symbol>
+        <!-- lucide `activity` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-activity" viewBox="0 0 24 24">
+          <path
+            d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+          />
+        </symbol>
+        <!-- lucide `users` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-users" viewBox="0 0 24 24">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <circle cx="9" cy="7" r="4" />
+        </symbol>
+        <!-- lucide `globe` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-globe" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+          <path d="M2 12h20" />
+        </symbol>
+        <!-- lucide `link-2` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-link-2" viewBox="0 0 24 24">
+          <path d="M9 17H7A5 5 0 0 1 7 7h2" />
+          <path d="M15 7h2a5 5 0 1 1 0 10h-2" />
+          <line x1="8" x2="16" y1="12" y2="12" />
+        </symbol>
+        <!-- lucide `shield` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-shield" viewBox="0 0 24 24">
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+        </symbol>
+        <!-- lucide `key-round` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-key-round" viewBox="0 0 24 24">
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </symbol>
+        <!-- lucide `workflow` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-workflow" viewBox="0 0 24 24">
+          <rect width="8" height="8" x="3" y="3" rx="2" />
+          <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+          <rect width="8" height="8" x="13" y="13" rx="2" />
+        </symbol>
+        <!-- lucide `shield-check` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-shield-check" viewBox="0 0 24 24">
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </symbol>
+        <!-- lucide `columns-3` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-columns-3" viewBox="0 0 24 24">
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </symbol>
+        <!-- lucide `gauge` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-gauge" viewBox="0 0 24 24">
+          <path d="m12 14 4-4" />
+          <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+        </symbol>
+        <!-- lucide `tag` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-tag" viewBox="0 0 24 24">
+          <path
+            d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"
+          />
+          <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+        </symbol>
+        <!-- lucide `box` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-box" viewBox="0 0 24 24">
+          <path
+            d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+          />
+          <path d="m3.3 7 8.7 5 8.7-5" />
+          <path d="M12 22V12" />
+        </symbol>
+        <!-- lucide `sparkles` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-sparkles" viewBox="0 0 24 24">
+          <path
+            d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+          />
+          <path d="M20 2v4" />
+          <path d="M22 4h-4" />
+          <circle cx="4" cy="20" r="2" />
+        </symbol>
+        <!-- lucide `bot` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-bot" viewBox="0 0 24 24">
+          <path d="M12 8V4H8" />
+          <rect width="16" height="12" x="4" y="8" rx="2" />
+          <path d="M2 14h2" />
+          <path d="M20 14h2" />
+          <path d="M15 13v2" />
+          <path d="M9 13v2" />
+        </symbol>
+        <!-- lucide `bug` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-bug" viewBox="0 0 24 24">
+          <path d="M12 20v-9" />
+          <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M21 21a4 4 0 0 0-3.81-4" />
+          <path d="M21 5a4 4 0 0 1-3.55 3.97" />
+          <path d="M22 13h-4" />
+          <path d="M3 21a4 4 0 0 1 3.81-4" />
+          <path d="M3 5a4 4 0 0 0 3.55 3.97" />
+          <path d="M6 13H2" />
+          <path d="m8 2 1.88 1.88" />
+          <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13" />
+        </symbol>
+        <!-- lucide `check` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-check" viewBox="0 0 24 24">
+          <path d="M20 6 9 17l-5-5" />
+        </symbol>
+        <!-- lucide `chevrons-up-down` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-chevrons-up-down" viewBox="0 0 24 24">
+          <path d="m7 15 5 5 5-5" />
+          <path d="m7 9 5-5 5 5" />
+        </symbol>
+        <!-- lucide `search` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <path d="m21 21-4.34-4.34" />
+          <circle cx="11" cy="11" r="8" />
+        </symbol>
+        <!-- lucide `triangle-alert` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-triangle-alert" viewBox="0 0 24 24">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </symbol>
+        <!-- lucide `cloud` — EXTRACTED from the installed `lucide-react@1.16.0` (Run hosted's glyph) -->
+        <symbol id="i-cloud" viewBox="0 0 24 24">
+          <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+        </symbol>
+        <!-- lucide `info` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-info" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </symbol>
+        <!-- lucide `lock` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-lock" viewBox="0 0 24 24">
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </symbol>
+        <!-- lucide `rotate-ccw` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-rotate-ccw" viewBox="0 0 24 24">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+        </symbol>
+        <!-- lucide `refresh-cw` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-refresh-cw" viewBox="0 0 24 24">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M8 16H3v5" />
+        </symbol>
+      </defs>
+    </svg>
+
+    <div class="board">
+      <header>
+        <h1>Hosted agent &mdash; the model a hosted run uses, by difficulty</h1>
+        <p>
+          The project-settings room that shows which model a hosted run uses for each difficulty
+          &mdash; Trivial, Low, Medium, High &mdash; lets a project admin override one, and says so
+          when an override stops applying. And the rail row that opens it. Card MOTIR-6991.
+        </p>
+        <p>
+          Its sibling is the Run hosted picker&rsquo;s delta,
+          <code class="k">design/runs/run-section--from-difficulty.mock.html</code>, which draws the
+          line that tells the person starting a run where the preselected model came from.
+        </p>
+      </header>
+
+      <div class="panel-label">
+        Panel 0 &middot; <b>The access path</b> &mdash; a new row in the Automation group, between
+        AI planning and Rules
+      </div>
+      <p class="panel-note">
+        The room is reached the way every project-settings room is: its <b>rail row</b> (and the
+        matching <code class="k">settings-hosted-agent</code> command-palette deep link the registry
+        lights at the same time). It sits in <b>Automation</b>, directly under
+        <b>AI planning</b> &mdash; both rooms choose a model Motir runs on this project&rsquo;s
+        behalf &mdash; and above Rules. The glyph is <code class="k">Cloud</code>, the one the Run
+        hosted button carries, so the row and the door it configures read as one thing.
+      </p>
+      <div class="panel">
+        <div class="rail-solo">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-activity" /></svg>Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-globe" /></svg>Public page
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-link-2" /></svg>Public address
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield" /></svg>Roles &amp; permissions
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield-check" /></svg>Approvals
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-gauge" /></svg>Estimation
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-tag" /></svg>Fields
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-box" /></svg>Components
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bug" /></svg>Bugs
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="rail-row active" aria-current="page">
+                <svg class="i"><use href="#i-cloud" /></svg>Hosted agent
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>Rules
+              </div>
+            </div>
+          </div>
+          <div class="callout">
+            <table class="statetable">
+              <thead>
+                <tr>
+                  <th>Condition</th>
+                  <th>The row</th>
+                  <th>The route</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>hosted runs on this build</td>
+                  <td>shown, to a holder of the view key</td>
+                  <td>renders the room</td>
+                </tr>
+                <tr>
+                  <td>no hosted runs on this build</td>
+                  <td>absent, whatever the actor holds</td>
+                  <td><code class="k">notFound()</code></td>
+                </tr>
+                <tr>
+                  <td>view key <code class="k">work_item:edit</code> not held</td>
+                  <td>absent</td>
+                  <td>the area&rsquo;s no-access state</td>
+                </tr>
+                <tr>
+                  <td>view key held, <code class="k">ai:configure</code> not held</td>
+                  <td>shown</td>
+                  <td>read-only (Panel 5)</td>
+                </tr>
+                <tr>
+                  <td>Motir AI down right now</td>
+                  <td>shown &mdash; an outage is not a removal</td>
+                  <td>unavailable (Panel 7)</td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="lands">
+              <b>Availability is a BUILD fact, not a live read.</b> The row keys on whether this
+              deployment runs hosted agents at all (a second
+              <code class="k">SettingsNavAvailability</code> field beside
+              <code class="k">publicProjectsAvailable</code>, defaulting closed). A row that came
+              and went with Motir AI&rsquo;s health would read as a feature being removed, and a
+              bookmarked URL would 404 mid-outage.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel 1 &middot; <b>The room as a project first finds it</b> &mdash; every difficulty on its
+        platform default
+      </div>
+      <p class="panel-note">
+        Four rows, <b>easiest first</b>. Each shows the model a hosted run of that difficulty uses
+        today, and where that comes from. Nothing is overridden, so there is no Reset and
+        <b>Save changes</b> is disabled. The note under the rows answers the question the four rows
+        leave open: what a work item with no difficulty runs on.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-activity" /></svg>Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-globe" /></svg>Public page
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-link-2" /></svg>Public address
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield" /></svg>Roles &amp; permissions
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield-check" /></svg>Approvals
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-gauge" /></svg>Estimation
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-tag" /></svg>Fields
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-box" /></svg>Components
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bug" /></svg>Bugs
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="rail-row active" aria-current="page">
+                <svg class="i"><use href="#i-cloud" /></svg>Hosted agent
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Hosted agent</h3>
+              <p>
+                Which model a hosted run uses. Run hosted preselects it from the work item&rsquo;s
+                difficulty; whoever starts the run can still pick another.
+              </p>
+            </div>
+            <section class="scard" data-surface="card">
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>
+                <div>
+                  <h4>Model by difficulty</h4>
+                  <p>
+                    Each difficulty runs on the platform default unless you override it. A parent
+                    work item uses the model of the highest difficulty among its leaves.
+                  </p>
+                </div>
+              </div>
+              <div class="scard-body">
+                <div class="dm-list">
+                  <div class="dm-cols" aria-hidden="true">
+                    <span>Difficulty</span><span>Model</span><span>Source</span>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Trivial</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Trivial"
+                      >
+                        <span class="lbl">claude-sonnet-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Low</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Low"
+                      >
+                        <span class="lbl">claude-sonnet-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Medium</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Medium"
+                      >
+                        <span class="lbl">claude-opus-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">High</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for High"
+                      >
+                        <span class="lbl">claude-opus-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="co plain">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-info" /></svg>
+                  <span
+                    >A work item with no difficulty runs on the platform default,
+                    <span class="mono-id">claude-opus-5-5</span> &mdash; the model Run hosted marks
+                    <b>Default</b>.</span
+                  >
+                </div>
+              </div>
+              <div class="scard-foot">
+                <button class="btn btn-secondary" type="button" disabled>Cancel</button>
+                <button class="btn btn-primary" type="button" disabled>Save changes</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel 2 &middot; <b>Overriding Low</b> &mdash; the shipped Combobox, open, before Save
+      </div>
+      <p class="panel-note">
+        The per-row select is the shipped <code class="k">Combobox</code> (<code class="k"
+          >searchable={false}</code
+        >), offering exactly what Motir AI offers &mdash; never a free-text field. Its label is the
+        model id and its secondary text the provider, as in Run hosted&rsquo;s picker. The
+        row&rsquo;s own platform default is marked in the menu by the option&rsquo;s
+        <code class="k">description</code> line, <i>Platform default for Low</i>. The row flips to
+        <b>Override</b> as soon as it is picked; the footer reports <i>Unsaved changes</i>.
+        <b>Picking the platform default again IS a reset</b> &mdash; the row returns to
+        <i>Platform default</i> and no override is stored, so an override can never name the model
+        it overrides.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-activity" /></svg>Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-globe" /></svg>Public page
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-link-2" /></svg>Public address
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield" /></svg>Roles &amp; permissions
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield-check" /></svg>Approvals
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-gauge" /></svg>Estimation
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-tag" /></svg>Fields
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-box" /></svg>Components
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bug" /></svg>Bugs
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="rail-row active" aria-current="page">
+                <svg class="i"><use href="#i-cloud" /></svg>Hosted agent
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Hosted agent</h3>
+              <p>
+                Which model a hosted run uses. Run hosted preselects it from the work item&rsquo;s
+                difficulty; whoever starts the run can still pick another.
+              </p>
+            </div>
+            <section class="scard" data-surface="card">
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>
+                <div>
+                  <h4>Model by difficulty</h4>
+                  <p>
+                    Each difficulty runs on the platform default unless you override it. A parent
+                    work item uses the model of the highest difficulty among its leaves.
+                  </p>
+                </div>
+              </div>
+              <div class="scard-body">
+                <div class="dm-list">
+                  <div class="dm-cols" aria-hidden="true">
+                    <span>Difficulty</span><span>Model</span><span>Source</span>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Trivial</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Trivial"
+                      >
+                        <span class="lbl">claude-sonnet-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Low</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="true"
+                        aria-label="Model for Low"
+                      >
+                        <span class="lbl">claude-opus-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                      <div class="menu" role="listbox" aria-label="Model for Low">
+                        <div class="opt" role="option" aria-selected="false">
+                          <span class="col"
+                            ><span>claude-sonnet-5-5</span
+                            ><span class="desc">Platform default for Low</span></span
+                          ><span class="sec">anthropic</span>
+                        </div>
+                        <div class="opt" role="option" aria-selected="false">
+                          <span>claude-opus-5-5</span><span class="sec">anthropic</span>
+                        </div>
+                        <div class="opt active" role="option" aria-selected="true">
+                          <span>claude-opus-5</span><span class="sec">anthropic</span
+                          ><svg class="i ck" aria-hidden="true"><use href="#i-check" /></svg>
+                        </div>
+                        <div class="opt" role="option" aria-selected="false">
+                          <span>claude-fable-5-1</span><span class="sec">anthropic</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-lav">Override</span
+                      ><button class="btn btn-ghost btn-sm" type="button">
+                        <svg class="i" aria-hidden="true"><use href="#i-rotate-ccw" /></svg>Reset to
+                        default
+                      </button>
+                    </div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Medium</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Medium"
+                      >
+                        <span class="lbl">claude-opus-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">High</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for High"
+                      >
+                        <span class="lbl">claude-opus-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="co plain">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-info" /></svg>
+                  <span
+                    >A work item with no difficulty runs on the platform default,
+                    <span class="mono-id">claude-opus-5-5</span> &mdash; the model Run hosted marks
+                    <b>Default</b>.</span
+                  >
+                </div>
+              </div>
+              <div class="scard-foot">
+                <span class="hint">Unsaved changes</span>
+                <button class="btn btn-secondary" type="button">Cancel</button>
+                <button class="btn btn-primary" type="button">Save changes</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel 3 &middot; <b>An overridden row, saved</b> &mdash; Low runs on claude-opus-5
+      </div>
+      <p class="panel-note">
+        The override is saved (toast <i>Hosted agent settings saved</i> &middot;
+        <i>New hosted runs use these models.</i>). The row carries the lavender <b>Override</b> pill
+        and its <b>Reset to default</b> action; Reset marks the row dirty and returns it to the
+        platform default, saved with the footer like any other change. The other three rows are
+        untouched.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-activity" /></svg>Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-globe" /></svg>Public page
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-link-2" /></svg>Public address
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield" /></svg>Roles &amp; permissions
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield-check" /></svg>Approvals
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-gauge" /></svg>Estimation
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-tag" /></svg>Fields
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-box" /></svg>Components
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bug" /></svg>Bugs
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="rail-row active" aria-current="page">
+                <svg class="i"><use href="#i-cloud" /></svg>Hosted agent
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Hosted agent</h3>
+              <p>
+                Which model a hosted run uses. Run hosted preselects it from the work item&rsquo;s
+                difficulty; whoever starts the run can still pick another.
+              </p>
+            </div>
+            <section class="scard" data-surface="card">
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>
+                <div>
+                  <h4>Model by difficulty</h4>
+                  <p>
+                    Each difficulty runs on the platform default unless you override it. A parent
+                    work item uses the model of the highest difficulty among its leaves.
+                  </p>
+                </div>
+              </div>
+              <div class="scard-body">
+                <div class="dm-list">
+                  <div class="dm-cols" aria-hidden="true">
+                    <span>Difficulty</span><span>Model</span><span>Source</span>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Trivial</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Trivial"
+                      >
+                        <span class="lbl">claude-sonnet-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Low</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Low"
+                      >
+                        <span class="lbl">claude-opus-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-lav">Override</span
+                      ><button class="btn btn-ghost btn-sm" type="button">
+                        <svg class="i" aria-hidden="true"><use href="#i-rotate-ccw" /></svg>Reset to
+                        default
+                      </button>
+                    </div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Medium</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Medium"
+                      >
+                        <span class="lbl">claude-opus-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">High</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for High"
+                      >
+                        <span class="lbl">claude-opus-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="co plain">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-info" /></svg>
+                  <span
+                    >A work item with no difficulty runs on the platform default,
+                    <span class="mono-id">claude-opus-5-5</span> &mdash; the model Run hosted marks
+                    <b>Default</b>.</span
+                  >
+                </div>
+              </div>
+              <div class="scard-foot">
+                <button class="btn btn-secondary" type="button" disabled>Cancel</button>
+                <button class="btn btn-primary" type="button" disabled>Save changes</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel 4 &middot; <b>A withdrawn override</b> &mdash; the saved model is no longer offered
+      </div>
+      <p class="panel-note">
+        Motir AI stopped offering <span class="mono">claude-opus-5</span>. The saved choice is not
+        deleted behind anyone&rsquo;s back, and it is not shown as if it still applied: the select
+        shows what runs <b>actually</b> use (<span class="mono">claude-sonnet-5-5</span>,
+        <i>Platform default</i>) and a warning line names the withdrawn model, struck through.
+        <b>Reset to default</b> stays, because a saved override still exists &mdash; pressing it
+        clears the dead row. If the model is offered again, the override applies again without
+        anyone re-saving it.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-activity" /></svg>Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-globe" /></svg>Public page
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-link-2" /></svg>Public address
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield" /></svg>Roles &amp; permissions
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield-check" /></svg>Approvals
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-gauge" /></svg>Estimation
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-tag" /></svg>Fields
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-box" /></svg>Components
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bug" /></svg>Bugs
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="rail-row active" aria-current="page">
+                <svg class="i"><use href="#i-cloud" /></svg>Hosted agent
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Hosted agent</h3>
+              <p>
+                Which model a hosted run uses. Run hosted preselects it from the work item&rsquo;s
+                difficulty; whoever starts the run can still pick another.
+              </p>
+            </div>
+            <section class="scard" data-surface="card">
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>
+                <div>
+                  <h4>Model by difficulty</h4>
+                  <p>
+                    Each difficulty runs on the platform default unless you override it. A parent
+                    work item uses the model of the highest difficulty among its leaves.
+                  </p>
+                </div>
+              </div>
+              <div class="scard-body">
+                <div class="dm-list">
+                  <div class="dm-cols" aria-hidden="true">
+                    <span>Difficulty</span><span>Model</span><span>Source</span>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Trivial</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Trivial"
+                      >
+                        <span class="lbl">claude-sonnet-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Low</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Low"
+                      >
+                        <span class="lbl">claude-sonnet-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span
+                      ><button class="btn btn-ghost btn-sm" type="button">
+                        <svg class="i" aria-hidden="true"><use href="#i-rotate-ccw" /></svg>Reset to
+                        default
+                      </button>
+                    </div>
+                    <p class="dm-gone" role="note">
+                      <svg class="i sm" aria-hidden="true"><use href="#i-triangle-alert" /></svg
+                      ><span
+                        >The saved model, <s class="mono-id">claude-opus-5</s>, is no longer
+                        offered, so Low runs use the platform default. Reset to clear it.</span
+                      >
+                    </p>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Medium</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Medium"
+                      >
+                        <span class="lbl">claude-opus-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">High</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for High"
+                      >
+                        <span class="lbl">claude-opus-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="co plain">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-info" /></svg>
+                  <span
+                    >A work item with no difficulty runs on the platform default,
+                    <span class="mono-id">claude-opus-5-5</span> &mdash; the model Run hosted marks
+                    <b>Default</b>.</span
+                  >
+                </div>
+              </div>
+              <div class="scard-foot">
+                <button class="btn btn-secondary" type="button" disabled>Cancel</button>
+                <button class="btn btn-primary" type="button" disabled>Save changes</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel 5 &middot; <b>Read-only</b> &mdash; a member who can start runs but lacks
+        <code class="k">ai:configure</code>
+      </div>
+      <p class="panel-note">
+        The AI planning room&rsquo;s read-only grammar: its plain
+        <code class="k">Callout</code> with the <code class="k">Lock</code> glyph opens the card,
+        every select is <b>disabled</b> (the primitive&rsquo;s
+        <code class="k">disabled:opacity-50</code>), there is no Reset and <b>no footer</b>. The
+        values and sources stay fully legible: a member who sees <i>Project override for High</i> on
+        Run hosted comes here to find out what that means.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-activity" /></svg>Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-globe" /></svg>Public page
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-link-2" /></svg>Public address
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield" /></svg>Roles &amp; permissions
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield-check" /></svg>Approvals
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-gauge" /></svg>Estimation
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-tag" /></svg>Fields
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-box" /></svg>Components
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bug" /></svg>Bugs
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="rail-row active" aria-current="page">
+                <svg class="i"><use href="#i-cloud" /></svg>Hosted agent
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Hosted agent</h3>
+              <p>
+                Which model a hosted run uses. Run hosted preselects it from the work item&rsquo;s
+                difficulty; whoever starts the run can still pick another.
+              </p>
+            </div>
+            <section class="scard" data-surface="card">
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>
+                <div>
+                  <h4>Model by difficulty</h4>
+                  <p>
+                    Each difficulty runs on the platform default unless you override it. A parent
+                    work item uses the model of the highest difficulty among its leaves.
+                  </p>
+                </div>
+              </div>
+              <div class="scard-body">
+                <div class="co plain">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-lock" /></svg>
+                  <span>Only a project admin can change hosted agent settings.</span>
+                </div>
+                <div class="dm-list">
+                  <div class="dm-cols" aria-hidden="true">
+                    <span>Difficulty</span><span>Model</span><span>Source</span>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Trivial</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Trivial"
+                        disabled
+                      >
+                        <span class="lbl">claude-sonnet-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Low</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Low"
+                        disabled
+                      >
+                        <span class="lbl">claude-sonnet-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Medium</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Medium"
+                        disabled
+                      >
+                        <span class="lbl">claude-opus-5-5</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src">
+                      <span class="pill pill-neutral">Platform default</span>
+                    </div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">High</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for High"
+                        disabled
+                      >
+                        <span class="lbl">claude-fable-5-1</span><span class="sec">anthropic</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src"><span class="pill pill-lav">Override</span></div>
+                  </div>
+                </div>
+                <div class="co plain">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-info" /></svg>
+                  <span
+                    >A work item with no difficulty runs on the platform default,
+                    <span class="mono-id">claude-opus-5-5</span> &mdash; the model Run hosted marks
+                    <b>Default</b>.</span
+                  >
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel 6 &middot; <b>Loading</b> &mdash; the rows hold their size while the offered list
+        arrives
+      </div>
+      <p class="panel-note">
+        The frame paints at once; each select shows the picker&rsquo;s own loading face,
+        <i>Loading models&hellip;</i>, disabled, and the source column is a skeleton block on
+        <code class="k">--el-muted</code>. Nothing shifts when the values land. No footer until the
+        read resolves.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-activity" /></svg>Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-globe" /></svg>Public page
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-link-2" /></svg>Public address
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield" /></svg>Roles &amp; permissions
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield-check" /></svg>Approvals
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-gauge" /></svg>Estimation
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-tag" /></svg>Fields
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-box" /></svg>Components
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bug" /></svg>Bugs
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="rail-row active" aria-current="page">
+                <svg class="i"><use href="#i-cloud" /></svg>Hosted agent
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Hosted agent</h3>
+              <p>
+                Which model a hosted run uses. Run hosted preselects it from the work item&rsquo;s
+                difficulty; whoever starts the run can still pick another.
+              </p>
+            </div>
+            <section class="scard" data-surface="card">
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>
+                <div>
+                  <h4>Model by difficulty</h4>
+                  <p>
+                    Each difficulty runs on the platform default unless you override it. A parent
+                    work item uses the model of the highest difficulty among its leaves.
+                  </p>
+                </div>
+              </div>
+              <div class="scard-body">
+                <div class="dm-list">
+                  <div class="dm-cols" aria-hidden="true">
+                    <span>Difficulty</span><span>Model</span><span>Source</span>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Trivial</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Trivial"
+                        disabled
+                      >
+                        <span class="ph">Loading models&hellip;</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src"><span class="sk" aria-hidden="true"></span></div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Low</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Low"
+                        disabled
+                      >
+                        <span class="ph">Loading models&hellip;</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src"><span class="sk" aria-hidden="true"></span></div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Medium</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Medium"
+                        disabled
+                      >
+                        <span class="ph">Loading models&hellip;</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src"><span class="sk" aria-hidden="true"></span></div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">High</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for High"
+                        disabled
+                      >
+                        <span class="ph">Loading models&hellip;</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src"><span class="sk" aria-hidden="true"></span></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">
+        Panel 7 &middot; <b>Unavailable</b> &mdash; Motir AI cannot be reached
+      </div>
+      <p class="panel-note">
+        The read failed, which is a different fact from <i>no models offered</i>. The peach
+        <code class="k">Callout</code> says so in words and offers <b>Try again</b>; the rows keep
+        their difficulty labels so the room still explains itself, each select reads
+        <i>Models unavailable</i> (the picker&rsquo;s own face), disabled, and the source column is
+        empty &mdash; the room does not guess a source it could not read. No footer, so nothing can
+        be saved against a list nobody has.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-activity" /></svg>Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-globe" /></svg>Public page
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-link-2" /></svg>Public address
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield" /></svg>Roles &amp; permissions
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-shield-check" /></svg>Approvals
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-gauge" /></svg>Estimation
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-tag" /></svg>Fields
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-box" /></svg>Components
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bug" /></svg>Bugs
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="rail-row active" aria-current="page">
+                <svg class="i"><use href="#i-cloud" /></svg>Hosted agent
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Hosted agent</h3>
+              <p>
+                Which model a hosted run uses. Run hosted preselects it from the work item&rsquo;s
+                difficulty; whoever starts the run can still pick another.
+              </p>
+            </div>
+            <section class="scard" data-surface="card">
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>
+                <div>
+                  <h4>Model by difficulty</h4>
+                  <p>
+                    Each difficulty runs on the platform default unless you override it. A parent
+                    work item uses the model of the highest difficulty among its leaves.
+                  </p>
+                </div>
+              </div>
+              <div class="scard-body">
+                <div class="co peach" role="status">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-triangle-alert" /></svg>
+                  <span>
+                    <span style="display: block"
+                      >Couldn&rsquo;t reach Motir AI, so the hosted models can&rsquo;t be shown or
+                      changed right now. Hosted runs are off until it answers.</span
+                    >
+                    <button class="btn btn-secondary btn-sm co-act" type="button">
+                      <svg class="i sm" aria-hidden="true"><use href="#i-refresh-cw" /></svg>Try
+                      again
+                    </button>
+                  </span>
+                </div>
+                <div class="dm-list">
+                  <div class="dm-cols" aria-hidden="true">
+                    <span>Difficulty</span><span>Model</span><span>Source</span>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Trivial</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Trivial"
+                        disabled
+                      >
+                        <span class="ph">Models unavailable</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src"></div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Low</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Low"
+                        disabled
+                      >
+                        <span class="ph">Models unavailable</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src"></div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">Medium</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for Medium"
+                        disabled
+                      >
+                        <span class="ph">Models unavailable</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src"></div>
+                  </div>
+                  <div class="dm-row">
+                    <span class="dm-diff">High</span>
+                    <div class="dm-cbx">
+                      <button
+                        class="cbx"
+                        type="button"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-label="Model for High"
+                        disabled
+                      >
+                        <span class="ph">Models unavailable</span
+                        ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                      </button>
+                    </div>
+                    <div class="dm-src"></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="panel-label">Panel 8 &middot; <b>At ~400px</b> &mdash; the rows stack</div>
+      <p class="panel-note">
+        Below the pane&rsquo;s two-column width each row becomes two lines: the difficulty with its
+        source pill (and Reset) on the first, the select at full width on the second. The column
+        heads drop out; the rail collapses into the area&rsquo;s drawer exactly as it does for every
+        other room.
+      </p>
+      <div class="panel">
+        <div class="narrow">
+          <div class="pane-head">
+            <div class="eyebrow">Project settings</div>
+            <h3>Hosted agent</h3>
+            <p>
+              Which model a hosted run uses. Run hosted preselects it from the work item&rsquo;s
+              difficulty; whoever starts the run can still pick another.
+            </p>
+          </div>
+          <section class="scard" data-surface="card">
+            <div class="scard-head">
+              <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>
+              <div>
+                <h4>Model by difficulty</h4>
+                <p>
+                  Each difficulty runs on the platform default unless you override it. A parent work
+                  item uses the model of the highest difficulty among its leaves.
+                </p>
+              </div>
+            </div>
+            <div class="scard-body">
+              <div class="dm-list">
+                <div class="dm-row">
+                  <span class="dm-diff">Trivial</span>
+                  <div class="dm-cbx">
+                    <button
+                      class="cbx"
+                      type="button"
+                      role="combobox"
+                      aria-haspopup="listbox"
+                      aria-expanded="false"
+                      aria-label="Model for Trivial"
+                    >
+                      <span class="lbl">claude-sonnet-5-5</span><span class="sec">anthropic</span
+                      ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                    </button>
+                  </div>
+                  <div class="dm-src"><span class="pill pill-neutral">Platform default</span></div>
+                </div>
+                <div class="dm-row">
+                  <span class="dm-diff">Low</span>
+                  <div class="dm-cbx">
+                    <button
+                      class="cbx"
+                      type="button"
+                      role="combobox"
+                      aria-haspopup="listbox"
+                      aria-expanded="false"
+                      aria-label="Model for Low"
+                    >
+                      <span class="lbl">claude-opus-5</span><span class="sec">anthropic</span
+                      ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                    </button>
+                  </div>
+                  <div class="dm-src">
+                    <span class="pill pill-lav">Override</span
+                    ><button class="btn btn-ghost btn-sm" type="button">
+                      <svg class="i" aria-hidden="true"><use href="#i-rotate-ccw" /></svg>Reset to
+                      default
+                    </button>
+                  </div>
+                </div>
+                <div class="dm-row">
+                  <span class="dm-diff">Medium</span>
+                  <div class="dm-cbx">
+                    <button
+                      class="cbx"
+                      type="button"
+                      role="combobox"
+                      aria-haspopup="listbox"
+                      aria-expanded="false"
+                      aria-label="Model for Medium"
+                    >
+                      <span class="lbl">claude-opus-5-5</span><span class="sec">anthropic</span
+                      ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                    </button>
+                  </div>
+                  <div class="dm-src"><span class="pill pill-neutral">Platform default</span></div>
+                </div>
+                <div class="dm-row">
+                  <span class="dm-diff">High</span>
+                  <div class="dm-cbx">
+                    <button
+                      class="cbx"
+                      type="button"
+                      role="combobox"
+                      aria-haspopup="listbox"
+                      aria-expanded="false"
+                      aria-label="Model for High"
+                    >
+                      <span class="lbl">claude-opus-5-5</span><span class="sec">anthropic</span
+                      ><svg class="i" aria-hidden="true"><use href="#i-chevrons-up-down" /></svg>
+                    </button>
+                  </div>
+                  <div class="dm-src"><span class="pill pill-neutral">Platform default</span></div>
+                </div>
+              </div>
+              <div class="co plain">
+                <svg class="i sm" aria-hidden="true"><use href="#i-info" /></svg>
+                <span
+                  >A work item with no difficulty runs on the platform default,
+                  <span class="mono-id">claude-opus-5-5</span> &mdash; the model Run hosted marks
+                  <b>Default</b>.</span
+                >
+              </div>
+            </div>
+            <div class="scard-foot">
+              <button class="btn btn-secondary" type="button" disabled>Cancel</button>
+              <button class="btn btn-primary" type="button" disabled>Save changes</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

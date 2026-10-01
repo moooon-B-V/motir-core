@@ -11,6 +11,8 @@ import 'server-only';
 // streams them, mapping the §5 problem+json taxonomy to motir-core typed errors.
 
 import { mintJobToken } from './jobToken';
+import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
+import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import {
   parseIndexAllowanceSummary,
   parseIndexAllowanceVerdict,
@@ -414,6 +416,51 @@ export async function debitAgentMachine(
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawAgentMachineDebitResponse;
+}
+
+// ── An agent instance's daily storage charge (MOTIR-6919 · motir-ai MOTIR-6915) ──
+
+/**
+ * What `POST /v1/credits/agent-storage` takes: ONE agent instance's storage for
+ * ONE UTC day, at the rate `docs/decisions/agent-instance-storage.md` §2 fixes.
+ * There is no `externalRef` — motir-ai builds the key from `instanceId` and `day`
+ * (`agent-storage:<instance id>:<day>`), so an agent is charged at most once per
+ * day whatever this side retries.
+ */
+export interface AgentStorageDebitInput {
+  coreOrganizationId: string;
+  /** `AgentInstance.id`. */
+  instanceId: string;
+  /** The UTC day charged, `YYYY-MM-DD`. */
+  day: string;
+  /** Whole credits (integer ≥ 1) — the record's daily rate. */
+  credits: number;
+  reason?: string;
+}
+
+/** The same body `ci-overage` answers, `idempotent` included. */
+export type RawAgentStorageDebitResponse = RawCiOverageDebitResponse;
+
+/**
+ * POST /v1/credits/agent-storage — charge an org's ledger for one agent's storage
+ * on one UTC day, the `agent_storage` kind.
+ *
+ * {@link debitAgentMachine}'s contract: it THROWS a typed error on failure, and the
+ * caller (`agentInstanceStorageChargeService`) — which has already written the
+ * `pending` row — decides to retry. Idempotent on the instance and the day, so a
+ * retry after a timed-out call that had in fact landed answers `idempotent: true`.
+ */
+export async function debitAgentStorage(
+  input: AgentStorageDebitInput,
+): Promise<RawAgentStorageDebitResponse> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/credits/agent-storage`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawAgentStorageDebitResponse;
 }
 
 /**
@@ -1905,12 +1952,50 @@ export interface AgentModel {
  * a body that is not a model list must never read as "no models exist".
  */
 export type AgentModelsRead =
-  | { state: 'ok'; models: AgentModel[]; default: string | null }
+  | {
+      state: 'ok';
+      models: AgentModel[];
+      default: string | null;
+      defaultsByDifficulty: AgentModelDefaultsByDifficulty;
+    }
   | { state: 'unavailable'; reason: string };
+
+/**
+ * motir-ai's platform default model per leaf difficulty (MOTIR-6990 · MOTIR-6993):
+ * all four levels, each an offered bare id or null.
+ */
+export type AgentModelDefaultsByDifficulty = Record<WorkItemDifficultyDto, string | null>;
+
+/** Every level null — what an older motir-ai, which serves no such field, reads as. */
+function noDifficultyDefaults(): AgentModelDefaultsByDifficulty {
+  return { trivial: null, low: null, medium: null, high: null };
+}
+
+/**
+ * `defaultsByDifficulty` is ADDITIVE on the contract, so a missing field (an older
+ * motir-ai) is all-null rather than a refusal. A present field that is not an
+ * object, or a level that is neither a string nor null, is a malformed answer.
+ */
+function parseDefaultsByDifficulty(value: unknown): AgentModelDefaultsByDifficulty | null {
+  if (value === undefined) return noDifficultyDefaults();
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const out = noDifficultyDefaults();
+  for (const level of WORK_ITEM_DIFFICULTIES) {
+    const id = (value as Record<string, unknown>)[level];
+    if (id === undefined || id === null) continue;
+    if (typeof id !== 'string' || !id) return null;
+    out[level] = id;
+  }
+  return out;
+}
 
 function parseAgentModels(body: unknown): AgentModelsRead | null {
   if (!body || typeof body !== 'object') return null;
-  const { models, default: defaultId } = body as { models?: unknown; default?: unknown };
+  const {
+    models,
+    default: defaultId,
+    defaultsByDifficulty,
+  } = body as { models?: unknown; default?: unknown; defaultsByDifficulty?: unknown };
   if (!Array.isArray(models)) return null;
   const parsed: AgentModel[] = [];
   for (const m of models) {
@@ -1919,7 +2004,14 @@ function parseAgentModels(body: unknown): AgentModelsRead | null {
     parsed.push({ id, provider });
   }
   if (defaultId !== null && defaultId !== undefined && typeof defaultId !== 'string') return null;
-  return { state: 'ok', models: parsed, default: defaultId ?? null };
+  const byDifficulty = parseDefaultsByDifficulty(defaultsByDifficulty);
+  if (!byDifficulty) return null;
+  return {
+    state: 'ok',
+    models: parsed,
+    default: defaultId ?? null,
+    defaultsByDifficulty: byDifficulty,
+  };
 }
 
 /**

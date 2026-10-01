@@ -20,6 +20,13 @@ import baseConfig from './vitest.config';
 // (`lib/agentInstances/terminal*.ts`, the ticket route under the instance routes),
 // and the two suites share one harness.
 //
+// EXTENDED BY THE AGENT-BILLING STORY GATE (Story MOTIR-6914 · MOTIR-6922): the
+// daily storage charge, the plan lapse and its notice, and the Agents line's
+// figures, under the same per-file floor, over their suites in
+// `tests/agentInstances/**` (the story gate is `agentBillingStoryGate.test.ts`)
+// and `agentFigures.test.ts`. `BillingClient.tsx` is the whole billing panel, not
+// this story's file, and stays with the billing suites.
+//
 // Held elsewhere, deliberately:
 //   * the in-agent terminal server (`packages/cli/src/agentTerminal/**`) is held by
 //     `packages/cli/vitest.config.ts`'s per-file thresholds (MOTIR-6938);
@@ -73,6 +80,16 @@ const MEASURED = [
   'app/[(]authed[)]/my-agents/_components/AgentChat.tsx',
   'app/[(]authed[)]/my-agents/_components/useAgentChat.ts',
   'app/[(]authed[)]/my-agents/_components/chat/**/*.{ts,tsx}',
+  // Story MOTIR-6914 — agents are an AI-plan feature, their storage paid in
+  // credits (MOTIR-6922): the daily storage charge, the plan lapse and its
+  // notice, and the Agents line's figures. The plan check, the per-org cap and
+  // the page's words land in files already measured above.
+  'lib/services/agentInstanceStorageChargeService.ts',
+  'lib/repositories/agentInstanceStorageChargeRepository.ts',
+  'lib/jobs/definitions/agentInstanceStorageCharge.ts',
+  'lib/services/agentInstanceLapseService.ts',
+  'lib/emailTemplates/agentsDeletionScheduled.tsx',
+  'app/(authed)/settings/organization/billing/_components/agentFigures.ts',
   // Story MOTIR-6864 — a run in my agent (MOTIR-7026).
   'lib/services/agentInstanceRunService.ts',
   'lib/mappers/agentInstanceRunMappers.ts',
@@ -94,6 +111,8 @@ export default defineConfig({
       // Story MOTIR-6863 — the agent chat (MOTIR-7018).
       'tests/agentChat/**/*.test.{ts,tsx}',
       'tests/components/AgentChat.test.tsx',
+      // Story MOTIR-6914 (MOTIR-6922).
+      'tests/components/agentFigures.test.ts',
       // Story MOTIR-6864 — the agent's live run in its panel (MOTIR-7029).
       'tests/components/AgentPanelRun.test.tsx',
     ],

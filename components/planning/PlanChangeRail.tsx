@@ -11,6 +11,7 @@ import {
   CircleQuestionMark,
   Clock,
   CornerDownRight,
+  FilePenLine,
   History,
   Inbox,
   ListTree,
@@ -21,6 +22,7 @@ import {
   RefreshCw,
   ScanSearch,
   Search,
+  SearchCheck,
   Send,
   ShieldCheck,
   Sparkles,
@@ -29,6 +31,7 @@ import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Spinner } from '@/components/ui/Spinner';
 import { MarkdownView } from '@/components/ui/MarkdownView';
+import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { PlanningTargetKeyChip } from '@/components/planning/PlanningTargetChip';
@@ -43,11 +46,12 @@ import {
   type QuestionDisposition,
 } from '@/lib/planning/planChangeThread';
 import type {
+  DebugLandingDto,
   EarlierSessionDto,
   PlanChangeTurnDto,
   PlanChangeTurnRoleDto,
 } from '@/lib/dto/planChange';
-import type { WorkItemRefMap } from '@/lib/dto/workItems';
+import type { WorkItemRefMap, WorkItemRefSummaryDto } from '@/lib/dto/workItems';
 import type {
   PlanChangeConversationState,
   PlanChangeProgress,
@@ -150,6 +154,24 @@ export interface PlanChangeRailProps {
    *  remount or a second open cannot send it again. Paired with `autoSendTurn`. */
   autoSendKey?: string | null;
   /**
+   * THE WIDGET'S SEEDED SEND JOINS THE THREAD THAT IS OPEN (MOTIR-7050). A pick's
+   * turn starts a conversation, so it is sent only into an EMPTY one; the report
+   * widget's debug turn lands on the person's project conversation whatever it
+   * already holds, so it is sent as soon as that thread is ready — idle, or
+   * holding an undecided proposal — with no user-turn condition.
+   */
+  autoSendIntoThread?: boolean;
+  /**
+   * How the one-time send is SENT, when it is not an ordinary composer send —
+   * the widget's turn carries its triage bug as the ask's anchor (MOTIR-7050).
+   * Absent → `onSend`.
+   */
+  onAutoSend?: (text: string) => void;
+  /** Where the caret lands in a pre-filled `initialDraft` — and that the field
+   *  takes focus at all (the orb's debug template, MOTIR-7050). Absent → the
+   *  shipped behaviour: no focus unless the re-plan asks for its reason. */
+  initialDraftCaret?: number;
+  /**
    * THE FOLLOW-UP FRAMING (design MOTIR-6432, revisions 2–3): the conversation
    * is the follow-up to a choice just made. The chip, the lead and the opener's
    * second line say so, and the *Follow-up to a choice* card sits under the
@@ -220,6 +242,9 @@ export function PlanChangeRail({
   initialDraft,
   autoSendTurn,
   autoSendKey = null,
+  autoSendIntoThread = false,
+  onAutoSend,
+  initialDraftCaret,
   followUp = null,
   state,
   index,
@@ -317,15 +342,27 @@ export function PlanChangeRail({
   // open on this page; the overlay only hands a turn over when the server has no
   // session this gate already seeded. A refused send puts the turn back in the
   // composer through the failed-send restore above.
+  //
+  // The WIDGET'S debug turn (MOTIR-7050) rides the same seam with two changes:
+  // it joins whatever the open thread holds (`autoSendIntoThread`), and it is
+  // sent through `onAutoSend`, which carries its triage bug as the ask's anchor.
+  // Its claim is the triage bug's key (`debugAutoSendKey`), so the three layers
+  // — the host's one-time take of the seed, this page-level claim, and the ref —
+  // hold for it exactly as they do for a pick.
   const autoSentRef = useRef(false);
   const autoSendReady =
-    Boolean(autoSendTurn) && state.phase === 'idle' && !state.readOnly && userTurns.length === 0;
+    Boolean(autoSendTurn) &&
+    !state.readOnly &&
+    (autoSendIntoThread
+      ? state.phase === 'idle' || state.phase === 'review'
+      : state.phase === 'idle' && userTurns.length === 0);
+  const sendAuto = onAutoSend ?? onSend;
   useEffect(() => {
     if (!autoSendReady || !autoSendTurn || autoSentRef.current) return;
     autoSentRef.current = true;
     if (autoSendKey !== null && !claimPickAutoSend(autoSendKey)) return;
-    onSend(autoSendTurn);
-  }, [autoSendReady, autoSendTurn, autoSendKey, onSend]);
+    sendAuto(autoSendTurn);
+  }, [autoSendReady, autoSendTurn, autoSendKey, sendAuto]);
 
   // No starters while the rail HOLDS A SEED (design MOTIR-6206 sheet 2): the seed
   // is the start. Cleared, the rail is an ordinary item re-plan again. A pick's
@@ -357,6 +394,12 @@ export function PlanChangeRail({
   // not the local tray. A sent turn is scoped by the session it landed in, so
   // the chips on the turn come from the record, not from what is picked now.
   const turnTargetKeys = state.session?.targetKeys ?? [];
+  // …and what a PROJECT-thread turn sent from here was anchored on (MOTIR-7050):
+  // the report widget's triage bug, drawn in the same target row. There is no
+  // item header and nothing in the composer's tray — the turn is about the bug,
+  // the conversation is still the project's.
+  const turnAnchors = state.turnAnchors ?? {};
+  const debugLandings = state.debugLandings ?? {};
 
   // THE RAIL FOLLOWS THE NEWEST ACT — while the reader has not scrolled away
   // (MOTIR-4069; `design/ai-chat/plan-change-run-live.mock.html` sheet 5).
@@ -521,8 +564,15 @@ export function PlanChangeRail({
             key={turn.id}
             turn={turn}
             userTurns={userTurns}
-            targetKeys={turnTargetKeys}
+            targetKeys={
+              turnTargetKeys.length > 0
+                ? turnTargetKeys
+                : turnAnchors[turn.id]
+                  ? [turnAnchors[turn.id] as string]
+                  : EMPTY_KEYS
+            }
             workItemRefs={state.session?.workItemRefs ?? {}}
+            debugOutcome={debugOutcomeFor(turn, turns, debugLandings, turnAnchors)}
             disposition={dispositionMarkerFor(turns, i)}
             isPending={question?.id === turn.id}
             // Keyed on the ASSISTANT turn that carries it — `correction.turnId`
@@ -543,6 +593,19 @@ export function PlanChangeRail({
             data-testid="plan-change-handoff"
           >
             {tc('handoff')}
+          </p>
+        ) : null}
+        {/* THE DEBUG HAND-OFF (MOTIR-7050; `debug-turn.mock.html` panel 1) — the
+            same marker slot, naming the other reading. It stays up for the whole
+            diagnosis rather than only while the hand-off is the live act: the
+            debug job narrates its own acts under it, and the marker is what says
+            what they are FOR. */}
+        {state.phase === 'streaming' && acts.some((act) => act.kind === 'redirectedDebug') ? (
+          <p
+            className="text-center text-xs text-(--el-text-secondary)"
+            data-testid="plan-change-handoff-debug"
+          >
+            {tc('handoffDebug')}
           </p>
         ) : null}
 
@@ -825,7 +888,8 @@ export function PlanChangeRail({
             onSend(text);
           }}
           placeholder={composerPlaceholder}
-          autoFocus={askingForReason}
+          autoFocus={askingForReason || initialDraftCaret !== undefined}
+          {...(initialDraftCaret !== undefined ? { caretAt: initialDraftCaret } : {})}
           // ⚠️ NO LONGER `busy` (MOTIR-4274). The composer stays LIVE while a run
           // works — that is the whole point of the mailbox, and it is a BEHAVIOUR
           // change rather than a styling one: `busy` put a real `disabled`
@@ -925,6 +989,31 @@ function originatingUserTurn(
   return turns.find((t) => t.role === 'user' && t.jobId === assistant.jobId) ?? null;
 }
 
+/** A stable empty key list, so a turn with no targets re-renders nothing. */
+const EMPTY_KEYS: readonly string[] = [];
+
+/**
+ * What a DEBUG turn landed, for the assistant turn that carries its diagnosis
+ * (MOTIR-7050) — or null for every other turn.
+ *
+ * Joined by the `debug_bug` job id: the landing is keyed by it, and the reply
+ * MOTIR-7049 appends carries it. The anchor is read off the USER turn the reply
+ * came out of (joined by the same job id, `originatingUserTurn`), because the
+ * enriched-anchor copy names that triage bug as the card left as it is.
+ */
+function debugOutcomeFor(
+  turn: PlanChangeTurnDto,
+  turns: readonly PlanChangeTurnDto[],
+  landings: Readonly<Record<string, DebugLandingDto>>,
+  anchors: Readonly<Record<string, string>>,
+): DebugOutcome | null {
+  if (turn.role !== 'assistant' || !turn.jobId) return null;
+  const landing = landings[turn.jobId];
+  if (!landing) return null;
+  const origin = originatingUserTurn(turns, turn);
+  return { landing, anchorKey: origin ? (anchors[origin.id] ?? null) : null };
+}
+
 /** The LAST assistant turn on the thread, or null. Only that one carries the
  *  correction marker — a superseded answer keeps its bubble but loses its
  *  affordance, so a thread never offers two ways to re-run one user turn. */
@@ -945,6 +1034,9 @@ interface TurnProps {
   /** Resolved `motir:` reference summaries for the whole thread — an assistant
    *  turn's findings report renders its references as the shipped chip. */
   workItemRefs: WorkItemRefMap;
+  /** The DEBUG turn's landing, on the assistant turn carrying its diagnosis
+   *  (MOTIR-7050) — its OUTCOME LINE. Null on every other turn. */
+  debugOutcome: DebugOutcome | null;
   /** How the question preceding this turn was disposed of, when this turn is what
    *  disposed of it (design states C and E). Null on every other turn. */
   disposition: QuestionDisposition | null;
@@ -1008,7 +1100,13 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
   // as the planner. A QUESTION is that same bubble with two token values swapped
   // and the existing label slot filled: the distinction never rests on wording,
   // and never on colour alone (a word, a glyph, and the composer's own change).
-  assistant: function AssistantTurn({ turn, workItemRefs, isPending, correction }: TurnProps) {
+  assistant: function AssistantTurn({
+    turn,
+    workItemRefs,
+    isPending,
+    correction,
+    debugOutcome,
+  }: TurnProps) {
     const tc = useTranslations('planningWorkspace.conversation');
     const asking = turn.question !== null;
     return (
@@ -1050,7 +1148,13 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
               An answer may rest on items its prose never names, and `citations`
               is the grounding contract; saying how many keeps that checkable
               without re-rendering what the body already showed. */}
-          {turn.citations.length > 0 ? (
+          {/* A DEBUG result's foot is its OUTCOME LINE instead (MOTIR-7050): the
+              one card the turn wrote, built from the settle's result rather than
+              the model's words — so it names the card even when the prose does
+              not. Its citation IS that card, so a count beside it says nothing. */}
+          {debugOutcome ? (
+            <DebugOutcomeLine outcome={debugOutcome} workItemRefs={workItemRefs} />
+          ) : turn.citations.length > 0 ? (
             <p
               className="mt-1.5 border-t border-(--el-border-soft) pt-1.5 text-xs text-(--el-text-secondary)"
               data-testid="plan-change-citation-count"
@@ -1155,6 +1259,9 @@ const ACT_GLYPH: Record<PlanChangeProgress['kind'], typeof Send> = {
   submitted: Send,
   reading: ScanSearch,
   redirected: CornerDownRight,
+  redirectedDebug: CornerDownRight,
+  matching: SearchCheck,
+  writing: FilePenLine,
   retrieval: BookOpenText,
   searching: Search,
   drilling: ListTree,
@@ -1209,9 +1316,108 @@ function actLine(act: PlanChangeProgress, tc: ReturnType<typeof useTranslations>
       return tc('act.unknownLine', { frame: act.frame });
     case 'proposed':
       return tc('progress.proposed', { count: act.count });
+    // The debug turn's two acts (MOTIR-7050; `debug-turn.mock.html` panel 1).
+    case 'matching':
+      return tc('act.matchingLine');
+    case 'writing':
+      return tc('act.writingLine', { key: act.key });
     default:
       return tc(`progress.${act.kind}`, { count: 0 });
   }
+}
+
+/** A debug turn's landing, as its outcome line reads it. */
+interface DebugOutcome {
+  landing: DebugLandingDto;
+  /** The triage bug the turn was anchored on (the widget path), or null (the orb). */
+  anchorKey: string | null;
+}
+
+/**
+ * THE OUTCOME LINE (MOTIR-7050; `design/ai-chat/debug-turn.mock.html` panels 2–4,
+ * `design-notes.md` § "⭐ Debug with Motir AI" §4) — the one new element a debug
+ * turn adds to the rail. It sits in the `answeredFrom` foot slot (hairline
+ * `--el-border-soft`, 12px `--el-text`) with a leading glyph in
+ * `--el-text-secondary`: `FilePenLine` for a write, `SearchCheck` for none.
+ *
+ * One sentence per A1.4 row, chosen from the landing — never from the prose:
+ *
+ *  · `diagnose` onto the anchored bug → `wroteAnchor` ("It stays in Triage");
+ *  · `diagnose` with no anchor (the orb) → `filed`, the bug it filed;
+ *  · `enrich_existing` → `enrichedAnchor` / `enriched`, the card that already
+ *    covers it — and, on the widget path, the anchor named as left as it is, in
+ *    plain text, because the turn did not touch it;
+ *  · `ungrounded` → nothing was written, and no card is named.
+ *
+ * The card is the shipped `WorkItemRefChip` (its click opens the shipped peek).
+ * Its summary is the thread's own resolved reference when there is one — the
+ * reply cites the card, so the session read resolved it — and otherwise the
+ * landing's own key and title, so a card the thread could not resolve still
+ * reads as the card it is rather than as a deleted one.
+ */
+function DebugOutcomeLine({
+  outcome,
+  workItemRefs,
+}: {
+  outcome: DebugOutcome;
+  workItemRefs: WorkItemRefMap;
+}) {
+  const tc = useTranslations('planningWorkspace.conversation');
+  const { landing, anchorKey } = outcome;
+  const key = landing.workItemKey;
+  const wrote = landing.outcome !== 'ungrounded' && key !== null;
+  const Glyph = wrote ? FilePenLine : SearchCheck;
+
+  let body: React.ReactNode;
+  if (!wrote) {
+    body = tc('debug.ungrounded');
+  } else {
+    const summary = outcomeChipSummary(key, landing.title, workItemRefs);
+    const chip = () => <WorkItemRefChip summary={summary} fallbackLabel={key} />;
+    const messageKey =
+      landing.outcome === 'enrich_existing'
+        ? anchorKey && anchorKey.toUpperCase() !== key.toUpperCase()
+          ? 'debug.enrichedAnchor'
+          : 'debug.enriched'
+        : landing.createdInTriage || !anchorKey
+          ? 'debug.filed'
+          : 'debug.wroteAnchor';
+    body = tc.rich(messageKey, { key, anchorKey: anchorKey ?? '', chip });
+  }
+
+  return (
+    <p
+      className="mt-1.5 flex items-start gap-1.5 border-t border-(--el-border-soft) pt-1.5 text-xs text-(--el-text)"
+      data-testid="plan-change-debug-outcome"
+      data-outcome={landing.outcome}
+    >
+      <Glyph className="mt-px size-3.5 flex-none text-(--el-text-secondary)" aria-hidden="true" />
+      <span className="min-w-0">{body}</span>
+    </p>
+  );
+}
+
+/** The chip's summary for the one card a debug turn wrote. */
+function outcomeChipSummary(
+  key: string,
+  title: string | null,
+  workItemRefs: WorkItemRefMap,
+): WorkItemRefSummaryDto | undefined {
+  const resolved = workItemRefs[key] ?? workItemRefs[key.toUpperCase()];
+  if (resolved) return resolved;
+  if (title === null) return undefined;
+  // A debug turn writes to a BUG — a triage bug, a bug it filed, or the card
+  // that already covers the report. Only the key and title crossed the settle,
+  // so no status dot is drawn rather than a guessed one.
+  return {
+    accessible: true,
+    id: key,
+    identifier: key,
+    title,
+    kind: 'bug',
+    archived: false,
+    status: null,
+  };
 }
 
 function Bubble({
