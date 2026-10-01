@@ -116,7 +116,7 @@ function readNestedDarkScopes(file: string): Reading[] {
     const { document } = window;
     // Flattened first: happy-dom drops `@layer` blocks and nested rules, which is
     // what a `renderMock` asset is made of (MOTIR-7179).
-    document.write(flattenMockCss(readFileSync(join(ROOT, file), 'utf8')));
+    document.write(flattenMockCss(readFileSync(join(ROOT, file), 'utf8'), { paintOnly: true }));
 
     // ⚠️ READ ONLY, never a gate. Unflattened, happy-dom returned '' here for an
     // asset whose token block is a `@layer theme { :root, :host { … } }` from

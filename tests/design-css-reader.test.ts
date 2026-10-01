@@ -143,6 +143,24 @@ describe('flattenCss — what the reader preserves', () => {
     expect(flat).toContain('@property --x');
   });
 
+  it('with `paintOnly`, keeps ink, ground and tokens and drops layout — and the rule it empties', () => {
+    // Both guards read paint only, and pruning layout is what keeps the state
+    // arm inside the lane's time budget (see `prunePaint`).
+    const flat = flattenCss(
+      ':root { --el-x: red; gap: 1rem } .a { color: var(--el-x); display: flex } ' +
+        '.b { background-color: blue; padding: 2px } .c { margin: 0; flex: 1 } ' +
+        '.d { &:hover { background: green; opacity: 0.5 } }',
+      { paintOnly: true },
+    );
+    for (const kept of ['--el-x: red', 'color: var(--el-x)', 'background-color: blue']) {
+      expect(flat).toContain(kept);
+    }
+    expect(flat).toContain('.d:hover { background: green; }');
+    for (const dropped of ['gap', 'display', 'padding', 'margin', 'flex', 'opacity', '.c']) {
+      expect(flat).not.toContain(dropped);
+    }
+  });
+
   it('returns input it cannot parse UNCHANGED', () => {
     for (const broken of ['.a { color: red', '.a { content: "x }', '/* open .a { color: red }']) {
       expect(flattenCss(broken)).toBe(broken);

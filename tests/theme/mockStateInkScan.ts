@@ -831,7 +831,7 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
     const { document } = window;
     // Stamp first, flatten second: the stamps are line numbers in the asset AS
     // WRITTEN, and flattening rewrites `<style>` text, which would move them.
-    document.write(flattenMockCss(stampSourceLines(html)));
+    document.write(flattenMockCss(stampSourceLines(html), { paintOnly: true }));
 
     const rules = styleRules(document);
     if (rules.length === 0) {
@@ -842,6 +842,15 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
       });
     }
 
+    // TWO PASSES (MOTIR-7179). `resolveAt` plants a probe, and a mutation drops
+    // happy-dom's computed-style cache — so resolving a host's tint and then
+    // walking its subtree, host after host, walked every subtree against a cold
+    // cache. Pass 1 makes every probe mutation; pass 2 reads against a warm
+    // cache, and only a FAILING pair's `inkSource` mutates again. Measured over
+    // all 270 mocks it saved ~8%: the larger cost is selector parsing, which
+    // `flattenMockCss`'s `paintOnly` addresses (see `prunePaint`).
+    const plans: { rule: PaintRule; states: string[]; hosts: El[]; tints: (string | null)[] }[] =
+      [];
     for (const rule of rules) {
       if (!rule.background.trim()) continue;
       if (ATTRIBUTE_SELECTOR_RE.test(rule.selectorText)) attributeBackgroundRules += 1;
@@ -871,8 +880,17 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
         continue;
       }
 
-      for (const host of hosts) {
-        const declared = resolveAt(window, host, rule.background);
+      plans.push({
+        rule,
+        states,
+        hosts,
+        tints: hosts.map((host) => resolveAt(window, host, rule.background)),
+      });
+    }
+
+    for (const { rule, states, hosts, tints } of plans) {
+      for (const [index, host] of hosts.entries()) {
+        const declared = tints[index]!;
         if (declared === null) {
           abstentions.push({
             file,
@@ -911,13 +929,22 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
 
           const ink = toHex(window.getComputedStyle(element).getPropertyValue('color'));
           if (ink === null) continue;
+          // The RATIO before the SOURCE, and the order is the lane's budget, not
+          // style (MOTIR-7179). A finding needs both, so neither order changes a
+          // verdict — but the ratio is arithmetic and `inkSource` is not: it
+          // tries every rule against every ancestor and plants a probe per match,
+          // and each probe invalidates the engine's style cache. Once the reader
+          // let this arm see compiled Tailwind's full rule set, attributing the
+          // ink of every passing pair first took the scan past the CI job's
+          // ten-minute ceiling. Almost every pair passes; only a failing one
+          // needs to know which token painted it.
+          const ratio = contrast(ink, surface);
+          if (ratio >= AA_SMALL_TEXT) continue;
+          if (seen.has(element)) continue;
           const source = inkSource(window, rules, element, ink);
           // The TOKEN is read off the declaration, never off the pixel — see
           // `inkSource`'s header for the false positives the other way round.
           if (!source.values.some((value) => value.includes(MUTED_TOKEN))) continue;
-          const ratio = contrast(ink, surface);
-          if (ratio >= AA_SMALL_TEXT) continue;
-          if (seen.has(element)) continue;
           seen.add(element);
 
           const resting = restingBackground(window, element).ground;

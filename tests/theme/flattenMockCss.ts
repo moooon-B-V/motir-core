@@ -299,11 +299,51 @@ class Layers {
   }
 }
 
+/** The properties a PAINT reader reads: ink, ground, and the tokens both resolve through. */
+const PAINT_PROPERTY = /^(?:--[\w-]+|color|background|background-color)$/i;
+
+/**
+ * Drop every declaration that cannot change what a paint reader computes, and
+ * so every rule left with none.
+ *
+ * ⚠️ THIS IS THE LANE'S BUDGET, MEASURED (MOTIR-7179). happy-dom re-parses each
+ * rule's selector text on every `matches()` inside `getComputedStyle`, caching
+ * nothing — profiled on `design/shell/context-row.mock.html`, 65% of the state
+ * arm's time was `SelectorParser.getSelectorGroups`. A compiled Tailwind sheet
+ * is mostly LAYOUT utilities (`flex`, `gap-2`, `px-3`, …), which no colour the
+ * guards read depends on, and flattening is what put them all in front of the
+ * engine. Inheritance of `color` and `var()` resolution need only the three
+ * properties and the custom properties kept here.
+ *
+ * A LOSSY reading, deliberately: a guard that reads LAYOUT through this reader
+ * must not pass `paintOnly`.
+ */
+function prunePaint(nodes: Node[]): Node[] {
+  const out: Node[] = [];
+  for (const node of nodes) {
+    if (node.kind === 'decl') {
+      const property = node.text.slice(0, node.text.indexOf(':')).trim();
+      if (PAINT_PROPERTY.test(property)) out.push(node);
+    } else if (node.kind === 'block' && node.children) {
+      out.push({ ...node, children: prunePaint(node.children) });
+    } else {
+      out.push(node);
+    }
+  }
+  return out;
+}
+
+export interface FlattenOptions {
+  /** Keep only paint declarations — see `prunePaint`. For readers of colour only. */
+  paintOnly?: boolean;
+}
+
 /** Flatten one stylesheet's text. Unparseable input comes back unchanged. */
-export function flattenCss(css: string): string {
+export function flattenCss(css: string, options: FlattenOptions = {}): string {
   try {
     const layers = new Layers();
-    const unlayered = emit(parse(css), null, layers);
+    const tree = parse(css);
+    const unlayered = emit(options.paintOnly ? prunePaint(tree) : tree, null, layers);
     return layers.css() + unlayered;
   } catch (error) {
     if (error instanceof Unparseable) return css;
@@ -317,10 +357,10 @@ export function flattenCss(css: string): string {
  * comment that merely mentions "the <style> below" would otherwise open a match
  * inside the comment and swallow its `-->` (`design/brand/brand-mark.mock.html`).
  */
-export function flattenMockCss(html: string): string {
+export function flattenMockCss(html: string, options: FlattenOptions = {}): string {
   return html.replace(
     /<!--[\s\S]*?-->|(<style\b[^>]*>)([\s\S]*?)(<\/style\s*>)/gi,
     (match: string, open?: string, css?: string, close?: string) =>
-      open === undefined ? match : `${open}${flattenCss(css!)}${close}`,
+      open === undefined ? match : `${open}${flattenCss(css!, options)}${close}`,
   );
 }
