@@ -1,6 +1,8 @@
 import {
   checkIndexAllowance,
   drawIndexAllowance,
+  fetchCodeGraphRunVerdict,
+  GRAPH_TOO_LARGE_FAILURE,
   mintCodeGraphRunCredential,
   motirAiContainerBaseUrl,
 } from '@/lib/ai/motirAiClient';
@@ -493,6 +495,12 @@ export interface IndexSupervisionOptions {
    *  (MOTIR-6586). Bounded by {@link MAX_DISPATCH_ATTEMPTS} the same way — a
    *  test may lower it (to 1, to watch a single container), never raise it. */
   maxDispatchAttempts?: number;
+  /**
+   * The run-verdict read an `upload_failed` attempt consults to learn whether
+   * motir-ai refused the graph for SIZE (MOTIR-7130). Defaults to
+   * {@link fetchCodeGraphRunVerdict}; injectable so a test needs no HTTP.
+   */
+  readRunVerdict?: typeof fetchCodeGraphRunVerdict;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
   /**
@@ -821,7 +829,33 @@ export type IndexDispatchOutcome =
 export type IndexAdvanceOutcome = IndexDispatchOutcome & {
   /** Absent on a first-attempt outcome; `2..MAX_DISPATCH_ATTEMPTS` otherwise. */
   readonly attempts?: number;
+  /**
+   * MOTIR-7130 — set only on a SETTLED `upload_failed` attempt whose run motir-ai
+   * recorded as refused for size (`GRAPH_TOO_LARGE`): the graph's uncompressed
+   * size and the supported maximum, in bytes. Attached after the steps return,
+   * like `attempts`, so no memoized shape widens.
+   */
+  readonly refusedForSize?: IndexSizeRefusal;
 };
+
+/** A graph motir-ai refused at the upload grant for being over the supported maximum. */
+export interface IndexSizeRefusal {
+  readonly sizeBytes: number;
+  readonly capBytes: number;
+}
+
+/** Bytes in binary units with at most one decimal — `1.4 GiB`, `1 GiB`. */
+function formatBinaryBytes(bytes: number): string {
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'] as const;
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const rounded = Math.floor(value * 10) / 10;
+  return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)} ${units[unit]}`;
+}
 
 /** One container's core-side spans: the `phasesMs` map, plus the sum of what is in it. */
 export interface IndexCoreSpans {
@@ -1727,6 +1761,18 @@ export const codeGraphIndexDispatchService = {
    * Every other outcome — an index, a non-re-dispatchable class, a deferred
    * admission, a refused provision, a failed teardown — is returned as it
    * stands, from whichever attempt produced it.
+   *
+   * ⚠️ AND A SIZE REFUSAL DOES NOT GO ROUND AGAIN (MOTIR-7130). `upload_failed`
+   * is re-dispatchable, and it is also what a grant refusal exits with — so a
+   * graph over the supported maximum used to boot {@link MAX_DISPATCH_ATTEMPTS}
+   * containers, each cloning, building more than a gibibyte and being refused
+   * again. On an `upload_failed` settle the attempt now reads the run's verdict;
+   * a `GRAPH_TOO_LARGE` failure ends the dispatch with `refusedForSize`. Every
+   * other answer — another class, `null` from an older or unreachable motir-ai,
+   * a read that threw — is a plain `upload_failed` and goes round as before.
+   * The read is MEMOIZED per attempt (`index-size-refusal:<subject>`), so a
+   * later pass replays the decision the first one made and can never discover a
+   * refusal after a second container has already booted.
    */
   async advanceIndexContainer(
     /** The `job_queue` row this supervision hangs off — `ctx.runId` for a job. */
@@ -1739,12 +1785,21 @@ export const codeGraphIndexDispatchService = {
       Math.min(options.maxDispatchAttempts ?? MAX_DISPATCH_ATTEMPTS, MAX_DISPATCH_ATTEMPTS),
     );
     for (let attempt = 1; ; attempt += 1) {
-      const outcome = await this.advanceIndexAttempt(
-        runId,
-        input,
-        indexAttemptSubject(input.projectId, attempt),
-        options,
-      );
+      const subject = indexAttemptSubject(input.projectId, attempt);
+      const outcome = await this.advanceIndexAttempt(runId, input, subject, options);
+      const refusedForSize = await this.readSizeRefusal(input, subject, outcome, options);
+      if (refusedForSize && outcome.outcome === 'settled') {
+        return {
+          ...outcome,
+          ...(attempt === 1 ? {} : { attempts: attempt }),
+          refusedForSize,
+          failureDetail:
+            `motir-ai refused the graph at the upload grant: it is ` +
+            `${formatBinaryBytes(refusedForSize.sizeBytes)} uncompressed (${refusedForSize.sizeBytes} bytes), ` +
+            `over the supported maximum of ${formatBinaryBytes(refusedForSize.capBytes)} ` +
+            `(${refusedForSize.capBytes} bytes)`,
+        };
+      }
       const again =
         outcome.outcome === 'settled' &&
         !outcome.verdict.indexed &&
@@ -1752,6 +1807,55 @@ export const codeGraphIndexDispatchService = {
         attempt < maxAttempts;
       if (!again) return attempt === 1 ? outcome : { ...outcome, attempts: attempt };
     }
+  },
+
+  /**
+   * Was this settled attempt refused for SIZE (MOTIR-7130)? Asked only of an
+   * un-indexed `upload_failed` settle — the one exit class a grant refusal
+   * produces — so every other path costs no HTTP call and no step.
+   *
+   * ⚠️ NEVER THROWS, and a read that fails answers "no": the attempt is then a
+   * plain `upload_failed`, exactly as before this card. ⚠️ MEMOIZED under
+   * `index-size-refusal:<subject>` — the answer decides whether another BILLED
+   * container boots, so it must not change between passes of one run.
+   */
+  async readSizeRefusal(
+    input: IndexDispatchInput,
+    subject: string,
+    outcome: IndexDispatchOutcome,
+    options: IndexSupervisionOptions,
+  ): Promise<IndexSizeRefusal | null> {
+    if (
+      outcome.outcome !== 'settled' ||
+      outcome.verdict.indexed ||
+      outcome.verdict.exitClass !== 'upload_failed'
+    ) {
+      return null;
+    }
+    const steps = options.steps ?? INLINE_STEPS;
+    const read = options.readRunVerdict ?? fetchCodeGraphRunVerdict;
+    const memo = await steps.run(`index-size-refusal:${subject}`, async () => {
+      try {
+        const verdict = await read({
+          coreWorkspaceId: input.workspaceId,
+          coreProjectId: input.projectId,
+          repoRef: input.repoRef,
+          runId: input.runId,
+        });
+        const failure = verdict?.failure;
+        if (
+          failure?.failureClass === GRAPH_TOO_LARGE_FAILURE &&
+          failure.sizeBytes !== null &&
+          failure.capBytes !== null
+        ) {
+          return { refusedForSize: { sizeBytes: failure.sizeBytes, capBytes: failure.capBytes } };
+        }
+      } catch (err) {
+        console.error('[index-fleet] could not read the run verdict after upload_failed', err);
+      }
+      return { refusedForSize: null };
+    });
+    return memo.refusedForSize;
   },
 
   /**

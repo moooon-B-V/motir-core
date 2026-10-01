@@ -72,7 +72,7 @@ export interface RetiredStepId {
 /**
  * Every live memoized step, by id.
  *
- * 61 entries over 69 call sites: an id used at several sites in one handler is
+ * 62 entries over 70 call sites: an id used at several sites in one handler is
  * pinned once, and the guard requires those sites to agree.
  *
  * ⚠️ MOTIR-6448 KEPT SEVEN IDS ON PURPOSE. `ContainerUsage` / `ContainerAccrual`
@@ -120,6 +120,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/services/codeGraphIndexDispatchService.ts',
     shape:
       '{ billableSeconds: number; containerId: string; coreTimings?: undefined | { phasesMs: { admissionWait?: number | undefined; boot?: number | undefined; pollToDetect?: number | undefined }; totalMs?: number | undefined }; costUsd: string; failureDetail: null | string; indexMode?: "rebuild" | "sync" | undefined; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string }; verdict: { detail: string; exitClass: "credential_refused" | "dispatch_malformed" | "exit_unobserved" | "graph_unbuildable" | "indexed" | "never_started" | "out_of_memory" | "pointer_unrecorded" | "repo_unfetchable" | "supervision_timed_out" | "unclassified" | "upload_failed"; exitCode: null | number; indexed: boolean; redispatchable: boolean } } | { detail: string; outcome: "admission_deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "org_index_cap" | "org_pool" | "plan_unknown" | "repo_index_in_flight" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "provision_failed" } | { detail: string; outcome: "teardown_failed" }',
+  },
+  // MOTIR-7130 — whether an `upload_failed` attempt was refused for SIZE. A pure
+  // read (motir-ai's run verdict), memoized because the answer decides whether a
+  // second billed container boots, so a later pass must replay it, not re-ask.
+  '`index-size-refusal:${subject}`': {
+    file: 'lib/services/codeGraphIndexDispatchService.ts',
+    shape: '{ refusedForSize: null } | { refusedForSize: { capBytes: number; sizeBytes: number } }',
   },
   '`settle-${pass}`': {
     file: 'lib/jobs/definitions/pullRequestBaseMoved.ts',

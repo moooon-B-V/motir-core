@@ -159,6 +159,10 @@ describe('a re-dispatchable exit boots a FRESH container within the same run', (
         `index-admit:${fx.projectId}`,
         `index-boot:${fx.projectId}`,
         `index-settle:${fx.projectId}`,
+        // MOTIR-7130: an `upload_failed` settle asks once, memoized, whether motir-ai
+        // refused the graph for SIZE before it goes round again. This world records
+        // no verdict, so the answer is "no" and the re-dispatch proceeds.
+        ...(code === 40 ? [`index-size-refusal:${fx.projectId}`] : []),
         `index-admit:${fx.projectId}:r2`,
         `index-boot:${fx.projectId}:r2`,
         `index-settle:${fx.projectId}:r2`,
