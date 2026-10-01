@@ -77,8 +77,8 @@ describe('memberPathForVisitorPath — the `enter` redirect (card mapping)', () 
     ['/p/ACME/items', '/items?view=list'],
     ['/p/ACME/tree', '/items?view=tree'],
     ['/p/ACME/roadmap', '/roadmap'],
-    // MOTIR-6769 — a member lands in their own inbox, renamed by MOTIR-6772.
-    ['/p/ACME/requested-features', '/requested-features'],
+    // MOTIR-6769 — a member lands in their own inbox, Triage again since MOTIR-7043.
+    ['/p/ACME/requested-features', '/triage'],
     ['/p/ACME/items/ACME-7', '/items/ACME-7'],
     ['/p/ACME/plans', '/plans'],
     ['/p/ACME/plans/cplan123', '/plans/cplan123'],
@@ -112,7 +112,7 @@ describe('visitorPathForMemberPath — a shared body’s member href, followed f
     ['/items/ACME-7', '?activity=comments', '/p/ACME/items/ACME-7?activity=comments'],
     ['/boards', '?board=b1', '/p/ACME/board?board=b1'],
     ['/roadmap', '?item=ACME-3', '/p/ACME/roadmap?item=ACME-3'],
-    ['/requested-features', '', '/p/ACME/requested-features'],
+    ['/triage', '', '/p/ACME/requested-features'],
     ['/plans', '?planState=approved', '/p/ACME/plans?planState=approved'],
     ['/plans/cplan1', '', '/p/ACME/plans/cplan1'],
     ['/approvals', '?page=2', '/p/ACME/approvals?page=2'],

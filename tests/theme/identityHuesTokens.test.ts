@@ -115,7 +115,7 @@ describe('the --el-type-* misuse is decoupled in every consumer', () => {
   // longer exists.
 
   it('TriageAvatar hashes onto the shared --el-avatar-* ramp, never --el-tint-*', () => {
-    const src = read('app/(authed)/requested-features/_components/TriageAvatar.tsx');
+    const src = read('app/(authed)/triage/_components/TriageAvatar.tsx');
     expect(src).toContain('bg-(--el-avatar-mint)');
     expect(src).not.toMatch(/bg-\(--el-tint-/);
   });

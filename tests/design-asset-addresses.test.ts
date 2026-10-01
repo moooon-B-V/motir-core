@@ -108,7 +108,7 @@ const APP_ROUTES = appRoutePatterns();
 // declares it, and a map this list forgets makes the guard report a live
 // address as resolving to nothing. (MOTIR-2534 added the second map.)
 // (MOTIR-4782 added the third, `/home` → `/workbench`; MOTIR-6772 the fourth,
-// `/triage` → `/requested-features`.)
+// which MOTIR-7043 reversed to `/requested-features` → `/triage`.)
 const REDIRECT_SOURCES = [
   ...DOCS_REDIRECTS,
   ...SETTINGS_REDIRECTS,
@@ -317,28 +317,9 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/home',
     why: "The mock's header carries the same rename record as the notes, for a reader who opens the asset rather than the spec. Permanent.",
   },
-  // ── `/triage` → `/requested-features` (MOTIR-6772) ─────────────────────────
-  // The members' inbox was renamed and moved; `REQUESTED_FEATURES_REDIRECTS`
-  // keeps the old address landing. These three assets drew the sidebar and the
-  // shell BEFORE the rename, and the card that renamed it adds no design asset
-  // (a label, heading and address change adds no element), so each is a record
-  // of its moment rather than a spec to rewrite. The 308 keeps every one of
-  // them resolving to the right room.
-  {
-    file: 'design/approvals/approvals-room.mock.html',
-    address: '/triage',
-    why: 'The sidebar as drawn before the inbox became Requested features (MOTIR-6772). The rename added no design asset; the 308 lands the old address on `/requested-features`. Permanent record.',
-  },
-  {
-    file: 'design/shell/top-bar.mock.html',
-    address: '/triage',
-    why: 'The shell drawer as drawn before the inbox became Requested features (MOTIR-6772). The rename added no design asset; the 308 lands the old address on `/requested-features`. Permanent record.',
-  },
-  {
-    file: 'design/shell/design-notes.md',
-    address: '/triage',
-    why: 'The ReportButton placement argument names the inbox by the address it had when the shell was drawn (MOTIR-6772 renamed it). The argument is unchanged; the 308 lands the old address on `/requested-features`. Permanent record.',
-  },
+  // (MOTIR-6772 moved the members' inbox to `/requested-features` and carried
+  // three KNOWN rows for the assets that drew `/triage`; MOTIR-7043 moved it back,
+  // so those assets name a served address again and the rows are gone.)
   // ── A route on a DIFFERENT host, kept in the unified chrome's nav ─────────
   // `design/public-site/` (MOTIR-3880) draws the ONE chrome every motir.co
   // surface wears, and the shipped `Design` showcase nav item resolves on

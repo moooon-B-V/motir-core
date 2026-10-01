@@ -447,7 +447,9 @@ export const config = {
     '/runs/:path*',
     '/settings/:path*',
     '/sprints/:path*',
-    '/requested-features/:path*',
+    // The members' inbox (MOTIR-7043). `/requested-features` has no entry: it is
+    // a `next.config` redirect onto this address, answered before the proxy.
+    '/triage/:path*',
     '/workbench/:path*',
   ],
 };

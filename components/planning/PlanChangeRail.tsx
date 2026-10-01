@@ -1411,7 +1411,8 @@ function DebugOutcomeLine({
       data-outcome={landing.outcome}
     >
       <Glyph className="mt-px size-3.5 flex-none text-(--el-text-secondary)" aria-hidden="true" />
-      <span className="min-w-0">{body}</span>
+      {/* `wi-chip-host` — the chip's own rules reach it outside MarkdownView (MOTIR-7068). */}
+      <span className="wi-chip-host min-w-0">{body}</span>
     </p>
   );
 }

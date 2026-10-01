@@ -6,7 +6,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { AlertCircle, Bug, ChevronUp, Inbox, Lightbulb, Loader2, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { TriageAvatar } from '@/app/(authed)/requested-features/_components/TriageAvatar';
+import { TriageAvatar } from '@/app/(authed)/triage/_components/TriageAvatar';
 import { visitorViewPath } from '@/lib/visitor/routes';
 import { cn } from '@/lib/utils/cn';
 import type {
