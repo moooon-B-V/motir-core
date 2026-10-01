@@ -70,6 +70,11 @@ const OPTIONS_INTERFACE: Record<string, string | null> = {
   done: 'DoneOptions',
   'agent-terminal': null,
   'agent-terminal serve': 'AgentTerminalServeOptions',
+  'agent-terminal run': 'AgentTerminalRunIdOptions',
+  'agent-terminal stop': 'AgentTerminalRunIdOptions',
+  'agent-terminal status': 'AgentTerminalRunIdOptions',
+  // `--json` is accepted for scripts and ignored: JSON is the only output.
+  'agent-terminal signin': null,
 };
 
 /** The help surface registers pseudo-commands that carry no options. */

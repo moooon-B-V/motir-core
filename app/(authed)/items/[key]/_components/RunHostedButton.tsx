@@ -1,48 +1,64 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { HostedRunCancel } from '@/app/(authed)/runs/_components/HostedRunCancel';
 import { isLiveRun } from '@/lib/runs/timeline';
 import { HostedModelPicker } from './HostedModelPicker';
 import { useHostedRun } from './HostedRunProvider';
 
-// THE RUN HOSTED DOOR — the Run section header's one control (Story MOTIR-683 ·
-// MOTIR-691; `design/runs/design-notes.md` § The ACCESS PATH).
+// THE RUN SECTION'S HEADER DOOR (Story MOTIR-683 · MOTIR-691; revised by
+// MOTIR-7022 revision 2 · MOTIR-7028, `design/runs/design-notes.md` § Revision 2).
 //
-// The header holds exactly one thing at a time:
+// Revision 2 moved the ways to START out of the header and into the start bar at
+// the top of the section's body (`StartBar`), so the header holds at most one
+// control, and only while a run is live on the work item:
 //
-//   · ready, never run or last run ended → the picker + Run hosted
-//     (Run hosted again once a hosted run has ended);
-//   · not ready → the same door, DISABLED (its reason is a line in the body —
-//     a door that disappears reads as a feature that does not exist);
-//   · a HOSTED run is live → Cancel run;
-//   · a LOCAL run is live → nothing: it runs on somebody's machine.
-//
-// It is offered on a leaf AND a parent card: a parent's hosted run works its
-// children through the CLI in the container, exactly as a local scope run does.
+//   · a run Motir works (`hosted`) is live → Cancel run;
+//   · a run in an agent (`instance`) is live → Cancel run for the agent's OWNER
+//     only (`agent-instance-run.md` §6: only the owner reaches an agent);
+//   · a LOCAL run is live, or nothing is → nothing.
 
 export function RunHostedButton() {
+  const t = useTranslations('runs.agent.cancel');
+  const door = useHostedRun();
+  if (!door) return null;
+  const run = door.currentRun;
+  if (!run || !isLiveRun(run.status)) return null;
+  if (run.origin === 'hosted') {
+    return <HostedRunCancel runId={run.id} onCancelled={door.notifyRunsChanged} />;
+  }
+  if (run.origin === 'instance' && door.viewerId !== null && run.createdById === door.viewerId) {
+    return (
+      <HostedRunCancel
+        runId={run.id}
+        onCancelled={door.notifyRunsChanged}
+        body={t('body', { name: run.agentName ?? '' })}
+      />
+    );
+  }
+  return null;
+}
+
+/**
+ * RUN — the start bar's first option's control: the model picker and **Run**
+ * (**Run again** once a run in Motir's cloud has ended). Disabled, never hidden,
+ * on a card that is not ready — its reason is one line under the bar.
+ */
+export function RunDoorControl() {
   const t = useTranslations('runs.hosted.door');
   const door = useHostedRun();
   if (!door) return null;
-
   const run = door.currentRun;
-  if (run && isLiveRun(run.status)) {
-    if (run.origin !== 'hosted') return null;
-    return <HostedRunCancel runId={run.id} onCancelled={door.notifyRunsChanged} />;
-  }
-  // A died card is continued, not re-run (design § Continue hosted, C7): the server
-  // refuses a fresh hosted run on it, so the header offers none.
-  if (door.runDoorHidden) return null;
-
   const modelsReady = door.models.state === 'ok' && door.models.models.length > 0;
-  const disabled = !door.ready || !modelsReady || door.starting || !door.selectedModel;
-  const again = run?.origin === 'hosted';
+  const sending = door.agentDoor?.sendingId != null;
+  const disabled = !door.ready || !modelsReady || door.starting || sending || !door.selectedModel;
+  // "Run again" after a run in Motir's cloud — Motir's own, or one in an agent —
+  // never after a local one.
+  const again = run?.origin === 'hosted' || run?.origin === 'instance';
 
   return (
-    <div className="flex items-center gap-2" data-testid="run-hosted-door">
+    <div className="flex min-w-0 flex-wrap items-center gap-2" data-testid="run-hosted-door">
       <HostedModelPicker
         models={door.models}
         value={door.selectedModel}
@@ -56,7 +72,6 @@ export function RunHostedButton() {
         disabled={disabled}
         loading={door.starting}
         onClick={() => void door.start()}
-        leftIcon={<Cloud className="size-3.5" aria-hidden="true" />}
         data-testid="run-hosted"
         // The anchor the design card's "Automatic re-run skipped" lines link to (MOTIR-702).
         id="run-hosted"

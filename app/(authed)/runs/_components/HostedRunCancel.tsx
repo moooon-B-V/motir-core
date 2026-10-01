@@ -8,7 +8,9 @@ import { Modal } from '@/components/ui/Modal';
 // CANCEL RUN for a live HOSTED run (Story MOTIR-683 · MOTIR-691;
 // `design/runs/design-notes.md` § CANCEL) — in the Run section's header and beside
 // the run modal's pill, never on a local run: that one is on somebody's machine,
-// and Ctrl-C is theirs.
+// and Ctrl-C is theirs. A run in an agent (MOTIR-7028) uses the same control for
+// its owner, with its own words: the cancel route stops the run's session in the
+// agent and the agent keeps running.
 //
 // ⚠️ A CONFIRM, because the act cannot be undone. `Keep running` takes the focus.
 // The copy names what the end path does (MOTIR-6450) — and, under the run-dies
@@ -21,9 +23,13 @@ import { Modal } from '@/components/ui/Modal';
 export function HostedRunCancel({
   runId,
   onCancelled,
+  body,
 }: {
   runId: string;
   onCancelled: () => void;
+  /** The confirm's words, when not a run Motir works — a run in an agent names
+   *  what Cancel does to the AGENT (MOTIR-7028, design panel 10). */
+  body?: string;
 }) {
   const t = useTranslations('runs.hosted.cancel');
   const [open, setOpen] = useState(false);
@@ -69,7 +75,7 @@ export function HostedRunCancel({
           open
           onOpenChange={(o) => (!o && !busy ? setOpen(false) : undefined)}
           title={t('title')}
-          description={t('body')}
+          description={body ?? t('body')}
           size="sm"
           role="alertdialog"
         >

@@ -20,7 +20,14 @@ import { reviewCommand } from './commands/review.js';
 import { autoCommand } from './commands/auto.js';
 import { batchCommand } from './commands/batch.js';
 import { planCommand } from './commands/plan.js';
-import { agentTerminalServeCommand } from './commands/agentTerminal.js';
+import {
+  agentTerminalRunCommand,
+  agentTerminalServeCommand,
+  agentTerminalSignInCommand,
+  agentTerminalStatusCommand,
+  agentTerminalStopCommand,
+  type AgentTerminalRunIdOptions,
+} from './commands/agentTerminal.js';
 import { applyHelpConfiguration, registerHelpSurface } from './help.js';
 
 // The command tree. 7.9.1 ships the scaffold + auth + link; the read commands
@@ -578,6 +585,30 @@ export function buildProgram(): Command {
     // alive; nothing awaits it past listening.
     .action(async (opts) => {
       await agentTerminalServeCommand(opts);
+    });
+  // The run launcher and its probes (MOTIR-7025 · `docs/decisions/agent-instance-run.md`
+  // §1, §4). Motir runs them through a short Fly `exec`; each prints one JSON
+  // line. `motir agent-terminal run --help` exiting 0 is the image-capability
+  // probe, so `run` must stay registered under this exact name.
+  register(agentTerminal, 'agent-terminal run')
+    .option('--run-id <id>', 'The run to open a session for (its credentials are read on stdin).')
+    .action(async (key: string, opts: AgentTerminalRunIdOptions) => {
+      await agentTerminalRunCommand(key, opts);
+    });
+  register(agentTerminal, 'agent-terminal stop')
+    .option('--run-id <id>', 'The run whose session to stop.')
+    .action(async (opts: AgentTerminalRunIdOptions) => {
+      await agentTerminalStopCommand(opts);
+    });
+  register(agentTerminal, 'agent-terminal status')
+    .option('--run-id <id>', 'The run whose session to report.')
+    .action(async (opts: AgentTerminalRunIdOptions) => {
+      await agentTerminalStatusCommand(opts);
+    });
+  register(agentTerminal, 'agent-terminal signin')
+    .option('--json', 'Print JSON (the only format; accepted for scripts that ask for it).')
+    .action(async () => {
+      await agentTerminalSignInCommand();
     });
 
   // After the real commands, so HELP TOPICS renders below them.

@@ -1,11 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
   ArrowLeft,
   CircleAlert,
+  CircleCheck,
   CircleHelp,
+  Eye,
   LoaderCircle,
   Moon,
   Package,
@@ -16,11 +19,14 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Segmented } from '@/components/ui/Segmented';
 import type { AgentInstanceListItemDto } from '@/lib/dto/agentInstances';
 import { AgentPanelHeader, ICON_BUTTON } from './AgentPanelHeader';
+import { itemHref } from './AgentRunLine';
 import { AgentTerminal } from './AgentTerminal';
 import { RefusalBox, type AgentRefusal } from './agentRefusal';
 import { useAgentTerminal, type TerminalConn, type TerminalSink } from './useAgentTerminal';
+import { useRunSessionWatch } from './useRunSessionWatch';
 
 // THE AGENT PANEL (Story MOTIR-6861 · MOTIR-6941) — one of the reader's own agents,
 // opened in the right half of My agents beside the list. Built to the approved
@@ -34,6 +40,19 @@ import { useAgentTerminal, type TerminalConn, type TerminalSink } from './useAge
 //   panel 5  the terminal tab: connecting, live, reconnecting, lost, exited
 //   panel 6  the refusals in words — and never another person's agent
 //   panel 7  the narrow width (the room hides the list; the header's crumb returns)
+//
+// THE AGENT'S LIVE RUN (Story MOTIR-6864 · MOTIR-7029, `my-agents--run.mock.html`):
+//   panel 1  the run line (the header), and the run's session offered beside the
+//            developer's own shell in a `Segmented` at the head of the Terminal
+//            tab — listed by the terminal server on the shell's own socket, and
+//            watched over a SECOND socket through the same ticket route and relay
+//            (one connection answers one session); watch-only, with its sky strip
+//   panel 2  Hibernate / Delete off during the run (the header), and the server's
+//            refusal shown in the panel's refusal box when pressed from elsewhere
+//   panel 3  the end, from either direction: the session exits (the watch shows its
+//            last screen, dimmed, under the ended strip, and the list re-reads) or
+//            the record closes (the next read turns the run line to "Last run")
+//   panel 4  the narrow width: the switch fills the width and drops its hint
 //
 // ⚠️ THE SERVER DECIDES WHO MAY OPEN AN AGENT. The panel is handed the row from
 // the reader's own list (the server's answer), or null when the address names an
@@ -60,12 +79,15 @@ export function AgentPanel({
   projectName,
   agent,
   actions,
+  refusal = null,
 }: {
   projectKey: string;
   projectName: string;
   /** The open agent, from the reader's own list; null when that list does not hold it. */
   agent: AgentInstanceListItemDto | null;
   actions: AgentPanelActions;
+  /** A Hibernate / Delete refused for THIS agent (MOTIR-7029 panel 2), in the page's box. */
+  refusal?: AgentRefusal | null;
 }) {
   const t = useTranslations('myAgents.panel');
   const panel = useRef<HTMLDivElement | null>(null);
@@ -96,6 +118,7 @@ export function AgentPanel({
           projectName={projectName}
           agent={agent}
           actions={actions}
+          refusal={refusal}
         />
       ) : (
         <NotAvailable onClose={actions.onClose} />
@@ -173,11 +196,13 @@ function OpenAgent({
   projectName,
   agent,
   actions,
+  refusal,
 }: {
   projectKey: string;
   projectName: string;
   agent: AgentInstanceListItemDto;
   actions: AgentPanelActions;
+  refusal: AgentRefusal | null;
 }) {
   const t = useTranslations('myAgents');
   const sink = useRef<TerminalSink | null>(null);
@@ -252,6 +277,8 @@ function OpenAgent({
     sink,
   });
 
+  const run = useRunView({ projectKey, agent, term, onRefresh: actions.onRefresh });
+
   if (conn.kind === 'notAvailable') return <NotAvailable onClose={actions.onClose} />;
 
   return (
@@ -264,6 +291,11 @@ function OpenAgent({
         onHibernate={() => actions.onHibernate(agent)}
         onDelete={() => actions.onDelete(agent)}
       />
+      {refusal ? (
+        <div className="border-b border-(--el-border-soft) p-(--spacing-card-padding)">
+          <RefusalBox refusal={refusal} />
+        </div>
+      ) : null}
       <div className="flex items-center justify-between gap-3 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2">
         {/* The shipped tab track, one tab today; the chat story adds Chat beside it. */}
         <nav
@@ -288,10 +320,224 @@ function OpenAgent({
           {area.word}
         </span>
       </div>
-      {area.strip}
-      <div className="flex min-h-0 flex-1 flex-col">{area.body}</div>
+      {run.bar}
+      {run.watching ? run.strip : area.strip}
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* The shell stays mounted while the run is watched, so switching back is instant. */}
+        <div className={run.watching ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>{area.body}</div>
+        {run.body}
+      </div>
     </>
   );
+}
+
+type RunView =
+  | { kind: 'shell' }
+  | { kind: 'run'; session: string; runId: string; workItemKey: string | null };
+
+/**
+ * THE RUN'S SESSION, beside the developer's shell (MOTIR-7029 panels 1, 3, 4).
+ *
+ * The switch shows while the shell's socket lists a run session AND the record
+ * says that run is working in this agent — the panel matches the listing's run id
+ * to the run line's. A listing the record has not caught up with asks the list to
+ * re-read (the run just started); a listing that drops its run, or a watched
+ * session that exits, does too (the run just ended) — the end arrives from both
+ * directions, and either one turns the header without a reload.
+ */
+function useRunView({
+  projectKey,
+  agent,
+  term,
+  onRefresh,
+}: {
+  projectKey: string;
+  agent: AgentInstanceListItemDto;
+  term: ReturnType<typeof useAgentTerminal>;
+  onRefresh: () => void;
+}): { watching: boolean; bar: ReactNode; strip: ReactNode; body: ReactNode } {
+  const t = useTranslations('myAgents');
+  const sink = useRef<TerminalSink | null>(null);
+  const [view, setView] = useState<RunView>({ kind: 'shell' });
+  const listed = term.sessions.find((s) => s.kind === 'run') ?? null;
+  const activeRun = agent.activeRun;
+  const offered = listed && activeRun && listed.runId === activeRun.id ? listed : null;
+  const watch = useRunSessionWatch({
+    projectKey,
+    agentId: agent.id,
+    session: view.kind === 'run' ? view.session : null,
+    sink,
+  });
+
+  // The listing and the record disagree: re-read the record, once per change.
+  const listedRun = listed?.runId ?? null;
+  const seenListed = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = seenListed.current;
+    seenListed.current = listedRun;
+    if (listedRun !== null && listedRun !== activeRun?.id) onRefresh();
+    else if (listedRun === null && previous !== null) onRefresh();
+  }, [listedRun, activeRun?.id, onRefresh]);
+
+  // The watched session exited (or the server no longer knows it) — the run
+  // ended: re-read the record for how it ended.
+  const watchEnded = view.kind === 'run' && watch.conn.kind === 'ended';
+  useEffect(() => {
+    if (watchEnded) onRefresh();
+  }, [watchEnded, onRefresh]);
+
+  // A watch that could not be opened at all hands the reader back their shell.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (watch.conn.kind === 'lost') setView({ kind: 'shell' });
+  }, [watch.conn.kind]);
+
+  const toShell = () => setView({ kind: 'shell' });
+  const watching = view.kind === 'run';
+  const stripIcon = 'size-4 flex-none';
+
+  // Panel 3: once the watched session has ended its segment has left the switch,
+  // and with one session left the switch goes — the ended strip holds the way back.
+  const bar =
+    offered || (watching && !watchEnded) ? (
+      <div className="flex items-center gap-3 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2">
+        <Segmented
+          label={t('panel.run.sessions.label')}
+          value={watching ? 'run' : 'shell'}
+          fill
+          className="@5xl:inline-flex @5xl:w-auto @5xl:[&>button]:flex-none @5xl:[&>button]:px-(--spacing-control-x)"
+          onChange={(next) => {
+            if (next === 'shell') toShell();
+            else if (offered) {
+              setView({
+                kind: 'run',
+                session: offered.session,
+                runId: offered.runId ?? '',
+                workItemKey: activeRun?.workItemKey ?? null,
+              });
+            }
+          }}
+          options={[
+            {
+              value: 'shell',
+              label: t('panel.run.sessions.shell'),
+              icon: <SquareTerminal className="size-3.5" />,
+            },
+            {
+              value: 'run',
+              label: t('panel.run.sessions.run', {
+                key: (watching ? view.workItemKey : activeRun?.workItemKey) ?? '',
+              }),
+              icon: <span className="size-[7px] rounded-full bg-(--el-status-in-progress)" />,
+              trailing: <Eye aria-hidden="true" className="size-3.5" />,
+            },
+          ]}
+        />
+        <span className="ml-auto hidden text-xs text-(--el-text-secondary) @5xl:inline">
+          {t('panel.run.sessions.watchOnly')}
+        </span>
+      </div>
+    ) : null;
+
+  if (view.kind === 'shell') return { watching: false, bar, strip: null, body: null };
+
+  const key = view.workItemKey ?? '';
+  let strip: ReactNode;
+  if (watchEnded) {
+    const last = agent.lastRun?.id === view.runId ? agent.lastRun : null;
+    const text = !last
+      ? t('panel.conn.ended')
+      : last.status === 'succeeded'
+        ? t('panel.run.strip.endedSucceeded')
+        : t('panel.run.strip.endedFailed');
+    strip = (
+      <Strip
+        tone="muted"
+        icon={
+          last?.status === 'succeeded' ? (
+            <CircleCheck className={stripIcon} aria-hidden="true" />
+          ) : (
+            <SquareTerminal className={stripIcon} aria-hidden="true" />
+          )
+        }
+        text={text}
+        action={
+          <Button
+            variant="secondary"
+            size="sm"
+            className="flex-none bg-(--el-card)"
+            leftIcon={<SquareTerminal aria-hidden="true" />}
+            onClick={toShell}
+          >
+            {t('panel.run.backToShell')}
+          </Button>
+        }
+      />
+    );
+  } else if (watch.conn.kind === 'takenOver') {
+    strip = (
+      <Strip
+        tone="muted"
+        icon={<Eye className={stripIcon} aria-hidden="true" />}
+        text={t('panel.strip.takenOver')}
+        action={
+          <Button
+            variant="secondary"
+            size="sm"
+            className="flex-none bg-(--el-card)"
+            leftIcon={<RotateCw aria-hidden="true" />}
+            onClick={watch.retake}
+          >
+            {t('panel.useHere')}
+          </Button>
+        }
+      />
+    );
+  } else {
+    strip = (
+      <Strip
+        tone="sky"
+        icon={<Eye className={stripIcon} aria-hidden="true" />}
+        text={t.rich('panel.run.strip.watching', {
+          key,
+          link: (chunks) =>
+            view.workItemKey ? (
+              <Link href={itemHref(view.workItemKey)} className="text-(--el-link) underline">
+                {chunks}
+              </Link>
+            ) : (
+              chunks
+            ),
+        })}
+      />
+    );
+  }
+
+  const connecting = watch.conn.kind === 'connecting' || watch.conn.kind === 'idle';
+  const body = (
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="agent-run-watch">
+      <AgentTerminal
+        key={view.session}
+        sinkRef={sink}
+        onData={() => {}}
+        onResize={watch.sendResize}
+        inputEnabled={false}
+        watchOnly
+        dimmed={watchEnded || watch.conn.kind === 'takenOver'}
+        label={t('panel.run.sessions.run', { key })}
+        jumpLabel={t('panel.jumpLatest')}
+        sizeLabel={(cols, rows) => t('panel.size', { cols, rows })}
+        overlay={
+          connecting && !watchEnded ? (
+            <Face icon={<LoaderCircle className={FACE_ICON} aria-hidden="true" />}>
+              <span>{t('panel.face.connecting', { name: agent.name })}</span>
+            </Face>
+          ) : undefined
+        }
+      />
+    </div>
+  );
+  return { watching: true, bar, strip, body };
 }
 
 function Face({
@@ -324,7 +570,7 @@ function Strip({
   tone: 'sky' | 'rose' | 'muted';
   alert?: boolean;
   icon: ReactNode;
-  text: string;
+  text: ReactNode;
   action?: ReactNode;
 }) {
   const ground =

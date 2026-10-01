@@ -61,6 +61,7 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
     status: 'succeeded',
     stopReason: 'completed',
     lastHeartbeatAt: null,
+    agentInstance: null,
     agent: 'opencode',
     model: 'claude-sonnet-5',
     startedAt: '2026-09-26T14:00:00.000Z',
@@ -145,8 +146,10 @@ describe('the Run section — a HOSTED run', () => {
     await waitFor(() => expect(screen.getByTestId('hosted-end')).toBeTruthy());
 
     const body = screen.getByTestId('hosted-run');
-    expect(body.textContent).toContain('Lane');
-    expect(body.textContent).toContain('Hosted');
+    // Revision 2 (MOTIR-7028): who works it, never where — no Lane · Hosted.
+    expect(body.textContent).toContain('Worked by');
+    expect(body.textContent).toContain('Motir');
+    expect(body.textContent).not.toContain('Hosted');
     expect(body.textContent).toContain('claude-sonnet-5');
     expect(body.textContent).toContain('Took');
 
@@ -274,7 +277,7 @@ describe('the run modal — a HOSTED run', () => {
       billableSeconds: 60,
       settled: false,
     });
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Hosted run');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Run');
     expect(screen.getByTestId('hosted-run-cancel')).toBeTruthy();
     expect(screen.getByTestId('hosted-run-cost').textContent).toContain('Cost so far');
     expect(screen.getByTestId('hosted-phase-chip').textContent).toBe('Starting · 1 of 6');
@@ -299,7 +302,7 @@ describe('the run modal — a HOSTED run', () => {
       />,
     );
     expect(screen.getByTestId('run-log-hosted-footer').textContent).toBe(
-      'A hosted run always reports its output. · Deleted after 30 days.',
+      'This run always reports its output. · Deleted after 30 days.',
     );
   });
 

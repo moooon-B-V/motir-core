@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { Bot, TriangleAlert } from 'lucide-react';
+import { Bot, Cloud, TriangleAlert } from 'lucide-react';
 import { RunTonePill } from '@/components/runs/RunTonePill';
 import { Button } from '@/components/ui/Button';
 import { HostedRunCost } from '@/app/(authed)/runs/_components/HostedRunCost';
@@ -13,9 +13,16 @@ import {
   HostedPhaseList,
   useHostedRunDetail,
 } from '@/app/(authed)/runs/_components/HostedRunParts';
+import {
+  AgentEndBlock,
+  AgentRunCost,
+  AgentWhere,
+  agentOf,
+  agentPanelHref,
+} from '@/app/(authed)/runs/_components/AgentRunParts';
 import { drainSseFrames } from '@/lib/ai/sseFrames';
 import { formatRunDuration } from '@/lib/runs/runClock';
-import { HostedDoorNotices } from './HostedDoorNotices';
+import { StartBar } from './StartBar';
 import { useHostedRun } from './HostedRunProvider';
 import type {
   DispatchRunCardDto,
@@ -216,11 +223,24 @@ export function RunSection({
   const doorRun =
     scopeRun && (!current || scopeRun.startedAt > current.startedAt) ? scopeRun : current;
   const reportCurrentRun = door?.reportCurrentRun;
+  // A run in an agent also names who may cancel it — its owner — and the agent
+  // Cancel's words speak of (MOTIR-7028).
+  const doorRunOwner = doorRun?.createdById ?? null;
+  const doorRunAgent =
+    doorRun && 'agentInstance' in doorRun ? (doorRun.agentInstance?.name ?? null) : null;
   useEffect(() => {
     reportCurrentRun?.(
-      doorRun ? { id: doorRun.id, origin: doorRun.origin, status: doorRun.status } : null,
+      doorRun
+        ? {
+            id: doorRun.id,
+            origin: doorRun.origin,
+            status: doorRun.status,
+            createdById: doorRunOwner,
+            agentName: doorRunAgent,
+          }
+        : null,
     );
-  }, [reportCurrentRun, doorRun?.id, doorRun?.origin, doorRun?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [reportCurrentRun, doorRun?.id, doorRun?.origin, doorRun?.status, doorRunOwner, doorRunAgent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A START OR A CANCEL from the door (MOTIR-691) — this island's history is
   // `useState(initialRuns)`, which a `router.refresh()` cannot reach, so it
@@ -257,7 +277,10 @@ export function RunSection({
 
   // A HOSTED current run reads its detail — cost, end, what it shipped — and
   // re-reads it as the run moves: every 20 events while live, and once at its end.
-  const hostedRunId = current?.origin === 'hosted' ? current.id : null;
+  // A run in an agent reads the same detail (MOTIR-7028) for its end and its pull
+  // requests; it has no cost in it to read.
+  const hostedRunId =
+    current?.origin === 'hosted' || current?.origin === 'instance' ? current.id : null;
   const hostedRefresh =
     (current && isLiveRun(current.status) ? 0 : 1) + Math.floor(events.length / 20) * 2;
   const hostedDetail = useHostedRunDetail(hostedRunId, hostedRefresh);
@@ -283,7 +306,10 @@ export function RunSection({
   // MOTIR-5402 panel 1). It has no leg of its own, so the leg history is empty —
   // and the empty state used to say the opposite of what happened. The scope
   // block takes its place; there is no step timeline, because steps are a LEG's.
-  const notices = door ? <HostedDoorNotices /> : null;
+  // THE START BAR (MOTIR-7022 revision 2): the two ways to start — Run and Send to
+  // my agent — with what they answered, at the top of the body. It draws nothing
+  // while a run is live.
+  const notices = door ? <StartBar /> : null;
 
   if (runs.length === 0 && scopeRun) {
     return (
@@ -323,7 +349,10 @@ export function RunSection({
     if (leg.endedAt) reached.add('settled');
   }
 
+  // Hosted, or in an agent (MOTIR-7028): both draw the six phases; only the run
+  // Motir works carries a token and credit cost.
   const hosted = current?.origin === 'hosted';
+  const inAgent = current?.origin === 'instance';
   const runTone = current ? RUN_STATUS_TONE[current.status] : 'queued';
   const legTone = leg ? DISPOSITION_TONE[leg.disposition] : 'queued';
   const otherCards = current ? current.cards.length : 0;
@@ -414,6 +443,13 @@ export function RunSection({
           detail={hostedDetail}
           refreshKey={hostedRefresh}
         />
+      ) : inAgent && current ? (
+        <AgentRunBody
+          run={current}
+          events={events}
+          detail={hostedDetail}
+          started={door?.agentDoor?.started ?? null}
+        />
       ) : (
         <ol className="flex flex-col gap-1.5" aria-live="polite">
           {CARD_STEPS.map((step) => {
@@ -497,28 +533,28 @@ function HostedRunBody({
   refreshKey: number;
 }) {
   const t = useTranslations('runs.hosted');
+  const tAgent = useTranslations('runs.agent');
   const live = isLiveRun(run.status);
   return (
     <div className="flex flex-col gap-4" data-testid="hosted-run">
+      {/* WHO WORKS IT (MOTIR-7022 revision 2, panel 11): the model, and Motir. */}
+      <p className="flex flex-wrap items-center gap-1.5 font-sans text-sm text-(--el-text)">
+        {run.model ? (
+          <span className="inline-flex items-center gap-1.5 rounded-(--radius-badge) bg-(--el-chip-bg) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-xs font-medium text-(--el-text-strong)">
+            <Cloud className="size-3.5" aria-hidden="true" />
+            {run.model}
+          </span>
+        ) : null}
+        <span>{live ? t('where.live') : t('where.ended')}</span>
+      </p>
       <dl className="flex flex-wrap gap-x-4 gap-y-1 font-sans text-xs">
-        <MetaPair label={t('meta.lane')}>{t('meta.hosted')}</MetaPair>
-        <MetaPair label={t('meta.agent')}>
-          <span className="font-mono">{run.agent ?? 'opencode'}</span>
-        </MetaPair>
+        <MetaPair label={tAgent('meta.worked')}>{t('meta.hosted')}</MetaPair>
         {run.model ? (
           <MetaPair label={t('meta.model')}>
             <span className="font-mono">{run.model}</span>
           </MetaPair>
         ) : null}
-        {live ? (
-          <MetaPair label={t('meta.elapsed')}>
-            <Elapsed since={run.startedAt} />
-          </MetaPair>
-        ) : run.endedAt ? (
-          <MetaPair label={t('meta.took')}>
-            {formatRunDuration(run.startedAt, run.endedAt)}
-          </MetaPair>
-        ) : null}
+        <DurationPair run={run} live={live} />
       </dl>
       <HostedPhaseList events={events} status={run.status} detail={detail} model={run.model} />
       {!live && detail ? <HostedEndBlock detail={detail} /> : null}
@@ -529,6 +565,81 @@ function HostedRunBody({
         variant="block"
         refreshKey={refreshKey}
       />
+    </div>
+  );
+}
+
+/** *Elapsed* while live, *Took* once ended. */
+function DurationPair({ run, live }: { run: DispatchRunDto; live: boolean }) {
+  const t = useTranslations('runs.hosted');
+  if (live) {
+    return (
+      <MetaPair label={t('meta.elapsed')}>
+        <Elapsed since={run.startedAt} />
+      </MetaPair>
+    );
+  }
+  return run.endedAt ? (
+    <MetaPair label={t('meta.took')}>{formatRunDuration(run.startedAt, run.endedAt)}</MetaPair>
+  ) : null;
+}
+
+/**
+ * A RUN IN AN AGENT in the section (Story MOTIR-6864 · MOTIR-7028; design
+ * MOTIR-7022 panels 7–9): who worked it and a link to the agent, the meta row, the
+ * six phases (waking is part of Starting), the end, and machine time as its only
+ * cost. No model, no tokens, no credits (`agent-instance-run.md` §5).
+ */
+function AgentRunBody({
+  run,
+  events,
+  detail,
+  started,
+}: {
+  run: DispatchRunDto;
+  events: DispatchRunEventDto[];
+  detail: ReturnType<typeof useHostedRunDetail>;
+  /** The send this page just made — its *Waking* / *Starting in* detail. */
+  started: { runId: string; agentName: string; woke: boolean } | null;
+}) {
+  const t = useTranslations('runs.agent');
+  const live = isLiveRun(run.status);
+  const agent = agentOf(run);
+  const pressed = started?.runId === run.id ? started : null;
+  return (
+    <div className="flex flex-col gap-4" data-testid="agent-run" data-status={run.status}>
+      <AgentWhere run={run} live={live} />
+      <dl className="flex flex-wrap gap-x-4 gap-y-1 font-sans text-xs">
+        <MetaPair label={t('meta.worked')}>
+          {agent ? (
+            <Link className="text-(--el-link) underline" href={agentPanelHref(agent.id)}>
+              {agent.name}
+            </Link>
+          ) : (
+            t('laneGone')
+          )}
+        </MetaPair>
+        {agent ? <MetaPair label={t('meta.codingAgent')}>{agent.profileLabel}</MetaPair> : null}
+        <DurationPair run={run} live={live} />
+      </dl>
+      <HostedPhaseList
+        events={events}
+        status={run.status}
+        detail={detail}
+        model={null}
+        startingDetail={
+          pressed
+            ? t(pressed.woke ? 'phaseDetail.waking' : 'phaseDetail.starting', {
+                name: pressed.agentName,
+              })
+            : null
+        }
+        runningDetail={
+          agent ? t('phaseDetail.running', { agent: agent.profileLabel, name: agent.name }) : null
+        }
+      />
+      {!live && detail ? <AgentEndBlock detail={detail} /> : null}
+      <AgentRunCost run={run} live={live} variant="block" />
     </div>
   );
 }
@@ -586,7 +697,11 @@ function ScopeBlock({
   divided?: boolean;
 }) {
   const routes = useReaderRoutes();
-  const agent = [run.agent, run.model].filter(Boolean).join(' · ');
+  // A run in an agent is named by who worked it — the agent and its coding agent
+  // (MOTIR-7028) — never by the profile id alone.
+  const agent = run.agentInstance
+    ? `${run.agentInstance.name} · ${run.agentInstance.profileLabel}`
+    : [run.agent, run.model].filter(Boolean).join(' · ');
   const detail = [agent, legSummary(run, t)].filter(Boolean).join(' · ');
   return (
     <section
