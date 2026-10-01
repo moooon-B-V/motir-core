@@ -383,3 +383,80 @@ describe('the terminal (agent-terminal.md Q2, Q8 · MOTIR-6939)', () => {
     expect(fake.terminalEndpoint(handle).url).toBe('ws://127.0.0.1:7681/v1/terminal');
   });
 });
+
+describe('the image move and the liveness check (agent-image-update.md Q2, Q3 · MOTIR-6950)', () => {
+  const NEW_IMAGE = 'ghcr.io/moooon-b-v/motir-sandbox@sha256:' + 'd'.repeat(64);
+
+  it('moves a RUNNING machine to the new image on the same volume: a new run, the handle unchanged', async () => {
+    let clock = new Date('2026-10-01T10:00:00.000Z');
+    fake.setNow(() => clock);
+    const h = await fake.provisionPersistent(SPEC);
+    clock = new Date('2026-10-01T10:05:00.000Z');
+    await fake.moveImage(h, NEW_IMAGE, { launch: true });
+    const status = await fake.describePersistent(h);
+    expect(status).toMatchObject({ state: 'running', image: NEW_IMAGE });
+    expect(status.startedAt?.toISOString()).toBe('2026-10-01T10:05:00.000Z');
+    expect(fake.machineImage(h.machineId)).toBe(NEW_IMAGE);
+    expect(fake.liveMachineIds()).toEqual([h.machineId]);
+    expect(fake.liveVolumeIds()).toEqual([h.volumeId]);
+  });
+
+  it('moves a STOPPED machine without starting it; the next start boots the new image', async () => {
+    const h = await fake.provisionPersistent(SPEC);
+    await fake.stop(h);
+    await fake.moveImage(h, NEW_IMAGE, { launch: false });
+    expect(await fake.describePersistent(h)).toMatchObject({ state: 'stopped', image: NEW_IMAGE });
+    await fake.start(h);
+    expect(await fake.describePersistent(h)).toMatchObject({ state: 'running', image: NEW_IMAGE });
+  });
+
+  it('a refused move changes nothing, and a gone machine throws', async () => {
+    const h = await fake.provisionPersistent(SPEC);
+    fake.failNextMove('version mismatch');
+    await expect(fake.moveImage(h, NEW_IMAGE, { launch: true })).rejects.toThrow(
+      OrchestratorApiError,
+    );
+    expect(fake.machineImage(h.machineId)).toBe(SPEC.image);
+    fake.destroyOutside(h.machineId);
+    await expect(fake.moveImage(h, NEW_IMAGE, { launch: true })).rejects.toThrow(
+      OrchestratorApiError,
+    );
+  });
+
+  it('a machine that never boots after the move reads starting', async () => {
+    const h = await fake.provisionPersistent(SPEC);
+    fake.setBootBehaviour('never_start');
+    await fake.moveImage(h, NEW_IMAGE, { launch: true });
+    expect((await fake.describePersistent(h)).state).toBe('starting');
+  });
+
+  it('answers alive on a running machine, and NOT alive (exit 127) for an image marked failing', async () => {
+    const h = await fake.provisionPersistent(SPEC);
+    expect(await fake.checkLiveness(h, ['claude', '--version'])).toEqual({ alive: true });
+    fake.markImageFailing(NEW_IMAGE);
+    await fake.moveImage(h, NEW_IMAGE, { launch: true });
+    expect(await fake.checkLiveness(h, ['claude', '--version'])).toMatchObject({
+      alive: false,
+      reason: 'exit',
+      exitCode: 127,
+    });
+    // Back on the old image, it is alive again: the mark is per image.
+    await fake.moveImage(h, SPEC.image, { launch: true });
+    expect((await fake.checkLiveness(h, ['claude', '--version'])).alive).toBe(true);
+  });
+
+  it('answers unreachable for a stopped machine, and follows a scripted exec answer', async () => {
+    const h = await fake.provisionPersistent(SPEC);
+    fake.setNextExecResult({ exitCode: 2, stdout: '', stderr: 'boom' });
+    expect(await fake.checkLiveness(h, ['codex', '--version'])).toMatchObject({
+      alive: false,
+      reason: 'exit',
+      exitCode: 2,
+    });
+    await fake.stop(h);
+    expect(await fake.checkLiveness(h, ['codex', '--version'])).toMatchObject({
+      alive: false,
+      reason: 'unreachable',
+    });
+  });
+});

@@ -21,10 +21,12 @@ import type {
   PersistentContainerState,
   PersistentContainerStatus,
   PersistentExecResult,
+  PersistentLivenessResult,
   PersistentPublicService,
   PersistentTerminalConfig,
   PersistentTerminalEndpoint,
 } from '../../types';
+import { livenessViaExec } from '../../persistentLiveness';
 
 // The FLY adapter's PERSISTENT half (Story MOTIR-6860 · MOTIR-6869) — a user
 // agent instance on Fly Machines, per `docs/decisions/agent-instances.md` §1–§3
@@ -497,8 +499,11 @@ const flyInstancesClient = {
 
   /**
    * `POST /v1/apps/{app}/machines/{id}` — Fly's machine update, with the FULL
-   * config, and `skip_launch: true` so a stopped machine STAYS stopped: the wake
-   * starts it afterwards, through the one start door (Fly, _Update Machine_,
+   * config, and — by default — `skip_launch: true` so a stopped machine STAYS
+   * stopped: the wake starts it afterwards, through the one start door. Without
+   * it a RUNNING machine reboots onto the new config (_"If the Machine is running
+   * and the request is successful, it will reboot"_, Fly, _Machines resource_,
+   * read 2026-10-01 — the image update's running case, MOTIR-6950) (Fly, _Update Machine_,
    * https://docs.fly.io/api/machines/machines/update-machine, read 2026-09-29).
    * `current_version` guards against a concurrent change: a machine changed since
    * the read answers 409 and nothing is written.
@@ -509,13 +514,14 @@ const flyInstancesClient = {
     id: string,
     machineConfig: Record<string, unknown>,
     currentVersion: string | null,
+    options: { skipLaunch: boolean } = { skipLaunch: true },
   ): Promise<void> {
     const res = await flyRequest(path(app, `/machines/${encodeURIComponent(id)}`), {
       method: 'POST',
       token: config.token,
       body: JSON.stringify({
         config: machineConfig,
-        skip_launch: true,
+        ...(options.skipLaunch ? { skip_launch: true } : {}),
         ...(currentVersion ? { current_version: currentVersion } : {}),
       }),
     });
@@ -702,6 +708,7 @@ export const flyPersistentOrchestrator: PersistentContainerOrchestrator = {
       providerState: machine.state,
       startedAt: instants.startedAt,
       stoppedAt: instants.stoppedAt,
+      image: machine.image ?? null,
     };
   },
 
@@ -794,6 +801,51 @@ export const flyPersistentOrchestrator: PersistentContainerOrchestrator = {
       typeof version === 'string' && version.length > 0 ? version : null,
     );
     return 'updated';
+  },
+
+  async moveImage(
+    handle: PersistentContainerHandle,
+    image: string,
+    options: { launch: boolean },
+  ): Promise<void> {
+    // agent-image-update.md Q2: Fly's machine update on the SAME machine and
+    // volume — a read of the FULL current config with ONLY `image` replaced, so a
+    // field Motir does not model is never dropped. Fly cannot change a volume
+    // attachment through an update anyway (_Machines resource_, read 2026-10-01).
+    const config = flyInstancesConfig();
+    const raw = await flyInstancesClient.getMachineRaw(config, handle.app, handle.machineId);
+    if (!raw) {
+      throw new OrchestratorApiError('fly', 404, `machine ${handle.machineId} is gone`);
+    }
+    const current = asRecord(raw['config']) ?? {};
+    const next: Record<string, unknown> = { ...current, image };
+    // The adapter refuses its own mistake rather than detach a home: the mounts it
+    // sends are the mounts it read, or nothing is sent at all.
+    if (JSON.stringify(next['mounts'] ?? null) !== JSON.stringify(current['mounts'] ?? null)) {
+      throw new OrchestratorApiError('fly', null, 'the image move would change the mounts');
+    }
+    const version = raw['version'] ?? raw['instance_id'];
+    await flyInstancesClient.updateMachine(
+      config,
+      handle.app,
+      handle.machineId,
+      next,
+      typeof version === 'string' && version.length > 0 ? version : null,
+      { skipLaunch: !options.launch },
+    );
+  },
+
+  async checkLiveness(
+    handle: PersistentContainerHandle,
+    command: readonly string[],
+    options: { timeoutSeconds?: number } = {},
+  ): Promise<PersistentLivenessResult> {
+    return livenessViaExec(
+      (h, cmd, opts) => this.exec(h, cmd, opts),
+      handle,
+      command,
+      options.timeoutSeconds,
+    );
   },
 
   terminalEndpoint(handle: PersistentContainerHandle): PersistentTerminalEndpoint {

@@ -9,9 +9,11 @@ import type {
   PersistentContainerState,
   PersistentContainerStatus,
   PersistentExecResult,
+  PersistentLivenessResult,
   PersistentTerminalConfig,
   PersistentTerminalEndpoint,
 } from '../../types';
+import { livenessViaExec } from '../../persistentLiveness';
 
 // The FAKE adapter's PERSISTENT half (Story MOTIR-6860 · MOTIR-6869) — the
 // second implementation of the persistent port, shipped beside the Fly one for
@@ -53,6 +55,12 @@ interface FakeStore {
     { app: string; name: string; attachedMachineId: string | null; createdAt: string }
   >;
   sequence: number;
+  /**
+   * Images whose liveness check fails (MOTIR-6950): the seam a test, the story's
+   * integration gate and its E2E drive a rollback through, with no Fly. Kept in
+   * the store so the E2E lane's web server and worker see the same answer.
+   */
+  failingImages?: string[];
 }
 
 export interface FakePersistentControls {
@@ -68,6 +76,8 @@ export interface FakePersistentControls {
   failNextStop(detail?: string): void;
   /** Make the next `destroyPersistent` throw. */
   failNextDestroy(detail?: string): void;
+  /** The next image move is refused, as Fly refuses an update (MOTIR-6950). */
+  failNextMove(detail?: string): void;
   /** New machines boot `running` (default) or stay `starting` until {@link completeBoot}. */
   setBootBehaviour(behaviour: 'start' | 'never_start'): void;
   /** Move a `starting` machine to `running`, stamping its run's start. */
@@ -112,6 +122,10 @@ export interface FakePersistentControls {
   setTerminalAddress(base: string | null): void;
   /** The machine's stamped terminal config version (0 when it carries none). */
   machineConfigVersion(machineId: string): number;
+  /** The image a machine's config names now (MOTIR-6950). */
+  machineImage(machineId: string): string;
+  /** Make every liveness check on a machine running `image` answer not alive (exit 127). */
+  markImageFailing(image: string): void;
 }
 
 const STATE_PATH_ENV = 'MOTIR_FAKE_PERSISTENT_STATE_PATH';
@@ -139,13 +153,14 @@ let nextExec: PersistentExecResult | null = null;
 let execResponder:
   | ((command: readonly string[], stdin: string | undefined) => PersistentExecResult)
   | null = null;
-type FailureKind = 'provision' | 'machine' | 'start' | 'stop' | 'destroy';
+type FailureKind = 'provision' | 'machine' | 'start' | 'stop' | 'destroy' | 'move';
 const failures: Record<FailureKind, string | null> = {
   provision: null,
   machine: null,
   start: null,
   stop: null,
   destroy: null,
+  move: null,
 };
 let bootBehaviour: 'start' | 'never_start' = 'start';
 let terminalBase: string | null = null;
@@ -268,6 +283,9 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
     failNextDestroy(detail = 'the fake refused to destroy') {
       armFailure('destroy', detail);
     },
+    failNextMove(detail = 'the fake refused to update the machine') {
+      armFailure('move', detail);
+    },
     setBootBehaviour(behaviour) {
       bootBehaviour = behaviour;
     },
@@ -313,6 +331,14 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
     },
     machineConfigVersion(machineId) {
       return machineOrThrow(machineId).configVersion ?? 0;
+    },
+    machineImage(machineId) {
+      return machineOrThrow(machineId).spec.image;
+    },
+    markImageFailing(image) {
+      load();
+      store.failingImages = [...new Set([...(store.failingImages ?? []), image])];
+      save();
     },
     liveMachineIds() {
       load();
@@ -444,6 +470,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
         providerState: machine.state,
         startedAt: machine.startedAt ? new Date(machine.startedAt) : null,
         stoppedAt: machine.stoppedAt ? new Date(machine.stoppedAt) : null,
+        image: machine.spec.image,
       };
     },
 
@@ -541,6 +568,69 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       operations.push(`machine:update:${handle.machineId}`);
       save();
       return 'updated';
+    },
+
+    async moveImage(
+      handle: PersistentContainerHandle,
+      image: string,
+      options: { launch: boolean },
+    ): Promise<void> {
+      load();
+      const refused = takeFailure('move');
+      if (refused) throw new OrchestratorApiError('fake', 409, refused);
+      const machine = store.machines[handle.machineId];
+      if (!machine)
+        throw new OrchestratorApiError('fake', 404, `machine ${handle.machineId} is gone`);
+      // Only the image changes: the volume, the handle and every other field stay.
+      machine.spec = { ...machine.spec, image };
+      if (options.launch && machine.state === 'running') {
+        // Fly reboots a running machine onto the new config: a new run begins.
+        if (bootBehaviour === 'never_start') {
+          machine.state = 'starting';
+        } else {
+          machine.startedAt = now().toISOString();
+          machine.stoppedAt = null;
+          machine.starts += 1;
+        }
+      }
+      operations.push(`machine:move:${handle.machineId}:${options.launch ? 'launch' : 'skip'}`);
+      save();
+    },
+
+    async checkLiveness(
+      handle: PersistentContainerHandle,
+      command: readonly string[],
+      options: { timeoutSeconds?: number } = {},
+    ): Promise<PersistentLivenessResult> {
+      load();
+      operations.push(`machine:liveness:${handle.machineId}`);
+      const machine = store.machines[handle.machineId];
+      if (machine && (store.failingImages ?? []).includes(machine.spec.image)) {
+        return {
+          alive: false,
+          reason: 'exit',
+          exitCode: 127,
+          detail: `${command.join(' ')} exited 127 (command not found)`,
+        };
+      }
+      // A scripted exec answer drives the other branches; with none, a running
+      // machine is alive — the fake never reaches a real binary.
+      if (nextExec || execResponder) {
+        return livenessViaExec(
+          (h, cmd, opts) => this.exec(h, cmd, opts),
+          handle,
+          command,
+          options.timeoutSeconds,
+        );
+      }
+      if (!machine || machine.state !== 'running') {
+        return {
+          alive: false,
+          reason: 'unreachable',
+          detail: `${command.join(' ')} could not be run: machine ${handle.machineId} is not running`,
+        };
+      }
+      return { alive: true };
     },
 
     terminalEndpoint(handle: PersistentContainerHandle): PersistentTerminalEndpoint {
