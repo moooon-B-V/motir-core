@@ -50,6 +50,10 @@ const DELIVERY_META: Record<
   // Declined. Drawn QUIET on purpose: it is the one state that does not hold the
   // card, so it must not read as something outstanding.
   excluded: { icon: CircleDashed, className: 'text-(--el-icon-muted)' },
+  // Finished without a pull request (MOTIR-7180) — the delivered glyph, because
+  // it holds nothing and nothing is outstanding; the neutral chip on the row
+  // says HOW it finished, so it never passes for a merge.
+  delivered_without_change_request: { icon: CircleCheck, className: 'text-(--el-success)' },
 };
 
 /** Where following a repository GOES (design MOTIR-3038 panel 2d) — the row on
@@ -158,12 +162,13 @@ export function RepositorySetField({
                   — an ordinary repository needs no chip saying it exists. The
                   two do not share a severity: `unestablished` HOLDS the card and
                   is drawn as a warning; `excluded` is a settled decision that
-                  holds nothing, and is drawn quiet. */}
+                  holds nothing, and is drawn quiet — as is a repository that
+                  shipped without a pull request (MOTIR-7180). */}
               {d.state === 'unestablished' ? (
                 <Pill severity="warning" className="shrink-0">
                   {t(`repositoryDelivery.${d.state}`)}
                 </Pill>
-              ) : d.state === 'excluded' ? (
+              ) : d.state === 'excluded' || d.state === 'delivered_without_change_request' ? (
                 <Pill tone="neutral" className="shrink-0">
                   {t(`repositoryDelivery.${d.state}`)}
                 </Pill>
@@ -278,7 +283,11 @@ function RepositoryCountCaption({
   // One repository has nothing to count — the row already says everything.
   if (delivery.length < 2) return null;
 
-  const delivered = delivery.filter((d) => d.state === 'delivered');
+  // Shipped without a pull request counts as delivered: it holds nothing, and
+  // `repositoriesAllDelivered` must be what a finished container reads.
+  const delivered = delivery.filter(
+    (d) => d.state === 'delivered' || d.state === 'delivered_without_change_request',
+  );
   const unknown = delivery.filter((d) => d.state === 'unknown');
   const outstanding = delivery.filter((d) => d.state === 'awaiting');
 

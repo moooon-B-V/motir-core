@@ -333,7 +333,14 @@ export type V1DispatchAdvisory = z.infer<typeof dispatchAdvisorySchema>;
  * the card does not carry (the unpinned card whose project has exactly one).
  */
 export const dispatchRepoDeliverySchema = z
-  .enum(['delivered', 'awaiting', 'unknown', 'unestablished', 'excluded'])
+  .enum([
+    'delivered',
+    'awaiting',
+    'unknown',
+    'unestablished',
+    'excluded',
+    'delivered_without_change_request',
+  ])
   .nullable();
 
 /** ONE repository of the dispatch set (MOTIR-3131). */

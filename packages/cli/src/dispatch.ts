@@ -457,7 +457,7 @@ export interface DispatchSummaryInput {
 }
 
 /**
- * The five per-repository delivery states, in the words a PERSON needs
+ * The six per-repository delivery states, in the words a PERSON needs
  * (MOTIR-3136 · `lib/workItems/repoDelivery.ts`).
  *
  * ⚠️ `unestablished` and `excluded` are NOT shades of `awaiting`, and the
@@ -487,6 +487,8 @@ function deliveryLabel(state: string | null): string | null {
       return 'NOT ESTABLISHED — this repository does not exist yet, so there is nothing to open a pull request against';
     case 'excluded':
       return 'excluded — the project is deliberately code-less here; it does not hold this work item';
+    case 'delivered_without_change_request':
+      return 'delivered without a pull request — its cards finished without one (a tag, a release, a setting); it does not hold this work item';
     default:
       return state;
   }
@@ -509,8 +511,9 @@ function repoSet(dispatch: DispatchPrompt): NonNullable<DispatchPrompt['targetRe
  */
 export function renderResumeNotice(dispatch: DispatchPrompt): string | null {
   const repos = repoSet(dispatch);
-  const delivered = repos.filter((r) => r.delivery === 'delivered').map((r) => r.name);
-  const remaining = repos.filter((r) => r.delivery !== 'delivered').map((r) => r.name);
+  const done = (d: string | null) => d === 'delivered' || d === 'delivered_without_change_request';
+  const delivered = repos.filter((r) => done(r.delivery)).map((r) => r.name);
+  const remaining = repos.filter((r) => !done(r.delivery)).map((r) => r.name);
   if (delivered.length === 0 || remaining.length === 0) return null;
   return [
     `Resume:     ${dispatch.key} is PARTIALLY DELIVERED — this is not a fresh work item.`,

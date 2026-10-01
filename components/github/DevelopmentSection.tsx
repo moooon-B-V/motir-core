@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from 'react';
 import {
+  CircleCheck,
   CircleDashed,
   CircleX,
   CircleQuestionMark,
@@ -291,19 +292,24 @@ function PullRequestRow({
  */
 function AwaitingRepoRow({ delivery }: { delivery: RepoDelivery }) {
   const t = useTranslations('github');
-  // FIVE states, four of which reach this row (design MOTIR-3038 panel 2c;
+  // SIX states, five of which reach this row (design MOTIR-3038 panel 2c;
   // `delivered` has a real pull-request row of its own). Each says something
   // different about what the reader should do next, so each gets its own copy
   // and its own glyph — a state that only differed in shade would be the false
   // "No pull request yet" row MOTIR-3036 fixed, wearing a new costume.
   const { state } = delivery;
   const unknown = state === 'unknown';
+  // `delivered_without_change_request` (MOTIR-7180) reaches it too: there is no
+  // pull request to draw, and its own copy says the work finished without one
+  // rather than leaving the row to read "No pull request yet".
   const Glyph =
     state === 'unknown'
       ? CircleQuestionMark
       : state === 'unestablished'
         ? FolderGit2
-        : CircleDashed;
+        : state === 'delivered_without_change_request'
+          ? CircleCheck
+          : CircleDashed;
   const title =
     state === 'unknown'
       ? 'development.mergedBranchUnknown'
@@ -311,7 +317,9 @@ function AwaitingRepoRow({ delivery }: { delivery: RepoDelivery }) {
         ? 'development.repositoryNotCreated'
         : state === 'excluded'
           ? 'development.repositorySkipped'
-          : 'development.noPullRequestYet';
+          : state === 'delivered_without_change_request'
+            ? 'development.shippedWithoutPullRequest'
+            : 'development.noPullRequestYet';
   const pillKey = `development.repoState.${state}` as const;
   return (
     <li className="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)">
