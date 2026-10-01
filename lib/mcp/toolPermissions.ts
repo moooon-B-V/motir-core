@@ -215,6 +215,13 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   claim_work_item_repair: 'work_item:edit',
   touch_work_item_repair: 'work_item:edit',
   close_work_item_repair: 'work_item:edit',
+  // The CONTINUE tools (MOTIR-7262) — the key the REST continue route
+  // (`claimWorkItemContinue`) and the dispatch-run heartbeat / close routes
+  // assert. `claimContinue` asserts `assertCanEdit` up front and touch / close
+  // assert it again before reading the run. Already in `CLI_TOKEN_GRANT`.
+  claim_work_item_continue: 'work_item:edit',
+  touch_work_item_continue: 'work_item:edit',
+  close_work_item_continue: 'work_item:edit',
 
   // ── comment:add ───────────────────────────────────────────────────────────
   // `commentsService` gates the add on `getCommentCapabilities().canComment`,

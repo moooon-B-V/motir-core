@@ -188,6 +188,9 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   // MOTIR-6807 — the repair claim, `WorkItemRepairClaim` whole (its touch and
   // close siblings are EXEMPT: a run's liveness is not the `DispatchRun` resource).
   claim_work_item_repair: true,
+  // MOTIR-7262 — the continue claim, `WorkItemContinueClaim` whole (its touch and
+  // close are exempt liveness payloads, like the repair tools').
+  claim_work_item_continue: true,
 };
 
 /** The runtime view the assertions below walk. */

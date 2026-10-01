@@ -149,6 +149,17 @@ export const EXEMPT_TOOLS = {
     'returns the whole `DispatchRun` with its legs, which the agent surface does not carry, for ' +
     'the reason `MCP_UNREACHABLE_RESOURCES.DispatchRun` records; the agent needs only that its ' +
     'repair is closed and how (MOTIR-6807).',
+  touch_work_item_continue:
+    'Returns a CONTINUE RUN’s liveness — `{ key, runId, open, status, stopReason, startedAt, ' +
+    'endedAt, lastHeartbeatAt }` — the answer an agent holding a continue acts on (stop when ' +
+    '`open` is false). The same shape and the same reason as `touch_work_item_repair`: v1’s ' +
+    'heartbeat is a 204 with no body, and its run read is the whole `DispatchRun` resource, ' +
+    'which no MCP tool returns by decision (`MCP_UNREACHABLE_RESOURCES.DispatchRun`) (MOTIR-7262).',
+  close_work_item_continue:
+    'The same continue-run liveness shape as `touch_work_item_continue`, after the close. v1’s ' +
+    'close returns the whole `DispatchRun` with its legs, which the agent surface does not ' +
+    'carry, for the reason `MCP_UNREACHABLE_RESOURCES.DispatchRun` records; the agent needs ' +
+    'only that its continue is closed and how (MOTIR-7262).',
   delete_work_item:
     'Returns a cascade-delete summary (`totalCount`, `descendantCount`, `byKind`). ADR §3 ' +
     'leaves the irreversible cascade delete OUT of v1 entirely, and `tests/helpers/v1RouteAudit.ts` ' +

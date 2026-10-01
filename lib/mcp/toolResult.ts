@@ -93,7 +93,12 @@ import {
 } from '@/lib/planChange/errors';
 import { InvalidTargetError } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError } from '@/lib/ai/errors';
-import { RepairRunRefusedError, RunFoundReportReasonInvalidError } from '@/lib/dispatchRuns/errors';
+import {
+  ContinueFromInvalidError,
+  ContinueRunRefusedError,
+  RepairRunRefusedError,
+  RunFoundReportReasonInvalidError,
+} from '@/lib/dispatchRuns/errors';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { AttachmentError } from '@/lib/blob/errors';
 import { DesignEvidenceError } from '@/lib/designEvidence/errors';
@@ -588,7 +593,14 @@ export function toToolError(err: unknown): CallToolResult {
     // `touch_work_item_repair` / `close_work_item_repair` naming a run that is not
     // the caller's own repair run of that card. Refused before anything is
     // written; the message says to claim first, or that somebody else holds it.
-    err instanceof RepairRunRefusedError
+    err instanceof RepairRunRefusedError ||
+    // CONTINUE_RUN_NOT_FOUND / CONTINUE_RUN_NOT_YOURS (MOTIR-7262) — the same
+    // refusal for `touch_work_item_continue` / `close_work_item_continue`.
+    err instanceof ContinueRunRefusedError ||
+    // CONTINUE_FROM_INVALID (MOTIR-7262) — `dispatch_prompt`'s `continueFrom`
+    // names a run that cannot be continued: the same code the REST route answers
+    // with a 422, so the two doors refuse a bad run identically.
+    err instanceof ContinueFromInvalidError
   ) {
     return toolError(err.code, err.message);
   }

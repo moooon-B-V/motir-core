@@ -85,6 +85,19 @@ const inputSchema = {
         'COMPLETE outcome protocol, which is what every caller wanting to read the real ' +
         'contract should do. An unrecognised capability is refused, never ignored.',
     ),
+  // MOTIR-7262 — the REST route's `?continueFrom=<runId>`, read the same way
+  // (trimmed; empty means absent) and handed to the same service option, so the
+  // prompt an agent continues from is byte-identical on either door.
+  continueFrom: z
+    .string()
+    .trim()
+    .optional()
+    .describe(
+      'Optional id of a DEAD dispatch run this prompt continues — the `deadRun.id` ' +
+        '`claim_work_item_continue` returned. The prompt then says how ' +
+        'that run ended and where its work stands. A run that is unknown, still running or ' +
+        'succeeded is refused with CONTINUE_FROM_INVALID, never ignored.',
+    ),
 };
 
 /**
@@ -213,7 +226,7 @@ function summarize(dto: DispatchPromptDto): string {
 
 /** The adapter: resolve the project from the key prefix, assemble the prompt. */
 export async function runDispatchPrompt(
-  args: { key: string; sessionBranch?: string; findingsPolicy?: string },
+  args: { key: string; sessionBranch?: string; findingsPolicy?: string; continueFrom?: string },
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   const identifier = normalizeIdentifier(args.key);
@@ -231,6 +244,7 @@ export async function runDispatchPrompt(
   const dto = await dispatchPromptService.getDispatchPrompt(project.id, identifier, ctx, {
     sessionBranch: args.sessionBranch ?? null,
     findingsPolicy: parsed.policy,
+    ...(args.continueFrom ? { continueFrom: args.continueFrom } : {}),
   });
   return toolOk(summarize(dto), derived(dispatchPromptPayload, presentMcpDispatchPrompt(dto)));
 }
