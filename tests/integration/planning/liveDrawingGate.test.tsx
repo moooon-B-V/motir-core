@@ -42,7 +42,7 @@
 // real clock, which is why this file waits with `until` rather than `waitFor`
 // (Testing Library's poller is itself a `setInterval`).
 import type { ComponentProps } from 'react';
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it as vitestIt, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -216,9 +216,32 @@ function installFetch(): void {
 const realSetTimeout = globalThis.setTimeout;
 const sleep = (ms: number) => new Promise<void>((r) => realSetTimeout(r, ms));
 
+// ⚠️ A TEST THAT TIMES OUT MUST NOT OUTLIVE ITSELF (MOTIR-7203). Vitest abandons
+// a timed-out body and moves on, but nothing stops the body: its `until` /
+// `settle` loops keep calling `act()` on the real clock into the NEXT test, React
+// reports "overlapping act() calls", and every later test in the file hangs to
+// its own timeout. That is how one slow case on a loaded CI shard failed all
+// seven (run 36861699491: 144 overlap warnings in the second test, then five
+// tests that drew nothing). So every body runs through this file's `it`, and
+// `afterEach` ENDS it: the helpers below throw once their test has ended, and
+// `afterEach` waits for the body — and the route calls it left in flight — to
+// unwind before the next `beforeEach` truncates under them.
+const body = { running: null as Promise<unknown> | null, ended: false };
+function alive(): void {
+  if (body.ended) throw new Error('this helper outlived its test, which has already ended');
+}
+function it(name: string, fn: () => Promise<void>): void {
+  vitestIt(name, () => {
+    const run = fn();
+    body.running = run;
+    return run;
+  });
+}
+
 /** Drain every in-flight route call and every render it causes. */
 async function settle(): Promise<void> {
   for (let quiet = 0; quiet < 3; ) {
+    alive();
     const pending = [...inFlight];
     await act(async () => {
       await Promise.allSettled(pending);
@@ -233,6 +256,7 @@ async function settle(): Promise<void> {
 async function until(check: () => void, timeoutMs = 15_000): Promise<void> {
   const start = Date.now();
   for (;;) {
+    alive();
     try {
       check();
       return;
@@ -247,6 +271,7 @@ async function until(check: () => void, timeoutMs = 15_000): Promise<void> {
 
 /** ONE poll tick: the interval fires, the read goes through the route, the pane draws. */
 async function tick(): Promise<void> {
+  alive();
   act(() => {
     vi.advanceTimersByTime(POLL_MS);
   });
@@ -281,6 +306,8 @@ let fx: WorkItemFixture;
 const tree = { E: '', S: '', S2: '', C1: '', D: '', S2Key: '', SKey: '', EKey: '' };
 
 beforeEach(async () => {
+  body.ended = false;
+  body.running = null;
   canvasLog.length = 0;
   viewsLog.length = 0;
   search.value = '';
@@ -333,7 +360,12 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  // A body still running here has timed out: end it, let it unwind at its next
+  // helper call, and drain the route calls the unmounted pane left in flight.
+  body.ended = true;
+  await body.running?.catch(() => {});
   cleanup();
+  while (inFlight.size > 0) await Promise.allSettled([...inFlight]);
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
@@ -352,6 +384,7 @@ function ok<T>(r: ToolResult): T {
 
 /** An MCP agent opens a plan: `generating`, attributed to its harness, in its own session. */
 async function agentOpensPlan(): Promise<{ planId: string; sessionId: string }> {
+  alive();
   const plan = ok<{ id: string }>(
     await runCreatePlan(
       {
@@ -375,6 +408,7 @@ async function agentAppends(
   proposals: unknown[],
   final = false,
 ): Promise<string[]> {
+  alive();
   const res = ok<{ planItemIds: string[] }>(
     await runAddPlanItems(
       { planId, proposals: proposals as never, ...(final ? { final: true } : {}) },
@@ -479,7 +513,7 @@ function drawnState() {
 
 // ════════════════════════════════════════════════════════════════════════════
 describe('MOTIR-6301 · the poll → pane seam, against rows the planners wrote', () => {
-  it('⭐ append, off-level, deepen, rewire, modify, withdraw — each drawn once, from the real read', async () => {
+  it('⭐ append, off-level, deepen — each drawn once, from the real read', async () => {
     const { planId, sessionId } = await agentOpensPlan();
     await mountSurface(sessionId);
 
@@ -540,6 +574,38 @@ describe('MOTIR-6301 · the poll → pane seam, against rows the planners wrote'
     expect(node(n1)).toBe(before);
     expect(deepen.seen).not.toContain(`node:${n1}:enter`);
     expect(deepen.seen).not.toContain(`node:${n1}:exit`);
+
+    // Nothing, at any point after the churn, is drawn twice.
+    const ids = drawnIds();
+    expect(new Set(ids).size).toBe(ids.length);
+    const keys = edgeKeys();
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(unserved).toEqual([]);
+  });
+
+  // Steps 4–6 continue the SAME plan shape from a fresh mount, not from the one
+  // steps 1–3 drew on: one body holding all six steps ran at the 15 s budget on a
+  // loaded CI shard (MOTIR-7203). Every assertion of 4–6 is unchanged. The plan's
+  // FIRST read holds one container's cards only — a plan spread across two opens
+  // in the List (`defaultPlanView`, pinned at that read), whose rows keep their
+  // entrance mark — so the off-level pair lands on a live tick, as step 2's did.
+  it('⭐ rewire, modify, withdraw — each drawn once, from the real read', async () => {
+    const { planId, sessionId } = await agentOpensPlan();
+    const [a1] = await agentAppends(planId, [addUnder(tree.S, 'Read the snapshot')]);
+    const [a2] = await agentAppends(planId, [addUnder(tree.S, 'Draw the arrow', [a1!])]);
+    const n1 = await nodeIdOf(planId, a1!);
+    const n2 = await nodeIdOf(planId, a2!);
+    await mountSurface(sessionId);
+    await until(() => expect(node(n2)).not.toBeNull());
+    expect(edgeKeys()).toContain(`${n1}→${n2}:pending`);
+    const [b] = await agentAppends(planId, [addUnder(tree.S2, 'Hand over without a remount')]);
+    const [a3] = await agentAppends(planId, [addUnder(tree.S, 'Wait for the hand-over', [b!])]);
+    const nb = await nodeIdOf(planId, b!);
+    const n3 = await nodeIdOf(planId, a3!);
+    await tick();
+    await until(() => expect(node(n3)).not.toBeNull());
+    expect(edgeKeys()).toContain(`${nb}→${n3}:cross`);
+    await until(() => expect(document.querySelectorAll('[data-motion]')).toHaveLength(0));
 
     // ── 4. update_plan_proposal REWIRES blockedByRefs — the old edge exits, the new enters ──
     // From the proposal it named to a COMMITTED card on the level — a rewire the
