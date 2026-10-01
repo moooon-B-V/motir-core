@@ -13,12 +13,14 @@ import {
   KeyRound,
   Laptop,
   ShieldAlert,
+  ShieldCheck,
   TriangleAlert,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/Button';
 import { Combobox } from '@/components/ui/Combobox';
 import { Pill } from '@/components/ui/Pill';
 import { Segmented } from '@/components/ui/Segmented';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/utils/cn';
 import { permissionSlug, type PermissionKey } from '@/lib/permissions/catalog';
 import { DEFAULT_TOKEN_GRANT, GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
@@ -52,7 +54,11 @@ import {
 // request the provider signed and the client's own registration
 // (`oauthConnectionsService.describeConsentRequest`); nothing here is taken
 // from the URL. The app's name is its own claim, so it is rendered as text,
-// never markup, and a self-registered one carries the Unverified pill.
+// never markup, and a self-registered one carries the Unverified pill. An app
+// Motir verified by its metadata document (MOTIR-7174, the verified-by-domain
+// delta `design/auth/oauth-consent--verified-client.mock.html`) is NAMED BY ITS
+// HOST everywhere — the title, the App asking value, every later state — and
+// its own name appears once, beneath, as what it calls itself.
 //
 // ONE ENDPOINT, two actions: `POST /api/oauth/consent` with `approve` (records
 // the connection and answers the provider) or `deny` (answers it, writes
@@ -128,7 +134,11 @@ export function ConsentScreen({
 }: ConsentScreenProps) {
   const t = useTranslations('oauthConsent');
   const router = useRouter();
-  const app = request.client.name ?? t('unnamedApp');
+  const verification = request.client.verification;
+  const claimedName = request.client.name ?? t('unnamedApp');
+  // THE HOST IS THE NAME for a verified app: the document's `client_name` is
+  // self-asserted, so every sentence of fact names the host instead.
+  const app = verification.kind === 'domain' ? verification.host : claimedName;
   const { workspaces } = request;
 
   const [phase, setPhase] = useState<Phase>('consent');
@@ -368,7 +378,15 @@ export function ConsentScreen({
     // `data-auth-wide` widens the (auth) column to 40rem and suppresses the
     // lockup — the /device confirm step's frame (design § The frame).
     <div data-auth-wide>
-      <AuthShell headline={t('heading.consent', { app })} subhead={t('subhead.consent')} tight>
+      <AuthShell
+        headline={
+          verification.kind === 'domain'
+            ? t('titleVerified', { host: verification.host })
+            : t('heading.consent', { app })
+        }
+        subhead={t('subhead.consent')}
+        tight
+      >
         <div className="flex flex-col gap-4">
           {banner}
 
@@ -385,18 +403,16 @@ export function ConsentScreen({
                     {app.trim().charAt(0).toUpperCase() || '?'}
                   </span>
                   <span className="flex min-w-0 flex-wrap items-center gap-1.5 font-sans text-sm font-medium text-(--el-text)">
-                    <span className="truncate">{app}</span>
-                    {request.client.unverified ? (
-                      <Pill severity="warning" className="gap-1">
-                        <ShieldAlert className="h-3 w-3" aria-hidden />
-                        {t('detail.unverified')}
-                      </Pill>
-                    ) : null}
+                    {verification.kind === 'domain' ? (
+                      // The verified host is never truncated: it is the fact.
+                      <span className="font-mono font-semibold break-all">{app}</span>
+                    ) : (
+                      <span className="truncate">{app}</span>
+                    )}
+                    <VerificationPill verification={verification} />
                   </span>
                 </span>
-                <DetailSub>
-                  {request.client.unverified ? t('detail.appDynamic') : t('detail.appRegistered')}
-                </DetailSub>
+                <DetailSub>{appLine(verification, claimedName, t)}</DetailSub>
               </DetailBlock>
 
               {/* Decision 3: the return host is always on screen — the code goes
@@ -702,4 +718,56 @@ function FixedGrant({ labelledBy }: { labelledBy: string }) {
       {column(right)}
     </div>
   );
+}
+
+type ConsentT = ReturnType<typeof useTranslations<'oauthConsent'>>;
+
+/** The pill beside the App asking value: sky info + ShieldCheck for a verified
+ * domain, the shipped warning + ShieldAlert for a self-registered app, and
+ * nothing for one this deployment registered. */
+function VerificationPill({
+  verification,
+}: {
+  verification: ConsentRequestDto['client']['verification'];
+}) {
+  const t = useTranslations('oauthConsent');
+  switch (verification.kind) {
+    case 'domain':
+      return (
+        <Tooltip content={t('detail.verifiedTooltip', { host: verification.host })}>
+          <span tabIndex={0} className="inline-flex focus-visible:outline-none">
+            <Pill severity="info" className="gap-1">
+              <ShieldCheck className="h-3 w-3" aria-hidden />
+              {t('detail.verified')}
+            </Pill>
+          </span>
+        </Tooltip>
+      );
+    case 'self':
+      return (
+        <Pill severity="warning" className="gap-1">
+          <ShieldAlert className="h-3 w-3" aria-hidden />
+          {t('detail.unverified')}
+        </Pill>
+      );
+    case 'registered':
+      return null;
+  }
+}
+
+/** The line beneath the App asking value — the ONE place a verified app's own
+ * name appears, attributed to it. */
+function appLine(
+  verification: ConsentRequestDto['client']['verification'],
+  claimedName: string,
+  t: ConsentT,
+): string {
+  switch (verification.kind) {
+    case 'domain':
+      return t('detail.appVerified', { app: claimedName, host: verification.host });
+    case 'self':
+      return t('detail.appDynamic');
+    case 'registered':
+      return t('detail.appRegistered');
+  }
 }

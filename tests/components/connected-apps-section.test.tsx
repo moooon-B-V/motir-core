@@ -26,9 +26,8 @@ function connection(over: Partial<OAuthConnectionDto> = {}): OAuthConnectionDto 
       name: 'Claude',
       uri: null,
       icon: null,
-      unverified: true,
+      verification: { kind: 'self' },
       host: 'claude.ai',
-      discoveredHost: null,
     },
     workspace: { id: 'w1', name: 'Motir' },
     organization: { id: 'o1', name: 'moooon' },
@@ -49,9 +48,8 @@ const TWO = [
       name: 'Claude Code',
       uri: null,
       icon: null,
-      unverified: false,
+      verification: { kind: 'registered' },
       host: 'localhost',
-      discoveredHost: null,
     },
     workspace: { id: 'w2', name: 'Client work' },
     project: { id: 'p1', name: 'Website' },
@@ -232,6 +230,75 @@ describe('ConnectedAppsSection', () => {
   });
 });
 
+describe('ConnectedAppsSection — an app verified by its domain (MOTIR-7174)', () => {
+  // `design/settings/account-settings--connected-apps--verified-client.mock.html`:
+  // the host leads the row with the sky Verified domain pill, the app's own name
+  // is the line beneath, and the redirect host leaves the cell.
+  function verified(name: string | null, host: string): OAuthConnectionDto {
+    return connection({
+      id: `v-${host}`,
+      client: {
+        clientId: `https://${host}/oauth/mcp-oauth-client-metadata`,
+        name,
+        uri: null,
+        icon: null,
+        verification: { kind: 'domain', host },
+        host: 'claude.ai',
+      },
+    });
+  }
+
+  it('renders all three members side by side', () => {
+    render([
+      verified('Claude', 'claude.ai'),
+      connection({ id: 's' }),
+      connection({ id: 'r', client: { ...TWO[1]!.client } }),
+    ]);
+    const [v, self, registered] = screen.getAllByTestId('connected-app-row').map((r) => within(r));
+    expect(v!.getByText('claude.ai')).toBeTruthy();
+    expect(v!.getByText('Verified domain')).toBeTruthy();
+    expect(v!.getByText('Calls itself “Claude”')).toBeTruthy();
+    expect(v!.queryByText('Unverified')).toBeNull();
+
+    expect(self!.getByText('Unverified')).toBeTruthy();
+    expect(self!.queryByText('Verified domain')).toBeNull();
+
+    expect(registered!.queryByText('Unverified')).toBeNull();
+    expect(registered!.queryByText('Verified domain')).toBeNull();
+    expect(registered!.getByText('Claude Code')).toBeTruthy();
+  });
+
+  it('a document calling itself “Claude” on another host reads as THAT host', () => {
+    render([verified('Claude', 'evil.example')]);
+    const row = within(screen.getByTestId('connected-app-row'));
+    expect(row.getByText('evil.example')).toBeTruthy();
+    expect(row.getByText('Calls itself “Claude”')).toBeTruthy();
+    // The name never stands alone as the app's label.
+    expect(row.queryByText('Claude')).toBeNull();
+    expect(table().getByRole('button', { name: 'Revoke evil.example in Motir' })).toBeTruthy();
+  });
+
+  it('the Revoke confirm names the host first, and lists the verified domain', () => {
+    render([verified('Claude', 'claude.ai')]);
+    fireEvent.click(table().getByRole('button', { name: 'Revoke claude.ai in Motir' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Revoke “Claude” from claude.ai?')).toBeTruthy();
+    expect(dialog.textContent).toContain(
+      'claude.ai, the app calling itself Claude, loses access to the Motir workspace now',
+    );
+    const facts = dialog.querySelector('dl')!;
+    expect(facts.querySelector('dt')!.textContent).toBe('Verified domain');
+    expect(facts.querySelector('dd')!.textContent).toBe('claude.ai');
+  });
+
+  it('an unregistered or registered app keeps the shipped confirm, with no domain row', () => {
+    render([connection()]);
+    fireEvent.click(table().getByRole('button', { name: 'Revoke Claude in Motir' }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.textContent).not.toContain('Verified domain');
+  });
+});
+
 describe('relativeOrDate', () => {
   const now = Date.parse('2026-09-30T12:00:00.000Z');
   it('is relative inside seven days and absolute beyond', () => {
@@ -250,9 +317,8 @@ describe('ConnectedAppsSection — the edges', () => {
           name: null,
           uri: null,
           icon: null,
-          unverified: true,
+          verification: { kind: 'self' },
           host: null,
-          discoveredHost: null,
         },
         permissions: [...GRANTABLE_PERMISSIONS],
       }),

@@ -20,7 +20,7 @@ const signOut = vi.fn(async () => undefined);
 vi.mock('@/lib/auth/client', () => ({ signOut: () => signOut() }));
 
 const REQUEST: ConsentRequestDto = {
-  client: { clientId: 'c1', name: 'Claude Code', unverified: true, discoveredHost: null },
+  client: { clientId: 'c1', name: 'Claude Code', verification: { kind: 'self' } },
   redirectUri: 'http://127.0.0.1:53682/callback',
   redirectHost: '127.0.0.1:53682',
   loopback: true,
@@ -81,6 +81,58 @@ afterEach(() => {
   vi.unstubAllGlobals();
   push.mockReset();
   signOut.mockClear();
+});
+
+describe('ConsentScreen — who vouches for the app (MOTIR-7174)', () => {
+  // `design/auth/oauth-consent--verified-client.mock.html` Panels V1–V2.
+  function withVerification(
+    verification: ConsentRequestDto['client']['verification'],
+    name: string | null = 'Claude',
+  ): ConsentRequestDto {
+    return {
+      ...REQUEST,
+      client: { clientId: 'https://claude.ai/oauth/mcp-oauth-client-metadata', name, verification },
+      redirectUri: 'https://claude.ai/api/mcp/auth_callback',
+      redirectHost: 'claude.ai',
+      loopback: false,
+    };
+  }
+
+  it('verified by domain: the host is the title and the app, the name is its own claim', () => {
+    renderScreen(withVerification({ kind: 'domain', host: 'claude.ai' }));
+    expect(screen.getByRole('heading', { name: 'Connect claude.ai to Motir?' })).toBeTruthy();
+    expect(screen.getByText('Verified domain')).toBeTruthy();
+    expect(screen.queryByText('Unverified')).toBeNull();
+    expect(
+      screen.getByText(
+        'Calls itself “Claude” — a name it chose. Motir checked that claude.ai publishes it.',
+      ),
+    ).toBeTruthy();
+    const app = screen.getAllByText('claude.ai').find((el) => el.className.includes('font-mono'));
+    expect(app).toBeTruthy();
+  });
+
+  it('a document calling itself “Claude” on another host reads as THAT host', () => {
+    renderScreen(withVerification({ kind: 'domain', host: 'evil.example' }));
+    expect(screen.getByRole('heading', { name: 'Connect evil.example to Motir?' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: /Claude/ })).toBeNull();
+    expect(screen.getByText(/Calls itself “Claude”.*evil\.example publishes it/)).toBeTruthy();
+  });
+
+  it('self-registered: the shipped Unverified pill and line', () => {
+    renderScreen(withVerification({ kind: 'self' }));
+    expect(screen.getByRole('heading', { name: 'Connect Claude to Motir?' })).toBeTruthy();
+    expect(screen.getByText('Unverified')).toBeTruthy();
+    expect(screen.queryByText('Verified domain')).toBeNull();
+    expect(screen.getByText(/It registered itself/)).toBeTruthy();
+  });
+
+  it('registered: no pill, and the registered line', () => {
+    renderScreen(withVerification({ kind: 'registered' }));
+    expect(screen.queryByText('Unverified')).toBeNull();
+    expect(screen.queryByText('Verified domain')).toBeNull();
+    expect(screen.getByText(/Registered with this Motir ahead of time/)).toBeTruthy();
+  });
 });
 
 describe('ConsentScreen', () => {
@@ -247,7 +299,7 @@ describe('ConsentScreen', () => {
     const calls = stubFetch(200, { connectionId: 'k', redirectUrl: 'http://127.0.0.1/cb?code=1' });
     const two: ConsentRequestDto = {
       ...REQUEST,
-      client: { ...REQUEST.client, unverified: false },
+      client: { ...REQUEST.client, verification: { kind: 'registered' } },
       workspaces: [
         REQUEST.workspaces[0]!,
         {

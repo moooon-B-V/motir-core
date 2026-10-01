@@ -218,8 +218,11 @@ describe('describing the request', () => {
       await consentQuery(clientId, cookie),
     );
     expect(described.client.name).toBeNull();
-    expect(described.client.unverified).toBe(true);
-    expect(await oauthConnectionsService.clientDisplayName(clientId)).toBeNull();
+    expect(described.client.verification).toEqual({ kind: 'self' });
+    expect(await oauthConnectionsService.clientDisplayName(clientId)).toEqual({
+      name: null,
+      verification: { kind: 'self' },
+    });
 
     const { connectionId } = await connect({ clientId, user: owner, workspaceId: workspace.id });
     const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: connectionId } });
@@ -257,7 +260,10 @@ describe('describing the request', () => {
 
   it('clientDisplayName: the registered name, and nothing for an unknown or disabled app', async () => {
     const clientId = await registeredClientId();
-    expect(await oauthConnectionsService.clientDisplayName(clientId)).toBe('Claude');
+    expect(await oauthConnectionsService.clientDisplayName(clientId)).toEqual({
+      name: 'Claude',
+      verification: { kind: 'self' },
+    });
     expect(await oauthConnectionsService.clientDisplayName('nobody')).toBeNull();
     await adminDb.oauthClient.update({ where: { clientId }, data: { disabled: true } });
     expect(await oauthConnectionsService.clientDisplayName(clientId)).toBeNull();
@@ -414,9 +420,8 @@ describe('the mapper', () => {
       name: null,
       uri: null,
       icon: null,
-      unverified: true,
+      verification: { kind: 'self' },
       host: null,
-      discoveredHost: null,
     });
   });
 
@@ -430,8 +435,8 @@ describe('the mapper', () => {
     expect(client(['http://[::1]:5000/cb']).host).toBe('localhost');
     expect(client(['not a url']).host).toBeNull();
     expect(client([]).host).toBeNull();
-    expect(client([], 'u').unverified).toBe(false);
-    expect(client([], null).unverified).toBe(true);
+    expect(client([], 'u').verification).toEqual({ kind: 'registered' });
+    expect(client([], null).verification).toEqual({ kind: 'self' });
   });
 });
 

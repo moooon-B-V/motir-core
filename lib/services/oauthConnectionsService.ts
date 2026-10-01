@@ -26,13 +26,14 @@ import {
   IRREVERSIBLE_PERMISSIONS,
   expandStoredGrant,
 } from '@/lib/tokens/grant';
-import { discoveredClientHost } from '@/lib/oauth/discoveredClient';
+import { clientVerification } from '@/lib/oauth/discoveredClient';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type {
   ApproveConsentResult,
   ConsentRequestDto,
   DenyConsentResult,
   OAuthConnectionDto,
+  OAuthSignInClientDto,
 } from '@/lib/dto/oauthConnections';
 
 // OAuth connections (Story MOTIR-6973 · Subtask MOTIR-6983) — what an app a
@@ -261,10 +262,10 @@ export const oauthConnectionsService = {
         clientId: client.clientId,
         name: client.name?.trim() || null,
         // A client a signed-in person registered was put there by someone this
-        // Motir knows; one that registered itself (RFC 7591, unauthenticated —
-        // every MCP client) is only its own claim.
-        unverified: client.userId === null,
-        discoveredHost: discoveredClientHost(client),
+        // Motir knows; one Motir discovered by its metadata document is vouched
+        // for by that document's host; one that registered itself (RFC 7591,
+        // unauthenticated) is only its own claim.
+        verification: clientVerification(client),
       },
       redirectUri,
       redirectHost: redirect.host,
@@ -275,14 +276,15 @@ export const oauthConnectionsService = {
   },
 
   /**
-   * The name a registered client gave itself, for the sign-in card's "connecting
-   * an app" banner (design Panel 5). Null for an unknown or disabled client, or
-   * one that registered no name — the card then says "This app". Display only.
+   * The app an authorize request is waiting on, for the sign-in card's
+   * "connecting an app" banner (design Panel 5, and its verified-by-domain
+   * delta V3): the name it gave itself, beside who vouches for it. Null for an
+   * unknown or disabled client. Display only.
    */
-  async clientDisplayName(clientId: string): Promise<string | null> {
+  async clientDisplayName(clientId: string): Promise<OAuthSignInClientDto | null> {
     const client = await oauthClientRepository.findByClientId(clientId);
     if (!client || client.disabled) return null;
-    return client.name?.trim() || null;
+    return { name: client.name?.trim() || null, verification: clientVerification(client) };
   },
 
   /**

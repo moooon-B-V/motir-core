@@ -4,7 +4,11 @@ import {
   fetchClientMetadataDocument,
   setClientMetadataTransportForTests,
 } from '@/lib/oauth/clientMetadataDocument';
-import { CIMD_DISCOVERY_ID, discoveredClientHost } from '@/lib/oauth/discoveredClient';
+import {
+  CIMD_DISCOVERY_ID,
+  clientVerification,
+  discoveredClientHost,
+} from '@/lib/oauth/discoveredClient';
 import { oauthErrorPageUrl } from '@/lib/oauth/config';
 
 // The Client ID Metadata Document seams (Story MOTIR-7170 · Subtask MOTIR-7173):
@@ -61,6 +65,41 @@ describe('discoveredClientHost', () => {
 
   it('is null for a discovered id that is not a URL', () => {
     expect(discoveredClientHost({ clientId: 'not a url', clientDiscoveryId: 'cimd' })).toBe(null);
+  });
+});
+
+describe('clientVerification (MOTIR-7174)', () => {
+  it('a discovered client is verified as its client_id host, whatever it calls itself', () => {
+    expect(
+      clientVerification({
+        clientId: 'https://evil.example/oauth/mcp-oauth-client-metadata',
+        clientDiscoveryId: CIMD_DISCOVERY_ID,
+        userId: null,
+      }),
+    ).toEqual({ kind: 'domain', host: 'evil.example' });
+  });
+
+  it('a client a person registered is registered; one that registered itself is self', () => {
+    expect(clientVerification({ clientId: 'mcp_1', userId: 'u1' })).toEqual({
+      kind: 'registered',
+    });
+    expect(clientVerification({ clientId: 'mcp_2', userId: null })).toEqual({ kind: 'self' });
+  });
+
+  it('a URL-shaped client_id is NOT a domain unless Motir discovered it', () => {
+    expect(
+      clientVerification({
+        clientId: 'https://claude.ai/x',
+        clientDiscoveryId: null,
+        userId: null,
+      }),
+    ).toEqual({ kind: 'self' });
+  });
+
+  it('a discovered client with no parseable host claims no domain', () => {
+    expect(
+      clientVerification({ clientId: 'not a url', clientDiscoveryId: 'cimd', userId: null }),
+    ).toEqual({ kind: 'self' });
   });
 });
 

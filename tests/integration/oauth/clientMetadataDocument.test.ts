@@ -126,8 +126,16 @@ describe('a client that names itself by a metadata document', () => {
       user.id,
       consent.searchParams.toString(),
     );
-    expect(described.client.discoveredHost).toBe(new URL(clientId).host);
+    expect(described.client.verification).toEqual({
+      kind: 'domain',
+      host: new URL(clientId).host,
+    });
     expect(described.client.name).toBe('Claude');
+    // The sign-in hand-off reads the same verification (MOTIR-7174).
+    expect(await oauthConnectionsService.clientDisplayName(clientId)).toEqual({
+      name: 'Claude',
+      verification: { kind: 'domain', host: new URL(clientId).host },
+    });
   });
 
   it('connects, exchanges and refreshes like any public client', async () => {
@@ -145,7 +153,10 @@ describe('a client that names itself by a metadata document', () => {
     expect(refreshed.status, await refreshed.clone().text()).toBe(200);
 
     const [connection] = await oauthConnectionsService.listForUser(c.user.id);
-    expect(connection!.client.discoveredHost).toBe(new URL(clientId).host);
+    expect(connection!.client.verification).toEqual({
+      kind: 'domain',
+      host: new URL(clientId).host,
+    });
   });
 
   it('matches a loopback redirect on any port (Claude Code’s document)', async () => {

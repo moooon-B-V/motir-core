@@ -151,7 +151,7 @@ describe('/oauth/consent renders a valid pending request', () => {
   it('describes the request from the SIGNED request and the registration, not the URL', async () => {
     const { query, user } = await pending();
     const request = await oauthConnectionsService.describeConsentRequest(user.id, query);
-    expect(request.client).toMatchObject({ name: 'Claude', unverified: true });
+    expect(request.client).toMatchObject({ name: 'Claude', verification: { kind: 'self' } });
     expect(request.redirectUri).toBe(CLAUDE_CALLBACK);
     expect(request.redirectHost).toBe('claude.ai');
     expect(request.loopback).toBe(false);

@@ -114,7 +114,7 @@ describe('GET /api/account/oauth-connections', () => {
       clientId,
       name: 'Claude',
       // Registered through RFC 7591 by nobody signed in — self-registered.
-      unverified: true,
+      verification: { kind: 'self' },
       host: 'claude.ai',
     });
     expect(row.workspace.id).toBe(first.workspaceId);
