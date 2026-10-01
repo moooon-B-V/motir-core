@@ -187,7 +187,7 @@ describe('what each built-in role is offered', () => {
     );
     // One became TWO with MOTIR-6874: `/my-agents` needs `instance:use`, which a
     // viewer does not hold (agent-instances.md §8 — a viewer runs no machine).
-    expect(gone.sort()).toEqual(['/my-agents', '/requested-features']);
+    expect(gone.sort()).toEqual(['/my-agents', '/triage']);
   });
 
   it('a viewer keeps every READ surface', () => {

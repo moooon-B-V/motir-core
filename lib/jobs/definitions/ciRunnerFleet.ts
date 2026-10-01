@@ -1,5 +1,7 @@
 import { defineJob } from '../defineJob';
+import { deferRun } from '../engine/defer';
 import { dispatchSystemEvent } from '../sendEvent';
+import { transactionTimeoutHalf } from '@/lib/monitoring/transactionStall';
 import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
 
 // The runner FLEET's background jobs (Story MOTIR-1916 · MOTIR-1921) — the
@@ -131,6 +133,13 @@ export const ciRunnerProvisionSweep = defineJob(
   },
 );
 
+/**
+ * How long a boot pass that could not start a transaction waits before it is
+ * re-entered (Bug MOTIR-7074) — `HOSTED_RUN_SUPERVISE_TRANSACTION_RETRY_MS`'s
+ * value and reason.
+ */
+export const CI_RUNNER_BOOT_TRANSACTION_RETRY_MS = 5_000;
+
 export const ciRunnerBoot = defineJob(
   {
     id: 'system.ci-runner-boot',
@@ -159,6 +168,16 @@ export const ciRunnerBoot = defineJob(
     // attempt"*). A genuine handler failure is counted on the failure path, where
     // there is something to record. `tests/jobs/ci-runner-fleet.test.ts` asserts
     // it against the real reclaim rather than citing this comment.
+    //
+    // ⚠️ EXCEPT A PASS THAT COULD NOT START A TRANSACTION AT ALL (Bug MOTIR-7074,
+    // `hosted-run/supervise`'s MOTIR-7071 twin). That is P2028's `maxWait` half: no
+    // pooled connection came free, so the statement never ran. With a budget of
+    // ONE it dead-lettered the whole CI supervision, leaving the intent and its
+    // machine to the abandoned-supervision sweep (15 minutes of grace plus its
+    // 5-minute tick). Such a pass is DEFERRED instead — the same re-entry a lease
+    // reclaim performs, over the same step memo, so a finished boot is replayed and
+    // never re-run. The `timeout` half (a transaction that expired mid-body) and
+    // every other failure keep the single attempt.
     retryPolicy: 'none',
   },
   async (ctx, services) => {
@@ -199,16 +218,24 @@ export const ciRunnerBoot = defineJob(
     // run — so the worker's slot is free between polls
     // (`docs/decisions/job-queue-foundation.md` §16). `runIntent` survives as the
     // in-process run-to-completion wrapper, for a caller with no queue row.
-    return services.ciRunnerBoot.advanceIntent(ctx.runId, intentId, {
-      steps: {
-        run: <T>(id: string, fn: () => T | Promise<T>): Promise<T> =>
-          // ONE cast, at the boundary — the same shape and reason as
-          // `lib/jobs/engine/runner.ts`'s single cast. Inngest types a step's
-          // result as `Jsonify<T>`, and every value crossing this seam
-          // (`SupervisionSession`, `RunIntentOutcome`) is declared
-          // JSON-serializable by contract and says so at its definition.
-          ctx.step.run(id, fn as () => Promise<T>) as unknown as Promise<T>,
-      },
-    });
+    try {
+      return await services.ciRunnerBoot.advanceIntent(ctx.runId, intentId, {
+        steps: {
+          run: <T>(id: string, fn: () => T | Promise<T>): Promise<T> =>
+            // ONE cast, at the boundary — the same shape and reason as
+            // `lib/jobs/engine/runner.ts`'s single cast. Inngest types a step's
+            // result as `Jsonify<T>`, and every value crossing this seam
+            // (`SupervisionSession`, `RunIntentOutcome`) is declared
+            // JSON-serializable by contract and says so at its definition.
+            ctx.step.run(id, fn as () => Promise<T>) as unknown as Promise<T>,
+        },
+      });
+    } catch (err) {
+      if (transactionTimeoutHalf(err) !== 'maxWait') throw err;
+      deferRun(
+        new Date(Date.now() + CI_RUNNER_BOOT_TRANSACTION_RETRY_MS),
+        `ci-runner boot ${intentId}: no database connection came free in time`,
+      );
+    }
   },
 );

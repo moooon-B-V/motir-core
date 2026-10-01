@@ -287,7 +287,7 @@ describe('rendered specimen — the differentiating hues still differentiate', (
     // name onto the six tints. The point of this assertion is unchanged: a
     // family is only real if something paints with it.
     const triageAvatar = readFileSync(
-      join(process.cwd(), 'app/(authed)/requested-features/_components/TriageAvatar.tsx'),
+      join(process.cwd(), 'app/(authed)/triage/_components/TriageAvatar.tsx'),
       'utf8',
     );
     for (const token of AVATAR_TOKENS.filter((t) => !t.includes('fallback'))) {

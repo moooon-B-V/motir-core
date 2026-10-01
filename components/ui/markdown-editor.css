@@ -140,8 +140,15 @@
    Colour via --el-* only; shape via the element-semantic tokens (--radius-control
    + the small-chip kbd padding pair — they flip with data-style). Introduces no
    new token. One rule covers MarkdownView's rendered token across every surface,
-   since the chip sits inside .motir-prose. */
-.motir-prose .wi-chip {
+   since the chip sits inside .motir-prose.
+
+   ⚠️ A CHIP OUTSIDE PROSE NAMES ITS HOST `.wi-chip-host` (MOTIR-7068). The rail's
+   debug outcome line renders the chip in plain text, not through MarkdownView;
+   without a matching ancestor every rule below missed, so the type icon drew at
+   lucide's 24px on its own line and the key ran into the title. `:is()` takes
+   its most specific argument, so the chip inside prose is matched exactly as
+   before. */
+:is(.motir-prose, .wi-chip-host) .wi-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -157,72 +164,72 @@
   color: var(--el-text);
   cursor: pointer;
 }
-.motir-prose .wi-chip .wi-type-icon {
+:is(.motir-prose, .wi-chip-host) .wi-chip .wi-type-icon {
   width: 13px;
   height: 13px;
 }
-.motir-prose .wi-chip .wi-key {
+:is(.motir-prose, .wi-chip-host) .wi-chip .wi-key {
   font-family: var(--font-mono);
   font-size: 0.9em;
   font-weight: 500;
   color: var(--el-link);
 }
-.motir-prose .wi-chip .wi-title {
+:is(.motir-prose, .wi-chip-host) .wi-chip .wi-title {
   color: var(--el-text);
 }
-.motir-prose .wi-chip .wi-dot {
+:is(.motir-prose, .wi-chip-host) .wi-chip .wi-dot {
   width: 6px;
   height: 6px;
   border-radius: 9999px;
   flex: none;
 }
-.motir-prose .wi-chip .wi-dot.s-todo {
+:is(.motir-prose, .wi-chip-host) .wi-chip .wi-dot.s-todo {
   background: var(--el-text-faint);
 }
-.motir-prose .wi-chip .wi-dot.s-inprogress {
+:is(.motir-prose, .wi-chip-host) .wi-chip .wi-dot.s-inprogress {
   background: var(--el-info);
 }
-.motir-prose .wi-chip .wi-dot.s-done {
+:is(.motir-prose, .wi-chip-host) .wi-chip .wi-dot.s-done {
   background: var(--el-success);
 }
-.motir-prose .wi-chip:hover {
+:is(.motir-prose, .wi-chip-host) .wi-chip:hover {
   background: var(--el-surface);
   border-color: var(--el-border-strong);
 }
-.motir-prose .wi-chip:hover .wi-title {
+:is(.motir-prose, .wi-chip-host) .wi-chip:hover .wi-title {
   text-decoration: underline;
 }
-.motir-prose .wi-chip:focus-visible {
+:is(.motir-prose, .wi-chip-host) .wi-chip:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: 1px;
 }
 
 /* Archived target — muted, dashed border + archive glyph, still navigable. */
-.motir-prose .wi-chip.is-archived {
+:is(.motir-prose, .wi-chip-host) .wi-chip.is-archived {
   background: transparent;
   border-style: dashed;
   border-color: var(--el-border);
   color: var(--el-text-faint);
 }
-.motir-prose .wi-chip.is-archived .wi-key {
+:is(.motir-prose, .wi-chip-host) .wi-chip.is-archived .wi-key {
   color: var(--el-text-muted);
 }
-.motir-prose .wi-chip.is-archived .wi-title {
+:is(.motir-prose, .wi-chip-host) .wi-chip.is-archived .wi-title {
   color: var(--el-text-faint);
 }
-.motir-prose .wi-chip .wi-archive-glyph {
+:is(.motir-prose, .wi-chip-host) .wi-chip .wi-archive-glyph {
   display: inline-flex;
   flex: none;
   color: var(--el-text-faint);
 }
-.motir-prose .wi-chip .wi-archive-glyph svg {
+:is(.motir-prose, .wi-chip-host) .wi-chip .wi-archive-glyph svg {
   width: 11px;
   height: 11px;
   display: block;
 }
 
 /* Deleted target — strikethrough, bare authored key kept, NOT clickable. */
-.motir-prose .wi-chip.is-deleted {
+:is(.motir-prose, .wi-chip-host) .wi-chip.is-deleted {
   background: transparent;
   border-color: transparent;
   padding-left: 0;
@@ -231,20 +238,20 @@
   text-decoration: line-through;
   cursor: default;
 }
-.motir-prose .wi-chip.is-deleted .wi-key {
+:is(.motir-prose, .wi-chip-host) .wi-chip.is-deleted .wi-key {
   color: var(--el-text-faint);
   text-decoration: line-through;
 }
 
 /* No view access — dashed bare key only, no title / status leak, not navigable. */
-.motir-prose .wi-chip.is-noaccess {
+:is(.motir-prose, .wi-chip-host) .wi-chip.is-noaccess {
   background: transparent;
   border-style: dashed;
   border-color: var(--el-border);
   color: var(--el-text-muted);
   cursor: not-allowed;
 }
-.motir-prose .wi-chip.is-noaccess .wi-key {
+:is(.motir-prose, .wi-chip-host) .wi-chip.is-noaccess .wi-key {
   color: var(--el-text-muted);
 }
 

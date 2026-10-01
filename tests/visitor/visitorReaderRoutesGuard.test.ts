@@ -39,7 +39,7 @@ const VISITOR_TREE = 'app/(visitor)/p/[identifier]';
 
 /** A member route's first segment — every route a shared body links to. */
 export const MEMBER_ROUTE =
-  /^\/(items|plans|approvals|runs|boards|roadmap|requested-features|backlog|sprints)(?=[/?#]|$)/;
+  /^\/(items|plans|approvals|runs|boards|roadmap|triage|backlog|sprints)(?=[/?#]|$)/;
 
 /** Calls whose argument is where a member route BELONGS: the reader mapping, and cache revalidation (never a link). */
 const WRAPPERS = new Set(['readerPath', 'path', 'view', 'revalidatePath']);

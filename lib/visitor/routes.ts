@@ -100,10 +100,11 @@ export function memberPathForVisitorPath(path: string): string | null {
     case 'roadmap':
     case 'approvals':
     case 'runs':
-    // The members' own inbox, renamed Requested features (MOTIR-6772): one list,
-    // one name, one address.
-    case 'requested-features':
       return withQuery(`/${view}`, params);
+    // The Visitor's Requested features is the members' own Triage inbox
+    // (MOTIR-7043 gave the members' side its old name back).
+    case 'requested-features':
+      return withQuery('/triage', params);
   }
 }
 
@@ -142,8 +143,11 @@ export function visitorPathForMemberPath(
     case 'roadmap':
     case 'approvals':
     case 'runs':
-    case 'requested-features':
       return decodedSub ? null : withQuery(visitorViewPath(identifier, head), params);
+    case 'triage':
+      return decodedSub
+        ? null
+        : withQuery(visitorViewPath(identifier, 'requested-features'), params);
     default:
       return null;
   }

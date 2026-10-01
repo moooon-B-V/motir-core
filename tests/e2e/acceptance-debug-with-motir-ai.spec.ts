@@ -311,8 +311,8 @@ test('Debug with Motir AI — from the report widget and from the orb', async ({
     await beat();
 
     // ── Open Triage: it is listed there ───────────────────────────────────
-    await page.goto('/requested-features');
-    await expect(page.getByRole('heading', { level: 1, name: 'Requested features' })).toBeVisible({
+    await page.goto('/triage');
+    await expect(page.getByRole('heading', { level: 1, name: 'Triage' })).toBeVisible({
       timeout: 60_000,
     });
     await expect(page.getByRole('button', { name: new RegExp(REPORT_TITLE) })).toBeVisible();
@@ -378,8 +378,8 @@ test('Debug with Motir AI — from the report widget and from the orb', async ({
 
     // ── Triage gained no row ──────────────────────────────────────────────
     expect(await triageCount(seed.projectId)).toBe(triageBefore);
-    await page.goto('/requested-features');
-    await expect(page.getByRole('heading', { level: 1, name: 'Requested features' })).toBeVisible({
+    await page.goto('/triage');
+    await expect(page.getByRole('heading', { level: 1, name: 'Triage' })).toBeVisible({
       timeout: 60_000,
     });
     await expect(page.getByRole('button', { name: new RegExp(REPORT_TITLE) })).toBeVisible();
