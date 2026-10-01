@@ -1,5 +1,7 @@
 import { defineJob } from '../defineJob';
+import { deferRun } from '../engine/defer';
 import type { HostedRunSuperviseData } from '../types';
+import { transactionTimeoutHalf } from '@/lib/monitoring/transactionStall';
 
 // A HOSTED RUN'S SUPERVISION (Story MOTIR-683 · MOTIR-690) — one pass per run of
 // the queue, advancing the booted container's supervision by one poll and
@@ -20,6 +22,22 @@ import type { HostedRunSuperviseData } from '../types';
 // refunds the attempt, and a genuine handler failure is one the abandoned-
 // supervision sweep settles — a blind retry would only re-enter a supervision
 // already recorded. `idempotency` keeps a double emit to ONE supervision per run.
+//
+// ⚠️ EXCEPT A PASS THAT COULD NOT START A TRANSACTION AT ALL (Bug MOTIR-7071).
+// That is P2028's `maxWait` half: no connection came free in time, so the
+// statement that asked for one never ran. With a budget of ONE it used to
+// dead-letter the whole supervision, and the only thing left to end the run was
+// the abandoned-supervision sweep — 15 minutes of grace plus its 5-minute tick —
+// while the container kept running and its card kept reading as running. Seen in
+// the acceptance lane: the job worker's pool was saturated for twenty minutes,
+// one supervise pass met it, and the stall that should have ended a silent run
+// 25 s later was never read again. Such a pass is DEFERRED instead — the same
+// re-entry a lease reclaim or a worker restart already performs, over the same
+// step memo, so nothing the pass had finished runs twice and nothing unfinished
+// is lost. The `timeout` half (a transaction that expired mid-body) and every
+// other failure keep the single attempt.
+export const HOSTED_RUN_SUPERVISE_TRANSACTION_RETRY_MS = 5_000;
+
 export const hostedRunSupervise = defineJob(
   {
     id: 'hosted-run/supervise',
@@ -28,13 +46,21 @@ export const hostedRunSupervise = defineJob(
   },
   async (ctx, services) => {
     const data = ctx.event.data as HostedRunSuperviseData;
-    return services.hostedRun.supervise(ctx.runId, data, {
-      steps: {
-        run: <T>(id: string, fn: () => T | Promise<T>): Promise<T> =>
-          // ONE cast, at the boundary — `ciRunnerBoot`'s shape and reason: every
-          // value crossing this seam is JSON-serializable by contract.
-          ctx.step.run(id, fn as () => Promise<T>) as unknown as Promise<T>,
-      },
-    });
+    try {
+      return await services.hostedRun.supervise(ctx.runId, data, {
+        steps: {
+          run: <T>(id: string, fn: () => T | Promise<T>): Promise<T> =>
+            // ONE cast, at the boundary — `ciRunnerBoot`'s shape and reason: every
+            // value crossing this seam is JSON-serializable by contract.
+            ctx.step.run(id, fn as () => Promise<T>) as unknown as Promise<T>,
+        },
+      });
+    } catch (err) {
+      if (transactionTimeoutHalf(err) !== 'maxWait') throw err;
+      deferRun(
+        new Date(Date.now() + HOSTED_RUN_SUPERVISE_TRANSACTION_RETRY_MS),
+        `hosted-run supervision ${data.dispatchRunId}: no database connection came free in time`,
+      );
+    }
   },
 );
