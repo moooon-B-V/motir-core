@@ -1148,6 +1148,52 @@ export const planChangeSessionsService = {
   },
 
   /**
+   * The `debug_bug` job a `debug` turn has ALREADY LANDED, or null (MOTIR-7065).
+   *
+   * A turn has landed when its claim (`debugLandingClaimedAt`) is taken — which
+   * also covers a landing that crashed after the claim, and A1.4 fails those
+   * CLOSED — or when its job already has its `assistant` reply on the thread (an
+   * ungrounded report replies without ever claiming). Either way a retry must not
+   * submit a second, paid diagnosis: the job named here is the one to replay.
+   *
+   * Read under the session's row lock, the serialisation {@link claimDebugLanding}
+   * takes the claim under, so a landing mid-flight is seen as committed or not at
+   * all. Null for a turn that is not a `debug` turn, has no job yet, or has not
+   * landed — the cue to re-run the diagnosis exactly as before.
+   */
+  async landedDebugJob(
+    turnId: string,
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<string | null> {
+    const session = await requireSession(pctx, address);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        const turn = await planChangeTurnRepository.findByIdInSession(
+          turnId,
+          session.id,
+          pctx.workspaceId,
+          tx,
+        );
+        if (!turn || turn.role !== 'user') throw new PlanChangeTurnNotFoundError(turnId);
+        if (turn.intent !== 'debug' || !turn.jobId) return null;
+        if (turn.debugLandingClaimedAt !== null) return turn.jobId;
+        const reply = await planChangeTurnRepository.findByJobIdAndRole(
+          session.id,
+          turn.jobId,
+          'assistant',
+          pctx.workspaceId,
+          tx,
+        );
+        return reply ? turn.jobId : null;
+      },
+    );
+  },
+
+  /**
    * RELEASE a debug landing's claim (MOTIR-7049). The caller does this ONLY when
    * the write was refused inside its own transaction — so nothing committed — and
    * a later settle may try again. A claim is never released after a write that

@@ -417,25 +417,69 @@ describe('a retried job writes nothing twice', () => {
     expect(await assistantTurns()).toHaveLength(1);
   });
 
-  it('a RETRY of a turn that already landed runs a job whose settle writes nothing', async () => {
+  it('a RETRY of a turn that already landed submits NO job and replays the landing (MOTIR-7065)', async () => {
     declare({ ask: [{ intent: 'debug' }], debugBug: [{ debugBug: diagnose(null) }] });
     const { dispatched } = await sendReport();
     const { jobId } = (await dispatched.json()) as { jobId: string };
-    expect((await settleJob(jobId)).status).toBe(200);
+    const first = await settleJob(jobId);
+    expect(first.status).toBe(200);
+    const { landing } = (await first.json()) as { landing: DebugLandingDto };
     const landed = await cards();
     expect(landed.size).toBe(1);
+    expect(debugJobs()).toHaveLength(1);
 
     const turn = await userTurn();
     const retry = await ask(post('/api/ai/ask', { turnId: turn.id }));
     expect(retry.status).toBe(200);
-    const { jobId: retryJobId } = (await retry.json()) as { jobId: string };
-    expect(retryJobId).toBe('e2e-debug_bug-1');
+    // The landed turn's OWN job comes back — nothing new crossed the wire, so
+    // nothing spent a credit.
+    await expect(retry.json()).resolves.toMatchObject({ outcome: 'debugging', jobId });
+    expect(debugJobs()).toHaveLength(1);
+    expect(wireKinds()).toEqual(['ask_project', 'debug_bug']);
+    expect((await userTurn()).jobId).toBe(jobId);
 
-    const res = await settleJob(retryJobId);
+    // Following it, as the rail does, settles to the SAME landing and writes nothing.
+    const res = await settleJob(jobId);
     expect(res.status).toBe(200);
-    // The turn's landing is claimed: the second job's identical result files no
-    // second bug and appends no second reply.
+    await expect(res.json()).resolves.toMatchObject({ outcome: 'debugged', landing });
     expect(changed(landed, await cards())).toEqual([]);
+    expect(await assistantTurns()).toHaveLength(1);
+  });
+
+  it('a RETRY of an UNGROUNDED turn that already replied submits NO job', async () => {
+    declare({
+      ask: [{ intent: 'debug' }],
+      debugBug: [{ debugBug: { ...diagnose(null), grounded: false } }],
+    });
+    const { dispatched } = await sendReport();
+    const { jobId } = (await dispatched.json()) as { jobId: string };
+    expect((await settleJob(jobId)).status).toBe(200);
+    expect(await assistantTurns()).toHaveLength(1);
+
+    const retry = await ask(post('/api/ai/ask', { turnId: (await userTurn()).id }));
+    expect(retry.status).toBe(200);
+    await expect(retry.json()).resolves.toMatchObject({ outcome: 'debugging', jobId });
+    expect(debugJobs()).toHaveLength(1);
+    expect((await cards()).size).toBe(0);
+  });
+
+  it('a RETRY of a debug turn that has NOT landed yet re-runs the diagnosis — ONE new job', async () => {
+    declare({
+      ask: [{ intent: 'debug' }],
+      debugBug: [{ debugBug: diagnose(null) }, { debugBug: diagnose(null) }],
+    });
+    const { dispatched } = await sendReport();
+    const { jobId } = (await dispatched.json()) as { jobId: string };
+    expect(debugJobs()).toHaveLength(1);
+
+    // Never settled: no claim, no reply — the retry runs the diagnosis again.
+    const retry = await ask(post('/api/ai/ask', { turnId: (await userTurn()).id }));
+    expect(retry.status).toBe(200);
+    const { jobId: retryJobId } = (await retry.json()) as { jobId: string };
+    expect(retryJobId).not.toBe(jobId);
+    expect(debugJobs()).toHaveLength(2);
+
+    await settleJob(retryJobId);
     expect((await cards()).size).toBe(1);
     expect(await assistantTurns()).toHaveLength(1);
   });
