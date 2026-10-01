@@ -1263,6 +1263,41 @@ invisible). The two questions deliberately NOT answered here are owned elsewhere
 `motir run <story>` looping a story's CHILDREN is **MOTIR-3001**, and the status vocabulary a
 partially delivered card rests in is **MOTIR-2999**.
 
+## Amendment 2026-10-01 (MOTIR-7180) — a SIXTH delivery state: a repository that shipped without a change request
+
+§A5 closed its table with _"Five states, and that is the whole enumeration."_ That stopped being
+true the first time a story carried a repository touched ONLY by a human card. MOTIR-6976's set was
+`[motir-marketing, motir-meta, motir-skills]`; its `motir-skills` leaf released `v0.4.0` by pushing a
+**tag** — correctly, with no pull request — and was closed Done through the guide. Both real pull
+requests merged, and the gate held the story at `deferred_incomplete_repo_set` on `motir-skills`
+for ever: nothing would ever merge there, so the hold was unsatisfiable by construction and only a
+person moving the status by hand released it.
+
+| Evidence                                                                                                                                                                              | Delivery state                         | Holds the item? |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | --------------- |
+| would be `awaiting`, the item has **no** linked change request in that repository, and the container's live leaves targeting it are **all** done-category with **no** linked delivery | **`delivered_without_change_request`** | **no**          |
+
+- **It is reached only from `awaiting`.** A merge onto the default branch is still `delivered`, a
+  null-base merge still `unknown`, a row that does not exist still `unestablished`. And ANY linked
+  change request in that repository — open, closed unmerged, merged onto a side branch — keeps the
+  state it had: the rule is "nothing will merge here, and that is how the work was done", never "a
+  Done child excuses a missing merge".
+- **The evidence is the LEAVES', read by `resolveExpectedRepos`** through
+  `workItemRepoRepository.listLeafSettlementForContainer` — the same non-archived, childless leaves
+  §A6 unions into the set, so the excuse reasons about exactly the cards that put the repository
+  there. A leaf is settled when its status's **category** is `done` in its project's workflow and it
+  has no `work_item_delivery` row at all. At least one leaf must target the repository, so a leaf
+  CARD (no children) never earns the state. The stored-name rung (§A7) has no references to match
+  a leaf against, so it carries no evidence and holds exactly as before.
+- **Kept, not dropped from the union.** Removing manual-only repositories from a container's set
+  when it is assembled was the alternative, and it loses the record that the story touched that
+  repository. The set is unchanged; only the classification learns a sixth answer.
+- **One derivation still.** The gate, its re-evaluation (`repoSetCompletionService`) and the item
+  panel all read through `resolveExpectedRepos` → `classifyRepoDelivery`, so all three agree. The
+  panel draws it with the delivered glyph and a neutral _Shipped without a PR_ chip; the
+  Development section keeps a placeholder row for it reading _Shipped without a pull request_; the
+  dispatch payload carries it and the CLI names it as not holding the card.
+
 ## Consequences
 
 - The completion gate acquires an EXPECTED side, which is the whole point: a card can

@@ -759,6 +759,58 @@ describe('sign-in status (panel 3, Q7)', () => {
       'Not signed in — run codex login --device-auth in the terminal to sign in',
     );
   });
+
+  // MOTIR-7062: the lane measures the header now — the turn settling, and every
+  // profile's own words (or the generic ones for a profile the table does not know).
+  it('the mint turn lands once, then settles to plain ink', async () => {
+    await mount(undefined, { openAgentId: 'a1' });
+    const ws = await goLive();
+    act(() => ws.frame({ t: 'signin', profile: 'claude', state: 'signed_out' }));
+    vi.useFakeTimers();
+    act(() => ws.frame({ t: 'signin', profile: 'claude', state: 'signed_in' }));
+    expect(screen.getByTestId('agent-signin').className).toContain('--el-tint-mint');
+    act(() => vi.advanceTimersByTime(4_000));
+    expect(screen.getByTestId('agent-signin').className).not.toContain('--el-tint-mint');
+    expect(screen.getByTestId('agent-signin').textContent).toBe('Signed in to Claude Code');
+  });
+
+  it.each([
+    [
+      'opencode',
+      'OpenCode',
+      'signed_out',
+      'Not signed in — run opencode auth login in the terminal to sign in',
+    ],
+    // A checkable sentence is only for the three that have one; Kimi signed out is generic.
+    ['kimi', 'Kimi Code', 'signed_out', 'Not signed in — sign in to Kimi Code in the terminal'],
+    ['cursor', 'Cursor', 'signed_out', 'Not signed in — sign in to Cursor in the terminal'],
+    [
+      'aider',
+      'Aider',
+      'unknown',
+      'Sign-in status can’t be checked for AiderAider uses your model provider’s key: add ANTHROPIC_API_KEY=… (or your provider’s) to ~/.env.',
+    ],
+    [
+      'goose',
+      'Goose',
+      'unknown',
+      'Sign-in status can’t be checked for GooseTo add your model provider’s key, run goose configure in the terminal.',
+    ],
+    [
+      'cursor',
+      'Cursor',
+      'unknown',
+      'Sign-in status can’t be checked for CursorTo sign in, start Cursor in the terminal and follow its sign-in.',
+    ],
+  ])('%s, %s: %s names its own way in', async (profileId, profileName, state, words) => {
+    routes.list = () => page([agent({ id: 'p1', profileId, profileName })]);
+    await mount(undefined, { openAgentId: 'p1' });
+    const ws = await goLive();
+    act(() => ws.frame({ t: 'signin', profile: profileId, state }));
+    const line = screen.getByTestId('agent-signin');
+    expect(line.getAttribute('data-state')).toBe(state);
+    expect(line.textContent).toBe(words);
+  });
 });
 
 describe('the header’s mutations update the list too (page-state contract)', () => {

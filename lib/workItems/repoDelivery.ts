@@ -47,11 +47,30 @@ export type RepoDeliveryState =
    * The row was SKIPPED — the project is deliberately code-less there
    * (`project-repository-set.md` §4.3).
    *
-   * The ONE state that does NOT hold the item. Holding it would make §4.3
+   * One of the two states that do NOT hold the item. Holding it would make §4.3
    * unreachable: a card would wait forever for work the user explicitly
    * declined.
    */
-  | 'excluded';
+  | 'excluded'
+  /**
+   * The repository's work FINISHED WITHOUT A CHANGE REQUEST (MOTIR-7180) — a
+   * container's leaf cards that target it are all in a done-category status and
+   * none of them carries a linked delivery, and the container itself has no
+   * linked change request there either. A release cut by pushing a tag, a
+   * package published by hand, a dashboard setting: a human or manual card
+   * ships these, and nothing will ever merge for them.
+   *
+   * The other state that does NOT hold the item. Holding on it made the gate
+   * unsatisfiable by construction — every later merge re-held the container,
+   * and the only way out was a person moving the status by hand.
+   *
+   * ⚠️ NOT "a Done child excuses a missing merge". It is reached only from
+   * `awaiting`, only on evidence the caller computed from the leaves
+   * (`ExpectedRepo.shippedWithoutChangeRequest`), and only when the item has no
+   * linked change request in that repository at all — so an open, unmerged,
+   * closed or merged-elsewhere pull request keeps the state it had.
+   */
+  | 'delivered_without_change_request';
 
 /** One repository of an item's set, with its delivery state and its position. */
 export interface RepoDelivery {
@@ -97,6 +116,14 @@ export interface ExpectedRepo {
   establishState?: string | undefined;
   /** The row's role, carried straight through to the panel — see `RepoDelivery.role`. */
   role?: string | undefined;
+  /**
+   * The item is a CONTAINER whose live leaf cards targeting this repository are
+   * ALL in a done-category status, there is at least one, and none of them has
+   * a linked delivery (MOTIR-7180) — computed by `resolveExpectedRepos` from the
+   * tree, because the classifier sees only the item's own change requests.
+   * `undefined` reads as `false`.
+   */
+  shippedWithoutChangeRequest?: boolean | undefined;
 }
 
 /** The row states in which a repository DOES NOT EXIST on the host yet. */
@@ -107,9 +134,14 @@ export function classifyRepoDelivery(
   linked: readonly LinkedChangeRequestCompletionFact[],
 ): RepoDelivery[] {
   return expected.map((entry, i) => {
-    const { repo, establishState, role } =
+    const { repo, establishState, role, shippedWithoutChangeRequest } =
       typeof entry === 'string'
-        ? { repo: entry, establishState: undefined, role: undefined }
+        ? {
+            repo: entry,
+            establishState: undefined,
+            role: undefined,
+            shippedWithoutChangeRequest: undefined,
+          }
         : entry;
     // The row's own state decides FIRST, because it decides whether a pull
     // request could exist at all. Asking about merges for a repository that has
@@ -121,14 +153,20 @@ export function classifyRepoDelivery(
       return { repo, role, state: 'unestablished' as const, primary: i === 0 };
     }
     const key = repo.toLowerCase();
-    const merged = linked.filter((f) => f.repoName.toLowerCase() === key && f.merged);
+    const inRepo = linked.filter((f) => f.repoName.toLowerCase() === key);
+    const merged = inRepo.filter((f) => f.merged);
     const state: RepoDeliveryState = merged.some(
       (f) => f.baseRef !== null && f.baseRef === f.repoDefaultBranch,
     )
       ? 'delivered'
       : merged.some((f) => f.baseRef === null)
         ? 'unknown'
-        : 'awaiting';
+        : // MOTIR-7180 — only from `awaiting`, and only with NO linked change
+          // request in this repository at all: one that exists, in any state,
+          // is the question this state must not answer for it.
+          shippedWithoutChangeRequest === true && inRepo.length === 0
+          ? 'delivered_without_change_request'
+          : 'awaiting';
     return { repo, role, state, primary: i === 0 };
   });
 }
