@@ -1,0 +1,5 @@
+---
+'@motir/cli': minor
+---
+
+`motir agent-terminal serve` now also answers `/v1/chat`, the chat beside the terminal on a Motir agent's machine (MOTIR-7012). The upgrade is refused exactly as `/v1/terminal`'s is unless it carries a relay token signed with the machine's own key. Over the chat socket the panel reads a `hello` (the profile, whether it can chat, and the terminal's sign-in state), lists the agent's chat sessions, opens a new one or resumes one with its earlier turns, sends a prompt and receives the turn as transcript events, and stops it. A turn runs the agent's own CLI once, headless, unwrapped, in `$HOME/workspace`, with the server's environment minus `MOTIR_TERMINAL_KEY`. Only one turn runs per agent; Stop is SIGINT, then SIGKILL after 5 seconds; a dropped connection does not stop a turn, and reconnecting replays it from a 256 KiB ring. A signed-out agent is refused before anything starts. The CLI-specific half is an adapter contract, and no adapter ships yet, so every profile answers that chat is unsupported until its adapter lands. It logs lifecycle lines with turn numbers, codes and durations only — never a prompt, a reply or a tool output.

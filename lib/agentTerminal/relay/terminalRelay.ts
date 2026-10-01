@@ -3,11 +3,14 @@ import http from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import {
+  CHAT_PING_INACTIVE,
+  CHAT_PONG,
   TERMINAL_AUTH_TIMEOUT_MS,
   TERMINAL_CLOSE,
   TERMINAL_HEARTBEAT_INTERVAL_MS,
-  TERMINAL_PATH,
   TERMINAL_PING_INTERVAL_MS,
+  channelForPath,
+  type AgentTerminalChannel,
   type AgentTerminalCloseReason,
 } from '@/lib/agentTerminal/protocol';
 import type {
@@ -23,7 +26,7 @@ import { scrubbedError } from './monitoring';
 // `agentTerminalService` (every database question is the service's).
 //
 // ONE CONNECTION, IN ORDER:
-//   1. The upgrade at `/v1/terminal`; anything else is a 404. `Origin` must be
+//   1. The upgrade at `/v1/terminal` or `/v1/chat`; anything else is a 404. `Origin` must be
 //      `MOTIR_BASE_URL`'s origin, else close 4403.
 //   2. The FIRST frame, within 5 s, must be text `{"t":"auth","ticket"}` — else
 //      close 4401. The ticket travels in a frame, never the URL (access logs).
@@ -47,6 +50,22 @@ import { scrubbedError } from './monitoring';
 // their `lastSeenAt` moves. A relay killed without shutting down stops moving
 // them, and `system.agent-instance-sweep` closes them `relay_lost`.
 //
+// THE CHAT CHANNEL (Story MOTIR-6863 · MOTIR-7013, `docs/decisions/agent-chat.md`
+// Q4, Q8, Q9, Q10) rides the same relay: ONE connection lifecycle, throttle,
+// heartbeat and scrubbed reporting, and exactly four differences —
+//   * the path: the browser upgrades at `/v1/chat`, and the relay dials the
+//     machine's `/v1/chat` with the same signed relay token;
+//   * the redeem: `authorize` is told the path's channel, and a ticket minted for
+//     the other channel is 4401;
+//   * the dial: the machine's HTTP 404 on `/v1/chat` — an image whose server
+//     predates the chat — closes the browser 4411 (`noChatServer`). Only that
+//     status, only on the chat channel; any other refusal stays 4502;
+//   * activity: after `auth` the relay DECODES NO CHAT FRAME. Every frame in
+//     either direction counts, except one whose bytes equal
+//     `{"t":"ping","active":false}` or `{"t":"pong"}`, compared as bytes. The
+//     terminal's small-text parsing (`MAX_PARSED_TEXT_BYTES`) is the terminal's
+//     alone, so a repeated `auth` on a chat is forwarded like any other frame.
+//
 // ⚠️ WHAT IS NEVER LOGGED OR REPORTED (Q8): a frame, a ticket, a token. Log
 // lines carry ids, codes and durations only, and every reported error is
 // rebuilt by `scrubbedError` from a fixed context and the original's NAME.
@@ -54,11 +73,13 @@ import { scrubbedError } from './monitoring';
 export interface TerminalRelayDeps {
   /** The one Origin a browser may connect from — `MOTIR_BASE_URL`'s origin. */
   allowedOrigin: string;
-  authorize(ticket: string): Promise<AgentTerminalAuthorization>;
+  /** Redeem a ticket on the channel whose path it arrived on. */
+  authorize(ticket: string, channel: AgentTerminalChannel): Promise<AgentTerminalAuthorization>;
   openConnection(input: {
     workspaceId: string;
     instanceId: string;
     userId: string;
+    channel: AgentTerminalChannel;
   }): Promise<string>;
   closeConnection(input: {
     id: string;
@@ -109,6 +130,23 @@ function sendableCode(code: number): boolean {
     (code >= 1007 && code <= 1014) ||
     (code >= 3000 && code <= 4999)
   );
+}
+
+/** Q9's two chat frames that do NOT count as activity, as the bytes they are. */
+const CHAT_QUIET_FRAMES: readonly Buffer[] = [
+  Buffer.from(CHAT_PING_INACTIVE, 'utf8'),
+  Buffer.from(CHAT_PONG, 'utf8'),
+];
+
+/**
+ * Is this chat frame one of Q9's non-counting heartbeats? A BYTE COMPARISON — the
+ * frame is never decoded. `ws` hands every message on both sockets as one
+ * `Buffer` (its default `nodebuffer` binary type), and `equals` compares the
+ * lengths before a byte.
+ */
+function isQuietChatFrame(data: RawData): boolean {
+  const bytes = data as Buffer;
+  return CHAT_QUIET_FRAMES.some((quiet) => quiet.equals(bytes));
 }
 
 /** A small JSON control frame, or null. Never logged, never thrown with. */
@@ -190,11 +228,12 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
     } catch {
       path = '';
     }
-    if (path !== TERMINAL_PATH) {
+    const channel = channelForPath(path);
+    if (!channel) {
       refuseUpgrade(socket, 404, 'Not Found');
       return;
     }
-    wss.handleUpgrade(req, socket, head, (ws) => handleConnection(ws, req.headers.origin));
+    wss.handleUpgrade(req, socket, head, (ws) => handleConnection(ws, req.headers.origin, channel));
   });
 
   function bump(instanceId: string): void {
@@ -204,7 +243,11 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
     });
   }
 
-  function handleConnection(browser: WebSocket, origin: string | undefined): void {
+  function handleConnection(
+    browser: WebSocket,
+    origin: string | undefined,
+    channel: AgentTerminalChannel,
+  ): void {
     const conn = randomUUID().slice(0, 8);
     const startedAt = deps.now();
 
@@ -312,7 +355,10 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
         return;
       }
       const instanceId = target?.instanceId;
-      if (isBinary) {
+      if (channel === 'chat') {
+        // Q9: compared, never decoded — and forwarded whatever it is.
+        if (instanceId && !isQuietChatFrame(data)) bump(instanceId);
+      } else if (isBinary) {
         if (instanceId) bump(instanceId);
       } else {
         const frame = parseControl(data);
@@ -348,7 +394,7 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
     async function authorizeAndDial(ticket: string): Promise<void> {
       let verdict: AgentTerminalAuthorization;
       try {
-        verdict = await deps.authorize(ticket);
+        verdict = await deps.authorize(ticket, channel);
       } catch (err) {
         deps.reportError(scrubbedError('relay: authorize failed', err));
         refuse(1011, 'authorize failed');
@@ -364,7 +410,12 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
       phase = 'dialing';
       live.set(conn, finish);
       rowId = deps
-        .openConnection({ workspaceId: t.workspaceId, instanceId: t.instanceId, userId: t.userId })
+        .openConnection({
+          workspaceId: t.workspaceId,
+          instanceId: t.instanceId,
+          userId: t.userId,
+          channel,
+        })
         .catch((err: unknown) => {
           deps.reportError(scrubbedError('relay: recording an open failed', err));
           return null;
@@ -373,7 +424,9 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
         // Held from the moment its row exists until `finish` lets it go.
         if (id && phase !== 'closed') openRows.set(conn, { id, workspaceId: t.workspaceId });
       });
-      deps.log(`relay: connection ${conn} opened instance=${t.instanceId} user=${t.userId}`);
+      deps.log(
+        `relay: connection ${conn} opened instance=${t.instanceId} user=${t.userId} channel=${channel}`,
+      );
       bump(t.instanceId);
 
       const socket = new WebSocket(t.dial.url, {
@@ -390,16 +443,24 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
       });
       socket.on('message', (data, isBinary) => {
         if (phase !== 'open') return;
-        if (isBinary) bump(t.instanceId);
+        if (channel === 'chat' ? !isQuietChatFrame(data) : isBinary) bump(t.instanceId);
         if (browser.readyState === WebSocket.OPEN) browser.send(data, { binary: isBinary });
       });
       socket.on('pong', () => {
         alive.upstream = true;
       });
       socket.on('unexpected-response', (_req, res) => {
+        res.resume(); // drain the refusal's body; it is never read
+        if (channel === 'chat' && res.statusCode === 404) {
+          // agent-chat.md Q8: the image's server predates the chat. A state, not a
+          // failure — logged, not reported.
+          deps.log(`relay: connection ${conn} instance=${t.instanceId} has no chat server`);
+          void finish(TERMINAL_CLOSE.noChatServer, 'no_chat_server');
+          return;
+        }
         // The server answered the upgrade with a status (401: a token it refused).
         deps.reportError(
-          new Error(`relay: the terminal server refused the upgrade (HTTP ${res.statusCode})`),
+          new Error(`relay: the ${channel} server refused the upgrade (HTTP ${res.statusCode})`),
         );
         void finish(TERMINAL_CLOSE.unreachable, 'unreachable');
       });
@@ -411,7 +472,7 @@ export function createTerminalRelay(deps: TerminalRelayDeps): TerminalRelay {
           void finish(TERMINAL_CLOSE.unreachable, 'unreachable');
           return;
         }
-        deps.reportError(scrubbedError('relay: terminal socket error', err));
+        deps.reportError(scrubbedError(`relay: ${channel} socket error`, err));
       });
       socket.on('close', (code) => {
         if (phase === 'closed') return;

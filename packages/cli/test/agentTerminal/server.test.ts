@@ -99,7 +99,7 @@ describe('authentication happens BEFORE anything exists', () => {
     ]);
   });
 
-  it('does not serve /v1/chat yet (reserved), nor plain HTTP', async () => {
+  it('serves no other upgrade path, nor plain HTTP', async () => {
     const h = await start();
     const statusOf = (path: string, upgrade: boolean): Promise<number> =>
       new Promise((resolve) => {
@@ -120,8 +120,9 @@ describe('authentication happens BEFORE anything exists', () => {
         req.on('response', (res) => resolve(res.statusCode ?? 0));
         req.end();
       });
-    expect(await statusOf('/v1/chat', true)).toBe(404);
+    expect(await statusOf('/v1/other', true)).toBe(404);
     expect(await statusOf('/v1/terminal', false)).toBe(426);
+    expect(await statusOf('/v1/chat', false)).toBe(426);
     expect(await statusOf('/', false)).toBe(404);
     expect(h.ptys).toHaveLength(0);
   });

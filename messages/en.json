@@ -9028,7 +9028,8 @@
       },
       "tabs": {
         "label": "Agent views",
-        "terminal": "Terminal"
+        "terminal": "Terminal",
+        "chat": "Chat"
       },
       "conn": {
         "waiting": "Waiting",
@@ -9072,6 +9073,87 @@
         "back": "Back to My agents"
       },
       "size": "{cols} × {rows}",
+      "chat": {
+        "unsupported": "Chat isn’t available for Aider: it has no machine-readable output for a chat to follow. Use the terminal.",
+        "newChat": "New chat",
+        "sessions": {
+          "label": "Sessions",
+          "title": "Sessions on {name}",
+          "empty": "No sessions yet. A chat you start here — or a session you started with {agent} in the terminal — shows up here.",
+          "bound": "Showing the 50 most recent. Older sessions aren’t listed; {agent} still keeps them."
+        },
+        "resumed": "Resumed",
+        "empty": {
+          "title": "Start a chat with {agent}",
+          "body": "It works in <cmd>~/workspace</cmd> on {name}, with the same files and sign-in as the terminal. Each turn runs {agent} headless, and it edits files and runs commands without asking first."
+        },
+        "transcript": "Chat transcript",
+        "working": "{agent} is working…",
+        "prompt": {
+          "label": "Prompt",
+          "placeholder": "Ask {agent} to do something…",
+          "hint": "Enter to send · Shift+Enter for a new line",
+          "offHint": "You can type again once the chat reconnects."
+        },
+        "send": "Send",
+        "sending": "Sending…",
+        "stop": "Stop",
+        "tool": {
+          "read": "Read",
+          "edit": "Edit",
+          "command": "Ran",
+          "lines": "{count} lines",
+          "exit": "exit {code}",
+          "running": "Running…",
+          "failed": "Failed",
+          "truncated": "Output clipped — showing the last 64 KB.",
+          "noDiff": "{agent} reported which file it changed, but not the change itself.",
+          "noOutput": "No output.",
+          "show": "Show details",
+          "hide": "Hide details",
+          "showAll": "Show all {count} lines"
+        },
+        "error": "{agent} reported a problem and kept going: {message}",
+        "other": "Unshown event: {name}",
+        "turn": {
+          "completed": "Turn complete",
+          "stopped": "Stopped",
+          "stoppedWhy": "You stopped this turn. The reply above is as far as it got.",
+          "failed": "Turn failed",
+          "failedWhy": {
+            "subscription_signin": "Claude Code is signed in with a Claude subscription, which the chat can’t use.",
+            "generic": "{agent} stopped unexpectedly ({code})."
+          }
+        },
+        "notice": {
+          "turnRunning": "A turn is already running on {name}, in another chat session. Wait for it to end or stop it there — one turn runs on an agent at a time.",
+          "tooLarge": "This prompt is over 64 KB. Shorten it, or save the text to a file in the workspace and point {agent} at it.",
+          "takenOver": "This chat is open in another tab now. A running turn keeps going there.",
+          "notSignedIn": "{agent} isn’t signed in. Sign in in the Terminal tab — the chat uses the same sign-in."
+        },
+        "openTerminal": "Open Terminal",
+        "subscription": {
+          "title": "Chat isn’t available on a Claude subscription",
+          "body": "The chat is not available for Claude Code signed in with a Claude subscription, because Anthropic’s terms do not allow a third-party interface to drive it on one. Sign in with an Anthropic API key or a cloud provider to chat, or keep using the terminal."
+        },
+        "noServer": {
+          "title": "This agent can’t chat yet",
+          "body": "It was made from an older image, from before the chat existed. Moving an agent to the newer image — keeping its home and sign-in — is on its way. Until then, its terminal works, and a new agent has the chat.",
+          "update": "It was made from an older image, from before the chat existed. Update it to {to} to chat. Its home and sign-in are kept."
+        },
+        "face": {
+          "connecting": "Connecting to {name}’s chat…",
+          "wakingHint": "The chat connects by itself when it’s up — nothing to click."
+        },
+        "strip": {
+          "reconnecting": "Connection dropped — reconnecting. A running turn keeps going on the agent.",
+          "lost": "Couldn’t reconnect. A running turn keeps going on the agent — reconnect to pick it up."
+        },
+        "history": {
+          "truncated": "Earlier turns aren’t shown — only the latest 256 KB of this session is loaded.",
+          "unavailable": "This session’s earlier turns can’t be shown here. {agent} still has them, so it carries on where you left off."
+        }
+      },
       "run": {
         "live": "Running a work item",
         "last": "Last run",

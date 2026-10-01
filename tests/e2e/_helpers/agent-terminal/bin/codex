@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# A STUB of the Codex CLI — the acceptance lane's stand-in for `codex exec --json`
+# behind the agent chat (Story MOTIR-6863 · MOTIR-7019). TEST-ONLY: it lives under
+# tests/e2e/, only the lane's terminal host (host.ts) puts it on a machine's PATH,
+# and nothing in the image or the app refers to it. It NEVER reaches a vendor.
+#
+# The headless turn docs/decisions/agent-chat.md Q3 records is answered by
+# ../vendor-stub.mjs, which replays a recorded stream and refuses (exit 2)
+# anything else.
+set -u
+exec node "$(dirname "$0")/../vendor-stub.mjs" codex "$@"

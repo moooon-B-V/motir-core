@@ -28,7 +28,10 @@
 
 /** The terminal path on the server. */
 export const TERMINAL_PATH = '/v1/terminal';
-/** Reserved for the chat story (MOTIR-6863), behind the same relay token. Not served yet. */
+/**
+ * The chat path on the same server, behind the same relay token (MOTIR-7012 ·
+ * `docs/decisions/agent-chat.md` Q4). Its frames are `chat/protocol.ts`'s.
+ */
 export const CHAT_PATH = '/v1/chat';
 
 export type SignInState = 'signed_in' | 'signed_out' | 'unknown';

@@ -1,0 +1,5 @@
+# codex-cli 0.159.2 · `codex exec resume --json -c sandbox_mode="workspace-write" 01a0f1e6-e507-7c00-a172-76c9ce46e8f1 -` · a resumed session: the same thread id, and the agent remembers the earlier turn
+{"type":"thread.started","thread_id":"01a0f1e6-e507-7c00-a172-76c9ce46e8f1"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Earlier you asked me to list the files: a.txt and b.md."}}
+{"type":"turn.completed","usage":{"input_tokens":88,"cached_input_tokens":64,"output_tokens":15}}

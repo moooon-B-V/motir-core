@@ -1,0 +1,34 @@
+[
+  {
+    "id": "ses_0f1a0b2c3ffeAbCdEfGhIjKlMn",
+    "title": "Set up the project README",
+    "updated": 1790676000000,
+    "created": 1790675400000,
+    "projectId": "global",
+    "directory": "/home/agent/workspace"
+  },
+  {
+    "id": "ses_f0e15f2f2ffeRhqhbBfRDMXLUT",
+    "title": "Fix greeting typo in hello.txt",
+    "updated": 1790762800850,
+    "created": 1790762400100,
+    "projectId": "global",
+    "directory": "/home/agent/workspace"
+  },
+  {
+    "id": "ses_0f1d9e8f7ffeZyXwVuTsRqPoNm",
+    "title": "Refactor the parser",
+    "updated": 1790700000000,
+    "created": 1790690000000,
+    "projectId": "4f2c1b0a9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b",
+    "directory": "/home/agent/workspace/motir-core"
+  },
+  {
+    "id": "ses_0f1b1c2d3ffeMnOpQrStUvWxYz",
+    "title": "New session - 2026-09-29T08:00:00.000Z",
+    "updated": 1790719200000,
+    "created": 1790719200000,
+    "projectId": "global",
+    "directory": "/home/agent/workspace"
+  }
+]

@@ -1,0 +1,4 @@
+# goose 1.52.0 (stable) · `goose run -q --output-format stream-json -i - --resume --session-id 20260930_3` · a follow-up turn in a resumed session · see README.md
+{"type":"message","message":{"id":"chatcmpl-c3d8e0","role":"assistant","created":1790762440,"content":[{"type":"text","text":"As I said above, "}],"metadata":{"userVisible":true,"agentVisible":true}}}
+{"type":"message","message":{"id":"chatcmpl-c3d8e0","role":"assistant","created":1790762440,"content":[{"type":"text","text":"the directory holds a.txt and b.md."}],"metadata":{"userVisible":true,"agentVisible":true}}}
+{"type":"complete","total_tokens":0}

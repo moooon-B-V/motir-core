@@ -4,6 +4,8 @@ import { terminalMasterKey } from '@/lib/agentInstances/terminal';
 import {
   TERMINAL_CLOSE,
   TERMINAL_CONNECTION_LOST_AFTER_MS,
+  addressForChannel,
+  type AgentTerminalChannel,
   type AgentTerminalCloseReason,
   type TerminalRefusalCode,
 } from '@/lib/agentTerminal/protocol';
@@ -26,7 +28,12 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
 //     bound to the ticket's own workspace), RE-READ the instance (still that
 //     user's, not deleted, serving a terminal, running) and answer Q3's close
 //     code, or where to dial with the one-shot relay token already signed.
-//   * `openConnection` / `closeConnection` — the one row per connection (Q8).
+//     A ticket is redeemed only on its OWN channel (`agent-chat.md` Q4 ·
+//     MOTIR-7013): the relay names the path it arrived on, and a terminal ticket
+//     on `/v1/chat` — or a chat ticket on `/v1/terminal` — is 4401. The dial goes
+//     to the same machine at that channel's path, with the same relay token.
+//   * `openConnection` / `closeConnection` — the one row per connection (Q8),
+//     recording its channel.
 //   * `heartbeatConnections` / `closeOwnLeftovers` / `sweepLostConnections` —
 //     the row's liveness (MOTIR-6959): a relay killed without shutting down
 //     leaves no row open for ever.
@@ -57,7 +64,9 @@ export interface AgentTerminalConnectionTarget {
   instanceId: string;
   userId: string;
   workspaceId: string;
-  /** The agent's terminal server: its address and the headers the dial carries. */
+  /** The socket the ticket opens — the path it was redeemed on. */
+  channel: AgentTerminalChannel;
+  /** The agent's server at that channel's path, and the headers the dial carries. */
   dial: { url: string; headers: Record<string, string> };
 }
 
@@ -119,8 +128,15 @@ export const agentTerminalRelayService = {
    * re-reads the instance (4403 not the ticket's user's or deleted, 4410 no
    * terminal server, 4409 not running), and answers the dial with a freshly
    * signed relay token. Never throws for a refusal.
+   *
+   * `channel` is the path the ticket arrived on. A ticket minted for the other
+   * channel is 4401 — and is spent: the consume comes first, so a ticket is
+   * single-use wherever it is presented.
    */
-  async authorizeConnection(ticket: string): Promise<AgentTerminalAuthorization> {
+  async authorizeConnection(
+    ticket: string,
+    channel: AgentTerminalChannel = 'terminal',
+  ): Promise<AgentTerminalAuthorization> {
     if (ticket.length === 0 || ticket.length > 256) return refuse(TERMINAL_CLOSE.badTicket);
     const now = agentTerminalClock.now();
     const found = await withSystemContext((tx) =>
@@ -133,6 +149,7 @@ export const agentTerminalRelayService = {
       agentTerminalTicketRepository.consume(found.id, now, tx),
     );
     if (consumed !== 1) return refuse(TERMINAL_CLOSE.badTicket);
+    if (found.channel !== channel) return refuse(TERMINAL_CLOSE.badTicket);
 
     const row = await withWorkspaceServiceContext(found.workspaceId, (tx) =>
       agentInstanceRepository.findById(found.instanceId, tx),
@@ -163,24 +180,41 @@ export const agentTerminalRelayService = {
         instanceId: row.id,
         userId: found.userId,
         workspaceId: row.workspaceId,
-        dial: { url: endpoint.url, headers: { ...endpoint.headers, authorization } },
+        channel,
+        dial: {
+          url: addressForChannel(endpoint.url, channel),
+          headers: { ...endpoint.headers, authorization },
+        },
       },
     };
   },
 
   /**
    * Record a connection the relay just opened (Q8), held by `relayMachineId`
-   * and seen now (MOTIR-6959). Returns the row's id.
+   * and seen now (MOTIR-6959), on its channel (`terminal` unless named).
+   * Returns the row's id.
    */
   async openConnection(input: {
     workspaceId: string;
     instanceId: string;
     userId: string;
+    channel?: AgentTerminalChannel;
     relayMachineId: string;
   }): Promise<string> {
     const now = agentTerminalClock.now();
     const row = await withWorkspaceServiceContext(input.workspaceId, (tx) =>
-      agentTerminalConnectionRepository.open({ ...input, openedAt: now, lastSeenAt: now }, tx),
+      agentTerminalConnectionRepository.open(
+        {
+          workspaceId: input.workspaceId,
+          instanceId: input.instanceId,
+          userId: input.userId,
+          channel: input.channel ?? 'terminal',
+          relayMachineId: input.relayMachineId,
+          openedAt: now,
+          lastSeenAt: now,
+        },
+        tx,
+      ),
     );
     return row.id;
   },

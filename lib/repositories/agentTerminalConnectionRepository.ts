@@ -1,4 +1,8 @@
-import type { AgentTerminalConnection, Prisma } from '@/generated/prisma/client';
+import type {
+  AgentTerminalChannel,
+  AgentTerminalConnection,
+  Prisma,
+} from '@/generated/prisma/client';
 
 // Single Prisma operations on `agent_terminal_connection` — one row per terminal
 // connection through the relay (Story MOTIR-6861 · MOTIR-6940,
@@ -17,6 +21,8 @@ export interface AgentTerminalConnectionOpenInput {
   workspaceId: string;
   instanceId: string;
   userId: string;
+  /** The socket it carries (`agent-chat.md` Q4 · MOTIR-7013). */
+  channel: AgentTerminalChannel;
   openedAt: Date;
   relayMachineId: string;
   lastSeenAt: Date;

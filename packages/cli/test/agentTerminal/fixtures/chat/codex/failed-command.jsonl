@@ -1,0 +1,7 @@
+# codex-cli 0.159.2 · `codex exec --json -c sandbox_mode="workspace-write" -` · a command that fails, then a reply
+{"type":"thread.started","thread_id":"01a0f1e8-9e44-7a02-b1c7-5d2e8f6a0b93"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'cat missing.txt'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'cat missing.txt'","aggregated_output":"cat: missing.txt: No such file or directory\n","exit_code":1,"status":"failed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"There is no missing.txt in the workspace."}}
+{"type":"turn.completed","usage":{"input_tokens":40,"cached_input_tokens":0,"output_tokens":18}}

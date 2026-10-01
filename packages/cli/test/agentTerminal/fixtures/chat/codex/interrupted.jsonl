@@ -1,0 +1,4 @@
+# codex-cli 0.159.2 · `codex exec --json -c sandbox_mode="workspace-write" -` · a turn stopped with SIGINT mid-command: codex exits 1 and prints NO final event (the rollout records turn_aborted — see store/)
+{"type":"thread.started","thread_id":"01a0f1e9-4c21-7b55-8a0d-2e6f9b3c1a74"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'sleep 60'","aggregated_output":"","exit_code":null,"status":"in_progress"}}

@@ -1,0 +1,9 @@
+# codex-cli 0.159.2 · `codex exec --json -c sandbox_mode="workspace-write" -` · a command execution, then a file change, then a reply. Copied from packages/cli/test/agentTerminal/fixtures/chat/codex/command.jsonl and file-change.jsonl with this story's words; see ../../vendor-stub.mjs.
+{"type":"thread.started","thread_id":"01a0f1e6-e507-7c00-a172-76c9ce46e8f1"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"reasoning","text":"**Counting the tests, then writing the notes**"}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'ls tests | wc -l'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'ls tests | wc -l'","aggregated_output":"42\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"file_change","changes":[{"path":"/home/agent/workspace/NOTES.md","kind":"add"}],"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"There are 42 entries under tests/. I wrote that count to NOTES.md."}}
+{"type":"turn.completed","usage":{"input_tokens":61,"cached_input_tokens":0,"output_tokens":44}}

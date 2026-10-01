@@ -141,11 +141,35 @@ export default defineConfig({
         // 98.74 lines / 93.45 br / 93.75 funcs with the run session's tests, so
         // it now carries the branch bar too; its remaining arms are the
         // refusal of an upgrade racing `close()` and the defensive fallbacks on
-        // a bound address.
+        // a bound address. With the chat's `/v1/chat` handler merged in (MOTIR-6863)
+        // it measures 98.84 lines / 93.58 br / 94.28 funcs.
         'src/agentTerminal/server.ts': { branches: 90, functions: 90, lines: 90 },
         // MOTIR-7025 — the LOCAL control socket the run launcher speaks to.
         // Measured first: 100 lines / 94.28 br / 96.29 funcs.
         'src/agentTerminal/control.ts': { branches: 90, functions: 90, lines: 90 },
+
+        // Story MOTIR-6863 · MOTIR-7018 (the story gate) — the in-agent CHAT:
+        // the wire protocol, the adapter contract, the turn runner and the five
+        // adapters. Each shipped mid-story with no threshold entry, which is the
+        // failure this file's header names twice. MEASURED FIRST over
+        // `test/agentTerminal/`, then pinned, lines / branches / funcs:
+        // protocol 100/100/100, adapter 100/100/100, turns 98.94/92.27/96.23,
+        // claude 99.36/97.63/100, codex 99.55/100/97.44, goose 100/99.57/100,
+        // kimi 100/100/100, opencode 98.45/97.78/100. The adapters entered at
+        // 74.8–83.2% branches: their fixtures are the streams each CLI really
+        // writes, and what no fixture carries — a block missing its id, a store
+        // line that is not JSON, a helper that exits non-zero — is driven by
+        // `test/agentTerminal/chatAdapterEdges.test.ts`. Fully gated, branches
+        // included: this is the code that decides what reaches the transcript,
+        // and that no prompt reaches a subscription sign-in.
+        'src/agentTerminal/chat/protocol.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/agentTerminal/chat/adapter.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/agentTerminal/chat/turns.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/agentTerminal/chat/adapters/claude.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/agentTerminal/chat/adapters/codex.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/agentTerminal/chat/adapters/goose.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/agentTerminal/chat/adapters/kimi.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/agentTerminal/chat/adapters/opencode.ts': { branches: 90, functions: 90, lines: 90 },
         // UNGATED: src/agentTerminal/pty.ts — the node-pty adapter. Its loader's
         // absent / unloadable arms are covered in `units.test.ts`; the adapter
         // body runs only against a real node-pty, which `realPty.test.ts` drives
