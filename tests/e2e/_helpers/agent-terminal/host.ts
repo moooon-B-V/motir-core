@@ -216,10 +216,13 @@ function homeFor(instanceId: string, setup: AgentSetup): string {
 
 interface Booted {
   /**
-   * Which run of which machine this server is: the instance, the run count and
-   * its terminal key. A fake machine id is a per-process sequence that restarts
-   * when a spec resets the fleet, so the id alone can name a NEW machine with a
-   * server booted for an old one (and the old key: every relay token 401s).
+   * Which run of which machine this server is: the instance, the run count, its
+   * terminal key and what the spec seeded for it. A fake machine id is a
+   * per-process sequence that restarts when a spec resets the fleet, so the id
+   * alone can name a NEW machine with a server booted for an old one (and the old
+   * key: every relay token 401s). And a machine can be booted by an exec — the
+   * sign-in probe that follows a create — before the spec seeds it, so a seed
+   * that lands later boots the machine again with it, as if it had been there.
    */
   run: string;
   /** The instance this machine run serves. */
@@ -233,7 +236,8 @@ interface Booted {
 
 function runOf(machine: FakeMachine): string {
   const env = { ...(machine.spec.env ?? {}), ...(machine.spec.terminal?.env ?? {}) };
-  return `${machine.spec.instanceId}#${machine.starts}#${env[TERMINAL_KEY_ENV] ?? ''}`;
+  const setup = JSON.stringify(readSetup(machine.spec.instanceId));
+  return `${machine.spec.instanceId}#${machine.starts}#${env[TERMINAL_KEY_ENV] ?? ''}#${setup}`;
 }
 const booted = new Map<string, Booted>();
 /** Makes each boot's control socket path unique, whatever a machine id or count repeats. */
