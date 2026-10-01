@@ -328,8 +328,12 @@ describe('tools/list through the real /api/mcp route meets the connector criteri
         expect(typeof hints.destructiveHint, tool.name).toBe('boolean');
         expect(typeof hints.idempotentHint, tool.name).toBe('boolean');
       }
-      // Nothing between the seam and the wire dropped or rewrote a hint.
-      expect(tool.annotations, tool.name).toStrictEqual(TOOL_ANNOTATIONS[tool.name as McpToolName]);
+      // Nothing between the seam and the wire dropped or rewrote a hint, and the
+      // title rides in `annotations` too (MOTIR-7189).
+      expect(tool.annotations, tool.name).toStrictEqual({
+        title,
+        ...TOOL_ANNOTATIONS[tool.name as McpToolName],
+      });
     }
   });
 

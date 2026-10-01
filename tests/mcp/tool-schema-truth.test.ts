@@ -203,7 +203,7 @@ describe('Guard B, for titles and hints — every stored value is the one `tools
 
   it('REPORTS a regenerated file whose hints moved — the byte guard sees the maps too', async () => {
     const generated = await generateMcpToolSchemas();
-    const flipped = generated.replace(/(delete_work_item: \{\s*readOnlyHint: )false/, '$1true');
+    const flipped = generated.replace(/(delete_work_item: \{[^}]*?readOnlyHint: )false/, '$1true');
     expect(flipped).not.toBe(generated);
     expect(isMcpToolSchemasStale(generated, flipped)).toBe(true);
   });

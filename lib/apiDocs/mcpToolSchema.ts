@@ -48,14 +48,17 @@ export interface McpToolInputSchema {
 // agree with the server is `tests/mcp/tool-schema-truth.test.ts`'s guard, over a
 // live handshake — a drift in the shape would surface there as a value mismatch.
 
-/** A tool whose handler performs no write. */
+/** A tool whose handler performs no write. `title` repeats the tool's own title,
+ * which is where Claude's connector directory reads it (MOTIR-7189). */
 export interface McpToolReadHints {
+  title: string;
   readOnlyHint: true;
   openWorldHint: boolean;
 }
 
 /** A tool whose handler writes — every write hint is always present. */
 export interface McpToolWriteHints {
+  title: string;
   readOnlyHint: false;
   destructiveHint: boolean;
   idempotentHint: boolean;

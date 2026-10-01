@@ -148,7 +148,7 @@ export async function generateMcpToolSchemas(): Promise<string> {
       tools.map((tool) => [tool.name, tool.title]),
     ),
     emitMap(
-      'Tool name → the `annotations` (hints) the registration seam injects from `TOOL_ANNOTATIONS`.',
+      'Tool name → the `annotations` the registration seam injects: the tool’s `title` plus its hints from `TOOL_ANNOTATIONS`.',
       'MCP_TOOL_ANNOTATIONS',
       'McpToolHints',
       tools.map((tool) => [tool.name, tool.annotations]),
