@@ -19,9 +19,155 @@
   and what survives.
 - **Consumed by:** MOTIR-1160 (the subprocessor list — amended in the same
   change as this record), MOTIR-3621 (counsel review), MOTIR-1134 (publication).
+- **AMENDED 2026-10-01 (MOTIR-3687):** **D2 and D3 are SUPERSEDED** by
+  MOTIR-3665 — DeepSeek stays served, the way OpenRouter serves it, and a caller
+  excludes it per request. The finding that justified D2 and D3 was wrong in three
+  places. The amendment directly below is the whole change. The original text is
+  kept and struck in place, because the reasoning trail is the point of a decision
+  record.
 
 > Convention per `work-item-type-taxonomy.md`: **Status → Context → Decision →
 > Consequences**, load-bearing facts pinned in explicit tables.
+
+---
+
+## ⚠️ AMENDMENT 2026-10-01 — D2 and D3 are SUPERSEDED: DeepSeek is served the way OpenRouter serves it
+
+- **Status:** Accepted on approval of MOTIR-3687. **Replacing card:**
+  MOTIR-3665 (re-scoped 2026-09-06), whose gateway half shipped as MOTIR-3669.
+- **Why now:** two shipped artefacts cite this record as their reason to keep
+  DeepSeek out of hosted agent runs — `motir-ai` `src/llm/hostedAgentModels.ts`
+  (`HOSTED_AGENT_PROVIDERS`) and `motir-gateway` `docs/hosted-run-egress.md` §2.
+  Founder, 2026-10-01: _"we are going to serve DeepSeek."_ A record that still
+  reads as an instruction to switch DeepSeek off would send every reader who
+  follows those citations back to the retirement.
+
+### What this record now decides, row by row
+
+| #      | As of 2026-10-01                                                                                                                                                                                                 |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D1** | **Not amended here.** The planner's default is still not DeepSeek. Its model was re-targeted on 2026-08-28, and that change is recorded on MOTIR-3687's card rather than decided in this amendment.              |
+| **D2** | **SUPERSEDED.** The DeepSeek channel is not disabled. It stays served, and a caller who does not accept its data policy excludes it per request (below). The executing card MOTIR-3636 was cancelled 2026-08-27. |
+| **D3** | **SUPERSEDED as a binding.** No caller is pinned to a basis-only group. The residency GROUP survives as a mechanism (§5). The executing card MOTIR-3637 was cancelled 2026-08-27.                                |
+| **D4** | Stands. Anthropic carries SCCs and is enabled.                                                                                                                                                                   |
+| **D5** | **Its D2 clause falls with D2.** The rest of the publication precondition is not re-decided here (see _What this amendment does NOT decide_).                                                                    |
+
+### What replaces D2 and D3 — the OpenRouter shape, in OpenRouter's own terms
+
+OpenRouter serves DeepSeek. It publishes DeepSeek's data practices beside the
+model, and it lets any caller refuse them. Read 2026-10-01 from OpenRouter's public
+provider table (`/api/frontend/v1/all-providers`, slug `deepseek`) and its
+provider-routing documentation:
+
+| OpenRouter                                                                                                                                                                                                                         | Motir                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The provider's data policy is disclosed per endpoint.** DeepSeek reads `training: true` (labelled _"may train on your data"_), `retainsPrompts: true`, `headquarters: CN`, with links to DeepSeek's own terms and privacy policy | **The same facts, read from DeepSeek's own documents** on motir-marketing `content/legal/model-providers.md` (read 2026-09-06): trains on API content, no retention period stated, People's Republic of China — and on `content/legal/subprocessors.md` |
+| **`data_collection: "allow"` is the default** — _"allow providers which store user data non-transiently and may train on it"_                                                                                                      | **A request with no `X-Motir-Data-Policy` header is unconstrained** (`motir-gateway` `motir/datapolicy`), so DeepSeek is reachable when the caller asks for a DeepSeek model                                                                            |
+| **`data_collection: "deny"`** — _"use only providers which do not collect user data"_                                                                                                                                              | **`X-Motir-Data-Policy: must-not-train`** — DeepSeek's channel is declared `TrainingYes`, so it is excluded                                                                                                                                             |
+| **`zdr: true`** — _"the request will only be routed to endpoints that do not retain prompts"_                                                                                                                                      | **`X-Motir-Data-Policy: zero-retention`** — DeepSeek's retention is declared unknown, which fails closed, so it is excluded                                                                                                                             |
+| **No compliant provider ⇒ _"your application chooses what happens next"_** — the request is not routed around the restriction                                                                                                      | **Fails closed** at the gateway when no channel satisfies the policy (MOTIR-3669)                                                                                                                                                                       |
+| An account-wide privacy setting layers on top of the per-request fields                                                                                                                                                            | **None.** MOTIR-3665 retired the per-workspace control. The filter is per request only                                                                                                                                                                  |
+
+**So the position is: DeepSeek is offered, never assigned.** It is reached only
+when a caller asks for a DeepSeek model, never as anyone's default. Its data
+practices are published where the model is chosen. A caller who will not accept
+a provider that trains on prompts or retains them says so on the request, and the
+gateway refuses rather than routing around them. This relies on neither of the
+two _Keep DeepSeek_ rows under **Rejected alternatives**: it is not an Art. 49
+derogation and it is not a consent gate, and both stay rejected for their
+original reasons.
+
+### Why the finding behind D2 and D3 was wrong
+
+§1 concluded retirement from _"DeepSeek carries no Chapter V mechanism"_. The
+observation was accurate: DeepSeek's policy names no SCCs. The reasoning built on
+it was defective in three separate places, and restating the conclusion without
+correcting them would leave the same inference for the next reader.
+
+1. **Adequacy is not the gate.** **Art. 46(2)(c) SCCs are available for transfers
+   to ANY third country**, with or without an adequacy decision. _"China has no
+   EU adequacy decision"_ is true and nearly irrelevant, and §1 treated it as
+   decisive.
+2. **The real gap is Art. 28, not Chapter V.** DeepSeek publishes no **processing
+   agreement**, and so offers no clauses to sign. That is one vendor's paperwork.
+   An EU-established vendor with the same gap would be equally hard to use as a
+   processor, so the defect has nothing to do with where DeepSeek is established.
+3. **The regulatory actions were misread.** Italy's Garante ordered **DeepSeek**
+   to stop processing Italian users' data through its **consumer app**. The
+   proceedings opened in France, Ireland, Germany, Belgium and Portugal are of the
+   same kind. All of them are findings about DeepSeek as **controller of its own
+   users**. **None restricts a European company from calling the API.**
+
+**The counter-example:** **Alibaba Cloud** serves Qwen from Model Studio's
+**Frankfurt** region, under an EEA DPA that incorporates the SCCs. It is a Chinese
+company with a stronger transfer position than any US provider on the list,
+because the inference never leaves the Union. Any reasoning that concludes
+_"Chinese vendor ⇒ retire"_ fails on that row.
+
+### Who reaches DeepSeek
+
+- **The hosted planner** — only when a caller asks for a DeepSeek model. D1
+  keeps it off the default.
+- **Hosted agent runs.** Customer repository content reaches DeepSeek when a
+  person picks a DeepSeek model for a hosted run (Story MOTIR-7205). It is
+  **offered, never the default**: the default stays Claude, platform-wide and per
+  difficulty (MOTIR-6989). It is **subject to the same per-request data policy**:
+  a request carrying `must-not-train` or `zero-retention` cannot reach DeepSeek.
+  How a hosted run carries a policy, and which providers its offered list spans,
+  is `hosted-agent-run.md` §7's to decide (MOTIR-7206), not this record's.
+
+### What SURVIVES from the original record
+
+The amendment retracts D2 and D3 and the inference behind them, and nothing else:
+
+- **The enumeration method** (§1 _How it was read_): read the gateway's channel
+  set from the running platform, not from source. `content/legal/subprocessors.md`
+  § _How this list is compiled_ (motir-marketing) depends on it.
+- **The rejection of `model_mapping`** (§4): still correct, for the original
+  reason. The model id a request names must stay the model a provider served, or
+  the consume log stops being a transfer audit.
+- **The residency GROUP as the enforcement seam** (§5): now the substrate for a
+  mixed provider set rather than the mechanism of a retirement. MOTIR-3634
+  shipped it, and DeepSeek stays OUT of the `transfer-basis` group
+  (`motir-gateway` `motir/catalog/channel-groups.sh`, `DEEPSEEK_GROUPS="default"`).
+- **The ordering hazard** (§3 _D1 and D2 have a MANDATORY ORDER_): routing is
+  `(group, model, enabled) → channel`. Binding a user to a group with no channel
+  for its model, or disabling the only channel serving a default model, is an
+  instant failure. That trap outlives the decision that found it.
+
+### What remains OPEN — disclosed, not closed
+
+**The Art. 28 gap is not closed by this amendment.** DeepSeek still offers no
+processing agreement, trains on API content and states no retention period. The
+published pages say so, which is the OpenRouter posture: disclose the provider's
+practices and let the caller refuse them. Counsel review is still MOTIR-3621's.
+The gap is reopened if DeepSeek publishes a DPA, if a supervisory authority
+addresses business use of the API, or if a customer requires it closed.
+
+### Clauses elsewhere this amendment makes false — named here, edited on their own cards
+
+- **`legal-document-set.md` § _AMENDED 2026-08-27 — the set is SEVEN pages_** still
+  commits that _"only a provider with a recorded transfer basis may serve EU
+  traffic"_, enforced at the gateway. That is D3's principle, now superseded. The
+  edit is MOTIR-7216, because this record is the one file the decision gate reads.
+- **motir-marketing `content/legal/subprocessors.md` and `model-providers.md`** say
+  _"today the default is DeepSeek"_ (false since D1), name no hosted-run consumer,
+  and describe a transfer-basis group that binds no caller. The edit is MOTIR-7215.
+
+### What this amendment does NOT decide
+
+- **D1's model.** The planner default stays off DeepSeek. Recording what it now
+  is belongs to another card.
+- **D5's remaining precondition** beyond its D2 clause, and whether
+  `content/legal/subprocessors.md` is now publishable. That is MOTIR-1134's.
+- **The published legal pages.** They live in motir-marketing and are not edited
+  here. Where they disagree with this record, the disagreement is written on
+  MOTIR-3687.
+- **A per-workspace data-policy control.** MOTIR-3665 retired it.
+- **How a hosted run carries a data policy, and which providers it offers.**
+  `hosted-agent-run.md` §7 (MOTIR-7206).
+- **Self-hosting DeepSeek's weights.** Still open on cost and capability grounds,
+  as §6 already says.
 
 ---
 
@@ -137,20 +283,29 @@ available off the shelf either. Article 49 derogations do not rescue it: they ar
 for occasional transfers, and routing every planning request through one upstream
 is the definition of systematic.
 
+> **⚠️ SUPERSEDED REASONING (AMENDMENT 2026-10-01, MOTIR-3687).** The quote and the
+> missing SCCs are accurate. The inference drawn from them is not: adequacy is not
+> the gate (Art. 46(2)(c) SCCs reach any third country), the real gap is DeepSeek's
+> missing Art. 28 processing agreement, and the regulators acted against DeepSeek's
+> consumer app, not against API callers. See the amendment at the top of this record.
+
 ---
 
 ## §3 — The decision
 
-**The hosted planner egresses only to upstreams carrying a recorded Chapter V
-basis, and the gateway ENFORCES that rather than documenting it.**
+~~**The hosted planner egresses only to upstreams carrying a recorded Chapter V
+basis, and the gateway ENFORCES that rather than documenting it.**~~
+**SUPERSEDED 2026-10-01 by MOTIR-3665** for D2 and D3: a provider's data policy is
+disclosed and a caller excludes it per request (the amendment at the top). D1, D4
+and the D5 text other than its D2 clause are not changed by that amendment.
 
-| #      | Decision                                                                                                                             | Where it lands                               |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
-| **D1** | **The planner's default upstream stops being DeepSeek.** `PLANNER_MODELS.default` becomes **`o3`**, served by channel 3              | `motir-ai` `src/llm/gatewayClient.ts`        |
-| **D2** | **The DeepSeek channel is disabled; Moonshot stays disabled.** Neither carries a basis                                               | gateway administration (channel `status: 2`) |
-| **D3** | **The gateway enforces residency by GROUP**, so no caller can route to a no-basis channel whatever it asks for                       | `motir-gateway` — the seam is named in §5    |
-| **D4** | **Anthropic is the recorded fallback**, enablable without another decision record: its basis is now on file                          | gateway administration                       |
-| **D5** | **`content/legal/subprocessors.md` does not publish until D1 and D2 are applied AND the channel set has been re-read to confirm it** | the publication precondition, §6             |
+| #      | Decision                                                                                                                                                                                                        | Where it lands                                   |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| **D1** | **The planner's default upstream stops being DeepSeek.** `PLANNER_MODELS.default` becomes **`o3`**, served by channel 3                                                                                         | `motir-ai` `src/llm/gatewayClient.ts`            |
+| **D2** | ~~**The DeepSeek channel is disabled; Moonshot stays disabled.** Neither carries a basis~~ **SUPERSEDED 2026-10-01 by MOTIR-3665** — DeepSeek stays served; a caller excludes it per request                    | ~~gateway administration (channel `status: 2`)~~ |
+| **D3** | ~~**The gateway enforces residency by GROUP**, so no caller can route to a no-basis channel whatever it asks for~~ **SUPERSEDED 2026-10-01 by MOTIR-3665** as a binding; the group survives as a mechanism (§5) | `motir-gateway` — the seam is named in §5        |
+| **D4** | **Anthropic is the recorded fallback**, enablable without another decision record: its basis is now on file                                                                                                     | gateway administration                           |
+| **D5** | **`content/legal/subprocessors.md` does not publish until D1 and D2 are applied AND the channel set has been re-read to confirm it**                                                                            | the publication precondition, §6                 |
 
 ### ⚠️ D1 and D2 have a MANDATORY ORDER, and the wrong one is an outage
 
@@ -228,6 +383,11 @@ the model a provider served.**
 
 ## §5 — D3: the enforcement seam, named
 
+> **AMENDED 2026-10-01 (MOTIR-3687).** D3's binding, which pinned the planner user
+> to a basis-only group, is SUPERSEDED. The seam described below SURVIVES: the GROUP
+> column is still how residency is enforced for a mixed provider set, and DeepSeek
+> stays outside the `transfer-basis` group.
+
 The lesson this record is most at risk of repeating is that **a decision record
 ships no code**. D1 is a default and D2 is a switch; both are one edit away from
 being undone by someone who does not know why they are set. D3 is what makes the
@@ -264,14 +424,14 @@ code.
 
 ## §6 — Consequences
 
-| #   | What must happen                                            | Owner                | Blocking?               |
-| --- | ----------------------------------------------------------- | -------------------- | ----------------------- |
-| 1   | **D1** — repoint `PLANNER_MODELS.default` to `o3`           | `motir-ai`           | **Yes**, and FIRST      |
-| 2   | **D2** — disable gateway channel 1; keep channel 4 disabled | platform (`manual`)  | **Yes**, after 1        |
-| 3   | **D3** — the residency group + planner-user binding         | `motir-gateway`      | Yes, for durability     |
-| 4   | Re-read the channel set and record the date                 | this record, amended | Yes — D5                |
-| 5   | Amend `content/legal/subprocessors.md`                      | done in this change  | —                       |
-| 6   | Counsel + founder read §2's exposure window                 | MOTIR-3621           | Yes, before publication |
+| #   | What must happen                                                                                                                                                           | Owner                   | Blocking?                    |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ---------------------------- |
+| 1   | **D1** — repoint `PLANNER_MODELS.default` to `o3`                                                                                                                          | `motir-ai`              | **Yes**, and FIRST           |
+| 2   | ~~**D2** — disable gateway channel 1; keep channel 4 disabled~~ **STRUCK 2026-10-01** — card MOTIR-3636 cancelled 2026-08-27                                               | ~~platform (`manual`)~~ | ~~**Yes**, after 1~~ — no    |
+| 3   | ~~**D3** — the residency group + planner-user binding~~ **STRUCK 2026-10-01** (the binding) — card MOTIR-3637 cancelled 2026-08-27; the group itself shipped as MOTIR-3634 | ~~`motir-gateway`~~     | ~~Yes, for durability~~ — no |
+| 4   | Re-read the channel set and record the date                                                                                                                                | this record, amended    | Yes — D5                     |
+| 5   | Amend `content/legal/subprocessors.md`                                                                                                                                     | done in this change     | —                            |
+| 6   | Counsel + founder read §2's exposure window                                                                                                                                | MOTIR-3621              | Yes, before publication      |
 
 **The publication precondition (D5), stated the way `legal-document-set.md` §3
 states its own:** `subprocessors.md` may describe the settled decision now, and
