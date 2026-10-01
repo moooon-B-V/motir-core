@@ -485,6 +485,23 @@ test.describe('To fix on the Workbench', () => {
       // A push that goes green on each: a new head leaves the queue exit, the conflict and
       // the refusal all behind.
       await checks(page, queue, 'queue', 'success', pushedHead('queue'));
+      // The host now reports the conflict card's NEW head, and it merges: a push is asked
+      // about at its new head (MOTIR-7063), and a host still describing the old `dirty`
+      // head would hand that head back.
+      writeFileSync(
+        CONTROL_PATH,
+        JSON.stringify({
+          repositories: [WEB],
+          pullRequests: {
+            [`${WEB}#${PRS.conflict.number}`]: {
+              outcome: 'merged',
+              mergeableState: 'clean',
+              mergeable: true,
+              headSha: pushedHead('conflict'),
+            },
+          },
+        } satisfies GithubMergeControl),
+      );
       await push(page, conflict, 'conflict', pushedHead('conflict'));
       await checks(page, conflict, 'conflict', 'success', pushedHead('conflict'));
       await checks(page, sentBack, 'sentBack', 'success', pushedHead('sentBack'));

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { checkRowsAtHead, prCiStateAtHead, pullRequestHead } from '@/lib/github/pullRequestHead';
-import { isConflictedAtCurrentHead } from '@/lib/github/mergeability';
+import {
+  isConflictedAtCurrentHead,
+  isMergeabilityOwedAt,
+  isMergeabilityOwedAtCurrentHead,
+} from '@/lib/github/mergeability';
 
 // THE PULL REQUEST'S HEAD, READ ONE WAY (MOTIR-7005). The check rows are not the head:
 // a push that produces no CI — every push to a conflicting pull request — leaves them
@@ -88,5 +92,44 @@ describe('isConflictedAtCurrentHead', () => {
         mergeableStateHeadSha: A,
       }),
     ).toBe(false);
+  });
+});
+
+// OWED IS NOT CLEAN (MOTIR-7063): the reading a push marks pending, or one taken at an
+// older commit, holds the CI promotion — and is still no conflict.
+describe('isMergeabilityOwedAtCurrentHead', () => {
+  const at = (mergeableState: string | null, mergeableStateHeadSha: string | null) => ({
+    headSha: B,
+    checkRuns: [run(B, 'success')],
+    mergeableState,
+    mergeableStateHeadSha,
+  });
+
+  it('pending at the head is owed, and is not a conflict', () => {
+    expect(isMergeabilityOwedAtCurrentHead(at('unknown', B))).toBe(true);
+    expect(isConflictedAtCurrentHead(at('unknown', B))).toBe(false);
+  });
+
+  it('a reading taken at another head is owed, whatever it said', () => {
+    expect(isMergeabilityOwedAtCurrentHead(at('clean', A))).toBe(true);
+    expect(isMergeabilityOwedAtCurrentHead(at('dirty', A))).toBe(true);
+  });
+
+  it('a computed reading AT the head is not owed', () => {
+    expect(isMergeabilityOwedAtCurrentHead(at('clean', B))).toBe(false);
+    expect(isMergeabilityOwedAtCurrentHead(at('dirty', B))).toBe(false);
+  });
+
+  it('a row nothing has ever asked about is not owed', () => {
+    expect(isMergeabilityOwedAtCurrentHead(at(null, null))).toBe(false);
+  });
+
+  it('with no known head, only the pending marker is owed', () => {
+    expect(
+      isMergeabilityOwedAt({ mergeableState: 'unknown', mergeableStateHeadSha: A }, null),
+    ).toBe(true);
+    expect(isMergeabilityOwedAt({ mergeableState: 'clean', mergeableStateHeadSha: A }, null)).toBe(
+      false,
+    );
   });
 });

@@ -1138,7 +1138,9 @@ async function reconcileInstallation(
  * WITHDRAW the merge gates a PUSH made stale (Story MOTIR-4882 · MOTIR-5515): a
  * `synchronize` delivery carries the new head, so any awaiting merge gate on that pull
  * request whose version names another head is superseded — and the stored
- * mergeability reading, which was about the old head, is cleared (MOTIR-5913).
+ * mergeability reading, which was about the old head, is replaced by "pending at the
+ * new head" (MOTIR-5913 · MOTIR-7063), which the enqueued `pull-request/head-moved`
+ * re-read answers.
  *
  * The CI event for the new head withdraws it too; this is the earlier of the two, and
  * the only one for the minutes before any check has reported. SWALLOWS EVERYTHING, for
@@ -1156,41 +1158,59 @@ async function withdrawGatesOnSynchronize(body: Record<string, unknown>): Promis
       return;
     }
 
-    await withSystemContext(async (tx) => {
+    const moved = await withSystemContext(async (tx) => {
       const installation = await githubInstallationRepository.findByInstallationId(
         installationId,
         tx,
       );
-      if (!installation) return;
+      if (!installation) return null;
       const repo = await githubRepoRepository.findByInstallationAndRepoId(
         installation.id,
         providerRepoId,
         tx,
       );
-      if (!repo) return;
+      if (!repo) return null;
       // `approval_gate` has no system arm — bind the repository's tenant first.
       await bindWorkspaceContext(tx, repo.workspaceId);
       const row = await githubPullRequestRepository.findByRepoAndNumber(repo.id, number, tx);
-      if (row) {
-        // THE PULL REQUEST IS AT THE NEW HEAD (MOTIR-7005) — stored before anything
-        // reads the set, because the check rows are not: a push to a conflicting pull
-        // request gets no CI, and a head read off the rows would stay at the old green
-        // commit for ever.
-        await githubPullRequestRepository.setHeadSha(row.id, headSha, tx);
-        // A NEW HEAD'S MERGEABILITY IS UNCOMPUTED (MOTIR-5913): forget the old head's
-        // reading BEFORE the withdrawal's re-ask reads the set, so a push that resolves
-        // a conflict makes the member a merge candidate again.
-        await githubPullRequestRepository.clearMergeability(row.id, tx);
-        // The approve-and-merge gate over the set this pull request belongs to
-        // (MOTIR-5482) — the card's only gate since MOTIR-5611.
-        await withdrawPullRequestApprovalGatesOnHeadMove(row.id, tx, headSha);
-        // A cleared reading ends a CONFLICTED to-fix reason, and a new head ends a
-        // standing Request changes (MOTIR-6602).
-        for (const ref of await resolveDeliveredWorkItems(row.id, tx)) {
-          await recomputeWorkItemFixReason(ref.id, tx);
-        }
+      if (!row) return null;
+      // THE PULL REQUEST IS AT THE NEW HEAD (MOTIR-7005) — stored before anything
+      // reads the set, because the check rows are not: a push to a conflicting pull
+      // request gets no CI, and a head read off the rows would stay at the old green
+      // commit for ever.
+      await githubPullRequestRepository.setHeadSha(row.id, headSha, tx);
+      // A NEW HEAD'S MERGEABILITY IS UNCOMPUTED (MOTIR-5913) — and OWED (MOTIR-7063).
+      // The old head's reading goes BEFORE the withdrawal's re-ask reads the set, so a
+      // push that resolves a conflict makes the member a merge candidate again; what
+      // replaces it is "pending at this head", not nothing, so a green build cannot
+      // promote the card before the host has said whether this head still merges.
+      await githubPullRequestRepository.markMergeabilityPending(row.id, headSha, tx);
+      // The approve-and-merge gate over the set this pull request belongs to
+      // (MOTIR-5482) — the card's only gate since MOTIR-5611.
+      await withdrawPullRequestApprovalGatesOnHeadMove(row.id, tx, headSha);
+      // A replaced reading ends a CONFLICTED to-fix reason, and a new head ends a
+      // standing Request changes (MOTIR-6602).
+      for (const ref of await resolveDeliveredWorkItems(row.id, tx)) {
+        await recomputeWorkItemFixReason(ref.id, tx);
       }
+      return { workspaceId: repo.workspaceId, pullRequestId: row.id };
     });
+    // ⚠️ AND ASK THE HOST ABOUT THE NEW HEAD (MOTIR-7063). A conflict does not only arrive
+    // when the BASE moves: a head pushed onto a base that already moved past it — the
+    // ordinary case for a long-lived branch — conflicts from the moment it lands, and
+    // nothing else asks until the reconcile tick finds the row quiet. POST-commit and
+    // best-effort, like the base-branch push's enqueue: `sendEvent` swallows a transport
+    // failure, and the tick re-reads the member (and fills the pending reading) if this
+    // never runs.
+    if (moved) {
+      await sendEvent('pull-request/head-moved', {
+        workspaceId: moved.workspaceId,
+        pullRequestId: moved.pullRequestId,
+        number,
+        headSha,
+        idempotencyKey: `${moved.pullRequestId}:${headSha}`,
+      });
+    }
   } catch (err) {
     console.warn('[githubWebhookService] could not withdraw merge gates on a push', {
       error: err instanceof Error ? err.message : String(err),

@@ -9,6 +9,9 @@ import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/contex
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { resolveDeliveredWorkItems } from './changeRequestWorkItems';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { promoteIfCiAlreadyGreen } from './ciPromotion';
+import { reconcileGatesFor } from './gateSetFor';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { queueExitCardMoves, settleUnlandedOutcome } from './mergeQueueExitService';
 import { withdrawPullRequestApprovalGatesOnConflict } from './pullRequestApprovalGates';
 
@@ -55,6 +58,25 @@ export interface SettleSummary {
   held: number;
   /** Members whose read threw — not persisted, due again on the reconcile tick. */
   failed: number;
+}
+
+/** What one pass of the `pull-request/head-moved` re-read did (MOTIR-7063). */
+export interface HeadSettleSummary {
+  /**
+   * `unknown` — the host has not computed yet (the job waits and asks again);
+   * `conflicted` / `clean` — a computed reading was stored at its head;
+   * `failed` — the read threw (left for the reconcile tick);
+   * `skipped` — the provider has no merge path, or the row is gone.
+   */
+  outcome: 'unknown' | 'conflicted' | 'clean' | 'failed' | 'skipped';
+  /** Awaiting `pull_request_approval` gates superseded with `conflict`. */
+  withdrawn: number;
+  /** Cards moved `in_review → implemented` by the conflict. */
+  held: number;
+  /** Cards a clean reading released `implemented → in_review`. */
+  promoted: number;
+  /** Gates a clean reading raised on cards already in review. */
+  gatesRaised: number;
 }
 
 /** Whether a host answer says the head cannot combine with its base. */
@@ -158,6 +180,91 @@ export const pullRequestMergeabilityService = {
     });
     await emitMoves(outcome.moved, actor);
     return { conflicted, ...outcome, actor };
+  },
+
+  /**
+   * ONE PASS of the head-moved re-read (MOTIR-7063): ask the host about ONE pull request
+   * whose head a push just moved, and act on the answer.
+   *
+   * A `dirty` answer is {@link settleReading}'s, exactly as the base-branch push and the
+   * reconcile tick settle one: stored at its head, the question withdrawn, a card in
+   * review held at Implemented, and the to-fix reason recomputed to `conflicted`.
+   *
+   * ⚠️ A CLEAN ANSWER IS WHAT THE PROMOTION WAS WAITING FOR, SO IT RELEASES IT. The
+   * promotion holds while the reading is owed at the head (`isMergeabilityOwedAt`), and
+   * CI very often goes green inside that window — so the green verdict woke the latch,
+   * found the reading owed and did nothing, and nothing else would wake it again until
+   * the reconcile tick. {@link releaseHeldPromotion} is that second wake-up.
+   */
+  async settleHeadMember(workspaceId: string, member: BaseMember): Promise<HeadSettleSummary> {
+    const none = { withdrawn: 0, held: 0, promoted: 0, gatesRaised: 0 };
+    let reading: ChangeRequestMergeability | null;
+    try {
+      reading = await this.readFromHost(member.pullRequestId);
+    } catch (err) {
+      console.warn('[pullRequestMergeability] could not read a pushed pull request', {
+        pullRequestId: member.pullRequestId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return { outcome: 'failed', ...none };
+    }
+    if (!reading) return { outcome: 'skipped', ...none };
+    if (!isComputedReading(reading)) return { outcome: 'unknown', ...none };
+    const settled = await this.settleReading(workspaceId, member.pullRequestId, reading);
+    if (settled.conflicted) {
+      return {
+        outcome: 'conflicted',
+        ...none,
+        withdrawn: settled.withdrawn,
+        held: settled.moved.length,
+      };
+    }
+    const released = await this.releaseHeldPromotion(
+      workspaceId,
+      member.pullRequestId,
+      settled.actor,
+    );
+    return { outcome: 'clean', ...none, ...released };
+  },
+
+  /**
+   * Re-run the green latch over every card this pull request delivers, now that its
+   * reading is known (MOTIR-7063). It adds an OCCASION, never a rule: a card at
+   * `implemented` goes through `promoteIfCiAlreadyGreen` — the edge-2 latch, with its
+   * `isPromotable` and its gate raise — and a card already in review has its gates
+   * re-derived by `reconcileGatesFor`, the reconcile tick's own helper, which raises only
+   * what is owed and supersedes nothing. A card whose set is not green is untouched by
+   * both. `actor` null (a workspace with no owner) releases nothing.
+   */
+  async releaseHeldPromotion(
+    workspaceId: string,
+    pullRequestId: string,
+    actor: ServiceContext | null,
+  ): Promise<{ promoted: number; gatesRaised: number }> {
+    if (!actor) return { promoted: 0, gatesRaised: 0 };
+    const refs = await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, workspaceId);
+      return resolveDeliveredWorkItems(pullRequestId, tx);
+    });
+    let promoted = 0;
+    for (const ref of refs) {
+      if (await promoteIfCiAlreadyGreen(ref.id, actor)) promoted += 1;
+    }
+    // A card the push found in review: its gate went with the old head, and the green
+    // verdict at the new one may have arrived while the reading was owed.
+    const gatesRaised = await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, workspaceId);
+      let raised = 0;
+      for (const ref of refs) {
+        // LOCK ORDER — the card's awaiting gates, then the card, as the reconcile does.
+        await approvalGateRepository.lockAwaitingByWorkItem(ref.id, tx);
+        await workItemRepository.lockById(ref.id, tx);
+        const item = await workItemRepository.findById(ref.id, tx);
+        if (item) raised += (await reconcileGatesFor(item, tx)).length;
+      }
+      return raised;
+    });
+    return { promoted, gatesRaised };
   },
 
   /**

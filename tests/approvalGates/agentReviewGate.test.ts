@@ -46,6 +46,7 @@ import { linkPrByIdentifier } from '../helpers/prLink';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 import { makeWorkWaitOn } from '../helpers/designWaits';
 import { shaFor } from '../helpers/commitShaFixtures';
+import { hostAnswersCleanAt } from '../helpers/hostMergeability';
 
 const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -404,7 +405,7 @@ describe('§12.2 — one review per version', () => {
 
 describe('§12.5 — withdrawal', () => {
   it('a head move supersedes the awaiting review; the next green raises a new one at the new version', async () => {
-    const { item, review } = await reviewing('head-move', 69);
+    const { s, item, review } = await reviewing('head-move', 69);
 
     await pushTo(item.identifier, 69, 'sha-b');
     const withdrawn = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: review.id } });
@@ -413,6 +414,8 @@ describe('§12.5 — withdrawal', () => {
     expect(withdrawn.decidedAt).toBeNull();
     expect(await awaitingOf(item.id, REVIEW)).toHaveLength(0);
 
+    // The host says the new head still merges (MOTIR-7063) — until then nobody is asked.
+    await hostAnswersCleanAt(s.workspace.id, 69, 'sha-b');
     await ci('success', 'sha-b', 69);
     const [fresh] = await awaitingOf(item.id, REVIEW);
     expect(fresh!.subjectVersion).toBe(version(69, 'sha-b'));
