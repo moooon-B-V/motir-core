@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import {
@@ -20,6 +23,26 @@ import { truncateAuthTables } from '../helpers/db';
 // a digest named by its version, the cache, and the two fields every listed
 // agent carries — against a stubbed registry, and the list against a real
 // Postgres.
+
+// The live registry's two reads, stubbable per test; unstubbed they are the real ones.
+const registryCalls = vi.hoisted(() => ({
+  listImageTags: null as null | ((repository: string) => Promise<unknown>),
+  probeImagePull: null as null | ((reference: string) => Promise<unknown>),
+}));
+vi.mock('@motir/orchestrator', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@motir/orchestrator')>();
+  return {
+    ...real,
+    listImageTags: (repository: string) =>
+      registryCalls.listImageTags
+        ? registryCalls.listImageTags(repository)
+        : real.listImageTags(repository),
+    probeImagePull: (...args: Parameters<typeof real.probeImagePull>) =>
+      registryCalls.probeImagePull
+        ? registryCalls.probeImagePull(args[0])
+        : real.probeImagePull(...args),
+  };
+});
 
 const D = (n: number) => `sha256:${String(n).repeat(64).slice(0, 64)}`;
 const D040 = D(4);
@@ -56,6 +79,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  registryCalls.listImageTags = null;
+  registryCalls.probeImagePull = null;
   imageCatalogSeam.reset();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
@@ -267,5 +292,76 @@ describe('the list carries imageVersion and update on every agent', () => {
     await seedAgent('a', 'claude', D040);
     expect((await list()).get('a')).toMatchObject({ update: 'unknown' });
     expect(counts.listTags).toBe(0);
+  });
+});
+
+describe('the live registry (Q1) — GHCR read through the orchestrator', () => {
+  it('names the newest from the tag listing and the moving tag’s pullable digest', async () => {
+    registryCalls.listImageTags = async () => ({
+      ok: true,
+      registry: 'ghcr.io',
+      repository: 'moooon-b-v/motir-sandbox',
+      tags: ['claude', 'claude-0.4.0', 'claude-0.5.0'],
+    });
+    registryCalls.probeImagePull = async (reference) => ({
+      pullable: true,
+      reference,
+      registry: 'ghcr.io',
+      digest: reference.endsWith('-0.4.0') ? D040 : D050,
+    });
+    expect(await imageCatalog.newestFor('claude')).toEqual({ version: '0.5.0', digest: D050 });
+  });
+
+  it('a listing that fails, or a moving tag that will not pull, is unknown — never up to date', async () => {
+    registryCalls.listImageTags = async () => ({ ok: false, reason: 'unreachable' });
+    registryCalls.probeImagePull = async (reference) => ({
+      pullable: true,
+      reference,
+      registry: 'ghcr.io',
+      digest: D050,
+    });
+    expect(await imageCatalog.newestFor('claude', { fresh: true })).toBe('unknown');
+
+    registryCalls.listImageTags = async () => ({
+      ok: true,
+      registry: 'ghcr.io',
+      repository: 'moooon-b-v/motir-sandbox',
+      tags: ['claude-0.5.0'],
+    });
+    registryCalls.probeImagePull = async (reference) => ({
+      pullable: false,
+      reference,
+      registry: 'ghcr.io',
+      reason: 'absent',
+    });
+    expect(await imageCatalog.newestFor('claude', { fresh: true })).toBe('unknown');
+  });
+});
+
+describe('the shared catalog file (MOTIR-6955) — the E2E lane’s cross-process seam', () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'motir-catalog-')), 'catalog.json');
+  beforeEach(() => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    vi.stubEnv('MOTIR_FAKE_IMAGE_CATALOG_PATH', file);
+  });
+
+  it('is read on every call: a newest published mid-test, then could-not-check', async () => {
+    writeFileSync(file, JSON.stringify({ newest: { claude: '1.2.0' } }));
+    expect(await imageCatalog.newestFor('claude')).toEqual({
+      version: '1.2.0',
+      digest: fakeDigestFor('claude', '1.2.0'),
+    });
+    writeFileSync(file, JSON.stringify({ newest: { claude: '1.2.0' }, unavailable: true }));
+    expect(await imageCatalog.newestFor('claude')).toBe('unknown');
+  });
+
+  it('a file that is malformed, or not an object, is ignored — the base version stands', async () => {
+    for (const body of ['{not json', 'null']) {
+      writeFileSync(file, body);
+      expect(await imageCatalog.newestFor('claude')).toEqual({
+        version: FAKE_BASE_VERSION,
+        digest: fakeDigestFor('claude', FAKE_BASE_VERSION),
+      });
+    }
   });
 });

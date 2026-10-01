@@ -20,9 +20,12 @@ import { pinnedImageReference } from '@/lib/agentInstances/imageDigest';
 import {
   AGENT_LIVENESS_COMMANDS,
   OFFERED_AGENT_PROFILES,
+  livenessCommandFor,
   sandboxImageTag,
 } from '@/lib/agentInstances/profiles';
 import { isLegalTransition, RUNNING_STATES } from '@/lib/agentInstances/stateMachine';
+import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { agentInstanceLifecycleService as lifecycle } from '@/lib/services/agentInstanceLifecycleService';
 import { agentInstanceSweepService as sweeper } from '@/lib/services/agentInstanceSweepService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
@@ -74,6 +77,7 @@ beforeEach(async () => {
   ctxRef.current = { userId: user.id, workspaceId: fx.workspaceId } as WorkspaceContext;
 });
 afterEach(async () => {
+  vi.restoreAllMocks();
   imageCatalogSeam.reset();
   await tearDownHarness();
 });
@@ -206,6 +210,42 @@ describe('a HIBERNATED agent (Q5)', () => {
     expect(woken).toMatchObject({ state: 'running', imageDigest: BASE_DIGEST });
     expect(woken.updateFailureReason).toContain('exited 127');
     expect(fleet.machineImage(a.machineId!)).toBe(ref(BASE_DIGEST));
+    expect(fleet.liveVolumeIds()).toEqual([a.volumeId]);
+  });
+
+  it.each([
+    [NEW, 'The update to 1.1.0 didn’t work: '],
+    [null, 'The update to the newer version didn’t work: '],
+  ])(
+    'a wake whose move to the target (%s) is refused boots the old image and says why',
+    async (targetVersion, opening) => {
+      const a = await hibernated();
+      imageCatalogSeam.setFakeNewest('claude', NEW);
+      await update(a.id);
+      await adminDb.agentInstance.update({
+        where: { id: a.id },
+        data: { targetImageVersion: targetVersion },
+      });
+      fleet.failNextMove('the provider refused the image');
+
+      const woken = await lifecycle.wake(fx.projectIdentifier, a.id, fx.ctx);
+      expect(woken).toMatchObject({ state: 'running', imageDigest: BASE_DIGEST });
+      expect(woken.updateFailureReason).toContain(opening);
+      expect(woken.updateFailureReason).toContain('Your agent is back on 1.0.0.');
+      expect(fleet.machineImage(a.machineId!)).toBe(ref(BASE_DIGEST));
+      expect(fleet.liveVolumeIds()).toEqual([a.volumeId]);
+    },
+  );
+
+  it('a wake that cannot put the agent back on its own image (no update pending) fails it in words', async () => {
+    const a = await hibernated();
+    // The stopped machine holds an image other than the record's (a rollback that never ran).
+    await fleet.moveImage(handleOf(a), ref(NEW_DIGEST), { launch: false });
+    fleet.failNextMove('the provider refused the image');
+    const woken = await lifecycle.wake(fx.projectIdentifier, a.id, fx.ctx);
+    expect(woken.state).toBe('failed');
+    expect(woken.failureReason).toContain('The machine could not start');
+    expect(woken.failureReason).toContain('the provider refused the image');
     expect(fleet.liveVolumeIds()).toEqual([a.volumeId]);
   });
 
@@ -403,6 +443,289 @@ describe('the sweep resolves an agent left mid-update (Q6)', () => {
   });
 });
 
+describe('settling an update, branch by branch (Q4, Q6)', () => {
+  /** An agent recorded `updating` toward 1.1.0 while its machine still runs the old image. */
+  async function interrupted(targetVersion: string | null) {
+    const a = await agent();
+    await adminDb.agentInstance.update({
+      where: { id: a.id },
+      data: { state: 'updating', targetImageDigest: NEW_DIGEST, targetImageVersion: targetVersion },
+    });
+    return a;
+  }
+
+  it('nothing to settle: an agent that is not updating, or does not exist', async () => {
+    const a = await agent();
+    expect(await lifecycle.settleUpdate(a.id)).toBe('noop');
+    expect(await lifecycle.settleUpdate('no-such-agent')).toBe('noop');
+  });
+
+  it('a machine lost mid-update fails the agent in words, the volume kept', async () => {
+    const a = await agent();
+    imageCatalogSeam.setFakeNewest('claude', NEW);
+    fleet.setBootBehaviour('never_start');
+    await update(a.id);
+    fleet.destroyOutside(a.machineId!);
+
+    expect(await lifecycle.settleUpdate(a.id)).toBe('failed');
+    const after = await row(a.id);
+    expect(after.state).toBe('failed');
+    expect(after.failureReason).toContain('The machine was lost during the update');
+    expect(fleet.liveVolumeIds()).toEqual([a.volumeId]);
+  });
+
+  it.each([
+    [NEW, 'The update to 1.1.0 was interrupted. Your agent is still on 1.0.0.'],
+    [null, 'The update to the newer version was interrupted. Your agent is still on 1.0.0.'],
+  ])(
+    'an update interrupted before the move (target %s): back to running on the old image, saying so',
+    async (targetVersion, reason) => {
+      const a = await interrupted(targetVersion);
+      expect(await lifecycle.settleUpdate(a.id)).toBe('running');
+      expect(await row(a.id)).toMatchObject({
+        state: 'running',
+        imageDigest: BASE_DIGEST,
+        targetImageDigest: null,
+        updateFailureReason: reason,
+      });
+      expect(fleet.machineImage(a.machineId!)).toBe(ref(BASE_DIGEST));
+    },
+  );
+
+  it('a machine left stopped mid-rollback is put back on the old image and started', async () => {
+    const a = await agent();
+    imageCatalogSeam.setFakeNewest('claude', NEW);
+    fleet.setBootBehaviour('never_start');
+    await update(a.id);
+    clock.advance(6 * MIN);
+    // The new image never started: the rollback begins.
+    expect(await lifecycle.settleUpdate(a.id)).toBe('pending');
+    expect((await row(a.id)).updateFailureReason).toContain('did not start within 5 minutes');
+
+    // …and the machine is found stopped, still holding the new image.
+    fleet.stopOutside(a.machineId!);
+    await fleet.moveImage(handleOf(a), ref(NEW_DIGEST), { launch: false });
+    fleet.setBootBehaviour('start');
+    expect(await lifecycle.settleUpdate(a.id)).toBe('pending');
+    expect(fleet.machineImage(a.machineId!)).toBe(ref(BASE_DIGEST));
+
+    expect(await lifecycle.settleUpdate(a.id)).toBe('running');
+    expect(await row(a.id)).toMatchObject({ state: 'running', imageDigest: BASE_DIGEST });
+    expect(fleet.liveVolumeIds()).toEqual([a.volumeId]);
+  });
+
+  it('a rollback that cannot even be asked for fails the agent in words, the volume kept', async () => {
+    const a = await agent();
+    imageCatalogSeam.setFakeNewest('claude', NEW);
+    fleet.setBootBehaviour('never_start');
+    await update(a.id);
+    await adminDb.agentInstance.update({ where: { id: a.id }, data: { targetImageVersion: null } });
+    clock.advance(6 * MIN);
+    fleet.failNextMove('the provider refused the image');
+    expect(await lifecycle.settleUpdate(a.id)).toBe('pending');
+    const after = await row(a.id);
+    expect(after.state).toBe('failed');
+    expect(after.failureReason).toContain(
+      'The update to the newer version didn’t work, and your agent couldn’t be brought back on 1.0.0',
+    );
+    expect(fleet.liveVolumeIds()).toEqual([a.volumeId]);
+  });
+
+  it('a rollback names "its previous build" when the old version was never known', async () => {
+    const a = await agent();
+    const unnamed = 'sha256:' + 'e'.repeat(64);
+    await adminDb.agentInstance.update({
+      where: { id: a.id },
+      data: { imageVersion: null, imageDigest: unnamed },
+    });
+    imageCatalogSeam.setFakeNewest('claude', NEW);
+    fleet.markImageFailing(ref(NEW_DIGEST));
+    const dto = await update(a.id);
+    expect(dto.updateFailureReason).toContain('Your agent is back on its previous build.');
+    expect(dto.imageDigest).toBe(unnamed);
+  });
+
+  it('an interrupted update whose machine stays stopped waits, then fails past the deadline', async () => {
+    const a = await interrupted(null);
+    fleet.stopOutside(a.machineId!);
+    expect(await lifecycle.settleUpdate(a.id)).toBe('pending');
+    expect((await row(a.id)).state).toBe('updating');
+
+    clock.advance(6 * MIN);
+    expect(await lifecycle.settleUpdate(a.id)).toBe('failed');
+    const after = await row(a.id);
+    expect(after.state).toBe('failed');
+    expect(after.failureReason).toContain(
+      'The update to the newer version didn’t work, and your agent couldn’t be brought back on 1.0.0: it did not start.',
+    );
+    expect(fleet.liveVolumeIds()).toEqual([a.volumeId]);
+  });
+
+  it('rolling the interval is for a running or updating agent only', async () => {
+    const a = await agent();
+    await lifecycle.hibernate(fx.projectIdentifier, a.id, fx.ctx);
+    expect(await lifecycle.rollInterval(a.id)).toBe('noop');
+    expect(await lifecycle.rollInterval('no-such-agent')).toBe('noop');
+  });
+
+  it('a stopped machine whose restart is refused waits for the next pass', async () => {
+    const a = await agent();
+    imageCatalogSeam.setFakeNewest('claude', NEW);
+    fleet.setBootBehaviour('never_start');
+    await update(a.id);
+    clock.advance(6 * MIN);
+    await lifecycle.settleUpdate(a.id);
+    fleet.stopOutside(a.machineId!);
+    fleet.failNextStart();
+    expect(await lifecycle.settleUpdate(a.id)).toBe('pending');
+    expect((await row(a.id)).state).toBe('updating');
+  });
+});
+
+describe('the terminal must survive the update (Q3)', () => {
+  it('a new image that drops the terminal server is rolled back, saying so', async () => {
+    vi.stubEnv('MOTIR_TERMINAL_MASTER_KEY', 'm'.repeat(48));
+    const a = await agent();
+    expect(a.terminalServer).toBe('present');
+    imageCatalogSeam.setFakeNewest('claude', NEW);
+    // The coding agent still runs on the new image; its terminal server is gone.
+    fleet.setExecResponder((command) => ({
+      exitCode: command.join(' ') === 'motir agent-terminal --help' ? 1 : 0,
+      stdout: '',
+      stderr: '',
+    }));
+    try {
+      const dto = await update(a.id);
+      expect(dto.state).toBe('running');
+      expect(dto.imageDigest).toBe(BASE_DIGEST);
+      expect(dto.updateFailureReason).toBe(
+        'The update to 1.1.0 didn’t work: the new version has no terminal server. ' +
+          'Your agent is back on 1.0.0.',
+      );
+      expect(fleet.liveVolumeIds()).toEqual([a.volumeId]);
+    } finally {
+      fleet.setExecResponder(null);
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
+describe('the lost races — every guarded move refuses rather than overwrites (Q8)', () => {
+  it('a run opened between the check and the move is caught inside the move, which is undone', async () => {
+    const a = await agent();
+    imageCatalogSeam.setFakeNewest('claude', NEW);
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'a card' },
+      fx.ctx,
+    );
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run',
+        origin: 'instance',
+        agentInstanceId: a.id,
+        agent: 'claude',
+        cards: [{ key: item.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    // The first look (outside the move) misses the run; the one inside it does not.
+    vi.spyOn(dispatchRunRepository, 'findRunningByAgentInstance').mockResolvedValueOnce(null);
+    const err = await update(a.id).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AgentInstanceRunActiveError);
+    expect(err).toMatchObject({ runId: run.id, workItemKey: item.identifier });
+    expect(await row(a.id)).toMatchObject({ state: 'running', imageDigest: BASE_DIGEST });
+    expect(fleet.machineImage(a.machineId!)).toBe(ref(BASE_DIGEST));
+  });
+
+  it('a running agent moved by someone else first is a state conflict', async () => {
+    const a = await agent();
+    imageCatalogSeam.setFakeNewest('claude', NEW);
+    vi.spyOn(agentInstanceRepository, 'transition').mockResolvedValueOnce(0);
+    await expect(update(a.id)).rejects.toThrow(AgentInstanceStateConflictError);
+    expect(fleet.machineImage(a.machineId!)).toBe(ref(BASE_DIGEST));
+  });
+
+  it('a hibernated agent woken by someone else first is a state conflict', async () => {
+    const a = await agent();
+    await lifecycle.hibernate(fx.projectIdentifier, a.id, fx.ctx);
+    imageCatalogSeam.setFakeNewest('claude', NEW);
+    vi.spyOn(agentInstanceRepository, 'patchImage').mockResolvedValueOnce(0);
+    await expect(update(a.id)).rejects.toThrow(AgentInstanceStateConflictError);
+    expect((await row(a.id)).targetImageDigest).toBeNull();
+  });
+
+  it('a settle that loses the race to another settle changes nothing', async () => {
+    const a = await agent();
+    imageCatalogSeam.setFakeNewest('claude', NEW);
+    fleet.setBootBehaviour('never_start');
+    await update(a.id);
+    fleet.completeBoot(a.machineId!);
+    vi.spyOn(agentInstanceRepository, 'transition').mockResolvedValueOnce(0);
+    expect(await lifecycle.settleUpdate(a.id)).toBe('noop');
+    // The winner's settle still lands.
+    expect(await lifecycle.settleUpdate(a.id)).toBe('running');
+  });
+
+  it('an interrupted-update settle that loses the race changes nothing', async () => {
+    const a = await agent();
+    await adminDb.agentInstance.update({
+      where: { id: a.id },
+      data: { state: 'updating', targetImageDigest: NEW_DIGEST, targetImageVersion: NEW },
+    });
+    vi.spyOn(agentInstanceRepository, 'transition').mockResolvedValueOnce(0);
+    expect(await lifecycle.settleUpdate(a.id)).toBe('noop');
+    expect((await row(a.id)).state).toBe('updating');
+  });
+
+  it('a rollback another settle already recorded is not begun twice', async () => {
+    const a = await agent();
+    imageCatalogSeam.setFakeNewest('claude', NEW);
+    fleet.setBootBehaviour('never_start');
+    await update(a.id);
+    clock.advance(6 * MIN);
+    vi.spyOn(agentInstanceRepository, 'patchImage').mockResolvedValueOnce(0);
+    const moves = () => fleet.operations.filter((o) => o.startsWith('machine:move:')).length;
+    const before = moves();
+    expect(await lifecycle.settleUpdate(a.id)).toBe('pending');
+    expect(moves()).toBe(before);
+  });
+});
+
+describe('an agent with no recorded version (created before versions were recorded)', () => {
+  it('is named from the catalog at the press, and the name is recorded with the update', async () => {
+    const a = await agent();
+    await adminDb.agentInstance.update({ where: { id: a.id }, data: { imageVersion: null } });
+    imageCatalogSeam.setFakeNewest('claude', NEW);
+    fleet.markImageFailing(ref(NEW_DIGEST));
+    const dto = await update(a.id);
+    // Rolled back to the old image, which now carries the version the catalog named.
+    expect(dto).toMatchObject({
+      state: 'running',
+      imageDigest: BASE_DIGEST,
+      imageVersion: '1.0.0',
+    });
+    expect((await row(a.id)).imageVersion).toBe('1.0.0');
+  });
+
+  it('an agent created while the catalog cannot be read records no version', async () => {
+    imageCatalogSeam.setFakeUnavailable(true);
+    const a = await agent();
+    expect(a.imageVersion).toBeNull();
+  });
+
+  it('a digest the catalog cannot name is still offered the update', async () => {
+    const a = await agent();
+    await adminDb.agentInstance.update({
+      where: { id: a.id },
+      data: { imageVersion: null, imageDigest: 'sha256:' + 'e'.repeat(64) },
+    });
+    imageCatalogSeam.setFakeNewest('claude', NEW);
+    const dto = await update(a.id);
+    expect(dto).toMatchObject({ state: 'running', imageDigest: NEW_DIGEST, imageVersion: NEW });
+  });
+});
+
 describe('POST /api/projects/[key]/instances/[id]/update', () => {
   const params = (id: string) => ({ params: Promise.resolve({ key: fx.projectIdentifier, id }) });
   const post = (id: string) =>
@@ -459,5 +782,19 @@ describe('the state table and the liveness commands', () => {
       expect(published, profile.id).toBeDefined();
       expect(AGENT_LIVENESS_COMMANDS[profile.id]).toEqual(published!.liveness.split(/\s+/));
     }
+  });
+
+  it('a profile with no published liveness command is checked with `motir --version`', () => {
+    expect(livenessCommandFor('claude')).toEqual(AGENT_LIVENESS_COMMANDS['claude']);
+    expect(livenessCommandFor('not-a-profile')).toEqual(['motir', '--version']);
+  });
+
+  it('the up-to-date refusal names the version when it is known, and reads whole without it', () => {
+    expect(new AgentInstanceUpToDateError('a1', '0.5.0').message).toBe(
+      'This agent already runs the newest version (0.5.0).',
+    );
+    expect(new AgentInstanceUpToDateError('a1', null).message).toBe(
+      'This agent already runs the newest version.',
+    );
   });
 });
