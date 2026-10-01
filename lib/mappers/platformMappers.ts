@@ -6,8 +6,10 @@ import type {
   PlatformOrganizationSummaryDTO,
   PlatformUserDetailDTO,
   PlatformUserSummaryDTO,
+  PlatformWorkspaceSummaryDTO,
 } from '@/lib/dto/platform';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
+import type { PlatformWorkspaceRow } from '@/lib/repositories/platformEstateRepository';
 
 /** A `platform_audit_log` row → the DTO. */
 export function toPlatformAuditLogDTO(row: PlatformAuditLog): PlatformAuditLogDTO {
@@ -101,5 +103,19 @@ export function toPlatformOrganizationDetailDTO(row: Organization): PlatformOrga
     // whether one is on record, and forwarding the blob would put a payment
     // provider's payload on an operator screen for no rendered benefit.
     hasScaledTrackerSubscription: row.scaledTrackerSubscription !== null,
+  };
+}
+
+/** A workspace row with its relation counts → the estate read's workspace. */
+export function toPlatformWorkspaceSummaryDTO(
+  row: PlatformWorkspaceRow,
+): PlatformWorkspaceSummaryDTO {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    createdAt: row.createdAt.toISOString(),
+    projectCount: row._count.projects,
+    memberCount: row._count.memberships,
   };
 }

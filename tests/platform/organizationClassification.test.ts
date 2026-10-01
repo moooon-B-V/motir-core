@@ -115,7 +115,7 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     expect(rows[1]?.with_check).toContain('app.platform_staff');
   });
 
-  it('arms NO other table — this card takes `organization` and only `organization` (MOTIR-730 keeps the rest)', async () => {
+  it('arms exactly the gate table, `organization`, and the four estate tiers MOTIR-730 added', async () => {
     const rows = await adminDb.$queryRaw<{ tablename: string }[]>`
       SELECT DISTINCT "tablename"
       FROM pg_policies
@@ -123,8 +123,17 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
       ORDER BY "tablename"
     `;
     // `platform_audit_log` is MOTIR-2896's own table — the gate's, not a tenant
-    // table — and is the only other member.
-    expect(rows.map((r) => r.tablename)).toEqual(['organization', 'platform_audit_log']);
+    // table. The four estate tiers are MOTIR-730's SELECT-only arms
+    // (`20261001200000_platform_staff_estate_read_arms`, asserted in
+    // `platformReadService.test.ts`).
+    expect(rows.map((r) => r.tablename)).toEqual([
+      'organization',
+      'organization_membership',
+      'platform_audit_log',
+      'project',
+      'workspace',
+      'workspace_membership',
+    ]);
   });
 
   it('does NOT widen a TENANT context: a workspace-scoped read still sees no other org', async () => {

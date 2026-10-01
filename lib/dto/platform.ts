@@ -166,3 +166,43 @@ export interface PlatformOrganizationPageDTO {
    */
   actions: PlatformAuditLogDTO[];
 }
+
+/**
+ * The estate's four headline counts (MOTIR-730's `platformReadService.getEstateCounts`).
+ *
+ * Whole-estate totals, read as four `count(*)` statements in one audited platform
+ * transaction — never a row load (finding #57). The overview's "new this period"
+ * deltas and its activity feed are MOTIR-731's, built on top of this.
+ */
+export interface PlatformEstateCountsDTO {
+  organizations: number;
+  workspaces: number;
+  projects: number;
+  users: number;
+}
+
+/** One workspace inside an organization, as the estate read returns it (MOTIR-730). */
+export interface PlatformWorkspaceSummaryDTO {
+  id: string;
+  name: string;
+  slug: string;
+  /** ISO-8601 — when the workspace was created. */
+  createdAt: string;
+  projectCount: number;
+  memberCount: number;
+}
+
+/**
+ * One organization and the tiers beneath it (MOTIR-730's
+ * `platformReadService.getOrganizationEstate`) — the substrate MOTIR-733's
+ * drill-down renders. Carries no usage and no jobs: those live in motir-ai and
+ * are read over the 7.1 boundary by the cards that render them.
+ */
+export interface PlatformOrganizationEstateDTO {
+  organization: PlatformOrganizationSummaryDTO;
+  memberCount: number;
+  /** Oldest first, capped at `PLATFORM_ORG_WORKSPACE_LIMIT`. */
+  workspaces: PlatformWorkspaceSummaryDTO[];
+  /** True when the org holds more workspaces than `workspaces` shows. */
+  hasMoreWorkspaces: boolean;
+}
