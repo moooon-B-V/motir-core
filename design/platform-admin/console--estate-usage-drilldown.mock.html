@@ -2944,10 +2944,11 @@
     </div>
     <!-- ════════════════ D3 — USAGE & COST · BY TENANCY (amends Panel 4) ════════════════ -->
     <div class="panel-label">
-      D3 · Usage &amp; cost · estate — <strong>replaces</strong> the by-tenancy tree, By model &amp;
-      consumers and By month (MOTIR-732; revised after review 2026-10-01). The estate as a whole:
-      the period is any month (picker) or All time; four figures; the estate by category. No list of
-      organizations here: that list is the Tenants page (D10), with the same columns.
+      D3 · Usage &amp; cost · estate, <strong>a month</strong> (MOTIR-732; revised after review
+      2026-10-01). The estate as a whole for the chosen month: four figures, the estate by category,
+      and the two model tables (planning tokens, agent-run tokens). The period switch sits in the
+      same place on every console page — the toolbar row under the title, on the right. No list of
+      organizations here: that list is Tenants (D10).
     </div>
     <div class="panel">
       <div class="stage">
@@ -3018,14 +3019,14 @@
               ></span>
             </div>
             <div class="page">
-              <div class="row-between">
-                <div>
-                  <h2>Usage &amp; cost</h2>
-                  <p class="sub">
-                    The estate’s spend in every category — credits charged, usage, and what it cost
-                    Motir. Pick any month, or all time. Each organization’s figures are on Tenants.
-                  </p>
-                </div>
+              <div>
+                <h2>Usage &amp; cost</h2>
+                <p class="sub">
+                  The estate’s spend in every category — credits charged, usage, and what it cost
+                  Motir. Pick any month, or all time. Each organization’s figures are on Tenants.
+                </p>
+              </div>
+              <div class="seg-row" style="margin-top: 16px; justify-content: flex-end">
                 <div class="segmented" role="group" aria-label="Period">
                   <button class="seg-opt active" aria-pressed="true">
                     <svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>Sep 2026<svg
@@ -3036,7 +3037,7 @@
                   ><button class="seg-opt" aria-pressed="false">All time</button>
                 </div>
               </div>
-              <div class="stat-grid">
+              <div class="stat-grid" style="margin-top: 16px">
                 <div class="card stat">
                   <span class="ico ent-org"
                     ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
@@ -3063,7 +3064,7 @@
                     ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg
                   ></span>
                   <div class="big">214</div>
-                  <div class="lbl">organizations with spend</div>
+                  <div class="lbl">organizations with spend · Sep 2026</div>
                 </div>
               </div>
               <div class="stack" style="margin-top: 16px">
@@ -3074,10 +3075,10 @@
                         ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
                       ></span>
                       <div>
-                        <h3>The estate by category</h3>
+                        <h3>The estate by category · Sep 2026</h3>
                         <p class="hsub">
-                          Every tenant summed — the same categories a tenant sees on its own pages,
-                          plus indexing, which tenants are never charged for.
+                          Every tenant summed — the categories tenants see on their own pages, plus
+                          indexing, which no tenant is charged for.
                         </p>
                       </div>
                     </div>
@@ -3190,107 +3191,6 @@
                     </table>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="panel-label">
-      D4 · Usage &amp; cost · estate · <strong>All time</strong>, models —
-      <strong>replaces</strong> By model &amp; consumers (MOTIR-732). The same page as D3 with the
-      period on <strong>All time</strong>, scrolled past the org list to the two model tables:
-      planning tokens and agent-run tokens, each per model with input / output / cache read / cache
-      write, how many orgs used it, credits and Motir cost. Every figure on D3 and D4 answers for
-      any month or for all time.
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="shell">
-          <aside class="admin-nav">
-            <div class="brand">
-              <span class="logo">M</span>
-              <div>
-                <div class="bt">Motir</div>
-                <div class="bs">Platform admin</div>
-              </div>
-            </div>
-            <div class="nav-group">Platform</div>
-            <div class="nav-item">
-              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
-            </div>
-            <div class="nav-item active">
-              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
-            </div>
-            <div class="nav-item">
-              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
-            </div>
-            <div class="nav-item">
-              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
-            </div>
-            <div class="nav-group">Operations</div>
-            <div class="nav-item">
-              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
-            </div>
-            <div class="nav-item muted">
-              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
-                >10.3</span
-              >
-            </div>
-            <div class="spacer"></div>
-            <div class="navfoot">
-              <div class="who">
-                <span class="pava">OP</span>
-                <div>
-                  <div class="wt">Platform staff</div>
-                  <div class="ws">ops@moooon.net</div>
-                </div>
-              </div>
-              <div class="nav-item">
-                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
-              </div>
-            </div>
-          </aside>
-          <div class="shell-main">
-            <div class="adminbar">
-              <span class="staff-mark">
-                <span class="sm-ico"
-                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
-                ></span>
-                <span
-                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
-                    >all reads audited</span
-                  ></span
-                >
-              </span>
-              <div class="searchbar">
-                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
-                workspaces, projects, users…<span class="kbd">⌘K</span>
-              </div>
-              <span class="op"
-                ><span class="op-ava">OP</span
-                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
-              ></span>
-            </div>
-            <div class="page">
-              <div class="row-between">
-                <div>
-                  <h2>Usage &amp; cost</h2>
-                  <p class="sub">
-                    The same page with the period set to All time, scrolled to its model breakdown.
-                  </p>
-                </div>
-                <div class="segmented" role="group" aria-label="Period">
-                  <button class="seg-opt" aria-pressed="false">
-                    <svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>Sep 2026<svg
-                      viewBox="0 0 24 24"
-                    >
-                      <use href="#i-chevdown" />
-                    </svg></button
-                  ><button class="seg-opt active" aria-pressed="true">All time</button>
-                </div>
-              </div>
-              <div class="stack" style="margin-top: 16px">
                 <div class="card">
                   <div class="card-head">
                     <div class="ttl">
@@ -3298,11 +3198,10 @@
                         ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
                       ></span>
                       <div>
-                        <h3>Planning tokens by model · all time</h3>
+                        <h3>Planning tokens by model · Sep 2026</h3>
                         <p class="hsub">
-                          Every planning run across the estate, per model. Tokens split by input,
-                          output and prompt cache; Motir cost at the upstream price on the day each
-                          call was made.
+                          Every planning run across the estate, per model. Motir cost at the
+                          upstream price on the day each call was made.
                         </p>
                       </div>
                     </div>
@@ -3378,10 +3277,10 @@
                         ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
                       ></span>
                       <div>
-                        <h3>Agent-run tokens by model · all time</h3>
+                        <h3>Agent-run tokens by model · Sep 2026</h3>
                         <p class="hsub">
-                          The model calls of hosted agent runs, per model. Machine time is a
-                          separate category, not in these rows.
+                          The model calls of hosted agent runs, per model. Machine time is its own
+                          category, never in these rows.
                         </p>
                       </div>
                     </div>
@@ -3430,6 +3329,402 @@
                           <td class="num">44</td>
                           <td class="num credits">4,920</td>
                           <td class="num credits">$30.50</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      D4 · Usage &amp; cost · estate, <strong>All time</strong> (MOTIR-732). The same page with the
+      period on All time: every figure, the category table and both model tables answer for all
+      time. Nothing on the page belongs to one period only — any month and All time show the same
+      sections.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <div>
+                <h2>Usage &amp; cost</h2>
+                <p class="sub">
+                  The estate’s spend in every category — credits charged, usage, and what it cost
+                  Motir. Pick any month, or all time. Each organization’s figures are on Tenants.
+                </p>
+              </div>
+              <div class="seg-row" style="margin-top: 16px; justify-content: flex-end">
+                <div class="segmented" role="group" aria-label="Period">
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>Sep 2026<svg
+                      viewBox="0 0 24 24"
+                    >
+                      <use href="#i-chevdown" />
+                    </svg></button
+                  ><button class="seg-opt active" aria-pressed="true">All time</button>
+                </div>
+              </div>
+              <div class="stat-grid" style="margin-top: 16px">
+                <div class="card stat">
+                  <span class="ico ent-org"
+                    ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                  ></span>
+                  <div class="big">582,634</div>
+                  <div class="lbl">credits charged · all time</div>
+                </div>
+                <div class="card stat">
+                  <span class="ico ent-ws"
+                    ><svg viewBox="0 0 24 24"><use href="#i-flame" /></svg
+                  ></span>
+                  <div class="big">$4,098.35</div>
+                  <div class="lbl">Motir cost · all time</div>
+                </div>
+                <div class="card stat">
+                  <span class="ico ent-proj"
+                    ><svg viewBox="0 0 24 24"><use href="#i-server" /></svg
+                  ></span>
+                  <div class="big">326,781</div>
+                  <div class="lbl">machine minutes · agents, instances, CI, indexing</div>
+                </div>
+                <div class="card stat">
+                  <span class="ico ent-user"
+                    ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg
+                  ></span>
+                  <div class="big">231</div>
+                  <div class="lbl">organizations with spend · all time</div>
+                </div>
+              </div>
+              <div class="stack" style="margin-top: 16px">
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
+                      ></span>
+                      <div>
+                        <h3>The estate by category · all time</h3>
+                        <p class="hsub">
+                          Every tenant summed — the categories tenants see on their own pages, plus
+                          indexing, which no tenant is charged for.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>Category</th>
+                          <th>Usage</th>
+                          <th class="num">Credits</th>
+                          <th class="num">Motir cost</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-org">P</span
+                              ><span class="nm">Planning tokens</span></span
+                            >
+                          </td>
+                          <td><span class="muted">134.5M in · 19.8M out</span></td>
+                          <td class="num credits">389,109</td>
+                          <td class="num">$1,458.24</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-ws">A</span
+                              ><span class="nm">Agent-run tokens</span></span
+                            >
+                          </td>
+                          <td><span class="muted">57.3M in · 8.1M out</span></td>
+                          <td class="num credits">116,277</td>
+                          <td class="num">$744.55</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-proj">A</span
+                              ><span class="nm">Agent-run machine</span></span
+                            >
+                          </td>
+                          <td><span class="muted">39,837 min</span></td>
+                          <td class="num credits">39,837</td>
+                          <td class="num">$298.41</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-user">A</span
+                              ><span class="nm">Agent instances</span></span
+                            >
+                          </td>
+                          <td><span class="muted">80,115 min</span></td>
+                          <td class="num credits">16,023</td>
+                          <td class="num">$362.35</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-user">A</span
+                              ><span class="nm">Agent storage</span></span
+                            >
+                          </td>
+                          <td><span class="muted">456 GB-days</span></td>
+                          <td class="num credits">2,278</td>
+                          <td class="num">$22.79</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-ws">C</span><span class="nm">CI</span></span
+                            >
+                          </td>
+                          <td><span class="muted">156,555 min · 23,520 over</span></td>
+                          <td class="num credits">4,704</td>
+                          <td class="num">$743.82</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-org">W</span
+                              ><span class="nm">Web search</span></span
+                            >
+                          </td>
+                          <td><span class="muted">14,406 searches</span></td>
+                          <td class="num credits">14,406</td>
+                          <td class="num">$144.06</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-proj">I</span
+                              ><span class="nm">Indexing</span></span
+                            >
+                          </td>
+                          <td><span class="muted">50,274 min</span></td>
+                          <td class="num">not charged</td>
+                          <td class="num">$324.13</td>
+                        </tr>
+                        <tr>
+                          <td><strong>Total</strong></td>
+                          <td><span class="muted">326,781 machine minutes</span></td>
+                          <td class="num credits">582,634</td>
+                          <td class="num credits">$4,098.35</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                      ></span>
+                      <div>
+                        <h3>Planning tokens by model · all time</h3>
+                        <p class="hsub">
+                          Every planning run across the estate, per model. Motir cost at the
+                          upstream price on the day each call was made.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>Model · planning</th>
+                          <th class="num">Input</th>
+                          <th class="num">Output</th>
+                          <th class="num">Cache read</th>
+                          <th class="num">Cache write</th>
+                          <th class="num">Orgs</th>
+                          <th class="num">Credits</th>
+                          <th class="num">Motir cost</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-proj">O</span
+                              ><span class="nm">Claude Opus 4.6</span></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">60.3M</span></td>
+                          <td class="num"><span class="muted">8.1M</span></td>
+                          <td class="num"><span class="muted">157.3M</span></td>
+                          <td class="num"><span class="muted">14.7M</span></td>
+                          <td class="num">218</td>
+                          <td class="num credits">177,135</td>
+                          <td class="num credits">$706.33</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-proj">S</span
+                              ><span class="nm">Claude Sonnet 4.6</span></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">54.4M</span></td>
+                          <td class="num"><span class="muted">8.8M</span></td>
+                          <td class="num"><span class="muted">132.3M</span></td>
+                          <td class="num"><span class="muted">11.8M</span></td>
+                          <td class="num">261</td>
+                          <td class="num credits">156,555</td>
+                          <td class="num credits">$545.37</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-proj">D</span
+                              ><span class="nm">DeepSeek-V4 Pro</span></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">19.8M</span></td>
+                          <td class="num"><span class="muted">2.9M</span></td>
+                          <td class="num"><span class="muted">37.5M</span></td>
+                          <td class="num"><span class="muted">2.2M</span></td>
+                          <td class="num">74</td>
+                          <td class="num credits">55,419</td>
+                          <td class="num credits">$206.53</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-ws" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                      ></span>
+                      <div>
+                        <h3>Agent-run tokens by model · all time</h3>
+                        <p class="hsub">
+                          The model calls of hosted agent runs, per model. Machine time is its own
+                          category, never in these rows.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>Model · agent runs</th>
+                          <th class="num">Input</th>
+                          <th class="num">Output</th>
+                          <th class="num">Cache read</th>
+                          <th class="num">Cache write</th>
+                          <th class="num">Orgs</th>
+                          <th class="num">Credits</th>
+                          <th class="num">Motir cost</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-proj">O</span
+                              ><span class="nm">Claude Opus 4.6</span></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">36.0M</span></td>
+                          <td class="num"><span class="muted">5.1M</span></td>
+                          <td class="num"><span class="muted">222.0M</span></td>
+                          <td class="num"><span class="muted">8.8M</span></td>
+                          <td class="num">79</td>
+                          <td class="num credits">80,115</td>
+                          <td class="num credits">$520.38</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-proj">S</span
+                              ><span class="nm">Claude Sonnet 4.6</span></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">21.3M</span></td>
+                          <td class="num"><span class="muted">2.9M</span></td>
+                          <td class="num"><span class="muted">107.3M</span></td>
+                          <td class="num"><span class="muted">4.4M</span></td>
+                          <td class="num">57</td>
+                          <td class="num credits">36,162</td>
+                          <td class="num credits">$224.17</td>
                         </tr>
                       </tbody>
                     </table>

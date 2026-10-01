@@ -296,6 +296,13 @@ a code workaround.
   and the **`.seatmeter`** (seats used vs tier limit) are token-styled `div`s, no
   charting lib.
 
+## The page header grammar (every console page in this delta)
+
+Title and subtitle, then ONE **toolbar row** beneath them: what the page is scoped to on the left (the Tenants
+filter, the org page's scope picker — nothing on Usage & cost), and the **period switch** (`Segmented`: the
+month picker, then **All time**) always on the **right**. The switch never sits in the title row, so a long
+subtitle cannot move it. A back button (`← Tenants`, `← {org}`), where there is one, sits above the title.
+
 ## Colour roles (`--el-*` — palette, not grey-only · finding #54)
 
 | Element                                               | Token                                                                                             | Why                                                                     |
@@ -1081,7 +1088,11 @@ both kinds of token spend open to their models.
 4. **Sent back:** _"Platform -> Tenants -> org ? why like this?"_ — the org page had inherited the shipped
    _Platform › Tenants › {org}_ chips. Agreed with Yue: the Organizations list moves from Usage & cost to the
    **Tenants** page, which shows the tenant list first; clicking an org opens its page; a **back button** returns
-   to the list. No breadcrumb (D3, D5, D6, D8, D9, D10, D11).
+   to the list. No breadcrumb (D3, D5, D6, D8, D9, D10, D11). Republished `b3426f2`.
+5. **Sent back:** _"Why screen D3 and D4 the period switch is one on the left and one on the right? Why only all
+   time has models break down?"_ — D3's header had let the switch wrap under the title on the left, and the model
+   tables had been drawn on the All-time panel only. Now one header grammar everywhere and the same sections for
+   every period (D3, D4).
 
 ## The spending categories
 
@@ -1112,13 +1123,14 @@ beside the workspaces — never guessed into one.
 - **D1 — Estate overview (MOTIR-731).** Unchanged from the first publish: four counts with "+N in the last
   {period}", and the activity feed merging tenant events with planning and coding runs (`GET /v1/platform/runs`).
 - **D2 — Overview states.** Unchanged: runs unavailable (the rest renders), empty estate, loading.
-- **D3 — Usage & cost · estate (MOTIR-732).** The estate as a whole. Period control: **any month** (picker) or
-  **All time**. Four figures: credits charged, Motir cost, machine minutes, orgs with spend. **The estate by
-  category**: the eight rows summed over every org, with usage, credits and Motir cost, and the totals. No list
-  of organizations here — that list is Tenants (D10).
-- **D4 — Usage & cost · estate · All time, by model (MOTIR-732).** The same page on All time, scrolled to the
-  two model tables: **planning tokens by model** and **agent-run tokens by model** — input, output, cache read,
-  cache write, orgs using it, credits, Motir cost. Machine time is its own category, never in these rows.
+- **D3 — Usage & cost · estate, a month (MOTIR-732).** The estate as a whole for the chosen month: four
+  figures (credits charged, Motir cost, machine minutes, orgs with spend), **the estate by category** (the eight
+  rows summed over every org, with usage, credits and Motir cost, and the totals), and the two model tables —
+  **planning tokens by model** and **agent-run tokens by model** (input, output, cache read, cache write, orgs
+  using it, credits, Motir cost). No list of organizations here — that list is Tenants (D10).
+- **D4 — Usage & cost · estate, All time (MOTIR-732).** The same page with the period on All time. **Every
+  section answers for any period** — a month or all time; nothing (the model tables included) exists for one
+  period only.
 - **D10 — Tenants (MOTIR-733).** Replaces the shipped search-first `/admin/tenants`: the **tenant list comes
   first**. One flat row per org — credits per charged category, indexing minutes, charged total, Motir cost —
   with the **estate total over all orgs** as the first row; sorted by Motir cost, every column sorts, Show more
