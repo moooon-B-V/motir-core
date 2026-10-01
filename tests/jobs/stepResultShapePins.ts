@@ -487,6 +487,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/agentInstanceIdleCheck.ts',
     shape: '"active" | "backstop" | "idle" | "noop"',
   },
+  // MOTIR-7026 — a run in the caller's agent launches through its terminal server.
+  'launch-agent-run': {
+    file: 'lib/jobs/definitions/agentInstanceRunLaunch.ts',
+    shape: '"failed" | "launched" | "noop"',
+  },
   'sweep-stale-claims': {
     file: 'lib/jobs/definitions/fleetAttribution.ts',
     shape: 'number',

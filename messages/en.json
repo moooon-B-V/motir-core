@@ -9012,7 +9012,27 @@
         "body": "It may have been deleted, or it isn’t one of yours. Only the person who created an agent can open it.",
         "back": "Back to My agents"
       },
-      "size": "{cols} × {rows}"
+      "size": "{cols} × {rows}",
+      "run": {
+        "live": "Running a work item",
+        "last": "Last run",
+        "open": "Open run",
+        "offWhy": "Hibernate and Delete are off while a run is working in this agent — cancel the run first.",
+        "refusedHibernate": "{name} is running <link>{key}</link>. Cancel that run on the work item first, then hibernate it.",
+        "refusedDelete": "{name} is running <link>{key}</link>. Cancel that run on the work item first, then delete it.",
+        "sessions": {
+          "label": "Terminal sessions",
+          "shell": "Your shell",
+          "run": "Run {key}",
+          "watchOnly": "The run’s session is watch-only"
+        },
+        "strip": {
+          "watching": "Watching the run of {key} — read-only, so typing goes nowhere. To stop it, use Cancel run on <link>the work item</link>.",
+          "endedSucceeded": "The run’s session has ended — the run succeeded, and its pull request is on the work item.",
+          "endedFailed": "The run’s session has ended — the run failed. Its work so far is on the run’s branch."
+        },
+        "backToShell": "Back to your shell"
+      }
     }
   },
   "runs": {
@@ -9176,24 +9196,24 @@
     "nonePastMine": "No run you started has finished yet.",
     "hosted": {
       "door": {
-        "run": "Run hosted",
-        "runAgain": "Run hosted again",
+        "run": "Run",
+        "runAgain": "Run again",
         "starting": "Starting…"
       },
       "picker": {
         "label": "Model",
         "default": "Default",
         "defaultSecondary": "Default · {provider}",
-        "footer": "The models that can run a hosted work item. The run is billed to your organization in credits.",
+        "footer": "The models Motir can run this work item with. The run is billed to your organization in credits.",
         "loadingTrigger": "Loading models…",
-        "loadingBody": "Loading the models that can run hosted…",
+        "loadingBody": "Loading the models Motir can run it with…",
         "unavailableTrigger": "Models unavailable",
-        "unavailableBody": "Couldn’t load the models that can run hosted, so Run hosted is off for now.",
+        "unavailableBody": "Couldn’t load the models, so Run is off for now.",
         "retry": "Try again",
         "emptyTrigger": "No model available",
-        "emptyBody": "No model can run a hosted work item right now, so Run hosted is off. Local runs are unaffected."
+        "emptyBody": "No model can run this work item right now, so Run is off. Local runs are unaffected."
       },
-      "notReady": "Run hosted is available once this work item is ready — it has {count, plural, one {# open blocker} other {# open blockers}}.",
+      "notReady": "Run is available once this work item is ready — it has {count, plural, one {# open blocker} other {# open blockers}}.",
       "refused": {
         "notReady": {
           "title": "Not started — this work item isn’t ready to run.",
@@ -9201,10 +9221,10 @@
         },
         "outOfCredits": {
           "title": "Not started — your organization is out of credits.",
-          "body": "Nothing was booted and nothing was charged. Run hosted works again once the organization has credits."
+          "body": "Nothing was booted and nothing was charged. Run works again once the organization has credits."
         },
         "modelNotOffered": {
-          "title": "{model} is no longer offered for hosted runs.",
+          "title": "{model} is no longer offered.",
           "body": "Nothing was started. The list has been refreshed — choose a model and run again."
         },
         "notWritable": {
@@ -9214,11 +9234,11 @@
           "open": "Open in Repositories"
         },
         "unavailable": {
-          "title": "Not started — hosted runs aren’t available right now.",
+          "title": "Not started — Run isn’t available right now.",
           "body": "Nothing was booted and nothing was charged. Try again shortly."
         },
         "bootFailed": {
-          "title": "The hosted run couldn’t start its machine.",
+          "title": "The run couldn’t start its machine.",
           "body": "It was opened and ended as failed, and nothing is left running."
         },
         "failed": {
@@ -9241,14 +9261,14 @@
       },
       "meta": {
         "lane": "Lane",
-        "hosted": "Hosted",
+        "hosted": "Motir",
         "agent": "Agent",
         "model": "Model",
         "elapsed": "Elapsed",
         "took": "Took"
       },
-      "modalTitle": "Hosted run",
-      "logFooter": "A hosted run always reports its output. · Deleted after 30 days.",
+      "modalTitle": "Run",
+      "logFooter": "This run always reports its output. · Deleted after 30 days.",
       "prHeadline": "Pull request opened —",
       "end": {
         "succeeded": "The run delivered its work.",
@@ -9289,9 +9309,155 @@
           "min": "{n} min",
           "s": "{n} s"
         }
+      },
+      "where": {
+        "live": "Motir is working on it",
+        "ended": "Motir worked on it"
       }
     },
-    "runDied": "This run died — last heard from <b><when></when></b>. Its work is kept on its branch; continue it from Development below."
+    "runDied": "This run died — last heard from <b><when></when></b>. Its work is kept on its branch; continue it from Development below.",
+    "start": {
+      "caption": "Start this work item",
+      "run": {
+        "title": "Run",
+        "lead": "Motir works it on a fresh machine, with the model you pick. Billed in credits."
+      },
+      "send": {
+        "title": "Send to my agent",
+        "lead": "One of your own agents works it, with its coding agent and your sign-in."
+      },
+      "notReady": "Run and Send to my agent are available once this work item is ready — it has {count, plural, one {# open blocker} other {# open blockers}}."
+    },
+    "agent": {
+      "door": {
+        "send": "Send to my agent",
+        "starting": "Starting…"
+      },
+      "picker": {
+        "title": "Send {key} to one of your agents",
+        "lead": "Choosing an agent sends it and starts the work. An agent that is asleep wakes first.",
+        "label": "Your agents",
+        "foot": "Only your agents on {project} are listed.",
+        "manage": "Manage in My agents",
+        "loading": "Loading your agents…",
+        "failed": "Couldn’t load your agents.",
+        "retry": "Try again",
+        "signin": {
+          "signedIn": "Signed in",
+          "signedOut": "Not signed in",
+          "unknown": "Sign-in can’t be checked"
+        },
+        "next": {
+          "now": "starts now",
+          "wakes": "wakes first",
+          "whenUp": "starts when it’s up",
+          "failed": "wakes first — it failed last time"
+        },
+        "busyPill": "Working",
+        "busy": "Working on <k>{key}</k> · {title}. It can take another work item once that run ends. <run>Open that run</run>",
+        "busyNoTitle": "Working on <k>{key}</k>. It can take another work item once that run ends. <run>Open that run</run>",
+        "busyUnknown": "Working on another work item. It can take this one once that run ends. <run>Open that run</run>",
+        "off": {
+          "hibernating": "It’s stopping. Choose it again once it’s hibernated — it will wake for the work.",
+          "deleting": "It’s being deleted.",
+          "signedOut": "Sign in first: open {name} and run <cmd></cmd> in its terminal. <link>Open {name}</link>",
+          "imageTooOld": "Made from an older image that can’t work on work items. Moving it to the newer image — keeping its home and sign-in — is on its way; a new agent can take them now.",
+          "cannotRun": "{agent} can’t work on a work item on its own — it has no unattended mode Motir can start."
+        }
+      },
+      "command": {
+        "one": "<c>{first}</c>",
+        "two": "<c>{first}</c>, then <c>{second}</c>,",
+        "generic": "its sign-in command"
+      },
+      "empty": {
+        "title": "You have no agent on {project} yet.",
+        "body": "An agent is your own coding agent — Claude Code, Codex and others — on your own sign-in, in Motir’s cloud. Make one for this project, sign it in, and you can send work items to it.",
+        "create": "Create one in My agents"
+      },
+      "refused": {
+        "nothing": "Nothing was started and nothing was charged.",
+        "notSignedIn": {
+          "title": "Not sent — {agent} isn’t signed in on {name}.",
+          "body": "Open {name} and run <cmd></cmd> in its terminal.",
+          "open": "Open {name}"
+        },
+        "wrongProject": {
+          "title": "Not sent — {name} works on another project.",
+          "body": "An agent works only on the project it was made for. Choose an agent on {project}, or create one in My agents."
+        },
+        "notReady": {
+          "title": "Not sent — this work item isn’t ready to start.",
+          "body": "It has {count, plural, one {# open blocker} other {# open blockers}}.",
+          "bodyState": "It isn’t waiting to be started — it may already be in progress or done."
+        },
+        "runActive": {
+          "title": "Not sent — {name} is already working on <k>{key}</k>.",
+          "titleNoKey": "Not sent — {name} is already working on another work item.",
+          "body": "An agent works on one work item at a time, and {name} can take this one once that run ends. <run>Open {key}’s run</run> to watch or cancel it, or send this to another agent.",
+          "bodyNoKey": "An agent works on one work item at a time, and {name} can take this one once that run ends. <run>Open that run</run> to watch or cancel it, or send this to another agent."
+        },
+        "imageTooOld": {
+          "title": "Not sent — {name} was made from an older image that can’t work on work items.",
+          "body": "Moving it to the newer image — keeping its home and sign-in — is on its way. Until then, a new agent can take them."
+        },
+        "cannotRun": {
+          "title": "Not sent — {agent} can’t work on a work item on its own.",
+          "body": "It has no unattended mode Motir can start. Choose an agent with another coding agent."
+        },
+        "hibernating": {
+          "title": "Not sent — {name} is hibernating.",
+          "body": "Choose it again once it’s hibernated — it will wake for the work."
+        },
+        "deleting": {
+          "title": "Not sent — {name} is being deleted."
+        },
+        "notFound": {
+          "title": "Not sent — that agent isn’t available.",
+          "body": "It may have been deleted. The list has been refreshed."
+        },
+        "permission": {
+          "title": "Not sent — you can’t send this work item to an agent.",
+          "body": "That needs edit access to the work item and permission to use agents on this project."
+        },
+        "outOfCredits": {
+          "title": "Not sent — your organization is out of credits."
+        },
+        "failed": {
+          "title": "Not sent — Motir couldn’t send it.",
+          "body": "Try again shortly."
+        },
+        "wakeTitle": "Not sent — {name} couldn’t wake."
+      },
+      "phaseDetail": {
+        "waking": "Waking {name}",
+        "starting": "Starting in {name}",
+        "running": "{agent} · {name}"
+      },
+      "lane": "{name} · {agent}",
+      "laneGone": "A deleted agent",
+      "where": {
+        "live": "Your agent is working on it",
+        "ended": "Your agent worked on it",
+        "watch": "Watch it in My agents",
+        "open": "Open {name}"
+      },
+      "meta": {
+        "worked": "Worked by",
+        "codingAgent": "Coding agent"
+      },
+      "cost": {
+        "machineDetail": "{name}’s running time — charged with the agent, in credits. No tokens: {agent} runs on your own sign-in.",
+        "stripMachine": "{name}’s running time, charged with the agent",
+        "stripNoTokens": "No tokens — {agent} runs on your own sign-in"
+      },
+      "end": {
+        "notStarted": "The run couldn’t start in the agent."
+      },
+      "cancel": {
+        "body": "The run’s session in {name} stops and its credentials are revoked. Work it already pushed stays on the run’s branch, and this work item stays where it is. {name} keeps running, and your own shells in it are untouched."
+      }
+    }
   },
   "repositoryPicker": {
     "add": "Add repository",

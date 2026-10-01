@@ -251,6 +251,21 @@ process.env['MOTIR_TERMINAL_MASTER_KEY'] ??= 'e2e-acceptance-terminal-master-key
 process.env['MOTIR_RELAY_URL'] ??= `ws://localhost:${RELAY_PORT}/v1/terminal`;
 process.env['MOTIR_FAKE_TERMINAL_URL'] ??= `ws://127.0.0.1:${TERMINAL_HOST_PORT}`;
 process.env['MOTIR_E2E_TERMINAL_HOST_PORT'] ??= String(TERMINAL_HOST_PORT);
+// ── A CARD'S RUN IN AN AGENT (Story MOTIR-6864 · MOTIR-7031) ─────────────────
+//
+// Motir starts a run in an agent through the orchestrator's `exec` — the sign-in
+// query, the launcher, the stop (`agent-instance-run.md` §1, §4). The fake
+// persistent orchestrator ROUTES every exec nothing scripted to the terminal
+// host above, which runs the real `motir agent-terminal` commands against the
+// machine's real server — so the run session a browser attaches to is a real
+// one. Set on the RUNNER too: the launch job runs in the job worker, which
+// inherits this env. Every exec answered 0-and-empty before this; the host
+// answers the probes 0 and every command it does not own 0-and-empty still.
+process.env['MOTIR_FAKE_EXEC_URL'] ??= `http://127.0.0.1:${TERMINAL_HOST_PORT}/exec`;
+// …and the launch job writes the run's API origin into the run's credentials
+// (`resolveBaseUrlTrimmed`), so the WORKER must know this lane's origin: without
+// it the run in the agent would report to localhost:3000.
+process.env['MOTIR_BASE_URL'] ??= BASE_URL;
 
 /** The Studio App's credentials. The private key is GENERATED per run rather than
  *  committed: `createAppJwt` really signs RS256 with it (the shipped path runs
@@ -488,6 +503,8 @@ export default defineConfig({
         // needs the master key, and hands the browser the lane's relay.
         MOTIR_TERMINAL_MASTER_KEY: process.env['MOTIR_TERMINAL_MASTER_KEY']!,
         MOTIR_RELAY_URL: process.env['MOTIR_RELAY_URL']!,
+        // A card's run in an agent: the exec door (see "A CARD'S RUN IN AN AGENT").
+        MOTIR_FAKE_EXEC_URL: process.env['MOTIR_FAKE_EXEC_URL']!,
       },
     },
     {
