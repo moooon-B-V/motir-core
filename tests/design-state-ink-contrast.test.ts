@@ -3,10 +3,18 @@ import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MUTED_TOKEN } from './theme/inkContrastMockScan';
 import { contrast } from './theme/colorMetrics';
+import { createElement } from 'react';
+// The package SOURCE, not `dist`: `vitest.design.config.ts` aliases both
+// specifiers to `packages/design-system/src`, because the lane's CI job skips
+// `postinstall` and so never builds the package.
+import { renderMock } from '@motir/design-system/mock';
+import { Button, Card, Pill } from '@motir/design-system';
 import {
   AA_SMALL_TEXT,
   STATE_PSEUDO_CLASSES,
+  baseSelector,
   formatStateInkFinding,
+  mixSrgb,
   scanMockStateInk,
   stampSourceLines,
 } from './theme/mockStateInkScan';
@@ -67,6 +75,14 @@ import { STATE_INK_LEDGER, type StateInkLedgerEntry } from './theme/stateInkLedg
 // cases ABSTAINED on `origin/main` @ 37b791035, every one of them saying
 // "translucent over no opaque ground" — including the one whose ground was an
 // opaque `#223344ff`.
+//
+// ⚠️ MOTIR-7184 taught the arm the cascade WINNER of a `color-mix()` fallback
+// pair, the mix itself, and escaped Tailwind variants. Measured over all 271
+// mocks on `origin/main` @ `644fb0182` with this spec's own walk: abstentions
+// 168 → 0, findings 138 → 138 (every one already in the ledger's findings half),
+// state background rules 583 → 582. All 168 sites measured CLEAN — including
+// with the new `@scope` filter switched off, so that filter changes no verdict
+// in today's tree; it stops a scoped rule being measured where it cannot paint.
 //
 // ── This spec belongs to the `design/*` lane ────────────────────────────────
 // It reads `design/**` and nothing else, so a `design/*` branch — where the
@@ -578,6 +594,175 @@ describe('design state-ink — the scanner, on fixtures it must and must not rep
     expect(found.map((f) => f.line)).toEqual([expected]);
   });
 
+  // ── MOTIR-7184 — the cascade WINNER, the mix, and escaped variants ───────────
+  // Each fixture is a shape measured abstaining over the committed tree on
+  // `origin/main` @ `644fb0182`: 159 sites read *"black" … cannot read as a
+  // colour* (the fallback half of a `color-mix()` pair), and 9 read *could not
+  // match the base selector* (an escaped variant this file's own string handling
+  // mangled). Expected colours are COMPUTED from the CSS Color 5 formula here,
+  // never retyped, so the assertion is about the formula and not a hex someone
+  // copied from the scanner's own output.
+
+  /** `color-mix(in srgb, A p%, B)` for two OPAQUE colours, from the spec's formula. */
+  const mixedHex = (a: string, p: number, b: string) => {
+    const at = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+    return `#${[0, 1, 2]
+      .map((i) =>
+        Math.round(at(a, i) * (p / 100) + at(b, i) * (1 - p / 100))
+          .toString(16)
+          .padStart(2, '0'),
+      )
+      .join('')}`;
+  };
+
+  it('rules on the @supports WINNER of a fallback pair, not on the fallback', () => {
+    // The pair verbatim as compiled Tailwind and `theme.css` emit it, nested —
+    // so it goes through the reader exactly as a committed mock does.
+    const scanned = scan(
+      `<div class="row"><span class="id">PROD-12</span></div>`,
+      `.row:hover { background-color: black; ` +
+        `@supports (color: color-mix(in lab, red, red)) { ` +
+        `background-color: color-mix(in srgb, black 14%, var(--el-surface)); } } ` +
+        `.id { color: var(--el-text-muted); }`,
+    );
+    expect(scanned.abstentions).toEqual([]);
+    expect(scanned.stateBackgroundRules).toBe(1);
+    expect(scanned.findings.map((f) => f.surface)).toEqual([mixedHex('#000000', 14, '#f6f5f4')]);
+  });
+
+  it('keeps ruling on BOTH rules where the later one does not apply everywhere', () => {
+    // Under a `@media` the earlier rule is not under, the later rule is not an
+    // override on every element — so neither is dropped.
+    const scanned = scan(
+      `<div class="row"><span class="id">PROD-12</span></div>`,
+      `.row:hover { background: var(--el-surface); } ` +
+        `@media (min-width: 9999px) { .row:hover { background: var(--el-card); } } ` +
+        `.id { color: var(--el-text-muted); }`,
+    );
+    expect(scanned.stateBackgroundRules).toBe(2);
+    expect(scanned.findings.map((f) => f.surface)).toEqual(['#f6f5f4']);
+  });
+
+  it('resolves color-mix(in srgb, black 14%, #f6f5f4) to the hex the formula gives', () => {
+    const expected = mixedHex('#000000', 14, '#f6f5f4');
+    const mixed = mixSrgb(
+      { r: 0, g: 0, b: 0, a: 1 },
+      14,
+      { r: 0xf6, g: 0xf5, b: 0xf4, a: 1 },
+      null,
+    )!;
+    expect(mixed.a).toBe(1);
+    expect(
+      `#${[mixed.r, mixed.g, mixed.b].map((c) => Math.round(c).toString(16).padStart(2, '0')).join('')}`,
+    ).toBe(expected);
+    // And through the scanner, as a state background written literally.
+    const found = scan(
+      `<div class="row"><span class="id">PROD-12</span></div>`,
+      `.row:hover { background: color-mix(in srgb, black 14%, #f6f5f4); } ` +
+        `.id { color: var(--el-text-muted); }`,
+    ).findings;
+    expect(found.map((f) => f.surface)).toEqual([expected]);
+  });
+
+  it('mixes through a token that itself HOLDS a color-mix()', () => {
+    // `var(--el-tint)` reads the sentinel back from the engine's probe, because
+    // the engine cannot compute the mix the token holds. Expanded, it is a mix.
+    const found = scan(
+      `<div class="row"><span class="id">PROD-12</span></div>`,
+      `:root { --el-tint: color-mix(in srgb, var(--el-text-muted) 10%, var(--el-surface)); } ` +
+        `.row:hover { background: var(--el-tint); } .id { color: var(--el-text-muted); }`,
+    ).findings;
+    expect(found.map((f) => f.surface)).toEqual([mixedHex('#787671', 10, '#f6f5f4')]);
+  });
+
+  it('normalises color-mix percentages the way CSS Color 5 does', () => {
+    const black = { r: 0, g: 0, b: 0, a: 1 };
+    const white = { r: 255, g: 255, b: 255, a: 1 };
+    // Both omitted ⇒ 50/50; one omitted ⇒ 100 minus the other.
+    expect(mixSrgb(black, null, white, null)).toEqual({ r: 127.5, g: 127.5, b: 127.5, a: 1 });
+    expect(mixSrgb(black, null, white, 25)).toEqual(mixSrgb(black, 75, white, null));
+    // A sum over 100 scales down, with no alpha change.
+    expect(mixSrgb(black, 60, white, 60)).toEqual({ r: 127.5, g: 127.5, b: 127.5, a: 1 });
+    // A sum under 100 keeps the shortfall as alpha.
+    expect(mixSrgb(black, 20, white, 20)!.a).toBeCloseTo(0.4);
+    // Premultiplied: a transparent operand thins the colour, never darkens it.
+    expect(mixSrgb(white, 24, { r: 0, g: 0, b: 0, a: 0 }, null)).toEqual({
+      r: 255,
+      g: 255,
+      b: 255,
+      a: 0.24,
+    });
+    expect(mixSrgb(black, 0, white, 0)).toBeNull();
+  });
+
+  it('names a NON-srgb color-mix() as its own abstention, never a guess', () => {
+    const scanned = scan(
+      `<div class="row"><span class="id">PROD-12</span></div>`,
+      `.row:hover { background: color-mix(in oklab, black 14%, var(--el-surface)); } ` +
+        `.id { color: var(--el-text-muted); }`,
+    );
+    expect(scanned.findings).toEqual([]);
+    expect(scanned.abstentions.map((a) => a.reason)).toEqual([
+      'the state background "color-mix(in oklab, black 14%, var(--el-surface))" is a ' +
+        'color-mix() interpolated "in oklab", and this scanner evaluates only `in srgb`',
+    ]);
+  });
+
+  it('reads a fallback `black` as a colour where nothing overrides it', () => {
+    // It used to abstain: *"black" … cannot read as a colour*. Read, it is a
+    // measured pass — the muted ink clears AA on black — so the evidence is the
+    // empty abstention list beside a rule the arm walked.
+    const scanned = scan(
+      `<div class="row"><span class="id">PROD-12</span></div>`,
+      `.row:hover { background: black; } .id { color: var(--el-text-muted); }`,
+    );
+    expect(scanned.stateBackgroundRules).toBe(1);
+    expect(scanned.abstentions).toEqual([]);
+    expect(scanned.findings).toEqual([]);
+    expect(contrast('#787671', '#000000')).toBeGreaterThanOrEqual(AA_SMALL_TEXT);
+  });
+
+  it('keeps an ESCAPED state inside a Tailwind class name out of the rewrite', () => {
+    // MOTIR-7184 shape (a): `\:hover` inside the class is two escaped characters,
+    // not a pseudo-class. Only the trailing, unescaped `:hover` is the state.
+    expect(baseSelector('.disabled\\:hover\\:x:disabled:hover')).toBe(
+      '.disabled\\:hover\\:x:disabled',
+    );
+    expect(baseSelector('.disabled\\:hover\\:x:hover')).toBe('.disabled\\:hover\\:x');
+    expect(baseSelector('.focus\\:x:hover')).toBe('.focus\\:x');
+    // And a selector LIST still splits on its real commas, inside :not() never.
+    expect(baseSelector('.a:hover:not(.b, .c), .d:focus')).toBe('.a:not(.b, .c), .d');
+  });
+
+  it('matches a host whose class holds an ESCAPED comma', () => {
+    // MOTIR-7184 shape (b), and the probe the card asked for settles it: happy-dom
+    // serialises the selector faithfully; it was `baseSelector`'s naive
+    // `split(',')` that cut the class at its escaped comma.
+    const scanned = scan(
+      `<div class="hover:bg-[color-mix(in_srgb,var(--el-text-muted)_10%,var(--el-surface))]">` +
+        `<span class="id">PROD-12</span></div>`,
+      `.hover\\:bg-\\[color-mix\\(in_srgb\\,var\\(--el-text-muted\\)_10\\%\\,var\\(--el-surface\\)\\)\\]:hover ` +
+        `{ background-color: color-mix(in srgb, var(--el-text-muted) 10%, var(--el-surface)); } ` +
+        `.id { color: var(--el-text-muted); }`,
+    );
+    expect(scanned.abstentions).toEqual([]);
+    expect(scanned.findings.map((f) => f.surface)).toEqual([mixedHex('#787671', 10, '#f6f5f4')]);
+  });
+
+  it('applies an @scope rule only inside its scope', () => {
+    // `theme.css`'s retrofuturism tints are scoped; `querySelectorAll` is not.
+    const style =
+      `@scope ([data-style='retro']) to ([data-style]) { ` +
+      `.row:hover { background: var(--el-surface); } } .id { color: var(--el-text-muted); }`;
+    const row = `<div class="row"><span class="id">PROD-12</span></div>`;
+    expect(scan(row, style).findings).toEqual([]);
+    expect(scan(`<div data-style="retro">${row}</div>`, style).findings).toHaveLength(1);
+    // A limit element between the root and the host ends the scope.
+    expect(
+      scan(`<div data-style="retro"><div data-style="plain">${row}</div></div>`, style).findings,
+    ).toEqual([]);
+  });
+
   it('stamps a line onto every opening tag and nothing inside a <style> or a comment', () => {
     const stamped = stampSourceLines(
       `<!doctype html><html><head><style>.a { color: red }</style></head>` +
@@ -587,6 +772,39 @@ describe('design state-ink — the scanner, on fixtures it must and must not rep
     expect(stamped).toContain('<style data-mock-source-line="1">.a { color: red }</style>');
     expect(stamped).toContain('<!-- <p class="x">c</p> -->');
   });
+});
+
+describe('design state-ink — a renderMock document is MEASURED, not abstained on (MOTIR-7184)', () => {
+  // The sanctioned renderer's own output, in the shape the story's integration
+  // gate renders (`design-render-mock-gate.test.ts`). Before MOTIR-7184 it read
+  // 2 state rules, 2 abstentions of the `"black"` kind and 0 findings: the arm
+  // shrugged at the hover tint `theme.css` itself emits.
+  it.each([['light'], ['dark']] as const)(
+    'rules on every state rule it emits (%s)',
+    async (theme) => {
+      const html = await renderMock({
+        title: 'Save bar',
+        axes: { styleId: 'warm-editorial', paletteId: 'motir', typeId: 'motir' },
+        theme,
+        panels: [
+          {
+            label: 'Unsaved changes',
+            element: createElement(
+              Card,
+              null,
+              createElement(Pill, { status: 'in-progress' }, 'Unsaved'),
+              createElement(Button, { variant: 'primary' }, 'Save'),
+              createElement(Button, { variant: 'secondary' }, 'Discard'),
+            ),
+          },
+          { label: 'Danger', element: createElement(Button, { variant: 'danger' }, 'Delete') },
+        ],
+      });
+      const scanned = scanMockStateInk('design/x/rendered.mock.html', html);
+      expect(scanned.stateBackgroundRules).toBeGreaterThan(0);
+      expect(scanned.abstentions).toEqual([]);
+    },
+  );
 });
 
 describe('design state-ink — the declared boundary still has a subject', () => {

@@ -179,6 +179,38 @@ import { MUTED_TOKEN, parseElements } from './inkContrastMockScan';
 // above: this arm rules on `--el-text-muted`, so ink naming a different token,
 // or none, is simply not its subject. An ink outside the token layer is the
 // never-invent-a-colour rule's subject (`CLAUDE.md`), and it is enforced there.
+//
+// ── The CASCADE WINNER, and the `color-mix()` it usually is (MOTIR-7184) ─────
+// Once MOTIR-7179's reader let this arm see compiled Tailwind, 168 sites in 16
+// assets — and `renderMock`'s own hover tint — abstained. Three gaps, each
+// measured before it was fixed:
+//
+//   1. THE FALLBACK PAIR. Tailwind and `theme.css` emit every `color-mix()` tint
+//      as `background-color: <fallback>; @supports (color: color-mix(…)) {
+//      background-color: color-mix(…) }`. Flattened, that is two rules with one
+//      selector, and the arm ruled on EACH — so it measured the fallback, which
+//      no modern engine paints (`black`, or a full-strength `var(--el-accent)`).
+//      Worse, happy-dom DROPS a `color-mix()` declaration from the rule it is in
+//      (probed: `.c:hover {  }`), so the winner never reached the CSSOM at all.
+//      `carryColourMix` copies each such value into a custom property — which
+//      happy-dom keeps verbatim — and `overriddenRules` drops a rule a later
+//      same-selector rule overrides, so the arm rules on the WINNER.
+//   2. THE MIX ITSELF. happy-dom computes `color-mix()` to nothing, so planting
+//      it in a probe reads the sentinel back. `resolveStateBackground` expands
+//      every `var()` through a custom-property probe (`expandAt`), resolves each
+//      operand where it stands, and mixes in sRGB with CSS Color 5's percentage
+//      normalisation (`mixSrgb`). `in srgb` is the only space a state background
+//      in this tree uses; any other is a NAMED abstention, never a guess.
+//   3. ESCAPED VARIANTS. `baseSelector` stripped `:hover` from INSIDE
+//      `.disabled\:hover\:bg-…` and split selector lists on the escaped comma in
+//      `.hover\:bg-\[color-mix\(in_srgb\,…`. Both are this file's own string
+//      handling, not the engine's: `selectorParts` reads a selector the way
+//      `flattenMockCss`'s `scan` does, skipping every `\`-escaped character.
+//
+// And one consequence of ruling on the winner: `theme.css`'s retrofuturism tints
+// sit in `@scope ([data-style='retrofuturism'])`, which `querySelectorAll` does
+// not see. A rule now measured has to apply where it is measured, so a scoped
+// rule takes only the hosts inside its scope (`inScope`).
 
 /** The interaction states this arm resolves. Ordered as written, for the report. */
 export const STATE_PSEUDO_CLASSES = [
@@ -197,10 +229,13 @@ export const STATE_PSEUDO_CLASSES = [
  * `:(?:focus|focus-within)` matches `:focus` inside `:focus-within`, `statesIn`
  * reports the wrong state and `baseSelector` rewrites `.x:focus-within` to the
  * selector `.x-within`, which matches nothing and reports a clean asset.
+ *
+ * STICKY, because `selectorParts` asks it only at an UNESCAPED `:` it has
+ * already found — the escape is the walker's question, not the regex's.
  */
 const STATE_PSEUDO_RE = new RegExp(
   `:(?:${[...STATE_PSEUDO_CLASSES].sort((a, b) => b.length - a.length).join('|')})\\b`,
-  'g',
+  'y',
 );
 
 /** Selectors carrying an ATTRIBUTE, which this arm declines — counted, not ruled on. */
@@ -336,8 +371,23 @@ interface Rgba {
  * reached it through `composite`, the other dropped because the code reached it
  * through `toHex`.
  */
+/**
+ * The CSS named colours this tree's paint actually uses, and only those
+ * (MOTIR-7184): the `color-mix()` operands `black` / `white` / `transparent`,
+ * which is also what a fallback pair's `background-color: black` names. NOT the
+ * whole CSS table — an unlisted name stays *unreadable*, which is a named
+ * abstention, and the fixtures hold `rebeccapurple` to exactly that.
+ */
+const NAMED_COLOURS: Readonly<Record<string, Rgba>> = {
+  black: { r: 0, g: 0, b: 0, a: 1 },
+  white: { r: 255, g: 255, b: 255, a: 1 },
+  transparent: { r: 0, g: 0, b: 0, a: 0 },
+};
+
 function parseColour(value: string): Rgba | null {
   const trimmed = value.trim();
+  const named = NAMED_COLOURS[trimmed.toLowerCase()];
+  if (named) return { ...named };
   if (HEX_RE.test(trimmed)) {
     const digits = trimmed.slice(1);
     // `#rgb` / `#rgba` are the same colour with every digit doubled.
@@ -476,44 +526,183 @@ function composite(value: string, ground: string | null): string | null {
 type Doc = Window['document'];
 type El = ReturnType<Doc['querySelector']> & object;
 
+/** A grouping rule a style rule sits inside, as far as the cascade-winner read needs it. */
+type Group =
+  | { kind: 'supports'; condition: string }
+  | { kind: 'scope'; start: string; end: string | null }
+  | { kind: 'other'; text: string };
+
+const groupKey = (group: Group) =>
+  group.kind === 'supports'
+    ? `supports ${group.condition}`
+    : group.kind === 'scope'
+      ? `scope ${group.start} to ${group.end ?? ''}`
+      : group.text;
+
 interface PaintRule {
   selectorText: string;
   background: string;
   color: string;
+  /** The grouping rules it sits in, outermost first. */
+  groups: Group[];
 }
 
 /**
  * Every style rule in the document that paints ink or ground, inside `@media` /
  * `@supports` / `@scope` groups included. `@layer` blocks and nested rules never
  * reach here as such: `flattenMockCss` lowered them before the engine parsed.
+ *
+ * A rule's BACKGROUND is its `color-mix()` carrier where it has one — the value
+ * happy-dom dropped from the rule (`carryColourMix`).
  */
 function styleRules(document: Doc): PaintRule[] {
   const out: PaintRule[] = [];
-  const walk = (rules: unknown[]) => {
+  const walk = (rules: unknown[], groups: Group[]) => {
     for (const rule of rules as {
       selectorText?: string;
       style?: { getPropertyValue(name: string): string };
       cssRules?: unknown[];
+      conditionText?: string;
+      media?: { mediaText: string };
+      start?: string;
+      end?: string | null;
+      cssText?: string;
     }[]) {
-      if (rule.cssRules?.length) walk([...rule.cssRules]);
+      if (rule.cssRules?.length) {
+        const group: Group =
+          typeof rule.start === 'string'
+            ? { kind: 'scope', start: rule.start, end: rule.end || null }
+            : !rule.media && typeof rule.conditionText === 'string'
+              ? { kind: 'supports', condition: rule.conditionText }
+              : { kind: 'other', text: (rule.cssText ?? '').slice(0, rule.cssText?.indexOf('{')) };
+        walk([...rule.cssRules], [...groups, group]);
+      }
       if (typeof rule.selectorText !== 'string' || !rule.style) continue;
       const background =
+        rule.style.getPropertyValue(CARRIER_PROPERTY) ||
         rule.style.getPropertyValue('background') ||
         rule.style.getPropertyValue('background-color');
       const color = rule.style.getPropertyValue('color');
       if (background.trim() || color.trim())
-        out.push({ selectorText: rule.selectorText, background, color });
+        out.push({ selectorText: rule.selectorText, background, color, groups });
     }
   };
   for (const sheet of document.styleSheets) {
     try {
-      walk([...sheet.cssRules]);
+      walk([...sheet.cssRules], []);
     } catch {
       // A sheet the engine could not parse is named by the caller's abstention
       // list via the zero-rule count, not swallowed here.
     }
   }
   return out;
+}
+
+/**
+ * Copy every `background` / `background-color` whose WHOLE value is a
+ * `color-mix()` into `CARRIER_PROPERTY` beside it, in every `<style>`.
+ *
+ * happy-dom drops such a declaration from its rule at parse time (probed:
+ * `.c:hover { background-color: color-mix(…) }` reads back as `.c:hover {  }`),
+ * so without this the `@supports` half of every fallback pair — the half a
+ * modern engine PAINTS — never reaches the CSSOM, and the arm can only see the
+ * fallback. A custom property is kept verbatim, so the value survives under a
+ * name nothing in the tree uses. Only a whole-value mix is carried: a gradient
+ * holding one is not a colour this arm reads, and carrying it would only turn
+ * an ignored rule into an abstention.
+ */
+function carryColourMix(html: string): string {
+  return html.replace(
+    /<!--[\s\S]*?-->|(<style\b[^>]*>)([\s\S]*?)(<\/style\s*>)/gi,
+    (match: string, open?: string, css?: string, close?: string) =>
+      open === undefined
+        ? match
+        : open +
+          css!.replace(
+            /([{;]\s*)(background(?:-color)?\s*:\s*)(color-mix\([^;{}]*\))(\s*(?:!important\s*)?)(?=[;}])/gi,
+            (_m, lead: string, property: string, value: string, tail: string) =>
+              `${lead}${property}${value}${tail}; ${CARRIER_PROPERTY}: ${value}${tail}`,
+          ) +
+          close,
+  );
+}
+
+/**
+ * The rules a LATER rule overrides on every element they both match — so the
+ * arm rules on the cascade winner, never on a fallback no engine paints.
+ *
+ * Rule B overrides rule A when both declare a background, they share a
+ * selector (so specificity ties and source order decides), B comes later, and
+ * B applies wherever A does: B's grouping rules are A's, plus only `@supports`
+ * conditions the engine says hold. That is the fallback pair exactly, and the
+ * plain repeated-selector case. Anything weaker — B under a `@media` A is not
+ * under — is not an override on every element, so both stay ruled on, as they
+ * were.
+ */
+function overriddenRules(window: Window, rules: PaintRule[]): Set<PaintRule> {
+  const supports = (condition: string) => {
+    try {
+      return Boolean(
+        (window as unknown as { CSS?: { supports(c: string): boolean } }).CSS?.supports(condition),
+      );
+    } catch {
+      return false;
+    }
+  };
+  const bySelector = new Map<string, PaintRule[]>();
+  for (const rule of rules) {
+    if (!rule.background.trim()) continue;
+    const key = rule.selectorText.replace(/\s+/g, ' ').trim();
+    bySelector.set(key, [...(bySelector.get(key) ?? []), rule]);
+  }
+  const out = new Set<PaintRule>();
+  for (const sameSelector of bySelector.values()) {
+    for (const [index, earlier] of sameSelector.entries()) {
+      const overridden = sameSelector.slice(index + 1).some((later) => {
+        if (later.groups.length < earlier.groups.length) return false;
+        const prefix = earlier.groups.every(
+          (group, at) => groupKey(group) === groupKey(later.groups[at]!),
+        );
+        return (
+          prefix &&
+          later.groups
+            .slice(earlier.groups.length)
+            .every((group) => group.kind === 'supports' && supports(group.condition))
+        );
+      });
+      if (overridden) out.add(earlier);
+    }
+  }
+  return out;
+}
+
+/**
+ * Is `host` inside every `@scope` its rule sits in? `querySelectorAll` matches
+ * the selector against the WHOLE document, so a scoped rule's hosts include
+ * every element outside its scope, where it paints nothing. A scoping LIMIT
+ * element is itself outside the scope.
+ */
+function inScope(host: El, groups: Group[]): boolean {
+  for (const group of groups) {
+    if (group.kind !== 'scope') continue;
+    try {
+      let reached = false;
+      for (let root = host.closest(group.start); root && !reached; ) {
+        let limited = false;
+        if (group.end) {
+          for (let node: El | null = host; node && node !== root; node = node.parentElement) {
+            if (node.matches(group.end)) limited = true;
+          }
+        }
+        reached = !limited;
+        root = root.parentElement?.closest(group.start) ?? null;
+      }
+      if (!reached) return false;
+    } catch {
+      // A scope prelude the engine cannot match: keep the host, as before.
+    }
+  }
+  return true;
 }
 
 /**
@@ -540,6 +729,170 @@ function resolveAt(window: Window, host: El, value: string): string | null {
   // The sentinel showing through means the declaration was invalid at computed
   // value time — an undefined token — and NOT that the site paints magenta.
   return toHex(resolved) === SENTINEL ? null : resolved;
+}
+
+/** The custom property `expandAt` plants, and `carryColourMix` writes into rules. */
+const PROBE_PROPERTY = '--mock-state-ink-probe';
+const CARRIER_PROPERTY = '--mock-state-ink-background';
+
+/**
+ * A value with every `var()` substituted AT a place in the tree, as TEXT — or
+ * null where a token it names is undefined there.
+ *
+ * `resolveAt` cannot do this for a `color-mix()`: happy-dom computes one to
+ * nothing, so its probe reads the sentinel back and the site would be reported
+ * as an undefined token. A CUSTOM property is different — the engine keeps its
+ * value verbatim and substitutes the `var()`s inside it, nested ones included
+ * (probed: `--q: var(--mix)` reads `color-mix(in srgb, black 14%, #f6f5f4)`). So
+ * the probe declares one and reads it back on the probe itself, which is the
+ * one element the header's behaviour (1) lets it be read on.
+ */
+function expandAt(window: Window, host: El, value: string): string | null {
+  if (!value.includes('var(')) return value.trim();
+  const probe = window.document.createElement('span');
+  probe.setAttribute('style', `${PROBE_PROPERTY}: ${value}`);
+  host.appendChild(probe);
+  const expanded = window.getComputedStyle(probe).getPropertyValue(PROBE_PROPERTY).trim();
+  probe.remove();
+  // An undefined token makes the custom property guaranteed-invalid: it reads
+  // back empty, or with the unresolved `var()` still in it.
+  return expanded === '' || expanded.includes('var(') ? null : expanded;
+}
+
+/** `color-mix(<body>)` as the WHOLE value, or null. */
+function colourMixBody(value: string): string | null {
+  const trimmed = value.trim();
+  if (!/^color-mix\(/i.test(trimmed) || !trimmed.endsWith(')')) return null;
+  const body = trimmed.slice('color-mix('.length, -1);
+  // The `(` this opened must be the one that closes at the very end — not
+  // `color-mix(a) , color-mix(b)`.
+  let depth = 0;
+  for (const ch of body) {
+    if (ch === '(') depth += 1;
+    else if (ch === ')' && (depth -= 1) < 0) return null;
+  }
+  return depth === 0 ? body : null;
+}
+
+/** Split on the commas at parenthesis depth 0. */
+function topLevelCommaSplit(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let from = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (ch === '(') depth += 1;
+    else if (ch === ')') depth -= 1;
+    else if (ch === ',' && depth === 0) {
+      parts.push(text.slice(from, i).trim());
+      from = i + 1;
+    }
+  }
+  parts.push(text.slice(from).trim());
+  return parts;
+}
+
+/**
+ * Mix two colours in sRGB, the way CSS Color 5 defines `color-mix()` — exported
+ * so the fixture can compute its expected value from the formula rather than
+ * retype a hex.
+ *
+ * Percentages normalise as the spec says: one omitted is 100 minus the other,
+ * both omitted is 50/50, a sum over 100 is scaled down to 100, and a sum UNDER
+ * 100 scales both up and keeps the shortfall as an alpha multiplier. The mix is
+ * PREMULTIPLIED, so a `transparent` operand thins the result rather than
+ * dragging it toward black — which is how `color-mix(in srgb, X 24%,
+ * transparent)` comes out as X at 24% alpha.
+ */
+export function mixSrgb(
+  first: { r: number; g: number; b: number; a: number },
+  firstPercent: number | null,
+  second: { r: number; g: number; b: number; a: number },
+  secondPercent: number | null,
+): { r: number; g: number; b: number; a: number } | null {
+  let p1 = firstPercent ?? (secondPercent === null ? 50 : 100 - secondPercent);
+  let p2 = secondPercent ?? 100 - p1;
+  if (p1 < 0 || p2 < 0 || p1 + p2 <= 0) return null;
+  const sum = p1 + p2;
+  const alphaMultiplier = Math.min(sum, 100) / 100;
+  p1 /= sum;
+  p2 /= sum;
+  const alpha = first.a * p1 + second.a * p2;
+  if (alpha <= 0) return { r: 0, g: 0, b: 0, a: 0 };
+  const channelOf = (c1: number, c2: number) => (c1 * first.a * p1 + c2 * second.a * p2) / alpha;
+  return {
+    r: channelOf(first.r, second.r),
+    g: channelOf(first.g, second.g),
+    b: channelOf(first.b, second.b),
+    a: alpha * alphaMultiplier,
+  };
+}
+
+/** A colour as the one string every reader above can parse. */
+function serialise(colour: Rgba): string {
+  if (colour.a >= 1) return hexOf(colour);
+  const round = (n: number) => Number(n.toFixed(3));
+  return `rgba(${round(colour.r)}, ${round(colour.g)}, ${round(colour.b)}, ${round(colour.a)})`;
+}
+
+/** What `resolveStateBackground` found: a colour, or why it could not name one. */
+type Resolved = { colour: string } | { undefinedToken: true } | { abstain: string };
+
+/**
+ * A state background, RESOLVED at its host — `resolveAt` for anything the
+ * engine can compute, and the mix evaluated here for the one thing it cannot.
+ *
+ * ⚠️ `in srgb` ONLY. It is the one interpolation space a state background in
+ * this tree is written in (`git grep -o 'color-mix(in [a-z]*'`: the `in lab`
+ * hits are the `@supports` CONDITION, and the `in oklab` ones a `currentcolor`
+ * border, neither a background). Another space would need its own conversion
+ * to agree with a real engine, and a guess there is a number nobody can trust,
+ * so it is named instead.
+ */
+function resolveStateBackground(window: Window, host: El, value: string, depth = 0): Resolved {
+  // The engine first, exactly as before: anything it can compute, it answers.
+  // Only a value that NAMES a mix, or a token whose probe read the sentinel
+  // back (which a token holding a mix does), is expanded and mixed here.
+  if (!/color-mix\(/i.test(value)) {
+    const resolved = resolveAt(window, host, value);
+    if (resolved !== null) return { colour: resolved };
+  }
+  const expanded = expandAt(window, host, value);
+  const body = expanded === null ? null : colourMixBody(expanded);
+  if (body === null) return { undefinedToken: true };
+  const head = `the state background ${JSON.stringify(value.trim())} is a color-mix() `;
+  const [space, ...operands] = topLevelCommaSplit(body);
+  const spaceName = /^in\s+([-a-z]+)$/i.exec(space ?? '')?.[1]?.toLowerCase();
+  if (spaceName !== 'srgb') {
+    return {
+      abstain:
+        `${head}interpolated ${JSON.stringify(space)}, and this scanner evaluates only ` +
+        `\`in srgb\``,
+    };
+  }
+  if (operands.length !== 2 || depth > 8) {
+    return { abstain: `${head}this scanner cannot parse as two operands` };
+  }
+  const read: { colour: Rgba; percent: number | null }[] = [];
+  for (const operand of operands) {
+    // `<colour> <p>%`, `<p>% <colour>`, or a bare colour.
+    const match = /^(?:([\d.]+)%\s+)?([\s\S]+?)(?:\s+([\d.]+)%)?$/.exec(operand);
+    const text = match?.[2]?.trim() ?? '';
+    const percent = match?.[1] ?? match?.[3];
+    const inner = resolveStateBackground(window, host, text, depth + 1);
+    if ('undefinedToken' in inner || 'abstain' in inner) return inner;
+    const colour = parseColour(inner.colour);
+    if (colour === null) {
+      return {
+        abstain: `${head}whose operand ${JSON.stringify(inner.colour)} this scanner cannot read as a colour`,
+      };
+    }
+    read.push({ colour, percent: percent === undefined ? null : Number(percent) });
+  }
+  const mixed = mixSrgb(read[0]!.colour, read[0]!.percent, read[1]!.colour, read[1]!.percent);
+  return mixed === null
+    ? { abstain: `${head}whose percentages sum to zero, which CSS defines as invalid` }
+    : { colour: serialise(mixed) };
 }
 
 /**
@@ -723,10 +1076,77 @@ function ownsText(element: El): boolean {
   );
 }
 
+/** One read of a selector: its top-level list, and every REAL state pseudo-class in it. */
+interface SelectorParts {
+  /** The selector list's members, each with its state pseudo-classes removed. */
+  bases: string[];
+  /** The states named, in order of appearance, deduplicated. */
+  states: string[];
+  /** A state pseudo-class sits inside `:not(…)`. */
+  negated: boolean;
+}
+
+/**
+ * Read a selector the way the engine does — and NOT the way a regex over its
+ * text does (MOTIR-7184).
+ *
+ * A Tailwind variant names its states INSIDE the class: `.disabled\:hover\:x`
+ * is one class, and the `\:hover` in it is two escaped characters, not a
+ * pseudo-class. An arbitrary value names commas inside it too:
+ * `.hover\:bg-\[color-mix\(in_srgb\,…`. Both were measured abstaining — the
+ * first rewritten to `.disabled\\:x:disabled`, the second split on its escaped
+ * comma into two halves that each match nothing. So this walks the text once,
+ * skipping every `\`-escaped character and every quoted string (the same rule as
+ * `flattenMockCss`'s `scan`), and only a `:` or a `,` the engine would read as
+ * syntax is one.
+ */
+function selectorParts(selectorText: string): SelectorParts {
+  const bases: string[] = [];
+  const states: string[] = [];
+  let negated = false;
+  let current = '';
+  const parens: boolean[] = []; // true where the `(` opened a `:not(`
+  for (let i = 0; i < selectorText.length; i += 1) {
+    const ch = selectorText[i]!;
+    if (ch === '\\') {
+      current += ch + (selectorText[i + 1] ?? '');
+      i += 1;
+    } else if (ch === '"' || ch === "'") {
+      const end = selectorText.indexOf(ch, i + 1);
+      const stop = end === -1 ? selectorText.length - 1 : end;
+      current += selectorText.slice(i, stop + 1);
+      i = stop;
+    } else if (ch === '(' || ch === '[') {
+      parens.push(ch === '(' && /:not$/i.test(current));
+      current += ch;
+    } else if (ch === ')' || ch === ']') {
+      parens.pop();
+      current += ch;
+    } else if (ch === ',' && parens.length === 0) {
+      bases.push(current.trim());
+      current = '';
+    } else if (ch === ':') {
+      STATE_PSEUDO_RE.lastIndex = i;
+      const match = STATE_PSEUDO_RE.exec(selectorText);
+      if (match) {
+        const state = match[0].slice(1);
+        if (!states.includes(state)) states.push(state);
+        if (parens.includes(true)) negated = true;
+        i += match[0].length - 1;
+      } else {
+        current += ch;
+      }
+    } else {
+      current += ch;
+    }
+  }
+  bases.push(current.trim());
+  return { bases: bases.filter(Boolean), states, negated };
+}
+
 /** Which of `STATE_PSEUDO_CLASSES` a selector names, in the order they appear. */
 function statesIn(selectorText: string): string[] {
-  STATE_PSEUDO_RE.lastIndex = 0;
-  return [...new Set([...selectorText.matchAll(STATE_PSEUDO_RE)].map((m) => m[0].slice(1)))];
+  return selectorParts(selectorText).states;
 }
 
 /**
@@ -739,20 +1159,13 @@ function statesIn(selectorText: string): string[] {
  * `:not(… :hover …)`, where dropping the pseudo would INVERT the rule rather
  * than widen it; `scanMockStateInk` abstains on such a selector rather than
  * rewriting it, so the check cannot rot if one is written later.
+ *
+ * Exported for the fixture that pins the escaped-variant shape (MOTIR-7184).
  */
-function baseSelector(selectorText: string): string | null {
-  if (
-    /:not\([^)]*:(?:hover|focus|focus-within|focus-visible|active|checked|target)/.test(
-      selectorText,
-    )
-  ) {
-    return null;
-  }
-  const parts = selectorText
-    .split(',')
-    .map((part) => part.replace(STATE_PSEUDO_RE, '').trim())
-    .filter(Boolean);
-  return parts.length ? parts.join(', ') : null;
+export function baseSelector(selectorText: string): string | null {
+  const parts = selectorParts(selectorText);
+  if (parts.negated) return null;
+  return parts.bases.length ? parts.bases.join(', ') : null;
 }
 
 /** Where an element's ink is WRITTEN — the declarations that produce it. */
@@ -831,9 +1244,12 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
     const { document } = window;
     // Stamp first, flatten second: the stamps are line numbers in the asset AS
     // WRITTEN, and flattening rewrites `<style>` text, which would move them.
-    document.write(flattenMockCss(stampSourceLines(html), { paintOnly: true }));
+    // Carry third: the carrier is written into the FLATTENED rules, beside the
+    // declaration it copies, so it lands in the same rule the winner is.
+    document.write(carryColourMix(flattenMockCss(stampSourceLines(html), { paintOnly: true })));
 
     const rules = styleRules(document);
+    const overridden = overriddenRules(window, rules);
     if (rules.length === 0) {
       abstentions.push({
         file,
@@ -849,13 +1265,14 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
     // cache, and only a FAILING pair's `inkSource` mutates again. Measured over
     // all 270 mocks it saved ~8%: the larger cost is selector parsing, which
     // `flattenMockCss`'s `paintOnly` addresses (see `prunePaint`).
-    const plans: { rule: PaintRule; states: string[]; hosts: El[]; tints: (string | null)[] }[] =
-      [];
+    const plans: { rule: PaintRule; states: string[]; hosts: El[]; tints: Resolved[] }[] = [];
     for (const rule of rules) {
       if (!rule.background.trim()) continue;
       if (ATTRIBUTE_SELECTOR_RE.test(rule.selectorText)) attributeBackgroundRules += 1;
       const states = statesIn(rule.selectorText);
       if (states.length === 0) continue;
+      // A fallback the cascade winner below overrides paints nothing anywhere.
+      if (overridden.has(rule)) continue;
       stateBackgroundRules += 1;
 
       const base = baseSelector(rule.selectorText);
@@ -870,7 +1287,9 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
 
       let hosts: El[];
       try {
-        hosts = [...document.querySelectorAll(base)] as El[];
+        hosts = ([...document.querySelectorAll(base)] as El[]).filter((host) =>
+          inScope(host, rule.groups),
+        );
       } catch {
         abstentions.push({
           file,
@@ -884,14 +1303,18 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
         rule,
         states,
         hosts,
-        tints: hosts.map((host) => resolveAt(window, host, rule.background)),
+        tints: hosts.map((host) => resolveStateBackground(window, host, rule.background)),
       });
     }
 
     for (const { rule, states, hosts, tints } of plans) {
       for (const [index, host] of hosts.entries()) {
-        const declared = tints[index]!;
-        if (declared === null) {
+        const tint = tints[index]!;
+        if ('abstain' in tint) {
+          abstentions.push({ file, stateSelector: rule.selectorText, reason: tint.abstain });
+          continue;
+        }
+        if ('undefinedToken' in tint) {
           abstentions.push({
             file,
             stateSelector: rule.selectorText,
@@ -901,10 +1324,12 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
           });
           continue;
         }
+        const declared = tint.colour;
         // `transparent` is not an abstention — it is the rule painting NOTHING,
         // which is a resolved answer and a common one (`.opt.is-disabled:hover
-        // { background: transparent }` un-paints a resting tint).
-        if (declared === 'transparent' || declared === '') continue;
+        // { background: transparent }` un-paints a resting tint). A mix that
+        // comes out at zero alpha is the same answer spelled the other way.
+        if (declared === 'transparent' || declared === '' || alphaIn(declared) <= 0) continue;
         const restingGround = restingBackground(window, host);
         const surface = composite(declared, restingGround.ground);
         if (surface === null) {
