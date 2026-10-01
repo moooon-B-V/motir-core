@@ -206,3 +206,40 @@ describe('the app imports packages by name, and no package imports the app (MOTI
     }
   });
 });
+
+// ── `@motir/pages` has no app consumer yet, and CI relies on that (MOTIR-5758) ──
+//
+// `ci.yml`'s `changes` job lets a `packages/pages/*`-only change skip the `app`
+// lanes — the one package exempted from "a package-only change still sets
+// `app=true`". That is sound only while nothing the app lanes run can reach the
+// package. This file runs in the structural-guard lane, which has no `if:`, so
+// the pull request that adds the first app import goes red HERE, and the fix is
+// to delete the `packages/pages/*) ;;` arm from the classifier (and this block)
+// in the same change. The schema story, MOTIR-5752, is that pull request.
+describe('no app file imports @motir/pages while CI skips the app lanes for it (MOTIR-5758)', () => {
+  const PAGES_IMPORT = /\bfrom\s+['"]@motir\/pages(?:\/[^'"]*)?['"]|\bimport\(\s*['"]@motir\/pages/;
+
+  it('the classifier still carries the exception this guard exists for', () => {
+    // When the arm is removed, this block has nothing left to protect: delete
+    // both together rather than leaving a guard that forbids a legal import.
+    const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
+    expect(ci).toMatch(/^\s*packages\/pages\/\*\) ;;$/m);
+  });
+
+  it('finds no `@motir/pages` import under lib/, app/, components/ or tests/', () => {
+    const found = violations(
+      [...APP_ROOTS, 'tests'],
+      PAGES_IMPORT,
+      'the app imports `@motir/pages` — remove the `packages/pages/*` app exemption in ci.yml first',
+    ).filter((v) => !v.file.startsWith(relative(root, __filename))); // this file's own samples
+    expect(found, message(found)).toEqual([]);
+  });
+
+  it('detects the import shapes it forbids, and not a sibling package', () => {
+    expect(PAGES_IMPORT.test("import { planPlacement } from '@motir/pages';")).toBe(true);
+    expect(PAGES_IMPORT.test("import type { PagePlacement } from '@motir/pages';")).toBe(true);
+    expect(PAGES_IMPORT.test("const m = await import('@motir/pages');")).toBe(true);
+    expect(PAGES_IMPORT.test("import { Button } from '@motir/design-system';")).toBe(false);
+    expect(PAGES_IMPORT.test("import { x } from '@motir/pages-extra';")).toBe(false);
+  });
+});
