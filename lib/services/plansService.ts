@@ -213,6 +213,7 @@ import { PlanSessionNotFoundError } from '@/lib/planChange/errors';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
 import { planGateService } from '@/lib/services/planGateService';
 import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
+import { withdrawQuestionsOnArchive } from '@/lib/approvalGates/withdrawOnArchive';
 import {
   asPlanStatusRefusal,
   decideThroughDoor,
@@ -2827,6 +2828,9 @@ async function materialize(
       touchedWorkItemIds.push(resolveRef(item.workItemId!));
     } else if (item.op === 'remove') {
       if (!item.workItemId) throw new PlanItemTargetMissingError('(unset)');
+      // A removed card is archived, and archiving withdraws every question still
+      // waiting on it — gates locked BEFORE the card, the decide door's order (MOTIR-7109).
+      await withdrawQuestionsOnArchive(item.workItemId, tx);
       const locked = await workItemRepository.lockById(item.workItemId, tx);
       if (!locked) throw new PlanItemTargetMissingError(item.workItemId);
       await workItemRepository.archive(item.workItemId, tx);

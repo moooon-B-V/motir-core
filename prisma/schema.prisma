@@ -5047,7 +5047,7 @@ enum ApprovalGateSupersedeCause {
   /// 2): a workflow run the raise could not see, a re-run, an App reporting late. The
   /// verdict is not in, so the question waits for the next green.
   ci_rerunning
-  /// The work was pulled out of review, or moved to Cancelled.
+  /// The work was pulled out of review, moved to Cancelled, or archived (MOTIR-7109).
   pulled_back
   /// A person re-opened a decided design gate (AMENDMENT 6 Q3's door back).
   /// Written ONLY by MOTIR-5659's backfill: this row predates the column.
