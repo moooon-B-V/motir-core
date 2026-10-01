@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
@@ -346,6 +348,36 @@ describe('the debug turn, FINISHED — the outcome line (panels 2–4)', () => {
     expect(within(line).queryByRole('link')).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
   });
+
+  // MOTIR-7068: the chip's rules in `markdown-editor.css` match only under a
+  // `.motir-prose` or `.wi-chip-host` ancestor, and this line is not MarkdownView —
+  // with neither, the type icon drew at 24px on its own line and the key ran into
+  // the title. jsdom applies no stylesheet, so this pins both halves: the host on
+  // the line, and the stylesheet's chip rules reaching that host.
+  it.each([
+    ['diagnose', false],
+    ['diagnose', true],
+    ['enrich_existing', false],
+  ] as const)(
+    'renders the %s chip (filed: %s) inside a `.wi-chip-host`, which the chip’s rules match',
+    (outcome, createdInTriage) => {
+      renderRail(
+        debugged({
+          outcome,
+          workItemKey: 'PROD-412',
+          title: 'Board drag drops the card one column short',
+          createdInTriage,
+        }),
+      );
+
+      const chip = within(outcomeLine()).getByRole('link');
+      expect(chip.closest('.wi-chip-host')).not.toBeNull();
+      const css = readFileSync(join(process.cwd(), 'components/ui/markdown-editor.css'), 'utf8');
+      expect(css).toContain(':is(.motir-prose, .wi-chip-host) .wi-chip {');
+      expect(css).toContain(':is(.motir-prose, .wi-chip-host) .wi-chip .wi-type-icon {');
+      expect(css).not.toMatch(/(^|\n)\.motir-prose \.wi-chip/);
+    },
+  );
 
   it('prefers the thread’s resolved reference for the chip (its status dot included)', () => {
     const state = debugged({
