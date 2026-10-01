@@ -291,3 +291,46 @@ describe('the type-check is a solution of project references (MOTIR-4293)', () =
     }
   });
 });
+
+// ── The PACKAGE projects (MOTIR-5759) ───────────────────────────────────────
+//
+// Discovery above reads the repository ROOT only, so a `packages/*` project was
+// on the solution file by convention rather than by assertion — the
+// omission-shaped gap the header describes, one directory down. The solution
+// names a package by its directory (`./packages/orchestrator`), which is how
+// `tsc -b` finds that directory's `tsconfig.json`.
+const PACKAGE_PROJECTS = readdirSync(join(ROOT, 'packages'))
+  .filter((dir) => !dir.startsWith('.'))
+  .flatMap((dir) => {
+    const rel = join('packages', dir, 'tsconfig.json');
+    try {
+      readFileSync(join(ROOT, rel));
+    } catch {
+      return [];
+    }
+    const options = (readTsconfig(rel).compilerOptions ?? {}) as { composite?: boolean };
+    return options.composite === true ? [`packages/${dir}`] : [];
+  })
+  .sort();
+
+describe('every composite PACKAGE project is on the solution file (MOTIR-5759)', () => {
+  it('discovers the package projects, @motir/pages among them', () => {
+    expect(PACKAGE_PROJECTS).toContain('packages/orchestrator');
+    expect(PACKAGE_PROJECTS).toContain('packages/pages');
+  });
+
+  it('references each one from tsconfig.solution.json', () => {
+    expect(
+      missingFromSolution(configs.get('tsconfig.solution.json')!, PACKAGE_PROJECTS),
+      'a composite package missing from tsconfig.solution.json is never type-checked by `pnpm typecheck`',
+    ).toEqual([]);
+  });
+
+  it('BITES on a solution file that has dropped the pages package', () => {
+    const solution = configs.get('tsconfig.solution.json')! as { references?: { path: string }[] };
+    const without = {
+      references: (solution.references ?? []).filter((r) => r.path !== './packages/pages'),
+    };
+    expect(missingFromSolution(without, PACKAGE_PROJECTS)).toEqual(['packages/pages']);
+  });
+});
