@@ -2038,7 +2038,7 @@ export interface components {
                 name: string;
                 cloneUrl: string | null;
                 defaultBranch: string | null;
-                delivery: ("delivered" | "awaiting" | "unknown" | "unestablished" | "excluded") | null;
+                delivery: ("delivered" | "awaiting" | "unknown" | "unestablished" | "excluded" | "delivered_without_change_request") | null;
             }[];
             /** @enum {string} */
             workflowMode: "per_item_pr" | "session_lineage";
