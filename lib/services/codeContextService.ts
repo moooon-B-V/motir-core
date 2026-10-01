@@ -155,6 +155,18 @@ export async function resolveCodeContextState(
           indexingRunId: repo.indexingRunId,
           terminalRunIds,
         }),
+        // ⚠️ REFUSED FOR SIZE (MOTIR-7132). Built only from the three columns
+        // MOTIR-7130 writes together and clears together; `indexRefusedAt` is the
+        // switch. BigInt → number is exact: the envelope caps a claim at 4 GiB.
+        graphTooLarge:
+          repo.indexRefusedAt !== null &&
+          repo.indexRefusedSizeBytes !== null &&
+          repo.indexRefusedCapBytes !== null
+            ? {
+                sizeBytes: Number(repo.indexRefusedSizeBytes),
+                capBytes: Number(repo.indexRefusedCapBytes),
+              }
+            : null,
       },
     ];
   });

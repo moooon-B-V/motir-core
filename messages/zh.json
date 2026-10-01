@@ -9572,6 +9572,11 @@
       "emptyDescription": "本项目还没有配置任何代码仓库。添加一个之后，Motir 在规划时就能读取你的代码。",
       "manageLink": "管理本项目的代码仓库",
       "notUpdating": "该索引没有在更新。",
+      "refusedForSize": {
+        "title": "上一次建立索引被拒绝：代码图大小为 {size}，而支持的上限为 {cap}。",
+        "lastGraph": "Motir 会继续基于上一次成功建立索引的代码图进行规划。",
+        "remedy": "可在仓库根目录的 <code>codegraph.json</code> 中排除生成文件或测试路径，例如 <code>\"exclude\": [\"tests/\", \"fixtures/\"]</code>，或联系 Motir。"
+      },
       "provider": {
         "github": "GitHub",
         "gitlab": "GitLab"

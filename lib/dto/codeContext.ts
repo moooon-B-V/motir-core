@@ -76,6 +76,17 @@ export interface CodeContextRepoDTO {
    * failed — an active repository is behind between every push.
    */
   refreshFailing: boolean;
+  /**
+   * ⚠️ THE LAST INDEX WAS REFUSED FOR SIZE (MOTIR-7132 · Story MOTIR-7092), or
+   * `null`. CUSTOMER-FACING: the row tells the person the graph's size and the
+   * supported maximum, in bytes, from `GithubRepo.indexRefused*` (written when a
+   * run is refused for size, cleared by the next run that indexes — MOTIR-7130).
+   *
+   * Numbers, never a sentence: the row renders its own copy in each locale, so
+   * no motir-ai wording reaches a customer. When it is set, the row's refusal
+   * block REPLACES the generic "not updating" line (design/code-context §17.3).
+   */
+  graphTooLarge: { sizeBytes: number; capBytes: number } | null;
 }
 
 /** The project's whole code-context answer. */

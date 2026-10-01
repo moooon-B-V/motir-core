@@ -9576,6 +9576,11 @@
       "emptyDescription": "This project has no repositories configured. Add one and Motir can read your code when it plans.",
       "manageLink": "Manage this project’s repositories",
       "notUpdating": "This index is not updating.",
+      "refusedForSize": {
+        "title": "The last index was refused: the code graph was {size}, and the supported maximum is {cap}.",
+        "lastGraph": "Motir keeps planning against the last code graph it indexed.",
+        "remedy": "Exclude generated or test paths in a <code>codegraph.json</code> at the repository root, for example <code>\"exclude\": [\"tests/\", \"fixtures/\"]</code>, or contact Motir."
+      },
       "provider": {
         "github": "GitHub",
         "gitlab": "GitLab"
