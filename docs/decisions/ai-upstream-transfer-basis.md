@@ -68,14 +68,27 @@ provider-routing documentation:
 | **No compliant provider ⇒ _"your application chooses what happens next"_** — the request is not routed around the restriction                                                                                                      | **Fails closed** at the gateway when no channel satisfies the policy (MOTIR-3669)                                                                                                                                                                       |
 | An account-wide privacy setting layers on top of the per-request fields                                                                                                                                                            | **None.** MOTIR-3665 retired the per-workspace control. The filter is per request only                                                                                                                                                                  |
 
-**So the position is: DeepSeek is offered, never assigned.** It is reached only
-when a caller asks for a DeepSeek model, never as anyone's default. Its data
-practices are published where the model is chosen. A caller who will not accept
-a provider that trains on prompts or retains them says so on the request, and the
-gateway refuses rather than routing around them. This relies on neither of the
-two _Keep DeepSeek_ rows under **Rejected alternatives**: it is not an Art. 49
-derogation and it is not a consent gate, and both stay rejected for their
-original reasons.
+**So the position is: Motir never assigns DeepSeek, and the customer may choose
+it, including as their default.** Motir's own platform defaults are not DeepSeek.
+A customer may pick a DeepSeek model for one request or run. A customer may also
+make it their project's default for a difficulty level, through the per-project
+override MOTIR-6989 shipped, exactly as an OpenRouter caller names the model it
+wants. DeepSeek's data practices are published where the model is chosen. A
+caller who will not accept a provider that trains on prompts or retains them says
+so on the request, and the gateway refuses rather than routing around it.
+
+**The choice is the customer's because the customers are global.** Motir is
+established in the EU and serves customers everywhere. How much a customer cares
+about where its content is processed, and by whom, differs by customer. A team in
+a jurisdiction with no transfer rules, or a small startup that weighs cost over
+data handling, may reasonably prefer DeepSeek. A team that may not use it never
+picks it, or sends the policy. Motir does not impose on every customer the
+strictest provider policy any one customer needs. It publishes the facts, keeps
+its own defaults off DeepSeek, and enforces whatever restriction a caller states.
+
+This relies on neither of the two _Keep DeepSeek_ rows under **Rejected
+alternatives**: it is not an Art. 49 derogation and it is not a consent gate, and
+both stay rejected for their original reasons.
 
 ### Why the finding behind D2 and D3 was wrong
 
@@ -109,10 +122,13 @@ _"Chinese vendor ⇒ retire"_ fails on that row.
 - **The hosted planner** — only when a caller asks for a DeepSeek model. D1
   keeps it off the default.
 - **Hosted agent runs.** Customer repository content reaches DeepSeek when a
-  person picks a DeepSeek model for a hosted run (Story MOTIR-7205). It is
-  **offered, never the default**: the default stays Claude, platform-wide and per
-  difficulty (MOTIR-6989). It is **subject to the same per-request data policy**:
-  a request carrying `must-not-train` or `zero-retention` cannot reach DeepSeek.
+  person picks a DeepSeek model for a hosted run (Story MOTIR-7205). It also
+  reaches DeepSeek when the project has made a DeepSeek model its default for the
+  card's difficulty level, through MOTIR-6989's per-project override. **Motir's
+  platform default stays Claude at every level. A project's override is the
+  customer's choice, and it may name DeepSeek.** Runs are **subject to the same
+  per-request data policy**: a request carrying `must-not-train` or
+  `zero-retention` cannot reach DeepSeek.
   How a hosted run carries a policy, and which providers its offered list spans,
   is `hosted-agent-run.md` §7's to decide (MOTIR-7206), not this record's.
 
@@ -156,6 +172,9 @@ addresses business use of the API, or if a customer requires it closed.
 
 ### What this amendment does NOT decide
 
+- **Motir's platform defaults.** They stay off DeepSeek: the planner's (D1) and
+  the hosted-run default at every difficulty level. A project's own override is
+  not restricted by this record.
 - **D1's model.** The planner default stays off DeepSeek. Recording what it now
   is belongs to another card.
 - **D5's remaining precondition** beyond its D2 clause, and whether
