@@ -692,6 +692,9 @@ describe('2 · Claude Code on a Claude subscription (Q2 option b)', () => {
     term.sendRaw(JSON.stringify({ t: 'open', cols: 80, rows: 24 }));
     expect(await term.frame('ready')).toMatchObject({ t: 'ready', resumed: false });
     expect(server.terminal.sessionCount()).toBe(1);
+    // The relay records a connection's row beside the dial, not before it, so the
+    // terminal's `ready` can arrive first: wait on the committed rows themselves.
+    await until(async () => (await connections()).length === 2);
     const rows = await connections();
     expect(rows.map((r) => r.channel).sort()).toEqual(['chat', 'terminal']);
     b.ws.close();
