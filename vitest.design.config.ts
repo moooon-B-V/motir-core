@@ -193,19 +193,48 @@ export default defineConfig({
       // skips every app lane and is exactly the pull request that must not skip
       // this.
       'tests/design-surface-views-chrome-copy.test.ts',
+      // `design-css-reader` (MOTIR-7179) pins `tests/theme/flattenMockCss.ts`, the
+      // reader both rendering guards above (`design-dark-parity`,
+      // `design-state-ink-contrast`) put every mock through: happy-dom drops
+      // `@layer` blocks and nested rules, which is all compiled Tailwind emits.
+      // It reads no committed asset — it renders one with `renderMock` from the
+      // package SOURCE (this job skips `postinstall`, so `dist` may be absent) —
+      // and it is here because the reader is what this lane's verdicts stand on:
+      // a regression in it silently blinds two of its specs.
+      'tests/design-css-reader.test.ts',
     ],
   },
   resolve: {
     // The root config gets `@/…` from `vite-tsconfig-paths` via the Next plugin
     // chain it inherits; this standalone config resolves the alias itself.
     // `waveBand.test.ts` imports `@/components/brand/waveBand`.
-    alias: {
-      '@': resolve(fileURLToPath(new URL('.', import.meta.url))),
+    alias: [
+      { find: '@', replacement: resolve(fileURLToPath(new URL('.', import.meta.url))) },
       // Same stub the root config uses: `import 'server-only'` is a Next
       // build-time marker with no plain-node resolution.
-      'server-only': resolve(
-        fileURLToPath(new URL('./tests/stubs/server-only.ts', import.meta.url)),
-      ),
-    },
+      {
+        find: 'server-only',
+        replacement: resolve(
+          fileURLToPath(new URL('./tests/stubs/server-only.ts', import.meta.url)),
+        ),
+      },
+      // MOTIR-7179 — `@motir/design-system` RUN from source. Its `exports` point
+      // at `dist`, which `postinstall` builds and the `design-guards` job never
+      // runs (it restores `node_modules` from cache), so on a cache hit the
+      // built package is absent. Exact matches only: a prefix alias would also
+      // capture `@motir/design-system/theme.css`.
+      {
+        find: /^@motir\/design-system\/mock$/,
+        replacement: resolve(
+          fileURLToPath(new URL('./packages/design-system/src/mock/index.ts', import.meta.url)),
+        ),
+      },
+      {
+        find: /^@motir\/design-system$/,
+        replacement: resolve(
+          fileURLToPath(new URL('./packages/design-system/src/index.ts', import.meta.url)),
+        ),
+      },
+    ],
   },
 });

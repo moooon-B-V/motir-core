@@ -1,5 +1,6 @@
 import { Window } from 'happy-dom';
 import { contrast } from './colorMetrics';
+import { flattenMockCss } from './flattenMockCss';
 import { MUTED_TOKEN, parseElements } from './inkContrastMockScan';
 
 // MOTIR-4255 — the STATE arm of the design-asset ink guard.
@@ -51,8 +52,17 @@ import { MUTED_TOKEN, parseElements } from './inkContrastMockScan';
 // coverage. Probed against `design/work-items/list.mock.html` before this file
 // was written, happy-dom resolves `color: var(--el-text-muted)` to `#787671`,
 // resolves BOTH `background:` and `background-color:` shorthands through
-// `var()`, exposes `document.styleSheets` with `selectorText` and recurses into
-// `@media` / `@layer` grouping rules.
+// `var()`, and exposes `document.styleSheets` with `selectorText`, recursing
+// into `@media` / `@supports` / `@scope` grouping rules.
+//
+// ⚠️ NOT `@layer`, and not CSS nesting — this paragraph claimed `@layer` until
+// MOTIR-7179 measured it. happy-dom 20.9 DROPS every rule inside an
+// `@layer { … }` block, and a style rule holding a nested rule loses the
+// declarations before it. That is exactly the CSS `renderMock` emits (compiled
+// Tailwind v4), so a mock rendered the sanctioned way read as zero rules and
+// this whole arm abstained on it. The document is therefore passed through
+// `flattenMockCss` before the engine parses it — see that file's header for
+// what it lowers and the one cascade divergence it accepts.
 //
 // Two behaviours it has that the code below is written AROUND rather than
 // against, because both were observed and neither is a bug:
@@ -472,7 +482,11 @@ interface PaintRule {
   color: string;
 }
 
-/** Every style rule in the document that paints ink or ground, `@media` / `@layer` included. */
+/**
+ * Every style rule in the document that paints ink or ground, inside `@media` /
+ * `@supports` / `@scope` groups included. `@layer` blocks and nested rules never
+ * reach here as such: `flattenMockCss` lowered them before the engine parsed.
+ */
 function styleRules(document: Doc): PaintRule[] {
   const out: PaintRule[] = [];
   const walk = (rules: unknown[]) => {
@@ -815,7 +829,9 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
 
   try {
     const { document } = window;
-    document.write(stampSourceLines(html));
+    // Stamp first, flatten second: the stamps are line numbers in the asset AS
+    // WRITTEN, and flattening rewrites `<style>` text, which would move them.
+    document.write(flattenMockCss(stampSourceLines(html)));
 
     const rules = styleRules(document);
     if (rules.length === 0) {
