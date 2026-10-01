@@ -427,10 +427,21 @@ describe('the shared counter stays ATOMIC and time-bounded under the wrapper', (
     // (MOTIR-2101). A guard that only hung the WHOLE store would prove the
     // assertion fires; this one proves it fires on the occurrence.
     const realIncrement = rateLimitService.increment.bind(rateLimitService);
+    // ⚠️ EVERY REAL INCREMENT IS KEPT, AND SETTLED BEFORE THE CASE ENDS (MOTIR-7108).
+    // On a loaded runner a real increment can lose the 200 ms deadline too — the
+    // tolerance below allows exactly that — and the wrapper then fails open and
+    // the batch moves on WITHOUT it. Its `INSERT … ON CONFLICT` is still running
+    // on the database when the case returns, and the suite-wide in-flight probe
+    // (MOTIR-6278) fails the case for it. The probe's prescribed remedy is to
+    // settle the work, never to widen the probe.
+    const realCalls: Promise<number>[] = [];
     let hung = 0;
-    vi.spyOn(rateLimitService, 'increment').mockImplementation((...args) =>
-      hung++ < STAGED_TIMEOUTS ? new Promise<number>(() => {}) : realIncrement(...args),
-    );
+    vi.spyOn(rateLimitService, 'increment').mockImplementation((...args) => {
+      if (hung++ < STAGED_TIMEOUTS) return new Promise<number>(() => {});
+      const call = realIncrement(...args);
+      realCalls.push(call);
+      return call;
+    });
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const failure = await assertAtomicUnderConcurrency(
@@ -439,6 +450,10 @@ describe('the shared counter stays ATOMIC and time-bounded under the wrapper', (
       () => null,
       (err: unknown) => err as Error,
     );
+    // Settled BEFORE any assertion below can throw, so a red assertion does not
+    // also leave a backend behind. `allSettled`, not `all`: a rejected increment
+    // must not stop the wait for its siblings.
+    await Promise.allSettled(realCalls);
 
     expect(
       failure,
