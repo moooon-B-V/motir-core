@@ -320,7 +320,10 @@ export async function openMergeGate(seed: HowToTestSeed): Promise<void> {
         projectId: seed.projectId,
         workItemId: seed.story.id,
         kind: 'pull_request_approval',
-        subjectId: seed.webPr.id,
+        // The kind's subject IS the card — its delivery set (`pullRequestApprovalHandler`).
+        // A pull request's id here named nothing the handler can resolve, which a read now
+        // treats as a gone subject and withdraws (MOTIR-7146).
+        subjectId: seed.story.id,
         routedToId: seed.ownerId,
       },
       tx,

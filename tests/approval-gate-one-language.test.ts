@@ -368,6 +368,16 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       writes: 'superseded',
       callers: ['lib/services/planGateService.ts'],
     },
+    // Bug MOTIR-7146: a gate whose SUBJECT no longer resolves is withdrawn when a read
+    // observes it — `subject_gone`, product-written, no actor, never a decision. By ID,
+    // because the subject is the gate's own and a card's other questions may be live. Its
+    // one caller is the service's withdraw, which re-reads the subject under the lock
+    // through the kind's handler first.
+    {
+      method: 'supersedeAwaitingById',
+      writes: 'superseded',
+      callers: ['lib/services/approvalGatesService.ts'],
+    },
     {
       method: 'setReviewUnavailableReason',
       // MOTIR-6820 (Story MOTIR-1626; `approval-gates.md` §12.6): why an AWAITING

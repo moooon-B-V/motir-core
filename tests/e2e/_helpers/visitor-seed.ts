@@ -133,12 +133,17 @@ export async function seedVisitorProject(slug: string): Promise<VisitorSeed> {
   const hiddenPlan = await plan('Tune the discount rules', c1.id);
 
   const gate = async (workItemId: string, decided: boolean) => {
+    // A REAL evidence row: a member's read withdraws a gate whose subject is gone
+    // (MOTIR-7146).
+    const evidence = await adminDb.designEvidence.create({
+      data: { workspaceId: base.workspaceId, workItemId, isCurrent: false },
+    });
     const g = await adminDb.approvalGate.create({
       data: {
         ...base,
         workItemId,
         kind: 'design_result',
-        subjectId: `vis-evidence-${workItemId}`,
+        subjectId: evidence.id,
         routedToId: maya.id,
       },
     });

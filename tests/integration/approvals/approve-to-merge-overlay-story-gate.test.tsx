@@ -349,7 +349,12 @@ describe('GUARD · TOTAL over `ApprovalGateKind`, at BOTH ends, enumerated FROM 
       const story = await twoRepoStory();
       // Every kind gets the SAME card and the same delivery set, so the only
       // thing that differs between these cases is the kind itself.
-      await rawGate(story, kind, kind === 'design_result' ? 'ev-gone' : story.id, setVersion);
+      const gate = await rawGate(
+        story,
+        kind,
+        kind === 'design_result' ? 'ev-gone' : story.id,
+        setVersion,
+      );
       signIn(owner());
 
       nav.go(`/workbench?approval=${story.identifier}&approvalKind=${kind}`);
@@ -397,10 +402,21 @@ describe('GUARD · TOTAL over `ApprovalGateKind`, at BOTH ends, enumerated FROM 
         // options to show — the route answers `gone`, the same arm.
         // MOTIR-5954: a confirm gate on a card that is not a `human` decision has no
         // decision to show — `gone` again, never *not built yet* for a registered kind.
-        expect(within(dialog).getByText(en.workbench.approvals.subjectGone)).toBeTruthy();
+        //
+        // ⚠️ AND OPENING IT WITHDRAWS IT (Bug MOTIR-7146). The gate was AWAITING, and a
+        // question over a subject that is gone is one nobody can answer — so the route
+        // supersedes it `subject_gone` before it answers, and the overlay draws the
+        // withdrawn frame (state `G`), with its cause and no verb, rather than Panel 4b.
         expect(
-          within(dialog).queryByRole('group', { name: en.approvalGate.port.label }),
+          await within(dialog).findByText(en.approvalGate.withdrawn.cause.subject_gone),
+        ).toBeTruthy();
+        expect(within(dialog).queryByText(en.workbench.approvals.subjectGone[kind])).toBeNull();
+        expect(
+          within(dialog).queryByRole('button', { name: en.approvalGate.verb.approve }),
         ).toBeNull();
+        const row = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
+        expect(row.state).toBe('superseded');
+        expect(row.supersededCause).toBe('subject_gone');
       } else {
         expect(within(dialog).getByText(en.workbench.approvals.notRenderable)).toBeTruthy();
         expect(

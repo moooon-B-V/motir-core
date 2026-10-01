@@ -5085,6 +5085,11 @@ enum ApprovalGateSupersedeCause {
   /// The project turned its review agent OFF while this `agent_review` gate was
   /// awaiting (ADR `approval-gates.md` §12.5); the ordinary flow is raised instead.
   review_agent_disabled
+  /// The gate's SUBJECT no longer resolves through its kind's handler — the design or
+  /// recording it asked about is gone, the body no longer parses, the delivery set emptied
+  /// (MOTIR-7146). Written when a read observes it, after the handler re-reads the subject
+  /// under the gate's lock, so the question nobody can answer leaves To approve.
+  subject_gone
 
   @@map("approval_gate_supersede_cause")
 }
