@@ -26,6 +26,8 @@ export const stub = {
   calls: [] as StubCall[],
   mayRun: true as boolean | 'unanswerable',
   debit: 'ok' as 'ok' | 'unavailable' | 'refused',
+  /** `GET /repos/{owner}/{name}/installation` status by `owner/name` (MOTIR-7026); default 200. */
+  installation: {} as Record<string, number>,
 };
 
 export const MIN = 60_000;
@@ -47,6 +49,7 @@ export async function setUpHarness(): Promise<void> {
   stub.calls = [];
   stub.mayRun = true;
   stub.debit = 'ok';
+  stub.installation = {};
   vi.stubEnv('MOTIR_CLOUD', 'true');
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
   vi.stubEnv('MOTIR_AI_URL', `${AI}/`);
@@ -84,8 +87,17 @@ export async function setUpHarness(): Promise<void> {
         if (stub.debit === 'refused') return json(402, { code: 'out_of_credits', title: 'no' });
         return json(200, { idempotent: false, balanceCredits: 90 });
       }
-      if (/\/repos\/[^/]+\/[^/]+\/installation$/.test(url)) {
-        return json(200, { id: 42, account: { login: 'acme' }, suspended_at: null });
+      const installation = /\/repos\/([^/]+\/[^/]+)\/installation$/.exec(url);
+      if (installation) {
+        const status = stub.installation[installation[1] ?? ''] ?? 200;
+        if (status !== 200) return json(status, {});
+        return json(200, {
+          id: 42,
+          account: { login: 'acme' },
+          // What a run's write pre-flight reads (MOTIR-7026); the clone reads only the id.
+          permissions: { contents: 'write', pull_requests: 'write', metadata: 'read' },
+          suspended_at: null,
+        });
       }
       if (url.endsWith('/app/installations/42/access_tokens') && method === 'POST') {
         tokenSeq += 1;

@@ -245,6 +245,11 @@ export function endedHow(run: {
   if (run.status === 'timed_out' && run.origin === 'hosted') {
     return 'the hosted run stalled or reached its time limit';
   }
+  // A run in the developer's own agent is closed `timed_out` by the same stall
+  // window and 12-hour backstop as a hosted one (`agent-instance-run.md` §6).
+  if (run.status === 'timed_out' && run.origin === 'instance') {
+    return 'the run in the agent stalled or reached its time limit';
+  }
   return `it ended ${run.status}`;
 }
 
@@ -252,21 +257,52 @@ export function endedHow(run: {
  * The reason line's key (MOTIR-6534, design D3). A hosted `timed_out` is split by
  * its closing `log` line: the 12-hour backstop names itself, anything else is the
  * stall watchdog.
+ *
+ * ⚠️ THE SPLIT COMES BEFORE THE `abandoned` SHORTCUT (MOTIR-7061). Both end paths
+ * close a stall and the backstop `abandoned` — the stop reason the lapse sweep
+ * writes too — so read first, the stall and the backstop were unreachable and every
+ * hosted timeout said *stopped reporting*.
  */
 async function diedReason(
   run: LatestRunForWorkItem,
   tx: Prisma.TransactionClient,
 ): Promise<RunDiedReason> {
-  if (run.status === 'running' || run.stopReason === 'abandoned') return 'lapsed';
+  if (run.status === 'running') return 'lapsed';
+  // An `instance` run's supervise job closes it with the hosted words — a stall or
+  // the 12-hour backstop (`agent-instance-run.md` §6) — so it splits the same way.
+  if (run.status === 'timed_out' && (run.origin === 'hosted' || run.origin === 'instance')) {
+    const timeout = await timeoutReason(run, tx);
+    if (timeout !== null) return timeout;
+  }
+  if (run.stopReason === 'abandoned') return 'lapsed';
   if (run.stopReason === 'interrupted') return 'interrupted';
   if (run.status === 'failed') return 'failed';
   if (run.status === 'cancelled') return 'cancelled';
-  if (run.origin === 'hosted') {
-    const last = await dispatchRunEventRepository.findLatestOfKind(run.id, 'log', tx);
-    const message = String((last?.data as { message?: unknown } | null)?.message ?? '');
-    return /12[- ]hour|backstop/i.test(message) ? 'backstop' : 'stalled';
-  }
   return 'lapsed';
+}
+
+/**
+ * A hosted or agent `timed_out` split by its closing `log` line — `null` when that
+ * line says the run LAPSED rather than timed out.
+ *
+ * Both end paths name their end in `data.end` (`hostedRunService.endHostedRun`,
+ * `agentInstanceRunService.end`), and that is read first: the hosted one carries no
+ * `data.message`. A line with no `end` is a lapse when the run was closed
+ * `abandoned` — the lapse sweep and the continue takeover write `no heartbeat
+ * since …` — and otherwise is read by its words, the 12-hour backstop naming itself.
+ */
+async function timeoutReason(
+  run: LatestRunForWorkItem,
+  tx: Prisma.TransactionClient,
+): Promise<'stalled' | 'backstop' | null> {
+  const last = await dispatchRunEventRepository.findLatestOfKind(run.id, 'log', tx);
+  const data = (last?.data ?? null) as { end?: unknown; message?: unknown } | null;
+  if (data?.end === 'backstop') return 'backstop';
+  if (data?.end === 'stall') return 'stalled';
+  // `lost_supervision`, an agent's `lapsed`: nothing timed out, the run went quiet.
+  if (data?.end !== undefined || run.stopReason === 'abandoned') return null;
+  const message = String(data?.message ?? '');
+  return /12[- ]hour|backstop/i.test(message) ? 'backstop' : 'stalled';
 }
 
 export type ContinueEvaluation =
@@ -880,6 +916,10 @@ export const workItemContinueService = {
             state: 'continuing',
             holder: actor(verdict.run.createdBy),
             byViewer: verdict.run.createdById === ctx.userId,
+            // `instance` takes the local arm: a continue is opened by a CLI the
+            // developer runs, or hosted by the server — never INTO an agent
+            // (`agent-instance-run.md`, "What this does NOT decide"), so a
+            // continuing run is never an `instance` run.
             origin: verdict.run.origin === 'hosted' ? 'hosted' : 'local',
             startedAt: verdict.run.startedAt.toISOString(),
             branch: typeof data?.branch === 'string' ? data.branch : null,

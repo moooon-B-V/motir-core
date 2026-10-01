@@ -17,7 +17,10 @@ import {
   standingQueueFailures,
   type DeliveredPullRequest,
 } from './deliveryVerdict';
-import { isConflictedAtCurrentHead } from '@/lib/github/mergeability';
+import {
+  isConflictedAtCurrentHead,
+  isMergeabilityOwedAtCurrentHead,
+} from '@/lib/github/mergeability';
 import { deliverySetIsGreen, deliveryStateForPromotion } from '@/lib/workItems/deliverySet';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -257,16 +260,28 @@ async function isPromotable(
 
 /**
  * THE CONFLICT HOLD (MOTIR-5913, for bug MOTIR-5907; design/github § 30 rule 2) —
- * true while any OPEN delivering pull request is stored `dirty` at its current head.
+ * true while any OPEN delivering pull request is stored `dirty` at its current head,
+ * OR its reading is still OWED there (MOTIR-7063).
  *
  * A conflict is the CAN'T-LAND class however it is found (§ 28's class table): a card
  * whose set cannot combine with its base stays at Implemented, because In Review
  * means a person is being asked and nobody should be. It lifts the way the queue hold
- * does — a PUSH clears the reading (`synchronize`), and the next green promotes.
+ * does — a PUSH replaces the reading (`synchronize`) — and then the host's answer at the
+ * new head decides.
+ *
+ * ⚠️ OWED IS HELD, NOT CLEAN (MOTIR-7063). The push used to clear the reading to `null`,
+ * which this read as "no conflict": a head pushed onto a base that had already moved
+ * past it went green, was promoted, and asked a person to approve a merge the host
+ * would refuse — for as long as the reconcile tick took to find the row quiet. So a
+ * member whose reading is owed at its head holds the card until the answer lands; the
+ * `pull-request/head-moved` re-read that answers it re-runs this latch on a clean answer
+ * (`pullRequestMergeabilityService.releaseHeldPromotion`), and the reconcile tick is the
+ * backstop for both.
  */
 function heldByConflict(byId: Map<string, DeliveredPullRequest>): boolean {
   for (const pr of byId.values()) {
-    if (pr.state === 'open' && !pr.merged && isConflictedAtCurrentHead(pr)) return true;
+    if (pr.state !== 'open' || pr.merged) continue;
+    if (isConflictedAtCurrentHead(pr) || isMergeabilityOwedAtCurrentHead(pr)) return true;
   }
   return false;
 }

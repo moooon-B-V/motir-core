@@ -352,7 +352,8 @@ export async function withdrawPullRequestApprovalGatesOnDraft(
  * card the pull request delivers loses its WHOLE awaiting gate, as `conflict`. The re-ask
  * raises nothing while the reading stands — `mergeCandidateHead` refuses a member `dirty`
  * at its head — so the caller persists the reading BEFORE calling this. A push that
- * resolves the conflict clears the reading (`synchronize`) and the next green re-asks.
+ * resolves the conflict replaces the reading (`synchronize`), and once the host's clean
+ * answer at the new head is in and CI is green, the question is asked again (MOTIR-7063).
  *
  * ⚠️ GATES ONLY. The Implemented hold that goes with it is a STATUS write, which this
  * module may not reach (it imports no service — see the header), so it is composed by

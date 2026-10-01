@@ -218,6 +218,8 @@ export function ContinuePart({
         }
       >
         {hosted?.notice}
+        {/* A continuing run is never `instance` (MOTIR-7023): the service maps
+            only `hosted` and `local` here. */}
         <Line quiet icon={<UserRound className={iconClass} aria-hidden />}>
           {view.origin === 'hosted' && (view.byViewer || view.holder)
             ? tHosted.rich(view.byViewer ? 'continuing.byYou' : 'continuing.by', {

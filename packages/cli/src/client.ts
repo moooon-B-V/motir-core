@@ -794,7 +794,7 @@ export interface WorkItemContinueClaim {
   deadRun: {
     id: string;
     command: string;
-    origin: 'local' | 'hosted';
+    origin: 'local' | 'hosted' | 'instance';
     status: string;
     stopReason: string | null;
     lastHeardAt: string;

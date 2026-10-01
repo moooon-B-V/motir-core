@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { CloudOff, TriangleAlert } from 'lucide-react';
+import { Cloud, CloudOff, TriangleAlert } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { RunTonePill } from '@/components/runs/RunTonePill';
 import { RunCanvasPane } from '@/app/(authed)/runs/_components/RunCanvasPane';
@@ -12,6 +12,13 @@ import { RunLogPane } from '@/app/(authed)/runs/_components/RunLogPane';
 import { HostedRunCancel } from '@/app/(authed)/runs/_components/HostedRunCancel';
 import { HostedRunCost } from '@/app/(authed)/runs/_components/HostedRunCost';
 import { hostedPhaseRead, hostedReasonLine } from '@/app/(authed)/runs/_components/HostedRunParts';
+import {
+  AgentEndStrip,
+  AgentLaneChip,
+  AgentRunCost,
+  agentOf,
+  agentPanelHref,
+} from '@/app/(authed)/runs/_components/AgentRunParts';
 import { useRunEvents } from '@/app/(authed)/runs/_components/useRunEvents';
 import type { DispatchRunDetailDto, DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
 import { formatRunDuration, formatRunInstant } from '@/lib/runs/runClock';
@@ -41,6 +48,13 @@ export interface RunModalProps {
   projectKey: string;
   /** Close and return to the list. */
   onClose: () => void;
+  /**
+   * The signed-in reader, or null for a visitor. A run in an agent is
+   * cancellable by the agent's OWNER only (`agent-instance-run.md` §6), and the
+   * owner is the run's creator — so the header's Cancel run needs to know who
+   * is looking (MOTIR-7028).
+   */
+  viewerId?: string | null;
 }
 
 type Load =
@@ -49,7 +63,7 @@ type Load =
   | { state: 'missing' }
   | { state: 'failed' };
 
-export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
+export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunModalProps) {
   const t = useTranslations('runs');
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
@@ -128,6 +142,8 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
 
   // A LIVE HOSTED run's cost follows it (MOTIR-691): one re-read of the run every
   // 20 events on the one stream — no second connection, no timer.
+  // `instance` (MOTIR-7023) has no per-run cost to follow — its machine time is
+  // its own clock — so hosted only.
   const hostedLive = run?.origin === 'hosted' && isLiveRun(run.status);
   const costBucket = hostedLive ? Math.floor(events.length / 20) : -1;
   const costBucketRef = useRef(costBucket);
@@ -180,7 +196,16 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
         </div>
       ) : run ? (
         <>
-          <RunHeader run={run} onCancelled={() => void fetchRun()} />
+          <RunHeader run={run} viewerId={viewerId} onCancelled={() => void fetchRun()} />
+          {/* A run in an agent: its end in one strip, then machine time as its
+              only cost (MOTIR-7022 panel 12). No tokens, no credits — they land
+              on the agent's own interval (MOTIR-7023, Q3.3). */}
+          {run.origin === 'instance' ? (
+            <>
+              <AgentEndStrip run={run} />
+              <AgentRunCost run={run} live={isLiveRun(run.status)} variant="strip" />
+            </>
+          ) : null}
           {run.origin === 'hosted' ? (
             <HostedRunCost
               runId={run.id}
@@ -195,6 +220,7 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
               {t('reconnecting')}
             </p>
           ) : null}
+          {/* A local OR `instance` run abandoned = its CLI stopped heartbeating. */}
           {run.stopReason === 'abandoned' && run.origin !== 'hosted' ? (
             <p
               className="flex items-center gap-2 border-b border-(--el-border-soft) bg-(--el-tint-peach) px-(--spacing-card-padding) py-1.5 text-xs text-(--el-text-strong)"
@@ -246,7 +272,10 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
             >
               <h2 className="flex items-center gap-2 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2 text-xs font-semibold text-(--el-text-secondary)">
                 {t('paneLog')}
-                {run.origin === 'hosted' ? <HostedPhaseChip run={run} events={events} /> : null}
+                {/* Both paths run in Motir's cloud and walk the same phases. */}
+                {run.origin === 'hosted' || run.origin === 'instance' ? (
+                  <HostedPhaseChip run={run} events={events} />
+                ) : null}
               </h2>
               {/* PINNED ABOVE THE LOG, and absent entirely when the run
                   produced nothing — which is most runs. See `RunFindings`. */}
@@ -285,27 +314,72 @@ function HostedPhaseChip({
   );
 }
 
-function RunHeader({ run, onCancelled }: { run: DispatchRunDetailDto; onCancelled: () => void }) {
+function RunHeader({
+  run,
+  viewerId,
+  onCancelled,
+}: {
+  run: DispatchRunDetailDto;
+  viewerId: string | null;
+  onCancelled: () => void;
+}) {
   const routes = useReaderRoutes();
   const t = useTranslations('runs');
   const tHosted = useTranslations('runs.hosted');
+  const tAgent = useTranslations('runs.agent');
   const commandKey =
     run.command === 'run' && run.scopeWorkItemId !== null ? 'run_scope' : run.command;
   const hosted = run.origin === 'hosted';
+  // A run in an agent (MOTIR-7023 · MOTIR-7028): the same one-work-item run in
+  // Motir's cloud, worked by the reader's own agent — its end line is the strip
+  // under the header (`AgentEndStrip`), not this row's.
+  const instance = run.origin === 'instance';
+  const cloud = hosted || instance;
+  const agent = instance ? agentOf(run) : null;
+  const live = isLiveRun(run.status);
   // A hosted run's stop line is the REASON its end recorded, quoted — not the
   // stop-reason enum, whose `abandoned` would say reporting went offline.
   const reason = hosted ? hostedReasonLine(run, tHosted) : null;
+  // The run's own work item, for the title's key (design panel 12).
+  const key = run.scopeLabel ?? run.cards[0]?.key ?? null;
+  const canCancel =
+    live && (hosted || (instance && viewerId !== null && run.createdById === viewerId));
   return (
     <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-3">
       <h1 className="font-mono text-sm font-semibold text-(--el-text)">
-        {hosted ? tHosted('modalTitle') : t(`command.${commandKey}`)}
+        {cloud ? tHosted('modalTitle') : t(`command.${commandKey}`)}
       </h1>
       {hosted ? (
-        <span className="rounded-(--radius-badge) bg-(--el-chip-bg) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs text-(--el-text-strong)">
-          {tHosted('meta.hosted')}
+        <span
+          className="inline-flex items-center gap-1.5 rounded-(--radius-badge) bg-(--el-chip-bg) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs text-(--el-text-strong)"
+          data-testid="run-modal-model"
+        >
+          <Cloud className="size-3.5" aria-hidden="true" />
+          {run.model ?? tHosted('meta.hosted')}
         </span>
       ) : null}
-      {run.scopeWorkItemId !== null && run.scopeLabel !== null ? (
+      {instance ? (
+        <>
+          <AgentLaneChip run={run} />
+          {agent ? (
+            <Link
+              href={agentPanelHref(agent.id)}
+              className="text-xs text-(--el-link) underline"
+              data-testid="agent-link"
+            >
+              {tAgent('where.open', { name: agent.name })}
+            </Link>
+          ) : null}
+        </>
+      ) : null}
+      {cloud && key !== null && run.scopeLabel === null ? (
+        <Link
+          href={routes.item(key)}
+          className="font-mono text-xs text-(--el-accent-on-surface) underline-offset-2 hover:underline"
+        >
+          {key}
+        </Link>
+      ) : run.scopeWorkItemId !== null && run.scopeLabel !== null ? (
         <Link
           href={routes.item(run.scopeLabel)}
           className="text-xs text-(--el-accent-on-surface) underline-offset-2 hover:underline"
@@ -318,9 +392,11 @@ function RunHeader({ run, onCancelled }: { run: DispatchRunDetailDto; onCancelle
         // link, because there is nothing to open.
         <span className="text-xs text-(--el-text-secondary)">{run.scopeLabel}</span>
       ) : null}
-      <span className="text-xs text-(--el-text-secondary)">
-        {[run.agent, run.model].filter(Boolean).join(' · ') || t('scopeNone')}
-      </span>
+      {cloud ? null : (
+        <span className="text-xs text-(--el-text-secondary)">
+          {[run.agent, run.model].filter(Boolean).join(' · ') || t('scopeNone')}
+        </span>
+      )}
       {/* Started, and — once it HAS ended — how long it took. A live run shows no
           ticking counter: that needs a clock read during render, which is the
           hydration mismatch `runClock.ts` exists to avoid, and the status pill
@@ -331,10 +407,14 @@ function RunHeader({ run, onCancelled }: { run: DispatchRunDetailDto; onCancelle
       </span>
       <span className="ml-auto flex items-center gap-2">
         <RunTonePill tone={RUN_STATUS_TONE[run.status]}>{t(`runStatus.${run.status}`)}</RunTonePill>
-        {hosted && isLiveRun(run.status) ? (
-          <HostedRunCancel runId={run.id} onCancelled={onCancelled} />
+        {canCancel ? (
+          <HostedRunCancel
+            runId={run.id}
+            onCancelled={onCancelled}
+            body={instance ? tAgent('cancel.body', { name: agent?.name ?? '' }) : undefined}
+          />
         ) : null}
-        {hosted ? (
+        {instance ? null : hosted ? (
           reason ? (
             <span
               className="font-mono text-xs text-(--el-text-secondary)"

@@ -1136,6 +1136,15 @@ model Organization {
   /// unlike `isMeta`'s data-flip, classifying an org is an operator's act.
   internalBilling Boolean @default(false) @map("internal_billing")
 
+  /// THIS ORGANISATION'S OWN FLEET POOL — the enterprise override of
+  /// `MOTIR_FLEET_ORG_MAX_IN_FLIGHT` (default 500): how many shared-workload
+  /// containers (CI runners, hosted-agent runs, index containers) the org may
+  /// have in flight at once (`docs/decisions/fleet-per-org-pool.md` §2,
+  /// MOTIR-6907). NULL = the environment's number. Set by platform staff with the
+  /// org, the way its tier is, and never as a per-org env var. `0` is legal and
+  /// means the org boots nothing. Read by `lib/ciFleet/limits.ts` `orgPoolCap`.
+  fleetPoolCap Int? @map("fleet_pool_cap")
+
   /// The git CONNECTIONS this organisation holds, and the REPOSITORIES behind
   /// them (Story MOTIR-4669 · MOTIR-4649) — a repository is connected ONCE, to
   /// the organisation, and which projects use it is visibility configuration.
@@ -1173,6 +1182,10 @@ model Organization {
   // meaningless without the org.
   ciWorkflowRunUsages         CiWorkflowRunUsage[]
   ciPeriodUsages              CiPeriodUsage[]
+  ciLiveAccruals              CiLiveAccrual[]
+  // The attribution reconciler's kills (MOTIR-6925) — SetNull: an audit row
+  // outlives the org it named.
+  fleetMachineKills           FleetMachineKill[]
   // Runner-fleet provisioning intents (Story MOTIR-1916 · MOTIR-1920) — the
   // queued fleet jobs attributed to this org. Cascade for the same reason: an
   // intent is a request to spend on the org's behalf, meaningless without it.
@@ -1408,6 +1421,7 @@ model Workspace {
   // tenant can never read another's consumption. Cascade with the workspace.
   ciWorkflowRunUsages         CiWorkflowRunUsage[]
   ciPeriodUsages              CiPeriodUsage[]
+  ciLiveAccruals              CiLiveAccrual[]
   // Runner-fleet provisioning intents (Story MOTIR-1916 · MOTIR-1920) — the same
   // workspace_id + RLS contract as the two metering tables above.
   ciRunnerProvisioningIntents CiRunnerProvisioningIntent[]
@@ -5313,7 +5327,8 @@ model ApprovalGate {
   /// MOTIR-2920's "what is on me across everything" surface, which is the
   /// caller it was added for.
   /// The automatic hosted re-run a Revise on this gate caused or skipped (MOTIR-700).
-  designAutoRerun    DesignAutoRerun?
+  designAutoRerun DesignAutoRerun?
+
   @@index([workspaceId, state])
   /// THE ROUTING READ's index (MOTIR-4791) — the Approvals tab asks for one
   /// PROJECT's `awaiting` gates, because the Workbench is active-project scoped
@@ -5364,20 +5379,20 @@ model DesignAutoRerun {
   /// one refusal, one attempt.
   gateId      String @unique @map("gate_id")
 
-  outcome    DesignAutoRerunOutcome
+  outcome       DesignAutoRerunOutcome
   /// Why nothing started. Null exactly when `outcome` is `started`.
-  skipReason DesignAutoRerunSkipReason? @map("skip_reason")
+  skipReason    DesignAutoRerunSkipReason? @map("skip_reason")
   /// The run it started. `SET NULL`: the record that a run was started outlives the run.
-  dispatchRunId String? @map("dispatch_run_id")
+  dispatchRunId String?                    @map("dispatch_run_id")
   /// Which automatic re-run of this card this was, counting Motir-pressed Revise
   /// refusals (§1e). The cap reads the same count; storing it lets the line say "2 of 3".
-  ordinal Int
+  ordinal       Int
   /// What the skipped line NAMES, captured when it was written (MOTIR-702; the design's
   /// `design-result--auto-rerun.mock.html`): the dispatcher's name for
   /// `no_project_access`, the model for `model_not_offered`, the repository for
   /// `repository_not_writable`. Null for every other outcome. A record of the moment, so
   /// the line still says who it was after that person's name changes.
-  detail  String?
+  detail        String?
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -8453,15 +8468,15 @@ model PlanChangeSession {
 ///                nothing happened. System turns are NOT part of the intent.
 /// Workspace-scoped tenant data (RLS in the same migration).
 model PlanChangeTurn {
-  id              String                @id @default(cuid())
-  workspaceId     String                @map("workspace_id")
-  sessionId       String                @map("session_id")
+  id                    String                @id @default(cuid())
+  workspaceId           String                @map("workspace_id")
+  sessionId             String                @map("session_id")
   /// 0-based position in the thread. Unique per session — the DB backstop for the
   /// locked allocation; a violation means a lost append race and surfaces as a
   /// typed domain error, never a raw P2002.
-  seq             Int
-  role            PlanChangeTurnRole
-  body            String                @db.Text
+  seq                   Int
+  role                  PlanChangeTurnRole
+  body                  String                @db.Text
   /// The producing motir-ai job token — set on a `system` submission marker (the
   /// job that submission produced) AND on an `assistant` turn (the job whose
   /// result carried the utterance, MOTIR-2226; it is also the idempotency key
@@ -8471,18 +8486,18 @@ model PlanChangeTurn {
   /// the settle is then a single keyed, replayable lookup rather than "the most
   /// recent user turn". Null on a `user` turn of the shipped plan-change path,
   /// whose submission is a separate gesture writing a `system` marker.
-  jobId           String?               @map("job_id")
+  jobId                 String?               @map("job_id")
   /// The ONE Gate-2 question an `assistant` turn asked (MOTIR-2222's
   /// `PlanningTurn.question`), or null when the turn only reported its findings.
   /// It is what makes the awaiting-your-answer state DERIVABLE from the persisted
   /// thread rather than held in client state — so re-opening the workspace hours
   /// later comes back to the same pending question. Null on every other role.
-  question        String?               @db.Text
+  question              String?               @db.Text
   /// A `user` turn sent as the REPLY to the pending question (through the answer
   /// bar), as opposed to one that changed the subject and SUPERSEDED it. The two
   /// dispositions render different markers (design state C vs E), and neither may
   /// rest on reading the words — so which affordance sent it is recorded here.
-  isAnswer        Boolean               @default(false) @map("is_answer")
+  isAnswer              Boolean               @default(false) @map("is_answer")
   /// What this turn ASKED FOR — `ask` (answer my question, change nothing) or
   /// `plan_change` (propose a plan delta), MOTIR-1816 /
   /// `docs/decisions/conversation-turn-intent.md`. Set on `user` turns only
@@ -8494,13 +8509,22 @@ model PlanChangeTurn {
   /// disposition — what actually ran for this turn — not a stored guess, which
   /// is why a re-run under the other intent MOVES it rather than adding a second
   /// row (the `isAnswer` posture: the thread records what Motir DID).
-  intent          PlanChangeTurnIntent? @map("intent")
+  intent                PlanChangeTurnIntent? @map("intent")
   /// Whether this turn was RE-RUN under the other intent after Motir read it
   /// wrong (ADR §3). `intent` alone cannot say so — it holds what finally ran —
   /// and the transcript is a record, so the correction has to survive as a fact
   /// rather than as the absence of the first reading. Also the one number that
   /// says whether ADR §4's default ever needs revisiting.
-  intentCorrected Boolean               @default(false) @map("intent_corrected")
+  intentCorrected       Boolean               @default(false) @map("intent_corrected")
+  /// When a `debug` turn's ONE write was CLAIMED (MOTIR-7049,
+  /// `docs/decisions/conversation-turn-intent.md` AMENDMENT 1 · A1.4). Set on a
+  /// `user` turn only, by a compare-and-set under the session's row lock BEFORE
+  /// the card is written, so of two settles of the same `debug_bug` job exactly
+  /// one writes. Null on every other turn, and on a debug turn nothing has been
+  /// landed for. Released (back to null) only when the write was refused inside
+  /// its own transaction, so nothing committed; a claim that outlives a crash
+  /// stays set — the landing fails CLOSED rather than filing a second bug.
+  debugLandingClaimedAt DateTime?             @map("debug_landing_claimed_at")
   /// The work items an `assistant` ANSWER rests on, as work-item IDENTIFIERS
   /// ("MOTIR-812"), in the order the answer cites them. Empty on every other
   /// role and on an answer the graphs could not support.
@@ -8512,12 +8536,12 @@ model PlanChangeTurn {
   /// WRITE time (`workItemRepository.findByIdentifiers`), so a cross-project or
   /// unresolvable key is dropped rather than persisted as a chip that renders
   /// broken. Queryable without a join (`citations @> ARRAY['MOTIR-812']`).
-  citations       String[]              @default([])
+  citations             String[]              @default([])
   /// The author of a `user` turn (null for `system` / `assistant` turns, and
   /// cleared if the author is deleted — SetNull, the session's `createdBy`
   /// semantics).
-  authorId        String?               @map("author_id")
-  createdAt       DateTime              @default(now()) @map("created_at")
+  authorId              String?               @map("author_id")
+  createdAt             DateTime              @default(now()) @map("created_at")
 
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   /// COMPOSITE FK (MOTIR-1735) — the turn points at `(session_id, workspace_id)`,
@@ -8667,14 +8691,18 @@ enum PlanChangeTurnRole {
 /// `docs/decisions/conversation-turn-intent.md`). ONE thread carries both, and a
 /// thread may alternate freely turn by turn — the previous turn's intent places
 /// no constraint on the next, which is why this sits on the TURN and never on
-/// the session. There is deliberately no third "unknown" value: every turn that
-/// ran, ran as one of these two, and a turn that never ran carries null.
+/// the session. There is deliberately no "unknown" value: every turn that ran,
+/// ran as one of these, and a turn that never ran carries null.
 enum PlanChangeTurnIntent {
   /// Propose a plan delta — the shipped path, unchanged.
   plan_change
   /// Answer a question about the project from its plan tree and code graph,
   /// with citations. Writes nothing.
   ask
+  /// Diagnose a REPORT OF BROKEN BEHAVIOUR (MOTIR-7047 · the ADR's AMENDMENT 1,
+  /// A1.6): `ask_project` redirected the turn and a `debug_bug` job ran for it.
+  /// It writes at most ONE card (A1.4) — landed by MOTIR-7049, not here.
+  debug
 
   @@map("plan_change_turn_intent")
 }
@@ -9549,6 +9577,8 @@ model CiRunnerProvisioningIntent {
   project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
   githubRepo   GithubRepo?  @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
 
+  liveAccruals CiLiveAccrual[]
+
   /// The idempotency guarantee: a redelivered webhook produces no second intent,
   /// while a RE-RUN (a new attempt) and every sibling JOB of the same run each
   /// get their own.
@@ -9566,6 +9596,93 @@ model CiRunnerProvisioningIntent {
   /// ago must not be swept as an hour-old orphan.
   @@index([status, bootedAt])
   @@map("ci_runner_provisioning_intent")
+}
+
+/// CI IS DEBITED WHILE IT RUNS (Story MOTIR-6906 · MOTIR-6910 ·
+/// `docs/decisions/fleet-per-org-pool.md` §3). One row per live CI container per
+/// debit period: the WHOLE minutes that container accrued since its previous row,
+/// added to the org's `ci_period_usage` in the same transaction so the existing
+/// allowance-then-credits charge sees them before the run ends.
+///
+/// The row is the idempotency record: `(provisioning_intent_id, tick_start)` makes
+/// a replayed or retried tick a no-op, and the per-intent SUM is the checkpoint the
+/// next tick subtracts from, so a late tick never counts a minute twice. When the
+/// run completes, the `workflow_run` meter subtracts this run's sum from GitHub's
+/// figure and adds only the difference (`ciMinutesMeterService.meterWorkflowRun`).
+model CiLiveAccrual {
+  id                   String @id @default(cuid())
+  provisioningIntentId String @map("provisioning_intent_id")
+  organizationId       String @map("organization_id")
+  workspaceId          String @map("workspace_id")
+
+  /// The GitHub run this container served — the completion meter's key.
+  runId      String @map("run_id")
+  runAttempt Int    @map("run_attempt")
+
+  /// The start of the 5-minute debit period this row was written in.
+  tickStart   DateTime @map("tick_start")
+  /// The calendar month (`ci_period_usage.period_start`) the minutes landed in.
+  periodStart DateTime @map("period_start")
+
+  /// Whole minutes, in seconds (always a multiple of 60).
+  accruedSeconds Int @map("accrued_seconds")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  provisioningIntent CiRunnerProvisioningIntent @relation(fields: [provisioningIntentId], references: [id], onDelete: Cascade)
+  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace          Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([provisioningIntentId, tickStart])
+  /// The completion meter's read: what this run was already charged live.
+  @@index([runId, runAttempt])
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@map("ci_live_accrual")
+}
+
+/// THE KILL RECORD (Story MOTIR-6906 · MOTIR-6925, `fleet-per-org-pool.md` §5) —
+/// one row per machine the attribution reconciler destroyed or stopped, for the
+/// platform admin's list (MOTIR-6905) and the audit of what the reconciler did.
+///
+/// ⚠️ WRITTEN BEFORE THE DESTROY. The decision commits first and the provider
+/// call follows (`docs/jobs.md`'s commit-then-effect rule), so a destroy that
+/// throws leaves a row with no `completedAt` and its `failureDetail` — never a
+/// machine killed with no record of why. The next pass decides again and writes
+/// a new row; a machine that keeps failing to die shows up as several.
+model FleetMachineKill {
+  id          String @id @default(cuid())
+  /// The provider app and machine, as the provider listed them.
+  app         String
+  machineId   String @map("machine_id")
+  machineName String @default("") @map("machine_name")
+
+  /// `no_record` · `record_ended` · `org_stopped` — the alert's own words.
+  reason String
+  /// `destroyed`, or `stopped` for an agent instance's persistent machine whose
+  /// record says it should be resting.
+  action String
+
+  /// What matched it, when anything did: the workload and its record's id.
+  /// Null for `no_record`.
+  workload       String?
+  recordRef      String? @map("record_ref")
+  /// The organisation of the matched record — null for `no_record`, and after
+  /// the organisation is deleted (the row outlives it: it is an audit).
+  organizationId String? @map("organization_id")
+
+  machineCreatedAt DateTime? @map("machine_created_at")
+  ageSeconds       Int       @map("age_seconds")
+
+  decidedAt     DateTime  @default(now()) @map("decided_at")
+  completedAt   DateTime? @map("completed_at")
+  failureDetail String?   @map("failure_detail")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, decidedAt])
+  @@index([decidedAt])
+  @@map("fleet_machine_kill")
 }
 
 /// The CONTAINER-SECONDS RECORD (Story MOTIR-1916 · MOTIR-1924) — what ONE fleet
@@ -10008,12 +10125,15 @@ model FleetInFlightSlot {
   /// … ON CONFLICT DO NOTHING` occupies no extra capacity.
   ref String
 
-  /// Attribution for the operator breakdown; never a tenancy boundary (see the
-  /// model comment). Not FKs: a slot must survive the deletion of whatever it
+  /// The organisation whose POOL this slot counts against
+  /// (`docs/decisions/fleet-per-org-pool.md` §2, MOTIR-6907) — REQUIRED since the
+  /// pool became per organisation: a slot with no org would be counted by no
+  /// org's pool, which is a container nothing bounds. The workspace is
+  /// attribution only. Not FKs: a slot must survive the deletion of whatever it
   /// pointed at, because a leaked slot that outlives its owner is exactly the
   /// row `expires_at` exists to age out — a cascade would silently free
   /// capacity a live container is still spending.
-  organizationId String? @map("organization_id")
+  organizationId String  @map("organization_id")
   workspaceId    String? @map("workspace_id")
 
   /// The container this slot stands for, once the workload knows it. Nullable
@@ -10059,6 +10179,8 @@ model FleetInFlightSlot {
   /// The ceiling's read — count live rows for one workload. Ordered
   /// `[workload, expiresAt]` because that is the predicate's shape.
   @@index([workload, expiresAt])
+  /// The per-organisation pool count (MOTIR-6907), read under the fleet lock.
+  @@index([organizationId, expiresAt])
   @@map("fleet_in_flight_slot")
 }
 
@@ -10698,13 +10820,27 @@ model DispatchRun {
   /// each saw half the work.
   idempotencyKey String? @map("idempotency_key")
 
+  /// The developer's own agent the run executes in (`origin: instance` —
+  /// `docs/decisions/agent-instance-run.md` §5, MOTIR-7023). Null for every
+  /// `local` and `hosted` run. `SET NULL`, so removing an agent row never takes
+  /// run history with it (an agent row is soft-deleted in practice, so its name
+  /// stays readable). AT MOST ONE `running` run per agent is enforced by a
+  /// hand-written PARTIAL unique index in the migration
+  /// (`dispatch_run_agent_instance_running_key`), which the datamodel cannot
+  /// express — so NO `@@index` / `@@unique` on this model may claim the column
+  /// list `(agent_instance_id)` (CLAUDE.md, the partial-index rule). A CHECK
+  /// constraint (`dispatch_run_agent_instance_origin_check`) pins that only an
+  /// `instance` run names an agent.
+  agentInstanceId String? @map("agent_instance_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  scope     WorkItem? @relation("DispatchRunScope", fields: [scopeWorkItemId], references: [id], onDelete: SetNull)
-  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scope         WorkItem?      @relation("DispatchRunScope", fields: [scopeWorkItemId], references: [id], onDelete: SetNull)
+  createdBy     User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  agentInstance AgentInstance? @relation(fields: [agentInstanceId], references: [id], onDelete: SetNull)
 
   cards            DispatchRunCard[]
   events           DispatchRunEvent[]
@@ -10726,6 +10862,10 @@ model DispatchRun {
   @@index([projectId, startedAt(sort: Desc)])
   /// The scope's own run history.
   @@index([scopeWorkItemId, startedAt(sort: Desc)])
+  /// An agent's run history, newest first — My agents' LAST-run read per agent
+  /// (MOTIR-7029). Two columns, so it never claims the partial unique index's
+  /// `(agent_instance_id)` list (CLAUDE.md, the partial-index rule).
+  @@index([agentInstanceId, startedAt(sort: Desc)])
   /// The abandoned-run reap's discovery read (MOTIR-1792): the oldest rows still
   /// `running`. Status-first, because `running` is a tiny minority of the table
   /// — the same shape `job_run`'s reap index has.
@@ -10912,6 +11052,11 @@ enum DispatchRunOrigin {
   local
   /// 9.1.7's container, on Motir's infrastructure.
   hosted
+  /// A run inside one of the developer's own agents (MOTIR-7023,
+  /// `agent-instance-run.md` §5): started from Motir, on Motir's machine, with
+  /// the developer's own coding agent and no gateway key. `agentInstanceId`
+  /// names the agent.
+  instance
 
   @@map("dispatch_run_origin")
 }
@@ -11732,6 +11877,27 @@ enum AgentTerminalServer {
   @@map("agent_terminal_server")
 }
 
+/// Whether an agent's image carries the run launcher (`agent-instance-run.md`
+/// §4, MOTIR-7026) — `unknown` until its digest is probed.
+enum AgentRunLauncher {
+  unknown
+  present
+  absent
+
+  @@map("agent_run_launcher")
+}
+
+/// The coding agent's sign-in as `motir agent-terminal signin` answers it
+/// (`agent-instance-run.md` §4). `unknown` for a profile that cannot answer and
+/// for an agent never probed.
+enum AgentSignInState {
+  unknown
+  signed_in
+  signed_out
+
+  @@map("agent_sign_in_state")
+}
+
 /// Why a running interval ended (§4).
 enum AgentInstanceIntervalEndReason {
   hibernated
@@ -11803,6 +11969,22 @@ model AgentInstance {
   /// digest that differs from `imageDigest` is re-probed on the next boot.
   terminalServerDigest String?             @map("terminal_server_digest")
 
+  /// Can the pinned image start a card's run (`agent-instance-run.md` §4,
+  /// MOTIR-7026)? Probed with `motir agent-terminal run --help` at a boot whose
+  /// digest was not probed yet, beside `terminalServer`. An agent never probed
+  /// for its CURRENT digest reads as too old to run a card.
+  runLauncher       AgentRunLauncher @default(unknown) @map("run_launcher")
+  /// The image digest `runLauncher` was probed for; null = never probed.
+  runLauncherDigest String?          @map("run_launcher_digest")
+  /// The coding agent's sign-in as the agent's terminal server last answered
+  /// `motir agent-terminal signin` (§4): probed at every boot, by a start on a
+  /// running agent, and just before a hibernate. The credential lives on the
+  /// volume, so a hibernated agent's last answer stands. A probe that could not
+  /// answer leaves the previous value.
+  signInState       AgentSignInState @default(unknown) @map("sign_in_state")
+  /// When `signInState` was last answered; null = never.
+  signInCheckedAt   DateTime?        @map("sign_in_checked_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -11814,6 +11996,8 @@ model AgentInstance {
   /// agent-terminal.md Q3, Q8 (MOTIR-6940): its terminal tickets and connections.
   terminalTickets     AgentTerminalTicket[]
   terminalConnections AgentTerminalConnection[]
+  /// agent-instance-run.md §5 (MOTIR-7023): the runs executed in this agent.
+  dispatchRuns        DispatchRun[]
 
   /// The owner's list: newest first per project.
   @@index([ownerId, projectId, createdAt(sort: Desc)])

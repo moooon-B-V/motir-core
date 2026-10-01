@@ -126,6 +126,65 @@ export class PlanChangeTurnNotFoundError extends Error {
   }
 }
 
+/**
+ * The work item an ask turn names as its ANCHOR (`anchorKey`, MOTIR-7047) does
+ * not resolve for this caller: an unknown key, a key in another project or
+ * workspace, or one they may not browse. ONE answer for all of them, and the same
+ * body `GET /api/work-items/planning-anchor` gives — a 403 would say "it exists
+ * but you can't see it". → 404 `NOT_FOUND`.
+ */
+export class AskAnchorNotAvailableError extends Error {
+  readonly code = 'NOT_FOUND' as const;
+  constructor() {
+    super('Work item not available.');
+    this.name = 'AskAnchorNotAvailableError';
+  }
+}
+
+/**
+ * The card a `debug` turn would land on (MOTIR-7049) does not resolve for this
+ * caller: the key `debug_bug` named as the existing card, or the anchor it echoed,
+ * is unknown in the active project, in another project, or not one they may
+ * browse. The same no-existence-leak answer as {@link AskAnchorNotAvailableError}
+ * — and nothing was written. → 404 `NOT_FOUND`.
+ */
+export class DebugTargetNotAvailableError extends Error {
+  readonly code = 'NOT_FOUND' as const;
+  constructor() {
+    super('Work item not available.');
+    this.name = 'DebugTargetNotAvailableError';
+  }
+}
+
+/**
+ * A `diagnose` result anchored on a card that is NOT an un-promoted triage `bug`
+ * (MOTIR-7049). ADR AMENDMENT 1 · A1.4 lets a diagnosis be written onto the
+ * anchored TRIAGE bug only; writing it onto any other card would be an enrichment
+ * the duplicate search never chose. Nothing was written. → 422.
+ */
+export class DebugAnchorNotTriageBugError extends Error {
+  readonly code = 'DEBUG_ANCHOR_NOT_TRIAGE_BUG' as const;
+  constructor(readonly anchorKey: string) {
+    super(`${anchorKey} is not a bug in Triage, so the diagnosis was not written onto it.`);
+    this.name = 'DebugAnchorNotTriageBugError';
+  }
+}
+
+/**
+ * The card a `debug` turn was landing on changed underneath it (MOTIR-7049) — a
+ * person edited it between the landing's read and its write, and the write
+ * carries `expectedUpdatedAt`, so it was refused rather than overwriting them.
+ * Nothing was written and the landing's claim was released, so settling the job
+ * again retries it against the edited card. → 409.
+ */
+export class DebugTargetChangedError extends Error {
+  readonly code = 'DEBUG_TARGET_CHANGED' as const;
+  constructor(readonly workItemKey: string) {
+    super(`${workItemKey} was edited while the diagnosis was being written. Try again.`);
+    this.name = 'DebugTargetChangedError';
+  }
+}
+
 // ── The BOUNDARY MAILBOX (Story MOTIR-4054 · MOTIR-4067) ────────────────────
 
 /**

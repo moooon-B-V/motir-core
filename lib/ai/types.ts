@@ -87,6 +87,14 @@ export const JOB_KINDS = [
   // `analyze_bug`, which classifies Motir's OWN defects. Mirror of the closed
   // motir-ai enum (the open-core boundary).
   'author_bug',
+  // `debug_bug` (Story MOTIR-7042 — MOTIR-7046 handler / MOTIR-7047 dispatch) —
+  // the conversation's THIRD intent (`docs/decisions/conversation-turn-intent.md`
+  // AMENDMENT 1): when `ask_project` hands a turn back as `intent: 'debug'`, core
+  // dispatches this for the SAME turn (`aiAskService.settle`) with the turn text as
+  // `context.prompt` and its anchor as `context.anchorKey`. It returns ONE
+  // diagnosis as the typed `debugBug` result and writes nothing; core lands the one
+  // card (MOTIR-7049). Mirror of the closed motir-ai enum (the open-core boundary).
+  'debug_bug',
 ] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 
@@ -269,6 +277,19 @@ export interface JobContextBag {
   // The monitor-issue facts an `author_bug` job (MOTIR-5849) authors a planned
   // bug FROM (see BugAuthoringContext above).
   bugAuthoring?: BugAuthoringContext;
+  // The ONE work item a conversation turn is anchored on (MOTIR-7047 producer ↔
+  // MOTIR-7046 consumer) — an identifier such as `MOTIR-12`, usually the triage
+  // bug the person just reported. Sent on `ask_project` (the classifier is TOLD
+  // the turn is anchored there, and a `debug` verdict echoes it back as
+  // `ask.anchorKey`) and on `debug_bug`. Core sends it only after resolving it
+  // through the keyed read and browse-gating it (`aiAskService`). Absent when the
+  // turn has no anchor. NOT `targetKeys`: that set drives a contextual PLANNING
+  // run; this names the item a question or a report is about.
+  anchorKey?: string;
+  // The submitted report a `debug_bug` job diagnoses (MOTIR-7046) —
+  // `{ title?, description? }`, the person's own words from the report widget.
+  // The conversation path sends `prompt` instead; either (or both) is legal.
+  debugReport?: { title?: string; description?: string };
   // The work-item context a `generate_explanation` job (8.8.11) drafts an
   // explanation FROM — the title / description / type / parent the "Draft with
   // AI" affordance (8.8.12) sends. Loosely typed (the reserved-hole convention,
@@ -517,6 +538,10 @@ export interface ResultEnvelope {
   // that crossed a boundary, and the only way into a typed value is
   // `parseAuthoredBug` (lib/ai/authoredBug.ts), which VALIDATES rather than casts.
   authoredBug?: unknown;
+  // The ONE diagnosis a `debug_bug` job produced (Story MOTIR-7042 · MOTIR-7046) —
+  // that kind only. Typed `unknown` for the same reason as `authoredBug`: it is
+  // untrusted model output, and its reader lands with the consumer (MOTIR-7049).
+  debugBug?: unknown;
 }
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';

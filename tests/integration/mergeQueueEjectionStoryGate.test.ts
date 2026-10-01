@@ -51,6 +51,7 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
+import { hostAnswersCleanAt } from '../helpers/hostMergeability';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { POST as queueAgainRoute } from '@/app/api/work-items/[id]/pull-requests/[pullRequestId]/queue-again/route';
 import { queueAgainAutoAction } from '@/app/(authed)/items/[key]/approvalGateActions';
@@ -445,6 +446,8 @@ describe('2 · the re-arm', () => {
     ).toMatchObject({ state: 'superseded', supersededCause: 'head_moved' });
     expect(await awaiting(item.id)).toEqual([]);
 
+    // The host says the new head still merges (MOTIR-7063) — until then nobody is asked.
+    await hostAnswersCleanAt(s.workspace.id, 7, 'sha-web-2', 'web');
     await green('web', 7, 'sha-web-2');
     expect(await statusOf(item.id)).toBe('in_review');
     const fresh = await awaiting(item.id);

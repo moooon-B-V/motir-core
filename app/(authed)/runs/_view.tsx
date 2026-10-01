@@ -134,6 +134,7 @@ export default async function RunsView({
       view={view}
       viewInUrl={hasSwitch}
       canRun={access.canRun}
+      viewerId={ctx.visitor ? null : ctx.userId}
     />
   );
 
@@ -267,6 +268,7 @@ async function RunsIndexData({
   view,
   viewInUrl,
   canRun,
+  viewerId,
 }: {
   projectKey: string;
   ctx: ServiceContext | VisitorReadContext;
@@ -276,6 +278,8 @@ async function RunsIndexData({
   /** Whether the reader has the switch, so every address the island writes keeps `?view=`. */
   viewInUrl: boolean;
   canRun: boolean;
+  /** The signed-in member, or null for a Visitor — the modal's owner-only Cancel. */
+  viewerId: string | null;
 }) {
   const narrowing = { view, ...(scopeKey ? { scopeWorkItemKey: scopeKey } : {}) };
   const [live, past] = await Promise.all([
@@ -308,6 +312,7 @@ async function RunsIndexData({
       view={view}
       viewInUrl={viewInUrl}
       canRun={canRun}
+      viewerId={viewerId}
       initialLive={live?.runs ?? null}
       initialPast={past?.runs ?? null}
       pageSize={PAGE}

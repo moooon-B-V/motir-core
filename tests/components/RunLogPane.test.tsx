@@ -53,6 +53,7 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
     endedAt: new Date().toISOString(),
     createdById: null,
     lastHeartbeatAt: null,
+    agentInstance: null,
     cards: [leg(), leg({ id: 'leg_2', key: 'MOTIR-1793', workItemId: 'wi_2' })],
     seq: 0,
     ...over,

@@ -4404,3 +4404,171 @@ and composer panels were finalised. What the render settled, against the first d
 - **The target is the level itself** when the surface opens inside it: the breadcrumb's last crumb
   carries the target glyph (MOTIR-6160). Set as target on a card on that level therefore ADDS a second
   anchor beside the one the surface opened on; it never replaces it.
+
+## ⭐ Debug with Motir AI — the callout's third row, and the debug turn in the rail (MOTIR-7045, 2026-09-30)
+
+**Design system check (first, per the design-system rule).** `package.json` depends on
+`@motir/design-system` `workspace:*`, and `app/globals.css` imports `@motir/design-system/theme.css`.
+**Verdict: the project is on Motir Design**, so both mocks are built from the package's primitives and
+its `--el-*` / shape tokens. The token blocks were extracted from `packages/design-system/theme.css`,
+not typed by hand. **Axes:** the root layout (`app/layout.tsx`) sets `data-style`, `data-palette` and
+`data-type` on `<html>` from the signed-in person's applied appearance
+(`appearancePreferenceService.getApplied`), so the project has no fixed axis values. The mocks draw the
+base values (no axis attribute). Every element routes through a token, so any applied axis re-skins it.
+
+**Mocks (both DELTAS):** [`ai-callout-menu--debug-row.mock.html`](ai-callout-menu--debug-row.mock.html)
+and [`debug-turn.mock.html`](debug-turn.mock.html). **Story:** MOTIR-7042. **Decision:**
+`docs/decisions/conversation-turn-intent.md` AMENDMENT 1 (the third intent, `debug`).
+
+**What it amends, by path.**
+
+- [`ai-callout-menu.mock.html`](ai-callout-menu.mock.html) panels 3–4 (the menu and the row anatomy)
+  and § _The Motir callout — the orb becomes a TRIGGER (MOTIR-1811)_ above, including its
+  sub-section _EVERY ROW OPENS THE SAME SURFACE_. The rule is kept: the new row has the same href and
+  seeds text only.
+- [`ask-answers.mock.html`](ask-answers.mock.html) panels 2 and 7 (the answer turn and its states) and
+  § _Ask about this project — the cited ANSWER turn, and the chrome that follows the turn (MOTIR-1815)_
+  above. A debug turn is a third turn form beside the answer and the proposal.
+- [`plan-change-run-live.mock.html`](plan-change-run-live.mock.html) sheet 3 (the act rail) and
+  § _The run surface while it is RUNNING (MOTIR-4066)_ above. The act rail gains two kinds.
+
+The existing mocks are records and are not edited. **The widget entrance** is designed in
+`design/triage/report-widget--debug-offer.mock.html` and in § _The Debug with Motir AI offer on the
+report widget's success state_ of `design/triage/design-notes.md`.
+
+**Read first:** `lib/planning/aiCallout.ts`, `components/planning/AiCalloutMenu.tsx`,
+`PlanWithAIFab.tsx`, `PlanChangeRail.tsx` (`Bubble`, the user turn's target row, the act rail, the
+marker lines, the `answeredFrom` foot line, the correction marker, `initialDraft` / `autoSendTurn`, and
+`state.outOfCredits` → `AiPaywall`), `PlanChangeComposer.tsx` (the running bar) and
+`components/ai/AiPaywall.tsx`.
+
+### 1 · The callout's third row (`ai-callout-menu--debug-row.mock.html` panels 1 and 3)
+
+| Element     | Primitive / source                                                  | Copy (exact)                                            | Colour · shape                                                                                                                               |
+| ----------- | ------------------------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| row         | `<Link>` in `AiCalloutMenu`, `data-action="debug"`, the shared href | —                                                       | `--radius-control`, `--spacing-control-x/y` · hover and focus-visible `--el-surface` · pressed `--el-muted` · inset 2px `--focus-ring-color` |
+| tile        | lucide `Bug`, the NON-primary tile                                  | —                                                       | `color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg))` · glyph `--el-accent-on-surface` · `--radius-control`                          |
+| title       | `aiCallout.actions.debug.title`                                     | "Debug with Motir AI"                                   | `--el-text`, 13px semibold                                                                                                                   |
+| description | `aiCallout.actions.debug.description`                               | "Trace a bug to its likely cause and file it in Triage" | `--el-text-secondary`, 11.5px, in every state (6.24:1 on `--el-surface`, 6.18:1 on `--el-muted`)                                             |
+
+- **Registry:** a third entry in `aiCalloutActions(href)`:
+  `{ id: 'debug', icon: 'bug', titleKey, descriptionKey, href }`. `AiCalloutIcon` gains `'bug'`, and
+  `ICONS` maps it to lucide `Bug`. **Position 3.** Only position 1 wears the filled hero tile. The
+  `wrench` / "Help with a task" row reserved in the registry comment has not landed, and takes
+  position 4 when it does.
+- **No gate of its own.** The orb is mounted only when `showPlanWithAi` holds (Motir AI configured, an
+  active project, `ai:plan`). That is exactly who may send a debug turn, so the row is never
+  dimmed and never absent on its own.
+
+### 2 · What the row opens: the composer pre-filled, nothing sent (panel 2)
+
+The same surface and href as the other rows, on the project conversation with its shipped opener
+("Opened on {project}. What should change — or what would you like to know?") and mode pill. The
+composer (`PlanChangeComposer`, `--radius-input`, `--spacing-input-x/y`, `--el-page-bg`, focus ring
+`--focus-ring-color`) holds the pre-fill, **unsent**:
+
+```
+Something is broken. What happens:
+What should happen instead:
+```
+
+- Key `shell.aiCallout.actions.debug.prefill`. There are two lines separated by one newline, and each
+  ends in a colon followed by one space. The field takes focus with the caret at the **end of the first
+  line**. The shipped multi-line composer (MOTIR-6236) grows to fit it.
+- **Mechanism:** the shipped `initialDraft` seam (the refusal re-plan's "pre-fill and wait",
+  MOTIR-6210). The person may edit or clear the seed, the starter chips stay hidden while it is in the
+  field, and nothing is sent on mount. It is **not** `autoSendTurn`, because these words are Motir's
+  (§5, A1.3).
+- _Why a template and not a starter chip (the ask row's choice):_ a bug report has a shape the widget
+  already asks for ("Steps, expected vs. actual"). Once filled in, the two lines read as a report of
+  broken behaviour, which is what A1.1 classifies as `debug`.
+
+### 3 · The debug turn, running (`debug-turn.mock.html` panel 1)
+
+- **⚠️ The widget path opens the PROJECT conversation, not an item-anchored thread.** The accept sends
+  the seeded turn through the one ask door, carrying the new triage bug's key as its **anchor**
+  (`targets`). So the sent user bubble shows a small reference to the bug: the shipped target row,
+  "Targeting 1 item" + `PlanningTargetKeyChip` tone `on-accent` (`--el-accent-pressed` /
+  `--el-accent-text`, `--radius-badge`, `--spacing-chip-x`, mono 10px). **There is no item-anchored
+  header and no target chip in the composer tray**, and the rail head keeps the project mode pill
+  (`plan`). The orb path sends with no anchor, so its user bubble has no target row.
+- User bubble: `--el-chat-bubble-user` / `--el-accent-text`, `--radius-card`, label "turn 1", with the
+  person's title, a blank line and the description (line breaks kept).
+- Markers (centred, 12px, `--el-text-secondary`): "Sent to Motir AI" (existing), then the **debug
+  hand-off**, new key `conversation.handoffDebug` = **"Reading it as a bug — tracing the likely cause"**,
+  in the same slot as the shipped plan-change `handoff`.
+- **Act rail** (`<ol>`, `--el-surface-soft`, `--radius-card`; settled rows `--el-text-secondary`,
+  the live row `--el-text` with `Spinner size="sm"`). It shows "Reading your request…" (existing), then
+  the hand-off act "Tracing the bug…", then the shipped retrieval lines "Read the code graph" / "Read
+  the plan tree". It gains two kinds:
+
+  | kind       | mono label | glyph         | line                                        |
+  | ---------- | ---------- | ------------- | ------------------------------------------- |
+  | `matching` | `match`    | `SearchCheck` | "Checking whether a card already covers it" |
+  | `writing`  | `write`    | `FilePenLine` | "Writing the diagnosis onto {key}"          |
+
+- **Running bar** (shipped): `--el-surface-soft`, `--radius-card`, the live line in
+  `--el-text-secondary`, and a **secondary** "Stop" (`--el-button-border`, `--radius-btn`,
+  `--height-btn-sm`). The composer stays live ("Reply, or refine further…").
+
+### 4 · Finished: the one new element, the OUTCOME line (panels 2–4)
+
+The prose is an ordinary assistant bubble (`--el-chat-bubble-ai` / `--el-text`, `MarkdownView`, the
+28px `--el-accent` avatar with the Motir mark). It is Motir AI's diagnosis. **Under it, in the
+`answeredFrom` foot slot**, is a new keyed **outcome line**. It has a hairline `border-t
+--el-border-soft`, is 12px `--el-text`, and has a leading `FilePenLine` glyph in `--el-text-secondary`
+(`SearchCheck` for no write). It is built from the job's **result**, not from the model's words, so it
+always names the one card written even when the prose does not. The card is linked with the shipped
+`WorkItemRefChip` (`--el-surface-soft`, `--el-border`, `--radius-control`, `--spacing-kbd-x/y`; bug
+square `--el-type-bug`; key `--el-link`; status dot; click opens the shipped peek).
+
+| Outcome (A1.4)                              | Key (new, `conversation.debug.*`) | Copy (exact; `{chip}` = WorkItemRefChip)                                                                                 |
+| ------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| diagnosis written onto the anchored bug     | `wroteAnchor`                     | "Wrote the diagnosis onto {chip}. It stays in Triage, and nothing else changed."                                         |
+| no anchor (orb): one bug filed with it      | `filed`                           | "Filed {chip} in Triage with the diagnosis. Nothing else changed."                                                       |
+| an existing card enriched (widget path)     | `enrichedAnchor`                  | "Added the diagnosis to {chip}, which already covers this bug. Nothing new was filed, and {anchorKey} is left as it is." |
+| an existing card enriched (orb path)        | `enriched`                        | "Added the diagnosis to {chip}, which already covers this bug. Nothing new was filed."                                   |
+| the report could not be grounded (no write) | `ungrounded`                      | "Couldn't trace this to the code, so nothing was written."                                                               |
+
+- `{anchorKey}` is plain text, not a chip, because the turn did not touch it. Marking it a duplicate
+  stays the Triage inbox's act.
+- "It stays in Triage" is load-bearing: the write neither promotes nor moves status (A1.4), and the
+  line saves the person from looking for the bug on the board.
+- **Could not ground** (panel 4) is drawn although the card listed four states. A1.4's fourth row and
+  Consequence 2 make it a terminal state. It is an ordinary bubble, not the error block.
+- **Correction (§3, A1.5):** the latest debug result carries the shipped correction marker (`--el-link`,
+  underlined, 12px semibold) reading **"Answer this instead"** (existing `correctToAsk`). It re-runs the
+  user turn as `ask`, and the write **stays**. Which label the marker shows under an ask or plan-change
+  turn now that there are three intents is for MOTIR-7050. This design draws only the label under a
+  debug result.
+
+### 5 · Out of credits (panel 5)
+
+The shipped `<AiPaywall triggeredOutOfCredits />` in the rail's own slot, **unchanged**: a `Card`
+(`--el-card`, `--el-border`, `--radius-card`, `--spacing-card-padding`), a 48px icon chip
+(`--el-tint-yellow`, `Pause` in `--el-warning`, `--radius-control`), serif title in `--el-text`, body in
+`--el-text-muted` on the white card (4.54:1), primary "Upgrade plan" + secondary "Buy credit top-up"
+(size md), and the note in `--el-text-secondary`. The owner copy is "Planning is paused — you're out of
+credits" / "The {org} organization has used all of this month's {allotment} {tier} credits, so new
+planning runs are paused. Existing plans stay fully editable." / "Renews {date} · or upgrade now to
+keep planning." The member and tier-gate faces are unchanged too. Nothing is written, and the user turn
+stays on the thread.
+
+> **Recorded, not fixed here:** the reused paywall's noun is _planning_. A debug turn inherits that
+> wording because the card says to reuse the treatment. Renaming it changes every AI surface that shows
+> the paywall.
+
+### Copy index (new strings)
+
+- `shell.aiCallout.actions.debug.title` "Debug with Motir AI" · `.description` "Trace a bug to its
+  likely cause and file it in Triage" · `.prefill` "Something is broken. What happens:⏎What should
+  happen instead: "
+- `planningWorkspace.conversation.handoffDebug` "Reading it as a bug — tracing the likely cause"
+- `planningWorkspace.conversation.act.matching` "match" · `act.matchingLine` "Checking whether a card
+  already covers it" · `act.writing` "write" · `act.writingLine` "Writing the diagnosis onto {key}" ·
+  `progress.redirectedDebug` "Tracing the bug…"
+- `planningWorkspace.conversation.debug.{wroteAnchor,filed,enrichedAnchor,enriched,ungrounded}` (the
+  table in 4)
+
+No composer intent control, no debug mode, no new panel: the chrome follows the latest turn (ADR
+Consequence 1), and after a debug turn the canvas footer rests, because nothing is proposed.

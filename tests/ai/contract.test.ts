@@ -87,6 +87,10 @@ const CANONICAL_JOB_KINDS = [
   // sends it, closes the drift that card's envelope documented while this
   // consumer was unbuilt.
   'author_bug',
+  // `debug_bug` (Story MOTIR-7042 — MOTIR-7046 handler / MOTIR-7047 dispatch);
+  // already in motir-ai's canonical set. Adding it HERE, with the dispatch that
+  // sends it, closes the drift that card's envelope documented.
+  'debug_bug',
 ] as const;
 
 // The motir-core typed error each canonical code maps to (lib/ai/errors.ts).

@@ -37,8 +37,10 @@ import { monitorBugEnrichOnCreated } from './definitions/monitorBugEnrich';
 import { monitorBugEnrichBackfill } from './definitions/monitorBugEnrichBackfill';
 import { autoPlanCadenceTick } from './definitions/autoPlanCadenceTick';
 import { ciMinutesReconcile } from './definitions/ciMinutesReconcile';
+import { ciLiveCharge } from './definitions/ciLiveCharge';
 import { ciActionsGateSweep } from './definitions/ciActionsGateSweep';
-import { ciRunnerProvisionSweep, ciRunnerBoot, ciRunnerReap } from './definitions/ciRunnerFleet';
+import { ciRunnerProvisionSweep, ciRunnerBoot } from './definitions/ciRunnerFleet';
+import { fleetAttribution } from './definitions/fleetAttribution';
 import { hostedRunSupervise } from './definitions/hostedRunSupervise';
 import {
   statusDerivationOnChildSetChanged,
@@ -64,6 +66,7 @@ import { pullRequestAutoMerge } from './definitions/pullRequestAutoMerge';
 import { agentReviewRequested } from './definitions/agentReviewRequested';
 import { designAutoRerun } from './definitions/designAutoRerun';
 import { pullRequestBaseMoved } from './definitions/pullRequestBaseMoved';
+import { pullRequestHeadMoved } from './definitions/pullRequestHeadMoved';
 import {
   monitorConnectionPoll,
   monitorIssueReconcileTick,
@@ -75,6 +78,8 @@ import { organizationErasureSweep } from './definitions/organizationErasureSweep
 import { organizationRetentionPurge } from './definitions/organizationRetentionPurge';
 import { dlqStandingDepthSweep } from './definitions/dlqStandingDepthSweep';
 import { agentInstanceIdleCheck } from './definitions/agentInstanceIdleCheck';
+import { agentInstanceRunLaunch } from './definitions/agentInstanceRunLaunch';
+import { agentInstanceRunSupervise } from './definitions/agentInstanceRunSupervise';
 import { agentInstanceSweep } from './definitions/agentInstanceSweep';
 
 // EVERY JOB THIS IMAGE KNOWS (Story 1.6 · Subtask 1.6.2; re-based onto the
@@ -127,10 +132,11 @@ export const jobDefinitions = [
   monitorBugEnrichBackfill,
   autoPlanCadenceTick,
   ciMinutesReconcile,
+  ciLiveCharge,
   ciActionsGateSweep,
   ciRunnerProvisionSweep,
   ciRunnerBoot,
-  ciRunnerReap,
+  fleetAttribution,
   hostedRunSupervise,
   planDriftOnTransitioned,
   statusDerivationOnTransitioned,
@@ -159,6 +165,8 @@ export const jobDefinitions = [
   agentReviewRequested,
   designAutoRerun,
   pullRequestBaseMoved,
+  // The head-push re-read beside it (MOTIR-7063): a push onto a base already moved.
+  pullRequestHeadMoved,
   // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick and
   // its per-connection fan-out.
   monitorIssueReconcileTick,
@@ -172,5 +180,7 @@ export const jobDefinitions = [
   // Agent instances (Story MOTIR-6860 · MOTIR-6873): the per-instance idle timer
   // and the 30-minute sweep beneath it.
   agentInstanceIdleCheck,
+  agentInstanceRunLaunch,
+  agentInstanceRunSupervise,
   agentInstanceSweep,
 ];

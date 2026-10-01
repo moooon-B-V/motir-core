@@ -20,6 +20,7 @@ import {
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
+import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 
 // A HOSTED RUN'S MACHINE TIME IS KEYED TO ITS DISPATCH RUN (Story MOTIR-683 ·
 // Subtask MOTIR-6448; `docs/decisions/hosted-agent-run.md` §1 — `DispatchRun.id` is
@@ -135,6 +136,8 @@ function accrualFor(usage: ContainerUsage, seconds: number): ContainerAccrual {
     ...(usage.dispatchRunId !== undefined ? { dispatchRunId: usage.dispatchRunId } : {}),
   };
 }
+
+grantPaidAiPlan();
 
 beforeEach(async () => {
   fakeOrchestrator.reset();

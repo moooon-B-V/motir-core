@@ -80,6 +80,12 @@ export interface PlanChangeComposerProps {
   placeholder?: string;
   /** Pre-focus, for the re-plan ask (MOTIR-910). */
   autoFocus?: boolean;
+  /**
+   * Where the pre-focused caret lands, as an offset into the draft — the orb's
+   * two-line debug template puts it at the end of its FIRST line (MOTIR-7050).
+   * Absent → the end of the draft, as every shipped pre-fill has it.
+   */
+  caretAt?: number;
   disabled?: boolean;
   /**
    * The planner's PENDING question (MOTIR-2226), or null when it is not waiting
@@ -141,6 +147,7 @@ export function PlanChangeComposer({
   onSubmit,
   placeholder,
   autoFocus = false,
+  caretAt,
   disabled = false,
   awaitingQuestion = null,
   onSeeQuestion,
@@ -182,7 +189,10 @@ export function PlanChangeComposer({
     const el = inputRef.current;
     if (!el) return;
     caretPlacedRef.current = true;
-    el.setSelectionRange(el.value.length, el.value.length);
+    const at = caretAt === undefined ? el.value.length : Math.min(caretAt, el.value.length);
+    el.setSelectionRange(at, at);
+    // `caretAt` is read at the one placement only, like the rest of this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFocus]);
 
   /** Open the search, remembering where the message caret should come back to. */

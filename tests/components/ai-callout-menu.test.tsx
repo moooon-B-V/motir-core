@@ -4,6 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import type { AiCalloutAction } from '@/lib/planning/aiCallout';
 import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';
+import { peekSurfaceSeed, resetSurfaceSeedForTests } from '@/lib/planning/surfaceSeed';
 
 // The doors resolve their href from the CURRENT address now (MOTIR-4730), so
 // these need a router. `usePathname` / `useSearchParams` are all the hook reads.
@@ -14,6 +15,8 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => searchParams,
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
+const { shallowPush } = vi.hoisted(() => ({ shallowPush: vi.fn() }));
+vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace: vi.fn() }));
 
 // The "M" universal AI callout (MOTIR-1812) — the orb is now the TRIGGER for an
 // anchored menu, and "Plan with AI" is the first ROW inside it. Driven under
@@ -46,6 +49,8 @@ vi.mock('@/lib/planning/aiCallout', async (importOriginal) => {
 
 afterEach(() => {
   registryOverride.current = null;
+  resetSurfaceSeedForTests();
+  shallowPush.mockReset();
   cleanup();
 });
 
@@ -96,12 +101,13 @@ describe('the callout menu', () => {
     fireEvent.click(orb());
 
     const panel = screen.getByRole('dialog', { name: 'Motir AI' });
-    // Two capabilities have landed: `plan` (MOTIR-1812) and `ask` (MOTIR-1343).
-    // `help` (MOTIR-1344) is deliberately absent until it exists — a row appears
-    // when its capability does, never before.
-    expect(panel.querySelectorAll('a[data-action]')).toHaveLength(2);
+    // Three capabilities have landed: `plan` (MOTIR-1812), `ask` (MOTIR-1343) and
+    // `debug` (MOTIR-7050). `help` (MOTIR-1344) is deliberately absent until it
+    // exists — a row appears when its capability does, never before.
+    expect(panel.querySelectorAll('a[data-action]')).toHaveLength(3);
     expect(panel.querySelector('a[data-action="plan"]')).not.toBeNull();
     expect(panel.querySelector('a[data-action="ask"]')).not.toBeNull();
+    expect(panel.querySelector('a[data-action="debug"]')).not.toBeNull();
     expect(panel.querySelector('a[data-action="help"]')).toBeNull();
   });
 
@@ -115,7 +121,7 @@ describe('the callout menu', () => {
 
     const panel = screen.getByRole('dialog', { name: 'Motir AI' });
     const hrefs = [...panel.querySelectorAll('a[data-action]')].map((a) => a.getAttribute('href'));
-    expect(hrefs).toHaveLength(2);
+    expect(hrefs).toHaveLength(3);
     expect(new Set(hrefs).size).toBe(1);
     // …and no row carries a mode or intent of its own.
     for (const href of hrefs) {
@@ -135,6 +141,57 @@ describe('the callout menu', () => {
     // Position 2: the primary tile marks position 1, and `help` takes 3.
     const panel = screen.getByRole('dialog', { name: 'Motir AI' });
     expect([...panel.querySelectorAll('a[data-action]')].indexOf(row)).toBe(1);
+  });
+
+  it('the debug row: third, bug tile on the non-primary ink, and the design’s copy', () => {
+    renderWithIntl(<PlanWithAIFab />);
+    fireEvent.click(orb());
+
+    const row = screen.getByRole('link', { name: /Debug with Motir AI/ });
+    expect(row.getAttribute('data-action')).toBe('debug');
+    expect(screen.getByText('Trace a bug to its likely cause and file it in Triage')).toBeTruthy();
+    const panel = screen.getByRole('dialog', { name: 'Motir AI' });
+    expect([...panel.querySelectorAll('a[data-action]')].indexOf(row)).toBe(2);
+    // The lucide `Bug` glyph, on the accent-tint tile — only position 1 is filled.
+    const tile = row.querySelector('span[aria-hidden]');
+    expect(tile?.className).toContain('text-(--el-accent-on-surface)');
+    expect(tile?.querySelector('svg.lucide-bug')).not.toBeNull();
+    // The SAME href as every other row.
+    expect(row.getAttribute('href')).toBe('/backlog?plan=project&planFrom=project');
+  });
+
+  it('the debug row PRE-FILLS the composer and sends nothing; the other rows hand nothing', () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      renderWithIntl(<PlanWithAIFab />);
+      fireEvent.click(orb());
+      fireEvent.click(screen.getByRole('link', { name: /Ask about this project/ }));
+      expect(peekSurfaceSeed()).toBeNull();
+
+      fireEvent.click(orb());
+      fireEvent.click(screen.getByRole('link', { name: /Debug with Motir AI/ }));
+
+      const prefill = 'Something is broken. What happens: \nWhat should happen instead: ';
+      expect(peekSurfaceSeed()).toEqual({
+        kind: 'draft',
+        text: prefill,
+        caret: prefill.indexOf('\n'),
+      });
+      // Opened in place on the one href, and NOTHING was sent anywhere.
+      expect(shallowPush).toHaveBeenLastCalledWith('/backlog?plan=project&planFrom=project');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('a ⌘-click on the debug row opens a new tab and hands no pre-fill', () => {
+    renderWithIntl(<PlanWithAIFab />);
+    fireEvent.click(orb());
+    fireEvent.click(screen.getByRole('link', { name: /Debug with Motir AI/ }), { metaKey: true });
+    expect(peekSurfaceSeed()).toBeNull();
+    expect(shallowPush).not.toHaveBeenCalled();
   });
 
   it('carries the originating context into the row href', () => {

@@ -27,6 +27,12 @@ import { PlanSeedNotApplicableError } from '@/lib/planChange/errors';
 //                                  `isAnswer` precedent), so the thread can say
 //                                  later whether the planner's question was
 //                                  answered or superseded.
+//   Either body may carry `anchorKey` (MOTIR-7047 · ADR AMENDMENT 1, A1.2): ONE
+//   work-item key the turn is ABOUT — usually the triage bug just reported. It is
+//   DATA, not an intent or a mode: the turn still lands on the project-wide
+//   thread, the key is resolved through the keyed read (triage included) and
+//   browse-gated in the service, and an unknown / foreign / hidden key is the
+//   planning-anchor route's no-existence-leak 404. A non-string is a 400.
 //   { turnId, flip? }            — RE-RUN a turn already on the thread: the retry
 //                                  after a failed submit (`flip` absent) and the
 //                                  correction affordance (`flip: true`). The
@@ -63,17 +69,33 @@ export async function POST(req: Request): Promise<Response> {
     isAnswer?: unknown;
     sessionId?: unknown;
     seedGateId?: unknown;
+    anchorKey?: unknown;
   };
   // The conversation the client holds (MOTIR-6023; AMENDMENT 17 §2). Optional
   // here: with none, the caller's resumable project-wide session is used, and a
   // new turn with none STARTS one — the ask door stays self-sufficient.
   const sessionId = readSessionId(body.sessionId) ?? undefined;
+  if (
+    body.anchorKey !== undefined &&
+    body.anchorKey !== null &&
+    typeof body.anchorKey !== 'string'
+  ) {
+    return NextResponse.json(
+      { code: 'BAD_REQUEST', error: '`anchorKey` must be a work-item key.' },
+      { status: 400 },
+    );
+  }
+  const anchorKey =
+    typeof body.anchorKey === 'string' && body.anchorKey.trim().length > 0
+      ? body.anchorKey.trim()
+      : undefined;
 
   try {
     if (typeof body.turnId === 'string' && body.turnId.length > 0) {
       const result = await aiAskService.resubmit(body.turnId, ctx, {
         flip: body.flip === true,
         ...(sessionId ? { sessionId } : {}),
+        ...(anchorKey ? { anchorKey } : {}),
       });
       return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
     }
@@ -91,6 +113,7 @@ export async function POST(req: Request): Promise<Response> {
       isAnswer: body.isAnswer === true,
       ...(sessionId ? { sessionId } : {}),
       ...(seedGateId && !sessionId ? { seedGateId } : {}),
+      ...(anchorKey ? { anchorKey } : {}),
     });
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {

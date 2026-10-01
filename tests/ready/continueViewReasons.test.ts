@@ -1,6 +1,11 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import {
+  agentInstanceRunService,
+  type AgentRunEndOutcome,
+} from '@/lib/services/agentInstanceRunService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
+import { hostedRunService, type HostedRunEndOutcome } from '@/lib/services/hostedRunService';
 import { endedHow, workItemContinueService } from '@/lib/services/workItemContinueService';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -17,6 +22,10 @@ beforeEach(async () => {
   await truncateAuthTables();
 });
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
@@ -25,7 +34,7 @@ afterAll(async () => {
 type Ending = {
   status: 'running' | 'failed' | 'cancelled' | 'timed_out';
   stopReason: 'interrupted' | 'abandoned' | 'halted' | null;
-  origin: 'local' | 'hosted';
+  origin: 'local' | 'hosted' | 'instance';
   log?: string;
 };
 
@@ -89,12 +98,85 @@ describe('the died reason (the marker’s first line)', () => {
       'stalled',
     ],
     [
+      // The lapse sweep and the continue takeover close with this line and no `end`.
+      'a hosted run closed as lapsed (abandoned, no end on its log line)',
+      {
+        status: 'timed_out',
+        stopReason: 'abandoned',
+        origin: 'hosted',
+        log: 'no heartbeat since 2026-09-30T10:00:00.000Z',
+      },
+      'lapsed',
+    ],
+    [
       'a local timed_out with no reason',
       { status: 'timed_out', stopReason: null, origin: 'local' },
       'lapsed',
     ],
   ])('%s → %s', async (_label, ending, reason) => {
     const view = await viewAfter(ending);
+    expect(view).toMatchObject({ state: 'died', reason });
+  });
+});
+
+/**
+ * A run closed by its REAL end path — the rows `endHostedRun` and the agent end
+ * path actually write (MOTIR-7061), rather than a hand-built log line: both close a
+ * timeout `abandoned`, and the hosted one names its end only in `data.end`.
+ */
+async function viewAfterEnd(
+  end:
+    | { origin: 'hosted'; outcome: HostedRunEndOutcome }
+    | { origin: 'instance'; outcome: AgentRunEndOutcome },
+) {
+  const fx = await makeWorkItemFixture();
+  const card = await createTestWorkItem(fx, { kind: 'task', title: 'a card whose run ended' });
+  await setStatus(card.id, 'in_progress');
+  const { run } = await dispatchRunService.open(
+    {
+      projectKey: fx.projectIdentifier,
+      command: 'run',
+      origin: end.origin === 'hosted' ? 'hosted' : 'local',
+      cards: [{ key: card.identifier, disposition: 'queued' }],
+    },
+    fx.ctx,
+  );
+  if (end.origin === 'hosted') {
+    // The revocations call out; every one of them answering "failed" is still an end.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 503 })),
+    );
+    const ended = await hostedRunService.endHostedRun(run.id, end.outcome, 'the end detail');
+    expect(ended.closed).toBe(true);
+  } else {
+    // A run in an agent without the agent row: the reader keys on the origin alone.
+    await adminDb.dispatchRun.update({ where: { id: run.id }, data: { origin: 'instance' } });
+    const ended = await agentInstanceRunService.end(run.id, end.outcome, 'the end detail');
+    expect(ended.closed).toBe(true);
+  }
+  return workItemContinueService.getContinueView(card.id, fx.ctx);
+}
+
+describe('the died reason of a run closed by its real end path (MOTIR-7061)', () => {
+  it.each<[HostedRunEndOutcome, string]>([
+    ['backstop', 'backstop'],
+    ['stall', 'stalled'],
+    ['lost_supervision', 'lapsed'],
+    ['failed', 'failed'],
+    ['cancelled', 'interrupted'],
+  ])('a hosted run ended %s → %s', async (outcome, reason) => {
+    const view = await viewAfterEnd({ origin: 'hosted', outcome });
+    expect(view).toMatchObject({ state: 'died', reason });
+  });
+
+  it.each<[AgentRunEndOutcome, string]>([
+    ['backstop', 'backstop'],
+    ['stall', 'stalled'],
+    ['lapsed', 'lapsed'],
+    ['failed', 'failed'],
+  ])('a run in an agent ended %s → %s', async (outcome, reason) => {
+    const view = await viewAfterEnd({ origin: 'instance', outcome });
     expect(view).toMatchObject({ state: 'died', reason });
   });
 });
@@ -110,6 +192,7 @@ describe('endedHow (the CONTINUE prompt’s sentence)', () => {
     [{ status: 'failed', stopReason: null, origin: 'local' }, /exited with an error/],
     [{ status: 'cancelled', stopReason: null, origin: 'local' }, /was cancelled/],
     [{ status: 'timed_out', stopReason: null, origin: 'hosted' }, /hosted run stalled/],
+    [{ status: 'timed_out', stopReason: null, origin: 'instance' }, /run in the agent stalled/],
     [{ status: 'timed_out', stopReason: null, origin: 'local' }, /ended timed_out/],
   ])('%o', (ending, sentence) => {
     expect(endedHow(ending)).toMatch(sentence);

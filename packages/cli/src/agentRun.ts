@@ -168,7 +168,10 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
   const dir = (opts.tempDirFactory ?? defaultTempDir)();
   const promptFile = join(dir, 'prompt.md');
   const reportFile = join(dir, 'agent-report.json');
-  writeFileSync(promptFile, opts.prompt, { mode: PROMPT_FILE_MODE });
+  // An agent-mode launcher's addendum (MOTIR-7024) rides on every channel, so
+  // the file, stdin and argv all carry the same words.
+  const prompt = opts.prompt + (opts.command.promptAddendum?.() ?? '');
+  writeFileSync(promptFile, prompt, { mode: PROMPT_FILE_MODE });
 
   // The DESIGN, before the spawn (MOTIR-5562). A throw is swallowed for the same
   // reason a `false` is honoured: fetching a design may never fail a dispatch.
@@ -186,10 +189,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
     const result = await new Promise<Omit<AgentRunResult, 'model'>>((resolve, reject) => {
       const tee = opts.onOutput;
       const promptOnStdin = opts.command.promptOnStdin !== false;
-      const args = [
-        ...opts.command.args,
-        ...(opts.command.promptArgs?.(opts.prompt, promptFile) ?? []),
-      ];
+      const args = [...opts.command.args, ...(opts.command.promptArgs?.(prompt, promptFile) ?? [])];
       const child = spawnFn(opts.command.binary, args, {
         cwd: opts.cwd,
         // stdin piped (we write the prompt); stdout/stderr inherited so the
@@ -252,7 +252,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
       const stdin = promptOnStdin ? child.stdin : null;
       if (stdin) {
         stdin.on('error', () => {});
-        stdin.end(opts.prompt);
+        stdin.end(prompt);
       }
 
       child.on('close', (code, signal) => {

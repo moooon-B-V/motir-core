@@ -374,8 +374,8 @@ export type CodeGraphRefreshData = CodeGraphIndexData;
  * that exists for a genuinely vanished tenant (MOTIR-1545). The result was NO
  * ledger row at all for the one job in the system that spends real money per
  * invocation. `null` is the honest value: the fleet is cross-tenant, the ledger's
- * `workspace_id` is nullable, and `system.ci-runner-reap` already lands
- * untenanted rows the same way.
+ * `workspace_id` is nullable, and `system.fleet-attribution` (which
+ * replaced `system.ci-runner-reap`) lands untenanted rows the same way.
  *
  * The type is the literal `null` rather than `string | null` ON PURPOSE — it is
  * what makes `''` (and any other string) a COMPILE error at the one call site
@@ -411,6 +411,37 @@ export interface HostedRunSuperviseData {
   /** The booted container, exactly as `hostedAgentContainerService.boot` returned it. */
   session: HostedAgentSession;
   /** `hosted-run:<dispatchRunId>` — one supervision per run, however often emitted. */
+  idempotencyKey: string;
+}
+
+/**
+ * The `agent-instance-run/launch` payload (Story MOTIR-6864 · MOTIR-7026,
+ * `docs/decisions/agent-instance-run.md` §4) — one per run started in a
+ * developer's agent, emitted by the start once the run is open and its cards
+ * claimed. The job waits for the agent to come up and runs the launcher.
+ *
+ * ⚠️ IT CARRIES NO SECRET: the run token is minted by the launch step itself and
+ * travels only on the exec's stdin (§2).
+ */
+export interface AgentInstanceRunLaunchData {
+  workspaceId: string;
+  /** The run — `DispatchRun.id`. */
+  dispatchRunId: string;
+  /** `agent-instance-run:<dispatchRunId>` — one launch per run, however often emitted. */
+  idempotencyKey: string;
+}
+
+/**
+ * The `agent-instance-run/supervise` payload (Story MOTIR-6864 · MOTIR-7027,
+ * `docs/decisions/agent-instance-run.md` §6) — one per run started in a
+ * developer's agent, emitted by the start beside the launch. The job polls the
+ * run each minute until it ends. It carries no secret.
+ */
+export interface AgentInstanceRunSuperviseData {
+  workspaceId: string;
+  /** The run — `DispatchRun.id`. */
+  dispatchRunId: string;
+  /** `agent-instance-run/supervise:<dispatchRunId>` — one supervision per run. */
   idempotencyKey: string;
 }
 
@@ -495,6 +526,9 @@ export interface JobEventDataMap {
   /** Monthly CI-minutes reconciliation (Story MOTIR-1775 · MOTIR-1896) — cron
    *  triggered, so it carries no payload beyond the scheduled envelope. */
   'system.ci-minutes-reconcile': SystemScheduledData;
+  /** The live CI charge (Story MOTIR-6906 · MOTIR-6910) — every debit period,
+   *  each live CI container's minutes are charged. Cron triggered. */
+  'system.ci-live-charge': SystemScheduledData;
   'system.ci-actions-gate-sweep': SystemScheduledData;
   /** The migrate-onboarding SWEEP lane — every transition of that state machine
    *  is observed only by an open browser tab, so this re-derives from durable
@@ -551,7 +585,7 @@ export interface JobEventDataMap {
    *  trigger, the per-intent boot, and the crash-backstop reaper. */
   'system.ci-runner-provision-sweep': SystemScheduledData;
   'system.ci-runner-boot': CiRunnerBootData;
-  'system.ci-runner-reap': SystemScheduledData;
+  'system.fleet-attribution': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   'system.code-graph-index': CodeGraphIndexData;
   'system.code-graph-refresh': CodeGraphRefreshData;
@@ -562,6 +596,10 @@ export interface JobEventDataMap {
   'hosted-run/supervise': HostedRunSuperviseData;
   /** One agent instance's idle timer (Story MOTIR-6860 · MOTIR-6873). */
   'agent-instance/idle-check': AgentInstanceIdleCheckData;
+  /** The launch of a card's run in a developer's agent (Story MOTIR-6864 · MOTIR-7026). */
+  'agent-instance-run/launch': AgentInstanceRunLaunchData;
+  /** The supervision of a card's run in a developer's agent (Story MOTIR-6864 · MOTIR-7027). */
+  'agent-instance-run/supervise': AgentInstanceRunSuperviseData;
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;
   'work-item/mentioned': WorkItemMentionedData;
@@ -585,6 +623,7 @@ export interface JobEventDataMap {
    *  mergeability of every open pull request that targets it, and withdraw the question
    *  over any that now conflict. Emitted by the push webhook after its own write. */
   'pull-request/base-moved': PullRequestBaseMovedData;
+  'pull-request/head-moved': PullRequestHeadMovedData;
   /** The monitor-issue reconciler's TICK (Story MOTIR-4929 · MOTIR-5581) — cron
    *  triggered and cross-tenant: it discovers every binding and fans out. */
   'system.monitor-issue-reconcile': SystemScheduledData;
@@ -651,6 +690,25 @@ export interface PullRequestBaseMovedData {
   /** The new head of that branch, when the delivery carried one. */
   baseHeadSha: string | null;
   /** `<repoId>:<baseHeadSha>` — a redelivered push for the same head enqueues nothing new. */
+  idempotencyKey: string;
+}
+
+/**
+ * The `pull-request/head-moved` event payload (MOTIR-7063) — one per `synchronize`. The
+ * base-branch push asks about every pull request on the base; a push to the pull
+ * request's OWN branch asks about that one, because a head pushed onto a base that has
+ * already moved past it conflicts with no event on the base at all.
+ */
+export interface PullRequestHeadMovedData {
+  /** The repository's tenant — `github_repo.workspace_id`. */
+  workspaceId: string;
+  /** The `github_pull_request` ROW id. */
+  pullRequestId: string;
+  /** The pull request's number on the host. */
+  number: number;
+  /** The head the push delivered — the one the pending reading is owed at. */
+  headSha: string;
+  /** `<pullRequestId>:<headSha>` — a redelivered push for the same head enqueues nothing new. */
   idempotencyKey: string;
 }
 

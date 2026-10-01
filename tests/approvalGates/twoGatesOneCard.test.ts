@@ -6,6 +6,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
 import { makeWorkWaitOn } from '@/tests/helpers/designWaits';
+import { hostAnswersCleanAt } from '../helpers/hostMergeability';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 
 // TWO GATES ON ONE CARD, THE DESIGN ONE PRIMARY (Story MOTIR-5652 · Subtask
@@ -311,6 +312,8 @@ describe('MOTIR-5663 — a withdrawal ASKS what the card should hold now', () =>
     });
     expect(await merge()).toEqual([['superseded', 'moooon/acme#31@sha-a']]);
 
+    // The host says the new head still merges (MOTIR-7063) — until then nobody is asked.
+    await hostAnswersCleanAt(s.workspace.id, 31, 'sha-b');
     await ci({ conclusion: 'success', headSha: 'sha-b', number: 31 });
     expect(await merge()).toEqual([
       ['superseded', 'moooon/acme#31@sha-a'],

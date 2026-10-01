@@ -31,6 +31,47 @@ describe('readAskOutcome — what it refuses to read', () => {
     ).toEqual({ intent: 'plan_change', answer: null, citations: [] });
   });
 
+  // MOTIR-7047 — the ADR's AMENDMENT 1: a third verdict, `debug`, redirected the
+  // same way, echoing the turn's anchor so core can forward it to `debug_bug`.
+  it('reads the DEBUG redirect as carrying nothing but a key-shaped anchor', () => {
+    expect(
+      readAskOutcome({
+        ask: { intent: 'debug', answer: 'stray', citations: ['ABC-1'], anchorKey: 'ABC-7' },
+      }),
+    ).toEqual({ intent: 'debug', answer: null, citations: [], anchorKey: 'ABC-7' });
+    // No anchor on the turn → null, never absent-and-guessed.
+    expect(readAskOutcome({ ask: { intent: 'debug', answer: null, citations: [] } })).toEqual({
+      intent: 'debug',
+      answer: null,
+      citations: [],
+      anchorKey: null,
+    });
+  });
+
+  it('drops an echoed anchor that is not EXACTLY a key — it never trims one into shape', () => {
+    for (const anchorKey of [' ABC-7', 'ABC-7 and more', 'abc-7', 'ABC', 7, {}, ['ABC-7'], '']) {
+      expect(readAskOutcome({ ask: { intent: 'debug', anchorKey } })).toEqual({
+        intent: 'debug',
+        answer: null,
+        citations: [],
+        anchorKey: null,
+      });
+    }
+  });
+
+  it('never reads an anchor off an `ask` or `plan_change` verdict', () => {
+    expect(readAskOutcome({ ask: { intent: 'ask', answer: 'hi', anchorKey: 'ABC-7' } })).toEqual({
+      intent: 'ask',
+      answer: 'hi',
+      citations: [],
+    });
+    expect(readAskOutcome({ ask: { intent: 'plan_change', anchorKey: 'ABC-7' } })).toEqual({
+      intent: 'plan_change',
+      answer: null,
+      citations: [],
+    });
+  });
+
   it('DEFAULTS an unrecognised intent to `ask` — never to a plan change', () => {
     // The expensive half of the asymmetry: an unparseable envelope must not turn
     // into a plan-edit job the person never asked for.

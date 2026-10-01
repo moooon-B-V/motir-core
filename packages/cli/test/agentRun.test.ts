@@ -323,3 +323,43 @@ describe('the injected spawn seam covers what a real child cannot show', () => {
     expect(await result).toEqual({ exitCode: 1, signal: null, model: null });
   });
 });
+
+describe('an agent-mode launcher (MOTIR-7024)', () => {
+  it('appends its addendum on every channel, and spawns with ITS environment and nothing wider', async () => {
+    const spawned: { args: string[]; env: NodeJS.ProcessEnv }[] = [];
+    let stdin = '';
+    const child = new EventEmitter() as EventEmitter & {
+      stdin: { on: () => void; end: (s: string) => void };
+    };
+    child.stdin = { on: () => undefined, end: (s: string) => (stdin = s) };
+    const result = runAgent({
+      command: {
+        ...parseAgentCommand('claude -p')!,
+        env: { PATH: '/bin', CLAUDE_CONFIG_DIR: '/h/.claude' },
+        promptArgs: (prompt) => [`ARG:${prompt}`],
+        promptAddendum: () => '\nADDENDUM',
+      },
+      prompt: PROMPT,
+      cwd: work,
+      env: { MOTIR_TOKEN: 'never-inherited' },
+      spawnFn: (_cmd, args, opts) => {
+        spawned.push({ args, env: opts.env as NodeJS.ProcessEnv });
+        return child as never;
+      },
+    });
+    child.emit('close', 0, null);
+    await result;
+
+    expect(stdin).toBe(`${PROMPT}\nADDENDUM`);
+    expect(spawned[0]!.args).toEqual(['-p', `ARG:${PROMPT}\nADDENDUM`]);
+    const env = spawned[0]!.env;
+    expect(env['MOTIR_TOKEN']).toBeUndefined();
+    expect(env['CLAUDE_CONFIG_DIR']).toBe('/h/.claude');
+    expect(Object.keys(env).sort()).toEqual([
+      'CLAUDE_CONFIG_DIR',
+      'MOTIR_AGENT_REPORT',
+      'MOTIR_PROMPT_FILE',
+      'PATH',
+    ]);
+  });
+});

@@ -24,6 +24,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
@@ -684,10 +685,10 @@ describe('the ADMISSION GATE is consulted BEFORE anything is spent (MOTIR-1922)'
   // AFTER the JIT config is minted or the container is booted has already cost
   // the money it exists to save. So the assertion is not just the outcome — it
   // is that GitHub was never called and the orchestrator never provisioned.
-  it('a fleet at its ceiling leaves the job QUEUED, with no mint and no container', async () => {
-    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '1');
+  it('an org at its pool leaves the job QUEUED, with no mint and no container', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORG_MAX_IN_FLIGHT', '1');
     const fx = await seedTenant();
-    // One runner already in flight — the fleet is full.
+    // One runner already in flight — the org's pool is full.
     await adminDb.ciRunnerProvisioningIntent.update({
       where: { id: (await seedIntent(fx, { jobId: '90001' })).id },
       data: { status: 'running' },
@@ -696,7 +697,7 @@ describe('the ADMISSION GATE is consulted BEFORE anything is spent (MOTIR-1922)'
 
     const result = await ciRunnerBootService.runIntent(queued.id, FAST);
 
-    expect(result).toMatchObject({ outcome: 'gate_deferred', reason: 'fleet_ceiling' });
+    expect(result).toMatchObject({ outcome: 'gate_deferred', reason: 'org_pool' });
     expect(mintCalls()).toHaveLength(0);
     expect(fakeOrchestrator.provisioned).toHaveLength(0);
     // PENDING, so the next sweep retries it — queued, never failed.
@@ -716,6 +717,10 @@ describe('the ADMISSION GATE is consulted BEFORE anything is spent (MOTIR-1922)'
 });
 
 describe('the REAPER — the backstop for the orchestrator crashing mid-flight', () => {
+  // The age cutoff is gone (MOTIR-6925, `fleet-per-org-pool.md` §6): the
+  // attribution reconciler kills a CI container once its INTENT's own end —
+  // boot + the job timeout + 10 minutes — is a grace behind it, and
+  // `reapContainer` settles what it kills.
   it('finds and destroys an orphan the in-process path missed, and settles its intent', async () => {
     // ⚠️ THE CRASH IS SIMULATED FAITHFULLY: the container is booted and recorded,
     // and then the supervising call simply never happens — which is exactly what
@@ -740,14 +745,17 @@ describe('the REAPER — the backstop for the orchestrator crashing mid-flight',
     });
     expect(inFlight.status).toBe('running');
 
-    // Age the container past the cutoff and sweep.
-    fakeOrchestrator.backdate(orphanId, new Date(Date.now() - 3 * 3_600_000));
+    // Move the clock past the intent's end and the grace, and reconcile.
     const charge = vi.spyOn(hostedRunChargeService, 'chargeMachineTime');
-    const result = await ciRunnerBootService.reapOrphans({
-      olderThan: new Date(Date.now() - 3_600_000),
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const result = await fleetAttributionService.reconcile({
+      now: () => new Date(Date.now() + 3 * 3_600_000),
     });
 
-    expect(result.reaped).toBe(1);
+    expect(result).toMatchObject({
+      outcome: 'reconciled',
+      killed: [{ machineId: orphanId, reason: 'record_ended', workload: 'ci_runner' }],
+    });
     // A CI runner is metered, never CHARGED as a hosted run (MOTIR-6524 AC2).
     expect(charge).not.toHaveBeenCalled();
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
@@ -758,7 +766,7 @@ describe('the REAPER — the backstop for the orchestrator crashing mid-flight',
     expect(settled.teardownReason).toBe('reaped');
   });
 
-  it('leaves a container that is not yet old enough alone', async () => {
+  it('leaves a container whose intent has not ended alone', async () => {
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
     fakeOrchestrator.setBootBehaviour('hang');
@@ -768,10 +776,8 @@ describe('the REAPER — the backstop for the orchestrator crashing mid-flight',
     await ciRunnerBootService.runIntent(intent.id, FAST);
     vi.restoreAllMocks();
 
-    const result = await ciRunnerBootService.reapOrphans({
-      olderThan: new Date(Date.now() - 3_600_000),
-    });
-    expect(result.reaped).toBe(0);
+    const result = await fleetAttributionService.reconcile();
+    expect(result).toMatchObject({ outcome: 'reconciled', matched: 1, killed: [] });
     expect(fakeOrchestrator.liveContainerIds()).toHaveLength(1);
   });
 
@@ -791,9 +797,9 @@ describe('the REAPER — the backstop for the orchestrator crashing mid-flight',
       },
     });
 
-    const result = await ciRunnerBootService.reapOrphans();
+    const staleClaims = await ciRunnerBootService.sweepStaleClaims();
 
-    expect(result.staleClaims).toBe(1);
+    expect(staleClaims).toBe(1);
     expect(deleteRunnerCalls()).toHaveLength(1);
     const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
@@ -807,11 +813,15 @@ describe('the REAPER — the backstop for the orchestrator crashing mid-flight',
     vi.stubEnv('FLY_FLEET_API_TOKEN', '');
     vi.stubEnv('FLY_FLEET_APP', '');
     vi.stubEnv('MOTIR_RUNNER_IMAGE', '');
-    expect(await ciRunnerBootService.reapOrphans()).toEqual({
-      reaped: 0,
-      staleClaims: 0,
-      usages: [],
-    });
+    expect(await ciRunnerBootService.sweepStaleClaims()).toBe(0);
+    expect(
+      await ciRunnerBootService.reapContainer({
+        provider: 'fly',
+        id: 'machine-1',
+        region: 'iad',
+        createdAt: new Date(),
+      }),
+    ).toBe(false);
   });
 });
 
@@ -1177,12 +1187,12 @@ describe('the REAPER’s attribution resolver refuses what it cannot attribute',
     const fx = await seedTenant();
     const { handle } = await orphan(fx, { projectId: null });
 
-    const result = await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
+    await fleetAttributionService.reconcile({ now: () => new Date(Date.now() + 3 * 3_600_000) });
 
     // An orphan Motir cannot attribute is still an orphan that BILLS, so it is
     // destroyed anyway; a row attributed to nobody would be worse than none.
     expect(fakeOrchestrator.liveContainerIds()).not.toContain(handle.id);
-    expect(result.reaped).toBe(0);
+    expect(await adminDb.ciContainerUsage.count()).toBe(0);
   });
 
   it('DESTROYS an orphan whose job id is malformed, and emits no cost row', async () => {
@@ -1190,19 +1200,17 @@ describe('the REAPER’s attribution resolver refuses what it cannot attribute',
     const fx = await seedTenant();
     const { handle } = await orphan(fx, { jobId: 'not-a-number' });
 
-    const result = await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
+    await fleetAttributionService.reconcile({ now: () => new Date(Date.now() + 3 * 3_600_000) });
 
     expect(fakeOrchestrator.liveContainerIds()).not.toContain(handle.id);
-    expect(result.reaped).toBe(0);
+    expect(await adminDb.ciContainerUsage.count()).toBe(0);
   });
 
   it('reaps an orphan with NO registered runner without calling GitHub', async () => {
     const fx = await seedTenant();
-    await orphan(fx, { githubRunnerId: null });
+    const { handle } = await orphan(fx, { githubRunnerId: null });
 
-    const result = await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
-
-    expect(result.reaped).toBe(1);
+    expect(await ciRunnerBootService.reapContainer(handle)).toBe(true);
     // Nothing to de-register: the crash happened before the mint, so there is no
     // runner id to name and no call to make.
     expect(deleteRunnerCalls()).toEqual([]);
@@ -1210,7 +1218,7 @@ describe('the REAPER’s attribution resolver refuses what it cannot attribute',
 
   it('settles nothing when the intent vanishes between the reap and the write-back', async () => {
     const fx = await seedTenant();
-    await orphan(fx);
+    const { handle } = await orphan(fx);
     // The row is deleted (a tenant teardown, a cascade) after the container was
     // destroyed. The sweep must not throw over a row that is already gone.
     const findByContainerId = vi.spyOn(ciRunnerProvisioningIntentRepository, 'findByContainerId');
@@ -1226,9 +1234,7 @@ describe('the REAPER’s attribution resolver refuses what it cannot attribute',
           });
     });
 
-    const result = await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
-
-    expect(result.reaped).toBe(1);
+    expect(await ciRunnerBootService.reapContainer(handle)).toBe(true);
     expect(deleteRunnerCalls()).toEqual([]);
   });
 });

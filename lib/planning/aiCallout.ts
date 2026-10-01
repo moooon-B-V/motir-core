@@ -31,6 +31,11 @@
 // "Ask about this project" (MOTIR-1343) / "Help with a task" (MOTIR-1344) each
 // arrive as a SINGLE ENTRY below plus their two `shell.aiCallout.*` message
 // keys — no change to `AiCalloutMenu` or to the orb.
+//
+// "Debug with Motir AI" (MOTIR-7050) is the third row and has no gate of its
+// own: the orb is mounted only where `showPlanWithAi` holds (Motir AI
+// configured, an active project, `ai:plan`), which is exactly who may send a
+// debug turn — so it is never dimmed and never absent on its own.
 
 /**
  * The icon a row's tile carries. A NAME, not a component, so this module stays
@@ -38,7 +43,7 @@
  * exhaustive record. The three names the design reserves are all mapped
  * already, so adding either future action needs no component change.
  */
-export type AiCalloutIcon = 'sparkles' | 'message-circle-question' | 'wrench';
+export type AiCalloutIcon = 'sparkles' | 'message-circle-question' | 'bug' | 'wrench';
 
 /**
  * One row of the callout menu. `titleKey` / `descriptionKey` are resolved
@@ -53,6 +58,15 @@ export interface AiCalloutAction {
   descriptionKey: string;
   /** Where the row goes. The SAME href for every action — see the note above. */
   href: string;
+  /**
+   * TEXT the row puts in the composer, UNSENT (MOTIR-7050) — a `shell` key, or
+   * absent for a row that opens the surface as it is. It is a pre-fill and never
+   * a send, and never a mode: the href stays the one every row shares, the words
+   * are Motir's own template for the person to finish, and what the turn turns
+   * out to be is still the server's reading of what they send
+   * (`conversation-turn-intent.md` §5, AMENDMENT 1 · A1.3).
+   */
+  prefillKey?: string;
 }
 
 /**
@@ -91,6 +105,18 @@ export function aiCalloutActions(href: string): AiCalloutAction[] {
       // server — so this row advertises a capability, it does not choose one.
       href,
     },
-    // MOTIR-1344 — { id: 'help', icon: 'wrench', … href }
+    {
+      id: 'debug',
+      icon: 'bug',
+      titleKey: 'aiCallout.actions.debug.title',
+      descriptionKey: 'aiCallout.actions.debug.description',
+      // The SAME `href` again (MOTIR-7050). The row's one difference is the
+      // two-line template it leaves in the composer — "what happens / what should
+      // happen instead" — which the person fills in and sends themselves. It
+      // sends nothing: the report widget's accept is the only seeded SEND (A1.3).
+      prefillKey: 'aiCallout.actions.debug.prefill',
+      href,
+    },
+    // MOTIR-1344 — { id: 'help', icon: 'wrench', … href } takes position 4.
   ];
 }

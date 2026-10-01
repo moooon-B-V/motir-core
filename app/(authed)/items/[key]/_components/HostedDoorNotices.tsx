@@ -20,6 +20,7 @@ import { useHostedRun, type HostedRunRefusal } from './HostedRunProvider';
 
 export function HostedDoorNotices() {
   const t = useTranslations('runs.hosted');
+  const tStart = useTranslations('runs.start');
   const door = useHostedRun();
   if (!door) return null;
   // While a run is live the header holds Cancel run (or nothing): the door's own
@@ -48,15 +49,19 @@ export function HostedDoorNotices() {
         </Notice>
       ) : null}
       {!door.ready ? (
+        // ONE line for both options when Send to my agent sits beside Run
+        // (MOTIR-7022 revision 2, panel 4); Run's own when it is alone.
         <p className="font-sans text-sm text-(--el-text-secondary)" data-testid="hosted-not-ready">
-          {t('notReady', { count: door.openBlockers })}
+          {door.agentDoor
+            ? tStart('notReady', { count: door.openBlockers })
+            : t('notReady', { count: door.openBlockers })}
         </p>
       ) : null}
     </div>
   );
 }
 
-function RefusalNotice({ refusal }: { refusal: HostedRunRefusal }) {
+export function RefusalNotice({ refusal }: { refusal: HostedRunRefusal }) {
   const t = useTranslations('runs.hosted.refused');
   if (refusal.kind === 'notWritable') {
     const count = refusal.repositories.length;
@@ -105,7 +110,7 @@ function RefusalNotice({ refusal }: { refusal: HostedRunRefusal }) {
 }
 
 /** The area's `notice warn` — a warning, not a danger: nothing failed, nothing was spent. */
-function Notice({ testId, children }: { testId: string; children: ReactNode }) {
+export function Notice({ testId, children }: { testId: string; children: ReactNode }) {
   return (
     <div
       role="status"
