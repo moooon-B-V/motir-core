@@ -123,6 +123,9 @@ export interface FlyMachine {
   /** Motir's own tags on the machine, used by the reaper to recognise its own
    *  containers without consulting in-process state. */
   readonly metadata: Readonly<Record<string, string>>;
+  /** The image the machine's config names (`config.image`); undefined when the
+   *  body carried none. Read by the image update's settle (MOTIR-6950). */
+  readonly image?: string;
   /** Fly's `events` array — "provide[s] log of what's happened with this
    *  Machine", each entry timestamped. The source of PROVIDER-ATTESTED start and
    *  stop instants (§5), which is what makes the monthly reconciliation an audit
@@ -307,6 +310,9 @@ export function toFlyMachine(body: unknown): FlyMachine | null {
     createdAt: parseFlyDate(record?.['created_at']),
     updatedAt: parseFlyDate(record?.['updated_at']),
     metadata: stringMap(asRecord(record?.['config'])?.['metadata']),
+    ...(typeof asRecord(record?.['config'])?.['image'] === 'string'
+      ? { image: asRecord(record?.['config'])?.['image'] as string }
+      : {}),
     events,
   };
 }

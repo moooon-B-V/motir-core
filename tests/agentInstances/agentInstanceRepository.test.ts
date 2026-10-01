@@ -127,13 +127,18 @@ describe('the §4 transition table', () => {
         'waking→failed',
         'failed→waking',
         'failed→deleting',
+        // agent-image-update.md Q6 — the update's own four.
+        'running→updating',
+        'hibernated→updating',
+        'updating→running',
+        'updating→failed',
       ].sort(),
     );
   });
 
   it('derives the prior-state set a guarded update names', () => {
     expect(statesThatMayEnter('deleting').sort()).toEqual(['failed', 'hibernated', 'running']);
-    expect(statesThatMayEnter('running').sort()).toEqual(['starting', 'waking']);
+    expect(statesThatMayEnter('running').sort()).toEqual(['starting', 'updating', 'waking']);
     expect(statesThatMayEnter('starting')).toEqual([]);
   });
 
@@ -153,7 +158,7 @@ describe('agentInstanceRepository', () => {
     const row = await createInstance(f);
     expect(row.state).toBe('starting');
     expect(row.deletedAt).toBeNull();
-    const dto = toAgentInstanceDto(row);
+    const dto = toAgentInstanceDto(row, { imageVersion: '0.9.0', update: null });
     expect(dto).toMatchObject({
       name: 'yue-claude',
       profileId: 'claude',

@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import {
   ArrowLeft,
   CircleAlert,
+  CircleArrowUp,
   CircleCheck,
   CircleHelp,
   Eye,
@@ -68,6 +69,8 @@ export interface AgentPanelActions {
   onClose: () => void;
   onHibernate: (agent: AgentInstanceListItemDto) => void;
   onDelete: (agent: AgentInstanceListItemDto) => void;
+  /** Open the Update confirmation for this agent (MOTIR-6953). */
+  onUpdate: (agent: AgentInstanceListItemDto) => void;
   /** Call the Wake route and re-read the list; the refusal to show, or null. */
   onWake: (agent: AgentInstanceListItemDto) => Promise<AgentRefusal | null>;
   /** Re-read the list (the agent's state moved under the panel). */
@@ -275,6 +278,7 @@ function OpenAgent({
     },
     term,
     sink,
+    onUpdate: () => actions.onUpdate(agent),
   });
 
   const run = useRunView({ projectKey, agent, term, onRefresh: actions.onRefresh });
@@ -290,6 +294,7 @@ function OpenAgent({
         onClose={actions.onClose}
         onHibernate={() => actions.onHibernate(agent)}
         onDelete={() => actions.onDelete(agent)}
+        onUpdate={() => actions.onUpdate(agent)}
       />
       {refusal ? (
         <div className="border-b border-(--el-border-soft) p-(--spacing-card-padding)">
@@ -603,6 +608,7 @@ function useTerminalArea({
   newShell,
   term,
   sink,
+  onUpdate,
 }: {
   agent: AgentInstanceListItemDto;
   hasTerminal: boolean;
@@ -614,6 +620,8 @@ function useTerminalArea({
   newShell: () => void;
   term: ReturnType<typeof useAgentTerminal>;
   sink: React.RefObject<TerminalSink | null>;
+  /** Open the Update confirmation — the image-too-old face's way out (MOTIR-6953). */
+  onUpdate: () => void;
 }): { word: string; dot: Dot; strip: ReactNode; body: ReactNode } {
   const t = useTranslations('myAgents');
   const conn: TerminalConn = term.conn;
@@ -646,6 +654,22 @@ function useTerminalArea({
         dot: 'busy',
         strip: null,
         body: <WakingFace />,
+      };
+    case 'updating':
+      // The update delta, panel 4: the machine reboots onto the new image (or back);
+      // the terminal reconnects when the agent is running again.
+      return {
+        word: t('panel.conn.reconnecting'),
+        dot: 'busy',
+        strip: null,
+        body: (
+          <Face
+            icon={<LoaderCircle className={FACE_ICON} aria-hidden="true" />}
+            title={t('update.updating.title', { to: agent.pendingImageVersion ?? '' })}
+          >
+            <span>{t('update.updating.body')}</span>
+          </Face>
+        ),
       };
     case 'hibernating':
       return {
@@ -724,7 +748,19 @@ function useTerminalArea({
           icon={<Package className={FACE_ICON} aria-hidden="true" />}
           title={t('panel.noTerminal.title')}
         >
-          <span className="max-w-[28rem]">{t('panel.noTerminal.body')}</span>
+          {agent.update && agent.update !== 'unknown' ? (
+            // The update delta, panel 8: the way out is the update, where one is offered.
+            <>
+              <span className="max-w-[28rem]">
+                {t('update.imageTooOld.body', { to: agent.update.version })}
+              </span>
+              <Button size="sm" leftIcon={<CircleArrowUp aria-hidden="true" />} onClick={onUpdate}>
+                {t('update.actionTo', { to: agent.update.version })}
+              </Button>
+            </>
+          ) : (
+            <span className="max-w-[28rem]">{t('panel.noTerminal.body')}</span>
+          )}
         </Face>
       ),
     };

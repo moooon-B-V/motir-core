@@ -216,6 +216,12 @@ process.env['MOTIR_FAKE_CONTAINER_STATE_PATH'] ??= path.resolve(
 process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH'] ??= path.resolve(
   'out/playwright-output-acceptance/.fake-persistent.json',
 );
+// Story MOTIR-6862 · MOTIR-6955 — the published-image catalog's fake answers (the
+// newest version per profile, and "could not check"), in one file the spec writes
+// and the webServer reads on every list, so a release can be "published" mid-test.
+process.env['MOTIR_FAKE_IMAGE_CATALOG_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-image-catalog.json',
+);
 // The stall watchdog's test-only config seam (`hostedRunStallWindowMs`,
 // `lib/hostedRuns/limits.ts`) — shortened from the real 15 minutes so the
 // "stalled" case can run in this lane at all. Read directly by whichever

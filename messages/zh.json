@@ -8914,7 +8914,8 @@
       "hibernated": "已休眠",
       "waking": "唤醒中",
       "failed": "失败",
-      "deleting": "删除中"
+      "deleting": "删除中",
+      "updating": "更新中"
     },
     "progress": {
       "starting": "正在启动——把项目的仓库克隆到主目录",
@@ -9070,6 +9071,7 @@
         "offWhy": "有运行正在这个智能体中进行时，休眠和删除不可用——请先取消该运行。",
         "refusedHibernate": "{name} 正在运行 <link>{key}</link>。请先在工作项上取消该运行，然后再让它休眠。",
         "refusedDelete": "{name} 正在运行 <link>{key}</link>。请先在工作项上取消该运行，然后再删除它。",
+        "refusedUpdate": "{name} 正在运行 <link>{key}</link>。请先在工作项上取消该运行，然后再更新它。",
         "sessions": {
           "label": "终端会话",
           "shell": "你的 shell",
@@ -9082,6 +9084,39 @@
           "endedFailed": "运行的会话已结束——运行失败。目前的工作在运行的分支上。"
         },
         "backToShell": "回到你的 shell"
+      }
+    },
+    "update": {
+      "available": "可更新 → {to}",
+      "unknown": "无法检查更新",
+      "nextWake": "下次唤醒时更新到 {to}",
+      "earlierBuild": "较早的版本",
+      "action": "更新",
+      "actionTo": "更新到 {to}",
+      "confirm": {
+        "title": "将 {name} 更新到 {to}？",
+        "introRunning": "{agent} {from} → {to}。智能体将以新版本重启，大约需要一分钟。以下内容会保留：",
+        "introHibernated": "{agent} {from} → {to}。它会保持休眠，下次唤醒时使用新版本。以下内容会保留：",
+        "keep1": "主目录及其中的所有文件，包括克隆的仓库；",
+        "keep2": "编码智能体的登录状态；",
+        "keep3": "聊天会话。",
+        "rollback": "如果新版本无法启动，智能体会回到 {from} 并告诉你原因。",
+        "rollbackWake": "如果新版本在那次唤醒时无法启动，智能体会回到 {from} 并告诉你原因。",
+        "notNow": "暂不",
+        "running": "更新并重启",
+        "hibernated": "下次唤醒时更新"
+      },
+      "updating": {
+        "title": "正在更新到 {to}",
+        "body": "智能体正在以新版本重启。你的主目录和登录状态保持不变。"
+      },
+      "imageTooOld": {
+        "body": "它基于终端出现之前的旧镜像创建。更新到 {to} 即可使用终端，主目录和登录状态都会保留。"
+      },
+      "refused": {
+        "upToDate": "该智能体已经是最新版本（{version}）。",
+        "state": "该智能体当前{state}，暂时无法更新。",
+        "unknown": "Motir 暂时无法检查新版本。请几分钟后重试。"
       }
     }
   },

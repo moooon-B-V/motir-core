@@ -34,11 +34,37 @@ export interface AgentInstanceHandleColumns {
 }
 
 /** What a guarded transition may write beside the new state. */
+/** The image-update columns a patch carries, only where the patch names them. */
+function imagePatch(patch: AgentInstanceTransitionPatch): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of [
+    'imageDigest',
+    'imageVersion',
+    'targetImageDigest',
+    'targetImageVersion',
+    'updateFailureReason',
+    'updateFailedAt',
+  ] as const) {
+    if (patch[key] !== undefined) out[key] = patch[key];
+  }
+  return out;
+}
+
 export interface AgentInstanceTransitionPatch {
   /** `failed`'s reason in words; `null` clears it (a later wake). */
   failureReason?: string | null;
   /** Bump the idle signal in the same write (create and wake do). */
   lastActivityAt?: Date;
+  /**
+   * The image-update fields (`agent-image-update.md` Q6, MOTIR-6952), written in
+   * the same guarded move as the state they belong to. `null` clears.
+   */
+  imageDigest?: string;
+  imageVersion?: string | null;
+  targetImageDigest?: string | null;
+  targetImageVersion?: string | null;
+  updateFailureReason?: string | null;
+  updateFailedAt?: Date | null;
 }
 
 /** One page of the owner's list. */
@@ -52,6 +78,15 @@ export interface AgentInstanceOwnerPage {
 
 /** A live row — `deletedAt IS NULL` — the only rows any list or owner read returns. */
 const LIVE = { deletedAt: null } as const;
+
+/**
+ * A probe's answer lands only while the row still runs that digest — or is
+ * updating TO it (`agent-image-update.md` Q3): the update's liveness check reads
+ * the new image's terminal server and run launcher before `imageDigest` moves.
+ */
+function pinsOrTargets(digest: string) {
+  return { OR: [{ imageDigest: digest }, { targetImageDigest: digest }] };
+}
 
 export const agentInstanceRepository = {
   /** Insert an instance at `starting`. `tx` required — a write. */
@@ -133,7 +168,26 @@ export const agentInstanceRepository = {
         stateChangedAt: at,
         ...(patch.failureReason !== undefined ? { failureReason: patch.failureReason } : {}),
         ...(patch.lastActivityAt ? { lastActivityAt: patch.lastActivityAt } : {}),
+        ...imagePatch(patch),
       },
+    });
+    return result.count;
+  },
+
+  /**
+   * Write image-update fields WITHOUT a state move, guarded on the state the
+   * caller read (MOTIR-6952): Update on a hibernated agent pins its target, and a
+   * rollback records its reason while the agent stays `updating`. `tx` required.
+   */
+  async patchImage(
+    id: string,
+    inStates: readonly AgentInstanceState[],
+    patch: AgentInstanceTransitionPatch,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.agentInstance.updateMany({
+      where: { id, state: { in: [...inStates] }, ...LIVE },
+      data: imagePatch(patch),
     });
     return result.count;
   },
@@ -180,9 +234,9 @@ export const agentInstanceRepository = {
 
   /**
    * Record the terminal-server probe (`agent-terminal.md` Q8): whether the image
-   * `digest` serves a terminal. Guarded on the digest the row still pins, so a
-   * probe that raced an image move can never stamp the new digest with the old
-   * image's answer. `tx` required.
+   * `digest` serves a terminal. Guarded on the digest the row still pins (or is
+   * updating to — {@link pinsOrTargets}), so a probe that raced an image move can
+   * never stamp the new digest with the old image's answer. `tx` required.
    */
   async recordTerminalServer(
     id: string,
@@ -190,7 +244,7 @@ export const agentInstanceRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const result = await tx.agentInstance.updateMany({
-      where: { id, imageDigest: probe.digest, ...LIVE },
+      where: { id, ...pinsOrTargets(probe.digest), ...LIVE },
       data: { terminalServer: probe.terminalServer, terminalServerDigest: probe.digest },
     });
     return result.count;
@@ -207,7 +261,7 @@ export const agentInstanceRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const result = await tx.agentInstance.updateMany({
-      where: { id, imageDigest: probe.digest, ...LIVE },
+      where: { id, ...pinsOrTargets(probe.digest), ...LIVE },
       data: { runLauncher: probe.runLauncher, runLauncherDigest: probe.digest },
     });
     return result.count;

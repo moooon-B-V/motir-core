@@ -11882,6 +11882,9 @@ enum AgentInstanceState {
   waking
   failed
   deleting
+  /// Moving to a newer image on the same machine and volume, or rolling back
+  /// from one (`agent-image-update.md` Q6, MOTIR-6952). Holds its slot.
+  updating
 
   @@map("agent_instance_state")
 }
@@ -11961,8 +11964,23 @@ model AgentInstance {
   profileId   String @map("profile_id")
   /// The moving tag the digest was resolved from, for display.
   imageTag    String @map("image_tag")
-  /// The image DIGEST the instance boots, pinned at create (§1).
+  /// The image DIGEST the instance boots, pinned at create (§1). It changes only
+  /// when an update's new image passes its liveness check, so it always names a
+  /// digest that has run on this agent (`agent-image-update.md` Q6).
   imageDigest String @map("image_digest")
+  /// The `x.y.z` of `imageDigest` (Q1, Q6): written at create and by a successful
+  /// update; null on an agent created before versions were recorded.
+  imageVersion String? @map("image_version")
+  /// The digest Update pinned (Q6). With `hibernated`, an update waiting for the
+  /// next wake; with `updating`, the image being moved to. Cleared when it settles.
+  targetImageDigest  String? @map("target_image_digest")
+  /// The version of `targetImageDigest`; set and cleared with it.
+  targetImageVersion String? @map("target_image_version")
+  /// The last update's failure, in words (Q4): set on a rollback (or a failed
+  /// one); cleared at the next Update press and when a move succeeds.
+  updateFailureReason String? @map("update_failure_reason")
+  /// When the last update failed — and, while `updating`, when its rollback began.
+  updateFailedAt     DateTime? @map("update_failed_at")
 
   /// The persistent handle `provisionPersistent` returns (§1, §7). Null until
   /// the provision call answers; the region is fixed at create.

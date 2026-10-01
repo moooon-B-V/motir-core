@@ -876,3 +876,149 @@ describe('the terminal machine config (agent-terminal.md Q2–Q4 · MOTIR-6939)'
     expect(calls).toEqual([]);
   });
 });
+
+describe('moveImage — an agent moved to a newer image on the same machine and volume (MOTIR-6950)', () => {
+  const NEW_IMAGE = 'ghcr.io/moooon-b-v/motir-sandbox@sha256:' + 'c'.repeat(64);
+  /** A machine as MOTIR-6939 leaves it: the terminal process, service, env and stamp. */
+  const CURRENT_CONFIG = {
+    image: SPEC.image,
+    guest: { cpu_kind: 'performance', cpus: 2, memory_mb: 8192 },
+    env: { MOTIR_INSTANCE_ID: 'cmInstance1', MOTIR_TERMINAL_KEY: 'derived-key' },
+    init: { cmd: TERMINAL.command },
+    services: [FLY_SERVICE],
+    metadata: {
+      [INSTANCE_METADATA_KEY]: 'cmInstance1',
+      motir_org_id: ORG,
+      [MACHINE_CONFIG_METADATA_KEY]: '1',
+      [TERMINAL_KEY_ID_METADATA_KEY]: 'kid-1',
+    },
+    mounts: [{ volume: 'vol_1', path: '/home/node', name: 'home_x', size_gb: 10 }],
+    auto_destroy: false,
+    restart: { policy: 'on-failure' },
+    // A field Motir does not model: a read-modify-write keeps it.
+    dns: { skip_registration: false },
+  };
+
+  function machineHandler(state: string, config: Record<string, unknown> | null = CURRENT_CONFIG) {
+    return (call: Call) => {
+      if (call.method === 'GET' && call.url === `${API}/apps/${APP}/machines/m-1`)
+        return config
+          ? json(200, { ...flyMachine(state), version: 'ver-9', config })
+          : json(404, { error: 'not found' });
+      if (call.method === 'POST' && call.url === `${API}/apps/${APP}/machines/m-1`)
+        return json(200, flyMachine(state));
+      return json(500, { error: 'unexpected' });
+    };
+  }
+
+  it('moves a RUNNING machine with ONE update: only config.image changes, and the launch is not skipped', async () => {
+    handler = machineHandler('started');
+    await flyPersistentOrchestrator.moveImage(HANDLE, NEW_IMAGE, { launch: true });
+    expect(calls.map((c) => `${c.method} ${c.url.replace(API, '')}`)).toEqual([
+      `GET /apps/${APP}/machines/m-1`,
+      `POST /apps/${APP}/machines/m-1`,
+    ]);
+    const update = calls[1]!.body!;
+    expect(update['config']).toEqual({ ...CURRENT_CONFIG, image: NEW_IMAGE });
+    expect(update).not.toHaveProperty('skip_launch');
+    expect(update['current_version']).toBe('ver-9');
+    // Every field but the image is byte-identical to what Fly returned.
+    const sent = { ...(update['config'] as Record<string, unknown>) };
+    delete sent['image'];
+    const read: Record<string, unknown> = { ...CURRENT_CONFIG };
+    delete read['image'];
+    expect(JSON.stringify(sent)).toBe(JSON.stringify(read));
+    expect(calls.some((c) => c.url.endsWith('/start'))).toBe(false);
+  });
+
+  it('moves a STOPPED machine with the same single update and skip_launch, and never starts it', async () => {
+    handler = machineHandler('stopped');
+    await flyPersistentOrchestrator.moveImage(HANDLE, NEW_IMAGE, { launch: false });
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(1);
+    const update = calls[1]!.body!;
+    expect(update['skip_launch']).toBe(true);
+    expect((update['config'] as Record<string, unknown>)['mounts']).toEqual(CURRENT_CONFIG.mounts);
+    expect((update['config'] as Record<string, unknown>)['image']).toBe(NEW_IMAGE);
+    expect(calls.some((c) => c.url.endsWith('/start'))).toBe(false);
+  });
+
+  it('surfaces a refused update as OrchestratorApiError with the provider detail, and sends no second request', async () => {
+    const base = machineHandler('started');
+    handler = (call) =>
+      call.method === 'POST' && call.url.endsWith('/machines/m-1')
+        ? json(409, { error: 'version mismatch' })
+        : base(call);
+    const err = await flyPersistentOrchestrator
+      .moveImage(HANDLE, NEW_IMAGE, { launch: true })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(OrchestratorApiError);
+    expect((err as Error).message).toContain('version mismatch');
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(1);
+  });
+
+  it('throws for a machine that is gone, sending no update', async () => {
+    handler = machineHandler('started', null);
+    await expect(
+      flyPersistentOrchestrator.moveImage(HANDLE, NEW_IMAGE, { launch: true }),
+    ).rejects.toThrow(OrchestratorApiError);
+    expect(calls.map((c) => c.method)).toEqual(['GET']);
+  });
+
+  it('omits current_version when the machine reports none', async () => {
+    handler = (call) =>
+      call.method === 'GET'
+        ? json(200, { id: 'm-1', state: 'started', config: CURRENT_CONFIG })
+        : json(200, flyMachine('started'));
+    await flyPersistentOrchestrator.moveImage(HANDLE, NEW_IMAGE, { launch: true });
+    expect(calls[1]!.body).not.toHaveProperty('current_version');
+  });
+
+  it('describePersistent names the image the machine config carries, and null once it is gone', async () => {
+    handler = () => json(200, { ...flyMachine('started'), config: { image: NEW_IMAGE } });
+    expect((await flyPersistentOrchestrator.describePersistent(HANDLE)).image).toBe(NEW_IMAGE);
+    handler = () => json(200, flyMachine('started'));
+    expect((await flyPersistentOrchestrator.describePersistent(HANDLE)).image).toBeNull();
+    handler = () => json(404, { error: 'not found' });
+    expect((await flyPersistentOrchestrator.describePersistent(HANDLE)).image ?? null).toBeNull();
+  });
+});
+
+describe('checkLiveness — is the coding agent alive on the new image? (MOTIR-6950)', () => {
+  const LIVENESS = ['claude', '--version'];
+
+  it('answers alive for exit 0, running the command through exec with the 60-second bound', async () => {
+    handler = () => json(200, { exit_code: 0, stdout: '2.1.0 (Claude Code)', stderr: '' });
+    expect(await flyPersistentOrchestrator.checkLiveness(HANDLE, LIVENESS)).toEqual({
+      alive: true,
+    });
+    expect(calls[0]).toMatchObject({
+      url: `${API}/apps/${APP}/machines/m-1/exec`,
+      body: { cmd: LIVENESS, timeout: 60 },
+    });
+  });
+
+  it('answers not alive with the exit code and the last line printed, never a throw', async () => {
+    handler = () => json(200, { exit_code: 127, stdout: '', stderr: 'sh: claude: not found\n' });
+    expect(
+      await flyPersistentOrchestrator.checkLiveness(HANDLE, LIVENESS, { timeoutSeconds: 5 }),
+    ).toEqual({
+      alive: false,
+      reason: 'exit',
+      exitCode: 127,
+      detail: 'claude --version exited 127 (sh: claude: not found)',
+    });
+    expect(calls[0]!.body).toMatchObject({ timeout: 5 });
+  });
+
+  it('answers timeout for the provider’s 408, and unreachable for any other refusal', async () => {
+    handler = () => json(408, { error: 'deadline exceeded' });
+    expect(await flyPersistentOrchestrator.checkLiveness(HANDLE, LIVENESS)).toMatchObject({
+      alive: false,
+      reason: 'timeout',
+    });
+    handler = () => json(412, { error: 'machine not started' });
+    const answer = await flyPersistentOrchestrator.checkLiveness(HANDLE, LIVENESS);
+    expect(answer).toMatchObject({ alive: false, reason: 'unreachable' });
+    expect(answer.alive === false && answer.detail).toContain('machine not started');
+  });
+});
