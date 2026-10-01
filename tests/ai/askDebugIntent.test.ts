@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
+import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { createTestUser } from '../fixtures';
 import {
@@ -25,7 +26,8 @@ import {
 //
 // What this file holds:
 //   * a turn `ask_project` reads as `debug` is stored as `debug` and submits
-//     EXACTLY ONE `debug_bug` job — replayed and raced, still one;
+//     EXACTLY ONE `debug_bug` job — replayed and raced, still one, and a settle
+//     that loses the claim submits none;
 //   * the ask door carries an optional `anchorKey`, resolved and gated on the way
 //     in, forwarded to `ask_project`, and RE-resolved when the echo comes back;
 //   * the gates at the debug dispatch: `work_item:edit` (typed 403, no job, and a
@@ -212,6 +214,36 @@ describe('a turn the classifier reads as `debug`', () => {
 
     expect(outcomes.sort()).toEqual(['debugging', 'silent']);
     expect(submittedKinds().filter((k) => k === 'debug_bug')).toHaveLength(1);
+    expect((await userTurn()).intent).toBe('debug');
+  });
+
+  // The race above decides WHICH early return its loser takes: one that reads
+  // the thread after the winner's claim leaves at the replay guards, and only
+  // one that reads it before reaches the claim and loses it there. So that test
+  // reaches the lost-claim return on some runs and not others (MOTIR-7202).
+  // This one puts the winner's claim between the read and the claim on purpose.
+  it('a settle that LOSES the claim to a concurrent one submits nothing', async () => {
+    const submitted = (await (await ask(askReq({ body: 'Export hangs' }))).json()) as {
+      jobId: string;
+    };
+    getJobMock.mockResolvedValue(debugVerdict());
+    const claim = planChangeSessionsService.claimTurnIntent.bind(planChangeSessionsService);
+    const spy = vi
+      .spyOn(planChangeSessionsService, 'claimTurnIntent')
+      .mockImplementationOnce(async (...args) => {
+        // The concurrent settle claims first, then this one asks.
+        expect(await claim(...args)).not.toBeNull();
+        return claim(...args);
+      });
+    try {
+      const res = await settle(settleReq({ jobId: submitted.jobId }));
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toMatchObject({ outcome: 'silent' });
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(submittedKinds()).toEqual(['ask_project']);
     expect((await userTurn()).intent).toBe('debug');
   });
 });
