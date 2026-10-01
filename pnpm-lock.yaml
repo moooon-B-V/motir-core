@@ -51,6 +51,9 @@ importers:
       '@motir/orchestrator':
         specifier: workspace:*
         version: link:packages/orchestrator
+      '@motir/pages':
+        specifier: workspace:*
+        version: link:packages/pages
       '@prisma/adapter-pg':
         specifier: ~7.9.0
         version: 7.9.0
