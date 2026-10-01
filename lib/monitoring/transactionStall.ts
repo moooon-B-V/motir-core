@@ -27,8 +27,17 @@ import type { ErrorEvent, EventHint } from '@sentry/nextjs';
 // ⚠️ AND IT NEVER IMPORTS `@/lib/db`. This module is reached from the Sentry init
 // that runs at server boot, before any request and possibly without a
 // `DATABASE_URL` at all (a build). `lib/db.ts` hands its pool IN instead
-// (`setTransactionStallPool`), so a process that never touched the database
+// (`registerTransactionStallPool`), so a process that never touched the database
 // simply reports no pool.
+//
+// ⚠️ THE POOL TAGS DESCRIBE EVERY POOL IN THE PROCESS, NOT ONE (MOTIR-7073). The
+// Next server evaluates `lib/db.ts` once per Turbopack runtime — route handlers
+// and pages are two — and each evaluation builds its own client and pool. So
+// `tx.pool_total` / `tx.pool_idle` / `tx.pool_waiting` / `tx.pool_max` are SUMS
+// over every registered pool (identical to MOTIR-6701's meaning wherever there is
+// one pool: the job worker, a script, a test), `tx.pool_count` says how many were
+// summed, and the `tx.pool_busiest_*` tags give the one pool with the most
+// waiters (then the most connections in use), which is where starvation shows.
 
 /** The two halves of P2028, named for the Prisma option that ran out. */
 export type TransactionTimeoutHalf = 'maxWait' | 'timeout';
@@ -39,6 +48,8 @@ export interface PoolOccupancy {
   readonly idleCount: number;
   readonly waitingCount: number;
   readonly options: { readonly max?: number };
+  /** `pg.Pool` sets it once `end()` has run; such a pool is no longer reported. */
+  readonly ended?: boolean;
 }
 
 const P2028 = 'P2028';
@@ -159,18 +170,43 @@ function readEventLoopDelay(): DelayWindow | null {
 // is started and read in the same evaluation (the server's Sentry config, the
 // worker's single bundle), and `tests/monitoring/sentry-init-gate.test.ts` relies
 // on `vi.resetModules()` discarding a monitor an earlier case started.
+//
+// ⚠️ AND THE REGISTRATION IS A SET, NOT A SLOT (MOTIR-7073). The WRITER is
+// evaluated more than once too: `lib/db.ts` runs once per Turbopack runtime, each
+// run building its own pool, so a single slot kept whichever runtime evaluated
+// last, and a route handler's P2028 reported a page runtime's idle pool
+// (0 total / 0 waiting, which the pool a `maxWait` timeout was waiting on cannot
+// be). Registering adds; nothing replaces.
 
-const POOL_KEY = Symbol.for('motir.transactionStall.pool');
+const POOLS_KEY = Symbol.for('motir.transactionStall.pools');
 
-type PoolHolder = { [POOL_KEY]?: PoolOccupancy | null };
+type PoolHolder = { [POOLS_KEY]?: Set<PoolOccupancy> };
 
-function registeredPool(): PoolOccupancy | null {
-  return (globalThis as PoolHolder)[POOL_KEY] ?? null;
+function poolRegistry(): Set<PoolOccupancy> {
+  const holder = globalThis as PoolHolder;
+  holder[POOLS_KEY] ??= new Set();
+  return holder[POOLS_KEY];
 }
 
-/** Register the pool `lib/db.ts` built, so a report can read its occupancy. */
-export function setTransactionStallPool(pool: PoolOccupancy | null): void {
-  (globalThis as PoolHolder)[POOL_KEY] = pool;
+/** The pools still open, forgetting any that have ended (a `$disconnect()`). */
+function registeredPools(): PoolOccupancy[] {
+  const registry = poolRegistry();
+  for (const pool of registry) if (pool.ended) registry.delete(pool);
+  return [...registry];
+}
+
+/**
+ * Add a pool `lib/db.ts` built, so a report can read its occupancy. Every
+ * evaluation of `lib/db.ts` in the process adds its own; the same pool twice
+ * (the dev hot-reload singleton) is counted once.
+ */
+export function registerTransactionStallPool(pool: PoolOccupancy): void {
+  poolRegistry().add(pool);
+}
+
+/** Forget every registered pool — for tests. */
+export function clearTransactionStallPools(): void {
+  poolRegistry().clear();
 }
 
 // ── The tags ─────────────────────────────────────────────────────────────────
@@ -184,6 +220,11 @@ export const STALL_TAG = {
   poolIdle: 'tx.pool_idle',
   poolWaiting: 'tx.pool_waiting',
   poolMax: 'tx.pool_max',
+  poolCount: 'tx.pool_count',
+  busiestTotal: 'tx.pool_busiest_total',
+  busiestIdle: 'tx.pool_busiest_idle',
+  busiestWaiting: 'tx.pool_busiest_waiting',
+  busiestMax: 'tx.pool_busiest_max',
   uptimeS: 'tx.uptime_s',
 } as const;
 
@@ -194,6 +235,53 @@ const UNMEASURED = 'unmeasured';
 // pg's own default, applied by `pg-pool` when no `max` is configured.
 const PG_DEFAULT_POOL_MAX = 10;
 
+function poolMax(pool: PoolOccupancy): number {
+  return pool.options.max ?? PG_DEFAULT_POOL_MAX;
+}
+
+/** The pool with the most waiters, then the most connections in use. */
+function busiestPool(pools: readonly PoolOccupancy[]): PoolOccupancy {
+  const inUse = (pool: PoolOccupancy) => pool.totalCount - pool.idleCount;
+  return pools.reduce((busiest, pool) =>
+    pool.waitingCount > busiest.waitingCount ||
+    (pool.waitingCount === busiest.waitingCount && inUse(pool) > inUse(busiest))
+      ? pool
+      : busiest,
+  );
+}
+
+function poolTags(pools: readonly PoolOccupancy[]): Record<string, string> {
+  if (pools.length === 0) {
+    return Object.fromEntries(
+      [
+        STALL_TAG.poolTotal,
+        STALL_TAG.poolIdle,
+        STALL_TAG.poolWaiting,
+        STALL_TAG.poolMax,
+        STALL_TAG.poolCount,
+        STALL_TAG.busiestTotal,
+        STALL_TAG.busiestIdle,
+        STALL_TAG.busiestWaiting,
+        STALL_TAG.busiestMax,
+      ].map((key) => [key, UNMEASURED]),
+    );
+  }
+  const sum = (read: (pool: PoolOccupancy) => number) =>
+    String(pools.reduce((total, pool) => total + read(pool), 0));
+  const busiest = busiestPool(pools);
+  return {
+    [STALL_TAG.poolTotal]: sum((pool) => pool.totalCount),
+    [STALL_TAG.poolIdle]: sum((pool) => pool.idleCount),
+    [STALL_TAG.poolWaiting]: sum((pool) => pool.waitingCount),
+    [STALL_TAG.poolMax]: sum(poolMax),
+    [STALL_TAG.poolCount]: String(pools.length),
+    [STALL_TAG.busiestTotal]: String(busiest.totalCount),
+    [STALL_TAG.busiestIdle]: String(busiest.idleCount),
+    [STALL_TAG.busiestWaiting]: String(busiest.waitingCount),
+    [STALL_TAG.busiestMax]: String(poolMax(busiest)),
+  };
+}
+
 /**
  * The stall tags for a transaction-timeout `err`, or null when `err` is not one.
  * Values are strings (Sentry tags are); a number is whole ms / whole seconds.
@@ -202,15 +290,11 @@ export function transactionStallTags(err: unknown): Record<string, string> | nul
   const half = transactionTimeoutHalf(err);
   if (!half) return null;
   const loop = readEventLoopDelay();
-  const pool = registeredPool();
   return {
     [STALL_TAG.half]: half,
     [STALL_TAG.loopMaxMs]: loop ? String(Math.round(loop.maxMs)) : UNMEASURED,
     [STALL_TAG.loopP99Ms]: loop ? String(Math.round(loop.p99Ms)) : UNMEASURED,
-    [STALL_TAG.poolTotal]: pool ? String(pool.totalCount) : UNMEASURED,
-    [STALL_TAG.poolIdle]: pool ? String(pool.idleCount) : UNMEASURED,
-    [STALL_TAG.poolWaiting]: pool ? String(pool.waitingCount) : UNMEASURED,
-    [STALL_TAG.poolMax]: pool ? String(pool.options.max ?? PG_DEFAULT_POOL_MAX) : UNMEASURED,
+    ...poolTags(registeredPools()),
     [STALL_TAG.uptimeS]: String(Math.round(process.uptime())),
   };
 }
