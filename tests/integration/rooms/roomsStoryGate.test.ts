@@ -19,6 +19,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { resolvableGateSubject } from '../../helpers/resolvableGateSubject';
 import {
   dropLegacyRoleStorage,
   ensureLegacyRoleStorage,
@@ -156,7 +157,8 @@ async function gate(assigneeId: string): Promise<void> {
       projectId: fx.projectId,
       workItemId: item.id,
       kind: 'design_result',
-      subjectId: `ev-${item.id}`,
+      // A subject that RESOLVES — the room withdraws a gone one on read (MOTIR-7146).
+      subjectId: await resolvableGateSubject(fx, item.id, 'design_result'),
     },
   });
 }

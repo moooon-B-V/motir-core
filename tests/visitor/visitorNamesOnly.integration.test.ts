@@ -14,6 +14,7 @@ import {
 import { visitorServiceContext } from '@/lib/visitor/context';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { resolvableGateSubject } from '../helpers/resolvableGateSubject';
 import { consentedVisitor } from './_consentedVisitor';
 import { truncateAuthTables } from '../helpers/db';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
@@ -126,7 +127,8 @@ async function fixture() {
       projectId: fx.projectId,
       workItemId: byNameless.id,
       kind: 'design_result',
-      subjectId: `sub-${byNameless.id}`,
+      // A subject that RESOLVES — the room withdraws a gone one on read (MOTIR-7146).
+      subjectId: await resolvableGateSubject(fx, byNameless.id, 'design_result'),
       state: 'awaiting',
       routedToId: nameless.id,
     },

@@ -181,7 +181,10 @@ export type ApprovalGateSupersedeCauseDTO =
    *  convergence (MOTIR-6595; §4 FIFTH AMENDMENT). */
   | 'queue_failed'
   /** The project turned its review agent OFF while the review was awaiting (ADR §12.5). */
-  | 'review_agent_disabled';
+  | 'review_agent_disabled'
+  /** The gate's subject no longer resolves through its kind's handler, so a read that
+   *  observed it withdrew the question (MOTIR-7146). */
+  | 'subject_gone';
 
 /** Under which §2 authority rung the decision was made (ADR §6a). Mirrors the
  *  `ApprovalGateAuthority` Prisma enum. Frozen at decision time, so a reader can

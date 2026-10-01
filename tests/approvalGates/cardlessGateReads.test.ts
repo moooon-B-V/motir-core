@@ -26,6 +26,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { resolvableGateSubject } from '../helpers/resolvableGateSubject';
 import { truncateAuthTables } from '../helpers/db';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
@@ -65,8 +66,22 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-/** A card-less `plan_approval` gate about `planId`, as MOTIR-6036's raise will write it. */
-function planGate(planId: string, extra: Partial<Prisma.ApprovalGateUncheckedCreateInput> = {}) {
+/** A card-less `plan_approval` gate about `planId`, as MOTIR-6036's raise will write it.
+ *  The PLAN is written too: a gate whose subject is gone is withdrawn by the read that
+ *  lists it (MOTIR-7146), so a gate about a plan that does not exist would leave the
+ *  queue under test. */
+async function planGate(
+  planId: string,
+  extra: Partial<Prisma.ApprovalGateUncheckedCreateInput> = {},
+  { withPlan = true }: { withPlan?: boolean } = {},
+) {
+  if (withPlan) {
+    await adminDb.plan.upsert({
+      where: { id: planId },
+      create: { id: planId, workspaceId: fx.workspaceId, projectId: fx.projectId },
+      update: {},
+    });
+  }
   return adminDb.approvalGate.create({
     data: {
       workspaceId: fx.workspaceId,
@@ -92,7 +107,8 @@ async function cardGate(title: string, kind: ApprovalGateKind = 'design_result')
       projectId: fx.projectId,
       workItemId: item.id,
       kind,
-      subjectId: `subject-${item.id}`,
+      // A subject that RESOLVES (MOTIR-7146 withdraws a gone one on read).
+      subjectId: await resolvableGateSubject(fx, item.id, kind),
       routedToId: fx.ownerId,
     },
   });
@@ -113,10 +129,10 @@ describe('the QUEUE — `listAwaitingMe` / `countAwaitingMe` list a card-less ro
       kind: 'plan_approval',
       state: 'awaiting',
       workItem: null,
-      // MOTIR-6035 registered the kind: its summary is read from the PLAN, and `plan-1`
-      // names no plan, so the subject no longer resolves (it was `{ kind }` while the
-      // kind was unregistered).
-      subject: null,
+      // MOTIR-6035 registered the kind: its summary is read from the PLAN (it was
+      // `{ kind }` while the kind was unregistered). A plan gate over NO plan is not here
+      // at all — the read withdraws it (MOTIR-7146).
+      subject: expect.objectContaining({ kind: 'plan_approval', planId: 'plan-1' }),
       // …and the owner holds `ai:decide_plan`, the kind's one check (it was `false`
       // while no handler named a permission).
       canDecide: true,
@@ -170,10 +186,10 @@ describe('the RECORD ROOM — `listRecords` carries a card-less row in both sect
     const page = await approvalGatesService.listRecords(meCtx, { limit: 50 });
     expect(page.sections.awaiting.total).toBe(2);
     const awaitingPlan = page.sections.awaiting.items.find((row) => row.kind === 'plan_approval');
-    // Registered by MOTIR-6035: no plan behind `plan-waiting`, and the owner may decide.
+    // Registered by MOTIR-6035: summarised from the plan, and the owner may decide.
     expect(awaitingPlan).toMatchObject({
       workItem: null,
-      subject: null,
+      subject: expect.objectContaining({ kind: 'plan_approval', planId: 'plan-waiting' }),
       canDecide: true,
     });
     expect(
@@ -186,7 +202,7 @@ describe('the RECORD ROOM — `listRecords` carries a card-less row in both sect
       state: 'approved',
       workItem: null,
       subjectVersion: 'plan.v1.abc',
-      subject: null,
+      subject: expect.objectContaining({ kind: 'plan_approval', planId: 'plan-approved' }),
     });
   });
 
@@ -228,7 +244,8 @@ describe('the MARKER — `pendingDecisionsFor` is keyed on cards, and a card-les
 // stale-subject refusal — still never a failure to resolve a card.
 describe('the DECIDE DOOR on a card-less gate whose plan is gone', () => {
   it('reaches the handler’s stale-subject refusal rather than failing to resolve a card', async () => {
-    const plan = await planGate('plan-1');
+    // No plan behind it: the handler answers a stale subject, never a missing card.
+    const plan = await planGate('plan-1', {}, { withPlan: false });
     const err = await approvalGatesService
       .decide(
         { gateId: plan.id, decision: 'approve', source: 'ui', stamp: DECIDED_WITHOUT_A_READER },

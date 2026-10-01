@@ -8249,7 +8249,16 @@
       "acceptanceMeta": "{chapters, plural, =0 {No chapters} =1 {# chapter} other {# chapters}} · {version}",
       "noVersion": "no version",
       "decidedOn": "on <mono>{version}</mono>",
-      "subjectGone": "The design this asked about is gone",
+      "subjectGone": {
+        "design_result": "The design this asked about is gone",
+        "decision_approval": "The decision document this asked about is gone",
+        "acceptance_result": "The acceptance video this asked about is gone",
+        "pull_request_approval": "The finished work this asked about is gone",
+        "decision_choice": "The options this asked about are gone",
+        "decision_confirmation": "The decision this asked about is gone",
+        "plan_approval": "The plan this asked about is gone",
+        "agent_review": "The finished work this review asked about is gone"
+      },
       "notRenderable": "Motir cannot show this kind yet",
       "notBuiltYet": "Not built yet",
       "subjectGonePill": "Gone",
@@ -9805,6 +9814,7 @@
         "plan_stale": "Work this plan changes was finished, so the plan went out of date and this question was withdrawn.",
         "plan_discarded": "Every proposal in the plan was withdrawn, so the plan ended and this question with it.",
         "queue_failed": "The merge queue failed these commits, so this question was withdrawn.",
+        "subject_gone": "What this question asked about is gone, so this question was withdrawn.",
         "unknown": "This question was withdrawn. The reason was not recorded."
       },
       "causeByKind": {
@@ -10585,7 +10595,14 @@
       "body": "This is a {kind} approval. It will open here once Motir can show that kind — nothing you did caused this."
     },
     "subjectGone": {
-      "body": "The design was removed after this approval was asked for, so there is nothing here to approve. Open the work item to see what it holds now."
+      "design_result": "The design was removed after this approval was asked for, so there is nothing here to approve. Open the work item to see what it holds now.",
+      "decision_approval": "The decision document is no longer on an open pull request, so there is nothing here to approve. Open the work item to see what it holds now.",
+      "acceptance_result": "The acceptance video was removed after this approval was asked for, so there is nothing here to approve. Open the work item to see what it holds now.",
+      "pull_request_approval": "The pull requests were unlinked after this approval was asked for, so there is nothing here to approve or merge. Open the work item to see what it holds now.",
+      "decision_choice": "The work item no longer lists options to choose from, so there is nothing here to pick. Open the work item to see what it holds now.",
+      "decision_confirmation": "The work item no longer reads as a decision to confirm, so there is nothing here to confirm. Open the work item to see what it holds now.",
+      "plan_approval": "The plan was removed after this approval was asked for, so there is nothing here to approve. Open the work item to see what it holds now.",
+      "agent_review": "The pull requests were unlinked after this review was asked for, so there is nothing here to review. Open the work item to see what it holds now."
     },
     "withdrawn": {
       "conflict": "{pr} now conflicts with {base}, so this question was withdrawn.",

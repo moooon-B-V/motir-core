@@ -373,8 +373,10 @@ export async function GET(req: Request): Promise<Response> {
     // (Story MOTIR-5238 · Subtask MOTIR-5243). Absent, the answer is empty and
     // this route behaves exactly as it did.
     const since = params.get('since');
-    const [read, held, statuses, parent] = await Promise.all([
-      approvalGatesService.getForWorkItem({ workItemId: item.id, kind, since }, ctx),
+    const readGate = () =>
+      approvalGatesService.getForWorkItem({ workItemId: item.id, kind, since }, ctx);
+    const [first, held, statuses, parent] = await Promise.all([
+      readGate(),
       // WHETHER A REFUSED DECISION'S RECORD OFFERS RE-PLAN WITH AI (MOTIR-6211): the item
       // page's own `canEdit` (`work_item:edit`) and a card that is not archived — exactly
       // what `WorkItemPlanEntrance` is drawn under, so the two doors cannot disagree.
@@ -388,6 +390,22 @@ export async function GET(req: Request): Promise<Response> {
         ? workItemsService.getWorkItem(item.parentId, ctx)
         : Promise.resolve(null),
     ]);
+    let read = first;
+    let subject = await readSubject(kind, read.gate, item, ctx);
+    // A QUESTION WHOSE SUBJECT IS GONE IS WITHDRAWN, NOT LEFT AS PANEL 4b (Bug MOTIR-7146).
+    // Opening it is what retires it: the card's awaiting gates whose subject no longer
+    // resolves are superseded `subject_gone`, each re-checked under its lock through its
+    // kind's own handler, and the gate is read again — so the reader meets the withdrawn
+    // frame (state `G`) instead of a dead end with nothing to press. A decided gate over
+    // a gone subject is somebody's answer and stays Panel 4b. A failed withdrawal leaves
+    // the read exactly as it was; the next open observes it again.
+    if (subject.state === 'gone' && read.gate?.state === 'awaiting') {
+      const withdrawn = await approvalGatesService.withdrawGoneQuestionsOnWorkItem(item.id, ctx);
+      if (withdrawn.size > 0) {
+        read = await readGate();
+        subject = await readSubject(kind, read.gate, item, ctx);
+      }
+    }
     const body: ApprovalGateOverlayReadDTO = {
       workItem: {
         id: item.id,
@@ -409,7 +427,7 @@ export async function GET(req: Request): Promise<Response> {
       stamp: read.stamp,
       movedSince: read.movedSince,
       earlierApproval: read.earlierApproval,
-      subject: await readSubject(kind, read.gate, item, ctx),
+      subject,
     };
     return NextResponse.json(body, {
       // A gate's state changes under the reader by design — never serve a

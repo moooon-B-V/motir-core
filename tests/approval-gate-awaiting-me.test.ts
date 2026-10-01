@@ -99,14 +99,33 @@ async function gateOn(opts: {
       ...(opts.reporterId ? { reporterId: opts.reporterId } : {}),
     },
   });
+  const kind = opts.kind ?? 'design_result';
+  // A design gate's subject must RESOLVE unless the test names its own: a gate whose
+  // subject is gone is withdrawn by the read that lists it (MOTIR-7146), so a made-up
+  // id would take the row out of the very queue under test.
+  const subjectId =
+    opts.subjectId ??
+    (kind === 'design_result'
+      ? (
+          await adminDb.designEvidence.create({
+            // Not CURRENT: the subject is read by id, and a test that publishes the card's
+            // own current evidence must not collide with this one.
+            data: {
+              workspaceId: opts.workspaceId ?? fx.workspaceId,
+              workItemId: item.id,
+              isCurrent: false,
+            },
+          })
+        ).id
+      : `evidence-${item.id}`);
   const gate = await withWorkspaceContext(ctx, (tx) =>
     approvalGateRepository.create(
       {
         workspaceId: opts.workspaceId ?? fx.workspaceId,
         projectId,
         workItemId: item.id,
-        kind: opts.kind ?? 'design_result',
-        subjectId: opts.subjectId ?? `evidence-${item.id}`,
+        kind,
+        subjectId,
       },
       tx,
     ),
@@ -422,17 +441,26 @@ describe('approvalGatesService.listAwaitingMe — the subject summary', () => {
     expect(row!.subject).toEqual({ kind: 'pull_request_merge' });
   });
 
-  it('carries a NULL subject when the gate’s subject no longer resolves — distinct from not-built-yet', async () => {
-    await gateOn({
+  // ⚠️ AMENDED (Bug MOTIR-7146). This read used to LIST such a gate with a null subject,
+  // for ever — a *Gone* row nobody could answer, counted in the tab. It now WITHDRAWS it:
+  // superseded `subject_gone`, out of the list and its count. Distinct from not-built-yet
+  // still — the not-built row above is listed, because a kind that has not shipped is not
+  // a subject that went away.
+  it('WITHDRAWS a gate whose subject no longer resolves — out of the list and its count', async () => {
+    const { gate } = await gateOn({
       title: 'Points at nothing',
       assigneeId: meCtx.userId,
       subjectId: 'evidence-that-is-gone',
     });
 
-    const [row] = (await approvalGatesService.listAwaitingMe(meCtx)).items;
+    const page = await approvalGatesService.listAwaitingMe(meCtx);
 
-    expect(row!.kind).toBe('design_result');
-    expect(row!.subject).toBeNull();
+    expect(page.items).toEqual([]);
+    expect(page.total).toBe(0);
+    expect(await approvalGatesService.countAwaitingMe(meCtx)).toBe(0);
+    const row = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
+    expect(row.state).toBe('superseded');
+    expect(row.supersededCause).toBe('subject_gone');
   });
 
   it('resolves a whole page of subjects without a per-row read, and identifies each card', async () => {

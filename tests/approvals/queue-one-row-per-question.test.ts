@@ -11,6 +11,7 @@ import type { HomeActorContext } from '@/lib/services/homeService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { resolvableGateSubject } from '../helpers/resolvableGateSubject';
 import { truncateAuthTables } from '../helpers/db';
 
 // ONE ROW PER QUESTION (Bug MOTIR-5712; `design-result.md` AMENDMENT 6 Q1, Q2, Q4),
@@ -65,6 +66,10 @@ async function cardWith(
   await adminDb.workItem.update({ where: { id: item.id }, data: { assigneeId } });
   const gates: Record<string, string> = {};
   for (const kind of kinds) {
+    // The merge gate's subject IS the card (and its delivery set); the design gate's is
+    // its evidence row. Both must RESOLVE — a read withdraws a gate whose subject is gone
+    // (MOTIR-7146).
+    const subjectId = await resolvableGateSubject(fx, item.id, kind);
     const gate = await withWorkspaceContext(fx.ctx, (tx) =>
       approvalGateRepository.create(
         {
@@ -72,8 +77,7 @@ async function cardWith(
           projectId: fx.projectId,
           workItemId: item.id,
           kind,
-          // The merge gate's subject IS the card; the design gate's is its evidence row.
-          subjectId: kind === 'pull_request_approval' ? item.id : `evidence-${item.id}`,
+          subjectId,
         },
         tx,
       ),

@@ -862,6 +862,29 @@ export const approvalGateRepository = {
     return result.count;
   },
 
+  /**
+   * RETIRE ONE `awaiting` gate by its id — the withdrawal a gate whose subject no longer
+   * resolves takes (MOTIR-7146). By id rather than by card, because the subject is the
+   * gate's own: a card can hold one question whose design has gone beside another whose
+   * subject is perfectly live, and only the first may go.
+   *
+   * The siblings' notes hold unchanged — `state` and its `cause` and nothing else, the
+   * `state: 'awaiting'` equality is the whole guard, the immutability trigger is
+   * structurally unreachable, and `cause` is REQUIRED. Returns 1, or 0 when a decision
+   * won the row first.
+   */
+  async supersedeAwaitingById(
+    id: string,
+    cause: LiveSupersedeCause,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.approvalGate.updateMany({
+      where: { id, state: 'awaiting' },
+      data: { state: 'superseded', supersededCause: cause },
+    });
+    return result.count;
+  },
+
   // ⚠️ `findByWorkItemAndKind`, `findAwaitingBySubject` AND `supersedeAwaitingBySubject`
   // WERE ALL HERE, and all three retired with the kind they were written for
   // (MOTIR-5611 · MOTIR-5613 · MOTIR-5616). Each read or wrote gates BY SUBJECT rather

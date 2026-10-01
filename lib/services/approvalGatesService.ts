@@ -1,4 +1,9 @@
-import type { ApprovalGateState, Prisma, WorkItem } from '@/generated/prisma/client';
+import type {
+  ApprovalGateKind,
+  ApprovalGateState,
+  Prisma,
+  WorkItem,
+} from '@/generated/prisma/client';
 import type {
   ApprovalGateAuthorityDTO,
   ApprovalGateDTO,
@@ -441,6 +446,79 @@ async function companionSubjectVersion(
     )
   ).find((row) => row.kind === 'pull_request_approval');
   return merge?.subjectVersion ?? null;
+}
+
+/**
+ * ONE gate's withdraw-on-observation (MOTIR-7146), inside the caller's transaction:
+ * lock it (its subject first, for a kind whose writers hold the subject's lock when they
+ * reach the gate), re-check it is still `awaiting`, ask its kind's handler for the
+ * subject, and supersede it `subject_gone` only when the handler answers null. True when
+ * it withdrew the gate.
+ *
+ * `resolvedStatusKey` and `refusalVerdict` are null because nothing is being decided:
+ * `resolveSubject` reads the gate and the transaction only, on every registered kind.
+ */
+async function withdrawIfSubjectGone(
+  gateId: string,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const preread = await approvalGateRepository.findById(gateId, tx);
+  if (!preread || preread.state !== 'awaiting' || !isRegisteredGateKind(preread.kind)) {
+    return false;
+  }
+  const handler = APPROVAL_GATE_HANDLERS[preread.kind];
+  if (handler.lockSubjectBeforeGate) await handler.lockSubjectBeforeGate(preread.subjectId, tx);
+  const locked = await approvalGateRepository.lockById(gateId, tx);
+  if (!locked || locked.state !== 'awaiting') return false;
+  const item =
+    locked.workItemId === null ? null : await workItemRepository.findById(locked.workItemId, tx);
+  const subject = await handler.resolveSubject({
+    gate: locked,
+    item,
+    ctx,
+    tx,
+    resolvedStatusKey: null,
+    refusalVerdict: null,
+  });
+  if (subject !== null) return false;
+  return (await approvalGateRepository.supersedeAwaitingById(gateId, 'subject_gone', tx)) > 0;
+}
+
+/**
+ * The gates a page read rendered with NO subject — the candidates for
+ * `withdrawGoneQuestions`. A registered kind only: an unregistered kind's row is a
+ * feature that has not shipped, never a gone subject (design § 20's *look alike and are
+ * opposite*).
+ */
+function goneCandidates(
+  rows: readonly { id: string; kind: ApprovalGateKind }[],
+  subjects: ReadonlyMap<string, unknown>,
+): string[] {
+  return rows
+    .filter((row) => isRegisteredGateKind(row.kind) && (subjects.get(row.id) ?? null) === null)
+    .map((row) => row.id);
+}
+
+/**
+ * Withdraw what a page read observed gone, AFTER that read committed — and never let the
+ * withdrawal fail the read. A refused or failed write leaves the row `awaiting`, which is
+ * exactly what the page showed before; the next read observes it again.
+ */
+async function withdrawObservedGone(
+  candidates: readonly string[],
+  ctx: ServiceContext,
+): Promise<Set<string>> {
+  if (candidates.length === 0) return new Set();
+  try {
+    return await approvalGatesService.withdrawGoneQuestions(candidates, ctx);
+  } catch (err) {
+    console.error('[approvalGatesService] could not withdraw a gate whose subject is gone', {
+      gateIds: candidates,
+      err,
+    });
+    return new Set();
+  }
 }
 
 /**
@@ -1368,7 +1446,7 @@ export const approvalGatesService = {
     options: ApprovalQueueReadOptions = {},
   ): Promise<ApprovalQueueDto> {
     const ceiling = options.ceiling ?? APPROVAL_QUEUE_CEILING;
-    return withWorkspaceContext(ctx, async (tx) => {
+    const read = await withWorkspaceContext(ctx, async (tx) => {
       const scope = await routingScope(ctx, tx);
 
       const total = await approvalGateRepository.countAwaitingRoutedTo(scope, tx);
@@ -1428,21 +1506,34 @@ export const approvalGatesService = {
       );
 
       return {
-        items: rows.map((row, index) =>
-          toApprovalQueueRowDto(
-            row,
-            subjects.get(row.id) ?? null,
-            row.workItem ? canDecide : canDecideCardlessGate(row.kind, cardlessHeld),
-            // A routed user whose row has gone resolves to nothing here, exactly
-            // as it does on the item page — the frame's fallback copy is what
-            // renders, which is the case that fallback is FOR (ADR §3).
-            namesById.get(routedToIds[index] ?? '') ?? null,
+        queue: {
+          items: rows.map((row, index) =>
+            toApprovalQueueRowDto(
+              row,
+              subjects.get(row.id) ?? null,
+              row.workItem ? canDecide : canDecideCardlessGate(row.kind, cardlessHeld),
+              // A routed user whose row has gone resolves to nothing here, exactly
+              // as it does on the item page — the frame's fallback copy is what
+              // renders, which is the case that fallback is FOR (ADR §3).
+              namesById.get(routedToIds[index] ?? '') ?? null,
+            ),
           ),
-        ),
-        total,
-        truncated: total > rows.length,
+          total,
+          truncated: total > rows.length,
+        },
+        gone: goneCandidates(rows, subjects),
       };
     });
+
+    // A ROW WHOSE SUBJECT IS GONE IS A QUESTION NOBODY CAN ANSWER (MOTIR-7146): it is
+    // withdrawn now, after the read committed, and leaves the list and its count rather
+    // than sitting on it as a *Gone* row for ever. A gate the withdrawal could not
+    // retire — its subject came back, or the write failed — stays exactly as read.
+    const withdrawn = await withdrawObservedGone(read.gone, ctx);
+    if (withdrawn.size === 0) return read.queue;
+    const items = read.queue.items.filter((row) => !withdrawn.has(row.gateId));
+    const total = read.queue.total - withdrawn.size;
+    return { items, total, truncated: total > items.length };
   },
 
   /**
@@ -1520,6 +1611,74 @@ export const approvalGatesService = {
   async countAwaitingMe(ctx: HomeActorContext): Promise<number> {
     return withWorkspaceContext(ctx, async (tx) =>
       approvalGateRepository.countAwaitingRoutedTo(await routingScope(ctx, tx), tx),
+    );
+  },
+
+  /**
+   * WITHDRAW THE QUESTIONS NOBODY CAN ANSWER ANY MORE (Bug MOTIR-7146) — every gate in
+   * `gateIds` that is still `awaiting` and whose SUBJECT no longer resolves is superseded
+   * `subject_gone`. Returns the ids it withdrew.
+   *
+   * An awaiting gate whose subject stopped resolving — its design or recording gone, its
+   * choice or decision body no longer parsing, its delivery set emptied — used to stay
+   * `awaiting` for ever: a *Gone* row on To approve, counted, with nothing in the product
+   * able to retire it. The subject-event writers each supersede on THEIR event; this is
+   * the generic backstop for a subject that went away by any other route, which is why it
+   * keys on the observation and never on how the subject went.
+   *
+   * ⚠️ WITHDRAWN ON OBSERVATION, IN ITS OWN TRANSACTION — chosen over a reconcile sweep.
+   * The reads that render a gone subject (To approve, the Approvals room, the overlay)
+   * call this AFTER their own read has committed, so a read never holds a gate's lock and
+   * never writes inside its snapshot. A sweep would have to read every awaiting gate in
+   * every workspace through every kind's resolver to find the rare gone one, and would
+   * still leave it on screen until its next tick; the read has already done that work for
+   * exactly the gates someone is looking at.
+   *
+   * ⚠️ THE READ'S VERDICT IS ONLY A CANDIDATE. Each gate is re-read UNDER ITS LOCK, in a
+   * transaction of its own, and withdrawn only if it is still `awaiting` AND its kind's
+   * handler — the registry's `resolveSubject`, the same seam the decide door reads — still
+   * answers null. So a subject that came back between the read and the write is left
+   * alone, a gate decided in between is left alone, and every registered kind is covered
+   * by the registry rather than by a list here. An unregistered kind has no handler to
+   * ask and is never touched.
+   *
+   * ⚠️ THE LOCK ORDER IS THE DECIDE DOOR'S: a kind that locks its subject before the gate
+   * (a plan) has it locked first here too. A cause is not an actor — the write records
+   * what happened to the subject and nobody as having decided anything (§6b).
+   */
+  async withdrawGoneQuestions(
+    gateIds: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<Set<string>> {
+    const withdrawn = new Set<string>();
+    for (const gateId of new Set(gateIds)) {
+      const gone = await withWorkspaceContext(ctx, (tx) => withdrawIfSubjectGone(gateId, ctx, tx));
+      if (gone) withdrawn.add(gateId);
+    }
+    return withdrawn;
+  },
+
+  /**
+   * {@link withdrawGoneQuestions} over every `awaiting` gate on ONE work item — what the
+   * approval overlay calls when its port finds the subject gone (MOTIR-7146). The whole
+   * card rather than the one gate the address names, because the port a gate is drawn
+   * through is not always its own: a design or acceptance question asked beside an
+   * awaiting merge question is ported by the MERGE gate's delivery set, and when that set
+   * has emptied it is the merge gate whose subject is gone.
+   *
+   * Like the list reads, a withdrawal that fails is logged and never fails the read that
+   * observed it: the gate stays as it was, and the next open observes it again.
+   */
+  async withdrawGoneQuestionsOnWorkItem(
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<Set<string>> {
+    const awaiting = await withWorkspaceContext(ctx, (tx) =>
+      approvalGateRepository.findAwaitingByWorkItem(workItemId, tx),
+    );
+    return withdrawObservedGone(
+      awaiting.map((gate) => gate.id),
+      ctx,
     );
   },
 
@@ -1614,7 +1773,7 @@ export const approvalGatesService = {
     const ctx: HomeActorContext = visitor
       ? { ...visitorServiceContext(visitor), projectId: visitor.project.id }
       : (reader as HomeActorContext);
-    return withWorkspaceContext(ctx, async (tx) => {
+    const read = await withWorkspaceContext(ctx, async (tx) => {
       const routing = visitor
         ? { projectIds: [visitor.project.id], userId: ctx.userId }
         : await routingScope(ctx, tx);
@@ -1728,7 +1887,7 @@ export const approvalGatesService = {
         ),
       );
 
-      return {
+      const records: ApprovalRecordsPageDto = {
         fullView: scope.fullView,
         scope: served,
         views,
@@ -1746,7 +1905,27 @@ export const approvalGatesService = {
         page,
         pageSize,
       };
+      // A Visitor reads and never writes, so nothing they look at is withdrawn.
+      return { records, gone: visitor ? [] : goneCandidates(awaitingRows, subjects) };
     });
+
+    // THE SAME WITHDRAWAL To approve makes (MOTIR-7146): a pending record whose subject
+    // is gone is withdrawn after the read, and a withdrawn question is listed in neither
+    // section — so it leaves this page now rather than on the next read.
+    const withdrawn = await withdrawObservedGone(read.gone, ctx);
+    if (withdrawn.size === 0) return read.records;
+    const { records } = read;
+    return {
+      ...records,
+      sections: {
+        ...records.sections,
+        awaiting: {
+          items: records.sections.awaiting.items.filter((row) => !withdrawn.has(row.gateId)),
+          total: records.sections.awaiting.total - withdrawn.size,
+        },
+      },
+      total: records.total - withdrawn.size,
+    };
   },
 
   /**

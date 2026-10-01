@@ -13,6 +13,7 @@ import type { HomeActorContext } from '@/lib/services/homeService';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
+import { resolvableGateSubject } from './helpers/resolvableGateSubject';
 import { truncateAuthTables } from './helpers/db';
 import { setWorkspaceRoleFor } from './helpers/workspaceRoleFixtures';
 
@@ -73,6 +74,7 @@ async function gate(
   workItemId: string,
   opts: { kind?: ApprovalGateKind; state?: ApprovalGateState; createdAt?: Date } = {},
 ) {
+  const subjectId = await resolvableGateSubject(fx, workItemId, opts.kind ?? 'design_result');
   const row = await withWorkspaceContext(fx.ctx, (tx) =>
     approvalGateRepository.create(
       {
@@ -80,7 +82,9 @@ async function gate(
         projectId: fx.projectId,
         workItemId,
         kind: opts.kind ?? 'design_result',
-        subjectId: `subject-${workItemId}-${opts.kind ?? 'design_result'}-${Math.random()}`,
+        // A subject that RESOLVES — the tab withdraws a gone one on read (MOTIR-7146),
+        // and this file compares the marker with the tab.
+        subjectId,
       },
       tx,
     ),
