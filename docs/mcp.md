@@ -411,7 +411,9 @@ explicit on every tool, because the MCP defaults are the permissive ones. For a
 Motir tool the fields promise:
 
 - **`title`** — the tool's name in words, 1–64 characters, for a client to show
-  a person in place of the snake_case `name`.
+  a person in place of the snake_case `name`. It is served twice from the tool's
+  one declaration: as the tool's own `title` and as `annotations.title`, which is
+  where Claude's connector directory reads the name it lists (MOTIR-7189).
 - **`readOnlyHint: true`** — the handler performs **no write** of any kind: no
   row created, updated or deleted, no job enqueued, no status moved, no counter
   or timestamp stamped. A tool that writes anything is a write, however it is

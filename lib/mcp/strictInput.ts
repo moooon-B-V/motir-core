@@ -165,8 +165,29 @@ export function strictifyUnknownKeys(schema: AnySchema): AnySchema {
         options: (def.options as AnySchema[]).map(strictifyUnknownKeys),
       });
     default:
-      return schema;
+      return distinctLeaf(schema);
   }
+}
+
+/**
+ * The same schema rebuilt over a COPY of its `_def` (bug MOTIR-7189).
+ *
+ * `tools/list` renders each input schema with `zod-to-json-schema`, which
+ * deduplicates by `_def` IDENTITY: the second property built from the same
+ * instance — `link_work_items`' `fromKey` and `toKey` are both
+ * `workItemKeyField` — is published as `{ "$ref": "#/properties/fromKey" }`.
+ * That is valid JSON Schema, and Claude's connector directory does not follow
+ * it: it reports the property as having no type. The SDK passes no options to
+ * the converter, so the reference strategy cannot be switched off there.
+ *
+ * Every container this transform recurses through is already rebuilt over a
+ * fresh `_def`; giving each leaf one too means no two nodes of a published
+ * schema share a def, so none is rendered as a reference. The copy is shallow
+ * and carries every field, so validation is unchanged.
+ */
+function distinctLeaf(schema: AnySchema): AnySchema {
+  const Ctor = schema.constructor as new (def: unknown) => AnySchema;
+  return new Ctor({ ...(schema._def as object) });
 }
 
 /** True when `value` is a Zod RAW SHAPE — the `{ field: zodSchema }` record the

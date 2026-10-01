@@ -180,9 +180,18 @@ describe('strictifyUnknownKeys — the transform, wrapper by wrapper', () => {
     expect(strictifyUnknownKeys(described).description).toBe('the shape');
   });
 
-  it('returns anything it does not recognise untouched', () => {
-    const leaf = z.string();
-    expect(strictifyUnknownKeys(leaf)).toBe(leaf);
+  it('returns a leaf it does not descend into as an equal copy over a fresh def', () => {
+    // Not the same instance (MOTIR-7189): `tools/list` renders a schema whose
+    // `_def` it has already seen as a `$ref`, so a leaf two properties share
+    // must come back as two defs. Everything the def says is kept.
+    const leaf = z.string().min(2).describe('A key.');
+    const copy = strictifyUnknownKeys(leaf);
+    expect(copy).not.toBe(leaf);
+    expect(copy._def).not.toBe(leaf._def);
+    expect(copy).toBeInstanceOf(z.ZodString);
+    expect(copy._def).toStrictEqual(leaf._def);
+    expect(copy.safeParse('A').success).toBe(false);
+    expect(copy.safeParse('AB').success).toBe(true);
   });
 });
 
@@ -345,5 +354,77 @@ describe('a patch that changes NOTHING is not a success (the second half)', () =
     expect(asResult.isError).toBe(true);
     expect(JSON.stringify(asResult.content)).toContain('NO_FIELDS_TO_PATCH');
     expect(JSON.stringify(asResult.content)).not.toContain('Patched: nothing');
+  });
+});
+
+/** Every `$ref` in a JSON value, as the path that reaches it. */
+function refPaths(value: unknown, path = ''): string[] {
+  if (!value || typeof value !== 'object') return [];
+  return Object.entries(value).flatMap(([key, child]) =>
+    key === '$ref' ? [path] : refPaths(child, `${path}/${key}`),
+  );
+}
+
+/** Every property schema in a JSON Schema object that declares no `type`, `enum`
+ * or `const`, nor a union of typed members — what a client that does not follow
+ * references reads as "untyped". */
+function untypedProperties(schema: unknown, path = ''): string[] {
+  const node = schema as { properties?: Record<string, unknown>; items?: unknown } | undefined;
+  if (!node || typeof node !== 'object') return [];
+  const out: string[] = [];
+  for (const [key, prop] of Object.entries(node.properties ?? {})) {
+    const p = prop as Record<string, unknown>;
+    const typed =
+      'type' in p ||
+      'enum' in p ||
+      'const' in p ||
+      Array.isArray(p.anyOf) ||
+      Array.isArray(p.oneOf);
+    if (!typed) out.push(`${path}/${key}`);
+    out.push(...untypedProperties(p, `${path}/${key}`));
+    if (p.items) out.push(...untypedProperties(p.items, `${path}/${key}/items`));
+  }
+  return out;
+}
+
+describe('published input schemas carry no reference (bug MOTIR-7189)', () => {
+  it('a leaf shared by two properties is rendered inline at both, not as a $ref', async () => {
+    const shared = z.string().min(1).describe('A key.');
+    const server = strictInputServer(new McpServer({ name: 'test', version: '0.0.0' }));
+    server.registerTool(
+      'pair',
+      { inputSchema: { fromKey: shared, toKey: shared, many: z.array(shared).optional() } },
+      async () => ({ content: [] }),
+    );
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = new Client({ name: 'test', version: '0.0.0' });
+    await client.connect(clientTransport);
+    const [tool] = (await client.listTools()).tools;
+    const properties = tool?.inputSchema.properties as Record<string, Record<string, unknown>>;
+
+    expect(refPaths(tool?.inputSchema)).toEqual([]);
+    expect(properties.toKey).toMatchObject({ type: 'string', minLength: 1, description: 'A key.' });
+    expect(properties.toKey).toStrictEqual(properties.fromKey);
+    // Validation is unchanged: the copy keeps the leaf's checks.
+    expect((await call(client, 'pair', { fromKey: 'A', toKey: '' })).isError).toBe(true);
+  });
+
+  it('no registered tool publishes a $ref or an untyped property, link_work_items included', async () => {
+    const client = await connectRegistry();
+    const { tools } = await client.listTools();
+    expect(tools.map((tool) => tool.name).sort()).toEqual([...MCP_TOOL_NAMES].sort());
+
+    for (const tool of tools) {
+      expect(refPaths(tool.inputSchema), tool.name).toEqual([]);
+      expect(untypedProperties(tool.inputSchema), tool.name).toEqual([]);
+    }
+    const link = tools.find((tool) => tool.name === 'link_work_items');
+    const unlink = tools.find((tool) => tool.name === 'unlink_work_items');
+    for (const tool of [link, unlink]) {
+      expect((tool?.inputSchema.properties as Record<string, { type?: unknown }>).toKey?.type).toBe(
+        'string',
+      );
+    }
   });
 });

@@ -170,13 +170,13 @@ describe('annotatedServer — the registration seam', () => {
       name: 'delete_work_item',
       title: 'Delete it',
       description: 'desc',
-      annotations: TOOL_ANNOTATIONS.delete_work_item,
+      annotations: { title: 'Delete it', ...TOOL_ANNOTATIONS.delete_work_item },
     });
   });
 });
 
 describe('tools/list — composed as production composes it', () => {
-  it('serves a guarded title and exactly the table row on every tool', async () => {
+  it('serves a guarded title, repeated as `annotations.title`, and exactly the table row on every tool', async () => {
     const server = buildMcpServer(neverResolved, () => [], true);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
@@ -191,9 +191,12 @@ describe('tools/list — composed as production composes it', () => {
       const title = tool.title as string;
       expect(title.trim().length, tool.name).toBeGreaterThan(0);
       expect(title.length, tool.name).toBeLessThanOrEqual(MAX_TOOL_TITLE_LENGTH);
-      expect(tool.annotations, tool.name).toStrictEqual(
-        TOOL_ANNOTATIONS[tool.name as keyof typeof TOOL_ANNOTATIONS],
-      );
+      // The directory listing reads the name from `annotations.title` (MOTIR-7189),
+      // so it is the tool's own title, beside exactly the table's hints.
+      expect(tool.annotations, tool.name).toStrictEqual({
+        title,
+        ...TOOL_ANNOTATIONS[tool.name as keyof typeof TOOL_ANNOTATIONS],
+      });
     }
   });
 });

@@ -536,7 +536,9 @@ export class ToolAnnotationError extends Error {
 
 /**
  * Wrap `server` so every `registerTool(name, config, cb)` call's `config` gains
- * `annotations: TOOL_ANNOTATIONS[name]`. It THROWS, naming the tool, when the
+ * `annotations: { title: config.title, ...TOOL_ANNOTATIONS[name] }` — the title
+ * repeated there because Claude's connector directory reads it from
+ * `annotations.title` (MOTIR-7189). It THROWS, naming the tool, when the
  * name has no row, when `config.title` is absent, blank or longer than
  * {@link MAX_TOOL_TITLE_LENGTH}, and when `config` already carries
  * `annotations` — the table is the one place a hint is declared.
@@ -572,8 +574,15 @@ export function annotatedServer(server: McpServer): McpServer {
             'declares its own annotations — hints are declared only in TOOL_ANNOTATIONS',
           );
         }
+        // The title is served twice from the one declaration: as the tool's own
+        // `title` and as `annotations.title`, which is where Claude's connector
+        // directory reads the name it lists (bug MOTIR-7189). The table holds
+        // only hints; the title stays declared by the tool itself.
         const next = [...registerArgs];
-        next[1] = { ...config, annotations: { ...TOOL_ANNOTATIONS[name as McpToolName] } };
+        next[1] = {
+          ...config,
+          annotations: { title, ...TOOL_ANNOTATIONS[name as McpToolName] },
+        };
         return register.apply(target, next);
       };
     },
