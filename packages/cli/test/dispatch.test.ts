@@ -716,6 +716,24 @@ describe('the delivery state on each repository line', () => {
     );
   });
 
+  it('names a repository that shipped WITHOUT a pull request, and that it holds nothing (MOTIR-7180)', () => {
+    const text = renderRepositoriesBlock(targets(2), [
+      'delivered',
+      'delivered_without_change_request',
+    ]).join('\n');
+    expect(text).toContain('delivered without a pull request');
+    expect(text).toContain('does not hold this work item');
+    expect(text).not.toContain('awaiting');
+  });
+
+  it('a repository shipped without a pull request is not "still outstanding" on a resume', () => {
+    expect(
+      renderResumeNotice(
+        withRepos(['motir-core', 'delivered'], ['motir-ai', 'delivered_without_change_request']),
+      ),
+    ).toBeNull();
+  });
+
   it('says nothing at all when the state is null — the repository the card does not carry', () => {
     expect(renderRepositoriesBlock(targets(2), [null, null]).join('\n')).not.toContain('awaiting');
   });

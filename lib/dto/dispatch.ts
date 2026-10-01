@@ -47,7 +47,8 @@ export interface DispatchRepoDto {
   /**
    * What this repository has to show for itself
    * ({@link RepoDeliveryState} — `delivered` / `awaiting` / `unknown` /
-   * `unestablished` / `excluded`), from the shared classifier
+   * `unestablished` / `excluded` / `delivered_without_change_request`), from
+   * the shared classifier
    * `workItemsService.listRepoDelivery` that the completion gate and the item
    * detail panel both answer from.
    *

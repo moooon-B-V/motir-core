@@ -257,3 +257,90 @@ describe('awaitingRepoRows', () => {
     ]);
   });
 });
+
+// MOTIR-7180 — a repository a container's leaves finished WITHOUT a change
+// request (a release tag, a dashboard setting). The evidence is computed from the
+// tree by `resolveExpectedRepos`; these pin what the classifier does with it, and
+// above all what it does NOT do: excuse a missing merge.
+describe('delivered_without_change_request', () => {
+  const shipped = (repo: string) => ({ repo, shippedWithoutChangeRequest: true });
+
+  it('promotes an AWAITING repository whose leaves shipped without a change request', () => {
+    expect(
+      classifyRepoDelivery(
+        ['motir-marketing', shipped('motir-skills')],
+        [fact('motir-marketing', true, 'main')],
+      ),
+    ).toEqual([
+      { repo: 'motir-marketing', state: 'delivered', primary: true },
+      {
+        repo: 'motir-skills',
+        role: undefined,
+        state: 'delivered_without_change_request',
+        primary: false,
+      },
+    ]);
+  });
+
+  it('does NOT hold the item — it is in no shortfall list', () => {
+    const shortfall = repoSetShortfall(
+      classifyRepoDelivery(
+        ['motir-marketing', shipped('motir-skills')],
+        [fact('motir-marketing', true, 'main')],
+      ),
+    );
+    expect(hasRepoSetShortfall(shortfall)).toBe(false);
+  });
+
+  it('keeps holding without the evidence — the card’s reproduction, as it stood', () => {
+    const shortfall = repoSetShortfall(
+      classifyRepoDelivery(
+        ['motir-marketing', { repo: 'motir-skills', shippedWithoutChangeRequest: false }],
+        [fact('motir-marketing', true, 'main')],
+      ),
+    );
+    expect(shortfall.outstanding).toEqual(['motir-skills']);
+  });
+
+  it('never answers for a repository with an OPEN linked pull request', () => {
+    expect(
+      classifyRepoDelivery([shipped('motir-skills')], [fact('motir-skills', false, 'main')])[0]!
+        .state,
+    ).toBe('awaiting');
+  });
+
+  it('never answers for a merge onto a NON-default branch — that stays awaiting', () => {
+    expect(
+      classifyRepoDelivery([shipped('motir-skills')], [fact('motir-skills', true, 'side')])[0]!
+        .state,
+    ).toBe('awaiting');
+  });
+
+  it('never answers for a merge with an UNRECORDED base — that stays unknown', () => {
+    expect(
+      classifyRepoDelivery([shipped('motir-skills')], [fact('motir-skills', true, null)])[0]!.state,
+    ).toBe('unknown');
+  });
+
+  it('a real merge onto the default branch still reads delivered', () => {
+    expect(
+      classifyRepoDelivery([shipped('motir-skills')], [fact('motir-skills', true, 'main')])[0]!
+        .state,
+    ).toBe('delivered');
+  });
+
+  it('the row’s own establish state still decides first', () => {
+    expect(
+      classifyRepoDelivery(
+        [{ repo: 'motir-skills', establishState: 'proposed', shippedWithoutChangeRequest: true }],
+        [],
+      )[0]!.state,
+    ).toBe('unestablished');
+  });
+
+  it('keeps a placeholder row in the Development section — there is no pull request to draw', () => {
+    expect(
+      awaitingRepoRows([delivery('motir-skills', 'delivered_without_change_request')], []),
+    ).toEqual([delivery('motir-skills', 'delivered_without_change_request')]);
+  });
+});
