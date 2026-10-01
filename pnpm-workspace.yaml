@@ -46,6 +46,7 @@ allowBuilds:
 # CIMD plugin MOTIR-7170 needs exists only on the 1.7 line. Pinned exactly, so
 # each entry names one immutable version; drop them once they have aged.
 minimumReleaseAgeExclude:
+  - '@better-auth/cimd@1.7.7'
   - '@better-auth/core@1.7.7'
   - '@better-auth/drizzle-adapter@1.7.7'
   - '@better-auth/kysely-adapter@1.7.7'

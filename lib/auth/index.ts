@@ -4,6 +4,7 @@ import { isAPIError } from 'better-auth/api';
 import { prismaAdapter } from '@better-auth/prisma-adapter';
 import { passkey } from '@better-auth/passkey';
 import { oauthProvider } from '@better-auth/oauth-provider';
+import { cimd } from '@better-auth/cimd';
 import { nextCookies } from 'better-auth/next-js';
 import { deviceAuthorization } from 'better-auth/plugins';
 import { twoFactor } from 'better-auth/plugins/two-factor';
@@ -36,6 +37,11 @@ import { PASSKEY_RESIDENT_KEY, PASSKEY_RP_NAME, PASSKEY_USER_VERIFICATION } from
 import { hash, verify } from './passwords';
 import { mcpOAuthPolicy } from './mcpOAuthPolicy';
 import { seedResourcesLazily } from './lazyResourceSeed';
+import {
+  CIMD_FETCH_POLICY,
+  CIMD_REVALIDATION_INTERVAL,
+  fetchClientMetadataDocument,
+} from '@/lib/oauth/clientMetadataDocument';
 import { CONSENT_REQUIRED_REFERENCE, currentConsentConnection } from '@/lib/oauth/consentContext';
 import {
   mcpResourceUrl,
@@ -114,6 +120,7 @@ export const authOptions: BetterAuthOptions & {
     ReturnType<typeof passkey>,
     ReturnType<typeof mcpOAuthPolicy>,
     ReturnType<typeof oauthProvider>,
+    ReturnType<typeof cimd>,
     ReturnType<typeof nextCookies>,
   ];
 } = {
@@ -721,6 +728,22 @@ export const authOptions: BetterAuthOptions & {
         // removed the option along with the warning it silenced.)
       }),
     ),
+    // Client ID Metadata Documents (MOTIR-7173): a client may name itself by an
+    // HTTPS URL, whose document is fetched, validated and recorded as a client
+    // (`clientDiscoveryId: 'cimd'`). AFTER the provider, which its `init`
+    // extends. Its discovery also advertises `client_id_metadata_document_
+    // supported`, the flag Claude reads before using its published identity.
+    // DCR stays open beside it for every other client.
+    cimd({
+      // The plugin's hardened node transport, behind a seam tests stub
+      // (`lib/oauth/clientMetadataDocument.ts` says what it guarantees).
+      fetchClientMetadataResource: fetchClientMetadataDocument,
+      // MCP 2026-07-28 pins CIMD draft-00, which requires `client_name` and
+      // `redirect_uris` — both of which the consent screen needs.
+      metadataProfile: 'mcp-2026-07-28',
+      metadataRevalidationInterval: CIMD_REVALIDATION_INTERVAL,
+      metadataFetchPolicy: CIMD_FETCH_POLICY,
+    }),
     // LAST, as Better-Auth requires of a cookie integration: it forwards the
     // `Set-Cookie` headers of every `after` hook that runs before it, and the
     // OAuth provider is the first plugin here to declare one (MOTIR-6982).

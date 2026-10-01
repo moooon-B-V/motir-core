@@ -11039,6 +11039,8 @@
         "invalid_client": "The app isn’t registered with Motir, or its registration has expired.",
         "invalid_redirect": "It asked to send you back to <b>{host}</b>, an address it never registered with Motir.",
         "invalid_redirect_nohost": "It asked to send you back to an address it never registered with Motir.",
+        "client_metadata": "It identified itself with a document at <b>{host}</b> that Motir couldn’t use: {detail}",
+        "client_metadata_nohost": "It identified itself with a document Motir couldn’t use.",
         "code_challenge": "It left out a security check Motir requires on every connection.",
         "invalid_target": "It asked for access to something other than Motir’s MCP server.",
         "expired": "It is too old to use — a connection has to be approved within a few minutes of the app asking.",

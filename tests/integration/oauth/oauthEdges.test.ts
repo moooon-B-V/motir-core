@@ -416,6 +416,7 @@ describe('the mapper', () => {
       icon: null,
       unverified: true,
       host: null,
+      discoveredHost: null,
     });
   });
 

@@ -11035,6 +11035,8 @@
         "invalid_client": "该应用没有在Motir注册，或者它的注册已过期。",
         "invalid_redirect": "它要求把你送回<b>{host}</b>，但这个地址从未在Motir注册过。",
         "invalid_redirect_nohost": "它要求把你送回一个从未在Motir注册过的地址。",
+        "client_metadata": "它用位于 <b>{host}</b> 的文档表明身份，但Motir无法使用该文档：{detail}",
+        "client_metadata_nohost": "它用一份Motir无法使用的文档表明身份。",
         "code_challenge": "它缺少Motir对每个连接都要求的一项安全检查。",
         "invalid_target": "它请求访问的不是Motir的MCP服务器。",
         "expired": "它已经过期——连接必须在应用发起后的几分钟内批准。",

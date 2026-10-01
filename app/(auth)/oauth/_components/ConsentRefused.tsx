@@ -17,6 +17,7 @@ import { Callout, Strong, TerminalState } from './consentParts';
 const QUOTED_CODE: Record<OAuthConsentProblem, string> = {
   invalid_client: 'invalid_client',
   invalid_redirect: 'invalid_request · redirect_uri',
+  client_metadata: 'invalid_client · client_id metadata document',
   code_challenge: 'invalid_request · code_challenge',
   invalid_target: 'invalid_target · resource',
   expired: 'invalid_request · expired',
@@ -41,10 +42,14 @@ export function consentProblemFrom(error: string | null | undefined): OAuthConse
 export function ConsentRefused({
   problem,
   host,
+  detail,
 }: {
   problem: OAuthConsentProblem;
-  /** The redirect host an `invalid_redirect` asked for — shown as data only. */
+  /** The redirect host an `invalid_redirect` asked for, or the host of a
+   * refused metadata document — shown as data only. */
   host?: string | null;
+  /** Why a metadata document was refused, in the plugin's words — data only. */
+  detail?: string | null;
 }) {
   const t = useTranslations('oauthConsent');
   const reason =
@@ -52,7 +57,15 @@ export function ConsentRefused({
       ? host
         ? t.rich('refused.reason.invalid_redirect', { host, b: (c) => <Strong>{c}</Strong> })
         : t('refused.reason.invalid_redirect_nohost')
-      : t(`refused.reason.${problem}`);
+      : problem === 'client_metadata'
+        ? host && detail
+          ? t.rich('refused.reason.client_metadata', {
+              host,
+              detail,
+              b: (c) => <Strong>{c}</Strong>,
+            })
+          : t('refused.reason.client_metadata_nohost')
+        : t(`refused.reason.${problem}`);
   return (
     <TerminalState
       headline={t('heading.refused')}

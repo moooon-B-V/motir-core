@@ -26,6 +26,7 @@ import {
   IRREVERSIBLE_PERMISSIONS,
   expandStoredGrant,
 } from '@/lib/tokens/grant';
+import { discoveredClientHost } from '@/lib/oauth/discoveredClient';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type {
   ApproveConsentResult,
@@ -263,6 +264,7 @@ export const oauthConnectionsService = {
         // Motir knows; one that registered itself (RFC 7591, unauthenticated —
         // every MCP client) is only its own claim.
         unverified: client.userId === null,
+        discoveredHost: discoveredClientHost(client),
       },
       redirectUri,
       redirectHost: redirect.host,

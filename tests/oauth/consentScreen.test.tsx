@@ -345,6 +345,18 @@ describe('/oauth/error — what it reads from its query', () => {
     [{}, 'It wasn’t issued by Motir'],
     [{ error: 'invalid_redirect' }, 'an address it never registered with Motir'],
     [{ error: 'code_challenge' }, 'invalid_request · code_challenge'],
+    // A refused Client ID Metadata Document (MOTIR-7173): its host and the
+    // plugin's reason, as text; without both, the general sentence.
+    [
+      {
+        error: 'client_metadata',
+        host: 'evil.example',
+        detail: 'Metadata document is not valid JSON',
+      },
+      'a document at <strong class="font-semibold">evil.example</strong> that Motir couldn’t use: Metadata document is not valid JSON',
+    ],
+    [{ error: 'client_metadata', host: 'evil.example' }, 'a document Motir couldn’t use.'],
+    [{ error: 'client_metadata' }, 'invalid_client · client_id metadata document'],
   ])('%j reads as a refusal it can name', async (searchParams, says) => {
     const page = html(await ErrorPage({ searchParams: Promise.resolve(searchParams) }));
     expect(page).toContain(says);

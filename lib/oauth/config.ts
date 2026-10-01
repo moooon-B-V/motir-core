@@ -25,12 +25,18 @@ export const OAUTH_CONSENT_PAGE = '/oauth/consent';
  */
 export const OAUTH_ERROR_PAGE = '/oauth/error';
 
-/** The refused-request page for one error code, with the host an unregistered
- * redirect asked for (display only — it is shown as data, never followed). */
-export function oauthErrorPageUrl(error: string, host?: string | null): string {
+/** The refused-request page for one error code, with the host it concerns — an
+ * unregistered redirect's, or a metadata document's — and, for a document,
+ * the reason it was refused. Display only: shown as data, never followed. */
+export function oauthErrorPageUrl(
+  error: string,
+  host?: string | null,
+  detail?: string | null,
+): string {
   const url = new URL(OAUTH_ERROR_PAGE, `${resolveBaseUrlTrimmed()}/`);
   url.searchParams.set('error', error);
   if (host) url.searchParams.set('host', host);
+  if (detail) url.searchParams.set('detail', detail);
   return url.toString();
 }
 

@@ -19,6 +19,10 @@ export interface OAuthConnectionDto {
     /** The host of its first registered redirect URI — the one fact on the row
      * the app did not choose. A loopback address reads `localhost`. */
     host: string | null;
+    /** The host of its `client_id` URL when Motir DISCOVERED it by a Client ID
+     * Metadata Document (MOTIR-7173) — the host that vouches for it. Null for
+     * a registered client. */
+    discoveredHost: string | null;
   };
   workspace: { id: string; name: string };
   organization: { id: string; name: string };
@@ -67,6 +71,9 @@ export interface ConsentRequestDto {
     name: string | null;
     /** True for a dynamically registered client: nobody vouched for its name. */
     unverified: boolean;
+    /** The host of its `client_id` URL when it was discovered by a Client ID
+     * Metadata Document (MOTIR-7173); null for a registered client. */
+    discoveredHost: string | null;
   };
   /** Where the code goes: the request's `redirect_uri`, already checked against
    * the client's registration. */

@@ -151,11 +151,26 @@ resource, `<base>/api/mcp`. A client discovers everything from two documents:
 
 Both answer without a session and to any origin. From there a client:
 
-1. **Registers itself** (RFC 7591) at the advertised `registration_endpoint` —
-   a public client (`token_endpoint_auth_method: none`). A `redirect_uri` must
-   be `https`, or `http` on `localhost` / `127.0.0.1` / `[::1]` (any port: a
-   loopback redirect is matched without its port, RFC 8252). Anything else is
-   refused `invalid_redirect_uri`.
+1. **Identifies itself**, one of two ways:
+   - **By a Client ID Metadata Document** — the client's `client_id` is an
+     `https` URL serving a JSON document that describes it (its name and
+     redirect URIs). The metadata advertises
+     `client_id_metadata_document_supported: true`, and Claude and Claude Code
+     use this path on their own; nothing is registered first. Motir fetches the
+     document at authorize time and caches it for up to 30 minutes. The fetch
+     resolves the host once and refuses a private or reserved address, never
+     follows a redirect, and gives up after 5 seconds or 5 KB. The document's
+     `client_id` must equal its own URL. A document Motir cannot use sends the
+     person to `/oauth/error` naming the host and why. Consent names the
+     client by that verified host, not by the name the document gives itself.
+   - **By registering** (RFC 7591) at the advertised `registration_endpoint` —
+     a public client (`token_endpoint_auth_method: none`).
+
+   Either way a `redirect_uri` must be `https`, or `http` on `localhost` /
+   `127.0.0.1` / `[::1]` (any port: a loopback redirect is matched without its
+   port, RFC 8252). A registration naming anything else is refused
+   `invalid_redirect_uri`.
+
 2. **Sends the person to authorize** with PKCE (`code_challenge_method=S256`;
    `plain` is refused) and `resource=<base>/api/mcp` (RFC 8707; any other value,
    or none, is refused `invalid_target`). A signed-out person signs in first and

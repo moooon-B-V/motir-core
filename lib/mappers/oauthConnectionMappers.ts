@@ -2,6 +2,7 @@ import type { OAuthConnectionWithClient } from '@/lib/repositories/apiTokenRepos
 import type { OAuthConnectionDto } from '@/lib/dto/oauthConnections';
 import { expandStoredGrant } from '@/lib/tokens/grant';
 import { isLoopbackHostname } from '@/lib/oauth/redirectPolicy';
+import { discoveredClientHost } from '@/lib/oauth/discoveredClient';
 
 // Prisma → DTO for OAuth connections (Story MOTIR-6973 · Subtask MOTIR-6983). The
 // row is an `api_token`; the hash and prefix are never copied, because a
@@ -20,6 +21,7 @@ export function toOAuthConnectionDto(row: OAuthConnectionWithClient): OAuthConne
       // (dynamic registration) — the Unverified label the consent screen shows.
       unverified: (row.oauthClient?.userId ?? null) === null,
       host: redirectHost(row.oauthClient?.redirectUris ?? []),
+      discoveredHost: row.oauthClient ? discoveredClientHost(row.oauthClient) : null,
     },
     workspace: { id: row.workspace.id, name: row.workspace.name },
     organization: { id: row.workspace.organization.id, name: row.workspace.organization.name },

@@ -20,7 +20,7 @@ const signOut = vi.fn(async () => undefined);
 vi.mock('@/lib/auth/client', () => ({ signOut: () => signOut() }));
 
 const REQUEST: ConsentRequestDto = {
-  client: { clientId: 'c1', name: 'Claude Code', unverified: true },
+  client: { clientId: 'c1', name: 'Claude Code', unverified: true, discoveredHost: null },
   redirectUri: 'http://127.0.0.1:53682/callback',
   redirectHost: '127.0.0.1:53682',
   loopback: true,

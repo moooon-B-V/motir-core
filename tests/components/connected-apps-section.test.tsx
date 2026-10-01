@@ -28,6 +28,7 @@ function connection(over: Partial<OAuthConnectionDto> = {}): OAuthConnectionDto 
       icon: null,
       unverified: true,
       host: 'claude.ai',
+      discoveredHost: null,
     },
     workspace: { id: 'w1', name: 'Motir' },
     organization: { id: 'o1', name: 'moooon' },
@@ -50,6 +51,7 @@ const TWO = [
       icon: null,
       unverified: false,
       host: 'localhost',
+      discoveredHost: null,
     },
     workspace: { id: 'w2', name: 'Client work' },
     project: { id: 'p1', name: 'Website' },
@@ -243,7 +245,15 @@ describe('ConnectedAppsSection — the edges', () => {
   it('an app with no name or host reads as unnamed; a granted delete gets the rose row', () => {
     render([
       connection({
-        client: { clientId: 'x', name: null, uri: null, icon: null, unverified: true, host: null },
+        client: {
+          clientId: 'x',
+          name: null,
+          uri: null,
+          icon: null,
+          unverified: true,
+          host: null,
+          discoveredHost: null,
+        },
         permissions: [...GRANTABLE_PERMISSIONS],
       }),
     ]);

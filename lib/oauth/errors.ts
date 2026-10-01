@@ -21,6 +21,8 @@ export type OAuthConsentProblem =
   | 'invalid_client'
   /** The `redirect_uri` is not one the client registered. */
   | 'invalid_redirect'
+  /** The client named itself by a metadata document Motir could not use. */
+  | 'client_metadata'
   /** PKCE missing, or a method other than S256. */
   | 'code_challenge'
   /** `resource` is not Motir's MCP. */
