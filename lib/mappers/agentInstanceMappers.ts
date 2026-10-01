@@ -2,6 +2,7 @@ import type { AgentInstance, AgentInstanceInterval } from '@/generated/prisma/cl
 import type {
   AgentInstanceActiveRunDto,
   AgentInstanceDto,
+  AgentInstanceImageFields,
   AgentInstanceIntervalDto,
   AgentInstanceLastRunDto,
 } from '@/lib/dto/agentInstances';
@@ -18,7 +19,10 @@ import type {
 // Fly handle, `deletedAt` (a deleted row is never returned) and the charge's
 // internals (reference, attempts, detail).
 
-export function toAgentInstanceDto(row: AgentInstance): AgentInstanceDto {
+export function toAgentInstanceDto(
+  row: AgentInstance,
+  image: AgentInstanceImageFields,
+): AgentInstanceDto {
   return {
     id: row.id,
     name: row.name,
@@ -26,6 +30,8 @@ export function toAgentInstanceDto(row: AgentInstance): AgentInstanceDto {
     profileId: row.profileId,
     imageTag: row.imageTag,
     imageDigest: row.imageDigest,
+    imageVersion: image.imageVersion,
+    update: image.update,
     region: row.region,
     state: row.state,
     failureReason: row.failureReason,

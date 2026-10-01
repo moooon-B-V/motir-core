@@ -39,6 +39,7 @@ import {
   type AgentSignInAnswer,
 } from '@/lib/agentInstances/terminal';
 import { imageDigestResolver, pinnedImageReference } from '@/lib/agentInstances/imageDigest';
+import { imageCatalog } from '@/lib/agentInstances/imageCatalog';
 import {
   isOfferedProfile,
   profileDisplayName,
@@ -51,7 +52,7 @@ import {
 } from '@/lib/agentInstances/stateMachine';
 import { checkAgentRunCredits } from '@/lib/ai/motirAiClient';
 import { isCloudBilling } from '@/lib/billing/availability';
-import type { AgentInstanceDto } from '@/lib/dto/agentInstances';
+import type { AgentInstanceDto, AgentInstanceImageFields } from '@/lib/dto/agentInstances';
 import {
   mintProjectReadCredentials,
   revokeInstanceCloneCredential,
@@ -599,6 +600,42 @@ async function waitFor(deadlineMs: number, done: () => Promise<boolean>): Promis
   }
 }
 
+/** The catalog could not be asked: shown as "could not check", never as up to date. */
+const UNKNOWN_IMAGE: AgentInstanceImageFields = { imageVersion: null, update: 'unknown' };
+
+/**
+ * The catalog's answer for each row (`agent-image-update.md` Q1, MOTIR-6949):
+ * its version and its update offer. The catalog caches per profile, so a page of
+ * N agents across P profiles reads the registry at most P times per window.
+ * Never throws: a catalog failure is `unknown` on the rows it touched.
+ */
+async function imageFieldsFor(
+  rows: readonly AgentInstance[],
+): Promise<Map<string, AgentInstanceImageFields>> {
+  // No instance lane on this deployment: nothing could be updated, and a list
+  // read must not reach a registry for it.
+  if (!isPersistentOrchestratorConfigured()) return new Map();
+  const answers = await Promise.all(
+    rows.map(async (row): Promise<[string, AgentInstanceImageFields]> => {
+      try {
+        return [row.id, await imageCatalog.updateFor(row.profileId, row.imageDigest)];
+      } catch (err) {
+        console.warn('[agentInstanceLifecycle] the image catalog failed', {
+          instanceId: row.id,
+          detail: describeError(err),
+        });
+        return [row.id, UNKNOWN_IMAGE];
+      }
+    }),
+  );
+  return new Map(answers);
+}
+
+async function toDtoWithImage(row: AgentInstance): Promise<AgentInstanceDto> {
+  const image = await imageFieldsFor([row]);
+  return toAgentInstanceDto(row, image.get(row.id) ?? UNKNOWN_IMAGE);
+}
+
 export const agentInstanceLifecycleService = {
   /** The caller's own live instances on the project, newest first, one page (§4, §8). */
   async list(
@@ -609,7 +646,7 @@ export const agentInstanceLifecycleService = {
     const project = await resolveProject(projectKey, ctx);
     const now = agentInstanceClock.now();
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    return inProject(project, ctx, async (tx) => {
+    const page_ = await inProject(project, ctx, async (tx) => {
       const scope = { ownerId: ctx.userId, projectId: project.id };
       const rows = await agentInstanceRepository.listLiveForOwner({ ...scope, ...page }, tx);
       const total = await agentInstanceRepository.countLiveForOwner(scope, tx);
@@ -643,19 +680,24 @@ export const agentInstanceLifecycleService = {
         rows.map((r) => r.id),
         tx,
       );
-      return {
-        total,
-        instances: rows.map((row) => ({
-          ...toAgentInstanceDto(row),
-          profileName: profileDisplayName(row.profileId),
-          machineSecondsThisMonth: usage.get(row.id)?.seconds ?? 0,
-          creditsThisMonth: usage.get(row.id)?.credits ?? 0,
-          stopReason: stopReasonOf(latestClosed.get(row.id) ?? null),
-          activeRun: runs.active.get(row.id) ?? null,
-          lastRun: runs.last.get(row.id) ?? null,
-        })),
-      };
+      return { total, rows, usage, latestClosed, runs };
     });
+    // The registry is asked OUTSIDE the transaction, once per profile per cache
+    // window (`agent-image-update.md` Q1) — never once per row.
+    const image = await imageFieldsFor(page_.rows);
+    const { usage, latestClosed, runs } = page_;
+    return {
+      total: page_.total,
+      instances: page_.rows.map((row) => ({
+        ...toAgentInstanceDto(row, image.get(row.id) ?? UNKNOWN_IMAGE),
+        profileName: profileDisplayName(row.profileId),
+        machineSecondsThisMonth: usage.get(row.id)?.seconds ?? 0,
+        creditsThisMonth: usage.get(row.id)?.credits ?? 0,
+        stopReason: stopReasonOf(latestClosed.get(row.id) ?? null),
+        activeRun: runs.active.get(row.id) ?? null,
+        lastRun: runs.last.get(row.id) ?? null,
+      })),
+    };
   },
 
   /**
@@ -780,14 +822,14 @@ export const agentInstanceLifecycleService = {
       );
     } catch (err) {
       await failInstance(row, `The machine could not be created: ${describeError(err)}`);
-      return toAgentInstanceDto(await reload(row));
+      return await toDtoWithImage(await reload(row));
     }
 
     await waitFor(
       INSTANCE_INLINE_BOOT_WAIT_MS,
       async () => (await this.settleBoot(instanceId)) !== 'pending',
     );
-    return toAgentInstanceDto(await reload(row));
+    return await toDtoWithImage(await reload(row));
   },
 
   /** Wake a `hibernated` or `failed` instance (§2, §4): refuse or start. Every wake is a cold boot. */
@@ -860,13 +902,13 @@ export const agentInstanceLifecycleService = {
         row,
         `The machine could not start: ${describeError(err)}. Wake to try again, or delete it.`,
       );
-      return toAgentInstanceDto(await reload(row));
+      return await toDtoWithImage(await reload(row));
     }
     await waitFor(
       INSTANCE_INLINE_BOOT_WAIT_MS,
       async () => (await this.settleBoot(instanceId)) !== 'pending',
     );
-    return toAgentInstanceDto(await reload(row));
+    return await toDtoWithImage(await reload(row));
   },
 
   /** Hibernate a `running` instance at its owner's request (§2). */
@@ -888,7 +930,7 @@ export const agentInstanceLifecycleService = {
     if (!(await this.beginHibernate(row.id, 'hibernated'))) {
       throw new AgentInstanceStateConflictError(row.id, (await reload(row)).state, 'hibernated');
     }
-    return toAgentInstanceDto(await reload(row));
+    return await toDtoWithImage(await reload(row));
   },
 
   /**

@@ -25,6 +25,15 @@ export type {
   AgentTerminalServer,
 };
 
+/** An agent's update offer (`agent-image-update.md` Q1). */
+export type AgentImageUpdateDto = { version: string; digest: string } | null | 'unknown';
+
+/** The catalog's answer for one agent, which the mapper puts on its DTO. */
+export interface AgentInstanceImageFields {
+  imageVersion: string | null;
+  update: AgentImageUpdateDto;
+}
+
 /** One instance, as its owner sees it. */
 export interface AgentInstanceDto {
   id: string;
@@ -35,6 +44,18 @@ export interface AgentInstanceDto {
   /** The moving tag the pinned digest was resolved from. */
   imageTag: string;
   imageDigest: string;
+  /**
+   * The version the agent runs (`agent-image-update.md` Q1, MOTIR-6949): the
+   * `x.y.z` of the immutable tag sharing its digest, or null where none does or
+   * the registry could not be asked.
+   */
+  imageVersion: string | null;
+  /**
+   * What the agent is offered (Q1): the newest published image when it is newer;
+   * null when the agent is on the newest; `'unknown'` when the registry could not
+   * be asked — which the page shows as "could not check", NEVER as up to date.
+   */
+  update: AgentImageUpdateDto;
   region: string;
   state: AgentInstanceState;
   /** Set on `failed`, in words; null otherwise. */

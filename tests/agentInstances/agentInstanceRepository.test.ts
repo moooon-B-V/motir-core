@@ -153,7 +153,7 @@ describe('agentInstanceRepository', () => {
     const row = await createInstance(f);
     expect(row.state).toBe('starting');
     expect(row.deletedAt).toBeNull();
-    const dto = toAgentInstanceDto(row);
+    const dto = toAgentInstanceDto(row, { imageVersion: '0.9.0', update: null });
     expect(dto).toMatchObject({
       name: 'yue-claude',
       profileId: 'claude',

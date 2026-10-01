@@ -143,6 +143,8 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
     profileName: 'Claude Code',
     imageTag: 'ghcr.io/moooon-b-v/motir-sandbox:claude',
     imageDigest: 'sha256:abc',
+    imageVersion: '1.0.0',
+    update: null,
     region: 'iad',
     state: 'running',
     failureReason: null,
