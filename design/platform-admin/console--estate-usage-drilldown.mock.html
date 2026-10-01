@@ -2945,11 +2945,9 @@
     <!-- ════════════════ D3 — USAGE & COST · BY TENANCY (amends Panel 4) ════════════════ -->
     <div class="panel-label">
       D3 · Usage &amp; cost · estate — <strong>replaces</strong> the by-tenancy tree, By model &amp;
-      consumers and By month (MOTIR-732; second revision after review 2026-10-01). One flat list of
-      organizations: each row is an org’s spend in the chosen period, one column per category, with
-      indexing minutes, the charged total and Motir’s cost. The top row is the estate total over ALL
-      orgs, not just the page shown. The period is any month (picker) or All time. Above it, the
-      estate by category. No workspace or project here: an org’s row opens its page (D8).
+      consumers and By month (MOTIR-732; revised after review 2026-10-01). The estate as a whole:
+      the period is any month (picker) or All time; four figures; the estate by category. No list of
+      organizations here: that list is the Tenants page (D10), with the same columns.
     </div>
     <div class="panel">
       <div class="stage">
@@ -3024,8 +3022,8 @@
                 <div>
                   <h2>Usage &amp; cost</h2>
                   <p class="sub">
-                    Every organization’s spend in every category — credits charged, usage, and what
-                    it cost Motir. Pick any month, or all time. Open an org for its full breakdown.
+                    The estate’s spend in every category — credits charged, usage, and what it cost
+                    Motir. Pick any month, or all time. Each organization’s figures are on Tenants.
                   </p>
                 </div>
                 <div class="segmented" role="group" aria-label="Period">
@@ -3190,167 +3188,6 @@
                         </tr>
                       </tbody>
                     </table>
-                  </div>
-                </div>
-                <div class="card">
-                  <div class="card-head">
-                    <div class="ttl">
-                      <span class="ico ent-org" style="width: 30px; height: 30px"
-                        ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg
-                      ></span>
-                      <div>
-                        <h3>Organizations</h3>
-                        <p class="hsub">
-                          One row per org: this period’s credits per category, indexing minutes, the
-                          charged total and Motir’s cost. Click a row for its full breakdown.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="card-body flush">
-                    <div style="overflow-x: auto">
-                      <table class="tbl dense">
-                        <thead>
-                          <tr>
-                            <th>Organization</th>
-                            <th class="num">Planning</th>
-                            <th class="num">Agent<br />tokens</th>
-                            <th class="num">Agent<br />machine</th>
-                            <th class="num">Instances</th>
-                            <th class="num">Storage</th>
-                            <th class="num">CI</th>
-                            <th class="num">Search</th>
-                            <th class="num">Indexing<br />min</th>
-                            <th class="num">Charged</th>
-                            <th class="num sorted">
-                              Motir<br />cost<svg viewBox="0 0 24 24">
-                                <use href="#i-arrow-down" />
-                              </svg>
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            <td>
-                              <strong>All 214 orgs</strong><br /><span class="muted"
-                                >estate total</span
-                              >
-                            </td>
-                            <td class="num"><strong>52,940</strong></td>
-                            <td class="num"><strong>15,820</strong></td>
-                            <td class="num"><strong>5,420</strong></td>
-                            <td class="num"><strong>2,180</strong></td>
-                            <td class="num"><strong>310</strong></td>
-                            <td class="num"><strong>640</strong></td>
-                            <td class="num"><strong>1,960</strong></td>
-                            <td class="num">
-                              <strong>6,840</strong>
-                            </td>
-                            <td class="num credits">79,270</td>
-                            <td class="num credits">$557.60</td>
-                          </tr>
-                          <tr class="drillable">
-                            <td>
-                              <span class="tenant"
-                                ><span class="ava ent-org">A</span
-                                ><span class="nm">Acme Corp</span></span
-                              >
-                            </td>
-                            <td class="num"><span class="muted">11,920</span></td>
-                            <td class="num"><span class="muted">4,480</span></td>
-                            <td class="num"><span class="muted">1,240</span></td>
-                            <td class="num"><span class="muted">620</span></td>
-                            <td class="num"><span class="muted">90</span></td>
-                            <td class="num"><span class="muted">68</span></td>
-                            <td class="num"><span class="muted">410</span></td>
-                            <td class="num"><span class="muted">960</span></td>
-                            <td class="num credits">18,828</td>
-                            <td class="num credits">$109.30</td>
-                          </tr>
-                          <tr class="drillable">
-                            <td>
-                              <span class="tenant"
-                                ><span class="ava ent-org">G</span
-                                ><span class="nm">Globex</span></span
-                              >
-                            </td>
-                            <td class="num"><span class="muted">9,800</span></td>
-                            <td class="num"><span class="muted">3,100</span></td>
-                            <td class="num"><span class="muted">820</span></td>
-                            <td class="num"><span class="muted">—</span></td>
-                            <td class="num"><span class="muted">—</span></td>
-                            <td class="num"><span class="muted">240</span></td>
-                            <td class="num"><span class="muted">160</span></td>
-                            <td class="num"><span class="muted">720</span></td>
-                            <td class="num credits">14,120</td>
-                            <td class="num credits">$78.40</td>
-                          </tr>
-                          <tr class="drillable">
-                            <td>
-                              <span class="tenant"
-                                ><span class="ava ent-org">U</span
-                                ><span class="nm">Umbrella</span></span
-                              >
-                            </td>
-                            <td class="num"><span class="muted">7,200</span></td>
-                            <td class="num"><span class="muted">2,050</span></td>
-                            <td class="num"><span class="muted">610</span></td>
-                            <td class="num"><span class="muted">300</span></td>
-                            <td class="num"><span class="muted">40</span></td>
-                            <td class="num"><span class="muted">—</span></td>
-                            <td class="num"><span class="muted">190</span></td>
-                            <td class="num"><span class="muted">410</span></td>
-                            <td class="num credits">10,390</td>
-                            <td class="num credits">$61.70</td>
-                          </tr>
-                          <tr class="drillable">
-                            <td>
-                              <span class="tenant"
-                                ><span class="ava ent-org">H</span
-                                ><span class="nm">Hooli</span></span
-                              ><br /><span class="pill pill-neutral">Internal billing</span>
-                            </td>
-                            <td class="num"><span class="muted">2,210</span></td>
-                            <td class="num"><span class="muted">1,400</span></td>
-                            <td class="num"><span class="muted">380</span></td>
-                            <td class="num"><span class="muted">—</span></td>
-                            <td class="num"><span class="muted">—</span></td>
-                            <td class="num"><span class="muted">—</span></td>
-                            <td class="num"><span class="muted">20</span></td>
-                            <td class="num"><span class="muted">300</span></td>
-                            <td class="num credits">4,010</td>
-                            <td class="num credits">$23.80</td>
-                          </tr>
-                          <tr class="drillable">
-                            <td>
-                              <span class="tenant"
-                                ><span class="ava ent-org">I</span
-                                ><span class="nm">Initech</span></span
-                              >
-                            </td>
-                            <td class="num"><span class="muted">3,100</span></td>
-                            <td class="num"><span class="muted">—</span></td>
-                            <td class="num"><span class="muted">—</span></td>
-                            <td class="num"><span class="muted">—</span></td>
-                            <td class="num"><span class="muted">—</span></td>
-                            <td class="num"><span class="muted">12</span></td>
-                            <td class="num"><span class="muted">40</span></td>
-                            <td class="num"><span class="muted">150</span></td>
-                            <td class="num credits">3,152</td>
-                            <td class="num credits">$15.20</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                  <div class="card-foot">
-                    <span class="fnote"
-                      ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Sorted by Motir cost ·
-                      every column sorts</span
-                    >
-                    <span class="btn btn-secondary btn-sm"
-                      >Show more<svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
-                    ></span>
                   </div>
                 </div>
               </div>
@@ -3605,10 +3442,284 @@
       </div>
     </div>
     <div class="panel-label">
-      D5 · Drill-down · org — <strong>amends Panels 6 and 11</strong> (MOTIR-733). It FILLS the
-      shipped org page (<code>/admin/tenants/[orgId]</code>, MOTIR-4566) — the header, chips,
-      classification control and the Index &amp; fleet cost card (Panel 14) stay exactly as they
-      ship and are collapsed here. The three reserved regions become:
+      D10 · Tenants — <strong>the tenant list first</strong> (MOTIR-733; revised after review
+      2026-10-01). Replaces the shipped search-first page (<code>/admin/tenants</code>): the list of
+      every organization is there on arrival, sorted by Motir cost; the search field filters it by
+      name or slug; the period control sets the month (or All time) every spend column answers for.
+      The top row is the estate total over ALL orgs. Clicking an org opens its page (D5); that page
+      has a <strong>← Tenants</strong> button back to this list, with the search and period kept.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <div class="row-between">
+                <div>
+                  <h2>Tenants</h2>
+                  <p class="sub">
+                    Every organization and what it spent, in every category. Click an org to open
+                    it. Opening one is an audited cross-tenant read.
+                  </p>
+                </div>
+              </div>
+              <div class="seg-row" style="margin-top: 16px; align-items: flex-end">
+                <div class="field" style="flex: 1; max-width: 420px; margin: 0">
+                  <label>Filter by name or slug</label>
+                  <div class="input" style="display: flex; align-items: center; gap: 8px">
+                    <svg viewBox="0 0 24 24" style="width: 14px; height: 14px">
+                      <use href="#i-search" /></svg
+                    >moooon, acme, northwind…
+                  </div>
+                </div>
+                <div class="segmented" role="group" aria-label="Period">
+                  <button class="seg-opt active" aria-pressed="true">
+                    <svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>Sep 2026<svg
+                      viewBox="0 0 24 24"
+                    >
+                      <use href="#i-chevdown" />
+                    </svg></button
+                  ><button class="seg-opt" aria-pressed="false">All time</button>
+                </div>
+              </div>
+              <div class="stack" style="margin-top: 16px">
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg
+                      ></span>
+                      <div>
+                        <h3>Organizations</h3>
+                        <p class="hsub">
+                          One row per org: this period’s credits per category, indexing minutes, the
+                          charged total and Motir’s cost. Click an org to open it.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <div style="overflow-x: auto">
+                      <table class="tbl dense">
+                        <thead>
+                          <tr>
+                            <th>Organization</th>
+                            <th class="num">Planning</th>
+                            <th class="num">Agent<br />tokens</th>
+                            <th class="num">Agent<br />machine</th>
+                            <th class="num">Instances</th>
+                            <th class="num">Storage</th>
+                            <th class="num">CI</th>
+                            <th class="num">Search</th>
+                            <th class="num">Indexing<br />min</th>
+                            <th class="num">Charged</th>
+                            <th class="num sorted">
+                              Motir<br />cost<svg viewBox="0 0 24 24">
+                                <use href="#i-arrow-down" />
+                              </svg>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>
+                              <strong>All 214 orgs</strong><br /><span class="muted"
+                                >estate total</span
+                              >
+                            </td>
+                            <td class="num"><strong>52,940</strong></td>
+                            <td class="num"><strong>15,820</strong></td>
+                            <td class="num"><strong>5,420</strong></td>
+                            <td class="num"><strong>2,180</strong></td>
+                            <td class="num"><strong>310</strong></td>
+                            <td class="num"><strong>640</strong></td>
+                            <td class="num"><strong>1,960</strong></td>
+                            <td class="num">
+                              <strong>6,840</strong>
+                            </td>
+                            <td class="num credits">79,270</td>
+                            <td class="num credits">$557.60</td>
+                          </tr>
+                          <tr class="drillable">
+                            <td>
+                              <span class="tenant"
+                                ><span class="ava ent-org">A</span
+                                ><span class="nm">Acme Corp</span></span
+                              >
+                            </td>
+                            <td class="num"><span class="muted">11,920</span></td>
+                            <td class="num"><span class="muted">4,480</span></td>
+                            <td class="num"><span class="muted">1,240</span></td>
+                            <td class="num"><span class="muted">620</span></td>
+                            <td class="num"><span class="muted">90</span></td>
+                            <td class="num"><span class="muted">68</span></td>
+                            <td class="num"><span class="muted">410</span></td>
+                            <td class="num"><span class="muted">960</span></td>
+                            <td class="num credits">18,828</td>
+                            <td class="num credits">$109.30</td>
+                          </tr>
+                          <tr class="drillable">
+                            <td>
+                              <span class="tenant"
+                                ><span class="ava ent-org">G</span
+                                ><span class="nm">Globex</span></span
+                              >
+                            </td>
+                            <td class="num"><span class="muted">9,800</span></td>
+                            <td class="num"><span class="muted">3,100</span></td>
+                            <td class="num"><span class="muted">820</span></td>
+                            <td class="num"><span class="muted">—</span></td>
+                            <td class="num"><span class="muted">—</span></td>
+                            <td class="num"><span class="muted">240</span></td>
+                            <td class="num"><span class="muted">160</span></td>
+                            <td class="num"><span class="muted">720</span></td>
+                            <td class="num credits">14,120</td>
+                            <td class="num credits">$78.40</td>
+                          </tr>
+                          <tr class="drillable">
+                            <td>
+                              <span class="tenant"
+                                ><span class="ava ent-org">U</span
+                                ><span class="nm">Umbrella</span></span
+                              >
+                            </td>
+                            <td class="num"><span class="muted">7,200</span></td>
+                            <td class="num"><span class="muted">2,050</span></td>
+                            <td class="num"><span class="muted">610</span></td>
+                            <td class="num"><span class="muted">300</span></td>
+                            <td class="num"><span class="muted">40</span></td>
+                            <td class="num"><span class="muted">—</span></td>
+                            <td class="num"><span class="muted">190</span></td>
+                            <td class="num"><span class="muted">410</span></td>
+                            <td class="num credits">10,390</td>
+                            <td class="num credits">$61.70</td>
+                          </tr>
+                          <tr class="drillable">
+                            <td>
+                              <span class="tenant"
+                                ><span class="ava ent-org">H</span
+                                ><span class="nm">Hooli</span></span
+                              ><br /><span class="pill pill-neutral">Internal billing</span>
+                            </td>
+                            <td class="num"><span class="muted">2,210</span></td>
+                            <td class="num"><span class="muted">1,400</span></td>
+                            <td class="num"><span class="muted">380</span></td>
+                            <td class="num"><span class="muted">—</span></td>
+                            <td class="num"><span class="muted">—</span></td>
+                            <td class="num"><span class="muted">—</span></td>
+                            <td class="num"><span class="muted">20</span></td>
+                            <td class="num"><span class="muted">300</span></td>
+                            <td class="num credits">4,010</td>
+                            <td class="num credits">$23.80</td>
+                          </tr>
+                          <tr class="drillable">
+                            <td>
+                              <span class="tenant"
+                                ><span class="ava ent-org">I</span
+                                ><span class="nm">Initech</span></span
+                              >
+                            </td>
+                            <td class="num"><span class="muted">3,100</span></td>
+                            <td class="num"><span class="muted">—</span></td>
+                            <td class="num"><span class="muted">—</span></td>
+                            <td class="num"><span class="muted">—</span></td>
+                            <td class="num"><span class="muted">—</span></td>
+                            <td class="num"><span class="muted">12</span></td>
+                            <td class="num"><span class="muted">40</span></td>
+                            <td class="num"><span class="muted">150</span></td>
+                            <td class="num credits">3,152</td>
+                            <td class="num credits">$15.20</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div class="card-foot">
+                    <span class="fnote"
+                      ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Sorted by Motir cost ·
+                      every column sorts</span
+                    >
+                    <span class="btn btn-secondary btn-sm"
+                      >Show more<svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+                    ></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      D5 · Drill-down · org — <strong>amends Panels 6 and 11</strong> (MOTIR-733). Reached from the
+      Tenants list (D10); <strong>← Tenants</strong> returns to it — no breadcrumb, here or on any
+      tab. It FILLS the shipped org page (<code>/admin/tenants/[orgId]</code>, MOTIR-4566) — the
+      header, chips, classification control and the Index &amp; fleet cost card (Panel 14) stay
+      exactly as they ship and are collapsed here. The three reserved regions become:
       <strong>Usage &amp; cost</strong> (this org from the rollup, by workspace, with its
       unattributed row), <strong>Members</strong> (keyset list, role read-only) and
       <strong>Recent jobs</strong> (the runs slice filtered to this org). A new
@@ -3684,13 +3795,10 @@
               ></span>
             </div>
             <div class="page">
-              <div class="scope">
-                <span class="seg">Platform</span><span class="sep" aria-hidden="true">›</span>
-                <span class="seg">Tenants</span><span class="sep" aria-hidden="true">›</span>
-                <span class="seg active"
-                  ><span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span
-                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
-                ></span>
+              <div>
+                <span class="btn btn-secondary btn-sm"
+                  ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Tenants</span
+                >
               </div>
               <div class="audit-banner">
                 <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
@@ -4050,10 +4158,11 @@
     </div>
     <!-- ════════════════ D6 — DRILL-DOWN · WORKSPACE (and the project level beneath it) ════════════════ -->
     <div class="panel-label">
-      D6 · Drill-down · workspace — <strong>new</strong> (MOTIR-733), at a page one level beneath
-      the org page (its route is MOTIR-733’s to add), reached from the org page’s Workspaces card or
-      a tenancy row. Same grammar one level down: its projects with spend, its members, its recent
-      jobs. Coding spend that carries no project is NOT shown at this level — it stays on the org’s
+      D6 · Drill-down · workspace — <strong>new</strong> (MOTIR-733);
+      <strong>← Acme Corp</strong> returns to the org page; at a page one level beneath the org page
+      (its route is MOTIR-733’s to add), reached from the org page’s Workspaces card or a tenancy
+      row. Same grammar one level down: its projects with spend, its members, its recent jobs.
+      Coding spend that carries no project is NOT shown at this level — it stays on the org’s
       unattributed row (D5), so no figure here can exceed what was attributed to it. A
       <strong>project</strong> page (one level further down) is this page with the Projects card
       removed: header, usage for the project, members of the workspace with access, recent jobs.
@@ -4127,16 +4236,10 @@
               ></span>
             </div>
             <div class="page">
-              <div class="scope">
-                <span class="seg">Platform</span><span class="sep" aria-hidden="true">›</span>
-                <span class="seg">Tenants</span><span class="sep" aria-hidden="true">›</span>
-                <span class="seg"
-                  ><span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span></span
-                ><span class="sep" aria-hidden="true">›</span>
-                <span class="seg active"
-                  ><span class="tenant"><span class="ava ent-ws">E</span>Engineering</span
-                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
-                ></span>
+              <div>
+                <span class="btn btn-secondary btn-sm"
+                  ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Acme Corp</span
+                >
               </div>
               <div class="audit-banner">
                 <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
@@ -4465,13 +4568,10 @@
               ></span>
             </div>
             <div class="page">
-              <div class="scope">
-                <span class="seg">Platform</span><span class="sep" aria-hidden="true">›</span>
-                <span class="seg">Tenants</span><span class="sep" aria-hidden="true">›</span>
-                <span class="seg active"
-                  ><span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span
-                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
-                ></span>
+              <div>
+                <span class="btn btn-secondary btn-sm"
+                  ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Tenants</span
+                >
               </div>
               <div class="audit-banner">
                 <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
@@ -5235,13 +5335,10 @@
               ></span>
             </div>
             <div class="page">
-              <div class="scope">
-                <span class="seg">Platform</span><span class="sep" aria-hidden="true">›</span>
-                <span class="seg">Tenants</span><span class="sep" aria-hidden="true">›</span>
-                <span class="seg active"
-                  ><span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span
-                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
-                ></span>
+              <div>
+                <span class="btn btn-secondary btn-sm"
+                  ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Tenants</span
+                >
               </div>
               <div class="audit-banner">
                 <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
@@ -5547,13 +5644,10 @@
               ></span>
             </div>
             <div class="page">
-              <div class="scope">
-                <span class="seg">Platform</span><span class="sep" aria-hidden="true">›</span>
-                <span class="seg">Tenants</span><span class="sep" aria-hidden="true">›</span>
-                <span class="seg active"
-                  ><span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span
-                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
-                ></span>
+              <div>
+                <span class="btn btn-secondary btn-sm"
+                  ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Tenants</span
+                >
               </div>
               <div class="audit-banner">
                 <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
