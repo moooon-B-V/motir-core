@@ -1974,6 +1974,303 @@
       .usebar {
         display: block;
       }
+
+      /* ── TENANT VIEW (D8, D9, D11 — added 2026-10-01) ──────────────────────────
+         The tenant's own Usage & cost and Billing & plans components, scoped under .tv so
+         they cannot collide with the console's classes. Rules copied verbatim from
+         design/billing/billing.mock.html (the billing lines) and design/ai-usage/usage.mock.html
+         (the monthly trend) — the shipped surfaces the operator now sees read-only. */
+      .tv .gico {
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .tv .gico svg {
+        width: 18px;
+        height: 18px;
+      }
+      .tv .gico.tracker {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .tv .gico.ai {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .tv .pill-topup {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .tv .pill-free {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .tv .line {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+      }
+      .tv .line .meta {
+        flex: 1;
+        min-width: 0;
+      }
+      .tv .line .row1 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .tv .line .pname {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .tv .line .fee {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-left: auto;
+        white-space: nowrap;
+      }
+      .tv .line .fee b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .tv .line .desc {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 6px;
+        line-height: 1.5;
+      }
+      .tv .line .acts {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        flex-wrap: wrap;
+      }
+      .tv .meter {
+        height: 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-surface);
+        margin-top: 10px;
+        overflow: hidden;
+      }
+      .tv .meter > span {
+        display: block;
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+      }
+      .tv .meterlbl {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 10px;
+      }
+      .tv .meterlbl b {
+        color: var(--el-text-strong);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .tv .topup-note {
+        color: var(--el-text-secondary);
+        font-weight: 400;
+        font-size: 11px;
+      }
+      .tv .caps {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 14px;
+        margin-top: 14px;
+      }
+      .tv .cap {
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+        background: var(--el-surface-soft);
+      }
+      .tv .cap .ct {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+      .tv .cap .ct svg {
+        width: 13px;
+        height: 13px;
+      }
+      .tv .cap .cv {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin-top: 6px;
+        font-variant-numeric: tabular-nums;
+      }
+      .tv .pay {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .tv .pay .pm {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .tv .pay .pm .brand {
+        width: 34px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .tv .pay .pm .brand svg {
+        width: 15px;
+        height: 15px;
+      }
+      .tv .pay .pm .digits {
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.04em;
+      }
+      .tv .pay .pm .exp {
+        color: var(--el-text-secondary);
+        font-size: 12px;
+      }
+      .tv .seatcalc {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        flex-wrap: wrap;
+      }
+      .tv .seatcalc .sc-l {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .tv .seatcalc .sc-total {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .tv .seatcalc .sc-total .per {
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--el-text-secondary);
+      }
+      .tv .avatars {
+        display: inline-flex;
+        flex: none;
+      }
+      .tv .avatars span {
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        border: 2px solid var(--el-page-bg);
+        margin-left: -6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+      }
+      .tv .avatars span:first-child {
+        margin-left: 0;
+      }
+      .tv .av1 {
+        background: var(--el-tint-lavender);
+      }
+      .tv .av2 {
+        background: var(--el-tint-sky);
+      }
+      .tv .av3 {
+        background: var(--el-tint-mint);
+      }
+      .tv .av4 {
+        background: var(--el-tint-peach);
+      }
+      .tv .av5 {
+        background: var(--el-tint-rose);
+      }
+      .tv .av6 {
+        background: var(--el-tint-yellow);
+      }
+      .tv .xlink {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .tv .xlink svg {
+        width: 13px;
+        height: 13px;
+      }
+      .tv .trend {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+        height: 132px;
+        padding: 8px 4px 0;
+      }
+      .tv .trend .col {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        height: 100%;
+        justify-content: flex-end;
+      }
+      .tv .trend .bar {
+        width: 100%;
+        max-width: 46px;
+        border-radius: var(--radius-control) var(--radius-control) 0 0;
+        background: var(--el-tint-lavender);
+      }
+      .tv .trend .col.cur .bar {
+        background: var(--el-accent);
+      }
+      .tv .trend .mo {
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .tv .trend .col.cur .mo {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .tv .trend .val {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
     </style>
   </head>
   <body>
@@ -3396,6 +3693,19 @@
                   </div>
                 </div>
               </div>
+              <div class="seg-row" style="margin-top: 16px">
+                <div class="segmented" role="group" aria-label="Tenant view">
+                  <button class="seg-opt active" aria-pressed="true">
+                    <svg viewBox="0 0 24 24"><use href="#i-grid" /></svg>Overview
+                  </button>
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+                  </button>
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-card" /></svg>Billing &amp; plans
+                  </button>
+                </div>
+              </div>
               <div class="stack">
                 <div class="note">
                   <svg viewBox="0 0 24 24"><use href="#i-info" /></svg
@@ -3825,6 +4135,16 @@
                   </div>
                 </div>
               </div>
+              <div class="seg-row" style="margin-top: 16px">
+                <div class="segmented" role="group" aria-label="Tenant view">
+                  <button class="seg-opt active" aria-pressed="true">
+                    <svg viewBox="0 0 24 24"><use href="#i-grid" /></svg>Overview
+                  </button>
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+                  </button>
+                </div>
+              </div>
               <div class="stack">
                 <div class="card">
                   <div class="card-head">
@@ -4037,6 +4357,1239 @@
     </div>
     <!-- ════════════════ D7 — USAGE & DRILL-DOWN STATES ════════════════ -->
     <div class="panel-label">
+      D8 · Drill-down · org · <strong>Usage &amp; cost tab</strong> —
+      <strong>new</strong> (MOTIR-733; added after review 2026-10-01). The org page gains three
+      tabs: <strong>Overview</strong> (D5 as drawn), <strong>Usage &amp; cost</strong> (this panel)
+      and <strong>Billing &amp; plans</strong> (D9). This tab is the tenant’s OWN Usage &amp; cost
+      dashboard (<code>design/ai-usage</code>, the shipped <code>OrgUsageClient</code>) rendered for
+      the operator read-only, with the same balance, the same monthly spend chart and the same
+      figures the org’s admins see, plus the <strong>by-month</strong> tables by workspace and by
+      spine. A workspace row opens D6 on the same tab. One tab view = one audit row.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <div class="scope">
+                <span class="seg">Platform</span><span class="sep" aria-hidden="true">›</span>
+                <span class="seg">Tenants</span><span class="sep" aria-hidden="true">›</span>
+                <span class="seg active"
+                  ><span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span
+                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                ></span>
+              </div>
+              <div class="audit-banner">
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+                ><span
+                  >You are viewing <strong>Acme Corp</strong> as platform staff. This cross-tenant
+                  read is recorded in the audit log (operator <strong>OP · ops@moooon.net</strong>,
+                  just now).</span
+                >
+              </div>
+              <div class="row-between" style="margin-top: 16px">
+                <div class="tenant" style="gap: 12px">
+                  <span class="ava ent-org" style="width: 36px; height: 36px; font-size: 14px"
+                    >A</span
+                  >
+                  <div>
+                    <h2 style="margin: 0; font-size: 19px">Acme Corp</h2>
+                    <div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap">
+                      <span class="pill pill-active">● Active</span
+                      ><span class="pill pill-code">acme</span
+                      ><span class="pill pill-tier">Team plan</span>
+                      <span class="pill pill-neutral"
+                        ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>12,400 credits</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="seg-row" style="margin-top: 16px">
+                <div class="segmented" role="group" aria-label="Tenant view">
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-grid" /></svg>Overview
+                  </button>
+                  <button class="seg-opt active" aria-pressed="true">
+                    <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+                  </button>
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-card" /></svg>Billing &amp; plans
+                  </button>
+                </div>
+              </div>
+              <div class="note" style="margin-top: 16px">
+                <svg viewBox="0 0 24 24"><use href="#i-info" /></svg
+                ><span
+                  ><strong>What Acme Corp’s admins see</strong> on their own
+                  <em>Usage &amp; cost</em> page, with the same figures, read-only. Actions they
+                  could take there (buy credits, change plan) do not appear here; acting on a tenant
+                  is Story 10.3.</span
+                >
+              </div>
+              <div class="stack">
+                <div class="stat-grid" style="grid-template-columns: repeat(3, 1fr)">
+                  <div class="card stat">
+                    <span class="ico ent-org"
+                      ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                    ></span>
+                    <div class="big">12,400</div>
+                    <div class="lbl">Credit balance · Team plan, 20,000 / month</div>
+                  </div>
+                  <div class="card stat">
+                    <span class="ico ent-ws"
+                      ><svg viewBox="0 0 24 24"><use href="#i-activity" /></svg
+                    ></span>
+                    <div class="big">17,640</div>
+                    <div class="lbl">Spent in Sep 2026 · 11,920 planning, 5,720 coding</div>
+                  </div>
+                  <div class="card stat">
+                    <span class="ico ent-proj"
+                      ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg
+                    ></span>
+                    <div class="big">148,300</div>
+                    <div class="lbl">Spent since joining · Jan 2026</div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-activity" /></svg
+                      ></span>
+                      <div>
+                        <h3>Monthly spend</h3>
+                        <p class="hsub">
+                          Credits debited per month, org-wide — the chart the tenant sees.
+                        </p>
+                      </div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Months shown">
+                      <button class="seg-opt active" aria-pressed="true">
+                        <svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>Last 6 months
+                      </button>
+                      <button class="seg-opt" aria-pressed="false">Last 12 months</button>
+                    </div>
+                  </div>
+                  <div class="card-body">
+                    <div class="tv">
+                      <div class="trend">
+                        <div class="col">
+                          <span class="bar" style="height: 51%"></span>
+                          <span class="val">9.8k</span><span class="mo">Apr</span>
+                        </div>
+                        <div class="col">
+                          <span class="bar" style="height: 58%"></span>
+                          <span class="val">11.2k</span><span class="mo">May</span>
+                        </div>
+                        <div class="col">
+                          <span class="bar" style="height: 68%"></span>
+                          <span class="val">13.0k</span><span class="mo">Jun</span>
+                        </div>
+                        <div class="col">
+                          <span class="bar" style="height: 75%"></span>
+                          <span class="val">14.3k</span><span class="mo">Jul</span>
+                        </div>
+                        <div class="col">
+                          <span class="bar" style="height: 83%"></span>
+                          <span class="val">15.9k</span><span class="mo">Aug</span>
+                        </div>
+                        <div class="col cur">
+                          <span class="bar" style="height: 92%"></span>
+                          <span class="val">17.6k</span><span class="mo">Sep</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-ws" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-grid" /></svg
+                      ></span>
+                      <div>
+                        <h3>Spend by month · by workspace</h3>
+                        <p class="hsub">
+                          Each workspace’s credits per month. Coding spend with no project stays on
+                          its own row and is never folded into a workspace.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>Workspace</th>
+                          <th class="num">Apr</th>
+                          <th class="num">May</th>
+                          <th class="num">Jun</th>
+                          <th class="num">Jul</th>
+                          <th class="num">Aug</th>
+                          <th class="num">Sep · credits</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr class="drillable">
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-ws">E</span
+                              ><span class="nm">Engineering</span></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">6,400</span></td>
+                          <td class="num"><span class="muted">7,300</span></td>
+                          <td class="num"><span class="muted">8,450</span></td>
+                          <td class="num"><span class="muted">9,300</span></td>
+                          <td class="num"><span class="muted">10,320</span></td>
+                          <td class="num credits">11,510</td>
+                        </tr>
+                        <tr class="drillable">
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-ws">O</span
+                              ><span class="nm">Operations</span></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">3,200</span></td>
+                          <td class="num"><span class="muted">3,500</span></td>
+                          <td class="num"><span class="muted">4,000</span></td>
+                          <td class="num"><span class="muted">4,500</span></td>
+                          <td class="num"><span class="muted">4,960</span></td>
+                          <td class="num credits">5,330</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava">?</span
+                              ><span class="nm">Unattributed coding spend</span></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">250</span></td>
+                          <td class="num"><span class="muted">400</span></td>
+                          <td class="num"><span class="muted">510</span></td>
+                          <td class="num"><span class="muted">510</span></td>
+                          <td class="num"><span class="muted">600</span></td>
+                          <td class="num credits">800</td>
+                        </tr>
+                        <tr>
+                          <td><strong>Acme Corp</strong></td>
+                          <td class="num"><strong>9,850</strong></td>
+                          <td class="num"><strong>11,200</strong></td>
+                          <td class="num"><strong>12,960</strong></td>
+                          <td class="num"><strong>14,310</strong></td>
+                          <td class="num"><strong>15,880</strong></td>
+                          <td class="num credits">17,640</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                      ></span>
+                      <div>
+                        <h3>Spend by month · by spine</h3>
+                        <p class="hsub">Planning and coding per month, for the org.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>Spine</th>
+                          <th class="num">Apr</th>
+                          <th class="num">May</th>
+                          <th class="num">Jun</th>
+                          <th class="num">Jul</th>
+                          <th class="num">Aug</th>
+                          <th class="num">Sep · credits</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>
+                            <span class="tenant"><span class="nm">Planning</span></span>
+                          </td>
+                          <td class="num"><span class="muted">6,700</span></td>
+                          <td class="num"><span class="muted">7,600</span></td>
+                          <td class="num"><span class="muted">8,800</span></td>
+                          <td class="num"><span class="muted">9,700</span></td>
+                          <td class="num"><span class="muted">10,770</span></td>
+                          <td class="num credits">11,920</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="tenant"><span class="nm">Coding</span></span>
+                          </td>
+                          <td class="num"><span class="muted">3,150</span></td>
+                          <td class="num"><span class="muted">3,600</span></td>
+                          <td class="num"><span class="muted">4,160</span></td>
+                          <td class="num"><span class="muted">4,610</span></td>
+                          <td class="num"><span class="muted">5,110</span></td>
+                          <td class="num credits">5,720</td>
+                        </tr>
+                        <tr>
+                          <td><strong>Total</strong></td>
+                          <td class="num"><strong>9,850</strong></td>
+                          <td class="num"><strong>11,200</strong></td>
+                          <td class="num"><strong>12,960</strong></td>
+                          <td class="num"><strong>14,310</strong></td>
+                          <td class="num"><strong>15,880</strong></td>
+                          <td class="num credits">17,640</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      D9 · Drill-down · org · <strong>Billing &amp; plans tab</strong> —
+      <strong>new</strong> (MOTIR-733; added after review 2026-10-01). The tenant’s OWN billing page
+      (<code>design/billing</code>, the shipped <code>BillingClient</code>) composed read-only: the
+      Motir seat line, the Motir AI plan with its allotment meter and top-up,
+      <strong>this month’s bill</strong> line by line, and the payment method with its recent
+      invoices. Every action the tenant has there is absent here. Billing is per ORGANIZATION, so a
+      workspace or project page has no Billing tab (D11).
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <div class="scope">
+                <span class="seg">Platform</span><span class="sep" aria-hidden="true">›</span>
+                <span class="seg">Tenants</span><span class="sep" aria-hidden="true">›</span>
+                <span class="seg active"
+                  ><span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span
+                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                ></span>
+              </div>
+              <div class="audit-banner">
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+                ><span
+                  >You are viewing <strong>Acme Corp</strong> as platform staff. This cross-tenant
+                  read is recorded in the audit log (operator <strong>OP · ops@moooon.net</strong>,
+                  just now).</span
+                >
+              </div>
+              <div class="row-between" style="margin-top: 16px">
+                <div class="tenant" style="gap: 12px">
+                  <span class="ava ent-org" style="width: 36px; height: 36px; font-size: 14px"
+                    >A</span
+                  >
+                  <div>
+                    <h2 style="margin: 0; font-size: 19px">Acme Corp</h2>
+                    <div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap">
+                      <span class="pill pill-active">● Active</span
+                      ><span class="pill pill-code">acme</span
+                      ><span class="pill pill-tier">Team plan</span>
+                      <span class="pill pill-neutral"
+                        ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>12,400 credits</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="seg-row" style="margin-top: 16px">
+                <div class="segmented" role="group" aria-label="Tenant view">
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-grid" /></svg>Overview
+                  </button>
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+                  </button>
+                  <button class="seg-opt active" aria-pressed="true">
+                    <svg viewBox="0 0 24 24"><use href="#i-card" /></svg>Billing &amp; plans
+                  </button>
+                </div>
+              </div>
+              <div class="note" style="margin-top: 16px">
+                <svg viewBox="0 0 24 24"><use href="#i-info" /></svg
+                ><span
+                  ><strong>What Acme Corp’s owner sees</strong> on their
+                  <em>Billing &amp; plans</em> page, read-only: no Change plan, no Manage payment,
+                  no Customer Portal link. Changing a tenant’s plan or credits is Story 10.3.</span
+                >
+              </div>
+              <div style="margin-top: 16px">
+                <div class="tv">
+                  <div class="stack">
+                    <div class="card">
+                      <div class="card-head">
+                        <div class="ttl">
+                          <span class="gico tracker"
+                            ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
+                          ></span>
+                          <div>
+                            <h3>Motir</h3>
+                            <p class="hsub">
+                              The project-management tool — paid per seat at scale.
+                            </p>
+                          </div>
+                        </div>
+                        <span class="pill pill-tier">Team plan</span>
+                      </div>
+                      <div class="card-body">
+                        <div class="seatcalc">
+                          <span class="sc-l">
+                            <span class="avatars">
+                              <span class="av1">P</span><span class="av2">T</span
+                              ><span class="av3">J</span><span class="av4">+</span>
+                            </span>
+                            Billed <b>1 seat per member</b> — 48 today
+                          </span>
+                          <span class="sc-total">48 × $5 = $240 <span class="per">/ mo</span></span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="card">
+                      <div class="card-head">
+                        <div class="ttl">
+                          <span class="gico ai"
+                            ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                          ></span>
+                          <div>
+                            <h3>Motir AI</h3>
+                            <p class="hsub">
+                              Planning &amp; hosted agents — an org-level monthly credit pool.
+                            </p>
+                          </div>
+                        </div>
+                        <span class="pill pill-active">● Active</span>
+                      </div>
+                      <div class="card-body">
+                        <div class="line">
+                          <div class="meta">
+                            <div class="row1">
+                              <span class="pill pill-tier">Team</span>
+                              <span class="pname">20,000 credits / mo</span>
+                              <span class="pill pill-topup">+10,000 top-up</span>
+                              <span class="fee">Plan fee <b>$200 / mo</b></span>
+                            </div>
+                            <div class="meterlbl">
+                              <span>Allotment this month</span><b>2,360 of 20,000 left</b>
+                            </div>
+                            <div class="meter"><span style="width: 12%"></span></div>
+                            <div class="meterlbl" style="margin-top: 8px">
+                              <span
+                                >+ <b>10,040</b> top-up credits
+                                <span class="topup-note">extra · don’t expire</span></span
+                              ><b>12,400 credits available</b>
+                            </div>
+                            <div class="desc">
+                              Renews <b>1 Oct 2026</b> · monthly allotment resets; purchased top-up
+                              credits roll over.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="card">
+                      <div class="card-head">
+                        <div class="ttl">
+                          <div>
+                            <h3>This month’s bill · Sep 2026</h3>
+                            <p class="hsub">
+                              The lines the tenant is charged, as they see them on their billing
+                              page.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="card-body flush">
+                        <table class="tbl">
+                          <thead>
+                            <tr>
+                              <th>Line</th>
+                              <th>Basis</th>
+                              <th class="num">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td>Motir · Team seats</td>
+                              <td><span class="muted">48 seats × $5</span></td>
+                              <td class="num">$240.00</td>
+                            </tr>
+                            <tr>
+                              <td>Motir AI · Team plan</td>
+                              <td><span class="muted">20,000 credits / month</span></td>
+                              <td class="num">$200.00</td>
+                            </tr>
+                            <tr>
+                              <td>Top-up credits</td>
+                              <td><span class="muted">10,000 credits · 4 Sep</span></td>
+                              <td class="num">$100.00</td>
+                            </tr>
+                            <tr>
+                              <td>CI minutes over allowance</td>
+                              <td><span class="muted">340 min</span></td>
+                              <td class="num">$6.80</td>
+                            </tr>
+                            <tr>
+                              <td><strong>Total</strong></td>
+                              <td><span class="muted">charged on 1 Oct 2026</span></td>
+                              <td class="num credits">$546.80</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div class="card">
+                      <div class="card-head">
+                        <div class="ttl">
+                          <div><h3>Payment &amp; invoices</h3></div>
+                        </div>
+                      </div>
+                      <div
+                        class="card-body"
+                        style="display: flex; flex-direction: column; gap: 12px"
+                      >
+                        <div class="pay">
+                          <span class="pm">
+                            <span class="brand"
+                              ><svg viewBox="0 0 24 24"><use href="#i-card" /></svg
+                            ></span>
+                            <span class="digits">•••• 4242</span>
+                            <span class="exp">expires 08 / 28</span>
+                          </span>
+                          <span class="pill pill-active" style="margin-left: auto">● Paid up</span>
+                        </div>
+                        <table class="tbl">
+                          <thead>
+                            <tr>
+                              <th>Invoice</th>
+                              <th>Status</th>
+                              <th class="num">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td>Sep 2026</td>
+                              <td><span class="pill pill-active">Paid</span></td>
+                              <td class="num">$448.00</td>
+                            </tr>
+                            <tr>
+                              <td>Aug 2026</td>
+                              <td><span class="pill pill-active">Paid</span></td>
+                              <td class="num">$441.20</td>
+                            </tr>
+                            <tr>
+                              <td>Jul 2026</td>
+                              <td><span class="pill pill-active">Paid</span></td>
+                              <td class="num">$440.00</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      D10 · Usage &amp; cost · <strong>By month</strong> — <strong>new</strong> (MOTIR-732; added
+      after review 2026-10-01). A third option on D3’s view control. The same org → workspace →
+      project tree as D3, with one column per month instead of the planning / coding split, so an
+      operator reads any tenant’s spend month by month at every level in one place. The month
+      control (top right) sets the LAST column; “Last 12 months” widens the window. The unattributed
+      row sits inside its org exactly as in D3. Every figure comes from the rollup, one month per
+      column, never a scan.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <span class="crumb"><b>Platform</b> · Usage &amp; cost</span>
+              <div class="row-between">
+                <div>
+                  <h2>Usage &amp; cost</h2>
+                  <p class="sub">
+                    Where the estate’s credits go — planning and coding spend together. Credits are
+                    an internal usage unit (never a currency).
+                  </p>
+                </div>
+                <div class="segmented" role="group" aria-label="Month">
+                  <button class="seg-opt">
+                    <svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Aug 2026</button
+                  ><button class="seg-opt active" aria-pressed="true">
+                    <svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>Sep 2026</button
+                  ><button class="seg-opt is-disabled">
+                    Oct 2026<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="seg-row">
+                <div class="segmented" role="group" aria-label="Usage view">
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-layers" /></svg>By tenancy
+                  </button>
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>By model &amp; consumers
+                  </button>
+                  <button class="seg-opt active" aria-pressed="true">
+                    <svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>By month
+                  </button>
+                </div>
+                <span class="hero-fig" style="text-align: right"
+                  ><span class="big" style="font-size: 22px">74,180</span
+                  ><span class="unit">
+                    credits · platform total · 52,940 planning + 21,240 coding</span
+                  ></span
+                >
+              </div>
+
+              <div class="stack" style="margin-top: 16px">
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg
+                      ></span>
+                      <div>
+                        <h3>Spend by tenancy, by month</h3>
+                        <p class="hsub">
+                          Every org, workspace and project, month by month — the six months ending
+                          at the chosen month. Expand an org to its workspaces and projects; click a
+                          row to open its page on the Usage &amp; cost tab.
+                        </p>
+                      </div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Months shown">
+                      <button class="seg-opt active" aria-pressed="true">
+                        <svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>Last 6 months
+                      </button>
+                      <button class="seg-opt" aria-pressed="false">Last 12 months</button>
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl tree">
+                      <thead>
+                        <tr>
+                          <th class="name">Tenant</th>
+                          <th class="num">Apr</th>
+                          <th class="num">May</th>
+                          <th class="num">Jun</th>
+                          <th class="num">Jul</th>
+                          <th class="num">Aug</th>
+                          <th class="num">Sep · credits</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr class="drillable">
+                          <td class="name">
+                            <span class="indent"
+                              ><span class="exp"
+                                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg></span
+                              ><span class="tenant"
+                                ><span class="ava ent-org">A</span
+                                ><span class="nm">Acme Corp</span></span
+                              ></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">9,850</span></td>
+                          <td class="num"><span class="muted">11,200</span></td>
+                          <td class="num"><span class="muted">12,960</span></td>
+                          <td class="num"><span class="muted">14,310</span></td>
+                          <td class="num"><span class="muted">15,880</span></td>
+                          <td class="num credits">17,640</td>
+                        </tr>
+                        <tr class="drillable">
+                          <td class="name">
+                            <span class="indent lvl-1"
+                              ><span class="exp"
+                                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg></span
+                              ><span class="tenant"
+                                ><span class="ava ent-ws">E</span
+                                ><span class="nm">Engineering</span></span
+                              ></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">6,400</span></td>
+                          <td class="num"><span class="muted">7,300</span></td>
+                          <td class="num"><span class="muted">8,450</span></td>
+                          <td class="num"><span class="muted">9,300</span></td>
+                          <td class="num"><span class="muted">10,320</span></td>
+                          <td class="num credits">11,510</td>
+                        </tr>
+                        <tr class="drillable">
+                          <td class="name">
+                            <span class="indent lvl-2"
+                              ><span class="exp leaf"></span
+                              ><span class="tenant"
+                                ><span class="ava ent-proj">M</span
+                                ><span class="nm">Mobile App</span></span
+                              ></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">3,700</span></td>
+                          <td class="num"><span class="muted">4,200</span></td>
+                          <td class="num"><span class="muted">4,900</span></td>
+                          <td class="num"><span class="muted">5,400</span></td>
+                          <td class="num"><span class="muted">5,980</span></td>
+                          <td class="num credits">6,680</td>
+                        </tr>
+                        <tr class="drillable">
+                          <td class="name">
+                            <span class="indent lvl-2"
+                              ><span class="exp leaf"></span
+                              ><span class="tenant"
+                                ><span class="ava ent-proj">W</span
+                                ><span class="nm">Web Platform</span></span
+                              ></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">2,700</span></td>
+                          <td class="num"><span class="muted">3,100</span></td>
+                          <td class="num"><span class="muted">3,550</span></td>
+                          <td class="num"><span class="muted">3,900</span></td>
+                          <td class="num"><span class="muted">4,340</span></td>
+                          <td class="num credits">4,830</td>
+                        </tr>
+                        <tr class="drillable">
+                          <td class="name">
+                            <span class="indent lvl-1"
+                              ><span class="exp"
+                                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg></span
+                              ><span class="tenant"
+                                ><span class="ava ent-ws">O</span
+                                ><span class="nm">Operations</span></span
+                              ></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">3,200</span></td>
+                          <td class="num"><span class="muted">3,500</span></td>
+                          <td class="num"><span class="muted">4,000</span></td>
+                          <td class="num"><span class="muted">4,500</span></td>
+                          <td class="num"><span class="muted">4,960</span></td>
+                          <td class="num credits">5,330</td>
+                        </tr>
+                        <tr>
+                          <td class="name">
+                            <span class="indent lvl-1"
+                              ><span class="exp leaf"></span
+                              ><span class="tenant"
+                                ><span class="ava">?</span
+                                ><span class="nm">Unattributed coding spend</span></span
+                              ></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">250</span></td>
+                          <td class="num"><span class="muted">400</span></td>
+                          <td class="num"><span class="muted">510</span></td>
+                          <td class="num"><span class="muted">510</span></td>
+                          <td class="num"><span class="muted">600</span></td>
+                          <td class="num credits">800</td>
+                        </tr>
+                        <tr class="drillable">
+                          <td class="name">
+                            <span class="indent"
+                              ><span class="exp"
+                                ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
+                              ><span class="tenant"
+                                ><span class="ava ent-org">G</span
+                                ><span class="nm">Globex</span></span
+                              ></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">10,100</span></td>
+                          <td class="num"><span class="muted">11,050</span></td>
+                          <td class="num"><span class="muted">11,900</span></td>
+                          <td class="num"><span class="muted">12,700</span></td>
+                          <td class="num"><span class="muted">13,480</span></td>
+                          <td class="num credits">14,320</td>
+                        </tr>
+                        <tr class="drillable">
+                          <td class="name">
+                            <span class="indent"
+                              ><span class="exp"
+                                ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
+                              ><span class="tenant"
+                                ><span class="ava ent-org">U</span
+                                ><span class="nm">Umbrella</span></span
+                              ></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">6,200</span></td>
+                          <td class="num"><span class="muted">7,100</span></td>
+                          <td class="num"><span class="muted">7,900</span></td>
+                          <td class="num"><span class="muted">8,700</span></td>
+                          <td class="num"><span class="muted">9,520</span></td>
+                          <td class="num credits">10,390</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      D11 · Drill-down · project · <strong>Usage &amp; cost tab</strong> —
+      <strong>new</strong> (MOTIR-733; added after review 2026-10-01). The project page (one level
+      beneath D6) on its Usage &amp; cost tab: the project’s monthly spend chart and its
+      month-by-month split by spine. The <strong>workspace</strong> page’s Usage &amp; cost tab is
+      the same, with the by-workspace table of D8 replaced by a by-project table. Workspace and
+      project pages carry Overview and Usage &amp; cost only.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <div class="scope">
+                <span class="seg">Platform</span><span class="sep" aria-hidden="true">›</span>
+                <span class="seg">Tenants</span><span class="sep" aria-hidden="true">›</span>
+                <span class="seg"
+                  ><span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span></span
+                ><span class="sep" aria-hidden="true">›</span>
+                <span class="seg"
+                  ><span class="tenant"><span class="ava ent-ws">E</span>Engineering</span></span
+                ><span class="sep" aria-hidden="true">›</span>
+                <span class="seg active"
+                  ><span class="tenant"><span class="ava ent-proj">M</span>Mobile App</span
+                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                ></span>
+              </div>
+              <div class="audit-banner">
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+                ><span
+                  >You are viewing <strong>Acme Corp › Engineering › Mobile App</strong> as platform
+                  staff. This cross-tenant read is recorded in the audit log (operator
+                  <strong>OP · ops@moooon.net</strong>, just now).</span
+                >
+              </div>
+              <div class="row-between" style="margin-top: 16px">
+                <div class="tenant" style="gap: 12px">
+                  <span class="ava ent-proj" style="width: 36px; height: 36px; font-size: 14px"
+                    >M</span
+                  >
+                  <div>
+                    <h2 style="margin: 0; font-size: 19px">Mobile App</h2>
+                    <div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap">
+                      <span class="pill pill-proj"
+                        ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg>Project</span
+                      ><span class="pill pill-neutral"
+                        ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>9 members</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="seg-row" style="margin-top: 16px">
+                <div class="segmented" role="group" aria-label="Tenant view">
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-grid" /></svg>Overview
+                  </button>
+                  <button class="seg-opt active" aria-pressed="true">
+                    <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+                  </button>
+                </div>
+              </div>
+              <div class="note" style="margin-top: 16px">
+                <svg viewBox="0 0 24 24"><use href="#i-info" /></svg
+                ><span
+                  ><strong>What a Mobile App member sees</strong> on their project’s slice of
+                  <em>Usage &amp; cost</em>, read-only. Billing is the organization’s, so there is
+                  no Billing tab below the org.</span
+                >
+              </div>
+              <div class="stack">
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-proj" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-activity" /></svg
+                      ></span>
+                      <div>
+                        <h3>Monthly spend</h3>
+                        <p class="hsub">Credits debited per month to this project.</p>
+                      </div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Months shown">
+                      <button class="seg-opt active" aria-pressed="true">
+                        <svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>Last 6 months
+                      </button>
+                      <button class="seg-opt" aria-pressed="false">Last 12 months</button>
+                    </div>
+                  </div>
+                  <div class="card-body">
+                    <div class="tv">
+                      <div class="trend">
+                        <div class="col">
+                          <span class="bar" style="height: 51%"></span>
+                          <span class="val">3.7k</span><span class="mo">Apr</span>
+                        </div>
+                        <div class="col">
+                          <span class="bar" style="height: 58%"></span>
+                          <span class="val">4.2k</span><span class="mo">May</span>
+                        </div>
+                        <div class="col">
+                          <span class="bar" style="height: 67%"></span>
+                          <span class="val">4.9k</span><span class="mo">Jun</span>
+                        </div>
+                        <div class="col">
+                          <span class="bar" style="height: 74%"></span>
+                          <span class="val">5.4k</span><span class="mo">Jul</span>
+                        </div>
+                        <div class="col">
+                          <span class="bar" style="height: 82%"></span>
+                          <span class="val">6.0k</span><span class="mo">Aug</span>
+                        </div>
+                        <div class="col cur">
+                          <span class="bar" style="height: 92%"></span>
+                          <span class="val">6.7k</span><span class="mo">Sep</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-proj" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                      ></span>
+                      <div>
+                        <h3>Spend by month · by spine</h3>
+                        <p class="hsub">
+                          Planning and coding per month. Coding counts only runs attributed to this
+                          project.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>Spine</th>
+                          <th class="num">Apr</th>
+                          <th class="num">May</th>
+                          <th class="num">Jun</th>
+                          <th class="num">Jul</th>
+                          <th class="num">Aug</th>
+                          <th class="num">Sep · credits</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>
+                            <span class="tenant"><span class="nm">Planning</span></span>
+                          </td>
+                          <td class="num"><span class="muted">2,300</span></td>
+                          <td class="num"><span class="muted">2,600</span></td>
+                          <td class="num"><span class="muted">3,000</span></td>
+                          <td class="num"><span class="muted">3,300</span></td>
+                          <td class="num"><span class="muted">3,640</span></td>
+                          <td class="num credits">4,060</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="tenant"><span class="nm">Coding</span></span>
+                          </td>
+                          <td class="num"><span class="muted">1,400</span></td>
+                          <td class="num"><span class="muted">1,600</span></td>
+                          <td class="num"><span class="muted">1,900</span></td>
+                          <td class="num"><span class="muted">2,100</span></td>
+                          <td class="num"><span class="muted">2,340</span></td>
+                          <td class="num credits">2,620</td>
+                        </tr>
+                        <tr>
+                          <td><strong>Mobile App</strong></td>
+                          <td class="num"><strong>3,700</strong></td>
+                          <td class="num"><strong>4,200</strong></td>
+                          <td class="num"><strong>4,900</strong></td>
+                          <td class="num"><strong>5,400</strong></td>
+                          <td class="num"><strong>5,980</strong></td>
+                          <td class="num credits">6,680</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
       D7 · States for Usage &amp; cost and the drill-down (MOTIR-732, MOTIR-733). (a) No spend in
       the month. (b) motir-ai unreachable on Usage &amp; cost — the page renders, the figures do
       not, and it says so. (c) On a drill-down page motir-ai unreachable takes out ONLY the usage
@@ -4125,6 +5678,17 @@
           <circle cx="12" cy="12" r="10" />
           <path d="M12 16v-4" />
           <path d="M12 8h.01" />
+        </g>
+        <g
+          id="i-card"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="14" x="2" y="5" rx="2" />
+          <path d="M2 10h20" />
         </g>
         <g
           id="i-coins"

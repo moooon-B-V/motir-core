@@ -1052,7 +1052,7 @@ by-workspace and by-model usage rollup; MOTIR-732 keeps the Usage & cost page.
 
 # AMENDMENT 2026-10-01 — the estate overview, Usage & cost and the drill-down, redrawn and published (MOTIR-7237)
 
-**Mock:** `design/platform-admin/console--estate-usage-drilldown.mock.html` — a DELTA. It amends this file's
+**Mock:** `design/platform-admin/console--estate-usage-drilldown.mock.html` — a DELTA (panels D1–D11). It amends this file's
 **Panel 2** (estate overview), **Panels 4–5** (Usage & cost) and **Panels 6 and 11** (the drill-down and the
 org page's reserved regions). Those panels were drawn by MOTIR-728, which closed before design results were
 published, so they were never approved; this delta is what MOTIR-731, MOTIR-732, MOTIR-733 and the fleet-COGS
@@ -1061,16 +1061,18 @@ with this section, this section wins.
 
 ## What changed, and why
 
-|               | was (Panels 2 / 4–6 / 11)                                    | now (D1–D7)                                                                                             | why                                                                                                                     |
-| ------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Shell nav     | Overview · Usage & cost · Tenants; Monitoring "10.2"         | the SHIPPED nav: Overview · Usage & cost · Tenants · Users · Monitoring; Governance "10.3"              | Users and Monitoring shipped (MOTIR-1167, MOTIR-4595). Usage & cost goes live with MOTIR-732 (it ships as "soon" today) |
-| Paging        | "Page 1 of 9,784", "Showing 1–5 of 48,920"                   | **Newer / Older** and **Show more**, no totals                                                          | a total over an unbounded cross-tenant stream is a scan; keyset only (finding #57)                                      |
-| Period        | "this month" fixed                                           | a period control (D1: 7 days / 30 days / this month) and a month control (D3–D5)                        | every delta and every figure is relative to one chosen window                                                           |
-| Spend columns | one Tokens column                                            | **Planning** and **Coding** columns, Credits total                                                      | the two spines come from different meters (MOTIR-7238) and an operator asks which one moved                             |
-| Unattributed  | absent                                                       | an **Unattributed coding spend** row inside each org (D3, D5), never summed into a workspace or project | hosted runs charged before they carried a workspace/project (MOTIR-7240) roll up to their org only                      |
-| Runs feed     | planning/coding jobs only, from a source nobody built        | merged with tenant events under ONE cursor; runs from `GET /v1/platform/runs` (MOTIR-7239)              | the producer now exists and is named                                                                                    |
-| Drill-down    | Panel 6's standalone page; Panel 11's three reserved regions | fills Panel 11's org page in place (D5) and adds a workspace level (D6)                                 | the org page shipped (MOTIR-4566); a second org page would duplicate it                                                 |
-| motir-ai down | Panel 7(d): the whole page errors                            | partial: Motir's own data renders and the missing half says so (D2a, D7b–c)                             | an operator debugging an incident needs the half that still works                                                       |
+|                 | was (Panels 2 / 4–6 / 11)                                    | now (D1–D7)                                                                                                                              | why                                                                                                                     |
+| --------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Shell nav       | Overview · Usage & cost · Tenants; Monitoring "10.2"         | the SHIPPED nav: Overview · Usage & cost · Tenants · Users · Monitoring; Governance "10.3"                                               | Users and Monitoring shipped (MOTIR-1167, MOTIR-4595). Usage & cost goes live with MOTIR-732 (it ships as "soon" today) |
+| Paging          | "Page 1 of 9,784", "Showing 1–5 of 48,920"                   | **Newer / Older** and **Show more**, no totals                                                                                           | a total over an unbounded cross-tenant stream is a scan; keyset only (finding #57)                                      |
+| Period          | "this month" fixed                                           | a period control (D1: 7 days / 30 days / this month) and a month control (D3–D5)                                                         | every delta and every figure is relative to one chosen window                                                           |
+| Spend columns   | one Tokens column                                            | **Planning** and **Coding** columns, Credits total                                                                                       | the two spines come from different meters (MOTIR-7238) and an operator asks which one moved                             |
+| Unattributed    | absent                                                       | an **Unattributed coding spend** row inside each org (D3, D5), never summed into a workspace or project                                  | hosted runs charged before they carried a workspace/project (MOTIR-7240) roll up to their org only                      |
+| Runs feed       | planning/coding jobs only, from a source nobody built        | merged with tenant events under ONE cursor; runs from `GET /v1/platform/runs` (MOTIR-7239)                                               | the producer now exists and is named                                                                                    |
+| Drill-down      | Panel 6's standalone page; Panel 11's three reserved regions | fills Panel 11's org page in place (D5) and adds a workspace level (D6)                                                                  | the org page shipped (MOTIR-4566); a second org page would duplicate it                                                 |
+| motir-ai down   | Panel 7(d): the whole page errors                            | partial: Motir's own data renders and the missing half says so (D2a, D7b–c)                                                              | an operator debugging an incident needs the half that still works                                                       |
+| Monthly history | one month at a time                                          | **By month** at every tier: D10 (the estate tree, one column per month), D8 (org), D11 (project)                                         | review 2026-10-01: an operator must read any org / workspace / project's spend month by month                           |
+| Tenant's view   | the operator's own summary only                              | the drill-down gets **Overview · Usage & cost · Billing & plans** tabs; the last two are the tenant's OWN pages, read-only (D8, D9, D11) | review 2026-10-01: "I should be able to see what they see — the tenant bill and usage dashboard"                        |
 
 ## The panels
 
@@ -1092,6 +1094,23 @@ with this section, this section wins.
   spend, members, recent jobs (attributed runs only). The project page is the same minus the Projects card.
 - **D7 — States.** No spend in the month; Usage & cost with motir-ai unreachable; a drill-down usage card
   unavailable while Motir's own cards render; loading.
+- **D8 — Drill-down · org · Usage & cost tab (MOTIR-733).** The org page gains three tabs (Overview = D5,
+  Usage & cost, Billing & plans; workspace and project pages carry the first two). This tab is the tenant's own
+  Usage & cost dashboard (`design/ai-usage`, the shipped `OrgUsageClient`) shown read-only: balance, this
+  month's spend split by spine, spend since joining, the **Monthly spend** chart (last 6 / 12 months), and
+  **by-month tables** by workspace (with the unattributed row) and by spine. A workspace row opens D6 on the
+  same tab. A note above names whose view this is and that its actions are absent.
+- **D9 — Drill-down · org · Billing & plans tab (MOTIR-733).** The tenant's own Billing & plans page
+  (`design/billing`, the shipped `BillingClient`) read-only: the Motir seat line, the Motir AI plan with its
+  allotment meter and top-up, **this month's bill** line by line (seats, plan fee, top-ups, overage lines such
+  as CI minutes), and the payment method with recent invoices and their status. No Change plan, no Manage
+  payment, no Customer Portal link. Billing is per organization, so only the org page has this tab.
+- **D10 — Usage & cost · By month (MOTIR-732).** A third option on D3's view control: the same org →
+  workspace → project tree, one column per month ending at the chosen month (6, or 12 with the toggle), the
+  unattributed row inside its org. Rows open the tenant's page on its Usage & cost tab.
+- **D11 — Drill-down · project · Usage & cost tab (MOTIR-733).** The project's Monthly spend chart and its
+  by-month split by spine (coding counts attributed runs only). The workspace page's tab is the same with a
+  by-project table in place of D8's by-workspace one.
 
 ## Primitives composed (no hand-rolling)
 
@@ -1099,7 +1118,14 @@ The mock's style block and icon sprite are copied verbatim from `console.mock.ht
 its existing components: the admin shell (`admin-nav`, `adminbar`, staff mark, search), `card` / `card-head` /
 `card-foot` (`Card`), `tbl` and `tbl tree` (`Table`), `pill` (`Pill` tones per entity / run kind), `segmented`
 (`Segmented`), `usebar`, `stat-grid` stats, `scope` breadcrumb, `audit-banner`, `note`, `states-grid` /
-`state` / `state err` (`EmptyState`, error state), `sk` skeletons. No new class and no new colour is introduced.
+`state` / `state err` (`EmptyState`, error state), `sk` skeletons. No new colour is introduced.
+
+**The tenant view (D8, D9, D11)** reuses the tenant's shipped components rather than redrawing them: the
+billing lines (`gico`, `line`, `row1`, `meter`, `meterlbl`, `seatcalc`, `pay`, `pill-topup`) are copied
+verbatim from `design/billing/billing.mock.html` and the monthly chart (`trend`, with its value labels) from
+`design/ai-usage/usage.mock.html`, all scoped under a `.tv` wrapper so they cannot collide with the
+console's own classes. The `i-card` icon is copied from the billing sprite. The tabs are the existing
+`segmented` control.
 
 ## Colour roles
 
@@ -1129,6 +1155,30 @@ icons; run kinds `pill-plan` (planning) and `pill-code` (coding); the unattribut
 | `drill.members.title`                            | Members · {count}                                                                                                                                                              |
 | `drill.jobs.title`                               | Recent jobs                                                                                                                                                                    |
 | `drill.usageUnavailable`                         | Usage isn’t available right now. Members and workspaces below are unaffected.                                                                                                  |
+| `drill.tab.overview` / `.usage` / `.billing`     | Overview / Usage & cost / Billing & plans                                                                                                                                      |
+| `drill.tenantView.usage`                         | What {org}’s admins see on their own Usage & cost page, with the same figures, read-only. Actions they could take there do not appear here; acting on a tenant is Story 10.3.  |
+| `drill.tenantView.billing`                       | What {org}’s owner sees on their Billing & plans page and in their invoices, read-only. Changing a tenant’s plan or credits is Story 10.3.                                     |
+| `usage.view.byMonth`                             | By month                                                                                                                                                                       |
+| `usage.window.6` / `.12`                         | Last 6 months / Last 12 months                                                                                                                                                 |
+| `billing.thisMonth.title`                        | This month’s bill · {month}                                                                                                                                                    |
+
+## Revision after review (2026-10-01)
+
+The first publish of this amendment (commit `c04ab4b`) was sent back with: _"I can't see per
+org/workspace/project per month spending. I should be able to see what they see, give the tenant bill and
+usage dashboard to me."_ D8–D11, the tabs on D5/D6 and the By month option on D3 answer it. D1–D7 are
+otherwise unchanged.
+
+## What the new views read
+
+- **By month (D8, D10, D11)** reads the platform usage rollup one month per column — the rollup is keyed
+  `(level, entityId, yearMonth, …)`, so a window of N months is N indexed reads, never a scan of the
+  metering tables. Twelve months is the widest window.
+- **Usage & cost tab (D8, D11)** shows the same figures the tenant's own page shows (balance, spend, the
+  monthly chart), fetched for that org through the console's audited read rather than the tenant's session.
+- **Billing & plans tab (D9)** shows the tenant's subscription, plan, allotment, this month's charge lines
+  and invoices — the data behind their billing page and their Stripe invoices — through the same audited
+  read. Every tab view writes one audit row, like every other drill-down page.
 
 ## What this amendment does NOT draw
 
