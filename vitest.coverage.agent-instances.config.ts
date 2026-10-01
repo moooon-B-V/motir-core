@@ -38,12 +38,18 @@ import baseConfig from './vitest.config';
 // chat's motir-core half — the browser's protocol mirror (`lib/agentChat/**`),
 // `CHAT_PROFILES` (already under `lib/agentInstances/**`), the relay's chat
 // channel and the ticket's channel (already under `lib/agentTerminal/**` and the
-// services above), and the Chat tab (already under `app/(authed)/my-agents/**`) —
+// services above), and the Chat tab (already under the My agents glob) —
 // held to the same per-file floor, over the chat's own suites (`tests/agentChat/**`,
 // whose story gate drives the relay into the REAL in-process chat server, and the
 // tab's `AgentChat.test.tsx`). The in-agent chat server and its five adapters
 // (`packages/cli/src/agentTerminal/chat/**`) are held, like the terminal server,
 // by `packages/cli/vitest.config.ts`'s per-file thresholds.
+//
+// ⚠️ THE GLOBS NEVER SPELL A ROUTE GROUP. `(authed)` is an extglob group to the
+// coverage matcher, which matches `authed` WITHOUT the parentheses, so
+// `app/(authed)/…` measured nothing — the My agents UI and `agentFigures.ts` sat
+// outside this floor from the day they were listed (MOTIR-7062). A route-group
+// segment is `*` here instead, as in `vitest.coverage.agent-instance-run.config.ts`.
 
 const FLOOR = { statements: 90, functions: 90, branches: 90, lines: 90 } as const;
 
@@ -58,9 +64,9 @@ const MEASURED = [
   'lib/jobs/definitions/agentInstanceIdleCheck.ts',
   'lib/jobs/definitions/agentInstanceSweep.ts',
   'app/api/projects/[[]key]/instances/**/*.ts',
-  'app/(authed)/my-agents/**/*.tsx',
+  'app/*/my-agents/**/*.tsx',
   // Story MOTIR-6861 — the agent terminal (MOTIR-6942).
-  'app/(authed)/my-agents/**/*.ts',
+  'app/*/my-agents/**/*.ts',
   'lib/agentTerminal/**/*.ts',
   'lib/services/agentTerminalService.ts',
   'lib/services/agentTerminalRelayService.ts',
@@ -70,16 +76,6 @@ const MEASURED = [
   'lib/mappers/agentTerminalMappers.ts',
   // Story MOTIR-6863 — the agent chat (MOTIR-7018).
   'lib/agentChat/**/*.ts',
-  // The Chat tab. Its parentheses are ESCAPED (`[(]` / `[)]`): the coverage
-  // include is a glob, where `(authed)` is a pattern group matching the bare
-  // segment `authed` — so the two `app/(authed)/my-agents/**` entries above
-  // match no file at all, and the panel they name has never been measured.
-  // Measured on this branch, they would hold the terminal story's own files
-  // below the floor, so widening them is left to that story; the chat's files
-  // are measured here, at the floor.
-  'app/[(]authed[)]/my-agents/_components/AgentChat.tsx',
-  'app/[(]authed[)]/my-agents/_components/useAgentChat.ts',
-  'app/[(]authed[)]/my-agents/_components/chat/**/*.{ts,tsx}',
   // Story MOTIR-6914 — agents are an AI-plan feature, their storage paid in
   // credits (MOTIR-6922): the daily storage charge, the plan lapse and its
   // notice, and the Agents line's figures. The plan check, the per-org cap and
@@ -89,7 +85,7 @@ const MEASURED = [
   'lib/jobs/definitions/agentInstanceStorageCharge.ts',
   'lib/services/agentInstanceLapseService.ts',
   'lib/emailTemplates/agentsDeletionScheduled.tsx',
-  'app/(authed)/settings/organization/billing/_components/agentFigures.ts',
+  'app/*/settings/organization/billing/_components/agentFigures.ts',
   // Story MOTIR-6864 — a run in my agent (MOTIR-7026).
   'lib/services/agentInstanceRunService.ts',
   'lib/mappers/agentInstanceRunMappers.ts',
@@ -115,6 +111,15 @@ export default defineConfig({
       'tests/components/agentFigures.test.ts',
       // Story MOTIR-6864 — the agent's live run in its panel (MOTIR-7029).
       'tests/components/AgentPanelRun.test.tsx',
+      // The run's live session watch the panel leans on — its own suite, which
+      // the lane never ran until the globs measured `useRunSessionWatch.ts` (MOTIR-7062).
+      'tests/components/useRunSessionWatch.test.tsx',
+      // MOTIR-7062 — the page, its wait, the dialogs' ways out, the terminal and
+      // its socket's edges, which the room's suites never reached.
+      'tests/components/MyAgentsPage.test.tsx',
+      'tests/components/AgentDialogs.test.tsx',
+      'tests/components/AgentTerminal.test.tsx',
+      'tests/components/useAgentTerminal.test.tsx',
       // The image update (Story MOTIR-6862 · MOTIR-6954).
       'tests/components/MyAgentsUpdate.test.tsx',
     ],
