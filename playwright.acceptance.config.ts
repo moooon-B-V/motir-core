@@ -401,6 +401,11 @@ export default defineConfig({
         // MOTIR-2389: the store is S3-compatible; the endpoint is the host
         // lib/test-blob-mock.ts intercepts, so it must match there.
         E2E_TEST_BLOB: '1',
+        // MOTIR-7176: the cimd plugin's document fetch is answered from
+        // `lib/test-cimd-mock.ts`'s table (Claude, Claude Code, and a document
+        // calling itself Claude from example.org) — the hardened transport
+        // refuses a local fixture server, so the seam replaces the transport.
+        E2E_TEST_CIMD: '1',
         MOTIR_S3_ENDPOINT: 'https://e2e.s3.invalid',
         MOTIR_S3_REGION: 'auto',
         MOTIR_S3_ACCESS_KEY_ID: 'e2e-playwright-only-placeholder',

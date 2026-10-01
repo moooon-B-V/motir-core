@@ -130,6 +130,74 @@ async function workspaceLabel(workspaceId: string): Promise<string> {
   return `${row.organization.name} · ${row.name}`;
 }
 
+// ── A client identified by its metadata document (Story MOTIR-7170 · MOTIR-7176) ──
+
+export interface DiscoveredClient {
+  /** The `client_id`: the HTTPS URL its document is served at. */
+  clientId: string;
+  /** The host Motir verifies it as — the `client_id` URL's. */
+  host: string;
+  /** What the document calls the app. */
+  name: string;
+  redirectUris: string[];
+}
+
+/** Claude, as claude.ai publishes it. */
+export const HOSTED_CLAUDE: DiscoveredClient = {
+  clientId: 'https://claude.ai/oauth/mcp-oauth-client-metadata',
+  host: 'claude.ai',
+  name: 'Claude',
+  redirectUris: ['https://claude.ai/api/mcp/auth_callback'],
+};
+
+/** Claude Code, as claude.ai publishes it: loopback, matched on any port. */
+export const CLAUDE_CODE: DiscoveredClient = {
+  clientId: 'https://claude.ai/oauth/claude-code-client-metadata',
+  host: 'claude.ai',
+  name: 'Claude Code',
+  redirectUris: ['http://localhost/callback', 'http://127.0.0.1/callback'],
+};
+
+/** A document that calls itself "Claude" from somewhere else. */
+export const CLAUDE_ELSEWHERE: DiscoveredClient = {
+  clientId: 'https://example.org/client',
+  host: 'example.org',
+  name: 'Claude',
+  redirectUris: ['https://example.org/callback'],
+};
+
+/**
+ * Write the client row exactly as the cimd plugin records a client it
+ * discovered — the shape read back from a real discovery in
+ * `tests/integration/oauth/clientMetadataDocument.test.ts`: no owning user,
+ * `clientDiscoveryId: 'cimd'`, a public client with no secret.
+ *
+ * ⚠️ THE ROW ALONE DOES NOT SKIP THE FETCH. The plugin caches a validated
+ * document IN MEMORY only, so a server re-fetches it on its first authorize
+ * whatever the database holds. The lane answers that fetch from
+ * `lib/test-cimd-mock.ts` (`E2E_TEST_CIMD=1` in the acceptance lane), whose
+ * table carries these same three documents, and the plugin then refreshes this
+ * row from what it fetched.
+ */
+export async function seedDiscoveredClient(client: DiscoveredClient): Promise<void> {
+  await adminDb.oauthClient.create({
+    data: {
+      clientId: client.clientId,
+      clientSecret: null,
+      disabled: false,
+      name: client.name,
+      uri: new URL(client.clientId).origin,
+      redirectUris: client.redirectUris,
+      tokenEndpointAuthMethod: 'none',
+      grantTypes: ['authorization_code', 'refresh_token'],
+      responseTypes: ['code'],
+      scopes: ['offline_access'],
+      clientDiscoveryId: 'cimd',
+      userId: null,
+    },
+  });
+}
+
 // ── The app side ─────────────────────────────────────────────────────────────
 
 /** A cookie-less request context: the app, which holds no browser session. */
@@ -161,14 +229,14 @@ export interface PendingAuthorize {
 /** The authorize URL an app opens in the person's browser: PKCE S256 + `resource`. */
 export function authorizeRequest(
   clientId: string,
-  opts: { resource?: string; state?: string } = {},
+  opts: { resource?: string; state?: string; redirectUri?: string } = {},
 ): PendingAuthorize {
   const verifier = randomBytes(32).toString('base64url');
   const state = opts.state ?? `st-${randomBytes(4).toString('hex')}`;
   const q = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
-    redirect_uri: CALLBACK,
+    redirect_uri: opts.redirectUri ?? CALLBACK,
     state,
     scope: 'offline_access',
     code_challenge: createHash('sha256').update(verifier).digest('base64url'),
@@ -281,8 +349,8 @@ const LOOPBACK_PAGE = `<!doctype html>
 </html>`;
 
 /** Stand in for the app's loopback listener, so the browser has somewhere to land. */
-export async function answerLoopback(page: Page): Promise<void> {
-  await page.route(`${CALLBACK}**`, (route) =>
+export async function answerLoopback(page: Page, at: string = CALLBACK): Promise<void> {
+  await page.route(`${at}**`, (route) =>
     route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: LOOPBACK_PAGE }),
   );
 }
@@ -315,13 +383,14 @@ export async function pickWorkspace(page: Page, label: string): Promise<void> {
 export async function pressAndReturn(
   page: Page,
   button: 'Approve and connect' | 'Deny',
+  returnTo: string = CALLBACK,
 ): Promise<URL> {
   const pressed = page.waitForResponse(
     (r) => r.url().endsWith('/api/oauth/consent') && r.request().method() === 'POST',
   );
   await page.getByRole('button', { name: button, exact: true }).click();
   expect((await pressed).status()).toBe(200);
-  await page.waitForURL((url) => url.href.startsWith(CALLBACK));
+  await page.waitForURL((url) => url.href.startsWith(returnTo));
   return new URL(page.url());
 }
 

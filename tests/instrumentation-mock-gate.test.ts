@@ -59,6 +59,7 @@ const aiJobs = vi.hoisted(() => ({ installAiJobsBoundaryMock: vi.fn() }));
 const lessons = vi.hoisted(() => ({ installLessonsBoundaryMock: vi.fn() }));
 const codeGraph = vi.hoisted(() => ({ installCodeGraphBoundaryMock: vi.fn() }));
 const hostedRun = vi.hoisted(() => ({ installHostedRunMock: vi.fn() }));
+const cimd = vi.hoisted(() => ({ installClientMetadataDocumentMock: vi.fn() }));
 
 vi.mock('@/lib/test-mock-agent', () => ({ installSharedMockAgent }));
 vi.mock('@/lib/test-oauth-mock', () => oauth);
@@ -71,6 +72,7 @@ vi.mock('@/lib/test-ai-jobs-mock', () => aiJobs);
 vi.mock('@/lib/test-lessons-mock', () => lessons);
 vi.mock('@/lib/test-code-graph-mock', () => codeGraph);
 vi.mock('@/lib/test-hosted-run-mock', () => hostedRun);
+vi.mock('@/lib/test-cimd-mock', () => cimd);
 
 /** Which installers each flag owns — the assertion that the RIGHT seam ran. */
 const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
@@ -106,6 +108,8 @@ const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
   // MOTIR-6452 — a hosted run's gateway, motir-ai and GitHub-installation seams,
   // registered here in the same change that adds them to the shipped table.
   E2E_TEST_HOSTED_RUN: [hostedRun.installHostedRunMock],
+  // MOTIR-7176 — the Client ID Metadata Document transport. Takes no agent.
+  E2E_TEST_CIMD: [cimd.installClientMetadataDocumentMock],
 };
 
 const ALL_INSTALLERS = Object.values(INSTALLERS).flat();

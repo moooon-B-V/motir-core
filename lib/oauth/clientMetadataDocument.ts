@@ -41,7 +41,16 @@ export const CIMD_REVALIDATION_INTERVAL = '30m';
 
 type Fetcher = typeof fetchClientMetadataResource;
 
-let transport: Fetcher = fetchClientMetadataResource;
+/**
+ * Where a swapped transport is held: on `globalThis`, not in a module local,
+ * because the E2E lane installs its fixture transport from `instrumentation.ts`
+ * (`lib/test-mock-seams.ts` · `E2E_TEST_CIMD`), and a production build bundles
+ * that hook and the auth route into separate chunks with separate copies of this
+ * module. The global is the one place both see (the object store's E2E
+ * transport, `lib/blob/s3.ts`, is held the same way).
+ */
+const TRANSPORT_KEY = Symbol.for('motir.oauth.clientMetadataTransport');
+type TransportHolder = { [TRANSPORT_KEY]?: Fetcher };
 
 /**
  * The transport the plugin fetches documents with: `@better-auth/cimd/node`'s,
@@ -50,9 +59,14 @@ let transport: Fetcher = fetchClientMetadataResource;
  * follows a redirect, and caps size and time. A hand-rolled fetch could not pin
  * the address after resolving it, which is the SSRF guard that matters.
  */
-export const fetchClientMetadataDocument: Fetcher = (url, init) => transport(url, init);
+export const fetchClientMetadataDocument: Fetcher = (url, init) =>
+  ((globalThis as TransportHolder)[TRANSPORT_KEY] ?? fetchClientMetadataResource)(url, init);
 
-/** Tests only: swap the network for a stub, so no test ever reaches it. */
+/**
+ * Tests and the E2E lane only: swap the network for a stub, so no test ever
+ * reaches it. `null` restores the real transport.
+ */
 export function setClientMetadataTransportForTests(fetcher: Fetcher | null): void {
-  transport = fetcher ?? fetchClientMetadataResource;
+  if (fetcher) (globalThis as TransportHolder)[TRANSPORT_KEY] = fetcher;
+  else delete (globalThis as TransportHolder)[TRANSPORT_KEY];
 }

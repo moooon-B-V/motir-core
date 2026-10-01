@@ -67,6 +67,17 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     },
   },
   {
+    // Story MOTIR-7170 · MOTIR-7176 — Client ID Metadata Documents. Like
+    // E2E_TEST_BLOB it ignores the agent: it replaces the cimd plugin's
+    // transport, whose pinned connection undici's MockAgent cannot intercept.
+    flag: 'E2E_TEST_CIMD',
+    message: 'Client ID Metadata Document transport mocked.',
+    install: async () => {
+      const { installClientMetadataDocumentMock } = await import('@/lib/test-cimd-mock');
+      installClientMetadataDocumentMock();
+    },
+  },
+  {
     flag: 'E2E_TEST_BILLING',
     message: 'motir-ai billing seam mocked.',
     install: async (agent) => {
