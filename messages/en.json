@@ -3777,6 +3777,9 @@
       "unnamedApp": "Unnamed app",
       "unverified": "Unverified",
       "unverifiedTooltip": "This app registered itself. Motir hasn't verified who publishes it.",
+      "verified": "Verified domain",
+      "verifiedTooltip": "Motir fetched this app’s identity from {host} and checked it. It shows who publishes the app, not what the app will do.",
+      "appCallsItself": "Calls itself “{app}”",
       "detailLead": "This app can:",
       "granted": "Granted",
       "notGranted": "Not granted",
@@ -3797,10 +3800,13 @@
       },
       "revokeConfirm": {
         "title": "Revoke “{app}”?",
+        "titleVerified": "Revoke “{app}” from {host}?",
         "body": "<strong>{app}</strong> loses access to the <strong>{workspace}</strong> workspace now. Its next request is refused, and it will ask you to sign in again. Your tokens and other connected apps are not affected.",
+        "bodyVerified": "<strong>{host}</strong>, the app calling itself {app}, loses access to the <strong>{workspace}</strong> workspace now. Its next request is refused, and it will ask you to sign in again. Your tokens and other connected apps are not affected.",
         "workspace": "Workspace",
         "scopes": "Scopes",
         "connected": "Connected",
+        "domain": "Verified domain",
         "cancel": "Cancel",
         "confirm": "Revoke access"
       },
@@ -11063,6 +11069,7 @@
       "approved": "{app} is connected",
       "denied": "{app} was not connected"
     },
+    "titleVerified": "Connect {host} to Motir?",
     "subhead": {
       "consent": "It will act as you, in the one workspace you choose. Check each part before you approve.",
       "noMemberships": "You’re not in any Motir workspace.",
@@ -11076,8 +11083,11 @@
       "you": "You",
       "workspace": "Workspace",
       "unverified": "Unverified",
+      "verified": "Verified domain",
+      "verifiedTooltip": "Motir fetched this app’s identity from {host} and checked it. It shows who publishes the app, not what the app will do.",
       "appDynamic": "It registered itself, so this name is its own claim. Motir hasn’t reviewed this app.",
       "appRegistered": "Registered with this Motir ahead of time — not by itself.",
+      "appVerified": "Calls itself “{app}” — a name it chose. Motir checked that {host} publishes it.",
       "returnsLoopback": "An app on this computer. Approve only if you just asked {app} to connect.",
       "returnsHttps": "You’ll be sent to {uri}",
       "notYou": "Not you? <link>Sign out</link> and sign in as them.",
@@ -11129,6 +11139,8 @@
         "invalid_client": "The app isn’t registered with Motir, or its registration has expired.",
         "invalid_redirect": "It asked to send you back to <b>{host}</b>, an address it never registered with Motir.",
         "invalid_redirect_nohost": "It asked to send you back to an address it never registered with Motir.",
+        "client_metadata": "It identified itself with a document at <b>{host}</b> that Motir couldn’t use: {detail}",
+        "client_metadata_nohost": "It identified itself with a document Motir couldn’t use.",
         "code_challenge": "It left out a security check Motir requires on every connection.",
         "invalid_target": "It asked for access to something other than Motir’s MCP server.",
         "expired": "It is too old to use — a connection has to be approved within a few minutes of the app asking.",
@@ -11157,6 +11169,8 @@
     "signIn": {
       "carriedLabel": "Connecting an app",
       "carriedValue": "{app} — you’ll pick a workspace and approve next.",
+      "carriedValueVerified": "<b>{host}</b>, an app calling itself “{app}” — you’ll pick a workspace and approve next.",
+      "carriedValueUnverified": "An app calling itself “{app}”, which Motir hasn’t verified — you’ll pick a workspace and approve next.",
       "foot": "Only the account you sign in as can approve this — and only its workspaces can be picked."
     }
   }

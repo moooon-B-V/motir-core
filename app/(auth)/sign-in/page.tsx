@@ -79,8 +79,12 @@ export default async function SignInPage({
   // `design/auth/oauth-consent.mock.html` Panel 5). `null` = not an OAuth return.
   const next = Array.isArray(params.next) ? params.next[0] : params.next;
   const oauthClientId = authorizeNextClientId(next);
+  // An unknown client reads as an unnamed, unverified one: nothing vouches for it.
   const oauthApp = oauthClientId
-    ? { name: await oauthConnectionsService.clientDisplayName(oauthClientId) }
+    ? ((await oauthConnectionsService.clientDisplayName(oauthClientId)) ?? {
+        name: null,
+        verification: { kind: 'self' as const },
+      })
     : null;
 
   return <SignInCard sessionActive={Boolean(session)} oauthApp={oauthApp} />;

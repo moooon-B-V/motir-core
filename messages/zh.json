@@ -3777,6 +3777,9 @@
       "unnamedApp": "未命名应用",
       "unverified": "未验证",
       "unverifiedTooltip": "此应用是自行注册的。Motir 尚未验证其发布者。",
+      "verified": "已验证域名",
+      "verifiedTooltip": "Motir 从 {host} 获取并核验了此应用的身份。它说明谁发布了此应用，而不是此应用会做什么。",
+      "appCallsItself": "自称“{app}”",
       "detailLead": "此应用可以：",
       "granted": "已授予",
       "notGranted": "未授予",
@@ -3797,10 +3800,13 @@
       },
       "revokeConfirm": {
         "title": "撤销“{app}”？",
+        "titleVerified": "从 {host} 撤销“{app}”？",
         "body": "<strong>{app}</strong> 将立即失去对 <strong>{workspace}</strong> 工作区的访问。它的下一个请求会被拒绝，并会要求你重新登录。你的令牌和其他已连接的应用不受影响。",
+        "bodyVerified": "<strong>{host}</strong>（自称 {app} 的应用）将立即失去对 <strong>{workspace}</strong> 工作区的访问。它的下一个请求会被拒绝，并会要求你重新登录。你的令牌和其他已连接的应用不受影响。",
         "workspace": "工作区",
         "scopes": "范围",
         "connected": "连接时间",
+        "domain": "已验证域名",
         "cancel": "取消",
         "confirm": "撤销访问"
       },
@@ -11059,6 +11065,7 @@
       "approved": "{app}已连接",
       "denied": "{app}未连接"
     },
+    "titleVerified": "将{host}连接到Motir？",
     "subhead": {
       "consent": "它将以你的身份，在你选择的那一个工作区中操作。批准前请逐项核对。",
       "noMemberships": "你还不在任何Motir工作区中。",
@@ -11072,8 +11079,11 @@
       "you": "当前账号",
       "workspace": "工作区",
       "unverified": "未验证",
+      "verified": "已验证域名",
+      "verifiedTooltip": "Motir从{host}获取并核验了这个应用的身份。它说明谁发布了这个应用，而不是这个应用会做什么。",
       "appDynamic": "它是自行注册的，所以这个名称只是它自己的说法。Motir没有审核过这个应用。",
       "appRegistered": "由这个Motir事先注册——而不是它自行注册。",
+      "appVerified": "自称“{app}”——这是它自己选的名称。Motir已核验它由{host}发布。",
       "returnsLoopback": "这台电脑上的应用。只有在你刚刚让{app}连接时才批准。",
       "returnsHttps": "你将被发送到{uri}",
       "notYou": "不是你？<link>退出登录</link>并换个账号登录。",
@@ -11125,6 +11135,8 @@
         "invalid_client": "该应用没有在Motir注册，或者它的注册已过期。",
         "invalid_redirect": "它要求把你送回<b>{host}</b>，但这个地址从未在Motir注册过。",
         "invalid_redirect_nohost": "它要求把你送回一个从未在Motir注册过的地址。",
+        "client_metadata": "它用位于 <b>{host}</b> 的文档表明身份，但Motir无法使用该文档：{detail}",
+        "client_metadata_nohost": "它用一份Motir无法使用的文档表明身份。",
         "code_challenge": "它缺少Motir对每个连接都要求的一项安全检查。",
         "invalid_target": "它请求访问的不是Motir的MCP服务器。",
         "expired": "它已经过期——连接必须在应用发起后的几分钟内批准。",
@@ -11153,6 +11165,8 @@
     "signIn": {
       "carriedLabel": "正在连接应用",
       "carriedValue": "{app}——接下来你将选择工作区并批准。",
+      "carriedValueVerified": "<b>{host}</b>，一个自称“{app}”的应用——接下来你将选择工作区并批准。",
+      "carriedValueUnverified": "一个自称“{app}”、Motir尚未验证的应用——接下来你将选择工作区并批准。",
       "foot": "只有你登录的这个账号才能批准——也只能选择它所在的工作区。"
     }
   }

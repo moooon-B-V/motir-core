@@ -21,6 +21,8 @@ export type OAuthConsentProblem =
   | 'invalid_client'
   /** The `redirect_uri` is not one the client registered. */
   | 'invalid_redirect'
+  /** The client named itself by a metadata document Motir could not use. */
+  | 'client_metadata'
   /** PKCE missing, or a method other than S256. */
   | 'code_challenge'
   /** `resource` is not Motir's MCP. */
@@ -56,6 +58,12 @@ export type OAuthAccessTokenRejection =
   | 'unknown'
   /** Past its `expiresAt`; the client refreshes. */
   | 'expired'
+  /**
+   * Stamped `revoked` by the provider (better-auth 1.7, MOTIR-7171): it does so
+   * to the access tokens of a browser session that signs out. The connection's
+   * `offline_access` refresh token survives, so the client refreshes.
+   */
+  | 'revoked'
   /** Issued outside a Motir consent decision, so it carries no connection. */
   | 'unbound'
   /** The consenting person is no longer in the connection's workspace. */

@@ -225,7 +225,9 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     model: 'oauthRefreshToken',
     tier: 'identity',
     basis: 'Refresh tokens issued to apps the reader connected, and their revocation.',
-    redact: ['token'],
+    // `rotationReplayResponse` (better-auth 1.7) is the last rotation's token
+    // response, encrypted, kept to answer a retried refresh: a credential too.
+    redact: ['token', 'rotationReplayResponse'],
     where: byUserId,
   },
   {

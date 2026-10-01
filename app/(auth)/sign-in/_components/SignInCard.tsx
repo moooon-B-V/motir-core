@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Mail, Lock, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import type { OAuthSignInClientDto } from '@/lib/dto/oauthConnections';
 import { Button, buttonVariants } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { signIn } from '@/lib/auth/client';
@@ -61,9 +62,8 @@ import {
  */
 /** An OAuth authorize request waiting on this sign-in (MOTIR-6985): the app's
  *  registered name, or null when it registered none. */
-export interface SignInOAuthApp {
-  name: string | null;
-}
+/** The app an authorize request is waiting on — `OAuthSignInClientDto`. */
+export type SignInOAuthApp = OAuthSignInClientDto;
 
 export function SignInCard({
   sessionActive = false,
@@ -313,10 +313,12 @@ function SignInForm({
       {/* An MCP client's authorize request is waiting (MOTIR-6985, design
           `design/auth/oauth-consent.mock.html` Panel 5) — the fourth
           `IdeaCarried`: it names the app, so the round trip through sign-in
-          reads as one flow. */}
+          reads as one flow. Its verified-by-domain delta (MOTIR-7174, Panel V3)
+          leads a verified app with its host, and never states a self-registered
+          app's name as fact. */}
       {oauthApp ? (
         <IdeaCarried label={tOAuth('signIn.carriedLabel')}>
-          {tOAuth('signIn.carriedValue', { app: oauthApp.name ?? tOAuth('unnamedApp') })}
+          <OAuthHandOff app={oauthApp} />
         </IdeaCarried>
       ) : null}
       {carryingOnboardingIntent ? (
@@ -508,4 +510,26 @@ function FooterLink({
 function signInErrorKey(error: unknown): 'accountSuspended' | 'wrongPassword' {
   const code = (error as { code?: unknown } | null | undefined)?.code;
   return code === 'ACCOUNT_SUSPENDED' ? 'accountSuspended' : 'wrongPassword';
+}
+
+/** The hand-off banner's value, per who vouches for the waiting app. */
+function OAuthHandOff({ app }: { app: SignInOAuthApp }) {
+  const t = useTranslations('oauthConsent');
+  const { verification } = app;
+  switch (verification.kind) {
+    case 'domain':
+      return t.rich('signIn.carriedValueVerified', {
+        b: (chunks) => <b className="font-mono font-semibold break-all">{chunks}</b>,
+        host: verification.host,
+        app: app.name ?? t('unnamedApp'),
+      });
+    case 'self':
+      // A self-registered app's name is its own claim; with none, the shipped
+      // "This app" line says nothing it can't back.
+      return app.name
+        ? t('signIn.carriedValueUnverified', { app: app.name })
+        : t('signIn.carriedValue', { app: t('unnamedApp') });
+    case 'registered':
+      return t('signIn.carriedValue', { app: app.name ?? t('unnamedApp') });
+  }
 }

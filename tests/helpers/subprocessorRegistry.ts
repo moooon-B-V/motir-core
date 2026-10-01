@@ -129,6 +129,7 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
   'acme.atlassian.net': 'documentation placeholder in importer copy',
   'your-domain.atlassian.net': 'documentation placeholder in importer copy',
   'example.com': 'RFC 2606 example domain, used in fixtures',
+  'example.org': 'RFC 2606 example domain, a canned client-metadata document in the E2E CIMD seam',
   'evil.example': 'negative-case fixture for URL validation',
   'motir.example.com': 'documentation placeholder',
   'device-handoff.invalid': 'RFC 2606 invalid TLD, used in a fixture',

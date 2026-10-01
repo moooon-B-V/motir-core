@@ -11,7 +11,7 @@ import { captureEmailEvents } from '../helpers/jobs';
 //
 // The per-subtask suites already prove each method in ISOLATION against real
 // Postgres — `profile-service.test.ts` (name/avatar + DTO read-back),
-// `email-change.test.ts` (request enqueue + confirm/swap/re-key, token
+// `email-change.test.ts` (request enqueue + confirm/swap, token
 // single-use + EXPIRY, the same-address REQUEST uniqueness race),
 // `users-service-password.test.ts` (every password branch: wrong-current /
 // weak / OAuth-only / session-revoke). This suite does NOT re-assert those; it
@@ -21,8 +21,8 @@ import { captureEmailEvents } from '../helpers/jobs';
 //     walked end-to-end and read BACK through the consumer reader
 //     (`getProfile` / `getPasswordCapability` / `verifyPassword`), proving state
 //     stays COHERENT ACROSS features — the profile (name + avatar) survives an
-//     email swap, and the password path works on the very credential the
-//     email-change RE-KEYED (8.8.22's `accountId` swap ↔ 8.8.23's lock-by-userId);
+//     email swap, and the password path works on the credential after the
+//     email change (8.8.22's swap ↔ 8.8.23's lock-by-userId);
 //   • the CONFIRM-path single-use guarantee under genuine warm-pool concurrency
 //     (the request-path race is the unit suite's; this is the consume-before-
 //     validate race on a single token).
@@ -106,8 +106,8 @@ describe('profile feature — story-level integration (8.8.25)', () => {
       image: resolvedAvatar(avatar),
     });
 
-    // (3) PASSWORD (8.8.23) on the RE-KEYED credential: email-change re-keyed the
-    // credential account's `accountId` to new@; a subsequent password change must
+    // (3) PASSWORD (8.8.23) after the email change: the credential stays keyed by
+    // the user id (better-auth 1.7, MOTIR-7171); a subsequent password change must
     // still lock+update that same credential (by userId) and verify under the NEW
     // address — the 8.8.22 ↔ 8.8.23 seam no single unit exercises.
     await usersService.changePassword({
@@ -156,13 +156,13 @@ describe('profile feature — story-level integration (8.8.25)', () => {
     }
 
     // Coherent end state regardless of the split: the live address is the new
-    // one (swapped exactly once, not to a wrong value), the credential is re-keyed
-    // to it, the token is consumed, and no pending row lingers.
+    // one (swapped exactly once, not to a wrong value), the credential is still
+    // keyed by the user id, the token is consumed, and no pending row lingers.
     expect((await usersService.getProfile(user.id))?.email).toBe('new@example.com');
     const credential = await adminDb.account.findFirst({
       where: { userId: user.id, providerId: 'credential' },
     });
-    expect(credential!.accountId).toBe('new@example.com');
+    expect(credential!.accountId).toBe(user.id);
     const emailChangeRequestRows = await adminDb.emailChangeRequest.findMany({
       where: { userId: user.id },
     });

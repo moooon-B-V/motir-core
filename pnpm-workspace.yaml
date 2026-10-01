@@ -41,6 +41,23 @@ allowBuilds:
   '@sentry/cli': false
   inngest-cli: set this to true or false
 
+# MOTIR-7171 — better-auth 1.7.7 (and the @better-auth/* set it peer-requires)
+# was published 2026-09-30, inside pnpm's minimum-release-age window, and the
+# CIMD plugin MOTIR-7170 needs exists only on the 1.7 line. Pinned exactly, so
+# each entry names one immutable version; drop them once they have aged.
+minimumReleaseAgeExclude:
+  - '@better-auth/cimd@1.7.7'
+  - '@better-auth/core@1.7.7'
+  - '@better-auth/drizzle-adapter@1.7.7'
+  - '@better-auth/kysely-adapter@1.7.7'
+  - '@better-auth/memory-adapter@1.7.7'
+  - '@better-auth/mongo-adapter@1.7.7'
+  - '@better-auth/oauth-provider@1.7.7'
+  - '@better-auth/passkey@1.7.7'
+  - '@better-auth/prisma-adapter@1.7.7'
+  - '@better-auth/telemetry@1.7.7'
+  - better-auth@1.7.7
+
 # ⚠️ `next` VENDORS the React the App Router renders with, and 16.2.6's copy
 # drops a Suspense ping that lands during render — a late section whose data has
 # arrived never paints and its transition never settles (MOTIR-5255). The patch
@@ -61,17 +78,6 @@ allowBuilds:
 # it. 1.1.0 is the last 1.x; 2.x moves to `@modelcontextprotocol/server` v2. On
 # a bump, delete the entry only if `tests/mcp/stream-cancel.test.ts` AND
 # `tests/mcp/body-abort.test.ts` pass on the unpatched install.
-#
-# ⚠️ `@better-auth/oauth-provider@1.6.11` matches a loopback redirect_uri
-# port-agnostically only when the REGISTERED host is an IP literal (127.x, ::1),
-# so a native client registered as `http://localhost/callback` that comes back on
-# the ephemeral port it was handed by the OS is refused. RFC 8252 §7.3 requires
-# the port to be ignored for loopback redirects, and the MCP story (MOTIR-6982)
-# names `http://localhost` as a loopback redirect. The patch adds the literal
-# `localhost` to that one comparison — scheme, host, path and query still match
-# exactly. On a bump, delete the entry only if
-# `tests/oauth/authorize.test.ts`'s localhost-port case passes unpatched.
 patchedDependencies:
-  '@better-auth/oauth-provider@1.6.11': patches/@better-auth__oauth-provider@1.6.11.patch
   mcp-handler@1.1.0: patches/mcp-handler@1.1.0.patch
   next@16.2.6: patches/next@16.2.6.patch

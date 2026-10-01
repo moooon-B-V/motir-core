@@ -2,7 +2,15 @@
 
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowUpRight, ChevronDown, CircleCheck, Plug, Trash2, TriangleAlert } from 'lucide-react';
+import {
+  ArrowUpRight,
+  ChevronDown,
+  CircleCheck,
+  Plug,
+  ShieldCheck,
+  Trash2,
+  TriangleAlert,
+} from 'lucide-react';
 import type { Locale } from '@/lib/i18n/locales';
 import { formatDate, formatDateTime } from '@/lib/utils/datetime';
 import { Card } from '@/components/ui/Card';
@@ -32,6 +40,11 @@ import { listConnections, revokeConnection, type OAuthConnectionDto } from './co
 // cannot reach it (the page-state-after-mutation contract, case 3). `null` means
 // the server read failed: the island renders the inline error, and Try again
 // re-runs the list read through `GET /api/account/oauth-connections`.
+//
+// An app Motir verified by its metadata document (MOTIR-7174, the delta
+// `design/settings/account-settings--connected-apps--verified-client.mock.html`)
+// is NAMED BY ITS HOST — in the row, the labels, the toast and the Revoke
+// confirm — and what it calls itself is the line beneath.
 
 /** Where the empty state sends a person: motir.co's "Add Motir to Claude",
  * which leads `/docs/mcp` (Story MOTIR-6976 owns the page). */
@@ -243,8 +256,15 @@ export function ConnectedAppsSection({
 
 type T = ReturnType<typeof useTranslations>;
 
-/** The client's registered name; the unnamed fallback is the consent screen's. */
+/** What the app is called on this card: its verified host when it has one,
+ * else its registered name (the unnamed fallback is the consent screen's). */
 function appName(c: OAuthConnectionDto, t: T): string {
+  if (c.client.verification.kind === 'domain') return c.client.verification.host;
+  return claimedName(c, t);
+}
+
+/** The name the app gave itself — its own claim. */
+function claimedName(c: OAuthConnectionDto, t: T): string {
   return c.client.name ?? t('unnamedApp');
 }
 
@@ -261,23 +281,53 @@ function Th({ children, className = '' }: { children: React.ReactNode; className
 
 function AppCell({ connection: c }: { connection: OAuthConnectionDto }) {
   const t = useTranslations('settings.connectedApps');
-  return (
-    <div className="min-w-0">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="font-sans text-sm font-medium text-(--el-text)">{appName(c, t)}</span>
-        {c.client.unverified ? (
-          <Tooltip content={t('unverifiedTooltip')}>
-            <span tabIndex={0} className="inline-flex focus-visible:outline-none">
-              <Pill tone="neutral">{t('unverified')}</Pill>
+  const verification = c.client.verification;
+  switch (verification.kind) {
+    case 'domain':
+      return (
+        <div className="min-w-0">
+          {/* Wraps at narrow width so the pill drops under a long host; the
+              host itself is never truncated. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-mono text-sm font-semibold break-all text-(--el-text)">
+              {verification.host}
             </span>
-          </Tooltip>
-        ) : null}
-      </div>
-      {c.client.host ? (
-        <div className="font-mono text-xs text-(--el-text-secondary)">{c.client.host}</div>
-      ) : null}
-    </div>
-  );
+            <Tooltip content={t('verifiedTooltip', { host: verification.host })}>
+              <span tabIndex={0} className="inline-flex focus-visible:outline-none">
+                <Pill severity="info" className="gap-1">
+                  <ShieldCheck className="h-3 w-3" aria-hidden />
+                  {t('verified')}
+                </Pill>
+              </span>
+            </Tooltip>
+          </div>
+          <div className="font-sans text-xs text-(--el-text-secondary)">
+            {t('appCallsItself', { app: claimedName(c, t) })}
+          </div>
+        </div>
+      );
+    case 'self':
+    case 'registered':
+      return (
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-sans text-sm font-medium text-(--el-text)">
+              {claimedName(c, t)}
+            </span>
+            {verification.kind === 'self' ? (
+              <Tooltip content={t('unverifiedTooltip')}>
+                <span tabIndex={0} className="inline-flex focus-visible:outline-none">
+                  <Pill tone="neutral">{t('unverified')}</Pill>
+                </span>
+              </Tooltip>
+            ) : null}
+          </div>
+          {c.client.host ? (
+            <div className="font-mono text-xs text-(--el-text-secondary)">{c.client.host}</div>
+          ) : null}
+        </div>
+      );
+  }
 }
 
 function ScopesCell({
@@ -564,6 +614,7 @@ function RevokeConnectionDialog({
   const { toast } = useToast();
   const [revoking, setRevoking] = useState(false);
   const name = appName(c, t);
+  const verification = c.client.verification;
 
   async function confirm() {
     setRevoking(true);
@@ -593,7 +644,11 @@ function RevokeConnectionDialog({
       // withdrawn (Panel 7 — one step stricter than the token dialog).
       onOpenChange={(o) => (!o && !revoking ? onClose() : undefined)}
       hideClose={revoking}
-      title={t('revokeConfirm.title', { app: name })}
+      title={
+        verification.kind === 'domain'
+          ? t('revokeConfirm.titleVerified', { app: claimedName(c, t), host: verification.host })
+          : t('revokeConfirm.title', { app: name })
+      }
       size="sm"
     >
       <div className="flex min-h-0 flex-col gap-4">
@@ -601,14 +656,27 @@ function RevokeConnectionDialog({
           <div className="flex gap-3 rounded-(--radius-card) bg-(--el-tint-rose) p-(--spacing-card-padding)">
             <TriangleAlert aria-hidden className="size-4 shrink-0 text-(--el-danger)" />
             <p className="font-sans text-sm text-(--el-text-strong)">
-              {t.rich('revokeConfirm.body', {
-                app: name,
-                workspace: c.workspace.name,
-                strong: (chunks) => <strong className="font-semibold">{chunks}</strong>,
-              })}
+              {verification.kind === 'domain'
+                ? t.rich('revokeConfirm.bodyVerified', {
+                    host: verification.host,
+                    app: claimedName(c, t),
+                    workspace: c.workspace.name,
+                    strong: (chunks) => <strong className="font-semibold">{chunks}</strong>,
+                  })
+                : t.rich('revokeConfirm.body', {
+                    app: name,
+                    workspace: c.workspace.name,
+                    strong: (chunks) => <strong className="font-semibold">{chunks}</strong>,
+                  })}
             </p>
           </div>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 font-sans text-[13px]">
+            {verification.kind === 'domain' ? (
+              <>
+                <dt className="text-(--el-text-secondary)">{t('revokeConfirm.domain')}</dt>
+                <dd className="font-mono break-all text-(--el-text)">{verification.host}</dd>
+              </>
+            ) : null}
             <dt className="text-(--el-text-secondary)">{t('revokeConfirm.workspace')}</dt>
             <dd className="text-(--el-text)">
               {workspaceLabel} · {reachLabel}

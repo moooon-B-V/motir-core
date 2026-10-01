@@ -24,7 +24,8 @@ const { createTestWorkspace } = await import('../../fixtures/workspaceFixtures')
 const { makeWorkItemFixture } = await import('../../fixtures/workItemFixtures');
 const { oauthConnectionsService } = await import('@/lib/services/oauthConnectionsService');
 const { IRREVERSIBLE_PERMISSIONS } = await import('@/lib/tokens/grant');
-const { OAuthConsentRequestInvalidError } = await import('@/lib/oauth/errors');
+const { OAuthAccessTokenRejectedError, OAuthConsentRequestInvalidError } =
+  await import('@/lib/oauth/errors');
 const { toOAuthConnectionDto } = await import('@/lib/mappers/oauthConnectionMappers');
 const { oauthSweep } = await import('@/lib/jobs/definitions/oauthSweep');
 const consentRoute = await import('@/app/api/oauth/consent/route');
@@ -217,8 +218,11 @@ describe('describing the request', () => {
       await consentQuery(clientId, cookie),
     );
     expect(described.client.name).toBeNull();
-    expect(described.client.unverified).toBe(true);
-    expect(await oauthConnectionsService.clientDisplayName(clientId)).toBeNull();
+    expect(described.client.verification).toEqual({ kind: 'self' });
+    expect(await oauthConnectionsService.clientDisplayName(clientId)).toEqual({
+      name: null,
+      verification: { kind: 'self' },
+    });
 
     const { connectionId } = await connect({ clientId, user: owner, workspaceId: workspace.id });
     const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: connectionId } });
@@ -256,7 +260,10 @@ describe('describing the request', () => {
 
   it('clientDisplayName: the registered name, and nothing for an unknown or disabled app', async () => {
     const clientId = await registeredClientId();
-    expect(await oauthConnectionsService.clientDisplayName(clientId)).toBe('Claude');
+    expect(await oauthConnectionsService.clientDisplayName(clientId)).toEqual({
+      name: 'Claude',
+      verification: { kind: 'self' },
+    });
     expect(await oauthConnectionsService.clientDisplayName('nobody')).toBeNull();
     await adminDb.oauthClient.update({ where: { clientId }, data: { disabled: true } });
     expect(await oauthConnectionsService.clientDisplayName(clientId)).toBeNull();
@@ -296,6 +303,24 @@ describe('the grant a connection records', () => {
     const resolved = await oauthConnectionsService.resolveAccessToken(access_token);
     expect(resolved.grant).not.toContain('retired:permission');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('unrecognised grant'));
+  });
+
+  it('an access token the provider stamped revoked is refused, though its row remains', async () => {
+    // better-auth 1.7 stamps `revoked` on a signed-out session's access tokens
+    // rather than deleting them (MOTIR-7171); the gate must read the stamp.
+    const clientId = await registeredClientId();
+    const keys = pkce();
+    const c = await connect({ clientId, keys });
+    const { access_token } = await exchange(clientId, c.code, keys.verifier);
+    await adminDb.oauthAccessToken.updateMany({
+      where: { clientId },
+      data: { revoked: new Date() },
+    });
+    const refused = await oauthConnectionsService
+      .resolveAccessToken(access_token)
+      .catch((err: unknown) => err);
+    expect(refused).toBeInstanceOf(OAuthAccessTokenRejectedError);
+    expect((refused as InstanceType<typeof OAuthAccessTokenRejectedError>).reason).toBe('revoked');
   });
 });
 
@@ -349,7 +374,11 @@ describe('the authorize policy', () => {
   it('a registration that sends no redirect list is left to the provider’s own schema', async () => {
     const res = await register('https://claude.ai/cb' as unknown as string[]);
     expect(res.status).toBe(400);
-    expect(((await res.json()) as { error?: string }).error).not.toBe('invalid_redirect_uri');
+    // better-auth 1.7's own schema answers a malformed `redirect_uris` with the
+    // same RFC 7591 code Motir's policy uses, so the CODE no longer says whose
+    // refusal it is — the description does. Motir's names the allowed schemes.
+    const body = (await res.json()) as { error_description?: string };
+    expect(body.error_description ?? '').not.toMatch(/must use https/);
   });
 
   it('a registration with no body at all is left to the provider’s own schema', async () => {
@@ -391,7 +420,7 @@ describe('the mapper', () => {
       name: null,
       uri: null,
       icon: null,
-      unverified: true,
+      verification: { kind: 'self' },
       host: null,
     });
   });
@@ -406,8 +435,8 @@ describe('the mapper', () => {
     expect(client(['http://[::1]:5000/cb']).host).toBe('localhost');
     expect(client(['not a url']).host).toBeNull();
     expect(client([]).host).toBeNull();
-    expect(client([], 'u').unverified).toBe(false);
-    expect(client([], null).unverified).toBe(true);
+    expect(client([], 'u').verification).toEqual({ kind: 'registered' });
+    expect(client([], null).verification).toEqual({ kind: 'self' });
   });
 });
 

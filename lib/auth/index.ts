@@ -4,6 +4,7 @@ import { isAPIError } from 'better-auth/api';
 import { prismaAdapter } from '@better-auth/prisma-adapter';
 import { passkey } from '@better-auth/passkey';
 import { oauthProvider } from '@better-auth/oauth-provider';
+import { cimd } from '@better-auth/cimd';
 import { nextCookies } from 'better-auth/next-js';
 import { deviceAuthorization } from 'better-auth/plugins';
 import { twoFactor } from 'better-auth/plugins/two-factor';
@@ -35,6 +36,12 @@ import {
 import { PASSKEY_RESIDENT_KEY, PASSKEY_RP_NAME, PASSKEY_USER_VERIFICATION } from './passkeyConfig';
 import { hash, verify } from './passwords';
 import { mcpOAuthPolicy } from './mcpOAuthPolicy';
+import { seedResourcesLazily } from './lazyResourceSeed';
+import {
+  CIMD_FETCH_POLICY,
+  CIMD_REVALIDATION_INTERVAL,
+  fetchClientMetadataDocument,
+} from '@/lib/oauth/clientMetadataDocument';
 import { CONSENT_REQUIRED_REFERENCE, currentConsentConnection } from '@/lib/oauth/consentContext';
 import {
   mcpResourceUrl,
@@ -113,6 +120,7 @@ export const authOptions: BetterAuthOptions & {
     ReturnType<typeof passkey>,
     ReturnType<typeof mcpOAuthPolicy>,
     ReturnType<typeof oauthProvider>,
+    ReturnType<typeof cimd>,
     ReturnType<typeof nextCookies>,
   ];
 } = {
@@ -203,7 +211,7 @@ export const authOptions: BetterAuthOptions & {
   // explicitly so the limiter is active in dev and tests too.
   //
   // The path here is /request-password-reset (not /forget-password):
-  // that's the canonical endpoint mounted by better-auth@1.6.11's
+  // that's the canonical endpoint mounted by better-auth's (1.6.11, still on 1.7.7)
   // password.mjs route module.
   // PRODECT_FINDINGS #9: Better-Auth groups /sign-in, /sign-up,
   // /change-password, /change-email into ONE IP-keyed bucket (window 10s,
@@ -294,7 +302,7 @@ export const authOptions: BetterAuthOptions & {
   // NOT create a user row, so this hook correctly does not fire and the
   // pre-existing workspace is preserved.
   //
-  // BEST-EFFORT, NOT ATOMIC. In better-auth 1.6.11 the `create.after` hook
+  // BEST-EFFORT, NOT ATOMIC. In better-auth (1.6.11, re-read on 1.7.7) the `create.after` hook
   // runs via queueAfterTransactionHook — i.e. AFTER the user-insert
   // transaction has already committed (verified in
   // better-auth/dist/db/with-hooks.mjs; the planning card claimed it was
@@ -460,12 +468,15 @@ export const authOptions: BetterAuthOptions & {
       expiresIn: DEVICE_CODE_EXPIRES_IN,
       interval: DEVICE_CODE_POLL_INTERVAL,
       validateClient: (clientId: string) => clientId === CLI_CLIENT_ID,
-      // `schema: {}` is REQUIRED, not decoration: better-auth 1.6.11 declares this
-      // option as `z.custom(() => true)` with no `.optional()`, so its own options
-      // parser throws `expected nonoptional, received undefined` when it is absent.
-      // An empty object means "no model/field renames" — which is what we want, since
-      // Motir's DeviceCode model already uses the plugin's field names verbatim.
-      schema: {},
+      // No `schema` override: Motir's DeviceCode model uses the plugin's field
+      // names verbatim. (1.6.11 REQUIRED an empty `schema: {}` here — its options
+      // parser declared the field without `.optional()`; 1.7 made it optional.)
+      //
+      // 1.7 split the OAuth provider's device grant into its own
+      // `oauthDeviceAuthorization()` (with `oauthClientId` / `resources` columns).
+      // That plugin is NOT this one, and Motir does not install it: `motir login`
+      // completes into Motir's own CLI PAT (/api/cli/device/*), never an OAuth
+      // token, so this plain plugin and its nine fields are unchanged (MOTIR-7171).
     }),
     // twoFactor (Story MOTIR-1213 · Subtask MOTIR-1217) is Better-Auth's own
     // 2FA plugin. It mounts /two-factor/enable, /two-factor/disable,
@@ -579,6 +590,14 @@ export const authOptions: BetterAuthOptions & {
       // again on this device". Also the plugin's default; pinned so the copy and
       // the cookie cannot drift apart.
       trustDeviceMaxAge: TWO_FACTOR_TRUST_DEVICE_MAX_AGE_SECONDS,
+      // OFF, to keep the 1.7 upgrade a library move (MOTIR-7171). 1.7 added an
+      // account-level lockout, ON by default: ten consecutive failed codes lock
+      // the challenge for fifteen minutes. That is a product decision with copy
+      // of its own (the challenge would have to explain the lock), not something
+      // a dependency bump should switch on silently. 1.6.11 had no such lock, so
+      // `false` is exactly the behaviour Motir shipped; the plugin's own limiter
+      // on /two-factor/* (3 per 10 s) still bounds guessing.
+      accountLockout: { enabled: false },
     }),
     // passkey (Story MOTIR-1214 · Subtask MOTIR-3610) is Better-Auth's WebAuthn
     // plugin, shipped as its own package rather than a `better-auth/plugins/*`
@@ -647,47 +666,83 @@ export const authOptions: BetterAuthOptions & {
     // at registration and a missing or foreign `resource` at authorize, neither
     // of which the provider checks (`./mcpOAuthPolicy.ts`).
     mcpOAuthPolicy(),
-    oauthProvider({
-      loginPage: OAUTH_LOGIN_PAGE,
-      consentPage: OAUTH_CONSENT_PAGE,
-      // The consent decision's CONNECTION (MOTIR-6983). Every consent row, code,
-      // access token and refresh token carries the id of the `api_token` row the
-      // person approved, and the MCP gate resolves a bearer through it to that
-      // row's workspace, project and grant. The id comes from the approval in
-      // progress (`lib/oauth/consentContext.ts`); outside one it is a reference no
-      // consent carries, so every authorization goes to the consent screen, where
-      // the workspace is chosen. `shouldRedirect` is false: there is no step
-      // between signing in and consenting — the workspace picker IS the consent.
-      postLogin: {
-        page: OAUTH_CONSENT_PAGE,
-        shouldRedirect: () => false,
-        consentReferenceId: () => currentConsentConnection() ?? CONSENT_REQUIRED_REFERENCE,
-      },
-      scopes: [...OAUTH_SCOPES],
-      // The only audience a token may be minted for (RFC 8707). The provider
-      // checks a `resource` sent to the token endpoint against this.
-      validAudiences: [mcpResourceUrl()],
-      grantTypes: ['authorization_code', 'refresh_token'],
-      // RFC 7591 dynamic registration, unauthenticated: an MCP client registers
-      // before anyone has signed in. Unauthenticated registration forces
-      // `token_endpoint_auth_method: none` — public clients only — so there is
-      // no client secret to leak and PKCE is always required.
-      allowDynamicClientRegistration: true,
-      allowUnauthenticatedClientRegistration: true,
-      // OPAQUE tokens, stored hashed in `oauth_access_token` /
-      // `oauth_refresh_token`. Revocation is a row the MCP gate no longer finds,
-      // and nothing needs a signing key — so no JWKS, and no new secret to
-      // provision. It also means no OpenID `id_token`: Motir is not offered as a
-      // login provider for other sites.
-      disableJwtPlugin: true,
-      // Registration and token are limited on the SHARED counter instead, per IP
-      // (`lib/rateLimit/authGuard.ts`). The provider's own defaults (5 and 20 a
-      // minute) are per-process and sized for one person — claude.ai registers
-      // and refreshes for all of its users from a handful of egress addresses.
-      rateLimit: { register: false, token: false },
-      // The root `/.well-known/oauth-authorization-server` routes exist
-      // (`app/.well-known/`); the provider warns until told so.
-      silenceWarnings: { oauthAuthServerConfig: true },
+    // Seeds the MCP resource on first use, not at import (`./lazyResourceSeed.ts`).
+    seedResourcesLazily(
+      oauthProvider({
+        loginPage: OAUTH_LOGIN_PAGE,
+        consentPage: OAUTH_CONSENT_PAGE,
+        // The consent decision's CONNECTION (MOTIR-6983). Every consent row, code,
+        // access token and refresh token carries the id of the `api_token` row the
+        // person approved, and the MCP gate resolves a bearer through it to that
+        // row's workspace, project and grant. The id comes from the approval in
+        // progress (`lib/oauth/consentContext.ts`); outside one it is a reference no
+        // consent carries, so every authorization goes to the consent screen, where
+        // the workspace is chosen. `shouldRedirect` is false: there is no step
+        // between signing in and consenting — the workspace picker IS the consent.
+        postLogin: {
+          page: OAUTH_CONSENT_PAGE,
+          shouldRedirect: () => false,
+          consentReferenceId: () => currentConsentConnection() ?? CONSENT_REQUIRED_REFERENCE,
+        },
+        scopes: [...OAUTH_SCOPES],
+        // The only protected resource a token may be minted for (RFC 8707). 1.7
+        // models resources as rows (`oauth_resource`), seeded at boot from this list
+        // — it replaces 1.6.11's `validAudiences`, which 1.7 removed (and which,
+        // because the factory's options are generic, would now be IGNORED rather
+        // than refused by the type checker). The provider refuses a `resource` at
+        // authorize or token that names no enabled row; `mcpOAuthPolicy()` still
+        // REQUIRES one at authorize, which the provider does not (MOTIR-7171).
+        //
+        // The OBJECT form, not the bare string, for one reason: the string form
+        // seeds `allowedScopes: null` ("inherit"), and Prisma refuses a null for a
+        // list column. Naming the full scope set is the same policy — every scope
+        // Motir offers is one the MCP accepts.
+        resources: [
+          { identifier: mcpResourceUrl(), name: 'Motir MCP', allowedScopes: [...OAUTH_SCOPES] },
+        ],
+        // OFF, deliberately. Its 1.7 default (`true`) demands an
+        // `oauth_client_resource` link per client per resource, and every client
+        // registered on 1.6.11 has none, so each existing connection's next refresh
+        // would be refused. With exactly one resource, "every client may request
+        // it" IS Motir's policy — the same one `validAudiences` expressed.
+        enforcePerClientResources: false,
+        grantTypes: ['authorization_code', 'refresh_token'],
+        // RFC 7591 dynamic registration, unauthenticated: an MCP client registers
+        // before anyone has signed in. Unauthenticated registration forces
+        // `token_endpoint_auth_method: none` — public clients only — so there is
+        // no client secret to leak and PKCE is always required.
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+        // OPAQUE tokens, stored hashed in `oauth_access_token` /
+        // `oauth_refresh_token`. Revocation is a row the MCP gate no longer finds,
+        // and nothing needs a signing key — so no JWKS, and no new secret to
+        // provision. It also means no OpenID `id_token`: Motir is not offered as a
+        // login provider for other sites.
+        disableJwtPlugin: true,
+        // Registration and token are limited on the SHARED counter instead, per IP
+        // (`lib/rateLimit/authGuard.ts`). The provider's own defaults (5 and 20 a
+        // minute) are per-process and sized for one person — claude.ai registers
+        // and refreshes for all of its users from a handful of egress addresses.
+        rateLimit: { register: false, token: false },
+        // (1.6.11's `silenceWarnings: { oauthAuthServerConfig: true }` is gone: 1.7
+        // removed the option along with the warning it silenced.)
+      }),
+    ),
+    // Client ID Metadata Documents (MOTIR-7173): a client may name itself by an
+    // HTTPS URL, whose document is fetched, validated and recorded as a client
+    // (`clientDiscoveryId: 'cimd'`). AFTER the provider, which its `init`
+    // extends. Its discovery also advertises `client_id_metadata_document_
+    // supported`, the flag Claude reads before using its published identity.
+    // DCR stays open beside it for every other client.
+    cimd({
+      // The plugin's hardened node transport, behind a seam tests stub
+      // (`lib/oauth/clientMetadataDocument.ts` says what it guarantees).
+      fetchClientMetadataResource: fetchClientMetadataDocument,
+      // MCP 2026-07-28 pins CIMD draft-00, which requires `client_name` and
+      // `redirect_uris` — both of which the consent screen needs.
+      metadataProfile: 'mcp-2026-07-28',
+      metadataRevalidationInterval: CIMD_REVALIDATION_INTERVAL,
+      metadataFetchPolicy: CIMD_FETCH_POLICY,
     }),
     // LAST, as Better-Auth requires of a cookie integration: it forwards the
     // `Set-Cookie` headers of every `after` hook that runs before it, and the

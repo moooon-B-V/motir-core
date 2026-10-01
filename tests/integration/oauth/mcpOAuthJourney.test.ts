@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -48,6 +48,17 @@ vi.mock('@/lib/auth/requireCompliantSession', () => ({
   requireCompliantSession: () => requireCompliantSession(),
 }));
 
+// The REAL Client ID Metadata Document transport must never run in this lane: a
+// metadata-document client is served by the test seam instead. Every call to the
+// real one is recorded and fails the test that made it (MOTIR-7175 case 7).
+const realCimdCalls = vi.hoisted(() => [] as string[]);
+vi.mock('@better-auth/cimd/node', () => ({
+  fetchClientMetadataResource: async (url: string) => {
+    realCimdCalls.push(url);
+    throw new Error(`the real CIMD transport was called in the test lane: ${url}`);
+  },
+}));
+
 const { db } = await import('@/lib/db');
 const { adminDb } = await import('../../helpers/adminDb');
 const { truncateAuthTables } = await import('../../helpers/db');
@@ -72,6 +83,7 @@ const authServerMetadata =
   await import('@/app/.well-known/oauth-authorization-server/[[...path]]/route');
 const { BASE, CLAUDE_CALLBACK, authorize, freshIp, location, registeredClientId, signIn } =
   await import('../../helpers/oauthFlow');
+const { setClientMetadataTransportForTests } = await import('@/lib/oauth/clientMetadataDocument');
 
 const MCP_URL = `${BASE}/api/mcp`;
 const RESOURCE_METADATA = `resource_metadata="${BASE}/.well-known/oauth-protected-resource"`;
@@ -80,6 +92,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 beforeEach(async () => {
   await truncateAuthTables();
   requireCompliantSession.mockReset();
+  realCimdCalls.length = 0;
+});
+
+afterEach(() => {
+  setClientMetadataTransportForTests(null);
+  expect(realCimdCalls, 'the real CIMD transport must never run here').toEqual([]);
 });
 
 afterAll(async () => {
@@ -264,15 +282,15 @@ async function approveInBrowser(
 async function connectThroughSdk(
   person: Person,
   choice: { workspaceId: string; projectId?: string | null; permissions?: string[] },
+  provider: MemoryOAuthProvider = new MemoryOAuthProvider(),
 ) {
-  const provider = new MemoryOAuthProvider();
   const first = new Client({ name: 'motir-oauth-gate', version: '1.0.0' });
   const transport = transportFor(provider);
   await expect(first.connect(transport)).rejects.toBeInstanceOf(UnauthorizedError);
   expect(provider.authorizationUrl).toBeDefined();
 
   const back = await approveInBrowser(person, provider.authorizationUrl!, choice);
-  expect(`${back.origin}${back.pathname}`).toBe(CLAUDE_CALLBACK);
+  expect(`${back.origin}${back.pathname}`).toBe(provider.redirectUrl);
   expect(back.searchParams.get('state')).toBe('st-sdk');
   await transport.finishAuth(back.searchParams.get('code')!);
   expect(provider.saved?.access_token).toBeTruthy();
@@ -452,6 +470,139 @@ describe('the MCP SDK client, end to end', () => {
       workspaceId: fx.workspaceId,
     });
     expect401(await rawMcp(provider.saved!.access_token));
+    await client.close();
+  });
+});
+
+// ── a client identified by its metadata document (Story MOTIR-7170 · MOTIR-7175) ──
+
+/** Claude Code's own shape: a `client_id` that is an HTTPS URL, and a loopback
+ * redirect on whatever port it listens on. */
+class MetadataDocumentProvider extends MemoryOAuthProvider {
+  constructor(readonly clientMetadataUrl: string) {
+    super();
+  }
+  override get redirectUrl(): string {
+    return 'http://127.0.0.1:53682/callback';
+  }
+  override get clientMetadata(): OAuthClientMetadata {
+    return { ...super.clientMetadata, redirect_uris: [this.redirectUrl] };
+  }
+}
+
+/** Serve a document at `url` through the transport seam, as Anthropic publishes
+ * Claude Code's: loopback redirects matched on any port. */
+function serveDocument(url: string, clientName: string): string[] {
+  const fetched: string[] = [];
+  setClientMetadataTransportForTests(async (input) => {
+    const at = String(input instanceof Request ? input.url : input);
+    fetched.push(at);
+    if (at !== url) throw new TypeError(`no document at ${at}`);
+    return new Response(
+      JSON.stringify({
+        client_id: url,
+        client_name: clientName,
+        redirect_uris: ['http://localhost/callback', 'http://127.0.0.1/callback'],
+        grant_types: ['authorization_code', 'refresh_token'],
+        response_types: ['code'],
+        token_endpoint_auth_method: 'none',
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  });
+  return fetched;
+}
+
+describe('a client identified by a Client ID Metadata Document', () => {
+  it('discovers, authorizes, calls a tool, refreshes and is revoked — and never registers', async () => {
+    const fx = await makeWorkItemFixture();
+    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Found by its document' });
+    const person = await personIn(fx);
+    const clientId = 'https://claude.ai/oauth/claude-code-client-metadata';
+    const fetched = serveDocument(clientId, 'Claude Code');
+    const provider = new MetadataDocumentProvider(clientId);
+    requests.length = 0;
+
+    const { client, connectionId } = await connectThroughSdk(
+      person,
+      { workspaceId: fx.workspaceId },
+      provider,
+    );
+
+    const asked = requests.map((r) => `${r.method} ${new URL(r.url).pathname}`);
+    // The SDK read the advertised flag and named itself by its URL instead of
+    // registering — no /oauth2/register call anywhere in the journey.
+    expect(asked.slice(0, 3)).toEqual([
+      'POST /api/mcp',
+      'GET /.well-known/oauth-protected-resource',
+      'GET /.well-known/oauth-authorization-server/api/auth',
+    ]);
+    expect(asked).not.toContain('POST /api/auth/oauth2/register');
+    expect(provider.authorizationUrl!.searchParams.get('client_id')).toBe(clientId);
+    expect(provider.authorizationUrl!.searchParams.get('code_challenge_method')).toBe('S256');
+    expect(provider.authorizationUrl!.searchParams.get('resource')).toBe(mcpResourceUrl());
+    expect(fetched).toContain(clientId);
+
+    const row = await adminDb.oauthClient.findUniqueOrThrow({ where: { clientId } });
+    expect(row.clientDiscoveryId).toBe('cimd');
+    expect(row.userId).toBeNull();
+
+    // case 3 — the verification it yields
+    const [connection] = await oauthConnectionsService.listForUser(person.user.id);
+    expect(connection!.client.verification).toEqual({ kind: 'domain', host: 'claude.ai' });
+    expect(connection!.client.name).toBe('Claude Code');
+
+    const result = await callTool(client, 'get_work_item', {
+      key: `${fx.projectIdentifier}-${item.key}`,
+    });
+    expect(textOf(result)).toContain('Found by its document');
+
+    // refresh
+    const before = provider.saved!.access_token;
+    await adminDb.oauthAccessToken.updateMany({ data: { expiresAt: new Date(Date.now() - 1000) } });
+    expect((await callTool(client, 'whoami', {})).isError).toBeFalsy();
+    expect(provider.saved!.access_token).not.toBe(before);
+
+    // revoke
+    requireCompliantSession.mockResolvedValue({ ok: true, session: { user: person.user } });
+    const revoked = await connectionsRoute.DELETE(
+      new Request(`${BASE}/api/account/oauth-connections/${connectionId}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: connectionId }) },
+    );
+    expect(revoked.status).toBe(204);
+    expect401(await rawMcp(provider.saved!.access_token));
+    await client.close();
+  });
+
+  it('a document naming itself “Claude” on another host is verified as THAT host', async () => {
+    const fx = await makeWorkItemFixture();
+    const person = await personIn(fx);
+    const clientId = 'https://claude-connector.example/oauth/client';
+    serveDocument(clientId, 'Claude');
+    const { client } = await connectThroughSdk(
+      person,
+      { workspaceId: fx.workspaceId },
+      new MetadataDocumentProvider(clientId),
+    );
+    const [connection] = await oauthConnectionsService.listForUser(person.user.id);
+    expect(connection!.client.verification).toEqual({
+      kind: 'domain',
+      host: 'claude-connector.example',
+    });
+    expect(connection!.client.name).toBe('Claude');
+    await client.close();
+  });
+
+  it('a DCR client beside it still registers, and reads as self-registered', async () => {
+    const fx = await makeWorkItemFixture();
+    const person = await personIn(fx);
+    requests.length = 0;
+    const { client } = await connectThroughSdk(person, { workspaceId: fx.workspaceId });
+    expect(requests.map((r) => `${r.method} ${new URL(r.url).pathname}`)).toContain(
+      'POST /api/auth/oauth2/register',
+    );
+    const [connection] = await oauthConnectionsService.listForUser(person.user.id);
+    expect(connection!.client.verification).toEqual({ kind: 'self' });
     await client.close();
   });
 });

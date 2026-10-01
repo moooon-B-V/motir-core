@@ -5,6 +5,23 @@
 
 import type { PermissionKey } from '@/lib/permissions/catalog';
 
+/**
+ * Who vouches for an app (Story MOTIR-7170 · Subtask MOTIR-7174). A VALUE, not a
+ * flag, so a surface that switches over it is total and cannot forget a member:
+ *
+ * - `registered` — a signed-in Motir user registered the client, so its name was
+ *   set by someone this deployment knows.
+ * - `domain` — Motir DISCOVERED the client by fetching and validating the Client
+ *   ID Metadata Document at its `client_id` URL (MOTIR-7173). `host` is that
+ *   URL's host, and it is the verified fact: the document's `client_name` is
+ *   still the app's own claim.
+ * - `self` — the client registered itself (RFC 7591): nobody vouches for it.
+ */
+export type OAuthClientVerification =
+  | { kind: 'registered' }
+  | { kind: 'domain'; host: string }
+  | { kind: 'self' };
+
 /** One app a person has connected, as Settings → Account → Connected apps lists it. */
 export interface OAuthConnectionDto {
   id: string;
@@ -14,8 +31,8 @@ export interface OAuthConnectionDto {
     name: string | null;
     uri: string | null;
     icon: string | null;
-    /** The client registered itself (RFC 7591) — no Motir user owns it. */
-    unverified: boolean;
+    /** Who vouches for it — registered, a verified domain, or nobody. */
+    verification: OAuthClientVerification;
     /** The host of its first registered redirect URI — the one fact on the row
      * the app did not choose. A loopback address reads `localhost`. */
     host: string | null;
@@ -65,8 +82,8 @@ export interface ConsentRequestDto {
     clientId: string;
     /** The registered `client_name` — the app's own claim, rendered as data. */
     name: string | null;
-    /** True for a dynamically registered client: nobody vouched for its name. */
-    unverified: boolean;
+    /** Who vouches for it — registered, a verified domain, or nobody. */
+    verification: OAuthClientVerification;
   };
   /** Where the code goes: the request's `redirect_uri`, already checked against
    * the client's registration. */
@@ -84,4 +101,12 @@ export interface ConsentRequestDto {
 /** What declining returns: the client redirect carrying `error=access_denied`. */
 export interface DenyConsentResult {
   redirectUrl: string;
+}
+
+/** The app an authorize request is waiting on, as the sign-in card's hand-off
+ * banner names it. */
+export interface OAuthSignInClientDto {
+  /** The client's `client_name` — its own claim. Null when it gave none. */
+  name: string | null;
+  verification: OAuthClientVerification;
 }

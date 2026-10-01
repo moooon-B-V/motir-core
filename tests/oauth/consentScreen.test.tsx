@@ -92,8 +92,16 @@ function html(element: ReactElement): string {
   );
 }
 
-function asSearchParams(query: string): Promise<Record<string, string>> {
-  return Promise.resolve(Object.fromEntries(new URLSearchParams(query)));
+/** The page's `searchParams` as Next hands them over: a REPEATED key is an array.
+ * better-auth 1.7's signed query repeats `ba_param` (MOTIR-7171), so collapsing
+ * repeats would hand the page a query whose signature no longer matches. */
+function asSearchParams(query: string): Promise<Record<string, string | string[]>> {
+  const out: Record<string, string | string[]> = {};
+  for (const [name, value] of new URLSearchParams(query)) {
+    const prior = out[name];
+    out[name] = prior === undefined ? value : [...(Array.isArray(prior) ? prior : [prior]), value];
+  }
+  return Promise.resolve(out);
 }
 
 /** A signed-in person with a workspace and a project, and a pending request. */
@@ -143,7 +151,7 @@ describe('/oauth/consent renders a valid pending request', () => {
   it('describes the request from the SIGNED request and the registration, not the URL', async () => {
     const { query, user } = await pending();
     const request = await oauthConnectionsService.describeConsentRequest(user.id, query);
-    expect(request.client).toMatchObject({ name: 'Claude', unverified: true });
+    expect(request.client).toMatchObject({ name: 'Claude', verification: { kind: 'self' } });
     expect(request.redirectUri).toBe(CLAUDE_CALLBACK);
     expect(request.redirectHost).toBe('claude.ai');
     expect(request.loopback).toBe(false);
@@ -337,6 +345,18 @@ describe('/oauth/error — what it reads from its query', () => {
     [{}, 'It wasn’t issued by Motir'],
     [{ error: 'invalid_redirect' }, 'an address it never registered with Motir'],
     [{ error: 'code_challenge' }, 'invalid_request · code_challenge'],
+    // A refused Client ID Metadata Document (MOTIR-7173): its host and the
+    // plugin's reason, as text; without both, the general sentence.
+    [
+      {
+        error: 'client_metadata',
+        host: 'evil.example',
+        detail: 'Metadata document is not valid JSON',
+      },
+      'a document at <strong class="font-semibold">evil.example</strong> that Motir couldn’t use: Metadata document is not valid JSON',
+    ],
+    [{ error: 'client_metadata', host: 'evil.example' }, 'a document Motir couldn’t use.'],
+    [{ error: 'client_metadata' }, 'invalid_client · client_id metadata document'],
   ])('%j reads as a refusal it can name', async (searchParams, says) => {
     const page = html(await ErrorPage({ searchParams: Promise.resolve(searchParams) }));
     expect(page).toContain(says);

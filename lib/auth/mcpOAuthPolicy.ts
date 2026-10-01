@@ -1,7 +1,13 @@
-import { APIError, createAuthMiddleware } from 'better-auth/api';
+import { APIError, createAuthMiddleware, isAPIError } from 'better-auth/api';
 import type { BetterAuthPlugin } from 'better-auth';
+import { getOAuthProviderApi, type OAuthOptions, type Scope } from '@better-auth/oauth-provider';
+import { isCimdClientIdUrlCandidate } from '@better-auth/cimd';
 import { mcpResourceUrl, oauthErrorPageUrl } from '@/lib/oauth/config';
-import { isAllowedRedirectUri, matchesRegisteredRedirect } from '@/lib/oauth/redirectPolicy';
+import {
+  isAllowedRedirectUri,
+  isLoopbackRedirect,
+  matchesRegisteredRedirect,
+} from '@/lib/oauth/redirectPolicy';
 import { currentConsentConnection } from '@/lib/oauth/consentContext';
 
 // Motir's policy IN FRONT OF `@better-auth/oauth-provider` (MOTIR-6982).
@@ -12,7 +18,9 @@ import { currentConsentConnection } from '@/lib/oauth/consentContext';
 // hold on every request whichever door it came through:
 //
 //   1. REGISTRATION (RFC 7591) — every `redirect_uris` entry must be `https` or
-//      loopback `http` (`lib/oauth/redirectPolicy.ts`). The provider's schema also
+//      loopback `http` (`lib/oauth/redirectPolicy.ts`), and a registration whose
+//      redirects are ALL loopback is declared `application_type: native` when it
+//      named none, which is what better-auth 1.7 needs to accept them. The provider's schema also
 //      admits custom schemes, which any installed app can claim, and so would
 //      hand an authorization code to whoever registered the scheme first.
 //      Refused `invalid_redirect_uri`, the RFC 7591 §3.2.2 code.
@@ -28,6 +36,11 @@ import { currentConsentConnection } from '@/lib/oauth/consentContext';
 //      refused-request page (`/oauth/error`, MOTIR-6985) — the one state with no
 //      trustworthy address to send an error to. The provider would refuse both
 //      too, to Better-Auth's bare `/api/auth/error`; this says it in words.
+//      The client is resolved the way the provider resolves it, so a client
+//      that names itself by an HTTPS URL (a Client ID Metadata Document,
+//      MOTIR-7173) is DISCOVERED here — fetched, validated and recorded — rather
+//      than refused for having no row yet. A document Motir cannot use is
+//      refused onto the same page, with the plugin's reason.
 //   3. CONSENT (MOTIR-6983) — an ACCEPTING `/oauth2/consent` is honoured only
 //      from inside `oauthConnectionsService.approveConsent`, which has recorded
 //      the connection (workspace, project, grant) the consent binds to. Posted
@@ -53,6 +66,35 @@ function hostOf(uri: string | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The client the request names, resolved as the provider resolves it: a stored
+ * client by its id, or — for an HTTPS `client_id` — the Client ID Metadata
+ * Document discovery the cimd plugin contributes, which fetches, validates and
+ * records it (throwing an `APIError` when the document cannot be used).
+ */
+async function resolveClient(
+  ctx: Parameters<Parameters<typeof createAuthMiddleware>[0]>[0],
+  clientId: string,
+): Promise<RegisteredClient | null> {
+  if (!isCimdClientIdUrlCandidate(clientId)) {
+    return ctx.context.adapter.findOne<RegisteredClient>({
+      model: 'oauthClient',
+      where: [{ field: 'clientId', value: clientId }],
+    });
+  }
+  const provider = ctx.context.getPlugin('oauth-provider') as {
+    options: OAuthOptions<Scope[]>;
+  } | null;
+  if (!provider) return null;
+  return getOAuthProviderApi(ctx, provider.options).getClient(clientId);
+}
+
+/** The plugin's own words for why a document was refused, for the error page. */
+function refusalDetail(err: { body?: unknown }): string | undefined {
+  const body = err.body as { error_description?: unknown } | undefined;
+  return typeof body?.error_description === 'string' ? body.error_description : undefined;
 }
 
 function refusedRegistration(description: string): APIError {
@@ -81,7 +123,10 @@ export function mcpOAuthPolicy(): BetterAuthPlugin {
         {
           matcher: (ctx) => ctx.path === REGISTER_PATH,
           handler: createAuthMiddleware(async (ctx) => {
-            const body = (ctx.body ?? {}) as { redirect_uris?: unknown };
+            const body = (ctx.body ?? {}) as {
+              redirect_uris?: unknown;
+              application_type?: unknown;
+            };
             const uris = body.redirect_uris;
             if (!Array.isArray(uris)) return; // the provider's own schema answers this
             const refused = uris.find(
@@ -92,6 +137,21 @@ export function mcpOAuthPolicy(): BetterAuthPlugin {
                 'redirect_uris must use https, or http on a loopback host (localhost, 127.0.0.1, [::1])',
               );
             }
+            // better-auth 1.7 validates a redirect against the client's
+            // `application_type`, defaulting an absent one to `web` (OpenID DCR),
+            // and a `web` client may not register a loopback `http` redirect. A
+            // native MCP client — Claude Code, any CLI — registers exactly that and
+            // usually sends no `application_type`, so on 1.7 it would be refused
+            // where 1.6.11 registered it (MOTIR-7171). A registration whose every
+            // redirect is loopback IS a native client (RFC 8252 §7.3), so it is
+            // declared one; anything the caller stated is left as stated.
+            if (
+              body.application_type === undefined &&
+              uris.length > 0 &&
+              uris.every(isLoopbackRedirect)
+            ) {
+              return { context: { body: { ...body, application_type: 'native' } } };
+            }
           }),
         },
         {
@@ -100,12 +160,20 @@ export function mcpOAuthPolicy(): BetterAuthPlugin {
             const query = (ctx.query ?? {}) as Record<string, string | undefined>;
             const clientId = query.client_id;
             const redirectUri = query.redirect_uri;
-            const client = clientId
-              ? await ctx.context.adapter.findOne<RegisteredClient>({
-                  model: 'oauthClient',
-                  where: [{ field: 'clientId', value: clientId }],
-                })
-              : null;
+            let client: RegisteredClient | null = null;
+            try {
+              client = clientId ? await resolveClient(ctx, clientId) : null;
+            } catch (err) {
+              // Only discovery throws: the document was unreachable, too slow,
+              // too big, a redirect, not JSON, at a non-public address, or
+              // invalid — or the fetch budget is spent. Never followed onward.
+              // (`isAPIError`, not `instanceof`: the plugin throws better-call's
+              // class, a different constructor from the one imported here.)
+              if (!isAPIError(err) || !clientId) throw err;
+              throw ctx.redirect(
+                oauthErrorPageUrl('client_metadata', hostOf(clientId), refusalDetail(err)),
+              );
+            }
             if (!client || client.disabled) {
               throw ctx.redirect(oauthErrorPageUrl('invalid_client'));
             }

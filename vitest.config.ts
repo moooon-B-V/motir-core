@@ -2891,6 +2891,22 @@ export default defineConfig({
         'lib/repositories/oauthRefreshTokenRepository.ts',
         'lib/services/oauthConnectionsService.ts',
         'lib/services/oauthSweepService.ts',
+        // ── Story MOTIR-7170 · CLAUDE SHOWS AS VERIFIED (gate MOTIR-7175) ──
+        // The files the story ADDED: the lazy resource seed of the better-auth 1.7
+        // upgrade, and the Client ID Metadata Document transport + verification.
+        // The OAuth files it widened (the policy hook, config, errors, redirect
+        // policy, the connection mapper and services) are already gated in the
+        // block above. `lib/auth/index.ts`, `lib/auth/authMail.ts`,
+        // `lib/export/personalDataSections.ts` and `lib/repositories/userRepository.ts`
+        // are pre-existing files it touched, not gated here (the passkey story's
+        // call, below). MEASURED on the parent branch over the story's suites
+        // (tests/oauth, tests/integration/oauth, tests/integration/auth,
+        // tests/auth, tests/jobs/oauthSweep): all three at 100 on every axis;
+        // the closest of the widened files is mcpOAuthPolicy's branches at 98.0.
+        // GATED at the project floor in `thresholds`.
+        'lib/auth/lazyResourceSeed.ts',
+        'lib/oauth/clientMetadataDocument.ts',
+        'lib/oauth/discoveredClient.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -6292,6 +6308,15 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
+        // ── Story MOTIR-7170 · Claude shows as verified (gate MOTIR-7175) — see `include`. ──
+        'lib/auth/lazyResourceSeed.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/oauth/clientMetadataDocument.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/oauth/discoveredClient.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         // ── Story MOTIR-6973 · the OAuth door (gate MOTIR-6987) — see `include`. ──
         'app/**/oauth/_components/ConsentRefused.tsx': {
           lines: 90,

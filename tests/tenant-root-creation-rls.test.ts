@@ -256,6 +256,12 @@ describe('RLS coverage across the public schema', () => {
       oauth_access_token: 'hashed OAuth access tokens, read by the sessionless token path',
       oauth_refresh_token: 'hashed OAuth refresh tokens, read by the sessionless token path',
       oauth_consent: "a person's consent to an OAuth client, keyed to the user",
+      // better-auth 1.7 (MOTIR-7171): the protected resources tokens may name,
+      // seeded from config; a client↔resource link; and the replay ledger for
+      // signed client assertions. All read on the same sessionless paths.
+      oauth_resource: 'OAuth protected resources, seeded from config and read pre-session',
+      oauth_client_resource: 'OAuth client-to-resource links, read on the sessionless token path',
+      oauth_client_assertion: 'replay ledger for OAuth client assertions, written pre-session',
       // User-scoped preference rows: keyed to the USER, who spans workspaces.
       notification_preference: 'per-user preference, deliberately cross-workspace',
       user_appearance_preference: 'per-user preference, deliberately cross-workspace',

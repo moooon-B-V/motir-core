@@ -23,7 +23,12 @@ import { oauthClientRepository } from '@/lib/repositories/oauthClientRepository'
 // connection" test reads `api_token`, whose RLS hides every row from a caller
 // with no user — which would make every client look unconnected.
 
-/** A dynamically registered client with no connection is pruned after this long. */
+/**
+ * A dynamically registered client with no connection is pruned after this long.
+ * A client discovered from a Client ID Metadata Document (MOTIR-7173) is stored
+ * the same way (no owning user) and pruned the same way: its next authorize
+ * simply fetches the document and records it again.
+ */
 export const OAUTH_CLIENT_UNUSED_DAYS = 30;
 export const OAUTH_SWEEP_BATCH_SIZE = 1_000;
 export const OAUTH_SWEEP_MAX_BATCHES = 10;

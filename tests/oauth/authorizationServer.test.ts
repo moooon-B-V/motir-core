@@ -67,7 +67,8 @@ async function codeFor(clientId: string, verifierChallenge = pkce()): Promise<st
 describe('dynamic client registration (RFC 7591)', () => {
   it("registers claude.ai's callback as a PUBLIC client", async () => {
     const res = await register([CLAUDE_CALLBACK]);
-    expect(res.status).toBe(200);
+    // 201 Created, as RFC 7591 §3.2.1 specifies — 1.6.11 answered 200 (MOTIR-7171).
+    expect(res.status).toBe(201);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body['client_id']).toEqual(expect.any(String));
     expect(body['token_endpoint_auth_method']).toBe('none');
@@ -82,7 +83,7 @@ describe('dynamic client registration (RFC 7591)', () => {
       'http://[::1]:8080/cb',
     ]) {
       const res = await register([uri]);
-      expect(res.status, uri).toBe(200);
+      expect(res.status, uri).toBe(201);
     }
   });
 
@@ -300,7 +301,9 @@ describe('tokens: exchange, refresh and revoke', () => {
       resource: `${BASE}/api/v1`,
     });
     expect(res.status).toBe(400);
-    expect(((await res.json()) as { error: string }).error).toBe('invalid_request');
+    // RFC 8707 §2's own code: better-auth 1.7 answers a foreign resource with
+    // invalid_target (1.6 said invalid_request).
+    expect(((await res.json()) as { error: string }).error).toBe('invalid_target');
   });
 
   it('refreshes, then revokes (RFC 7009) so the refresh token is dead', async () => {
@@ -372,13 +375,13 @@ describe('the app-level limiter on registration and token (per IP)', () => {
   it('refuses the (N+1)-th registration from one IP with a 429', async () => {
     process.env['MOTIR_OAUTH_REGISTER_RATE_LIMIT'] = '2';
     const ip = '203.0.113.77';
-    expect((await register([CLAUDE_CALLBACK], ip)).status).toBe(200);
-    expect((await register([CLAUDE_CALLBACK], ip)).status).toBe(200);
+    expect((await register([CLAUDE_CALLBACK], ip)).status).toBe(201);
+    expect((await register([CLAUDE_CALLBACK], ip)).status).toBe(201);
     const refused = await register([CLAUDE_CALLBACK], ip);
     expect(refused.status).toBe(429);
     expect(Number(refused.headers.get('Retry-After'))).toBeGreaterThanOrEqual(1);
     // Another origin is not charged for it.
-    expect((await register([CLAUDE_CALLBACK], '203.0.113.78')).status).toBe(200);
+    expect((await register([CLAUDE_CALLBACK], '203.0.113.78')).status).toBe(201);
   });
 
   it('refuses the (N+1)-th token request from one IP with a 429', async () => {

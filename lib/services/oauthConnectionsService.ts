@@ -26,12 +26,14 @@ import {
   IRREVERSIBLE_PERMISSIONS,
   expandStoredGrant,
 } from '@/lib/tokens/grant';
+import { clientVerification } from '@/lib/oauth/discoveredClient';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type {
   ApproveConsentResult,
   ConsentRequestDto,
   DenyConsentResult,
   OAuthConnectionDto,
+  OAuthSignInClientDto,
 } from '@/lib/dto/oauthConnections';
 
 // OAuth connections (Story MOTIR-6973 · Subtask MOTIR-6983) — what an app a
@@ -120,6 +122,14 @@ async function resolveConnectionGrant(input: ApproveConsentInput): Promise<Permi
   return [...new Set(input.permissions as PermissionKey[])];
 }
 
+/** The query sorted by name, then value — the form better-auth 1.7 signs. */
+function canonicalQuery(params: URLSearchParams): URLSearchParams {
+  const sorted = [...params.entries()].sort(([keyA, valueA], [keyB, valueB]) =>
+    keyA === keyB ? (valueA < valueB ? -1 : valueA > valueB ? 1 : 0) : keyA < keyB ? -1 : 1,
+  );
+  return new URLSearchParams(sorted);
+}
+
 /**
  * Check the consent request is one the provider signed and has not expired, and
  * return its parameters. The provider checks the same signature again when it
@@ -129,12 +139,18 @@ async function resolveConnectionGrant(input: ApproveConsentInput): Promise<Permi
  */
 async function verifiedConsentQuery(oauthQuery: string): Promise<URLSearchParams> {
   const params = new URLSearchParams(oauthQuery);
+  const sigs = params.getAll('sig');
   const sig = params.get('sig');
   const exp = Number(params.get('exp'));
   params.delete('sig');
   const { secret } = await auth.$context;
-  const expected = await makeSignature(params.toString(), secret);
-  if (!sig || !constantTimeEqual(sig, expected)) {
+  // better-auth 1.7 signs the CANONICAL query — every parameter sorted by name,
+  // then value — not the order it was sent in, and refuses a query carrying more
+  // than one `sig` (its `verifyOAuthQueryParams`, which folds the expiry into the
+  // same boolean, so it is mirrored here rather than called: Motir tells a forged
+  // request from a stale one). MOTIR-7171.
+  const expected = await makeSignature(canonicalQuery(params).toString(), secret);
+  if (sigs.length !== 1 || !sig || !constantTimeEqual(sig, expected)) {
     throw new OAuthConsentRequestInvalidError('it was not issued by Motir', 'not_issued');
   }
   if (!Number.isFinite(exp) || exp * 1000 < Date.now()) {
@@ -246,9 +262,10 @@ export const oauthConnectionsService = {
         clientId: client.clientId,
         name: client.name?.trim() || null,
         // A client a signed-in person registered was put there by someone this
-        // Motir knows; one that registered itself (RFC 7591, unauthenticated —
-        // every MCP client) is only its own claim.
-        unverified: client.userId === null,
+        // Motir knows; one Motir discovered by its metadata document is vouched
+        // for by that document's host; one that registered itself (RFC 7591,
+        // unauthenticated) is only its own claim.
+        verification: clientVerification(client),
       },
       redirectUri,
       redirectHost: redirect.host,
@@ -259,14 +276,15 @@ export const oauthConnectionsService = {
   },
 
   /**
-   * The name a registered client gave itself, for the sign-in card's "connecting
-   * an app" banner (design Panel 5). Null for an unknown or disabled client, or
-   * one that registered no name — the card then says "This app". Display only.
+   * The app an authorize request is waiting on, for the sign-in card's
+   * "connecting an app" banner (design Panel 5, and its verified-by-domain
+   * delta V3): the name it gave itself, beside who vouches for it. Null for an
+   * unknown or disabled client. Display only.
    */
-  async clientDisplayName(clientId: string): Promise<string | null> {
+  async clientDisplayName(clientId: string): Promise<OAuthSignInClientDto | null> {
     const client = await oauthClientRepository.findByClientId(clientId);
     if (!client || client.disabled) return null;
-    return client.name?.trim() || null;
+    return { name: client.name?.trim() || null, verification: clientVerification(client) };
   },
 
   /**
@@ -400,6 +418,7 @@ export const oauthConnectionsService = {
     return withSystemContext(async (tx) => {
       const row = await oauthAccessTokenRepository.findByTokenHash(tokenHash, tx);
       if (!row) throw new OAuthAccessTokenRejectedError('unknown');
+      if (row.revoked) throw new OAuthAccessTokenRejectedError('revoked');
       const now = new Date();
       if (row.expiresAt.getTime() <= now.getTime()) {
         throw new OAuthAccessTokenRejectedError('expired');

@@ -194,8 +194,12 @@ export function TwoFactorManager({
       if (action === 'enable') {
         const res = await twoFactor.enable({ password: pw ?? '' });
         if (res.error) throw new Error(res.error.message ?? 'enable failed');
-        setTotpUri(res.data?.totpURI ?? null);
-        setPendingCodes(res.data?.backupCodes ?? null);
+        // better-auth 1.7 answers a discriminated result (MOTIR-7171): `otp` is
+        // the OTP-only enrolment, which this pane never asks for — it enrols
+        // TOTP with recovery codes, so only the `totp` arm carries what it shows.
+        const enrolled = res.data?.method === 'totp' ? res.data : null;
+        setTotpUri(enrolled?.totpURI ?? null);
+        setPendingCodes(enrolled?.backupCodes ?? null);
         setGating(null);
         return;
       }
