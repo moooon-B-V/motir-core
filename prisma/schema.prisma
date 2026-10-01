@@ -1220,20 +1220,20 @@ model Organization {
   /// resolver asks on every request (MOTIR-6396), which is why it lives on the
   /// org row rather than being joined from the request: a join on the hot path
   /// for a state almost no org is ever in. Non-null ⇔ an OPEN request exists.
-  closingSince           DateTime?                     @map("closing_since")
+  closingSince                DateTime?                     @map("closing_since")
   /// When the erasure sweep scrubbed this org to a TOMBSTONE (DECISION §6 step
   /// 4, §7): name and slug replaced, memberships gone, only `CiPeriodCharge`
   /// kept. Non-null marks a tombstone; the seven-year purge (MOTIR-6401) keys on
   /// it. Null for every live org.
-  erasedAt               DateTime?                     @map("erased_at")
+  erasedAt                    DateTime?                     @map("erased_at")
   // Deletion requests against this org — a LIST: at most one OPEN at a time
   // (the partial unique index), but a cancelled one stays on record and a new
   // one may follow it. `Restrict` on the request's side: an org row may not
   // vanish under its own deletion record (the purge deletes the requests first).
-  deletionRequests       OrganizationDeletionRequest[]
+  deletionRequests            OrganizationDeletionRequest[]
   /// Agent instances billed to this organisation (MOTIR-6870). Cascade.
-  agentInstances         AgentInstance[]
-  agentInstanceIntervals AgentInstanceInterval[]
+  agentInstances              AgentInstance[]
+  agentInstanceIntervals      AgentInstanceInterval[]
   agentInstanceStorageCharges AgentInstanceStorageCharge[]
 
   @@map("organization")
@@ -7416,6 +7416,27 @@ model GithubRepo {
   /// When the pause above was recorded.
   indexPausedAt     DateTime? @map("index_paused_at")
 
+  /// THE LAST INDEX WAS REFUSED FOR SIZE (MOTIR-7129 · Story MOTIR-7092): the
+  /// graph's UNCOMPRESSED size and the supported maximum motir-ai refused it
+  /// against at the upload grant, in bytes, and when that was recorded. Written by
+  /// `githubRepoRepository.markIndexRefusedForSize` when a run settles refused for
+  /// size (MOTIR-7130); cleared by `clearIndexRefusal` when a later run actually
+  /// indexes. A run that fails for any other reason leaves them as they are —
+  /// nothing has shown the graph got smaller.
+  ///
+  /// ⚠️ CUSTOMER-FACING — the opposite of `indexPausedReason` above. These are
+  /// written so they CAN be shown: the `/code` Repositories row tells the person
+  /// the size and the limit (MOTIR-7132). They are NUMBERS, not a sentence, so the
+  /// row renders its own copy in each locale and no motir-ai wording ever reaches a
+  /// customer.
+  ///
+  /// BigInt: the plausibility envelope admits a claim up to 4 GiB, past `int4`.
+  indexRefusedSizeBytes BigInt?   @map("index_refused_size_bytes")
+  /// The supported maximum the size above was refused against.
+  indexRefusedCapBytes  BigInt?   @map("index_refused_cap_bytes")
+  /// When the refusal above was recorded.
+  indexRefusedAt        DateTime? @map("index_refused_at")
+
   /// THE DRIFT COUNT — how many commits the default branch is ahead of the graph
   /// (MOTIR-4644), and the exact PAIR it was computed for.
   ///
@@ -12017,10 +12038,10 @@ model AgentInstance {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  workspace           Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  organization        Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project             Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  owner               User                      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  workspace           Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project             Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner               User                         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   intervals           AgentInstanceInterval[]
   /// agent-terminal.md Q3, Q8 (MOTIR-6940): its terminal tickets and connections.
   terminalTickets     AgentTerminalTicket[]
