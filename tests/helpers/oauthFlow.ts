@@ -44,7 +44,7 @@ export async function register(redirectUris: string[], ip = freshIp()): Promise<
 
 export async function registeredClientId(redirectUri = CLAUDE_CALLBACK): Promise<string> {
   const res = await register([redirectUri]);
-  expect(res.status, await res.clone().text()).toBe(200);
+  expect(res.status, await res.clone().text()).toBe(201);
   return ((await res.json()) as { client_id: string }).client_id;
 }
 

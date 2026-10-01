@@ -107,14 +107,22 @@ async function confirmEnrolment(userId: string, headers: Headers): Promise<Heade
   return new Headers({ cookie: cookieHeader(res.headers.get('set-cookie')) });
 }
 
+/**
+ * Enrol TOTP and return the `totp` arm of 1.7's discriminated answer
+ * (MOTIR-7171). Every enrolment here is the TOTP one, so any other arm fails.
+ */
+async function enableTotp(headers: Headers) {
+  const enabled = await auth.api.enableTwoFactor({ body: { password: PASSWORD }, headers });
+  if (enabled.method !== 'totp')
+    throw new Error(`expected a TOTP enrolment, got ${enabled.method}`);
+  return enabled;
+}
+
 describe('the plugin writes and Motir reads the SAME row', () => {
   it('enable → the row exists, and the pane still says OFF until it is confirmed', async () => {
     const { user, headers } = await signedInUser();
 
-    const enabled = await auth.api.enableTwoFactor({
-      body: { password: PASSWORD },
-      headers,
-    });
+    const enabled = await enableTotp(headers);
     expect(enabled.totpURI).toContain('otpauth://totp/');
     expect(enabled.backupCodes).toHaveLength(TWO_FACTOR_BACKUP_CODE_COUNT);
 
@@ -134,7 +142,7 @@ describe('the plugin writes and Motir reads the SAME row', () => {
   it('the otpauth URI carries the configured issuer, digits and period', async () => {
     const { headers } = await signedInUser();
 
-    const enabled = await auth.api.enableTwoFactor({ body: { password: PASSWORD }, headers });
+    const enabled = await enableTotp(headers);
     const uri = new URL(enabled.totpURI.replace('otpauth://', 'https://'));
 
     expect(uri.searchParams.get('issuer')).toBe(TWO_FACTOR_ISSUER);
@@ -152,7 +160,7 @@ describe('the plugin writes and Motir reads the SAME row', () => {
     // means the E2E cannot fail for that reason without this failing first and
     // far more cheaply.
     const { user, headers } = await signedInUser();
-    const enabled = await auth.api.enableTwoFactor({ body: { password: PASSWORD }, headers });
+    const enabled = await enableTotp(headers);
 
     const setupKey = new URL(enabled.totpURI.replace('otpauth://', 'https://')).searchParams.get(
       'secret',
@@ -164,7 +172,7 @@ describe('the plugin writes and Motir reads the SAME row', () => {
 
   it('confirm with a REAL code → the pane flips on, with both methods and ten codes', async () => {
     const { user, headers } = await signedInUser();
-    await auth.api.enableTwoFactor({ body: { password: PASSWORD }, headers });
+    await enableTotp(headers);
 
     await confirmEnrolment(user.id, headers);
 
@@ -178,7 +186,7 @@ describe('the plugin writes and Motir reads the SAME row', () => {
 
   it('a WRONG code leaves the enrolment unconfirmed', async () => {
     const { user, headers } = await signedInUser();
-    await auth.api.enableTwoFactor({ body: { password: PASSWORD }, headers });
+    await enableTotp(headers);
 
     await expect(auth.api.verifyTOTP({ body: { code: '000000' }, headers })).rejects.toBeInstanceOf(
       Error,
@@ -193,7 +201,7 @@ describe('the plugin writes and Motir reads the SAME row', () => {
     // also proves Motir's codec and the plugin's agree byte for byte.
     const { user, headers } = await signedInUser();
 
-    const enabled = await auth.api.enableTwoFactor({ body: { password: PASSWORD }, headers });
+    const enabled = await enableTotp(headers);
     const row = await twoFactorRepository.findByUserId(user.id);
 
     expect(await decodeBackupCodes(row!.backupCodes)).toEqual(enabled.backupCodes);
@@ -201,7 +209,7 @@ describe('the plugin writes and Motir reads the SAME row', () => {
 
   it('a code from `enable` spends through MOTIR’s service and the pane sees it', async () => {
     const { user, headers } = await signedInUser();
-    const enabled = await auth.api.enableTwoFactor({ body: { password: PASSWORD }, headers });
+    const enabled = await enableTotp(headers);
     await confirmEnrolment(user.id, headers);
 
     await twoFactorService.consumeBackupCode(user.id, enabled.backupCodes[0]!);
@@ -213,7 +221,7 @@ describe('the plugin writes and Motir reads the SAME row', () => {
 
   it('disable → the row is gone and the pane says OFF', async () => {
     const { user, headers } = await signedInUser();
-    await auth.api.enableTwoFactor({ body: { password: PASSWORD }, headers });
+    await enableTotp(headers);
     const confirmed = await confirmEnrolment(user.id, headers);
 
     await auth.api.disableTwoFactor({ body: { password: PASSWORD }, headers: confirmed });
@@ -232,7 +240,7 @@ describe('confirming an enrolment ROTATES the session', () => {
     // token is logged out, which is what the settings pane's enrol flow relies
     // on the browser doing for it.
     const { user, headers } = await signedInUser();
-    await auth.api.enableTwoFactor({ body: { password: PASSWORD }, headers });
+    await enableTotp(headers);
 
     const refreshed = await confirmEnrolment(user.id, headers);
 
@@ -248,7 +256,7 @@ describe('confirming an enrolment ROTATES the session', () => {
 describe('a recovery code is spent at most once, across BOTH writers', () => {
   it('the plugin’s regenerate and Motir’s reader agree on the new set', async () => {
     const { user, headers } = await signedInUser();
-    const first = await auth.api.enableTwoFactor({ body: { password: PASSWORD }, headers });
+    const first = await enableTotp(headers);
     const confirmed = await confirmEnrolment(user.id, headers);
 
     const regenerated = await auth.api.generateBackupCodes({
@@ -268,7 +276,7 @@ describe('a recovery code is spent at most once, across BOTH writers', () => {
 
   it('two concurrent spends of one code: exactly one wins, under a warm pool', async () => {
     const { user, headers } = await signedInUser();
-    const enabled = await auth.api.enableTwoFactor({ body: { password: PASSWORD }, headers });
+    const enabled = await enableTotp(headers);
     await confirmEnrolment(user.id, headers);
     await warmPool();
 

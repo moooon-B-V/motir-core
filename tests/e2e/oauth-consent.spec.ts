@@ -45,7 +45,7 @@ test('a pending request opens the consent screen, and Approve returns the code',
       response_types: ['code'],
     },
   });
-  expect(registered.status()).toBe(200);
+  expect(registered.status()).toBe(201);
   const { client_id: clientId } = (await registered.json()) as { client_id: string };
 
   const verifier = randomBytes(32).toString('base64url');

@@ -22,7 +22,7 @@ import type { JobEventData } from '@/lib/jobs/types';
 // this fix to refuse.
 //
 // ── ⚠️ WHY THERE IS A PER-REQUEST FLAG AND NOT JUST A THROW ───────────────
-// Two of the three are BETTER-AUTH HOOKS, and better-auth@1.6.11 swallows what
+// Two of the three are BETTER-AUTH HOOKS, and better-auth (1.6.11; re-read on 1.7.7) swallows what
 // they throw — verified in `node_modules`, not inferred:
 //
 //   * `sendResetPassword` is invoked through `ctx.context.runInBackgroundOrAwait`

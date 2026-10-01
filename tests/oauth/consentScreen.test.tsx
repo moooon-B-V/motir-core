@@ -92,8 +92,16 @@ function html(element: ReactElement): string {
   );
 }
 
-function asSearchParams(query: string): Promise<Record<string, string>> {
-  return Promise.resolve(Object.fromEntries(new URLSearchParams(query)));
+/** The page's `searchParams` as Next hands them over: a REPEATED key is an array.
+ * better-auth 1.7's signed query repeats `ba_param` (MOTIR-7171), so collapsing
+ * repeats would hand the page a query whose signature no longer matches. */
+function asSearchParams(query: string): Promise<Record<string, string | string[]>> {
+  const out: Record<string, string | string[]> = {};
+  for (const [name, value] of new URLSearchParams(query)) {
+    const prior = out[name];
+    out[name] = prior === undefined ? value : [...(Array.isArray(prior) ? prior : [prior]), value];
+  }
+  return Promise.resolve(out);
 }
 
 /** A signed-in person with a workspace and a project, and a pending request. */

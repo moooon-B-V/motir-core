@@ -56,6 +56,12 @@ export type OAuthAccessTokenRejection =
   | 'unknown'
   /** Past its `expiresAt`; the client refreshes. */
   | 'expired'
+  /**
+   * Stamped `revoked` by the provider (better-auth 1.7, MOTIR-7171): it does so
+   * to the access tokens of a browser session that signs out. The connection's
+   * `offline_access` refresh token survives, so the client refreshes.
+   */
+  | 'revoked'
   /** Issued outside a Motir consent decision, so it carries no connection. */
   | 'unbound'
   /** The consenting person is no longer in the connection's workspace. */

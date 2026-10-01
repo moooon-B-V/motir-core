@@ -648,21 +648,28 @@ model TwoFactor {
 
   /// The encrypted TOTP seed. `@index` because the plugin's own schema declares
   /// one; it is never a lookup key in Motir code.
-  secret      String
+  secret                  String
   /// The encrypted, joined recovery-code set — NOT one code per row. The plugin
   /// rewrites the whole column each time a code is consumed or the set is
   /// regenerated, which is why consuming one is a read-derived write and needs a
   /// row lock (Subtask MOTIR-1218).
-  backupCodes String  @map("backup_codes")
+  backupCodes             String    @map("backup_codes")
   /// The owner. INDEXED, deliberately NOT `@unique` — see the `User.twoFactor`
   /// back-relation comment. Cascade: personal auth substrate, it dies with the
   /// user (the `deviceCodes` / `apiTokens` lifecycle).
-  userId      String  @map("user_id")
+  userId                  String    @map("user_id")
   /// False while enrolment is pending a confirming code; true once one was
   /// accepted. Defaults TRUE to match the plugin's own default — the pending
   /// state is written explicitly by `/two-factor/enable`, not derived from the
   /// column default.
-  verified    Boolean @default(true)
+  verified                Boolean   @default(true)
+  /// better-auth 1.7's account-level LOCKOUT state (MOTIR-7171): consecutive
+  /// failed second-factor verifications, and the time a spent budget locks the
+  /// challenge until. Declared by the plugin's schema, so its adapter checks for
+  /// them; Motir turns the lockout itself OFF (`accountLockout` in
+  /// lib/auth/index.ts), so neither is written today.
+  failedVerificationCount Int?      @default(0) @map("failed_verification_count")
+  lockedUntil             DateTime? @map("locked_until")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -770,49 +777,68 @@ model Passkey {
 /// `clientSecret` stays null in practice; it is kept because the plugin's schema
 /// declares it. Identity-scoped, no RLS (see the migration header).
 model OauthClient {
-  id                      String    @id @default(cuid())
+  id                               String    @id @default(cuid())
   /// The public identifier the client presents. Unique — every token, code and
   /// consent row references a client BY this column, not by `id`.
-  clientId                String    @unique @map("client_id")
-  clientSecret            String?   @map("client_secret")
-  disabled                Boolean?  @default(false)
-  skipConsent             Boolean?  @map("skip_consent")
-  enableEndSession        Boolean?  @map("enable_end_session")
-  subjectType             String?   @map("subject_type")
-  scopes                  String[]
+  clientId                         String    @unique @map("client_id")
+  clientSecret                     String?   @map("client_secret")
+  disabled                         Boolean?  @default(false)
+  skipConsent                      Boolean?  @map("skip_consent")
+  enableEndSession                 Boolean?  @map("enable_end_session")
+  subjectType                      String?   @map("subject_type")
+  scopes                           String[]
   /// The person who registered the client, when a signed-in registration made
   /// it. Dynamic registration from Claude is UNAUTHENTICATED, so this is null for
   /// every client this story expects. Cascade: a client a person registered dies
   /// with them.
-  userId                  String?   @map("user_id")
-  createdAt               DateTime? @default(now()) @map("created_at")
-  updatedAt               DateTime? @updatedAt @map("updated_at")
-  name                    String?
-  uri                     String?
-  icon                    String?
-  contacts                String[]
-  tos                     String?
-  policy                  String?
-  softwareId              String?   @map("software_id")
-  softwareVersion         String?   @map("software_version")
-  softwareStatement       String?   @map("software_statement")
-  redirectUris            String[]  @map("redirect_uris")
-  postLogoutRedirectUris  String[]  @map("post_logout_redirect_uris")
-  tokenEndpointAuthMethod String?   @map("token_endpoint_auth_method")
-  grantTypes              String[]  @map("grant_types")
-  responseTypes           String[]  @map("response_types")
-  public                  Boolean?
-  type                    String?
-  requirePKCE             Boolean?  @map("require_pkce")
-  referenceId             String?   @map("reference_id")
-  metadata                Json?
+  userId                           String?   @map("user_id")
+  createdAt                        DateTime? @default(now()) @map("created_at")
+  updatedAt                        DateTime? @updatedAt @map("updated_at")
+  name                             String?
+  uri                              String?
+  icon                             String?
+  contacts                         String[]
+  tos                              String?
+  policy                           String?
+  softwareId                       String?   @map("software_id")
+  softwareVersion                  String?   @map("software_version")
+  softwareStatement                String?   @map("software_statement")
+  redirectUris                     String[]  @map("redirect_uris")
+  postLogoutRedirectUris           String[]  @map("post_logout_redirect_uris")
+  tokenEndpointAuthMethod          String?   @map("token_endpoint_auth_method")
+  grantTypes                       String[]  @map("grant_types")
+  responseTypes                    String[]  @map("response_types")
+  /// ⚠️ RETIRED by better-auth 1.7 (MOTIR-7171): `public` and `type` left the
+  /// plugin's schema, so the 1.7 build neither reads nor writes them. The columns
+  /// stay for ONE release because Fly applies migrations BEFORE the new build
+  /// takes traffic, and the 1.6.11 build still serving then writes them; a later
+  /// migration drops them.
+  public                           Boolean?
+  type                             String?
+  requirePKCE                      Boolean?  @map("require_pkce")
+  referenceId                      String?   @map("reference_id")
+  metadata                         Json?
+  // ── Added by better-auth 1.7 (MOTIR-7171). Nullable or defaulted, so the
+  // 1.6.11 build still serving during the release is unaffected by them. ─────
+  /// The discovery mechanism that resolved this client, when one did (a Client
+  /// ID Metadata Document, MOTIR-7173). Null for a dynamically registered one.
+  clientDiscoveryId                String?   @map("client_discovery_id")
+  clientCredentialsScopes          String[]  @default([]) @map("client_credentials_scopes")
+  backchannelLogoutUri             String?   @map("backchannel_logout_uri")
+  backchannelLogoutSessionRequired Boolean?  @map("backchannel_logout_session_required")
+  applicationType                  String?   @map("application_type")
+  jwks                             String?
+  jwksUri                          String?   @map("jwks_uri")
+  dpopBoundAccessTokens            Boolean?  @default(false) @map("dpop_bound_access_tokens")
 
-  user          User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   refreshTokens OauthRefreshToken[]
   accessTokens  OauthAccessToken[]
   consents      OauthConsent[]
   /// The connections people approved for this client (MOTIR-6983).
   connections   ApiToken[]
+  /// The protected resources this client is linked to (better-auth 1.7).
+  resources     OauthClientResource[]
 
   @@index([userId])
   @@map("oauth_client")
@@ -822,19 +848,32 @@ model OauthClient {
 /// the plugin's HASH of the value (`storeTokens: "hashed"`), never the value the
 /// client holds. Revocation stamps `revoked`; rotation issues a new row.
 model OauthRefreshToken {
-  id          String    @id @default(cuid())
-  token       String    @unique
-  clientId    String    @map("client_id")
+  id                      String    @id @default(cuid())
+  token                   String    @unique
+  clientId                String    @map("client_id")
   /// The Motir session the grant was made in. SetNull, as the plugin declares:
   /// signing out of the browser must not revoke a connection.
-  sessionId   String?   @map("session_id")
-  userId      String    @map("user_id")
-  referenceId String?   @map("reference_id")
-  expiresAt   DateTime  @map("expires_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  revoked     DateTime?
-  authTime    DateTime? @map("auth_time")
-  scopes      String[]
+  sessionId               String?   @map("session_id")
+  userId                  String    @map("user_id")
+  referenceId             String?   @map("reference_id")
+  expiresAt               DateTime  @map("expires_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  revoked                 DateTime?
+  authTime                DateTime? @map("auth_time")
+  scopes                  String[]
+  // ── Added by better-auth 1.7 (MOTIR-7171) ─────────────────────────────────
+  /// The authorization code the grant was redeemed from (replay detection).
+  authorizationCodeId     String?   @map("authorization_code_id")
+  /// The RFC 8707 resources the grant is bound to. Empty on a row the 1.6.11
+  /// build issued, which predates the column.
+  resources               String[]
+  requestedUserInfoClaims String[]  @map("requested_user_info_claims")
+  rotatedAt               DateTime? @map("rotated_at")
+  /// The token response a rotation returned, kept for its short replay window so
+  /// a retried refresh gets the same answer. A credential: never exported.
+  rotationReplayResponse  String?   @map("rotation_replay_response")
+  rotationReplayExpiresAt DateTime? @map("rotation_replay_expires_at")
+  confirmation            Json?
 
   client       OauthClient        @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
   session      Session?           @relation(fields: [sessionId], references: [id], onDelete: SetNull)
@@ -849,6 +888,7 @@ model OauthRefreshToken {
   @@index([sessionId])
   @@index([userId])
   @@index([referenceId])
+  @@index([authorizationCodeId])
   @@map("oauth_refresh_token")
 }
 
@@ -856,18 +896,28 @@ model OauthRefreshToken {
 /// hashed, so a revocation or an expiry is a row the MCP gate no longer finds —
 /// nothing here needs a signing key.
 model OauthAccessToken {
-  id          String   @id @default(cuid())
-  token       String   @unique
-  clientId    String   @map("client_id")
-  sessionId   String?  @map("session_id")
-  userId      String?  @map("user_id")
-  referenceId String?  @map("reference_id")
+  id                      String    @id @default(cuid())
+  token                   String    @unique
+  clientId                String    @map("client_id")
+  sessionId               String?   @map("session_id")
+  userId                  String?   @map("user_id")
+  referenceId             String?   @map("reference_id")
   /// The refresh token this access token was minted beside. Cascade: an access
   /// token does not outlive the refresh token that carries its grant.
-  refreshId   String?  @map("refresh_id")
-  expiresAt   DateTime @map("expires_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  scopes      String[]
+  refreshId               String?   @map("refresh_id")
+  expiresAt               DateTime  @map("expires_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  scopes                  String[]
+  // ── Added by better-auth 1.7 (MOTIR-7171) ─────────────────────────────────
+  authorizationCodeId     String?   @map("authorization_code_id")
+  /// The RFC 8707 resources the token is bound to. Empty on a row the 1.6.11
+  /// build issued, which predates the column.
+  resources               String[]
+  requestedUserInfoClaims String[]  @map("requested_user_info_claims")
+  /// Set when 1.7 revokes an access token in place rather than deleting it; the
+  /// MCP gate refuses a row that carries it.
+  revoked                 DateTime?
+  confirmation            Json?
 
   client       OauthClient        @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
   session      Session?           @relation(fields: [sessionId], references: [id], onDelete: SetNull)
@@ -884,6 +934,7 @@ model OauthAccessToken {
   @@index([userId])
   @@index([refreshId])
   @@index([referenceId])
+  @@index([authorizationCodeId])
   @@map("oauth_access_token")
 }
 
@@ -892,13 +943,16 @@ model OauthAccessToken {
 /// project, permission keys) is the CONNECTION its `referenceId` names — an
 /// `api_token` row (MOTIR-6983).
 model OauthConsent {
-  id          String   @id @default(cuid())
-  clientId    String   @map("client_id")
-  userId      String?  @map("user_id")
-  referenceId String?  @map("reference_id")
-  scopes      String[]
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                      String   @id @default(cuid())
+  clientId                String   @map("client_id")
+  userId                  String?  @map("user_id")
+  referenceId             String?  @map("reference_id")
+  scopes                  String[]
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+  // ── Added by better-auth 1.7 (MOTIR-7171) ─────────────────────────────────
+  resources               String[]
+  requestedUserInfoClaims String[] @map("requested_user_info_claims")
 
   client     OauthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
   user       User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -910,6 +964,67 @@ model OauthConsent {
   @@index([userId])
   @@index([referenceId])
   @@map("oauth_consent")
+}
+
+/// A protected resource Motir's authorization server issues tokens for (better-auth
+/// 1.7's resource model, MOTIR-7171). Motir protects exactly ONE — the MCP at
+/// `<base>/api/mcp` — and the provider seeds its row at boot from the
+/// `resources` option (`resourceSeedMode: "insertOnly"`), so nothing else
+/// writes here. Identity-scoped like the rest of the provider's tables: no RLS.
+model OauthResource {
+  id                            String    @id @default(cuid())
+  /// The RFC 8707 `resource` value — the identifier a client names.
+  identifier                    String    @unique
+  name                          String
+  accessTokenTtl                Int?      @map("access_token_ttl")
+  refreshTokenTtl               Int?      @map("refresh_token_ttl")
+  signingAlgorithm              String?   @map("signing_algorithm")
+  signingKeyId                  String?   @map("signing_key_id")
+  allowedScopes                 String[]  @map("allowed_scopes")
+  customClaims                  Json?     @map("custom_claims")
+  dpopBoundAccessTokensRequired Boolean?  @default(false) @map("dpop_bound_access_tokens_required")
+  disabled                      Boolean?  @default(false)
+  createdAt                     DateTime? @default(now()) @map("created_at")
+  updatedAt                     DateTime? @updatedAt @map("updated_at")
+  policyVersion                 Int?      @default(1) @map("policy_version")
+  metadata                      Json?
+
+  clients OauthClientResource[]
+
+  @@map("oauth_resource")
+}
+
+/// A client's link to a protected resource (better-auth 1.7, MOTIR-7171). The
+/// provider consults it only under `enforcePerClientResources`, which Motir turns
+/// OFF: with one resource, "every client may request it" is the policy, and a
+/// client registered on 1.6.11 has no link row. Kept because the plugin's schema
+/// declares it. Both FKs cascade, as the plugin declares.
+model OauthClientResource {
+  id         String    @id @default(cuid())
+  clientId   String    @map("client_id")
+  /// The resource's `identifier` (not its id), as the plugin references it.
+  resourceId String    @map("resource_id")
+  metadata   Json?
+  createdAt  DateTime? @default(now()) @map("created_at")
+
+  client   OauthClient   @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  resource OauthResource @relation(fields: [resourceId], references: [identifier], onDelete: Cascade)
+
+  @@unique([clientId, resourceId])
+  @@index([resourceId])
+  @@map("oauth_client_resource")
+}
+
+/// A consumed `private_key_jwt` client assertion, kept until it expires so it
+/// cannot be replayed (better-auth 1.7, MOTIR-7171). Motir registers only public
+/// clients, so nothing writes here today; the table exists because the plugin's
+/// schema declares it.
+model OauthClientAssertion {
+  id        String   @id @default(cuid())
+  expiresAt DateTime @map("expires_at")
+
+  @@index([expiresAt])
+  @@map("oauth_client_assertion")
 }
 
 /// One in-flight device-authorization grant for `motir login` (RFC 8628, Story

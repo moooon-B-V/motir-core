@@ -24,7 +24,8 @@ const { createTestWorkspace } = await import('../../fixtures/workspaceFixtures')
 const { makeWorkItemFixture } = await import('../../fixtures/workItemFixtures');
 const { oauthConnectionsService } = await import('@/lib/services/oauthConnectionsService');
 const { IRREVERSIBLE_PERMISSIONS } = await import('@/lib/tokens/grant');
-const { OAuthConsentRequestInvalidError } = await import('@/lib/oauth/errors');
+const { OAuthAccessTokenRejectedError, OAuthConsentRequestInvalidError } =
+  await import('@/lib/oauth/errors');
 const { toOAuthConnectionDto } = await import('@/lib/mappers/oauthConnectionMappers');
 const { oauthSweep } = await import('@/lib/jobs/definitions/oauthSweep');
 const consentRoute = await import('@/app/api/oauth/consent/route');
@@ -297,6 +298,24 @@ describe('the grant a connection records', () => {
     expect(resolved.grant).not.toContain('retired:permission');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('unrecognised grant'));
   });
+
+  it('an access token the provider stamped revoked is refused, though its row remains', async () => {
+    // better-auth 1.7 stamps `revoked` on a signed-out session's access tokens
+    // rather than deleting them (MOTIR-7171); the gate must read the stamp.
+    const clientId = await registeredClientId();
+    const keys = pkce();
+    const c = await connect({ clientId, keys });
+    const { access_token } = await exchange(clientId, c.code, keys.verifier);
+    await adminDb.oauthAccessToken.updateMany({
+      where: { clientId },
+      data: { revoked: new Date() },
+    });
+    const refused = await oauthConnectionsService
+      .resolveAccessToken(access_token)
+      .catch((err: unknown) => err);
+    expect(refused).toBeInstanceOf(OAuthAccessTokenRejectedError);
+    expect((refused as InstanceType<typeof OAuthAccessTokenRejectedError>).reason).toBe('revoked');
+  });
 });
 
 // ── the authorize and register hooks ───────────────────────────────────────
@@ -349,7 +368,11 @@ describe('the authorize policy', () => {
   it('a registration that sends no redirect list is left to the provider’s own schema', async () => {
     const res = await register('https://claude.ai/cb' as unknown as string[]);
     expect(res.status).toBe(400);
-    expect(((await res.json()) as { error?: string }).error).not.toBe('invalid_redirect_uri');
+    // better-auth 1.7's own schema answers a malformed `redirect_uris` with the
+    // same RFC 7591 code Motir's policy uses, so the CODE no longer says whose
+    // refusal it is — the description does. Motir's names the allowed schemes.
+    const body = (await res.json()) as { error_description?: string };
+    expect(body.error_description ?? '').not.toMatch(/must use https/);
   });
 
   it('a registration with no body at all is left to the provider’s own schema', async () => {

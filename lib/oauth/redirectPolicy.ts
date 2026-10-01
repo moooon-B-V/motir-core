@@ -31,6 +31,13 @@ export function isAllowedRedirectUri(uri: string): boolean {
   return url.protocol === 'http:' && isLoopbackHostname(url.hostname);
 }
 
+/** Whether a `redirect_uri` is `http` on a loopback host — a native client's. */
+export function isLoopbackRedirect(uri: unknown): boolean {
+  if (typeof uri !== 'string') return false;
+  const url = parse(uri);
+  return !!url && url.protocol === 'http:' && isLoopbackHostname(url.hostname);
+}
+
 /**
  * Whether a `redirect_uri` on an authorize request matches one the client
  * registered: exactly, or — for a loopback registration only — ignoring the PORT,

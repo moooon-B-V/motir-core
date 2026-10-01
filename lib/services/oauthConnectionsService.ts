@@ -120,6 +120,14 @@ async function resolveConnectionGrant(input: ApproveConsentInput): Promise<Permi
   return [...new Set(input.permissions as PermissionKey[])];
 }
 
+/** The query sorted by name, then value — the form better-auth 1.7 signs. */
+function canonicalQuery(params: URLSearchParams): URLSearchParams {
+  const sorted = [...params.entries()].sort(([keyA, valueA], [keyB, valueB]) =>
+    keyA === keyB ? (valueA < valueB ? -1 : valueA > valueB ? 1 : 0) : keyA < keyB ? -1 : 1,
+  );
+  return new URLSearchParams(sorted);
+}
+
 /**
  * Check the consent request is one the provider signed and has not expired, and
  * return its parameters. The provider checks the same signature again when it
@@ -129,12 +137,18 @@ async function resolveConnectionGrant(input: ApproveConsentInput): Promise<Permi
  */
 async function verifiedConsentQuery(oauthQuery: string): Promise<URLSearchParams> {
   const params = new URLSearchParams(oauthQuery);
+  const sigs = params.getAll('sig');
   const sig = params.get('sig');
   const exp = Number(params.get('exp'));
   params.delete('sig');
   const { secret } = await auth.$context;
-  const expected = await makeSignature(params.toString(), secret);
-  if (!sig || !constantTimeEqual(sig, expected)) {
+  // better-auth 1.7 signs the CANONICAL query — every parameter sorted by name,
+  // then value — not the order it was sent in, and refuses a query carrying more
+  // than one `sig` (its `verifyOAuthQueryParams`, which folds the expiry into the
+  // same boolean, so it is mirrored here rather than called: Motir tells a forged
+  // request from a stale one). MOTIR-7171.
+  const expected = await makeSignature(canonicalQuery(params).toString(), secret);
+  if (sigs.length !== 1 || !sig || !constantTimeEqual(sig, expected)) {
     throw new OAuthConsentRequestInvalidError('it was not issued by Motir', 'not_issued');
   }
   if (!Number.isFinite(exp) || exp * 1000 < Date.now()) {
@@ -400,6 +414,7 @@ export const oauthConnectionsService = {
     return withSystemContext(async (tx) => {
       const row = await oauthAccessTokenRepository.findByTokenHash(tokenHash, tx);
       if (!row) throw new OAuthAccessTokenRejectedError('unknown');
+      if (row.revoked) throw new OAuthAccessTokenRejectedError('revoked');
       const now = new Date();
       if (row.expiresAt.getTime() <= now.getTime()) {
         throw new OAuthAccessTokenRejectedError('expired');

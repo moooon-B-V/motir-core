@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Prisma, type Account, type User } from '@/generated/prisma/client';
 import { db, dbRead } from '@/lib/db';
 
@@ -126,15 +127,22 @@ export const userRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<User> {
     const email = normalizeEmail(data.email);
+    // The id is minted HERE, not by the column default, because the credential
+    // account must carry it too: better-auth 1.7 finds a credential account by
+    // `accountId === userId` (`findCredentialAccount`, and the email sign-in),
+    // which is what its own sign-up writes. An account keyed by the email — what
+    // this method wrote before 1.7 — signs nobody in (MOTIR-7171).
+    const id = randomUUID();
     return tx.user.create({
       data: {
+        id,
         email,
         name: data.name,
         emailVerified: false,
         accounts: {
           create: {
             providerId: 'credential',
-            accountId: email,
+            accountId: id,
             password: data.passwordHash,
           },
         },

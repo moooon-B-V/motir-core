@@ -148,7 +148,7 @@ export async function registerApp(app: APIRequestContext): Promise<string> {
       response_types: ['code'],
     },
   });
-  expect(res.status(), 'an app can register itself unauthenticated').toBe(200);
+  expect(res.status(), 'an app can register itself unauthenticated').toBe(201);
   return ((await res.json()) as { client_id: string }).client_id;
 }
 
