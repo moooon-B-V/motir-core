@@ -94,7 +94,10 @@ function stub(s: Stub = {}): void {
         if (status !== 200) return json(status, { code: 'internal_error' });
         const ids = s.models?.ids ?? [MODEL];
         return json(200, {
-          models: ids.map((id) => ({ id, provider: 'anthropic' })),
+          models: ids.map((id) => ({
+            id,
+            provider: id.startsWith('deepseek') ? 'deepseek' : 'anthropic',
+          })),
           default: s.models?.default === undefined ? (ids[0] ?? null) : s.models.default,
         });
       }
@@ -506,6 +509,17 @@ describe('a refusal before the boot is written onto the gate, which stays awaiti
     await agentReviewStartService.startRequested(request);
     const [run] = await runRows(s.workspace.id);
     expect(run!.model).toBe('claude-sonnet-5');
+  });
+
+  it('a list whose first offered model is DeepSeek reviews on deepseek/<id>, the key bare (MOTIR-7208)', async () => {
+    const { s, request } = await reviewing('deepseek-first', 90);
+    stub({ models: { ids: ['deepseek-v4-pro', MODEL], default: null } });
+
+    await agentReviewStartService.startRequested(request);
+    const [run] = await runRows(s.workspace.id);
+    expect(run!.model).toBe('deepseek-v4-pro');
+    expect(fakeOrchestrator.specs.at(-1)!.env['MOTIR_MODEL']).toBe('deepseek/deepseek-v4-pro');
+    expect(mintCalls().at(-1)!.body!['models']).toEqual(['deepseek-v4-pro']);
   });
 
   it('a refused review is not retried by a redelivery', async () => {

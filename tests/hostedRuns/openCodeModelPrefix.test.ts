@@ -2,20 +2,23 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// THE `anthropic/` PREFIX IS ADDED IN ONE PLACE (MOTIR-6483 AC3;
-// `docs/decisions/hosted-agent-run.md` §7, *one id, two spellings, never mixed*).
+// A PROVIDER PREFIX IS ADDED IN ONE PLACE (MOTIR-6483 AC3, widened to every
+// provider by MOTIR-7208; `docs/decisions/hosted-agent-run.md` §7, *one id, two
+// spellings, never mixed*).
 //
 // The gateway's key allow-list, `DispatchRun.model` and `implementationModel`
 // hold the BARE id; only OpenCode's `--model` flag takes the prefixed one, and a
 // prefixed id on the allow-list gets every model call refused with 403. So
 // `toOpenCodeModel` in `lib/services/hostedRunModelService.ts` is the only
-// module allowed to write the prefix.
+// module allowed to write the prefix — and since MOTIR-7208 it writes it from the
+// offered entry's `provider`, so NO module, the home included, carries a literal
+// `anthropic/` or `deepseek/` prefix.
 //
 // SCOPE: the shipped source trees — `lib/`, `app/`, `components/` and every
 // `packages/*` source file (the CLI and the hosted-agent image included) —
 // skipping `node_modules`, build output and tests (a test asserts the prefixed
 // value, which is not adding it). The tell is a STRING LITERAL that starts with
-// `anthropic/` and goes on to BUILD a value — an interpolation, a concatenation
+// `anthropic/` or `deepseek/` and goes on to BUILD a value — an interpolation, a concatenation
 // or a literal model id. Comment lines are dropped first, and a placeholder such
 // as `anthropic/<model id>` in an error message documents the expected shape
 // rather than writing it, so neither counts.
@@ -33,7 +36,9 @@ const SKIP_DIRS = new Set([
 ]);
 const SOURCE = /\.(ts|tsx|js|mjs|cjs|sh)$/;
 const THE_ONE_HOME = 'lib/services/hostedRunModelService.ts';
-const PREFIX_LITERAL = /['"`]anthropic\/(?:\$\{|['"`]|[A-Za-z0-9])/;
+const PREFIX_LITERAL = /['"`](?:anthropic|deepseek)\/(?:\$\{|['"`]|[A-Za-z0-9])/;
+/** The one way the home builds it: the offered entry's provider, a slash, its bare id. */
+const PROVIDER_TEMPLATE = /`\$\{model\.provider\}\/\$\{model\.id\}`/;
 const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*)/;
 
 function codeOnly(source: string): string {
@@ -60,19 +65,28 @@ function* walk(dir: string): Generator<string> {
   }
 }
 
-describe('the anthropic/ model prefix', () => {
-  it(`is written by ${THE_ONE_HOME} and by no other module`, () => {
+describe('the OpenCode model prefix', () => {
+  it('is written as a literal (anthropic/, deepseek/) by no module at all', () => {
     const offenders: string[] = [];
-    let homeWritesIt = false;
     for (const tree of TREES) {
       for (const file of walk(join(ROOT, tree))) {
-        const rel = relative(ROOT, file);
-        if (!PREFIX_LITERAL.test(codeOnly(readFileSync(file, 'utf8')))) continue;
-        if (rel === THE_ONE_HOME) homeWritesIt = true;
-        else offenders.push(rel);
+        if (PREFIX_LITERAL.test(codeOnly(readFileSync(file, 'utf8')))) {
+          offenders.push(relative(ROOT, file));
+        }
       }
     }
     expect(offenders).toEqual([]);
-    expect(homeWritesIt).toBe(true);
+  });
+
+  it(`is built from the offered entry's provider, in ${THE_ONE_HOME} only`, () => {
+    const builders: string[] = [];
+    for (const tree of TREES) {
+      for (const file of walk(join(ROOT, tree))) {
+        if (PROVIDER_TEMPLATE.test(codeOnly(readFileSync(file, 'utf8')))) {
+          builders.push(relative(ROOT, file));
+        }
+      }
+    }
+    expect(builders).toEqual([THE_ONE_HOME]);
   });
 });

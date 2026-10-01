@@ -63,9 +63,15 @@ const MAX_ARGV_PROMPT_BYTES = 100 * 1024;
  */
 export const EGRESS_DOCUMENT = {
   $schema: 'https://opencode.ai/config.json',
-  enabled_providers: ['anthropic'],
+  enabled_providers: ['anthropic', 'deepseek'],
   provider: {
     anthropic: {
+      options: {
+        baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
+        apiKey: '{env:MOTIR_RUN_KEY}',
+      },
+    },
+    deepseek: {
       options: {
         baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
         apiKey: '{env:MOTIR_RUN_KEY}',
@@ -75,6 +81,13 @@ export const EGRESS_DOCUMENT = {
   share: 'disabled',
   autoupdate: false,
 } as const;
+
+/**
+ * The providers a hosted run may name in `MOTIR_MODEL` — DERIVED from the document
+ * above, never a second hand-typed list (MOTIR-7208), so the CLI accepts exactly
+ * what the OpenCode it launches has enabled.
+ */
+export const HOSTED_MODEL_PROVIDERS: readonly string[] = EGRESS_DOCUMENT.enabled_providers;
 
 /** The egress contract's document, as OpenCode reads it (`OPENCODE_CONFIG_CONTENT`). */
 export function egressConfig(): string {
@@ -131,10 +144,15 @@ export function hostedOpenCodeAgent(
       hint: 'The hosted image is booted with the run model, the gateway URL and the run key.',
     });
   }
-  // Only the anthropic provider is enabled (egress contract §2), and the start
-  // path adds the `anthropic/` prefix to the bare gateway id (decision §7).
-  if (!/^anthropic\/[A-Za-z0-9._-]+$/.test(model)) {
-    throw new CliError(`${HOSTED_MODEL_ENV} must be "anthropic/<model id>", got "${model}".`);
+  // `<provider>/<bare id>`, the provider one the egress document enables (egress
+  // contract §2); the start path builds it from the offered entry (decision §7).
+  const slash = model.indexOf('/');
+  const provider = slash > 0 ? model.slice(0, slash) : '';
+  const id = slash > 0 ? model.slice(slash + 1) : '';
+  if (!HOSTED_MODEL_PROVIDERS.includes(provider) || !/^[A-Za-z0-9._-]+$/.test(id)) {
+    throw new CliError(
+      `${HOSTED_MODEL_ENV} must be "<provider>/<model id>" with provider one of ${HOSTED_MODEL_PROVIDERS.join(', ')}, got "${model}".`,
+    );
   }
   const args = ['run', '--model', model, '--auto'];
   return {
