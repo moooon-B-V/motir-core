@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { Window } from 'happy-dom';
+import { flattenMockCss } from './theme/flattenMockCss';
 
 // MOTIR-3592 — a design mock's "Dark parity" panel must actually render dark.
 //
@@ -60,7 +61,9 @@ import { Window } from 'happy-dom';
 //      OWN `--color-background` rather than against the light literal.
 //   2. happy-dom reads NOTHING off `<html>` for an asset whose token block is a
 //      `@layer theme { :root, :host { … } }` emitted by compiled Tailwind, where
-//      Chromium reads the light value. So the root reading is carried for
+//      Chromium reads the light value — it drops every rule inside an `@layer`
+//      block (MOTIR-7179). The asset is now passed through `flattenMockCss`
+//      first, which unwraps the layers, but the root reading stays carried for
 //      reporting only and gates nothing: an earlier draft used it to decide
 //      whether to walk an asset, and silently skipped a BROKEN one
 //      (`design/shell/context-row.mock.html`) on that basis.
@@ -111,11 +114,13 @@ function readNestedDarkScopes(file: string): Reading[] {
   });
   try {
     const { document } = window;
-    document.write(readFileSync(join(ROOT, file), 'utf8'));
+    // Flattened first: happy-dom drops `@layer` blocks and nested rules, which is
+    // what a `renderMock` asset is made of (MOTIR-7179).
+    document.write(flattenMockCss(readFileSync(join(ROOT, file), 'utf8'), { paintOnly: true }));
 
-    // ⚠️ READ ONLY, never a gate. happy-dom returns '' here for an asset whose
-    // token block is a `@layer theme { :root, :host { … } }` from compiled
-    // Tailwind — `design/shell/context-row.mock.html` is one, and Chromium reads
+    // ⚠️ READ ONLY, never a gate. Unflattened, happy-dom returned '' here for an
+    // asset whose token block is a `@layer theme { :root, :host { … } }` from
+    // compiled Tailwind — `design/shell/context-row.mock.html` is one, and Chromium reads
     // `#ffffff` for it. Gating the walk on this value silently SKIPPED that whole
     // asset, which is how a broken one passed while the spec was being written.
     // Every assertion that matters is element-local for exactly that reason.
