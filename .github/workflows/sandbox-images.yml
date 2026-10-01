@@ -49,10 +49,24 @@ jobs:
   sandbox-smoke:
     name: Sandbox smoke (loop + failure + confinement)
     runs-on: ubuntu-latest
-    # Observed 2.8–8.3 min across 14 runs of BOTH callers → 25 (~3x on the
-    # worst, 8.32 min on release-sandbox run 30966874373). The publish path is
-    # the slow one; `ci.yml` runs this same job at 2.8–4.6.
-    timeout-minutes: 25
+    # Sized on the RELEASE lane, which is the slow one: it also runs the
+    # two-platform "Push the base image" step below. `ci.yml` and
+    # `image-cache-main.yml` run this same job without that step.
+    #
+    #   release      run           build   push     job total  under 25
+    #   cli-v0.9.0   36720947162   5m08s   15m36s   22m36s     success
+    #   cli-v0.10.0  36795719520   7m42s   15m41s   26m16s     CANCELLED
+    #   cli-v0.11.0  36910243238   7m07s   16m15s   25m49s     CANCELLED
+    #
+    # → 45 (~1.7x on the worst, 26m16s). The old 25 was ~3x on 2.8–8.3 min
+    # measured before MOTIR-6204 added Python, Postgres and a browser to the
+    # shared base, which made the arm64 half of the push long. Two releases
+    # were cancelled on time with every step green, so their images went out
+    # unverified and their digests never reached the README (MOTIR-7217).
+    # Why the push takes ~16 min is not measured yet; candidates are the QEMU
+    # build of the heavier arm64 half, and the `sandbox-base-multiarch` scope
+    # being written only on tag refs, so no release reads it warm.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
       # Register the arm64 emulator BEFORE the builder that will use it (the
