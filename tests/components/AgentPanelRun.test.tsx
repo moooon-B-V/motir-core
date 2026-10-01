@@ -159,6 +159,7 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
     machineSecondsThisMonth: 72 * 60,
     creditsThisMonth: 72,
     stopReason: null,
+    scheduledDeletionAt: null,
     activeRun: null,
     lastRun: null,
     scheduledDeletionAt: null,
