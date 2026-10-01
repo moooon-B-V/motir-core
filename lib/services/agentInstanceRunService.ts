@@ -200,7 +200,7 @@ export type AgentRunSuperviseVerdict =
   | { deferUntil: Date };
 
 /** The agent states a running run may sit in: up, or coming up for its launch. */
-const AGENT_UP: readonly AgentInstance['state'][] = ['running', 'starting', 'waking'];
+const AGENT_UP: readonly AgentInstance['state'][] = ['running', 'starting', 'waking', 'updating'];
 
 function projectKeyOf(identifier: string): string {
   const dash = identifier.lastIndexOf('-');
@@ -252,7 +252,8 @@ function agentRefusal(
   running: RunningDispatchRunInAgent | null,
   signIn: AgentInstance['signInState'] = row.signInState,
 ): AgentRunAgentRefusal | null {
-  if (row.state === 'hibernating' || row.state === 'deleting') {
+  // `agent-image-update.md` Q8: an agent moving to a new image takes no run.
+  if (row.state === 'hibernating' || row.state === 'deleting' || row.state === 'updating') {
     return 'agent_instance_state_conflict';
   }
   if (running) return 'agent_instance_run_active';
@@ -407,7 +408,7 @@ export const agentInstanceRunService = {
     );
     if (!agent) throw new AgentInstanceNotFoundError(input.agentInstanceId);
     if (agent.projectId !== project.id) throw new AgentInstanceWrongProjectError(agent.id);
-    if (agent.state === 'hibernating' || agent.state === 'deleting') {
+    if (agent.state === 'hibernating' || agent.state === 'deleting' || agent.state === 'updating') {
       throw refusalError('agent_instance_state_conflict', agent);
     }
 
@@ -578,9 +579,18 @@ export const agentInstanceRunService = {
     if (agent && (agent.state === 'starting' || agent.state === 'waking')) {
       await agentInstanceLifecycleService.settleBoot(agent.id);
       agent = await readAgent(agent.id);
+    } else if (agent && agent.state === 'updating') {
+      // The launch's wake applied a pinned update (Q5): the run starts on whichever
+      // image the update settles on.
+      await agentInstanceLifecycleService.settleUpdate(agent.id);
+      agent = await readAgent(agent.id);
     }
     if (agent && !agent.deletedAt && agent.state === 'running') return 'ready';
-    if (agent && !agent.deletedAt && (agent.state === 'starting' || agent.state === 'waking')) {
+    if (
+      agent &&
+      !agent.deletedAt &&
+      (agent.state === 'starting' || agent.state === 'waking' || agent.state === 'updating')
+    ) {
       const now = agentInstanceClock.now();
       if (now.getTime() - run.startedAt.getTime() < AGENT_RUN_BOOT_WAIT_MS) {
         return { deferUntil: new Date(now.getTime() + AGENT_RUN_LAUNCH_POLL_MS) };

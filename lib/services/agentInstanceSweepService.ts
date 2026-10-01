@@ -63,6 +63,9 @@ const ORPHAN_MIN_AGE_MS = 15 * 60 * 1000;
 /** How many rows one pass reads per state — a sweep is bounded, the next one continues. */
 const SWEEP_BATCH = 200;
 
+/** `agent-image-update.md` Q6: the sweep settles an update left in motion this long. */
+export const UPDATE_SWEEP_AFTER_MS = 10 * 60_000;
+
 export interface AgentInstanceSweepSummary {
   settled: number;
   reconciled: number;
@@ -179,19 +182,30 @@ export const agentInstanceSweepService = {
       // 1 · Anything in motion: finish what an earlier request left pending.
       const moving = await withSystemContext((tx) =>
         agentInstanceRepository.listLiveInStates(
-          ['starting', 'waking', 'hibernating', 'deleting'],
+          ['starting', 'waking', 'hibernating', 'deleting', 'updating'],
           SWEEP_BATCH,
           tx,
         ),
       );
+      const sweepNow = agentInstanceClock.now().getTime();
       for (const row of moving) {
+        // `agent-image-update.md` Q6: an update is the inline settle's while it is
+        // fresh; the sweep takes one left `updating` longer than ten minutes.
+        if (
+          row.state === 'updating' &&
+          sweepNow - row.stateChangedAt.getTime() < UPDATE_SWEEP_AFTER_MS
+        ) {
+          continue;
+        }
         await guarded(async () => {
           const result =
             row.state === 'hibernating'
               ? await lifecycle.settleStop(row.id, 'hibernated')
               : row.state === 'deleting'
                 ? await lifecycle.settleDelete(row.id)
-                : await lifecycle.settleBoot(row.id);
+                : row.state === 'updating'
+                  ? await lifecycle.settleUpdate(row.id)
+                  : await lifecycle.settleBoot(row.id);
           if (result !== 'pending' && result !== 'noop') summary.settled += 1;
         });
       }
@@ -201,6 +215,16 @@ export const agentInstanceSweepService = {
       const running = await withSystemContext((tx) =>
         agentInstanceRepository.listLiveInStates(['running'], SWEEP_BATCH, tx),
       );
+      // Q7: an updating agent's machine runs and is charged — its interval rolls
+      // like a running one's (the reconcile and the credit stop wait for it to settle).
+      const updating = await withSystemContext((tx) =>
+        agentInstanceRepository.listLiveInStates(['updating'], SWEEP_BATCH, tx),
+      );
+      for (const row of updating) {
+        await guarded(async () => {
+          if ((await lifecycle.rollInterval(row.id)) === 'rolled') summary.rolled += 1;
+        });
+      }
       const stillRunning: AgentInstance[] = [];
       for (const row of running) {
         await guarded(async () => {

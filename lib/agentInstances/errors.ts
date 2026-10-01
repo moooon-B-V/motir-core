@@ -222,7 +222,7 @@ export class AgentInstanceRunActiveError extends Error {
     readonly instanceId: string,
     readonly runId: string,
     readonly workItemKey: string | null,
-    readonly action: 'hibernated' | 'deleted',
+    readonly action: 'hibernated' | 'deleted' | 'updated',
   ) {
     super(
       `This agent is running ${workItemKey ?? `run ${runId}`}, so it can’t be ${action}. Cancel the run first.`,
@@ -258,5 +258,36 @@ export class AgentRunAlreadyEndedError extends Error {
   ) {
     super(`This run has already ended (${status}).`);
     this.name = 'AgentRunAlreadyEndedError';
+  }
+}
+
+/**
+ * Update refused: the agent already runs the newest published image
+ * (`agent-image-update.md` Q8, MOTIR-6952) — a stale page pressed it (409).
+ */
+export class AgentInstanceUpToDateError extends Error {
+  readonly code = 'agent_instance_up_to_date' as const;
+  constructor(
+    readonly instanceId: string,
+    readonly version: string | null,
+  ) {
+    super(
+      version
+        ? `This agent already runs the newest version (${version}).`
+        : 'This agent already runs the newest version.',
+    );
+    this.name = 'AgentInstanceUpToDateError';
+  }
+}
+
+/**
+ * Update refused: the registry could not be asked which image is newest (Q8,
+ * MOTIR-6952) — a wait, never "up to date" (503).
+ */
+export class AgentImageCatalogUnavailableError extends Error {
+  readonly code = 'agent_image_catalog_unavailable' as const;
+  constructor() {
+    super('Motir couldn’t check for a newer version just now. Try again in a few minutes.');
+    this.name = 'AgentImageCatalogUnavailableError';
   }
 }

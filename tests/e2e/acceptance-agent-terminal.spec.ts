@@ -3,7 +3,12 @@ import { test, expect } from './_helpers/acceptance-video';
 import { signIn } from './_helpers/shell-session';
 import { adminDb, db } from './_helpers/db-reset';
 import { createTestPerson } from './_helpers/testPerson';
-import { seedMyAgents, type MyAgentsSeed } from './_helpers/my-agents-seed';
+import {
+  seedMyAgents,
+  setCatalogUnavailable,
+  resetCatalog,
+  type MyAgentsSeed,
+} from './_helpers/my-agents-seed';
 import en from '@/messages/en.json';
 
 // THE AGENT TERMINAL (Story MOTIR-6861 · MOTIR-6943) — the story's verification
@@ -368,12 +373,20 @@ test.describe('The agent terminal', () => {
     await expect(panel(page)).toContainText(copy.failedWayOut);
     await expect(panel(page).getByRole('button', { name: copy.panel.wake })).toBeVisible();
 
-    // An agent from before the terminal says so, in the design's words.
-    await page.goto(`/my-agents?agent=${oldImage.id}`);
-    await expect(panelTitle(page)).toContainText('yue-old-image');
-    await expect(panel(page)).toContainText(copy.panel.noTerminal.title);
-    await expect(panel(page)).toContainText(copy.panel.noTerminal.body);
-    await expect(connWord(page)).toHaveText(copy.panel.conn.unavailable);
+    // An agent from before the terminal says so, in the design's words. This
+    // receipt was recorded before an update could be offered (MOTIR-6862), so the
+    // catalog is held at "could not check" here: with no newer image on offer, the
+    // face reads as it did. The offered-update face is the update story's receipt.
+    setCatalogUnavailable(true);
+    try {
+      await page.goto(`/my-agents?agent=${oldImage.id}`);
+      await expect(panelTitle(page)).toContainText('yue-old-image');
+      await expect(panel(page)).toContainText(copy.panel.noTerminal.title);
+      await expect(panel(page)).toContainText(copy.panel.noTerminal.body);
+      await expect(connWord(page)).toHaveText(copy.panel.conn.unavailable);
+    } finally {
+      resetCatalog();
+    }
 
     // Another MEMBER of the same project — who holds `instance:use` — opening the
     // first member's agent address sees the refusal, never the agent…

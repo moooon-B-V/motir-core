@@ -610,6 +610,12 @@ export interface PersistentContainerStatus {
   readonly startedAt: Date | null;
   /** The stop instant of the current run, when it has stopped since `startedAt`. */
   readonly stoppedAt: Date | null;
+  /**
+   * The image the machine's config names right now (`agent-image-update.md` Q6:
+   * the settle of an interrupted update reads WHERE the machine is). Null when
+   * the provider named none; absent when the machine is gone.
+   */
+  readonly image?: string | null;
 }
 
 /** Everything in one organisation's instance app — the reconcile's read (§5). */
@@ -707,7 +713,48 @@ export interface PersistentContainerOrchestrator {
 
   /** Where the relay dials this machine's terminal server (Q2). Pure — no provider call. */
   terminalEndpoint(handle: PersistentContainerHandle): PersistentTerminalEndpoint;
+
+  /**
+   * MOVE the machine to a different image (`agent-image-update.md` Q2) — the SAME
+   * machine id and volume, the mount at the home, the env, the process, the
+   * services and the restart policy all kept: a read of the provider's CURRENT
+   * config with ONLY its image replaced, never a config rebuilt from Motir's
+   * record. `launch: true` (a running machine) lets the provider reboot it onto
+   * the new image; `launch: false` (a stopped one) writes the image without
+   * starting it, and the next {@link start} boots it. A provider refusal throws
+   * `OrchestratorApiError` and sends no second request. Never destroys or
+   * recreates anything.
+   */
+  moveImage(
+    handle: PersistentContainerHandle,
+    image: string,
+    options: { launch: boolean },
+  ): Promise<void>;
+
+  /**
+   * Is the coding agent alive on this STARTED machine (`agent-image-update.md`
+   * Q3)? Runs the profile's liveness command through {@link exec} with a bounded
+   * timeout. NEVER THROWS for a failing or slow command: a non-zero exit and a
+   * timeout are answers, as is a machine that could not be asked.
+   */
+  checkLiveness(
+    handle: PersistentContainerHandle,
+    command: readonly string[],
+    options?: { timeoutSeconds?: number },
+  ): Promise<PersistentLivenessResult>;
 }
+
+/** What {@link PersistentContainerOrchestrator.checkLiveness} answered. */
+export type PersistentLivenessResult =
+  | { readonly alive: true }
+  | {
+      readonly alive: false;
+      readonly reason: 'exit';
+      readonly exitCode: number;
+      readonly detail: string;
+    }
+  | { readonly alive: false; readonly reason: 'timeout'; readonly detail: string }
+  | { readonly alive: false; readonly reason: 'unreachable'; readonly detail: string };
 
 /** What one {@link PersistentContainerOrchestrator.exec} returned. */
 export interface PersistentExecResult {
