@@ -77,6 +77,7 @@ function diffOf(row: WorkItemRevision): Record<string, DiffCell> {
 describe('createWorkItem — revision', () => {
   it('writes ONE "created" revision whose diff is the initial state (non-null fields as { from: null, to })', async () => {
     const fx = await makeFixture();
+    const before = Date.now();
     const created = await workItemsService.createWorkItem(
       createInput(fx, { title: 'Born', descriptionMd: 'why', priority: 'high' }),
       fx.ctx,
@@ -85,12 +86,18 @@ describe('createWorkItem — revision', () => {
     const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       workItemRevisionRepository.listByWorkItem(created.id, {}, tx),
     );
+    const after = Date.now();
     expect(revs).toHaveLength(1);
     const rev = revs[0]!;
     expect(rev.changeKind).toBe('created');
     expect(rev.changedById).toBe(fx.ctx.userId);
-    // changedAt is freshly minted — within the last second.
-    expect(Date.now() - rev.changedAt.getTime()).toBeLessThan(1000);
+    // changedAt was minted by THIS write: it falls between a timestamp taken
+    // before createWorkItem and one taken after the read. Bracketing, not a
+    // latency bound — a loaded CI runner can take any time between the two.
+    // The slack covers skew between the Postgres clock (`now()`) and Node's.
+    const CLOCK_SKEW_MS = 250;
+    expect(rev.changedAt.getTime()).toBeGreaterThanOrEqual(before - CLOCK_SKEW_MS);
+    expect(rev.changedAt.getTime()).toBeLessThanOrEqual(after + CLOCK_SKEW_MS);
 
     const diff = diffOf(rev);
     // Non-null fields present as { from: null, to: <value> }.
