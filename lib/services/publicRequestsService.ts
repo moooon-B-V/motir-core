@@ -195,7 +195,7 @@ export const publicRequestsService = {
    *   - `not_found` (cloud off, unknown, not public) → `ProjectNotFoundError`;
    *   - `sign_in` → `VisitorSignInRequiredError`;
    *   - `enter` → `VisitorEntersProjectError` — a member reads the same list in
-   *     their own inbox, `/requested-features`, with its acts;
+   *     their own inbox, `/triage`, with its acts;
    *   - `consent` → `VisitorConsentRequiredError`.
    * `cursor` is the opaque `nextCursor` of a previous page; a malformed one is
    * `InvalidRoadmapCursorError`.

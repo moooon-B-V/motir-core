@@ -587,3 +587,105 @@ describe('every write runs as the sender', () => {
     expect(await assistantTurns()).toHaveLength(0);
   });
 });
+
+// ── After a reload (MOTIR-7064) ───────────────────────────────────────────────
+//
+// A reload reads the thread back from the database (`openForScope` → the turn
+// mapper) and has nothing else: no send-time anchor seed, no settle response. So
+// what the rail needs to redraw the anchor chip and the outcome line must be ON
+// the persisted turns — the `user` turn's anchor, the reply's landing.
+
+describe('a settled debug turn, read back after a reload', () => {
+  /** The thread exactly as a reload reads it, and its debug pair. */
+  async function reloaded(jobId: string) {
+    const turns = (await thread()).turns;
+    const user = turns.find((t) => t.role === 'user' && t.jobId === jobId);
+    const reply = turns.find((t) => t.role === 'assistant' && t.jobId === jobId);
+    return { turns, user: user!, reply: reply! };
+  }
+
+  it('diagnose onto the anchored triage bug: the anchor and the landing survive', async () => {
+    const triaged = await fileTriageBug();
+    const jobId = await debugTurn(diagnose(triaged.identifier), triaged.identifier);
+    const body = (await (await settleDebug(jobId)).json()) as Debugged;
+
+    const { user, reply } = await reloaded(jobId);
+    expect(user.anchorKey).toBe(triaged.identifier);
+    expect(reply.debugLanding).toEqual(body.landing);
+    expect(reply.debugLanding).toEqual({
+      outcome: 'diagnose',
+      workItemKey: triaged.identifier,
+      title: 'Mention disappears',
+      createdInTriage: false,
+    });
+  });
+
+  it('enrich_existing on the widget path: the anchor and the covering card survive', async () => {
+    const existing = await createTestWorkItem(fx, { kind: 'bug', title: 'Mentions vanish' });
+    const triaged = await fileTriageBug();
+    const jobId = await debugTurn(
+      enrich(existing.identifier, triaged.identifier),
+      triaged.identifier,
+    );
+    const body = (await (await settleDebug(jobId)).json()) as Debugged;
+
+    const { user, reply } = await reloaded(jobId);
+    expect(user.anchorKey).toBe(triaged.identifier);
+    expect(reply.debugLanding).toEqual(body.landing);
+    expect(reply.debugLanding?.workItemKey).toBe(existing.identifier);
+  });
+
+  it('diagnose from the orb: no anchor, and the bug it FILED in Triage survives', async () => {
+    const jobId = await debugTurn(diagnose(null));
+    const body = (await (await settleDebug(jobId)).json()) as Debugged;
+
+    const { user, reply } = await reloaded(jobId);
+    expect(user.anchorKey).toBeNull();
+    expect(reply.debugLanding).toEqual(body.landing);
+    expect(reply.debugLanding).toMatchObject({ outcome: 'diagnose', createdInTriage: true });
+  });
+
+  it('ungrounded: the "nothing was written" landing survives', async () => {
+    const triaged = await fileTriageBug();
+    const jobId = await debugTurn(
+      diagnose(triaged.identifier, { grounded: false, groundingReason: 'no_match' }),
+      triaged.identifier,
+    );
+    await settleDebug(jobId);
+
+    const { user, reply } = await reloaded(jobId);
+    expect(user.anchorKey).toBe(triaged.identifier);
+    expect(reply.debugLanding).toEqual({
+      outcome: 'ungrounded',
+      workItemKey: null,
+      title: null,
+      createdInTriage: false,
+    });
+  });
+
+  it('a replayed settle leaves the persisted landing as it was', async () => {
+    const jobId = await debugTurn(diagnose(null));
+    const first = (await (await settleDebug(jobId)).json()) as Debugged;
+    await settleDebug(jobId);
+
+    const { reply } = await reloaded(jobId);
+    expect(reply.debugLanding).toEqual(first.landing);
+  });
+
+  it('an ordinary answered ask carries neither — it renders exactly as before', async () => {
+    const askRes = await ask(post('/api/ai/ask', { body: 'What is in the sprint?' }));
+    const { jobId } = (await askRes.json()) as { jobId: string };
+    jobs.set(jobId, {
+      status: 'succeeded',
+      result: { ask: { intent: 'ask', answer: 'Two cards.', citations: [] } },
+    });
+    expect((await settle(post('/api/ai/ask/settle', { jobId }))).status).toBe(200);
+
+    const { user, reply } = await reloaded(jobId);
+    expect(user.anchorKey).toBeNull();
+    expect(user.debugLanding).toBeNull();
+    expect(reply.body).toBe('Two cards.');
+    expect(reply.anchorKey).toBeNull();
+    expect(reply.debugLanding).toBeNull();
+  });
+});

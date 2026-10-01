@@ -221,11 +221,11 @@ test('the view’s edges — no Manager act, a 429, the empty state, a member, a
   const hidden = await page.goto(viewPath(s.membersOnly.key));
   expect(hidden?.status()).toBe(404);
 
-  // ── A member is sent to their own Requested features inbox, unasked ────────
+  // ── A member is sent to their own Triage inbox, unasked (MOTIR-7043) ───────
   await page.context().clearCookies();
   await signIn(page, s.otherEmails[1]!, VISITOR_PASSWORD);
   await page.goto(viewPath(key));
-  await page.waitForURL((u) => u.pathname === '/requested-features');
-  await expect(page.getByRole('heading', { name: 'Requested features', level: 1 })).toBeVisible();
+  await page.waitForURL((u) => u.pathname === '/triage');
+  await expect(page.getByRole('heading', { name: 'Triage', level: 1 })).toBeVisible();
   await expect(page.getByRole('heading', { name: /^Before you watch/ })).toHaveCount(0);
 });

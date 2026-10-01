@@ -391,8 +391,8 @@
       "description": "Permanently delete a work item and everything beneath it. Cannot be undone."
     },
     "work_item_triage": {
-      "label": "Handle requested features",
-      "description": "Accept, decline, promote or snooze an item in Requested features."
+      "label": "Triage requests",
+      "description": "Accept, decline, promote or snooze an item in Triage."
     },
     "comment_add": {
       "label": "Add comments",
@@ -1117,7 +1117,8 @@
       "git": "Git",
       "github": "GitHub",
       "backlog": "Backlog",
-      "triage": "Requested features",
+      "triage": "Triage",
+      "requestedFeatures": "Requested features",
       "roadmap": "Roadmap",
       "plans": "Plans",
       "resumeOnboarding": "Resume onboarding",
@@ -5491,19 +5492,19 @@
     }
   },
   "triage": {
-    "heading": "Requested features",
-    "count": "{count, plural, other {# waiting}}",
+    "heading": "Triage",
+    "count": "{count, plural, other {# to triage}}",
     "subtitle": "{project} · {key} — incoming bug reports & feature requests, excluded from the tree until you act",
-    "noAccessTitle": "No access to Requested features",
-    "noAccessDescription": "You don’t have access to Requested features for this project.",
-    "loadError": "Couldn’t load Requested features. Please try again.",
+    "noAccessTitle": "No access to Triage",
+    "noAccessDescription": "You don’t have access to Triage for this project.",
+    "loadError": "Couldn’t load Triage. Please try again.",
     "queueLabel": "Queue · newest first",
     "searchPlaceholder": "Search submissions",
     "searchAria": "Search submissions",
     "loadOlder": "Load older",
     "loadingMore": "Loading…",
     "noSearchResults": "No submissions match your search.",
-    "selectPrompt": "Select a request to review",
+    "selectPrompt": "Select a submission to triage",
     "selectPromptBody": "Pick a row from the queue to see its full report and act on it.",
     "detailLoading": "Loading submission…",
     "publicChip": "Public",
@@ -5517,7 +5518,7 @@
     "commentsLabel": "Comments",
     "noComments": "No comments yet.",
     "empty": {
-      "title": "Nothing waiting in Requested features",
+      "title": "Nothing waiting in Triage",
       "description": "New bug reports and feature requests land here — from the in-app “Report” button or a signed-in “Submit a request” on the public project page."
     },
     "actions": {
@@ -5595,7 +5596,7 @@
       "descriptionPlaceholder": "Add any details that help us reproduce or understand it…",
       "submit": "Submit",
       "submitted": "Thanks — your report was submitted",
-      "submittedDetail": "Filed as {key}, now waiting in Requested features.",
+      "submittedDetail": "Filed as {key}, now waiting in Triage.",
       "error": "Couldn’t submit your report. Please try again.",
       "debugOffer": {
         "action": "Debug with Motir AI",
@@ -8918,7 +8919,8 @@
       "hibernated": "Hibernated",
       "waking": "Waking",
       "failed": "Failed",
-      "deleting": "Deleting"
+      "deleting": "Deleting",
+      "updating": "Updating"
     },
     "progress": {
       "starting": "Booting — cloning the project’s repositories into the home",
@@ -9074,6 +9076,7 @@
         "offWhy": "Hibernate and Delete are off while a run is working in this agent — cancel the run first.",
         "refusedHibernate": "{name} is running <link>{key}</link>. Cancel that run on the work item first, then hibernate it.",
         "refusedDelete": "{name} is running <link>{key}</link>. Cancel that run on the work item first, then delete it.",
+        "refusedUpdate": "{name} is running <link>{key}</link>. Cancel that run on the work item first, then update it.",
         "sessions": {
           "label": "Terminal sessions",
           "shell": "Your shell",
@@ -9086,6 +9089,39 @@
           "endedFailed": "The run’s session has ended — the run failed. Its work so far is on the run’s branch."
         },
         "backToShell": "Back to your shell"
+      }
+    },
+    "update": {
+      "available": "Update available → {to}",
+      "unknown": "Could not check for updates",
+      "nextWake": "{to} on next wake",
+      "earlierBuild": "an earlier build",
+      "action": "Update",
+      "actionTo": "Update to {to}",
+      "confirm": {
+        "title": "Update {name} to {to}?",
+        "introRunning": "{agent} {from} → {to}. The agent restarts on the new version, which takes about a minute. It keeps:",
+        "introHibernated": "{agent} {from} → {to}. It stays asleep and takes the new version the next time it wakes. It keeps:",
+        "keep1": "its home and every file in it, including the cloned repositories;",
+        "keep2": "its coding agent’s sign-in;",
+        "keep3": "its chat sessions.",
+        "rollback": "If the new version doesn’t start, the agent goes back to {from} and tells you why.",
+        "rollbackWake": "If the new version doesn’t start at that wake, the agent goes back to {from} and tells you why.",
+        "notNow": "Not now",
+        "running": "Update and restart",
+        "hibernated": "Update on next wake"
+      },
+      "updating": {
+        "title": "Updating to {to}",
+        "body": "The agent is restarting on the new version. Your home and sign-in stay where they are."
+      },
+      "imageTooOld": {
+        "body": "It was made from an older image, from before the terminal existed. Update it to {to} to get the terminal. Its home and sign-in are kept."
+      },
+      "refused": {
+        "upToDate": "This agent already runs the newest version ({version}).",
+        "state": "This agent is {state}, so it can’t be updated right now.",
+        "unknown": "Motir couldn’t check for a newer version just now. Try again in a few minutes."
       }
     }
   },

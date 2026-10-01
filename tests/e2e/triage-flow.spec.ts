@@ -54,7 +54,7 @@ interface Seed {
 }
 
 /** Sign up through the real UI (auto-workspace), create a project server-side,
- *  and pin it active so the project-scoped routes (/items, /boards, /requested-features)
+ *  and pin it active so the project-scoped routes (/items, /boards, /triage)
  *  and the shell "Report" affordance resolve it. */
 async function seedProject(page: Page, email: string, identifier: string): Promise<Seed> {
   await signUp(page, email);
@@ -122,12 +122,12 @@ async function submitBug(page: Page, title: string): Promise<Submitted> {
   return body;
 }
 
-/** Open /requested-features, select the submission's queue row, and wait for its detail pane
+/** Open /triage, select the submission's queue row, and wait for its detail pane
  *  to load — so the action bar (Accept / Promote / Decline …) is mounted.
  *  Clicking the row is what triggers the detail fetch (the initial selection
  *  highlights the row but does not auto-fetch the detail). */
 async function openTriageDetail(page: Page, title: string): Promise<void> {
-  await page.goto('/requested-features');
+  await page.goto('/triage');
   // The queue row is a button whose accessible name starts with the title.
   await page.getByRole('button', { name: new RegExp(title) }).click();
   // The loaded detail renders the title as an h2. A generous timeout absorbs the
@@ -155,7 +155,7 @@ test('@smoke a submitted bug lands in triage, is excluded from tree/list/board/s
   const submitted = await submitBug(page, bugTitle);
 
   // ── it appears in the triage inbox ─────────────────────────────────────────
-  await page.goto('/requested-features');
+  await page.goto('/triage');
   await expect(page.getByText(bugTitle)).toBeVisible();
 
   // ── and is EXCLUDED from every normal read (before promotion) ──────────────
@@ -200,7 +200,7 @@ test('@smoke a submitted bug lands in triage, is excluded from tree/list/board/s
   expect((await promoted).status(), 'promote → backlog returns 200').toBe(200);
 
   // ── it is GONE from the triage queue ───────────────────────────────────────
-  await page.goto('/requested-features');
+  await page.goto('/triage');
   await expect(page.getByText(bugTitle)).toHaveCount(0);
 
   // ── and now PRESENT in every normal read ───────────────────────────────────
@@ -261,7 +261,7 @@ test('@smoke a declined submission leaves the queue and never enters the tree', 
   expect((await declined).status(), 'decline returns 200').toBe(200);
 
   // It leaves the queue …
-  await page.goto('/requested-features');
+  await page.goto('/triage');
   await expect(page.getByText(declineTitle)).toHaveCount(0);
 
   // … and never appears in the tree (a declined item is canceled, not promoted).
@@ -270,27 +270,27 @@ test('@smoke a declined submission leaves the queue and never enters the tree', 
   await expect(page.getByTestId(`issue-row-${submitted.identifier}`)).toHaveCount(0);
 });
 
-// MOTIR-6772 — the inbox is called Requested features, at `/requested-features`,
-// and "triage" is no longer a name any member reads. The old address is a
-// bookmark, so it keeps landing: a permanent redirect from `next.config`, which
-// runs before the proxy's session bounce and so answers a signed-out browser
-// with the same 308 a signed-in one gets.
-test('the retired /triage address lands on Requested features, signed out and signed in', async ({
+// MOTIR-7043 — the inbox is Triage again, at `/triage` (MOTIR-6772 had renamed it
+// Requested features, a name only the Visitor's view keeps now). The two-day-old
+// `/requested-features` address is a bookmark, so it keeps landing: a permanent
+// redirect from `next.config`, which runs before the proxy's session bounce and so
+// answers a signed-out browser with the same 308 a signed-in one gets.
+test('the old /requested-features address lands on Triage, signed out and signed in', async ({
   page,
   request,
 }) => {
   // Signed out: the redirect itself, before any sign-in bounce.
-  const signedOut = await request.get('/triage', { maxRedirects: 0 });
-  expect(signedOut.status(), '/triage is a permanent redirect').toBe(308);
-  expect(signedOut.headers()['location']).toBe('/requested-features');
+  const signedOut = await request.get('/requested-features', { maxRedirects: 0 });
+  expect(signedOut.status(), '/requested-features is a permanent redirect').toBe(308);
+  expect(signedOut.headers()['location']).toBe('/triage');
 
-  // Signed in: the bookmark lands on the renamed inbox, named in its heading
-  // and in the sidebar entry that opens it.
-  await seedProject(page, 'e2e-requested-features@example.com', 'TRR');
+  // Signed in: the bookmark lands on the inbox, named in its heading and in the
+  // sidebar entry that opens it.
+  await seedProject(page, 'e2e-triage-redirect@example.com', 'TRR');
   await page.goto('/triage');
-  await expect(page).toHaveURL(/\/requested-features$/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Requested features' })).toBeVisible();
-  const entry = page.getByRole('link', { name: 'Requested features', exact: true });
-  await expect(entry.first()).toHaveAttribute('href', '/requested-features');
-  await expect(page.getByText(/triage/i)).toHaveCount(0);
+  await expect(page).toHaveURL(/\/triage$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Triage' })).toBeVisible();
+  const entry = page.getByRole('link', { name: 'Triage', exact: true });
+  await expect(entry.first()).toHaveAttribute('href', '/triage');
+  await expect(page.getByText(/requested features/i)).toHaveCount(0);
 });

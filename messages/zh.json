@@ -391,8 +391,8 @@
       "description": "永久删除工作项及其下级内容，无法撤销。"
     },
     "work_item_triage": {
-      "label": "处理功能需求",
-      "description": "接受、拒绝、升级或延后「功能需求」中的条目。"
+      "label": "处理分诊",
+      "description": "接受、拒绝、升级或延后「分诊」中的条目。"
     },
     "comment_add": {
       "label": "发表评论",
@@ -1117,7 +1117,8 @@
       "git": "Git",
       "github": "GitHub",
       "backlog": "待办列表",
-      "triage": "功能需求",
+      "triage": "分诊",
+      "requestedFeatures": "功能需求",
       "roadmap": "路线图",
       "plans": "计划",
       "resumeOnboarding": "继续引导",
@@ -5491,19 +5492,19 @@
     }
   },
   "triage": {
-    "heading": "功能需求",
-    "count": "{count, plural, other {# 项待处理}}",
+    "heading": "分诊",
+    "count": "{count, plural, other {# 项待分诊}}",
     "subtitle": "{project} · {key} — 新的缺陷报告与功能请求，在你处理之前不会进入工作项树",
-    "noAccessTitle": "无权访问功能需求",
-    "noAccessDescription": "你没有此项目「功能需求」的访问权限。",
-    "loadError": "无法加载功能需求，请重试。",
+    "noAccessTitle": "无权访问分诊",
+    "noAccessDescription": "你没有此项目「分诊」的访问权限。",
+    "loadError": "无法加载分诊，请重试。",
     "queueLabel": "队列 · 最新优先",
     "searchPlaceholder": "搜索提交",
     "searchAria": "搜索提交",
     "loadOlder": "加载更早",
     "loadingMore": "加载中…",
     "noSearchResults": "没有符合搜索条件的提交。",
-    "selectPrompt": "选择一项请求进行处理",
+    "selectPrompt": "选择一项进行分诊",
     "selectPromptBody": "从队列中选择一行，查看完整报告并进行处理。",
     "detailLoading": "正在加载提交…",
     "publicChip": "公开",
@@ -5517,7 +5518,7 @@
     "commentsLabel": "评论",
     "noComments": "暂无评论。",
     "empty": {
-      "title": "「功能需求」中没有待处理的事项",
+      "title": "「分诊」中没有待处理的事项",
       "description": "新的缺陷报告和功能请求会出现在这里 — 来自应用内的“反馈”按钮，或公开项目页面上已登录用户的“提交请求”。"
     },
     "actions": {
@@ -5595,7 +5596,7 @@
       "descriptionPlaceholder": "补充有助于我们重现或理解的细节……",
       "submit": "提交",
       "submitted": "已收到你的反馈，谢谢",
-      "submittedDetail": "已记为 {key}，正在「功能需求」中等待处理。",
+      "submittedDetail": "已记为 {key}，正在「分诊」中等待处理。",
       "error": "反馈提交失败，请重试。",
       "debugOffer": {
         "action": "用 Motir AI 排查缺陷",
@@ -8914,7 +8915,8 @@
       "hibernated": "已休眠",
       "waking": "唤醒中",
       "failed": "失败",
-      "deleting": "删除中"
+      "deleting": "删除中",
+      "updating": "更新中"
     },
     "progress": {
       "starting": "正在启动——把项目的仓库克隆到主目录",
@@ -9070,6 +9072,7 @@
         "offWhy": "有运行正在这个智能体中进行时，休眠和删除不可用——请先取消该运行。",
         "refusedHibernate": "{name} 正在运行 <link>{key}</link>。请先在工作项上取消该运行，然后再让它休眠。",
         "refusedDelete": "{name} 正在运行 <link>{key}</link>。请先在工作项上取消该运行，然后再删除它。",
+        "refusedUpdate": "{name} 正在运行 <link>{key}</link>。请先在工作项上取消该运行，然后再更新它。",
         "sessions": {
           "label": "终端会话",
           "shell": "你的 shell",
@@ -9082,6 +9085,39 @@
           "endedFailed": "运行的会话已结束——运行失败。目前的工作在运行的分支上。"
         },
         "backToShell": "回到你的 shell"
+      }
+    },
+    "update": {
+      "available": "可更新 → {to}",
+      "unknown": "无法检查更新",
+      "nextWake": "下次唤醒时更新到 {to}",
+      "earlierBuild": "较早的版本",
+      "action": "更新",
+      "actionTo": "更新到 {to}",
+      "confirm": {
+        "title": "将 {name} 更新到 {to}？",
+        "introRunning": "{agent} {from} → {to}。智能体将以新版本重启，大约需要一分钟。以下内容会保留：",
+        "introHibernated": "{agent} {from} → {to}。它会保持休眠，下次唤醒时使用新版本。以下内容会保留：",
+        "keep1": "主目录及其中的所有文件，包括克隆的仓库；",
+        "keep2": "编码智能体的登录状态；",
+        "keep3": "聊天会话。",
+        "rollback": "如果新版本无法启动，智能体会回到 {from} 并告诉你原因。",
+        "rollbackWake": "如果新版本在那次唤醒时无法启动，智能体会回到 {from} 并告诉你原因。",
+        "notNow": "暂不",
+        "running": "更新并重启",
+        "hibernated": "下次唤醒时更新"
+      },
+      "updating": {
+        "title": "正在更新到 {to}",
+        "body": "智能体正在以新版本重启。你的主目录和登录状态保持不变。"
+      },
+      "imageTooOld": {
+        "body": "它基于终端出现之前的旧镜像创建。更新到 {to} 即可使用终端，主目录和登录状态都会保留。"
+      },
+      "refused": {
+        "upToDate": "该智能体已经是最新版本（{version}）。",
+        "state": "该智能体当前{state}，暂时无法更新。",
+        "unknown": "Motir 暂时无法检查新版本。请几分钟后重试。"
       }
     }
   },

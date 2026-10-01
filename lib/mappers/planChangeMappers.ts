@@ -1,5 +1,6 @@
 import type { PlanChangeSession, PlanChangeTurn } from '@/generated/prisma/client';
 import type {
+  DebugLandingDto,
   PlanChangeSessionDto,
   PlanChangeTurnDto,
   PlanChangeTurnIntentDto,
@@ -14,6 +15,27 @@ import type { WorkItemRefMap } from '@/lib/dto/workItems';
 // boundary — the client never needs the tenant id, and omitting it keeps the
 // tenancy an entirely server-side concern.
 
+const DEBUG_OUTCOMES: ReadonlySet<string> = new Set(['enrich_existing', 'diagnose', 'ungrounded']);
+
+/**
+ * The persisted `debug_landing` JSON → its DTO (MOTIR-7064). The column is
+ * written only by `debugLandingService` from a `DebugLandingDto`, so this is a
+ * NARROWING, not a repair: anything that is not that shape reads as null — the
+ * turn then renders as the ordinary answer it would have been — rather than as
+ * an outcome line built from a guess.
+ */
+function toDebugLandingDto(value: unknown): DebugLandingDto | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.outcome !== 'string' || !DEBUG_OUTCOMES.has(v.outcome)) return null;
+  return {
+    outcome: v.outcome as DebugLandingDto['outcome'],
+    workItemKey: typeof v.workItemKey === 'string' ? v.workItemKey : null,
+    title: typeof v.title === 'string' ? v.title : null,
+    createdInTriage: v.createdInTriage === true,
+  };
+}
+
 export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
   return {
     id: row.id,
@@ -26,6 +48,8 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
     intent: (row.intent as PlanChangeTurnIntentDto | null) ?? null,
     intentCorrected: row.intentCorrected,
     citations: row.citations,
+    anchorKey: row.anchorKey,
+    debugLanding: toDebugLandingDto(row.debugLanding),
     authorId: row.authorId,
     createdAt: row.createdAt.toISOString(),
   };

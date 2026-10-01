@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import {
   ArrowLeft,
   CircleAlert,
+  CircleArrowUp,
   CircleCheck,
   CircleHelp,
   Lock,
@@ -17,6 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { AGENT_STATE_TONE } from '@/lib/agentInstances/presentation';
 import { agentSignInHint } from '@/lib/agentInstances/profiles';
 import type { AgentInstanceListItemDto, AgentInstanceState } from '@/lib/dto/agentInstances';
+import { AgentImageVersion } from './AgentImageVersion';
 import { AgentRunLine } from './AgentRunLine';
 import type { TerminalSignIn } from './useAgentTerminal';
 
@@ -38,7 +40,20 @@ const DELETE_DISABLED: ReadonlySet<AgentInstanceState> = new Set([
   'hibernating',
   'waking',
   'deleting',
+  'updating',
 ]);
+
+/**
+ * Is an update offered to this agent (`agent-image-update.md` Q1, Q5)? A newer
+ * image, on a running or hibernated agent that has not already taken one.
+ */
+export function updateOffered(agent: AgentInstanceListItemDto): boolean {
+  return (
+    agent.update !== null &&
+    agent.update !== 'unknown' &&
+    (agent.state === 'running' || (agent.state === 'hibernated' && !agent.pendingImageVersion))
+  );
+}
 
 /** How long a sign-in that just turned keeps its mint ground (panel 3). */
 const JUST_TURNED_MS = 4_000;
@@ -53,6 +68,7 @@ export function AgentPanelHeader({
   onClose,
   onHibernate,
   onDelete,
+  onUpdate,
 }: {
   agent: AgentInstanceListItemDto;
   projectName: string;
@@ -61,10 +77,16 @@ export function AgentPanelHeader({
   onClose: () => void;
   onHibernate: () => void;
   onDelete: () => void;
+  /** Open the Update confirmation (MOTIR-6953). */
+  onUpdate: () => void;
 }) {
   const t = useTranslations('myAgents');
   const runActive = agent.activeRun !== null;
   const deleteOff = DELETE_DISABLED.has(agent.state) || runActive;
+  const updating = agent.state === 'updating';
+  // The update delta, panel 1: Update is the FIRST action, shown while an update
+  // is offered; while the agent updates it stays, disabled, with the other two.
+  const showUpdate = updateOffered(agent) || updating;
   const offClass =
     'disabled:bg-(--el-surface) disabled:text-(--el-text-secondary) disabled:opacity-100';
   return (
@@ -88,14 +110,35 @@ export function AgentPanelHeader({
           <p className="mt-0.5 mb-0 text-[0.8125rem] text-(--el-text-secondary)">
             {agent.profileName} · {projectName}
           </p>
+          <AgentImageVersion agent={agent} />
+          {agent.updateFailureReason && agent.state === 'running' ? (
+            <p
+              data-testid="agent-update-failed"
+              className="mt-1 mb-0 text-xs text-(--el-danger-on-surface)"
+            >
+              {agent.updateFailureReason}
+            </p>
+          ) : null}
         </div>
         <div className="order-last flex basis-full flex-wrap items-center gap-1.5 @5xl:order-none @5xl:basis-auto">
-          {agent.state === 'running' ? (
+          {showUpdate ? (
+            <Button
+              size="sm"
+              disabled={updating}
+              aria-disabled={updating || undefined}
+              className={offClass}
+              leftIcon={<CircleArrowUp aria-hidden="true" />}
+              onClick={onUpdate}
+            >
+              {t('update.action')}
+            </Button>
+          ) : null}
+          {agent.state === 'running' || updating ? (
             <Button
               variant="secondary"
               size="sm"
-              disabled={runActive}
-              aria-disabled={runActive || undefined}
+              disabled={runActive || updating}
+              aria-disabled={runActive || updating || undefined}
               className={offClass}
               leftIcon={<Moon aria-hidden="true" />}
               onClick={onHibernate}

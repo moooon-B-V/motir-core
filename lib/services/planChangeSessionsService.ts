@@ -37,6 +37,7 @@ import { readPlanningTurn } from '@/lib/planning/plannerTurn';
 import { getJob } from '@/lib/ai/motirAiClient';
 import type { SubmittedRequirement } from '@/lib/ai/types';
 import type {
+  DebugLandingDto,
   PlanChangeSessionDto,
   PlanChangeSubmitResultDto,
   ResumableSessionDto,
@@ -265,6 +266,10 @@ interface AppendTurn {
   isAnswer?: boolean;
   intent?: PlanChangeTurnIntent | null;
   citations?: string[];
+  /** A `user` turn's resolved anchor identifier (MOTIR-7064). */
+  anchorKey?: string | null;
+  /** A debug reply's landing (MOTIR-7064), persisted with the reply itself. */
+  debugLanding?: DebugLandingDto | null;
 }
 
 async function appendLocked(
@@ -325,6 +330,20 @@ async function appendWithin(
         isAnswer: turn.isAnswer ?? false,
         intent: turn.intent ?? null,
         citations: turn.citations ?? [],
+        anchorKey: turn.anchorKey ?? null,
+        // An explicit literal, not the DTO itself: Prisma's JSON input wants an
+        // indexable object, and spelling the four fields keeps the column's
+        // shape exactly the DTO's.
+        ...(turn.debugLanding
+          ? {
+              debugLanding: {
+                outcome: turn.debugLanding.outcome,
+                workItemKey: turn.debugLanding.workItemKey,
+                title: turn.debugLanding.title,
+                createdInTriage: turn.debugLanding.createdInTriage,
+              },
+            }
+          : {}),
         authorId: turn.authorId ?? null,
       },
       tx,
@@ -701,7 +720,7 @@ export const planChangeSessionsService = {
     pctx: ProjectContext,
     scope: PlanChangeScope,
     body: string,
-    opts: { isAnswer?: boolean } = {},
+    opts: { isAnswer?: boolean; anchorKey?: string | null } = {},
   ): Promise<PlanChangeSessionDto> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
@@ -717,7 +736,13 @@ export const planChangeSessionsService = {
         const row = await appendWithin(
           sessionId,
           pctx,
-          { role: 'user', body: trimmed, authorId: pctx.userId, isAnswer: opts.isAnswer === true },
+          {
+            role: 'user',
+            body: trimmed,
+            authorId: pctx.userId,
+            isAnswer: opts.isAnswer === true,
+            anchorKey: opts.anchorKey ?? null,
+          },
           {},
           tx,
         );
@@ -746,7 +771,7 @@ export const planChangeSessionsService = {
     scope: PlanChangeScope,
     body: string,
     seedGateId: string,
-    opts: { isAnswer?: boolean } = {},
+    opts: { isAnswer?: boolean; anchorKey?: string | null } = {},
   ): Promise<PlanChangeSessionDto> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
@@ -761,7 +786,13 @@ export const planChangeSessionsService = {
         const row = await appendWithin(
           sessionId,
           pctx,
-          { role: 'user', body: trimmed, authorId: pctx.userId, isAnswer: opts.isAnswer === true },
+          {
+            role: 'user',
+            body: trimmed,
+            authorId: pctx.userId,
+            isAnswer: opts.isAnswer === true,
+            anchorKey: opts.anchorKey ?? null,
+          },
           {},
           tx,
         );
@@ -896,7 +927,12 @@ export const planChangeSessionsService = {
     body: string,
     pctx: ProjectContext,
     address: PlanChangeSessionAddress,
-    opts: { isAnswer?: boolean; intent?: PlanChangeTurnIntent; jobId?: string } = {},
+    opts: {
+      isAnswer?: boolean;
+      intent?: PlanChangeTurnIntent;
+      jobId?: string;
+      anchorKey?: string | null;
+    } = {},
   ): Promise<PlanChangeSessionDto> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
@@ -913,6 +949,9 @@ export const planChangeSessionsService = {
       // model existed does; that is why there is no back-fill.
       intent: opts.intent ?? null,
       ...(opts.jobId ? { jobId: opts.jobId } : {}),
+      // The anchor the ASK SERVICE resolved (MOTIR-7064) — an identifier this
+      // caller can see, never the raw posted string.
+      anchorKey: opts.anchorKey ?? null,
     });
   },
 
@@ -934,9 +973,18 @@ export const planChangeSessionsService = {
    * because the rail renders each one as a work-item chip and a chip that
    * resolves to nothing is worse than a missing citation: it asserts the answer
    * rested on something it did not.
+   *
+   * A DEBUG reply carries its `debugLanding` (MOTIR-7064) — what the turn wrote,
+   * or that it wrote nothing — persisted in THIS append, so the reply and the
+   * outcome line it renders commit together and a reload redraws both.
    */
   async appendAnswerTurn(
-    input: { jobId: string; body: string; citations?: readonly string[] },
+    input: {
+      jobId: string;
+      body: string;
+      citations?: readonly string[];
+      debugLanding?: DebugLandingDto | null;
+    },
     pctx: ProjectContext,
     address: PlanChangeSessionAddress,
   ): Promise<PlanChangeSessionDto> {
@@ -947,7 +995,13 @@ export const planChangeSessionsService = {
     return appendLocked(
       session,
       pctx,
-      { role: 'assistant', body: trimmed, jobId: input.jobId, citations },
+      {
+        role: 'assistant',
+        body: trimmed,
+        jobId: input.jobId,
+        citations,
+        debugLanding: input.debugLanding ?? null,
+      },
       {},
       async (tx) =>
         (await planChangeTurnRepository.findByJobIdAndRole(

@@ -330,12 +330,13 @@ export const debugLandingService = {
 
     // A1.4's fourth row: a report that cannot be grounded writes NOTHING.
     if (!result.diagnosis.grounded) {
+      const landing = landingOf(result, null);
       const session = await planChangeSessionsService.appendAnswerTurn(
-        { jobId: input.jobId, body: DEBUG_UNGROUNDED_REPLY, citations: [] },
+        { jobId: input.jobId, body: DEBUG_UNGROUNDED_REPLY, citations: [], debugLanding: landing },
         ctx,
         address,
       );
-      return { landing: landingOf(result, null), session };
+      return { landing, session };
     }
 
     const target = await resolveTarget(result, ctx);
@@ -358,11 +359,19 @@ export const debugLandingService = {
       throw err;
     }
 
+    // The landing rides ON the reply (MOTIR-7064): one append writes both, so the
+    // outcome line a reload draws is the one the settle returned.
+    const landing = landingOf(result, card);
     const session = await planChangeSessionsService.appendAnswerTurn(
-      { jobId: input.jobId, body: result.replyMd, citations: [card.identifier] },
+      {
+        jobId: input.jobId,
+        body: result.replyMd,
+        citations: [card.identifier],
+        debugLanding: landing,
+      },
       ctx,
       address,
     );
-    return { landing: landingOf(result, card), session };
+    return { landing, session };
   },
 };
