@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { renderAcceptanceRecordPrompt, renderAcceptanceRerunPrompt } from '../src/ciWatch.js';
+import {
+  ACCEPTANCE_LANE_PUBLISHES_CHECK,
+  renderAcceptanceRecordPrompt,
+  renderAcceptanceRerunPrompt,
+} from '../src/ciWatch.js';
 
 // The two prompts an acceptance Re-run sends (Story MOTIR-6071 · MOTIR-6502): the fix
 // turn, and the closing turn that re-records the video once CI is green.
@@ -71,5 +75,35 @@ describe('renderAcceptanceRecordPrompt', () => {
   it('changes no code and publishes nothing from a red run', () => {
     expect(prompt).toContain('Change no code in this step and move no status.');
     expect(prompt).toContain('a red run records nothing');
+  });
+
+  // ── WHO PUBLISHES — the checkout decides (MOTIR-7254) ──────────────────────
+  it('reads the checkout first, with the SAME check the dispatch prompt spells out', () => {
+    // Byte-identical to motir-core's `ACCEPTANCE_LANE_PUBLISHES_CHECK`
+    // (lib/dispatch/promptTemplate.ts) — this package cannot import it.
+    expect(ACCEPTANCE_LANE_PUBLISHES_CHECK).toBe(
+      "grep -rlE 'uses:\\s*\\./\\.github/actions/upload-acceptance-video' .github/workflows/",
+    );
+    expect(prompt).toContain(ACCEPTANCE_LANE_PUBLISHES_CHECK);
+    expect(prompt.indexOf(ACCEPTANCE_LANE_PUBLISHES_CHECK)).toBeLessThan(
+      prompt.indexOf('`create_acceptance_upload`'),
+    );
+  });
+
+  it('where the lane publishes: no MCP publish, confirm green, report the lane', () => {
+    expect(prompt).toContain('**If it prints a file**');
+    expect(prompt).toContain('NO MCP publish');
+    expect(prompt).toContain('only to confirm it is green');
+    expect(prompt).toContain('no MCP publish made');
+  });
+
+  it('where no lane publishes: both MCP calls and the receipt id, as before', () => {
+    expect(prompt).toContain('**If it prints nothing**');
+    expect(prompt).toContain('3. **Publish it — two calls.**');
+    expect(prompt).toContain('4. **Report the receipt id the publish returned.**');
+  });
+
+  it('no longer claims no CI lane uploads a recording', () => {
+    expect(prompt).not.toContain('No CI lane uploads');
   });
 });

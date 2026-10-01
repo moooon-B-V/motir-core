@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ACCEPTANCE_LANE_PUBLISHES_CHECK,
   assembleDispatchPrompt,
   branchSlug,
   FINDINGS_POLICY_TOKENS,
@@ -2068,8 +2069,66 @@ describe('the acceptance-receipt steps are conditional on the card recording one
     // and looks for the argument that takes the bytes.
     expect(prompt).toContain('Content-Type: video/webm');
     // The silence is the hazard, so the prompt says so where the agent is
-    // standing when it decides whether the run is over.
-    expect(prompt).toContain('NOTHING ELSE MAKES THAT CALL');
+    // standing when it decides whether the run is over — scoped, since
+    // MOTIR-7254, to the repositories where no lane publishes.
+    expect(prompt).toContain('WHERE NO LANE PUBLISHES, NOTHING ELSE MAKES THAT CALL');
+  });
+
+  // ── WHO PUBLISHES — the checkout decides (MOTIR-7254) ──────────────────────
+  //
+  // CI publishes again where the repository's lane carries the uploader
+  // (MOTIR-7253). The prompt cannot see a repository's workflows, so the agent
+  // reads its own checkout. Both branches must be present and explicit: a
+  // stand-down that reads as "skip publishing" in a repository with NO lane
+  // brings back the silent missing receipt MOTIR-4704 ended.
+  it('spells out the checkout check, the stand-down branch and the report line', () => {
+    const { prompt } = assembleDispatchPrompt(acceptanceCard());
+    expect(prompt).toContain(
+      "grep -rlE 'uses:\\s*\\./\\.github/actions/upload-acceptance-video' .github/workflows/",
+    );
+    expect(ACCEPTANCE_LANE_PUBLISHES_CHECK).toBe(
+      "grep -rlE 'uses:\\s*\\./\\.github/actions/upload-acceptance-video' .github/workflows/",
+    );
+    expect(prompt).toContain('IF IT PRINTS A FILE');
+    expect(prompt).toContain('Make NO\n   MCP publish');
+    expect(prompt).toContain(
+      'this repository’s acceptance lane publishes\n   the receipt on a green run; no MCP publish made',
+    );
+    // …and the other branch keeps BOTH calls, in order, after the check.
+    expect(prompt).toContain('IF IT PRINTS NOTHING');
+    const check = prompt.indexOf('5. FIRST, find out WHO publishes');
+    const publish = prompt.indexOf('6. OTHERWISE, PUBLISH the receipt');
+    expect(check).toBeGreaterThan(-1);
+    expect(publish).toBeGreaterThan(check);
+    expect(prompt.indexOf('create_acceptance_upload', publish)).toBeGreaterThan(publish);
+    expect(prompt.indexOf('publish_acceptance_result', publish)).toBeGreaterThan(publish);
+  });
+
+  it('asserts nowhere, unconditionally, that only the agent publishes', () => {
+    const { prompt } = assembleDispatchPrompt(acceptanceCard());
+    // The pre-MOTIR-7254 sentence opened the paragraph on its own.
+    expect(prompt).not.toMatch(/^\s*NOTHING ELSE MAKES THAT CALL/m);
+    expect(prompt).not.toContain('No CI lane uploads');
+  });
+
+  it('a CONTINUE prompt (what `motir continue` fetches) stands down exactly as a fresh one', () => {
+    const { prompt } = assembleDispatchPrompt(
+      acceptanceCard({
+        continueFrom: {
+          deadRunId: 'run_dead',
+          endedHow: 'the run stopped reporting',
+          lastHeardAt: '2026-09-27T14:02:00.000Z',
+          dispatcherName: 'Mara S.',
+          branch: 'subtask/PROD-40-e2e',
+          pullRequest: null,
+        },
+      }),
+    );
+    expect(prompt).toContain('CONTINUE — you are carrying on a run that DIED');
+    expect(prompt).toContain(ACCEPTANCE_LANE_PUBLISHES_CHECK);
+    expect(prompt).toContain('IF IT PRINTS A FILE');
+    expect(prompt).toContain('IF IT PRINTS NOTHING');
+    expect(prompt).toContain('publish_acceptance_result');
   });
 
   it('keeps the ordinary test steps and APPENDS to them', () => {
@@ -2077,7 +2136,8 @@ describe('the acceptance-receipt steps are conditional on the card recording one
     // its spec, and the publish is the step after that.
     const { prompt } = assembleDispatchPrompt(acceptanceCard());
     expect(prompt).toContain('4. Run the test files you added or changed and leave them green.');
-    expect(prompt).toContain('5. PUBLISH the receipt');
+    expect(prompt).toContain('5. FIRST, find out WHO publishes the receipt');
+    expect(prompt).toContain('6. OTHERWISE, PUBLISH the receipt');
   });
 
   it('finds the signal in the DESCRIPTION when the title does not carry it', () => {
@@ -2101,6 +2161,8 @@ describe('the acceptance-receipt steps are conditional on the card recording one
 
     expect(prompt).not.toContain('create_acceptance_upload');
     expect(prompt).not.toContain('publish_acceptance_result');
+    expect(prompt).not.toContain('upload-acceptance-video');
+    expect(prompt).not.toContain('WHO publishes');
     expect(prompt).toContain('4. Run the test files you added or changed and leave them green.');
   });
 

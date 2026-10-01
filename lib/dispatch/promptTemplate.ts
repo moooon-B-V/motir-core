@@ -871,24 +871,56 @@ function designResultSteps(openDependentKeys: readonly string[]): string[] {
  * cannot skip reading, said nothing about the deliverable the card exists to
  * produce. A design run is told by Motir; an acceptance run was told by
  * whoever wrote the card.
+ *
+ * WHO PUBLISHES, SINCE 2026-10-01 (MOTIR-7253 / MOTIR-7254). CI publishes the
+ * receipt again in the repositories whose acceptance lane carries the uploader —
+ * motir-core, and every project generated from the starter
+ * (`docs/decisions/acceptance-video.md`, the 2026-10-01 amendment). The prompt
+ * cannot see a repository's workflows, but the agent is standing in a checkout
+ * of it, so the decision is a READ of that checkout: step 5 below greps
+ * `.github/workflows/` for the `upload-acceptance-video` action. Where it
+ * matches, the agent makes no MCP publish and says so; anywhere else it
+ * publishes exactly as before. The stand-down is a named BRANCH, never a
+ * softened instruction — wording an agent in a repository with no publishing
+ * lane could read as "skip publishing" would bring back the silent missing
+ * receipt MOTIR-4704 ended. Exported so the test pins the check verbatim.
  */
+export const ACCEPTANCE_LANE_PUBLISHES_CHECK =
+  "grep -rlE 'uses:\\s*\\./\\.github/actions/upload-acceptance-video' .github/workflows/";
+
 const ACCEPTANCE_PUBLISH_STEPS = [
-  '5. PUBLISH the receipt, from THIS run, while the recording is in front of you.',
-  '   Two calls, because a video is far larger than a tool argument can carry:',
-  '   `create_acceptance_upload` with this card’s key mints a short-lived',
-  '   presigned PUT; upload the clip’s bytes straight to that URL with',
-  '   `Content-Type: video/webm`; then `publish_acceptance_result` with the',
+  '5. FIRST, find out WHO publishes the receipt in this repository. From the',
+  '   root of your checkout run:',
+  '',
+  `       ${ACCEPTANCE_LANE_PUBLISHES_CHECK}`,
+  '',
+  '   IF IT PRINTS A FILE, this repository’s acceptance lane publishes the',
+  '   receipt itself, from a green pull-request run, over keyless OIDC. Make NO',
+  '   MCP publish — do not call create_acceptance_upload or',
+  '   publish_acceptance_result. Confirm your spec declares its story with',
+  '   `acceptanceStory()` (without it the lane cannot attribute the clip), push,',
+  '   and write in your run report: “this repository’s acceptance lane publishes',
+  '   the receipt on a green run; no MCP publish made”. Steps 6 and 7 do not',
+  '   apply.',
+  '',
+  '   IF IT PRINTS NOTHING, no lane here publishes, and steps 6 and 7 are yours.',
+  '6. OTHERWISE, PUBLISH the receipt, from THIS run, while the recording is in',
+  '   front of you. Two calls, because a video is far larger than a tool',
+  '   argument can carry: `create_acceptance_upload` with this card’s key mints',
+  '   a short-lived presigned PUT; upload the clip’s bytes straight to that URL',
+  '   with `Content-Type: video/webm`; then `publish_acceptance_result` with the',
   '   `pathname` it gave you, the chapters from `chapters.json`, the `commitSha`',
   '   you recorded at, and this card’s key as `producedByKey`. Pass this card’s',
   '   key to both — a receipt belongs to the STORY, and the server resolves up.',
-  '6. Confirm it landed. The call returns the receipt’s `id` and a `pending`',
+  '7. Confirm it landed. The call returns the receipt’s `id` and a `pending`',
   '   status; report the id, because that is what makes the publish checkable by',
   '   somebody else.',
   '',
-  '   NOTHING ELSE MAKES THAT CALL. A story whose receipt never arrives looks',
-  '   exactly like one that succeeded — spec green, checks green, pull request',
-  '   merged, and a story nobody can watch working. A red run publishes nothing,',
-  '   and that is correct: the receipt records a GREEN run or it records nothing.',
+  '   WHERE NO LANE PUBLISHES, NOTHING ELSE MAKES THAT CALL. A story whose',
+  '   receipt never arrives looks exactly like one that succeeded — spec green,',
+  '   checks green, pull request merged, and a story nobody can watch working. A',
+  '   red run publishes nothing, and that is correct: the receipt records a GREEN',
+  '   run or it records nothing.',
 ];
 
 /**
