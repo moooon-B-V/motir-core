@@ -532,6 +532,279 @@ the decision record keep their engineering names.
 - **Leaves to others:** the Chat tab (MOTIR-6863), _Run in my agent_ (MOTIR-6864), and the image update
   and its _Update available_ marker (MOTIR-6862).
 
+---
+
+## The Chat tab — a conversation with the agent beside its terminal (delta, MOTIR-7011)
+
+**Story MOTIR-6863 · design MOTIR-7011.** Gates **MOTIR-7017** (the Chat tab). Mock:
+**`design/my-agents/my-agents--chat.mock.html`**, a DELTA.
+
+**What it amends.** This section amends § _The agent panel_ above, and in it § _Panel 5 — THE
+TERMINAL TAB_, whose first bullet reads _"It holds one tab today, so the chat story (MOTIR-6863) adds
+**Chat** beside it, and nothing marks the empty place"_. It draws on
+**`design/my-agents/my-agents--panel.mock.html`** (MOTIR-6937, approved), which is not edited and stays
+the record of the panel. The delta draws only what the Chat tab adds: the tab in the track, the
+transcript, the tool-call rows, the turn ends, the prompt box, the session list, and every state in
+which an agent cannot chat.
+
+**Where every state comes from.** **`docs/decisions/agent-chat.md` (MOTIR-7010)** is the workflow spec,
+and this design adds no state it does not produce: Q1 (the supported set; aider unsupported), Q2 (the
+Claude Code subscription refusal and its per-turn backstop), Q3 (per-turn headless process in
+`~/workspace`, auto-approve flags), Q4 (the frames and the error codes `subscription_signin`,
+`not_signed_in`, `turn_running`, `taken_over`, `too_large`), Q5 (the seven event kinds, the four tool
+kinds, the 64 KiB clip), Q6 (turn end, Stop, one turn per agent, a dropped socket does not stop a turn),
+Q7 (the session list, 50 newest, resume, `unavailable`) and Q8 (close code 4411, `CHAT_PROFILES`). The
+copy is this card's.
+
+**Composed, not redrawn.** The mock's first five `<style>` blocks are `my-agents--panel.mock.html`'s own,
+verbatim, and the list cards, header, sign-in line, tab track, connection word, strips and faces are
+its markup, copied. A sixth block adds only the chat's own elements, from the same tokens. Most panels
+show the panel from its tab track down; the header above it is unchanged.
+
+| Panel | What it settles                                                                                  | ADR                 |
+| ----- | ------------------------------------------------------------------------------------------------ | ------------------- |
+| 1     | the tab in the track (active, inactive, disabled), the tab in the address, a new chat            | Q1, Q3, Q4, Q8      |
+| 2     | the transcript: prompt, collapsed tool rows, a reply streaming, then complete                    | Q1, Q5, Q6          |
+| 3     | tool rows, each kind collapsed and expanded; a diff, a path-only edit, clipped output, a failure | Q5                  |
+| 4     | turn ends (completed, stopped, failed), the Q2 backstop, the `error` and `other` rows            | Q2, Q5, Q6          |
+| 5     | the prompt box: idle, typing, sending, running (Stop), disabled; `turn_running`, `too_large`     | Q4, Q6              |
+| 6     | the session list: open, empty, at 50; resumed with history, history unavailable; `taken_over`    | Q4, Q6, Q7          |
+| 7     | aider's disabled tab, Claude Code on a subscription, not signed in, no chat server (4411)        | Q1, Q2, Q6, Q8, Q11 |
+| 8     | waking, connecting, reconnecting, lost                                                           | Q4, Q6              |
+| 9     | the narrow width                                                                                 | —                   |
+
+### Panel 1 — THE TAB IN THE TRACK
+
+- **Chat is the second tab** in the approved track, after Terminal, with a `MessageSquare` glyph. The
+  active tab is the approved one (`--el-page-bg` ground, `--el-text-strong` label, the glyph in
+  `--el-tabnav-active`, `--shadow-subtle`). The **inactive** tab is the same box on the track
+  (`--el-tabnav-track`) with `--el-text-secondary` label and glyph; on hover `--el-surface-soft` and
+  `--el-text`. The box is the shipped tab's: `--height-control`, `--radius-control`,
+  `--spacing-control-x`.
+- **Disabled** (aider only, Q1) is drawn from `CHAT_PROFILES` (Q8) without connecting:
+  `aria-disabled="true"`, a `Ban` glyph in place of the chat glyph, `--el-text-secondary` ink (never
+  faint: the tab is still read), no hover. The reason is a tooltip on hover **and** keyboard focus,
+  tied by `aria-describedby`: `--el-tooltip-bg` / `--el-tooltip-text`, `--radius-control`,
+  `--spacing-tooltip-x/y`, `--shadow-elevated`.
+- **Which tab opens.** An agent opens on Terminal, as it ships. The open tab is kept in the address as
+  `&tab=chat`, written with `shallowPush` (the chat renders itself; the server answers nothing), so a
+  reload returns to the chat. The connection word at the strip's right end describes the open tab.
+- **A new chat** (Q4 `open` with no session) is an empty transcript with one centred face that says
+  what the chat is: it works in the terminal's `~/workspace` (Q3), each turn runs the coding agent
+  headless (Q3), and it acts without asking first (Q3's auto-approve flags; the ADR builds no approval
+  prompt).
+
+### Panel 2 — THE TRANSCRIPT
+
+| Element         | Content                                                                      | Tokens                                                                                                                  |
+| --------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| chat bar        | the session title (ellipsised), a _Resumed_ chip, **Sessions**, **New chat** | 0.8125rem `--el-text`; `--el-border-soft` rule; buttons the base `Button` secondary (`--height-btn-sm`, `--radius-btn`) |
+| `user`          | the prompt, right-aligned, max 85%                                           | `--el-surface` ground, `--el-text`, `--radius-card`, `--spacing-input-y/x`                                              |
+| `text`          | prose on the card, no bubble; deltas of one `id` join                        | 0.875rem `--el-text`; inline code `--el-code-bg` / `--el-code-text`, `--radius-badge`                                   |
+| streaming caret | ends the paragraph while deltas arrive                                       | `--el-accent` block, `aria-hidden`                                                                                      |
+| working line    | _{agent} is working…_ under the transcript while a turn runs                 | 0.75rem `--el-text-secondary`, `LoaderCircle`                                                                           |
+| transcript      | fills the tab between the bar and the prompt box                             | `--el-card`, `--spacing-card-padding`                                                                                   |
+
+- Claude Code and goose stream word by word; Codex, OpenCode and kimi send whole messages (Q1), so on
+  those the caret is never seen. Token counts, cost and thinking are never drawn (Q5, Q10).
+- The transcript fills to the bottom of the viewport, scrolls inside itself, stays pinned to the latest
+  event, and shows the approved **Jump to latest** when the reader has scrolled up.
+
+### Panel 3 — THE TOOL-CALL ROWS
+
+| Kind (Q5) | Glyph            | Row                               | Right end                                                    | Expanded body                                                                                       |
+| --------- | ---------------- | --------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `read`    | `FileText`       | **Read** + path                   | lines read                                                   | the content read                                                                                    |
+| `edit`    | `FilePen`        | **Edit** + path                   | _+added −removed_                                            | the unified `diff`; path only: _{agent} reported which file it changed, but not the change itself._ |
+| `command` | `SquareTerminal` | **Ran** + command                 | _exit {code}_                                                | the output; clipped: the note above it                                                              |
+| `other`   | `Wrench`         | the tool's `name` + its `title`   | —                                                            | its output, or _No output._                                                                         |
+| running   | as its kind      | as its kind                       | `LoaderCircle` _Running…_                                    | —                                                                                                   |
+| failed    | as its kind      | as its kind, `--el-danger` border | `CircleX` _Failed · exit {code}_ in `--el-danger-on-surface` | the output                                                                                          |
+
+- **Row:** `--el-card`, `--el-border`, `--radius-control`, `--spacing-control-x/y`, min
+  `--height-control`; the act in `--el-text`, the path or command mono 0.75rem `--el-text-secondary`
+  (ellipsised), glyphs and chevron `--el-text-secondary`; hover `--el-surface-soft`. The head is a
+  disclosure button (`aria-expanded`); collapsed by default, and a failure is not opened for the reader.
+- **Body:** `--el-code-bg` / `--el-code-text`, mono 12px, `--spacing-tooltip-y/x` (the inline code
+  block's padding), `--el-border-soft` rule. Diff lines: added `--el-diff-added`, removed
+  `--el-diff-removed`, both `--el-text-strong`; hunk headers `--el-text-secondary`.
+- **Clipped** (`truncated`, over 64 KiB): a note row _above_ the body, where the cut start would be —
+  `AlertTriangle`, 0.75rem `--el-text-secondary` on `--el-card`.
+
+### Panel 4 — HOW A TURN ENDS
+
+- **One marker per turn**, written by the runner (Q5, Q6): a `--el-border-soft` rule with the reason in
+  its middle, 0.75rem `--el-text-secondary`, `role="separator"`.
+  - `completed`: _Turn complete_, `CircleCheck` in `--el-success`.
+  - `stopped`: _Stopped_, `Square` in `--el-text-secondary`, and under it _You stopped this turn. The
+    reply above is as far as it got._ The streamed text stays (Q6).
+  - `failed`: _Turn failed_ in `--el-danger-on-surface`, `CircleX` in `--el-danger`, and its `code` in
+    words under it (0.75rem `--el-text-secondary`). The Q2 backstop is this marker with
+    `subscription_signin`.
+- **`error`** (Q5 — does not end the turn): an inline notice, `--el-warning-surface` ground,
+  `--el-warning-text` ink, `AlertTriangle` in `--el-warning`, `--radius-control`,
+  `--spacing-control-x/y`.
+- **`other`**: one 0.75rem `--el-text-secondary` line naming the event, nothing else (Q10).
+
+### Panel 5 — THE PROMPT BOX
+
+| State    | Box                                                                           | Button                                                 |
+| -------- | ----------------------------------------------------------------------------- | ------------------------------------------------------ |
+| idle     | empty, placeholder in `--el-text-secondary`                                   | **Send**, off (`--el-surface`, secondary ink)          |
+| typing   | multi-line, grows to ~8 lines then scrolls; `--el-accent` border + focus ring | **Send**, primary (`--el-accent` / `--el-accent-text`) |
+| sending  | emptied; the prompt is already in the transcript                              | _Sending…_, off, `LoaderCircle`                        |
+| running  | editable (the next prompt can be written; sent once the turn ends)            | **Stop** (`Square`), secondary — Q6's SIGINT           |
+| disabled | not connected: `--el-input-disabled-bg` / `-border` / `-text`, text kept      | **Send**, off                                          |
+
+- **Box:** `--el-input-border`, `--radius-input`, `--spacing-input-y/x`, min `--height-input`,
+  0.875rem `--el-text`. The composer sits on `--el-card` under a `--el-border-soft` rule; the hint is
+  0.75rem `--el-text-secondary`. Enter sends; Shift+Enter is a new line. A prompt is text only (Q4).
+- **Refusals** are a strip directly above the box (`--spacing-control-y` × `--spacing-card-padding`,
+  `--el-text-strong` ink), and neither empties the box: `turn_running` on `--el-tint-peach`
+  (`AlertTriangle`, `role="status"`); `too_large` on `--el-tint-rose` (`CircleAlert`, `role="alert"`).
+
+### Panel 6 — THE SESSION LIST
+
+- **Sessions** opens a popover under the chat bar: `--el-card`, `--el-border`, `--radius-card`,
+  `--shadow-elevated`. **New chat** heads it. Rows (`--spacing-control-x/y`, `--radius-control`, hover
+  `--el-surface-soft`): the title in 0.8125rem `--el-text`, one line, ellipsised (the CLI's title or the
+  first prompt cut to 120 characters, Q7), and the last activity in the app's relative time, 0.75rem
+  `--el-text-secondary`. Newest first by last activity (Q7). The open session has `aria-current` and
+  `--el-option-active-bg`. Terminal sessions are listed too and not told apart (Q7). At narrow width it
+  is a sheet the panel's width.
+- **Empty** and **at the bound of 50** (Q7) each get one 0.75–0.8125rem `--el-text-secondary` line (the
+  bound's in a foot under a `--el-border-soft` rule).
+- **Resumed** (Q4 `open` + `session`, then `history`): the bar shows the title and a _Resumed_ chip
+  (`--el-tint-lavender`, `--el-text-strong`, `--radius-badge`, `--spacing-chip-x/y`); earlier turns are
+  drawn exactly as live ones. `history.truncated` heads the transcript with a note; `unavailable` (Q7)
+  opens with **no earlier turns drawn** and one note. Notes: `History` glyph, 0.75rem
+  `--el-text-secondary` on `--el-surface-soft`, `--radius-control`, `--spacing-control-x/y`.
+- **`taken_over`** (Q6): the transcript dims (opacity 0.6), the connection word is _Ended_, a
+  `--el-muted` strip says the turn keeps running in the other tab, with **Use it here**; the box is
+  disabled.
+
+### Panel 7 — WHEN THE AGENT CAN'T CHAT
+
+| Case                                         | Tab                                    | Chat body                                                                                                                                                   |
+| -------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| aider (Q1)                                   | disabled, tooltip                      | not reachable; the panel stays on Terminal, untouched                                                                                                       |
+| Claude Code on a Claude subscription (Q2, b) | enabled (the server's `hello` decides) | one face: `Lock`, the title, the Q2 sentence in full, **Open Terminal**. No prompt box. Terminal beside it, live                                            |
+| not signed in (Q4, Q6)                       | enabled                                | the transcript unchanged, a `--el-tint-peach` strip (`role="alert"`) above the box pointing at the terminal, **Open Terminal**; the prompt stays in the box |
+| no chat server — close 4411 (Q8)             | enabled; word _Unavailable_            | one face: `Package`, the title, the body — the panel design's image-too-old register; no date, no button                                                    |
+
+- Faces: centred on `--el-card`, `--spacing-card-padding`, glyph 22px `--el-text-secondary`, title
+  0.875rem `--el-text`, body 0.8125rem `--el-text-secondary` (max 30rem).
+- The subscription case changes **nothing** on the Terminal tab or the header's sign-in line: the
+  terminal on a subscription is the carve-out (Q2). Motir offers no way to set a key here (Q2, Q11).
+- `not_signed_in` is let through as _unknown_ for kimi, aider and goose (Q6), so those never see it.
+  The chat never starts a sign-in; **Open Terminal** switches tabs (Q11).
+
+### Panel 8 — THE CONNECTION
+
+The chat is its own socket (Q4), with its own connection word and dot, the approved set. The faces and
+strips are the terminal tab's (§ Panel 5 above), reworded for a chat:
+
+| State        | Word            | Body                                                                                            | Box                 |
+| ------------ | --------------- | ----------------------------------------------------------------------------------------------- | ------------------- |
+| waking       | _Waiting_       | the panel's waking face, with the chat's hint                                                   | disabled            |
+| connecting   | _Connecting…_   | _Connecting to {name}'s chat…_                                                                  | disabled            |
+| reconnecting | _Reconnecting…_ | `--el-tint-sky` strip; the transcript dimmed                                                    | disabled, text kept |
+| lost         | _Disconnected_  | `--el-tint-rose` strip, `role="alert"`, **Reconnect**; 4502 uses the panel's `lostMachine` line | disabled, text kept |
+
+On reconnect the tab re-opens the same session: `history`, then the running turn's kept events (256
+KiB), then live ones (Q6). 4401 and `not_running` have no words, as on the terminal.
+
+### Panel 9 — THE NARROW WIDTH
+
+As the panel design's Panel 7: the agent takes the whole view. The chat bar's **Sessions** and **New
+chat** become icon buttons (`--spacing-icon-btn`, `--radius-control`) with the same accessible labels;
+tool rows keep one line with the path or command ellipsised; the prompt box stays pinned at the bottom.
+
+### Strings — `myAgents.panel.*`, every new one
+
+Reused unchanged: `panel.conn.*`, `panel.reconnect`, `panel.useHere`, `panel.strip.lostMachine`,
+`panel.jumpLatest`, `progress.waking`. Times use the app's relative-time formatter.
+
+| Key                                       | en                                                                                                                                                                                                                                                            | zh                                                                                                                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tabs.chat`                               | Chat                                                                                                                                                                                                                                                          | 对话                                                                                                                                                                        |
+| `chat.unsupported`                        | Chat isn’t available for Aider: it has no machine-readable output for a chat to follow. Use the terminal.                                                                                                                                                     | Aider 无法使用对话：它没有可供对话跟随的机器可读输出。请使用终端。                                                                                                          |
+| `chat.newChat`                            | New chat                                                                                                                                                                                                                                                      | 新对话                                                                                                                                                                      |
+| `chat.sessions`                           | Sessions                                                                                                                                                                                                                                                      | 会话                                                                                                                                                                        |
+| `chat.resumed`                            | Resumed                                                                                                                                                                                                                                                       | 已恢复                                                                                                                                                                      |
+| `chat.empty.title`                        | Start a chat with {agent}                                                                                                                                                                                                                                     | 开始与 {agent} 对话                                                                                                                                                         |
+| `chat.empty.body`                         | It works in <cmd>~/workspace</cmd> on {name}, with the same files and sign-in as the terminal. Each turn runs {agent} headless, and it edits files and runs commands without asking first.                                                                    | 它在 {name} 的 <cmd>~/workspace</cmd> 中工作，文件和登录与终端相同。每一轮都以无界面方式运行 {agent}，它会直接编辑文件、运行命令，不会先询问。                              |
+| `chat.transcript`                         | Chat transcript (the region's label)                                                                                                                                                                                                                          | 对话记录                                                                                                                                                                    |
+| `chat.working`                            | {agent} is working…                                                                                                                                                                                                                                           | {agent} 正在处理…                                                                                                                                                           |
+| `chat.prompt.label`                       | Prompt                                                                                                                                                                                                                                                        | 提示                                                                                                                                                                        |
+| `chat.prompt.placeholder`                 | Ask {agent} to do something…                                                                                                                                                                                                                                  | 让 {agent} 做点什么…                                                                                                                                                        |
+| `chat.prompt.hint`                        | Enter to send · Shift+Enter for a new line                                                                                                                                                                                                                    | Enter 发送 · Shift+Enter 换行                                                                                                                                               |
+| `chat.prompt.offHint`                     | You can type again once the chat reconnects.                                                                                                                                                                                                                  | 对话重新连接后即可继续输入。                                                                                                                                                |
+| `chat.send`                               | Send                                                                                                                                                                                                                                                          | 发送                                                                                                                                                                        |
+| `chat.sending`                            | Sending…                                                                                                                                                                                                                                                      | 发送中…                                                                                                                                                                     |
+| `chat.stop`                               | Stop                                                                                                                                                                                                                                                          | 停止                                                                                                                                                                        |
+| `chat.tool.read`                          | Read                                                                                                                                                                                                                                                          | 读取                                                                                                                                                                        |
+| `chat.tool.edit`                          | Edit                                                                                                                                                                                                                                                          | 编辑                                                                                                                                                                        |
+| `chat.tool.command`                       | Ran                                                                                                                                                                                                                                                           | 运行                                                                                                                                                                        |
+| `chat.tool.lines`                         | {count} lines                                                                                                                                                                                                                                                 | {count} 行                                                                                                                                                                  |
+| `chat.tool.exit`                          | exit {code}                                                                                                                                                                                                                                                   | 退出码 {code}                                                                                                                                                               |
+| `chat.tool.running`                       | Running…                                                                                                                                                                                                                                                      | 运行中…                                                                                                                                                                     |
+| `chat.tool.failed`                        | Failed                                                                                                                                                                                                                                                        | 失败                                                                                                                                                                        |
+| `chat.tool.truncated`                     | Output clipped — showing the last 64 KB.                                                                                                                                                                                                                      | 输出已截断——仅显示最后 64 KB。                                                                                                                                              |
+| `chat.tool.noDiff`                        | {agent} reported which file it changed, but not the change itself.                                                                                                                                                                                            | {agent} 报告了它修改的文件，但没有报告具体改动。                                                                                                                            |
+| `chat.tool.noOutput`                      | No output.                                                                                                                                                                                                                                                    | 无输出。                                                                                                                                                                    |
+| `chat.tool.show` / `chat.tool.hide`       | Show details / Hide details (the disclosure's label)                                                                                                                                                                                                          | 显示详情 / 隐藏详情                                                                                                                                                         |
+| `chat.error`                              | {agent} reported a problem and kept going: {message}                                                                                                                                                                                                          | {agent} 报告了一个问题，并继续执行：{message}                                                                                                                               |
+| `chat.other`                              | Unshown event: {name}                                                                                                                                                                                                                                         | 未显示的事件：{name}                                                                                                                                                        |
+| `chat.turn.completed`                     | Turn complete                                                                                                                                                                                                                                                 | 本轮完成                                                                                                                                                                    |
+| `chat.turn.stopped`                       | Stopped                                                                                                                                                                                                                                                       | 已停止                                                                                                                                                                      |
+| `chat.turn.stoppedWhy`                    | You stopped this turn. The reply above is as far as it got.                                                                                                                                                                                                   | 你停止了这一轮。上面的回复就是它停下时的进度。                                                                                                                              |
+| `chat.turn.failed`                        | Turn failed                                                                                                                                                                                                                                                   | 本轮失败                                                                                                                                                                    |
+| `chat.turn.failedWhy.subscription_signin` | Claude Code is signed in with a Claude subscription, which the chat can’t use.                                                                                                                                                                                | Claude Code 使用 Claude 订阅登录，对话无法使用该登录。                                                                                                                      |
+| `chat.turn.failedWhy.generic`             | {agent} stopped unexpectedly ({code}).                                                                                                                                                                                                                        | {agent} 意外停止（{code}）。                                                                                                                                                |
+| `chat.notice.turnRunning`                 | A turn is already running on {name}, in another chat session. Wait for it to end or stop it there — one turn runs on an agent at a time.                                                                                                                      | {name} 上已有一轮正在另一个对话会话中运行。请等它结束，或在那里停止它——一个智能体同一时间只运行一轮。                                                                       |
+| `chat.notice.tooLarge`                    | This prompt is over 64 KB. Shorten it, or save the text to a file in the workspace and point {agent} at it.                                                                                                                                                   | 这条提示超过了 64 KB。请缩短它，或把文本保存到工作区的文件中，再让 {agent} 去读取。                                                                                         |
+| `chat.notice.takenOver`                   | This chat is open in another tab now. A running turn keeps going there.                                                                                                                                                                                       | 这个对话现在在另一个标签页中打开。正在运行的一轮会在那里继续。                                                                                                              |
+| `chat.notice.notSignedIn`                 | {agent} isn’t signed in. Sign in in the Terminal tab — the chat uses the same sign-in.                                                                                                                                                                        | {agent} 尚未登录。请在“终端”标签页中登录——对话使用相同的登录。                                                                                                              |
+| `chat.openTerminal`                       | Open Terminal                                                                                                                                                                                                                                                 | 打开终端                                                                                                                                                                    |
+| `chat.subscription.title`                 | Chat isn’t available on a Claude subscription                                                                                                                                                                                                                 | Claude 订阅无法使用对话                                                                                                                                                     |
+| `chat.subscription.body`                  | The chat is not available for Claude Code signed in with a Claude subscription, because Anthropic’s terms do not allow a third-party interface to drive it on one. Sign in with an Anthropic API key or a cloud provider to chat, or keep using the terminal. | 使用 Claude 订阅登录的 Claude Code 无法使用对话，因为 Anthropic 的条款不允许第三方界面在订阅登录上驱动它。请使用 Anthropic API 密钥或云服务商登录后再对话，或继续使用终端。 |
+| `chat.noServer.title`                     | This agent can’t chat yet                                                                                                                                                                                                                                     | 这个智能体暂时无法对话                                                                                                                                                      |
+| `chat.noServer.body`                      | It was made from an older image, from before the chat existed. Moving an agent to the newer image — keeping its home and sign-in — is on its way. Until then, its terminal works, and a new agent has the chat.                                               | 它是用较旧的镜像创建的，那时还没有对话功能。把智能体迁移到新镜像（保留主目录和登录）的功能即将推出。在那之前，它的终端仍可使用，新建的智能体都带有对话。                    |
+| `chat.face.connecting`                    | Connecting to {name}’s chat…                                                                                                                                                                                                                                  | 正在连接 {name} 的对话…                                                                                                                                                     |
+| `chat.face.wakingHint`                    | The chat connects by itself when it’s up — nothing to click.                                                                                                                                                                                                  | 机器启动后对话会自动连接——无需点击。                                                                                                                                        |
+| `chat.strip.reconnecting`                 | Connection dropped — reconnecting. A running turn keeps going on the agent.                                                                                                                                                                                   | 连接中断——正在重新连接。正在运行的一轮会在智能体上继续。                                                                                                                    |
+| `chat.strip.lost`                         | Couldn’t reconnect. A running turn keeps going on the agent — reconnect to pick it up.                                                                                                                                                                        | 无法重新连接。正在运行的一轮会在智能体上继续——重新连接即可继续查看。                                                                                                        |
+| `chat.sessions.title`                     | Sessions on {name}                                                                                                                                                                                                                                            | {name} 上的会话                                                                                                                                                             |
+| `chat.sessions.empty`                     | No sessions yet. A chat you start here — or a session you started with {agent} in the terminal — shows up here.                                                                                                                                               | 还没有会话。你在这里开始的对话，或你在终端中用 {agent} 开始的会话，都会显示在这里。                                                                                         |
+| `chat.sessions.bound`                     | Showing the 50 most recent. Older sessions aren’t listed; {agent} still keeps them.                                                                                                                                                                           | 仅显示最近的 50 个会话。更早的会话未列出，{agent} 仍然保留着它们。                                                                                                          |
+| `chat.history.truncated`                  | Earlier turns aren’t shown — only the latest 256 KB of this session is loaded.                                                                                                                                                                                | 更早的轮次未显示——只加载了这个会话最近的 256 KB。                                                                                                                           |
+| `chat.history.unavailable`                | This session’s earlier turns can’t be shown here. {agent} still has them, so it carries on where you left off.                                                                                                                                                | 这个会话之前的轮次无法在这里显示。{agent} 仍然保留着它们，会从你上次停下的地方继续。                                                                                        |
+
+### Tokens this delta adds
+
+None. Every colour is an existing `--el-*` token (`--el-diff-added` / `--el-diff-removed`,
+`--el-tooltip-bg` / `--el-tooltip-text`, `--el-warning-surface` / `--el-warning-text`,
+`--el-input-disabled-*` and `--el-option-active-bg` are new to this area only). **Ink:** `--el-text`,
+`--el-text-strong`, `--el-text-secondary`, `--el-code-text`, `--el-accent-text` on the accent fill and
+`--el-danger-on-surface`. `--el-text-muted`, `--el-text-faint` and `--el-danger-text` are used nowhere,
+including the disabled tab, the placeholder and every `:hover` state.
+
+### GIVES / TAKES
+
+- **GIVES MOTIR-7017** (the Chat tab): the tab and its three states, `&tab=chat`, the chat bar, the
+  seven event kinds as drawn, the four tool kinds collapsed and expanded, the three turn-end markers,
+  the prompt box's five states and two refusals, the session list and resume, the four can't-chat
+  states, the four connection states, the narrow form, and every string above in en and zh.
+- **TAKES from MOTIR-7010** (the decision): every state above. **TAKES from MOTIR-6937** (the panel
+  design): the header, the list, the tab track, the connection word, the strips and the faces,
+  unchanged.
+- **Leaves to others:** the relay's chat channel and 4411 (MOTIR-7013), the `/v1/chat` server
+  (MOTIR-7012), the adapters (MOTIR-7014 and the other adapter cards), _Run in my agent_ (MOTIR-6864),
+  and the image update that clears 4411 (MOTIR-6862).
+
+---
+
 ## The agent's live run — the panel while a work item runs in the agent (delta, MOTIR-7022)
 
 **Story MOTIR-6864 · design MOTIR-7022.** Gates **MOTIR-7029**. Mock:

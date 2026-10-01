@@ -92,6 +92,10 @@ interface JoinedRow {
   repoIndexingRunId: string | null;
   repoIndexPausedReason: string | null;
   repoIndexPausedAt: Date | null;
+  /** MOTIR-7129 — the last index's size refusal, customer-facing (`GithubRepo`). */
+  repoIndexRefusedSizeBytes: bigint | null;
+  repoIndexRefusedCapBytes: bigint | null;
+  repoIndexRefusedAt: Date | null;
   repoCommitsBehind: number | null;
   repoCommitsBehindBaseSha: string | null;
   repoCommitsBehindHeadSha: string | null;
@@ -167,6 +171,9 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
             indexingRunId: r.repoIndexingRunId,
             indexPausedReason: r.repoIndexPausedReason,
             indexPausedAt: r.repoIndexPausedAt,
+            indexRefusedSizeBytes: r.repoIndexRefusedSizeBytes,
+            indexRefusedCapBytes: r.repoIndexRefusedCapBytes,
+            indexRefusedAt: r.repoIndexRefusedAt,
             commitsBehind: r.repoCommitsBehind,
             commitsBehindBaseSha: r.repoCommitsBehindBaseSha,
             commitsBehindHeadSha: r.repoCommitsBehindHeadSha,
@@ -279,6 +286,9 @@ export const projectRepoRepository = {
         gr."indexing_run_id"         AS "repoIndexingRunId",
         gr."index_paused_reason"     AS "repoIndexPausedReason",
         gr."index_paused_at"         AS "repoIndexPausedAt",
+        gr."index_refused_size_bytes" AS "repoIndexRefusedSizeBytes",
+        gr."index_refused_cap_bytes" AS "repoIndexRefusedCapBytes",
+        gr."index_refused_at"        AS "repoIndexRefusedAt",
         gr."commits_behind"          AS "repoCommitsBehind",
         gr."commits_behind_base_sha" AS "repoCommitsBehindBaseSha",
         gr."commits_behind_head_sha" AS "repoCommitsBehindHeadSha"

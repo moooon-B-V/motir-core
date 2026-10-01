@@ -1,0 +1,4 @@
+# goose 1.52.0 (stable) · `goose run -q --output-format stream-json -i -` · SIGINT mid-reply, then exit 1 · see README.md
+{"type":"message","message":{"id":"chatcmpl-7e44b0","role":"assistant","created":1790762420,"content":[{"type":"text","text":"Let me think about "}],"metadata":{"userVisible":true,"agentVisible":true}}}
+{"type":"message","message":{"id":"chatcmpl-7e44b0","role":"assistant","created":1790762420,"content":[{"type":"text","text":"that for a "}],"metadata":{"userVisible":true,"agentVisible":true}}}
+{"type":"error","error":"Headless run interrupted"}

@@ -138,7 +138,7 @@ async function startRelay(
 ): Promise<void> {
   relay = createTerminalRelay({
     allowedOrigin: ORIGIN,
-    authorize: (ticket) => relayService.authorizeConnection(ticket),
+    authorize: (ticket, channel) => relayService.authorizeConnection(ticket, channel),
     openConnection: (input) => relayService.openConnection({ ...input, relayMachineId: RELAY_ID }),
     closeConnection: (input) => relayService.closeConnection(input),
     touchActivity: async (instanceId) => {
@@ -317,6 +317,47 @@ describe('refusals before any byte flows (Q3)', () => {
     ]);
   });
 
+  it('a chat ticket cannot open the terminal: 4401 on /v1/terminal, nothing dialled (MOTIR-7013)', async () => {
+    const id = await runningAgent();
+    const { ticket } = await agentTerminalService.issueTicket(
+      fx.projectIdentifier,
+      id,
+      fx.ctx,
+      'chat',
+    );
+    const b = browser();
+    await b.opened;
+    b.ws.send(JSON.stringify({ t: 'auth', ticket }));
+    expect(await b.closed).toBe(4401);
+    expect(fake.upgrades).toHaveLength(0);
+    expect(await connections()).toEqual([]);
+  });
+
+  it('a 404 from the terminal server is NOT the chat’s 4411: the terminal channel still closes 4502 (MOTIR-7013)', async () => {
+    const id = await runningAgent();
+    const notFound = http.createServer((_req, res) => res.writeHead(404).end());
+    notFound.on('upgrade', (_req, socket) => {
+      socket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+      socket.destroy();
+    });
+    await new Promise<void>((resolve) => notFound.listen(0, '127.0.0.1', resolve));
+    fleet.setTerminalAddress(`ws://127.0.0.1:${(notFound.address() as AddressInfo).port}`);
+    const b = browser();
+    await b.opened;
+    b.ws.send(JSON.stringify({ t: 'auth', ticket: await ticketFor(id) }));
+    expect(await b.closed).toBe(4502);
+    expect(reported.map((e) => e.message)).toContain(
+      'relay: the terminal server refused the upgrade (HTTP 404)',
+    );
+    await until(async () => (await connections())[0]?.closedAt != null);
+    expect((await connections())[0]).toMatchObject({
+      channel: 'terminal',
+      closeCode: 4502,
+      closeReason: 'unreachable',
+    });
+    await new Promise<void>((resolve) => notFound.close(() => resolve()));
+  });
+
   it('closes 4502 when the terminal server refuses the relay token, reporting only the status', async () => {
     const id = await runningAgent();
     const ticket = await ticketFor(id);
@@ -330,12 +371,18 @@ describe('refusals before any byte flows (Q3)', () => {
     );
   });
 
-  it('answers 404 off /v1/terminal and 200 on /healthz', async () => {
-    const off = new WebSocket(relayUrl.replace('/v1/terminal', '/v1/chat'), { origin: ORIGIN });
-    const status = await new Promise<number>((resolve) =>
-      off.on('unexpected-response', (_req, res) => resolve(res.statusCode ?? 0)),
-    );
-    expect(status).toBe(404);
+  it('answers 404 off /v1/terminal and /v1/chat, and 200 on /healthz', async () => {
+    for (const path of ['/v1/other', '/v1/terminal/x', '/v1/chatty', '/']) {
+      const off = new WebSocket(relayUrl.replace('/v1/terminal', path), { origin: ORIGIN });
+      const status = await new Promise<number>((resolve) =>
+        off.on('unexpected-response', (_req, res) => resolve(res.statusCode ?? 0)),
+      );
+      expect(status).toBe(404);
+    }
+    // `/v1/chat` is the chat channel's (MOTIR-7013): upgraded, then held to the auth rule.
+    const chat = browser(ORIGIN, relayUrl.replace('/v1/terminal', '/v1/chat'));
+    await chat.opened;
+    expect(await chat.closed).toBe(4401);
     const health = await fetchLocal(
       relayUrl.replace('ws://', 'http://').replace('/v1/terminal', '/healthz'),
     );
@@ -426,7 +473,12 @@ describe('a live terminal (Q3, Q4, Q5)', () => {
     const b = await openTerminal(id);
     await until(async () => (await connections()).length === 1);
     const [open] = await connections();
-    expect(open).toMatchObject({ instanceId: id, userId: fx.ownerId, closedAt: null });
+    expect(open).toMatchObject({
+      instanceId: id,
+      userId: fx.ownerId,
+      channel: 'terminal',
+      closedAt: null,
+    });
     clock.advance(42_000);
     b.ws.close(1000);
     await b.closed;

@@ -1,0 +1,4 @@
+{"fixture":"resumed","cli":"kimi-code 2.1.1","source":"constructed from docs/decisions/agent-chat.md Q1 capture (resume keeps the same session id)","exit":0,"session":"session_542c66ca-c9c4-4267-ba4b-10bfab95ff91"}
+{"role":"meta","type":"system.version","version":"2.1.1"}
+{"role":"assistant","content":"Earlier I fixed the typo in README.md and listed a.txt and b.md."}
+{"role":"meta","type":"session.resume_hint","session_id":"session_542c66ca-c9c4-4267-ba4b-10bfab95ff91"}

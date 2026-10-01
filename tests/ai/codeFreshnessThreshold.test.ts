@@ -36,6 +36,8 @@ function repo(commitsBehind: number | null) {
     // dead refresh, so it is false throughout — the two are independent facts,
     // and a repository can be badly behind with a perfectly healthy pipeline.
     refreshFailing: false,
+    // MOTIR-7132's field — no size refusal; the threshold is independent of it.
+    graphTooLarge: null,
   };
 }
 

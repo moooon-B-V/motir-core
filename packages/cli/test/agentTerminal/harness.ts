@@ -1,4 +1,23 @@
 import { EventEmitter } from 'node:events';
+import type {
+  ChatAdapter,
+  ChatContext,
+  ChatSupport,
+  TranscriptMapper,
+  TurnCommand,
+} from '../../src/agentTerminal/chat/adapter.js';
+import type {
+  ChatErrorCode,
+  ChatSessionSummary,
+  TranscriptEvent,
+} from '../../src/agentTerminal/chat/protocol.js';
+import type {
+  ChatProcess,
+  ChatProcessExit,
+  ChatSignal,
+  ChatSpawnOptions,
+  SpawnChat,
+} from '../../src/agentTerminal/chat/turns.js';
 import type { PtyProcess, PtySpawnOptions, SpawnPty } from '../../src/agentTerminal/pty.js';
 import {
   newNonce,
@@ -80,26 +99,40 @@ export interface Harness {
   terminal: TerminalServer;
   port: number;
   ptys: FakePty[];
+  /** Chat turn processes the server spawned (a fake spawn unless a test passes one). */
+  chatProcs: FakeChatProcess[];
   logs: string[];
   token(overrides?: Partial<RelayTokenPayload>): string;
   connect(
+    overrides?: Partial<RelayTokenPayload> | { authorization: string | null },
+  ): Promise<Client>;
+  /** The same, at `/v1/chat` (MOTIR-7012). */
+  connectChat(
     overrides?: Partial<RelayTokenPayload> | { authorization: string | null },
   ): Promise<Client>;
 }
 
 export async function startHarness(options: Partial<TerminalServerOptions> = {}): Promise<Harness> {
   const { spawn, ptys } = fakeSpawner();
+  const chat = fakeChatSpawner();
   const logs: string[] = [];
   const terminal = createTerminalServer({
     instanceKey: KEY,
     instanceId: INSTANCE,
     machineId: MACHINE,
     spawnPty: spawn,
+    spawnChat: chat.spawn,
     env: { HOME: '/nonexistent-home', MOTIR_SANDBOX_AGENT: 'kimi' },
     log: (line) => logs.push(line),
     ...options,
   });
   const port = await terminal.listen(0, '127.0.0.1');
+  const authorizationFor = (
+    overrides: Partial<RelayTokenPayload> | { authorization: string | null },
+  ): string | null =>
+    'authorization' in overrides
+      ? overrides.authorization
+      : relayAuthorizationHeader(token(overrides as Partial<RelayTokenPayload>));
   const token = (overrides: Partial<RelayTokenPayload> = {}): string =>
     signRelayToken(KEY, {
       instanceId: INSTANCE,
@@ -112,15 +145,11 @@ export async function startHarness(options: Partial<TerminalServerOptions> = {})
     terminal,
     port,
     ptys,
+    chatProcs: chat.procs,
     logs,
     token,
-    connect: (overrides = {}) => {
-      const authorization =
-        'authorization' in overrides
-          ? overrides.authorization
-          : relayAuthorizationHeader(token(overrides as Partial<RelayTokenPayload>));
-      return Client.connect(port, authorization);
-    },
+    connect: (overrides = {}) => Client.connect(port, authorizationFor(overrides)),
+    connectChat: (overrides = {}) => Client.connect(port, authorizationFor(overrides), '/v1/chat'),
   };
 }
 
@@ -155,10 +184,14 @@ export class Client {
     });
   }
 
-  static connect(port: number, authorization: string | null): Promise<Client> {
+  static connect(
+    port: number,
+    authorization: string | null,
+    path = '/v1/terminal',
+  ): Promise<Client> {
     const headers: Record<string, string> = authorization ? { Authorization: authorization } : {};
     // Node's WebSocket accepts `headers` in its init dictionary (undici).
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/terminal`, {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}${path}`, {
       headers,
     } as unknown as string[]);
     const client = new Client(ws);
@@ -213,5 +246,168 @@ export class Client {
 
   close(): void {
     this.ws.close();
+  }
+}
+
+// ── The chat (MOTIR-7012) ───────────────────────────────────────────────────
+// A FAKE turn process behind the `SpawnChat` seam, and a FAKE adapter whose
+// "CLI" speaks a tiny JSON-lines dialect, so the runner's rules — order, Stop,
+// the per-agent limit, the ring, takeover, the gates — are proved without any
+// vendor binary. The real adapters are their own cards.
+
+export class FakeChatProcess implements ChatProcess {
+  readonly signals: ChatSignal[] = [];
+  exited = false;
+  private readonly events = new EventEmitter();
+
+  constructor(
+    readonly options: ChatSpawnOptions,
+    readonly pid: number,
+    /** Exit by itself on SIGKILL (as a real process must). SIGINT is up to the test. */
+    private readonly exitOnKill = true,
+  ) {}
+
+  onStdout(listener: (chunk: Buffer) => void): void {
+    this.events.on('stdout', listener);
+  }
+  onExit(listener: (exit: ChatProcessExit) => void): void {
+    this.events.on('exit', listener);
+  }
+  signal(signal: ChatSignal): void {
+    this.signals.push(signal);
+    if (signal === 'SIGKILL' && this.exitOnKill) this.exit(null, 'SIGKILL');
+  }
+  /** One stdout line from the "CLI". */
+  line(value: Record<string, unknown> | string): void {
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    this.events.emit('stdout', Buffer.from(`${text}\n`));
+  }
+  raw(text: string | Buffer): void {
+    this.events.emit('stdout', Buffer.from(text));
+  }
+  exit(code: number | null, signal: string | null = null): void {
+    if (this.exited) return;
+    this.exited = true;
+    this.events.emit('exit', { code, signal });
+  }
+}
+
+export function fakeChatSpawner(): { spawn: SpawnChat; procs: FakeChatProcess[] } {
+  const procs: FakeChatProcess[] = [];
+  const spawn: SpawnChat = (options) => {
+    const proc = new FakeChatProcess(options, 2000 + procs.length);
+    procs.push(proc);
+    return proc;
+  };
+  return { spawn, procs };
+}
+
+/**
+ * The fake CLI's dialect, one JSON object per line:
+ *   {"type":"session","id"}           reveals the session id
+ *   {"type":"text","id","text"}       assistant text
+ *   {"type":"tool","id","command","output"}   a command and its output
+ *   {"type":"end"}                    the end-of-turn marker
+ *   {"type":"no_key"}                 Q2's backstop: asks for a kill
+ *   {"type":<anything else>}          an unmapped event → `other`
+ * A line that is not JSON is dropped.
+ */
+export class FakeChatAdapter implements ChatAdapter {
+  answer: ChatSupport = { supported: true };
+  sessions: ChatSessionSummary[] = [];
+  history: { events: TranscriptEvent[]; truncated: boolean } | { unavailable: true } = {
+    events: [],
+    truncated: false,
+  };
+  command: Partial<TurnCommand> = {};
+  readonly commands: { prompt: string; sessionId: string | null }[] = [];
+  readonly listed: number[] = [];
+  readonly histories: { sessionId: string; budgetBytes: number }[] = [];
+  /** Resolve `readHistory` only when the test says so. */
+  historyGate: Promise<void> | null = null;
+
+  constructor(readonly profile: string) {}
+
+  async support(): Promise<ChatSupport> {
+    return this.answer;
+  }
+
+  turnCommand(input: { prompt: string; sessionId: string | null }): TurnCommand {
+    this.commands.push({ prompt: input.prompt, sessionId: input.sessionId });
+    return {
+      file: 'fake-agent',
+      args: input.sessionId ? ['--resume', input.sessionId] : [],
+      stdin: input.prompt,
+      ...this.command,
+    };
+  }
+
+  createMapper(): TranscriptMapper {
+    let session: string | null = null;
+    let ended = false;
+    let kill: ChatErrorCode | null = null;
+    return {
+      onLine: (line) => {
+        let value: Record<string, unknown>;
+        try {
+          value = JSON.parse(line) as Record<string, unknown>;
+        } catch {
+          return [];
+        }
+        switch (value['type']) {
+          case 'session':
+            session = value['id'] as string;
+            return [];
+          case 'text':
+            return [{ k: 'text', id: value['id'] as string, delta: value['text'] as string }];
+          case 'tool':
+            return [
+              {
+                k: 'tool_call',
+                id: value['id'] as string,
+                kind: 'command',
+                name: 'Bash',
+                title: value['command'] as string,
+                command: value['command'] as string,
+              },
+              {
+                k: 'tool_result',
+                id: value['id'] as string,
+                ok: true,
+                output: value['output'] as string,
+                exitCode: 0,
+                truncated: false,
+              },
+            ];
+          case 'end':
+            ended = true;
+            // An adapter never writes turn_end; the runner drops one if it tries.
+            return [{ k: 'turn_end', reason: 'completed' }];
+          case 'no_key':
+            kill = 'subscription_signin';
+            return [];
+          default:
+            return [{ k: 'other', name: String(value['type']) }];
+        }
+      },
+      sessionId: () => session,
+      sawEnd: () => ended,
+      killCode: () => kill,
+    };
+  }
+
+  async listSessions(_ctx: ChatContext, limit: number): Promise<ChatSessionSummary[]> {
+    this.listed.push(limit);
+    return this.sessions;
+  }
+
+  async readHistory(
+    _ctx: ChatContext,
+    sessionId: string,
+    budgetBytes: number,
+  ): Promise<{ events: TranscriptEvent[]; truncated: boolean } | { unavailable: true }> {
+    this.histories.push({ sessionId, budgetBytes });
+    if (this.historyGate) await this.historyGate;
+    return this.history;
   }
 }

@@ -1,0 +1,2 @@
+{"timestamp":"2026-09-30T09:00:00.100Z","type":"session_meta","payload":{"id":"01a0f1ec-5b2a-7f60-9d31-4a8e0c7b2f16","timestamp":"2026-09-30T09:00:00.090Z","cwd":"/home/agent/other-directory","originator":"codex_exec","cli_version":"0.159.2","source":"exec","model_provider":"openai"}}
+{"timestamp":"2026-09-30T09:00:00.110Z","type":"event_msg","payload":{"type":"user_message","message":"A session begun in another directory","images":[]}}

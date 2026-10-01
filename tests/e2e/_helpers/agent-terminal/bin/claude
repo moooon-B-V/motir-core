@@ -14,8 +14,13 @@
 # — a progress line every few seconds — until the file named by
 # `MOTIR_E2E_RELEASE` exists, so the spec decides when the work is done without a
 # clock. Then it says so and exits 0.
+#
+# Any OTHER arguments make it the CHAT's binary (Story MOTIR-6863 · MOTIR-7019):
+# the headless turn (`-p --output-format stream-json …`) and `auth status --json`
+# that docs/decisions/agent-chat.md Q2/Q3 record are answered by
+# ../vendor-stub.mjs, which refuses (exit 2) anything else.
 set -u
-if [ "${1:-}" = "-p" ]; then
+if [ "${1:-}" = "-p" ] && [ "${2:-}" != "--output-format" ]; then
   echo "Claude Code (stub) · ${2:-no prompt}"
   echo "Reading the work item and the repository…"
   echo "Editing src/invoices/export.ts — invoices export as CSV"
@@ -28,6 +33,9 @@ if [ "${1:-}" = "-p" ]; then
   done
   echo "Tests pass. Committed the change to the run's branch."
   exit 0
+fi
+if [ "$#" -gt 0 ]; then
+  exec node "$(dirname "$0")/../vendor-stub.mjs" claude "$@"
 fi
 echo "Claude Code (stub for the Motir acceptance lane)"
 echo "Type /login to sign in, /exit to leave."

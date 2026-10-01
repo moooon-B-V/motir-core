@@ -611,6 +611,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'github.spec.ts': 8.3,
   'general-attachment.spec.ts': 8.0,
   'gitlab.spec.ts': 6.1,
+  // MOTIR-7134 — /code for a repository refused for size. Measured LOCALLY (6 tests,
+  // 20.4 s against a production build), not from a green CI run — there is none yet.
+  // Recorded at ~1.5x per the calibration note. Re-measure from the first green
+  // `playwright-report-bulk-*` artifact with it.
+  'graph-too-large.spec.ts': 30.0,
   'hero-ai-control-styles.spec.ts': 12.0,
   // MOTIR-5487. Promoted from the acceptance lane (it was
   // `acceptance-how-to-test.spec.ts`). NOT measured in this lane: estimated from the

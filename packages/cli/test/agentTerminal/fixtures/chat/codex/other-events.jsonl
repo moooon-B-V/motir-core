@@ -1,0 +1,15 @@
+# codex-cli 0.159.2 · `codex exec --json -c sandbox_mode="workspace-write" -` · events the mapping names "other", a non-fatal error, an MCP call and a web search
+{"type":"thread.started","thread_id":"01a0f1ea-0d3f-7e19-9b6a-7c4d2e1f8a05"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"todo_list","items":[{"text":"Look up the docs","completed":false}]}}
+{"type":"item.updated","item":{"id":"item_0","type":"todo_list","items":[{"text":"Look up the docs","completed":true}]}}
+{"type":"item.completed","item":{"id":"item_0","type":"todo_list","items":[{"text":"Look up the docs","completed":true}]}}
+{"type":"item.started","item":{"id":"item_1","type":"web_search","query":"codex exec json events"}}
+{"type":"item.completed","item":{"id":"item_1","type":"web_search","query":"codex exec json events"}}
+{"type":"item.started","item":{"id":"item_2","type":"mcp_tool_call","server":"motir","tool":"get_work_item","arguments":{"key":"MOTIR-1"},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_2","type":"mcp_tool_call","server":"motir","tool":"get_work_item","arguments":{"key":"MOTIR-1"},"result":{"content":[{"type":"text","text":"MOTIR-1 · done"}],"structured_content":null},"error":null,"status":"completed"}}
+{"type":"error","message":"Reconnecting... 1/5"}
+{"type":"item.completed","item":{"id":"item_3","type":"error","message":"model rerouted"}}
+{"type":"session.configured","model":"gpt-5-codex"}
+{"type":"item.completed","item":{"id":"item_4","type":"agent_message","text":"MOTIR-1 is done."}}
+{"type":"turn.completed","usage":{"input_tokens":120,"cached_input_tokens":0,"output_tokens":9}}

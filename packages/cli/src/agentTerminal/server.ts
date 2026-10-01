@@ -4,6 +4,13 @@ import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { HOSTED_STATE_ENV, defaultCliInvocation } from '../hostedGit.js';
+import { resolveChatAdapter, type ChatAdapter, type ChatContext } from './chat/adapter.js';
+import {
+  createChatHub,
+  spawnChatProcess,
+  type ChatConnectionHandle,
+  type SpawnChat,
+} from './chat/turns.js';
 import {
   CONTROL_SOCKET,
   listenControl,
@@ -34,7 +41,9 @@ import {
 } from './websocket.js';
 
 // The in-agent terminal server (MOTIR-6938 · `docs/decisions/agent-terminal.md`
-// Q3, Q4, Q5, Q7, Q8).
+// Q3, Q4, Q5, Q7, Q8), and the chat beside it at `/v1/chat` (MOTIR-7012 ·
+// `docs/decisions/agent-chat.md` Q4, Q6, Q10, Q11) — the same upgrade, the
+// same relay-token check, then a second handler (`chat/turns.ts`).
 //
 // ⚠️ WHAT IS NEVER LOGGED. Fly ships this process's stdout to logs, so the
 // only lines written are LIFECYCLE lines carrying ids: a session opened,
@@ -117,6 +126,12 @@ export interface TerminalServerOptions {
   /** Milliseconds since the epoch. */
   now?: () => number;
   stat?: StatFn;
+  /** The chat turn process spawn; the real one by default. */
+  spawnChat?: SpawnChat;
+  /** The chat adapter registry (`chat/adapter.ts` `CHAT_ADAPTERS` by default). */
+  chatAdapters?: readonly ChatAdapter[];
+  /** Stop's SIGINT → SIGKILL grace for a chat turn. */
+  chatStopGraceMs?: number;
   maxSessions?: number;
   replayBytes?: number;
   signInIntervalMs?: number;
@@ -177,6 +192,8 @@ export interface TerminalServer {
   close(): Promise<void>;
   /** How many live sessions the server holds, the run session included. */
   sessionCount(): number;
+  /** The running chat turn's number, or null (one per agent). */
+  chatTurn(): number | null;
 }
 
 /** The shell's environment: the server's own, minus the key, plus the terminal type. */
@@ -188,6 +205,16 @@ export function shellEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   }
   out['TERM'] = 'xterm-256color';
   out['COLORTERM'] = 'truecolor';
+  return out;
+}
+
+/** A chat turn's environment: the server's own, minus the key, and nothing added (Q11). */
+export function chatEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(env)) {
+    if (name === TERMINAL_KEY_ENV || value === undefined) continue;
+    out[name] = value;
+  }
   return out;
 }
 
@@ -223,6 +250,25 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
   let lastSignIn: SignInStatus | null = null;
   let closing = false;
 
+  // ── Chat (MOTIR-7012) ─────────────────────────────────────────────────────
+  const profile = options.env['MOTIR_SANDBOX_AGENT']?.trim() || null;
+  const chatContext: ChatContext = {
+    home: options.env['HOME'] || '/',
+    cwd: shellCwd(options.env),
+    env: chatEnv(options.env),
+  };
+  const chat = createChatHub({
+    profile,
+    adapter: resolveChatAdapter(profile, options.chatAdapters),
+    ctx: chatContext,
+    spawn: options.spawnChat ?? spawnChatProcess,
+    readSignIn: () => readSignIn(),
+    log,
+    now,
+    ...(options.chatStopGraceMs !== undefined ? { stopGraceMs: options.chatStopGraceMs } : {}),
+  });
+  const chatSockets = new Set<WebSocketConnection>();
+
   const send = (attachment: Attachment, frame: ServerFrame): void => {
     if (attachment.ws.isOpen) attachment.ws.send(encodeServerFrame(frame));
   };
@@ -252,10 +298,11 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
     if (closing || sameState(lastSignIn, status)) return;
     lastSignIn = status;
     pushSignIn(status, attachedConnections());
+    chat.pushSignIn(status);
   };
 
   const syncSignInTimer = (): void => {
-    const wanted = attachedCount() > 0 && !closing;
+    const wanted = (attachedCount() > 0 || chatSockets.size > 0) && !closing;
     if (wanted && signInTimer === null) {
       signInTimer = setInterval(() => void pollSignIn(), signInIntervalMs);
       signInTimer.unref();
@@ -598,10 +645,8 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
   const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {
     socket.on('error', () => socket.destroy());
     const path = (req.url ?? '/').split('?')[0];
-    if (path !== TERMINAL_PATH) {
-      // `/v1/chat` is reserved for MOTIR-6863 and not served yet.
+    if (path !== TERMINAL_PATH && path !== CHAT_PATH) {
       refuseUpgrade(socket, 404, 'Not Found');
-      if (path === CHAT_PATH) log('agent-terminal: upgrade refused (chat not served)');
       return;
     }
     if (!isWebSocketUpgrade(req)) {
@@ -625,6 +670,10 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
       return;
     }
     const ws = acceptWebSocket(req, socket, head);
+    if (path === CHAT_PATH) {
+      acceptChat(ws);
+      return;
+    }
     const attachment: Attachment = { ws, session: null, tokenSession: verdict.payload.sessionId };
     connections.add(attachment);
     log('agent-terminal: connection opened');
@@ -646,9 +695,24 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
     });
   };
 
+  /** A chat socket, past the same token check as the terminal's. */
+  const acceptChat = (ws: WebSocketConnection): void => {
+    chatSockets.add(ws);
+    syncSignInTimer();
+    const handle: ChatConnectionHandle = chat.accept(ws);
+    ws.on('message', (data, isBinary) => handle.message(data, isBinary));
+    ws.on('close', (code) => {
+      chatSockets.delete(ws);
+      handle.closed();
+      syncSignInTimer();
+      log(`agent-chat: connection closed (${code})`);
+    });
+  };
+
   const server = createServer((req, res) => {
-    // Plain HTTP is not served. `426` on the terminal path says why.
-    res.statusCode = req.url?.startsWith(TERMINAL_PATH) ? 426 : 404;
+    // Plain HTTP is not served. `426` on a WebSocket path says why.
+    const path = (req.url ?? '/').split('?')[0];
+    res.statusCode = path === TERMINAL_PATH || path === CHAT_PATH ? 426 : 404;
     res.end();
   });
   server.on('upgrade', onUpgrade);
@@ -691,8 +755,13 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
       }
       for (const attachment of connections) attachment.ws.terminate();
       connections.clear();
+      // The chat shares the shutdown: its running turn is killed, its sockets dropped.
+      chat.close();
+      for (const ws of chatSockets) ws.terminate();
+      chatSockets.clear();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     },
     sessionCount: () => sessions.size,
+    chatTurn: () => chat.runningTurn(),
   };
 }

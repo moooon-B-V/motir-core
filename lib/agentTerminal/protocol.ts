@@ -5,6 +5,69 @@
 /** Q3: the WebSocket path, on the relay and on the agent's terminal server. */
 export const TERMINAL_PATH = '/v1/terminal';
 
+/**
+ * `agent-chat.md` Q4 (MOTIR-7013): the chat's WebSocket path, on the relay and on
+ * the agent's own server (the same process and port as the terminal).
+ */
+export const CHAT_PATH = '/v1/chat';
+
+/**
+ * `agent-chat.md` Q4: which of the agent's two sockets a ticket opens. The
+ * ticket and the connection row record it; the relay redeems a ticket only on
+ * its own channel's path, so a terminal ticket can never open a chat, nor the
+ * reverse.
+ */
+export const AGENT_TERMINAL_CHANNELS = ['terminal', 'chat'] as const;
+export type AgentTerminalChannel = (typeof AGENT_TERMINAL_CHANNELS)[number];
+
+/** Is this a channel a ticket may name? */
+export function isAgentTerminalChannel(value: unknown): value is AgentTerminalChannel {
+  return (
+    typeof value === 'string' && (AGENT_TERMINAL_CHANNELS as readonly string[]).includes(value)
+  );
+}
+
+/** Each channel's WebSocket path — the same on the relay and on the machine. */
+export const CHANNEL_PATH: Readonly<Record<AgentTerminalChannel, string>> = {
+  terminal: TERMINAL_PATH,
+  chat: CHAT_PATH,
+};
+
+/** The channel a relay path serves, or null for a path the relay does not serve. */
+export function channelForPath(path: string): AgentTerminalChannel | null {
+  if (path === TERMINAL_PATH) return 'terminal';
+  if (path === CHAT_PATH) return 'chat';
+  return null;
+}
+
+/**
+ * A terminal address (`…/v1/terminal`, as the orchestrator and `MOTIR_RELAY_URL`
+ * spell it) moved to `channel`'s path. The terminal's is returned unchanged; for
+ * the chat, a trailing `/v1/terminal` becomes `/v1/chat` — any host and prefix
+ * before it are kept — and an address without that suffix gets `/v1/chat`
+ * appended.
+ */
+export function addressForChannel(terminalAddress: string, channel: AgentTerminalChannel): string {
+  if (channel === 'terminal') return terminalAddress;
+  const base = terminalAddress.endsWith(TERMINAL_PATH)
+    ? terminalAddress.slice(0, -TERMINAL_PATH.length)
+    : terminalAddress.replace(/\/+$/, '');
+  return `${base}${CHAT_PATH}`;
+}
+
+/**
+ * `agent-chat.md` Q9: THE HEARTBEAT BYTES. On the chat channel the relay decodes
+ * no frame after `auth`; it tells a heartbeat by comparing a frame's bytes to
+ * these constants, which the panel and the agent's server send exactly. Every
+ * other chat frame, in either direction, counts as activity.
+ */
+/** A visible tab's heartbeat — counts. */
+export const CHAT_PING_ACTIVE = '{"t":"ping","active":true}';
+/** A hidden tab's heartbeat — does NOT count. */
+export const CHAT_PING_INACTIVE = '{"t":"ping","active":false}';
+/** The server's answer to either ping — does NOT count. */
+export const CHAT_PONG = '{"t":"pong"}';
+
 /** Q1/Q3: where the browser dials when `MOTIR_RELAY_URL` is unset. */
 export const DEFAULT_RELAY_URL = 'wss://relay.motir.co/v1/terminal';
 
@@ -47,6 +110,11 @@ export const TERMINAL_CLOSE = {
   notRunning: 4409,
   /** The agent's image has no terminal server. */
   noTerminalServer: 4410,
+  /**
+   * The agent's image has no chat server (`agent-chat.md` Q8, MOTIR-7013): its
+   * server answered the chat dial with HTTP 404. The chat channel only.
+   */
+  noChatServer: 4411,
   /** The machine did not answer. */
   unreachable: 4502,
 } as const;
@@ -62,6 +130,8 @@ export type AgentTerminalCloseReason =
   | 'browser_closed'
   /** The agent's terminal server closed its socket (a shell exit, a refusal, a restart). */
   | 'terminal_closed'
+  /** The chat dial got HTTP 404: the agent's image predates the chat server (4411). */
+  | 'no_chat_server'
   /** The machine could not be reached, or dropped the connection. */
   | 'unreachable'
   /** A peer stopped answering protocol pings. */

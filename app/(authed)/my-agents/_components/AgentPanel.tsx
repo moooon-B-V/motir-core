@@ -5,12 +5,14 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
   ArrowLeft,
+  Ban,
   CircleAlert,
   CircleArrowUp,
   CircleCheck,
   CircleHelp,
   Eye,
   LoaderCircle,
+  MessageSquare,
   Moon,
   Package,
   Power,
@@ -21,11 +23,24 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Segmented } from '@/components/ui/Segmented';
+import { chatProfile } from '@/lib/agentInstances/profiles';
 import type { AgentInstanceListItemDto } from '@/lib/dto/agentInstances';
+import { shallowPush } from '@/lib/navigation/shallowUrl';
+import { ChatFace, useChatArea } from './AgentChat';
 import { AgentPanelHeader, ICON_BUTTON } from './AgentPanelHeader';
 import { itemHref } from './AgentRunLine';
 import { AgentTerminal } from './AgentTerminal';
 import { RefusalBox, type AgentRefusal } from './agentRefusal';
+import {
+  DOT,
+  FACE_ICON,
+  STRIP_ICON,
+  Strip,
+  type Dot,
+  type FaceComponent,
+  type TabArea,
+} from './panelParts';
+import { useAgentChat } from './useAgentChat';
 import { useAgentTerminal, type TerminalConn, type TerminalSink } from './useAgentTerminal';
 import { useRunSessionWatch } from './useRunSessionWatch';
 
@@ -42,6 +57,13 @@ import { useRunSessionWatch } from './useRunSessionWatch';
 //   panel 6  the refusals in words — and never another person's agent
 //   panel 7  the narrow width (the room hides the list; the header's crumb returns)
 //
+// THE CHAT TAB (Story MOTIR-6863 · MOTIR-7017) sits beside Terminal in the track,
+// built to the approved delta `design/my-agents/my-agents--chat.mock.html`
+// (MOTIR-7011): the open tab is kept in the address as `&tab=chat` (written with
+// `shallowPush`), an agent still opens on Terminal, aider's tab is disabled from
+// `CHAT_PROFILES` without connecting, and the chat's own socket, faces and strips
+// live in `AgentChat.tsx` / `useAgentChat.ts`.
+//
 // THE AGENT'S LIVE RUN (Story MOTIR-6864 · MOTIR-7029, `my-agents--run.mock.html`):
 //   panel 1  the run line (the header), and the run's session offered beside the
 //            developer's own shell in a `Segmented` at the head of the Terminal
@@ -54,6 +76,7 @@ import { useRunSessionWatch } from './useRunSessionWatch';
 //            last screen, dimmed, under the ended strip, and the list re-reads) or
 //            the record closes (the next read turns the run line to "Last run")
 //   panel 4  the narrow width: the switch fills the width and drops its hint
+// The run's switch and strip belong to the Terminal tab: the Chat tab never shows them.
 //
 // ⚠️ THE SERVER DECIDES WHO MAY OPEN AN AGENT. The panel is handed the row from
 // the reader's own list (the server's answer), or null when the address names an
@@ -82,6 +105,7 @@ export function AgentPanel({
   projectName,
   agent,
   actions,
+  initialTab = 'terminal',
   refusal = null,
 }: {
   projectKey: string;
@@ -89,6 +113,8 @@ export function AgentPanel({
   /** The open agent, from the reader's own list; null when that list does not hold it. */
   agent: AgentInstanceListItemDto | null;
   actions: AgentPanelActions;
+  /** The tab the address names (`&tab=chat`) for the agent it opened; Terminal otherwise. */
+  initialTab?: AgentPanelTab;
   /** A Hibernate / Delete refused for THIS agent (MOTIR-7029 panel 2), in the page's box. */
   refusal?: AgentRefusal | null;
 }) {
@@ -97,10 +123,12 @@ export function AgentPanel({
   useFillViewport(panel);
 
   const onKeyDown = (event: React.KeyboardEvent) => {
-    // Esc closes from anywhere in the panel EXCEPT the terminal: there it is the shell's.
-    if (event.key !== 'Escape') return;
+    // Esc closes from anywhere in the panel EXCEPT the terminal (there it is the
+    // shell's) and the chat's prompt box and popover (there it is theirs).
+    if (event.key !== 'Escape' || event.defaultPrevented) return;
     const target = event.target as HTMLElement | null;
     if (target?.closest('[data-testid="agent-terminal"]')) return;
+    if (target?.closest('[data-testid="chat-composer"]')) return;
     actions.onClose();
   };
 
@@ -121,6 +149,7 @@ export function AgentPanel({
           projectName={projectName}
           agent={agent}
           actions={actions}
+          initialTab={initialTab}
           refusal={refusal}
         />
       ) : (
@@ -185,26 +214,44 @@ function NotAvailable({ onClose }: { onClose: () => void }) {
   );
 }
 
-type Dot = 'idle' | 'busy' | 'live' | 'lost' | 'ended';
-const DOT: Record<Dot, string> = {
-  idle: 'bg-(--el-status-todo)',
-  busy: 'bg-(--el-status-in-progress)',
-  live: 'bg-(--el-status-done)',
-  lost: 'bg-(--el-danger)',
-  ended: 'bg-(--el-status-cancelled)',
-};
+/** The panel's two tabs (the chat delta, MOTIR-7011 panel 1). */
+export type AgentPanelTab = 'terminal' | 'chat';
+
+/** The query parameter that keeps the open tab in the address (`&tab=chat`). */
+export const TAB_PARAM = 'tab';
+
+function tabHref(tab: AgentPanelTab): string {
+  const url = new URL(window.location.href);
+  if (tab === 'chat') url.searchParams.set(TAB_PARAM, 'chat');
+  else url.searchParams.delete(TAB_PARAM);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function tabFromAddress(): AgentPanelTab {
+  return new URLSearchParams(window.location.search).get(TAB_PARAM) === 'chat'
+    ? 'chat'
+    : 'terminal';
+}
+
+/** The shipped tab's box, shared by both tabs in every state. */
+const TAB_BOX =
+  'relative inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[0.8125rem] font-medium';
+const TAB_ON = `${TAB_BOX} bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle)`;
+const TAB_OFF = `${TAB_BOX} text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none`;
 
 function OpenAgent({
   projectKey,
   projectName,
   agent,
   actions,
+  initialTab,
   refusal,
 }: {
   projectKey: string;
   projectName: string;
   agent: AgentInstanceListItemDto;
   actions: AgentPanelActions;
+  initialTab: AgentPanelTab;
   refusal: AgentRefusal | null;
 }) {
   const t = useTranslations('myAgents');
@@ -216,6 +263,14 @@ function OpenAgent({
     agentRef.current = agent;
   });
 
+  // Q1/Q8: an unsupported profile's Chat tab is drawn disabled WITHOUT connecting.
+  const chatVerdict = chatProfile(agent.profileId);
+  const [tab, setTab] = useState<AgentPanelTab>(
+    initialTab === 'chat' && chatVerdict.supported ? 'chat' : 'terminal',
+  );
+  // The chat connects the first time its tab is opened, and stays while the panel does.
+  const [chatOpened, setChatOpened] = useState(tab === 'chat');
+
   const hasTerminal = agent.terminalServer !== 'absent';
   const term = useAgentTerminal({
     projectKey,
@@ -223,15 +278,25 @@ function OpenAgent({
     enabled: agent.state === 'running' && hasTerminal,
     sink,
   });
+  const chat = useAgentChat({
+    projectKey,
+    agentId: agent.id,
+    enabled: agent.state === 'running' && hasTerminal && chatVerdict.supported && chatOpened,
+  });
   const conn = term.conn;
-  // Did the READER ask for this terminal just now — by opening the panel, or by
-  // pressing Reconnect / Use it here / Try again / Start a new shell? Only then
-  // is `not_running` a cue to wake: a terminal left open in a background tab
-  // whose agent hibernated on the idle rule must NOT wake it by itself (Q6).
+  // Did the READER ask for this terminal (or this chat) just now — by opening the
+  // panel or the tab, or by pressing Reconnect / Use it here / Try again / Start a
+  // new shell? Only then is `not_running` a cue to wake: a tab left open in a
+  // background browser tab whose agent hibernated on the idle rule must NOT wake
+  // it by itself (Q6).
   const readerAsked = useRef(true);
+  const chatReaderAsked = useRef(true);
   useEffect(() => {
     if (conn.kind === 'live') readerAsked.current = false;
   }, [conn.kind]);
+  useEffect(() => {
+    if (chat.conn.kind === 'live') chatReaderAsked.current = false;
+  }, [chat.conn.kind]);
 
   const wake = useCallback(async () => {
     setWakeRefusal(null);
@@ -251,23 +316,72 @@ function OpenAgent({
   }, []);
 
   // `not_running` / 4409 carry no words: they are the cue to wake the agent when
-  // the reader asked for the terminal, and otherwise to re-read its state.
+  // the reader asked for the terminal or the chat, and otherwise to re-read its state.
   useEffect(() => {
     if (conn.kind !== 'notRunning') return;
     if (readerAsked.current) void wake();
     else actions.onRefresh();
   }, [conn.kind, wake, actions]);
+  useEffect(() => {
+    if (chat.conn.kind !== 'notRunning') return;
+    if (chatReaderAsked.current) void wake();
+    else actions.onRefresh();
+  }, [chat.conn.kind, wake, actions]);
 
-  const area = useTerminalArea({
+  // Back / forward move the address; the open tab follows it.
+  useEffect(() => {
+    const onPop = () => {
+      const next = tabFromAddress();
+      if (next === 'chat' && !chatProfile(agentRef.current.profileId).supported) return;
+      setTab(next);
+      if (next === 'chat') setChatOpened(true);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const selectTab = (next: AgentPanelTab) => {
+    if (next === tab) return;
+    if (next === 'chat' && !chatVerdict.supported) return;
+    setTab(next);
+    // The chat renders itself; the server answers nothing (CLAUDE.md § URL state).
+    shallowPush(tabHref(next));
+    if (next !== 'chat') return;
+    chatReaderAsked.current = true;
+    setChatOpened(true);
+    // Opening Chat on a hibernated agent wakes it exactly as the terminal does;
+    // the chat ticket follows once it reads running — no second click.
+    if (agent.state === 'hibernated' && !waking && !wakeRefusal) void wake();
+  };
+
+  const onWake = () => {
+    readerAsked.current = true;
+    chatReaderAsked.current = true;
+    void wake();
+  };
+
+  const terminalLifecycle = useLifecycleArea({
     agent,
-    hasTerminal,
     waking,
     wakeRefusal,
+    onWake,
+    Face,
+    wakingHint: t('panel.face.wakingHint'),
+  });
+  const chatLifecycle = useLifecycleArea({
+    agent,
+    waking,
+    wakeRefusal,
+    onWake,
+    Face: ChatFace,
+    wakingHint: t('panel.chat.face.wakingHint'),
+  });
+
+  const terminalArea = useTerminalArea({
+    agent,
+    hasTerminal,
+    lifecycle: terminalLifecycle,
     everLive: term.everLive,
-    onWake: () => {
-      readerAsked.current = true;
-      void wake();
-    },
     reconnect: () => {
       readerAsked.current = true;
       term.reconnect();
@@ -280,10 +394,29 @@ function OpenAgent({
     sink,
     onUpdate: () => actions.onUpdate(agent),
   });
+  const chatArea = useChatArea({
+    agent,
+    hasServer: hasTerminal,
+    lifecycle: chatLifecycle,
+    chat,
+    onOpenTerminal: () => selectTab('terminal'),
+    onUpdate: () => actions.onUpdate(agent),
+    reconnect: () => {
+      chatReaderAsked.current = true;
+      chat.reconnect();
+    },
+  });
 
   const run = useRunView({ projectKey, agent, term, onRefresh: actions.onRefresh });
 
-  if (conn.kind === 'notAvailable') return <NotAvailable onClose={actions.onClose} />;
+  if (conn.kind === 'notAvailable' || chat.conn.kind === 'notAvailable') {
+    return <NotAvailable onClose={actions.onClose} />;
+  }
+
+  const area = tab === 'chat' ? chatArea : terminalArea;
+  const chatTipId = `agent-chat-tip-${agent.id}`;
+  // The run's session is offered at the head of the TERMINAL tab (MOTIR-7029).
+  const watchingRun = tab === 'terminal' && run.watching;
 
   return (
     <>
@@ -302,20 +435,62 @@ function OpenAgent({
         </div>
       ) : null}
       <div className="flex items-center justify-between gap-3 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2">
-        {/* The shipped tab track, one tab today; the chat story adds Chat beside it. */}
+        {/* The shipped tab track: Terminal, then Chat (MOTIR-7011 panel 1). */}
         <nav
           aria-label={t('panel.tabs.label')}
           className="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5"
         >
-          <span
-            aria-current="page"
-            className="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) bg-(--el-page-bg) px-(--spacing-control-x) text-[0.8125rem] font-medium text-(--el-text-strong) shadow-(--shadow-subtle)"
+          <button
+            type="button"
+            aria-current={tab === 'terminal' ? 'page' : undefined}
+            onClick={() => selectTab('terminal')}
+            className={tab === 'terminal' ? TAB_ON : TAB_OFF}
           >
-            <span aria-hidden="true" className="inline-flex text-(--el-tabnav-active)">
+            <span
+              aria-hidden="true"
+              className={`inline-flex ${tab === 'terminal' ? 'text-(--el-tabnav-active)' : ''}`}
+            >
               <SquareTerminal className="size-3.5" />
             </span>
             {t('panel.tabs.terminal')}
-          </span>
+          </button>
+          {chatVerdict.supported ? (
+            <button
+              type="button"
+              aria-current={tab === 'chat' ? 'page' : undefined}
+              onClick={() => selectTab('chat')}
+              className={tab === 'chat' ? TAB_ON : TAB_OFF}
+            >
+              <span
+                aria-hidden="true"
+                className={`inline-flex ${tab === 'chat' ? 'text-(--el-tabnav-active)' : ''}`}
+              >
+                <MessageSquare className="size-3.5" />
+              </span>
+              {t('panel.tabs.chat')}
+            </button>
+          ) : (
+            // Q1 (aider): disabled, still read — secondary ink, never faint — with
+            // the reason on hover AND keyboard focus, tied by aria-describedby.
+            <span
+              role="button"
+              tabIndex={0}
+              aria-disabled="true"
+              aria-describedby={chatTipId}
+              data-testid="agent-chat-tab-disabled"
+              className={`group ${TAB_BOX} cursor-not-allowed text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none`}
+            >
+              <Ban aria-hidden="true" className="size-3.5" />
+              {t('panel.tabs.chat')}
+              <span
+                role="tooltip"
+                id={chatTipId}
+                className="absolute top-[calc(100%+6px)] left-0 z-20 hidden w-[260px] rounded-(--radius-control) bg-(--el-tooltip-bg) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) text-xs leading-normal font-normal whitespace-normal text-(--el-tooltip-text) shadow-(--shadow-elevated) group-hover:block group-focus-visible:block"
+              >
+                {t('panel.chat.unsupported')}
+              </span>
+            </span>
+          )}
         </nav>
         <span
           data-testid="agent-conn"
@@ -325,13 +500,24 @@ function OpenAgent({
           {area.word}
         </span>
       </div>
-      {run.bar}
-      {run.watching ? run.strip : area.strip}
-      <div className="flex min-h-0 flex-1 flex-col">
+      {tab === 'terminal' ? run.bar : null}
+      {watchingRun ? run.strip : area.strip}
+      {/* The terminal stays mounted under the chat, so its screen and socket survive a tab switch. */}
+      <div className={`min-h-0 flex-1 flex-col ${tab === 'terminal' ? 'flex' : 'hidden'}`}>
         {/* The shell stays mounted while the run is watched, so switching back is instant. */}
-        <div className={run.watching ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>{area.body}</div>
+        <div className={run.watching ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
+          {terminalArea.body}
+        </div>
         {run.body}
       </div>
+      {chatOpened ? (
+        <div
+          data-testid="agent-chat-tab"
+          className={`min-h-0 flex-1 flex-col ${tab === 'chat' ? 'flex' : 'hidden'}`}
+        >
+          {chatArea.body}
+        </div>
+      ) : null}
     </>
   );
 }
@@ -563,75 +749,48 @@ function Face({
   );
 }
 
-const FACE_ICON = 'size-[22px]';
-
-function Strip({
-  tone,
-  alert,
-  icon,
-  text,
-  action,
-}: {
-  tone: 'sky' | 'rose' | 'muted';
-  alert?: boolean;
-  icon: ReactNode;
-  text: ReactNode;
-  action?: ReactNode;
-}) {
-  const ground =
-    tone === 'sky'
-      ? 'bg-(--el-tint-sky)'
-      : tone === 'rose'
-        ? 'bg-(--el-tint-rose)'
-        : 'bg-(--el-muted)';
-  return (
-    <div
-      role={alert ? 'alert' : 'status'}
-      className={`flex items-center gap-2 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-(--spacing-control-y) text-[0.8125rem] text-(--el-text-strong) ${ground}`}
-    >
-      {icon}
-      <span className="min-w-0 flex-1">{text}</span>
-      {action}
-    </div>
-  );
-}
-
-/** Decide the connection word, the strip and the terminal area from ONE state. */
-function useTerminalArea({
+/**
+ * The agent's lifecycle, in either tab's faces (panel 4): every state but
+ * `running` is a face, whichever tab is open. Null when the agent runs.
+ */
+function useLifecycleArea({
   agent,
-  hasTerminal,
   waking,
   wakeRefusal,
-  everLive,
   onWake,
-  reconnect,
-  newShell,
-  term,
-  sink,
-  onUpdate,
+  Face: FaceC,
+  wakingHint,
 }: {
   agent: AgentInstanceListItemDto;
-  hasTerminal: boolean;
   waking: boolean;
   wakeRefusal: AgentRefusal | null;
-  everLive: boolean;
   onWake: () => void;
-  reconnect: () => void;
-  newShell: () => void;
-  term: ReturnType<typeof useAgentTerminal>;
-  sink: React.RefObject<TerminalSink | null>;
-  /** Open the Update confirmation — the image-too-old face's way out (MOTIR-6953). */
-  onUpdate: () => void;
-}): { word: string; dot: Dot; strip: ReactNode; body: ReactNode } {
+  Face: FaceComponent;
+  wakingHint: string;
+}): TabArea | null {
   const t = useTranslations('myAgents');
-  const conn: TerminalConn = term.conn;
   const wakeButton = (
     <Button size="sm" leftIcon={<Power aria-hidden="true" />} onClick={onWake} loading={waking}>
       {t('panel.wake')}
     </Button>
   );
   const closed = { word: t('panel.conn.closed'), dot: 'ended' as Dot, strip: null };
-  const stripIcon = 'size-4 flex-none';
+  const wakingFace = (
+    <FaceC
+      icon={<LoaderCircle className={FACE_ICON} aria-hidden="true" />}
+      title={t('progress.waking')}
+    >
+      <span>{wakingHint}</span>
+    </FaceC>
+  );
+  const refused = (refusal: AgentRefusal) => (
+    <FaceC>
+      <div className="max-w-[28rem] text-left">
+        <RefusalBox refusal={refusal} />
+      </div>
+      {wakeButton}
+    </FaceC>
+  );
 
   switch (agent.state) {
     case 'starting':
@@ -640,88 +799,81 @@ function useTerminalArea({
         dot: 'idle',
         strip: null,
         body: (
-          <Face
+          <FaceC
             icon={<LoaderCircle className={FACE_ICON} aria-hidden="true" />}
             title={t('progress.starting')}
           >
             <span>{t('panel.face.startingHint')}</span>
-          </Face>
+          </FaceC>
         ),
       };
     case 'waking':
-      return {
-        word: t('panel.conn.waiting'),
-        dot: 'busy',
-        strip: null,
-        body: <WakingFace />,
-      };
+      return { word: t('panel.conn.waiting'), dot: 'busy', strip: null, body: wakingFace };
     case 'updating':
       // The update delta, panel 4: the machine reboots onto the new image (or back);
-      // the terminal reconnects when the agent is running again.
+      // the terminal and the chat reconnect when the agent is running again.
       return {
         word: t('panel.conn.reconnecting'),
         dot: 'busy',
         strip: null,
         body: (
-          <Face
+          <FaceC
             icon={<LoaderCircle className={FACE_ICON} aria-hidden="true" />}
             title={t('update.updating.title', { to: agent.pendingImageVersion ?? '' })}
           >
             <span>{t('update.updating.body')}</span>
-          </Face>
+          </FaceC>
         ),
       };
     case 'hibernating':
       return {
         ...closed,
         body: (
-          <Face
+          <FaceC
             icon={<Moon className={FACE_ICON} aria-hidden="true" />}
             title={t('progress.hibernating')}
           >
             <span>{t('panel.face.hibernatingHint')}</span>
-          </Face>
+          </FaceC>
         ),
       };
     case 'deleting':
       return {
         ...closed,
         body: (
-          <Face
+          <FaceC
             icon={<Trash2 className={FACE_ICON} aria-hidden="true" />}
             title={t('progress.deleting')}
           >
             <span>{t('panel.face.deletingHint')}</span>
-          </Face>
+          </FaceC>
         ),
       };
     case 'hibernated': {
-      if (wakeRefusal)
-        return { ...closed, body: <RefusedWake refusal={wakeRefusal} wake={wakeButton} /> };
+      if (wakeRefusal) return { ...closed, body: refused(wakeRefusal) };
       // The wake the open asked for is in flight: its face is waking's.
       if (waking)
-        return { word: t('panel.conn.waiting'), dot: 'busy', strip: null, body: <WakingFace /> };
+        return { word: t('panel.conn.waiting'), dot: 'busy', strip: null, body: wakingFace };
       return {
         ...closed,
         body: (
-          <Face
+          <FaceC
             icon={<Moon className={FACE_ICON} aria-hidden="true" />}
             title={t('panel.face.hibernatedTitle', { name: agent.name })}
           >
             {agent.stopReason ? <span>{t(`stop.${agent.stopReason}`)}</span> : null}
             <span>{t('panel.face.kept')}</span>
             {wakeButton}
-          </Face>
+          </FaceC>
         ),
       };
     }
     case 'failed': {
-      if (wakeRefusal)
-        return { ...closed, body: <RefusedWake refusal={wakeRefusal} wake={wakeButton} /> };
+      if (wakeRefusal) return { ...closed, body: refused(wakeRefusal) };
       return {
         ...closed,
         body: (
-          <Face icon={<CircleAlert className={FACE_ICON} aria-hidden="true" />}>
+          <FaceC icon={<CircleAlert className={FACE_ICON} aria-hidden="true" />}>
             {agent.failureReason ? (
               <span className="text-[0.8125rem] text-(--el-danger-on-surface)">
                 {agent.failureReason}
@@ -729,13 +881,43 @@ function useTerminalArea({
             ) : null}
             <span>{t('failedWayOut')}</span>
             {wakeButton}
-          </Face>
+          </FaceC>
         ),
       };
     }
     case 'running':
-      break;
+      return null;
   }
+  return null;
+}
+
+/** Decide the connection word, the strip and the terminal area from ONE state. */
+function useTerminalArea({
+  agent,
+  hasTerminal,
+  lifecycle,
+  everLive,
+  reconnect,
+  newShell,
+  term,
+  sink,
+  onUpdate,
+}: {
+  agent: AgentInstanceListItemDto;
+  hasTerminal: boolean;
+  lifecycle: TabArea | null;
+  everLive: boolean;
+  reconnect: () => void;
+  newShell: () => void;
+  term: ReturnType<typeof useAgentTerminal>;
+  sink: React.RefObject<TerminalSink | null>;
+  /** Open the Update confirmation — the image-too-old face's way out (MOTIR-6953). */
+  onUpdate: () => void;
+}): TabArea {
+  const t = useTranslations('myAgents');
+  const conn: TerminalConn = term.conn;
+  const stripIcon = STRIP_ICON;
+  if (lifecycle) return lifecycle;
 
   // Q8: an image from before the terminal — the agent is fine, it just has no terminal.
   if (!hasTerminal || conn.kind === 'noTerminal') {
@@ -874,28 +1056,4 @@ function useTerminalArea({
       />
     ),
   };
-}
-
-function WakingFace() {
-  const t = useTranslations('myAgents');
-  return (
-    <Face
-      icon={<LoaderCircle className={FACE_ICON} aria-hidden="true" />}
-      title={t('progress.waking')}
-    >
-      <span>{t('panel.face.wakingHint')}</span>
-    </Face>
-  );
-}
-
-/** Panel 6: a refused wake lands inside the panel, in the list's own box and copy. */
-function RefusedWake({ refusal, wake }: { refusal: AgentRefusal; wake: ReactNode }) {
-  return (
-    <Face>
-      <div className="max-w-[28rem] text-left">
-        <RefusalBox refusal={refusal} />
-      </div>
-      {wake}
-    </Face>
-  );
 }

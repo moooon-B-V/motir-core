@@ -431,6 +431,13 @@ async function indexEveryProject(
     // admission, a refused provision, an unpullable image, a failed teardown)
     // reaches the same throw carrying its own discriminator.
     if (outcome.outcome !== 'settled' || !outcome.verdict.indexed) {
+      // ⚠️ A SIZE REFUSAL IS RECORDED ON THE REPOSITORY BEFORE THE RUN FAILS
+      // (MOTIR-7130), so `/code` can say why this repository stopped updating —
+      // with the numbers, not the generic "not updating" line. The run still
+      // fails: it published nothing, and its ledger row says so.
+      if (outcome.refusedForSize) {
+        await markRefusedForSize(target.repoRef, outcome.refusedForSize);
+      }
       throw dispatchFailure(target.repoRef, projectId, outcome);
     }
 
@@ -681,6 +688,33 @@ async function liftIndexingPause(repoRef: string): Promise<void> {
   }
 }
 
+/** Record that the repository's graph was refused for size (MOTIR-7130). Never
+ *  throws, like {@link pauseIndexingRepo}: the run's own failure — which names
+ *  both sizes in its detail — stays the record if this write is lost. */
+async function markRefusedForSize(
+  repoRef: string,
+  refusal: { sizeBytes: number; capBytes: number },
+): Promise<void> {
+  try {
+    await withSystemContext((tx) =>
+      githubRepoRepository.markIndexRefusedForSize(repoRef, refusal, tx),
+    );
+  } catch (err) {
+    console.error('[index-fleet] could not record the size refusal', repoRef, err);
+  }
+}
+
+/** Clear a recorded size refusal once a run has actually indexed (MOTIR-7130).
+ *  Never throws. Only a run that indexed clears it: a run that failed for any
+ *  other reason has not shown the graph got smaller. */
+async function clearRefusal(repoRef: string): Promise<void> {
+  try {
+    await withSystemContext((tx) => githubRepoRepository.clearIndexRefusal(repoRef, tx));
+  } catch (err) {
+    console.error('[index-fleet] could not clear the size refusal', repoRef, err);
+  }
+}
+
 /** The named failure for a dispatch outcome that did not index. */
 function dispatchFailure(
   repoRef: string,
@@ -745,4 +779,7 @@ async function settleIndexingRepo(repoRef: string, headAtStart: string | null): 
   } catch (err) {
     console.error('[index-fleet] could not settle the indexing repo', repoRef, err);
   }
+  // This is only reached on the INDEXED path, so a repository brought back under
+  // the supported maximum shows its normal status after this run (MOTIR-7130).
+  await clearRefusal(repoRef);
 }

@@ -64,8 +64,13 @@ const ACTIVE = {
 
 const LISTED = { instances: [], total: 0, planLapse: null };
 
-const render = (agent?: string | string[]) =>
-  MyAgentsPage({ searchParams: Promise.resolve(agent === undefined ? {} : { agent }) });
+const render = (agent?: string | string[], tab?: string | string[]) =>
+  MyAgentsPage({
+    searchParams: Promise.resolve({
+      ...(agent === undefined ? {} : { agent }),
+      ...(tab === undefined ? {} : { tab }),
+    }),
+  });
 
 /** The page's <Suspense>, and the room its data child resolves to. */
 async function resolve(tree: ReactElement) {
@@ -122,7 +127,16 @@ describe('/my-agents — the room over the reader’s own list', () => {
       maxPerUser: INSTANCE_MAX_PER_USER,
       storageCreditsPerDay: INSTANCE_STORAGE_CREDITS_PER_DAY,
       openAgentId: null,
+      openTab: 'terminal',
     });
+  });
+
+  it('`&tab=chat` reopens the panel on its Chat tab; any other value is Terminal', async () => {
+    expect((await resolve(await render('a1', 'chat'))).room.props['openTab']).toBe('chat');
+    expect((await resolve(await render('a1', 'terminal'))).room.props['openTab']).toBe('terminal');
+    expect((await resolve(await render('a1', ['chat', 'chat']))).room.props['openTab']).toBe(
+      'terminal',
+    );
   });
 
   it('a self-hosted build charges no storage, so the room is given no rate', async () => {

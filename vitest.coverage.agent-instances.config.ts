@@ -34,6 +34,17 @@ import baseConfig from './vitest.config';
 //     drain on SIGTERM) — it is bundled and run, not imported, like
 //     `scripts/worker.ts`; everything it wires is measured here.
 //
+// EXTENDED BY THE AGENT-CHAT STORY GATE (Story MOTIR-6863 · MOTIR-7018): the
+// chat's motir-core half — the browser's protocol mirror (`lib/agentChat/**`),
+// `CHAT_PROFILES` (already under `lib/agentInstances/**`), the relay's chat
+// channel and the ticket's channel (already under `lib/agentTerminal/**` and the
+// services above), and the Chat tab (already under the My agents glob) —
+// held to the same per-file floor, over the chat's own suites (`tests/agentChat/**`,
+// whose story gate drives the relay into the REAL in-process chat server, and the
+// tab's `AgentChat.test.tsx`). The in-agent chat server and its five adapters
+// (`packages/cli/src/agentTerminal/chat/**`) are held, like the terminal server,
+// by `packages/cli/vitest.config.ts`'s per-file thresholds.
+//
 // ⚠️ THE GLOBS NEVER SPELL A ROUTE GROUP. `(authed)` is an extglob group to the
 // coverage matcher, which matches `authed` WITHOUT the parentheses, so
 // `app/(authed)/…` measured nothing — the My agents UI and `agentFigures.ts` sat
@@ -63,6 +74,8 @@ const MEASURED = [
   'lib/repositories/agentTerminalTicketRepository.ts',
   'lib/repositories/agentTerminalConnectionRepository.ts',
   'lib/mappers/agentTerminalMappers.ts',
+  // Story MOTIR-6863 — the agent chat (MOTIR-7018).
+  'lib/agentChat/**/*.ts',
   // Story MOTIR-6914 — agents are an AI-plan feature, their storage paid in
   // credits (MOTIR-6922): the daily storage charge, the plan lapse and its
   // notice, and the Agents line's figures. The plan check, the per-org cap and
@@ -91,6 +104,9 @@ export default defineConfig({
       'tests/components/MyAgentsRoom.test.tsx',
       'tests/agentTerminal/**/*.test.ts',
       'tests/components/AgentPanel.test.tsx',
+      // Story MOTIR-6863 — the agent chat (MOTIR-7018).
+      'tests/agentChat/**/*.test.{ts,tsx}',
+      'tests/components/AgentChat.test.tsx',
       // Story MOTIR-6914 (MOTIR-6922).
       'tests/components/agentFigures.test.ts',
       // Story MOTIR-6864 — the agent's live run in its panel (MOTIR-7029).

@@ -16,6 +16,8 @@ import { toAgentInstanceIntervalDto } from '@/lib/mappers/agentInstanceMappers';
 import {
   AGENT_SIGN_IN_HINTS,
   agentSignInHint,
+  CHAT_PROFILES,
+  chatProfile,
   isOfferedProfile,
   NOT_OFFERED_AGENT_PROFILES,
   OFFERED_AGENT_PROFILES,
@@ -194,6 +196,20 @@ describe('profiles and caps', () => {
     expect(INSTANCE_NAME_PATTERN.test('Yue Claude')).toBe(false);
     expect(INSTANCE_NAME_PATTERN.test('-leading')).toBe(false);
     expect(INSTANCE_NAME_PATTERN.test('a'.repeat(41))).toBe(false);
+  });
+});
+
+describe('the chat verdict per profile (agent-chat.md Q1)', () => {
+  it('supports the five streaming profiles and refuses aider with its reason', () => {
+    for (const id of ['claude', 'codex', 'opencode', 'kimi', 'goose']) {
+      expect(chatProfile(id)).toEqual({ supported: true });
+    }
+    expect(chatProfile('aider')).toEqual(CHAT_PROFILES.aider);
+    expect(chatProfile('aider').supported).toBe(false);
+  });
+
+  it("leaves a profile it does not name to the server's hello", () => {
+    expect(chatProfile('some-future-agent')).toEqual({ supported: true });
   });
 });
 

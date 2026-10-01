@@ -1,0 +1,4 @@
+{"timestamp":"2026-09-30T08:00:00.100Z","type":"session_meta","payload":{"id":"01a0f1e9-4c21-7b55-8a0d-2e6f9b3c1a74","timestamp":"2026-09-30T08:00:00.090Z","cwd":"/home/agent/workspace","originator":"codex_exec","cli_version":"0.159.2","source":"exec","model_provider":"openai"}}
+{"timestamp":"2026-09-30T08:00:00.110Z","type":"event_msg","payload":{"type":"user_message","message":"Run a long command","images":[]}}
+{"timestamp":"2026-09-30T08:00:01.000Z","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{\"command\":[\"bash\",\"-lc\",\"sleep 60\"]}","call_id":"call_Sl01"}}
+{"timestamp":"2026-09-30T08:00:03.000Z","type":"event_msg","payload":{"type":"turn_aborted","reason":"interrupted"}}

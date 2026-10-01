@@ -1,0 +1,7 @@
+# codex-cli 0.159.2 · `codex exec --json -c sandbox_mode="workspace-write" -` · a command execution then a reply (the ADR's Q1 capture)
+{"type":"thread.started","thread_id":"01a0f1e6-e507-7c00-a172-76c9ce46e8f1"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc ls","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc ls","aggregated_output":"a.txt\nb.md\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"The directory contains the files listed above."}}
+{"type":"turn.completed","usage":{"input_tokens":24,"cached_input_tokens":0,"output_tokens":30}}

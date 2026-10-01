@@ -1,0 +1,6 @@
+# codex-cli 0.159.2 · `codex exec --json -c sandbox_mode="workspace-write" -` · a plain reply
+{"type":"thread.started","thread_id":"01a0f1e6-e507-7c00-a172-76c9ce46e8f1"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"reasoning","text":"**Answering a greeting**"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Hello! How can I help with this workspace?"}}
+{"type":"turn.completed","usage":{"input_tokens":24,"cached_input_tokens":0,"output_tokens":12}}

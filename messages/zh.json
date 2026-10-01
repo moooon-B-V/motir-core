@@ -9024,7 +9024,8 @@
       },
       "tabs": {
         "label": "智能体视图",
-        "terminal": "终端"
+        "terminal": "终端",
+        "chat": "对话"
       },
       "conn": {
         "waiting": "等待中",
@@ -9068,6 +9069,87 @@
         "back": "返回我的智能体"
       },
       "size": "{cols} × {rows}",
+      "chat": {
+        "unsupported": "Aider 无法使用对话：它没有可供对话跟随的机器可读输出。请使用终端。",
+        "newChat": "新对话",
+        "sessions": {
+          "label": "会话",
+          "title": "{name} 上的会话",
+          "empty": "还没有会话。你在这里开始的对话，或你在终端中用 {agent} 开始的会话，都会显示在这里。",
+          "bound": "仅显示最近的 50 个会话。更早的会话未列出，{agent} 仍然保留着它们。"
+        },
+        "resumed": "已恢复",
+        "empty": {
+          "title": "开始与 {agent} 对话",
+          "body": "它在 {name} 的 <cmd>~/workspace</cmd> 中工作，文件和登录与终端相同。每一轮都以无界面方式运行 {agent}，它会直接编辑文件、运行命令，不会先询问。"
+        },
+        "transcript": "对话记录",
+        "working": "{agent} 正在处理…",
+        "prompt": {
+          "label": "提示",
+          "placeholder": "让 {agent} 做点什么…",
+          "hint": "Enter 发送 · Shift+Enter 换行",
+          "offHint": "对话重新连接后即可继续输入。"
+        },
+        "send": "发送",
+        "sending": "发送中…",
+        "stop": "停止",
+        "tool": {
+          "read": "读取",
+          "edit": "编辑",
+          "command": "运行",
+          "lines": "{count} 行",
+          "exit": "退出码 {code}",
+          "running": "运行中…",
+          "failed": "失败",
+          "truncated": "输出已截断——仅显示最后 64 KB。",
+          "noDiff": "{agent} 报告了它修改的文件，但没有报告具体改动。",
+          "noOutput": "无输出。",
+          "show": "显示详情",
+          "hide": "隐藏详情",
+          "showAll": "显示全部 {count} 行"
+        },
+        "error": "{agent} 报告了一个问题，并继续执行：{message}",
+        "other": "未显示的事件：{name}",
+        "turn": {
+          "completed": "本轮完成",
+          "stopped": "已停止",
+          "stoppedWhy": "你停止了这一轮。上面的回复就是它停下时的进度。",
+          "failed": "本轮失败",
+          "failedWhy": {
+            "subscription_signin": "Claude Code 使用 Claude 订阅登录，对话无法使用该登录。",
+            "generic": "{agent} 意外停止（{code}）。"
+          }
+        },
+        "notice": {
+          "turnRunning": "{name} 上已有一轮正在另一个对话会话中运行。请等它结束，或在那里停止它——一个智能体同一时间只运行一轮。",
+          "tooLarge": "这条提示超过了 64 KB。请缩短它，或把文本保存到工作区的文件中，再让 {agent} 去读取。",
+          "takenOver": "这个对话现在在另一个标签页中打开。正在运行的一轮会在那里继续。",
+          "notSignedIn": "{agent} 尚未登录。请在“终端”标签页中登录——对话使用相同的登录。"
+        },
+        "openTerminal": "打开终端",
+        "subscription": {
+          "title": "Claude 订阅无法使用对话",
+          "body": "使用 Claude 订阅登录的 Claude Code 无法使用对话，因为 Anthropic 的条款不允许第三方界面在订阅登录上驱动它。请使用 Anthropic API 密钥或云服务商登录后再对话，或继续使用终端。"
+        },
+        "noServer": {
+          "title": "这个智能体暂时无法对话",
+          "body": "它是用较旧的镜像创建的，那时还没有对话功能。把智能体迁移到新镜像（保留主目录和登录）的功能即将推出。在那之前，它的终端仍可使用，新建的智能体都带有对话。",
+          "update": "它是用较旧的镜像创建的，那时还没有对话功能。将它更新到 {to} 即可使用对话，主目录和登录都会保留。"
+        },
+        "face": {
+          "connecting": "正在连接 {name} 的对话…",
+          "wakingHint": "机器启动后对话会自动连接——无需点击。"
+        },
+        "strip": {
+          "reconnecting": "连接中断——正在重新连接。正在运行的一轮会在智能体上继续。",
+          "lost": "无法重新连接。正在运行的一轮会在智能体上继续——重新连接即可继续查看。"
+        },
+        "history": {
+          "truncated": "更早的轮次未显示——只加载了这个会话最近的 256 KB。",
+          "unavailable": "这个会话之前的轮次无法在这里显示。{agent} 仍然保留着它们，会从你上次停下的地方继续。"
+        }
+      },
       "run": {
         "live": "正在处理一个工作项",
         "last": "上次运行",
@@ -9611,6 +9693,11 @@
       "emptyDescription": "本项目还没有配置任何代码仓库。添加一个之后，Motir 在规划时就能读取你的代码。",
       "manageLink": "管理本项目的代码仓库",
       "notUpdating": "该索引没有在更新。",
+      "refusedForSize": {
+        "title": "上一次建立索引被拒绝：代码图大小为 {size}，而支持的上限为 {cap}。",
+        "lastGraph": "Motir 会继续基于上一次成功建立索引的代码图进行规划。",
+        "remedy": "可在仓库根目录的 <code>codegraph.json</code> 中排除生成文件或测试路径，例如 <code>\"exclude\": [\"tests/\", \"fixtures/\"]</code>，或联系 Motir。"
+      },
       "provider": {
         "github": "GitHub",
         "gitlab": "GitLab"
