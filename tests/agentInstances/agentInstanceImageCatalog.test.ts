@@ -169,6 +169,15 @@ describe('the fake fleet — no registry, a settable newest version', () => {
     expect(counts.resolveDigest.size).toBe(0);
   });
 
+  it('answers unknown on the fake fleet when the seam says the registry cannot be read', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    imageCatalogSeam.setFakeUnavailable(true);
+    expect(await imageCatalog.newestFor('claude')).toBe('unknown');
+    expect(await imageCatalog.versionOf('claude', fakeDigestFor('claude', FAKE_BASE_VERSION))).toBe(
+      'unknown',
+    );
+  });
+
   it('reads the newest version from MOTIR_FAKE_IMAGE_NEWEST, for a lane whose server is another process', async () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
     vi.stubEnv('MOTIR_FAKE_IMAGE_NEWEST', JSON.stringify({ codex: '2.0.0' }));

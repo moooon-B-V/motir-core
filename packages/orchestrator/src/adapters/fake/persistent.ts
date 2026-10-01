@@ -52,7 +52,14 @@ interface FakeStore {
   machines: Record<string, FakePersistentMachine>;
   volumes: Record<
     string,
-    { app: string; name: string; attachedMachineId: string | null; createdAt: string }
+    {
+      app: string;
+      name: string;
+      attachedMachineId: string | null;
+      createdAt: string;
+      /** Files a test wrote into the home this volume holds (MOTIR-6954) — path → content. */
+      files?: Record<string, string>;
+    }
   >;
   sequence: number;
   /**
@@ -126,6 +133,10 @@ export interface FakePersistentControls {
   machineImage(machineId: string): string;
   /** Make every liveness check on a machine running `image` answer not alive (exit 127). */
   markImageFailing(image: string): void;
+  /** Write a file into the home a volume holds (MOTIR-6954: it must survive an image update). */
+  writeHomeFile(volumeId: string, path: string, content: string): void;
+  /** Read a file from the home a volume holds; null when the volume or the file is gone. */
+  readHomeFile(volumeId: string, path: string): string | null;
 }
 
 const STATE_PATH_ENV = 'MOTIR_FAKE_PERSISTENT_STATE_PATH';
@@ -334,6 +345,17 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
     },
     machineImage(machineId) {
       return machineOrThrow(machineId).spec.image;
+    },
+    writeHomeFile(volumeId, path, content) {
+      load();
+      const volume = store.volumes[volumeId];
+      if (!volume) throw new OrchestratorApiError('fake', 404, `volume ${volumeId} is gone`);
+      volume.files = { ...(volume.files ?? {}), [path]: content };
+      save();
+    },
+    readHomeFile(volumeId, path) {
+      load();
+      return store.volumes[volumeId]?.files?.[path] ?? null;
     },
     markImageFailing(image) {
       load();

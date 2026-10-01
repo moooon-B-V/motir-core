@@ -460,3 +460,18 @@ describe('the image move and the liveness check (agent-image-update.md Q2, Q3 ·
     });
   });
 });
+
+describe('the home a volume holds (MOTIR-6954)', () => {
+  it('keeps a written file across an image move, and answers null once the volume is gone', async () => {
+    const h = await fake.provisionPersistent(SPEC);
+    fake.writeHomeFile(h.volumeId, 'notes.txt', 'mine');
+    await fake.moveImage(h, 'ghcr.io/moooon-b-v/motir-sandbox@sha256:' + 'e'.repeat(64), {
+      launch: true,
+    });
+    expect(fake.readHomeFile(h.volumeId, 'notes.txt')).toBe('mine');
+    expect(fake.readHomeFile(h.volumeId, 'other.txt')).toBeNull();
+    await fake.destroyPersistent(h);
+    expect(fake.readHomeFile(h.volumeId, 'notes.txt')).toBeNull();
+    expect(() => fake.writeHomeFile(h.volumeId, 'x', 'y')).toThrow(OrchestratorApiError);
+  });
+});

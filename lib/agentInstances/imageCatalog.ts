@@ -88,6 +88,8 @@ const inflight = new Map<string, Promise<ProfileEntry>>();
 /** Immutable tag → digest; never expires (an immutable tag never moves). */
 const digestByTag = new Map<string, string>();
 const inflightTags = new Map<string, Promise<string | null>>();
+/** On the fake fleet: answer `unknown`, as a registry that cannot be read does (a test seam). */
+let fakeUnavailable = false;
 /** The fake fleet's newest version per profile, set by a test. */
 const fakeNewest = new Map<string, string>();
 
@@ -180,6 +182,7 @@ export const imageCatalog = {
     options: { fresh?: boolean } = {},
   ): Promise<PublishedImage | CatalogUnknown> {
     if (isFake()) {
+      if (fakeUnavailable) return 'unknown';
       const version = fakeNewestVersion(profileId) ?? FAKE_BASE_VERSION;
       return { version, digest: fakeDigestFor(profileId, version) };
     }
@@ -199,6 +202,7 @@ export const imageCatalog = {
   /** The version a digest carries for a profile, null when no tag names it, or `unknown`. */
   async versionOf(profileId: string, digest: string): Promise<string | null | CatalogUnknown> {
     if (isFake()) {
+      if (fakeUnavailable) return 'unknown';
       if (digest === fakeDigestFor(profileId, FAKE_BASE_VERSION)) return FAKE_BASE_VERSION;
       const newest = fakeNewestVersion(profileId);
       return newest && digest === fakeDigestFor(profileId, newest) ? newest : null;
@@ -249,7 +253,12 @@ export const imageCatalogSeam = {
     if (version === null) fakeNewest.delete(profileId);
     else fakeNewest.set(profileId, version);
   },
+  /** On the fake fleet: make the catalog answer as an unreachable registry does. */
+  setFakeUnavailable(value: boolean): void {
+    fakeUnavailable = value;
+  },
   reset(): void {
+    fakeUnavailable = false;
     registry = liveRegistry;
     clock = () => Date.now();
     profileCache.clear();
