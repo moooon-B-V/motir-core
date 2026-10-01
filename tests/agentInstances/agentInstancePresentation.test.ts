@@ -34,11 +34,13 @@ describe('the tones reuse the run vocabulary', () => {
       waking: 'running',
       failed: 'failed',
       deleting: 'queued',
+      updating: 'running',
     });
     expect([...AGENT_STATES_IN_MOTION].sort()).toEqual([
       'deleting',
       'hibernating',
       'starting',
+      'updating',
       'waking',
     ]);
   });
