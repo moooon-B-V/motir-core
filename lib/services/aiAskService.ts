@@ -445,6 +445,15 @@ export const aiAskService = {
       // The RETRY of a debug turn — its dispatch failed after the turn was
       // recorded as `debug` (the settle arm moves the intent first). Re-run the
       // SAME diagnosis; the classifier is not asked again.
+      //
+      // ⚠️ NOT A TURN THAT ALREADY LANDED (MOTIR-7065). Its landing claim is taken
+      // (or its reply is on the thread), so a second `debug_bug` job could only
+      // spend credits for a settle that writes nothing. Hand back the turn's OWN
+      // job instead: the rail follows it exactly as it follows a fresh one, and its
+      // settle REPLAYS the landing (`debugged`, the same card) — or, for a landing
+      // that crashed after its claim, answers `silent` (A1.4 fails closed).
+      const landedJobId = await planChangeSessionsService.landedDebugJob(turnId, ctx, address);
+      if (landedJobId) return { outcome: 'debugging', jobId: landedJobId, session: current };
       await assertCanDebug(ctx);
       const { jobId } = await submitConversationJob('debug_bug', turn.body, anchor, ctx);
       const session = await planChangeSessionsService.recordTurnIntent(
