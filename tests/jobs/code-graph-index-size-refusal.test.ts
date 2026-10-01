@@ -18,10 +18,7 @@ import { JobTestEngine, type JobTestEngineContext } from '../helpers/jobs';
 import { db } from '@/lib/db';
 import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
-import {
-  codeGraphIndexDispatchService,
-  MAX_DISPATCH_ATTEMPTS,
-} from '@/lib/services/codeGraphIndexDispatchService';
+import { MAX_DISPATCH_ATTEMPTS } from '@/lib/services/codeGraphIndexDispatchService';
 import { fakeOrchestrator } from '@motir/orchestrator';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
@@ -35,9 +32,14 @@ import {
   seedIndexWorkspace,
   stubIndexFleet,
 } from '../helpers/indexFleet';
+import {
+  containersExitWith,
+  GIB,
+  motirAiAnswersVerdict,
+  REFUSED_SIZE,
+} from '../helpers/indexSizeRefusal';
 
-const GIB = 1024 ** 3;
-const SIZE = 1_503_238_554; // 1.4 GiB
+const SIZE = REFUSED_SIZE; // 1.4 GiB
 const [REPO_OWNER, REPO_NAME] = INDEX_REPO_REF.split('/') as [string, string];
 
 beforeEach(async () => {
@@ -61,74 +63,6 @@ afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
 });
-
-/** Container N (in provision order) exits with `codes[N-1]`; past the list, the last. */
-function containersExitWith(...codes: Array<number | null>): void {
-  const realPoll = codeGraphIndexDispatchService.pollIndexContainer.bind(
-    codeGraphIndexDispatchService,
-  );
-  vi.spyOn(codeGraphIndexDispatchService, 'pollIndexContainer').mockImplementation(
-    async (session, previous, options) => {
-      const n = Math.min(fakeOrchestrator.provisioned.length, codes.length);
-      for (const id of fakeOrchestrator.liveContainerIds()) {
-        fakeOrchestrator.completeJob(id, { exitCode: codes[n - 1]! });
-      }
-      return realPoll(session, previous, options);
-    },
-  );
-}
-
-type VerdictAnswer = 'refused' | 'upload' | 'none' | 'unreachable';
-
-/**
- * Wrap the shared fleet stub so motir-ai's run-verdict read answers as motir-ai
- * would for a run whose grant was refused for size (`refused`), one whose PUT
- * failed (`upload`), one with nothing recorded (`none`), or not at all.
- */
-function motirAiAnswersVerdict(answer: VerdictAnswer): { reads: () => number } {
-  const inner = globalThis.fetch;
-  let reads = 0;
-  vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
-    const href = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
-    if (new URL(href).pathname.endsWith('/v1/code-graph/run/verdict')) {
-      reads += 1;
-      if (answer === 'unreachable') throw new TypeError('fetch failed');
-      const failure =
-        answer === 'refused'
-          ? {
-              failureClass: 'GRAPH_TOO_LARGE',
-              message:
-                'The code graph is 1.40 GiB uncompressed; the supported maximum is 1.00 GiB.',
-              httpStatus: 422,
-              sizeBytes: SIZE,
-              capBytes: GIB,
-              attempts: null,
-              reportedAt: new Date().toISOString(),
-            }
-          : answer === 'upload'
-            ? {
-                failureClass: 'UPLOAD',
-                message: 'HTTP 503',
-                httpStatus: 503,
-                sizeBytes: null,
-                capBytes: null,
-                attempts: 4,
-                reportedAt: new Date().toISOString(),
-              }
-            : null;
-      return new Response(
-        JSON.stringify({
-          verdict: failure
-            ? { repoRef: INDEX_REPO_REF, runId: 'r', indexMode: null, failure }
-            : null,
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      );
-    }
-    return inner(url, init);
-  });
-  return { reads: () => reads };
-}
 
 /** The memos a finished execution left — what `job_step` hands a resumed run. */
 async function replayOf(
