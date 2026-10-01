@@ -48,6 +48,7 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { grantPaidAiPlan } from '../helpers/paidAiPlan';
 import { JobTestEngine } from '../helpers/jobs';
 import { linkPr } from '../helpers/prLink';
+import { hostAnswersCleanAt } from '../helpers/hostMergeability';
 
 const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -358,12 +359,15 @@ async function green(w: World, repo: RepoSpec, number: number, sha: string) {
   });
 }
 
-/** A push moved pull request `number`'s head to `sha` — and, as on GitHub, CI starts on it. */
+/** A push moved pull request `number`'s head to `sha` — and, as on GitHub, CI starts on it,
+ *  and the host answers that the new head still merges with its base (MOTIR-7063: until it
+ *  does, the next green asks nobody). */
 async function push(w: World, repo: RepoSpec, number: number, headRef: string, sha: string) {
   await githubWebhookService.handleEvent(
     'pull_request',
     prPayload(w, repo, 'synchronize', number, { ref: headRef, sha }),
   );
+  await hostAnswersCleanAt(w.workspace.id, number, sha, repo.name);
   await githubWebhookService.handleEvent('check_run', {
     action: 'created',
     installation: installationOf(w),

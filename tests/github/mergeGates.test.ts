@@ -16,6 +16,15 @@ vi.mock('@/lib/jobs/sendEvent', async () => {
 });
 
 import { db } from '@/lib/db';
+import { getGitProvider } from '@/lib/git';
+import type { GitProvider } from '@/lib/git/provider';
+import type { ChangeRequestMergeability } from '@/lib/git/types';
+import { jobServices } from '@/lib/jobs/services';
+import {
+  HEAD_MOVED_RETRY_WAITS_MS,
+  pullRequestHeadMoved,
+} from '@/lib/jobs/definitions/pullRequestHeadMoved';
+import { homeService } from '@/lib/services/homeService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -223,6 +232,52 @@ async function reviewedWithOneGate(email: string) {
   expect(gates[0]!.kind).toBe('pull_request_approval');
   expect(await mergeGates(item.id)).toEqual([]);
   return { s, item };
+}
+
+/** Answer the host's mergeability read with this SEQUENCE, one answer per read, the
+ *  last repeating — the one thing that leaves the process (MOTIR-7063). */
+function stubHostReading(...answers: Array<Partial<ChangeRequestMergeability>>) {
+  let reads = 0;
+  const github = getGitProvider('github') as Required<GitProvider>;
+  const spy = vi.spyOn(github, 'readChangeRequestMergeability').mockImplementation(async () => {
+    const answer = answers[Math.min(reads, answers.length - 1)]!;
+    reads += 1;
+    return { mergeable: null, mergeableState: null, headSha: null, ...answer };
+  });
+  return { spy, reads: () => reads };
+}
+
+/** Drive the `pull-request/head-moved` job's own handler with a step API that executes
+ *  steps and records sleeps — the run a `synchronize` enqueues (MOTIR-7063). */
+async function runHeadMovedJob(workspaceId: string, number: number, headSha: string) {
+  const pullRequestId = await prId(number);
+  const slept: number[] = [];
+  const ctx = {
+    event: {
+      name: 'pull-request/head-moved',
+      data: {
+        workspaceId,
+        pullRequestId,
+        number,
+        headSha,
+        idempotencyKey: `${pullRequestId}:${headSha}`,
+      },
+    },
+    attempt: 0,
+    step: {
+      run: async <T>(_id: string, fn: () => T | Promise<T>): Promise<T> => fn(),
+      sleep: async (_id: string, ms: number | string) => {
+        slept.push(Number(ms));
+      },
+    },
+  };
+  const result = await (
+    pullRequestHeadMoved.handler as unknown as (
+      c: typeof ctx,
+      s: typeof jobServices,
+    ) => Promise<Record<string, unknown>>
+  )(ctx, jobServices);
+  return { result, slept };
 }
 
 beforeEach(async () => {
@@ -701,7 +756,8 @@ describe('a DRAFT is not a merge candidate (MOTIR-5699)', () => {
 // A CONFLICTED MEMBER IS NOT A MERGE CANDIDATE (MOTIR-5913, for bug MOTIR-5907). The host's
 // `mergeable_state` is stored with the head it was read at, and a member the host reports
 // `dirty` AT ITS CURRENT HEAD is asked about nobody, is not promoted to In Review, and is
-// what a `synchronize` clears. `null` — GitHub has not computed — changes nothing.
+// what a `synchronize` replaces. `null` — GitHub has not computed — is no conflict (and, owed
+// at the head, it holds the promotion: MOTIR-7063, below).
 describe('a CONFLICTED member is not a merge candidate (MOTIR-5913)', () => {
   const openGreen = {
     state: 'open',
@@ -763,13 +819,25 @@ describe('a CONFLICTED member is not a merge candidate (MOTIR-5913)', () => {
     expect(await gatesOf(item.id)).toEqual([]);
   });
 
-  it('a reading at an OLDER head does not hold: green at the new head promotes with ONE gate', async () => {
+  it('a reading at an OLDER head is OWED, not clean (MOTIR-7063): green at the new head waits, and the host’s clean answer there promotes with ONE gate', async () => {
     const s = await makeScenario('mg-conflict-old-head@example.com');
     const item = await cardWithPrs(s, 'Old reading', [32]);
     await storeReading(32, 'dirty', 'sha-before');
 
     await ci({ conclusion: 'success', headSha: 'sha-after', number: 32 });
 
+    // The `dirty` is about another commit, so it is no conflict at `sha-after` — and no
+    // answer about it either. Nobody is asked yet.
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await gatesOf(item.id)).toEqual([]);
+
+    stubHostReading({ mergeable: true, mergeableState: 'clean', headSha: 'sha-after' });
+    const summary = await pullRequestMergeabilityService.settleHeadMember(s.workspace.id, {
+      pullRequestId: await prId(32),
+      number: 32,
+    });
+
+    expect(summary).toMatchObject({ outcome: 'clean', promoted: 1 });
     expect(await statusOf(item.id)).toBe('in_review');
     expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#32@sha-after']);
   });
@@ -798,13 +866,18 @@ describe('a CONFLICTED member is not a merge candidate (MOTIR-5913)', () => {
       pullRequestPayload('synchronize', 34, headRef, { head: { ref: headRef, sha: 'sha-b' } }),
     );
     await ci({ conclusion: 'success', headSha: 'sha-b', number: 34 });
+    // Green at the resolving head is not yet "resolved": the host has not said (MOTIR-7063).
+    expect(await statusOf(item.id)).toBe('implemented');
+
+    stubHostReading({ mergeable: true, mergeableState: 'clean', headSha: 'sha-b' });
+    await runHeadMovedJob(s.workspace.id, 34, 'sha-b');
 
     expect(await statusOf(item.id)).toBe('in_review');
     expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#34@sha-b']);
     expect((await gatesOf(item.id)).filter((g) => g.state === 'awaiting')).toHaveLength(1);
   });
 
-  it('a `synchronize` CLEARS the reading, and the resolving head going green asks exactly ONCE', async () => {
+  it('a `synchronize` REPLACES the reading with pending at the new head and asks the host; the resolving head asks exactly ONCE', async () => {
     const s = await makeScenario('mg-conflict-resolve@example.com');
     const item = await cardWithPrs(s, 'Resolve', [33]);
     await storeReading(33, 'dirty', 'sha-1');
@@ -819,11 +892,198 @@ describe('a CONFLICTED member is not a merge candidate (MOTIR-5913)', () => {
     const row = await adminDb.githubPullRequest.findUniqueOrThrow({
       where: { id: await prId(33) },
     });
-    expect([row.mergeableState, row.mergeableStateHeadSha]).toEqual([null, null]);
+    // The old head's `dirty` is gone — and what stands in its place is OWED, not nothing.
+    expect([row.mergeableState, row.mergeableStateHeadSha]).toEqual(['unknown', 'sha-2']);
+    expect(sent.filter((e) => e.name === 'pull-request/head-moved').map((e) => e.data)).toEqual([
+      {
+        workspaceId: s.workspace.id,
+        pullRequestId: row.id,
+        number: 33,
+        headSha: 'sha-2',
+        idempotencyKey: `${row.id}:sha-2`,
+      },
+    ]);
 
     await ci({ conclusion: 'success', headSha: 'sha-2', number: 33 });
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await gatesOf(item.id)).toEqual([]);
+
+    stubHostReading({ mergeable: true, mergeableState: 'clean', headSha: 'sha-2' });
+    await runHeadMovedJob(s.workspace.id, 33, 'sha-2');
+
     expect(await statusOf(item.id)).toBe('in_review');
     expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#33@sha-2']);
     expect((await gatesOf(item.id)).filter((g) => g.state === 'awaiting')).toHaveLength(1);
+  });
+});
+
+// A PUSH ONTO A BASE THAT HAS ALREADY MOVED PAST IT (MOTIR-7063). The conflict arrives
+// with no event on the base at all, so the `synchronize` itself asks: it marks the
+// reading PENDING at the new head and enqueues `pull-request/head-moved`, whose host
+// read settles it. Green CI does not promote a head whose reading is still owed.
+describe('a push is asked about at its NEW head (MOTIR-7063)', () => {
+  const headRefOf = (item: { identifier: string }, number: number) =>
+    `subtask/${item.identifier}-${number}`;
+  const push = (item: { identifier: string }, number: number, sha: string) =>
+    githubWebhookService.handleEvent(
+      'pull_request',
+      pullRequestPayload('synchronize', number, headRefOf(item, number), {
+        head: { ref: headRefOf(item, number), sha },
+      }),
+    );
+  const reading = async (number: number) => {
+    const row = await adminDb.githubPullRequest.findUniqueOrThrow({
+      where: { id: await prId(number) },
+    });
+    return [row.mergeableState, row.mergeableStateHeadSha];
+  };
+  const fixReasonOf = async (workItemId: string) =>
+    (await adminDb.workItem.findUniqueOrThrow({ where: { id: workItemId } })).fixReason;
+  const toFixRow = async (s: Scenario, workItemId: string) =>
+    (
+      await homeService.listToFix({
+        userId: s.user.id,
+        workspaceId: s.workspace.id,
+        projectId: s.project.id,
+      })
+    ).items.find((row) => row.id === workItemId);
+
+  it('onto a CONFLICTING base: the re-read stores `dirty` at the new head, the card is `conflicted` in To fix, and green there promotes nothing', async () => {
+    const s = await makeScenario('mg-7063-conflict@example.com');
+    const item = await cardWithPrs(s, 'Pushed onto a moved base', [41]);
+
+    await push(item, 41, 'sha-b');
+    expect(await reading(41)).toEqual(['unknown', 'sha-b']);
+
+    stubHostReading({ mergeable: false, mergeableState: 'dirty', headSha: 'sha-b' });
+    const { result, slept } = await runHeadMovedJob(s.workspace.id, 41, 'sha-b');
+
+    expect(result).toMatchObject({ outcome: 'conflicted', passes: 1 });
+    expect(slept).toEqual([]);
+    expect(await reading(41)).toEqual(['dirty', 'sha-b']);
+    expect(await fixReasonOf(item.id)).toBe('conflicted');
+    expect((await toFixRow(s, item.id))?.fixReason).toBe('conflicted');
+
+    await ci({ conclusion: 'success', headSha: 'sha-b', number: 41 });
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await gatesOf(item.id)).toEqual([]);
+  });
+
+  it('green BEFORE the answer waits; a CLEAN answer then promotes with exactly ONE gate', async () => {
+    const s = await makeScenario('mg-7063-clean@example.com');
+    const item = await cardWithPrs(s, 'Pushed onto a clean base', [42]);
+
+    await push(item, 42, 'sha-b');
+    await ci({ conclusion: 'success', headSha: 'sha-b', number: 42 });
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await gatesOf(item.id)).toEqual([]);
+
+    stubHostReading({ mergeable: true, mergeableState: 'clean', headSha: 'sha-b' });
+    const { result } = await runHeadMovedJob(s.workspace.id, 42, 'sha-b');
+
+    expect(result).toMatchObject({ outcome: 'clean', promoted: 1 });
+    expect(await reading(42)).toEqual(['clean', 'sha-b']);
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#42@sha-b']);
+  });
+
+  it('a CLEAN answer BEFORE green promotes nothing yet; the green that follows promotes with ONE gate', async () => {
+    const s = await makeScenario('mg-7063-clean-first@example.com');
+    const item = await cardWithPrs(s, 'Answer first', [43]);
+
+    await push(item, 43, 'sha-b');
+    stubHostReading({ mergeable: true, mergeableState: 'clean', headSha: 'sha-b' });
+    const { result } = await runHeadMovedJob(s.workspace.id, 43, 'sha-b');
+    expect(result).toMatchObject({ outcome: 'clean', promoted: 0 });
+    expect(await statusOf(item.id)).toBe('implemented');
+
+    await ci({ conclusion: 'success', headSha: 'sha-b', number: 43 });
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#43@sha-b']);
+  });
+
+  it('a card IN REVIEW pushed onto a conflicting base is moved to Implemented and listed in To fix as `conflicted`', async () => {
+    const s = await makeScenario('mg-7063-in-review@example.com');
+    const item = await cardWithPrs(s, 'Already asked', [44]);
+    await ci({ conclusion: 'success', headSha: 'sha-a', number: 44 });
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#44@sha-a']);
+
+    await push(item, 44, 'sha-b');
+    await ci({ conclusion: 'success', headSha: 'sha-b', number: 44 });
+    // The push withdrew the question about `sha-a`, and green at `sha-b` asks nothing
+    // while the reading there is owed.
+    expect(await awaitingVersions(item.id)).toEqual([]);
+
+    stubHostReading({ mergeable: false, mergeableState: 'dirty', headSha: 'sha-b' });
+    await runHeadMovedJob(s.workspace.id, 44, 'sha-b');
+
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await awaitingVersions(item.id)).toEqual([]);
+    expect((await toFixRow(s, item.id))?.fixReason).toBe('conflicted');
+  });
+
+  it('a card IN REVIEW pushed onto a clean base is asked again about the new head, ONCE', async () => {
+    const s = await makeScenario('mg-7063-in-review-clean@example.com');
+    const item = await cardWithPrs(s, 'Asked again', [45]);
+    await ci({ conclusion: 'success', headSha: 'sha-a', number: 45 });
+
+    await push(item, 45, 'sha-b');
+    await ci({ conclusion: 'success', headSha: 'sha-b', number: 45 });
+    expect(await awaitingVersions(item.id)).toEqual([]);
+
+    stubHostReading({ mergeable: true, mergeableState: 'clean', headSha: 'sha-b' });
+    const { result } = await runHeadMovedJob(s.workspace.id, 45, 'sha-b');
+
+    expect(result).toMatchObject({ outcome: 'clean', gatesRaised: 1 });
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#45@sha-b']);
+  });
+
+  it('the host computes LAZILY: `null` is asked again after the bounded waits, and a `dirty` on the retry settles', async () => {
+    const s = await makeScenario('mg-7063-lazy@example.com');
+    const item = await cardWithPrs(s, 'Lazy host', [46]);
+    await push(item, 46, 'sha-b');
+
+    const host = stubHostReading(
+      { mergeable: null, mergeableState: 'unknown' },
+      { mergeable: false, mergeableState: 'dirty', headSha: 'sha-b' },
+    );
+    const { result, slept } = await runHeadMovedJob(s.workspace.id, 46, 'sha-b');
+
+    expect(host.reads()).toBe(2);
+    expect(slept).toEqual([HEAD_MOVED_RETRY_WAITS_MS[0]]);
+    expect(result).toMatchObject({ outcome: 'conflicted', passes: 2 });
+    expect(await fixReasonOf(item.id)).toBe('conflicted');
+  });
+
+  it('`null` on EVERY retry leaves the reading pending and the card held — the reconcile tick is the backstop', async () => {
+    const s = await makeScenario('mg-7063-never@example.com');
+    const item = await cardWithPrs(s, 'Never computed', [47]);
+    await push(item, 47, 'sha-b');
+    await ci({ conclusion: 'success', headSha: 'sha-b', number: 47 });
+
+    stubHostReading({ mergeable: null, mergeableState: 'unknown' });
+    const { result, slept } = await runHeadMovedJob(s.workspace.id, 47, 'sha-b');
+
+    expect(slept).toEqual([...HEAD_MOVED_RETRY_WAITS_MS]);
+    expect(result).toMatchObject({
+      outcome: 'unknown',
+      passes: HEAD_MOVED_RETRY_WAITS_MS.length + 1,
+    });
+    expect(await reading(47)).toEqual(['unknown', 'sha-b']);
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await fixReasonOf(item.id)).toBeNull();
+  });
+
+  it('a pull request NOTHING has asked about is not held — an unasked row is not an owed one', async () => {
+    const s = await makeScenario('mg-7063-unasked@example.com');
+    const item = await cardWithPrs(s, 'Never pushed', [48]);
+    expect(await reading(48)).toEqual([null, null]);
+
+    await ci({ conclusion: 'success', headSha: 'sha-a', number: 48 });
+
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#48@sha-a']);
   });
 });
