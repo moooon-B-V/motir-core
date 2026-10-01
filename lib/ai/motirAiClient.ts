@@ -390,6 +390,16 @@ export interface AgentMachineDebitInput {
    *  `agent-instance-interval:<id>` (one charge per interval). */
   externalRef: string;
   reason?: string;
+  /**
+   * WHERE THE RUN RAN (Story MOTIR-727 · MOTIR-7240 · motir-ai MOTIR-7238) — the run's
+   * core workspace and project, sent together on the `coreRunId` path only. motir-ai
+   * writes them onto the run's usage row ONCE, which is what lets the platform usage
+   * rollup place the run's coding spend below its org; a run charged without them is
+   * reported in the org's unattributed bucket. Never sent with `instanceIntervalId`:
+   * an agent instance is not scoped to a project, and motir-ai refuses the pair.
+   */
+  coreWorkspaceId?: string;
+  coreProjectId?: string;
 }
 
 /** The same body `ci-overage` answers, `idempotent` included. */
@@ -409,10 +419,14 @@ export async function debitAgentMachine(
   input: AgentMachineDebitInput,
 ): Promise<RawAgentMachineDebitResponse> {
   const { url, serviceToken } = config();
+  // The address travels whole or not at all — motir-ai refuses half of one.
+  const { coreWorkspaceId, coreProjectId, ...charge } = input;
+  const body =
+    coreWorkspaceId && coreProjectId ? { ...charge, coreWorkspaceId, coreProjectId } : charge;
   const res = await aiFetch(`${url}/v1/credits/agent-machine`, {
     method: 'POST',
     headers: authHeaders(serviceToken),
-    body: JSON.stringify(input),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawAgentMachineDebitResponse;

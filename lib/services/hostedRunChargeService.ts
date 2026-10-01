@@ -66,14 +66,18 @@ export const hostedRunChargeService = {
   ): Promise<HostedRunChargeResult> {
     if (!isCloudBilling()) return { outcome: 'not_charged', reason: 'disabled' };
 
-    const organizationId = await withSystemContext(async (tx) => {
+    const located = await withSystemContext(async (tx) => {
       const run = await dispatchRunRepository.findById(dispatchRunId, tx);
       // Hosted only. An `instance` run is charged as its agent's machine time, on
       // the agent's intervals — never per run (`agent-instance-run.md` §5).
       if (!run || run.origin !== 'hosted') return null;
-      return workspaceRepository.findOrganizationId(run.workspaceId, tx);
+      const organizationId = await workspaceRepository.findOrganizationId(run.workspaceId, tx);
+      return organizationId
+        ? { organizationId, workspaceId: run.workspaceId, projectId: run.projectId }
+        : null;
     });
-    if (!organizationId) return { outcome: 'not_charged', reason: 'no_run' };
+    if (!located) return { outcome: 'not_charged', reason: 'no_run' };
+    const { organizationId } = located;
 
     const machine = await ciFleetCostMeterService.getMachineTimeForDispatchRun(dispatchRunId);
     if (!machine.settled) return { outcome: 'not_charged', reason: 'not_settled' };
@@ -90,6 +94,11 @@ export const hostedRunChargeService = {
         billableSeconds,
         externalRef: dispatchRunId,
         reason: 'hosted run machine time',
+        // WHERE the run ran (MOTIR-7240): the run's own workspace and project, so the
+        // platform usage rollup places its coding spend below the org. The client
+        // sends the pair only when both are present; the charge never waits on it.
+        coreWorkspaceId: located.workspaceId,
+        coreProjectId: located.projectId,
       });
       return {
         outcome: 'charged',

@@ -6,6 +6,7 @@ import {
   type HostedAgentContainerRequest,
 } from '@/lib/services/hostedAgentContainerService';
 import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
+import { debitAgentMachine } from '@/lib/ai/motirAiClient';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -180,6 +181,9 @@ describe('a settled hosted-agent container charges its run once', () => {
       billableSeconds: machine.billableSeconds,
       externalRef: runId,
       reason: 'hosted run machine time',
+      // MOTIR-7240 — the run's own workspace and project, so motir-ai attributes it.
+      coreWorkspaceId: tenant.workspaceId,
+      coreProjectId: tenant.projectId,
     });
     // AC 7 — no meter row, cost or rate crosses the boundary.
     expect(JSON.stringify(calls[0])).not.toMatch(/costUsd|usdPerSecond|handleId|cost/i);
@@ -405,5 +409,50 @@ describe('a motir-ai failure never holds the teardown, and the charge is retried
     });
     expect(outcome.outcome).toBe('settled');
     expect(calls).toHaveLength(1);
+  });
+});
+
+// MOTIR-7240 — the run's ADDRESS rides the charge whole or not at all, and only on
+// the run path. Driven at the client, where the rule lives: motir-ai refuses half an
+// address, and refuses any address on an instance interval.
+describe('the charge carries where the run ran', () => {
+  const base = {
+    coreOrganizationId: 'org_1',
+    credits: 3,
+    billableSeconds: 180,
+    reason: 'hosted run machine time',
+  };
+
+  it('sends both ids with a run charge, and drops a half address instead of sending it', async () => {
+    const calls = stubMotirAi((_n, body) => json(debitBody(body['credits'] as number)));
+    await debitAgentMachine({
+      ...base,
+      coreRunId: 'run_1',
+      externalRef: 'run_1',
+      coreWorkspaceId: 'ws_1',
+      coreProjectId: 'pj_1',
+    });
+    await debitAgentMachine({
+      ...base,
+      coreRunId: 'run_2',
+      externalRef: 'run_2',
+      coreWorkspaceId: 'ws_1',
+    });
+    expect(calls[0]).toMatchObject({ coreWorkspaceId: 'ws_1', coreProjectId: 'pj_1' });
+    // The charge itself still goes — it never waits on attribution.
+    expect(calls[1]).toMatchObject({ coreRunId: 'run_2', credits: 3 });
+    expect(calls[1]).not.toHaveProperty('coreWorkspaceId');
+    expect(calls[1]).not.toHaveProperty('coreProjectId');
+  });
+
+  it('an instance-interval charge carries neither id', async () => {
+    const calls = stubMotirAi((_n, body) => json(debitBody(body['credits'] as number)));
+    await debitAgentMachine({
+      ...base,
+      instanceIntervalId: 'iv_1',
+      externalRef: 'agent-instance-interval:iv_1',
+    });
+    expect(calls[0]).not.toHaveProperty('coreWorkspaceId');
+    expect(calls[0]).not.toHaveProperty('coreProjectId');
   });
 });
