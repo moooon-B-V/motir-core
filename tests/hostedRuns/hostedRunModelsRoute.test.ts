@@ -52,7 +52,7 @@ describe('GET /api/hosted-runs/models', () => {
       'fetch',
       vi.fn(async () => json(LIST)),
     );
-    const res = await GET();
+    const res = await GET(new Request('http://localhost/api/hosted-runs/models'));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(LIST);
   });
@@ -64,7 +64,7 @@ describe('GET /api/hosted-runs/models', () => {
     });
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const res = await GET();
+    const res = await GET(new Request('http://localhost/api/hosted-runs/models'));
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ code: 'UNAUTHENTICATED' });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -75,7 +75,7 @@ describe('GET /api/hosted-runs/models', () => {
       'fetch',
       vi.fn(() => Promise.reject(new TypeError('fetch failed'))),
     );
-    const res = await GET();
+    const res = await GET(new Request('http://localhost/api/hosted-runs/models'));
     expect(res.status).toBe(503);
     const body = (await res.json()) as { code: string; models?: unknown };
     expect(body.code).toBe('hosted_models_unavailable');

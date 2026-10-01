@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
-import { hostedRunModelService } from '@/lib/services/hostedRunModelService';
+import { hostedRunPickerService } from '@/lib/services/hostedRunPickerService';
 
 // GET /api/hosted-runs/models (MOTIR-6483) — the models the Run hosted picker
 // offers, and the one it preselects (`docs/decisions/hosted-agent-run.md` §7).
@@ -12,11 +12,17 @@ import { hostedRunModelService } from '@/lib/services/hostedRunModelService';
 // ⚠️ UNAVAILABLE IS A 503 WITH A STABLE CODE, NEVER A 200 WITH AN EMPTY LIST.
 // The picker disables Run hosted and says why on this code; an empty list would
 // tell the person no model exists while motir-ai is merely unreachable.
-export async function GET(): Promise<Response> {
+//
+// `?workItem=<KEY>` (Story MOTIR-6989 · MOTIR-6996) adds `resolved` — the card's
+// preselection from its difficulty, and why — or `resolved: null` where it cannot
+// be told (a key the caller cannot browse reads exactly like one that names
+// nothing). Without it the answer is unchanged.
+export async function GET(request: Request): Promise<Response> {
   const gate = await requireCompliantWorkspaceContext();
   if (!gate.ok) return gate.response;
 
-  const offered = await hostedRunModelService.listOfferedModels();
+  const workItem = new URL(request.url).searchParams.get('workItem')?.trim() || null;
+  const offered = await hostedRunPickerService.readModels(workItem, gate.ctx);
   if (offered.state === 'unavailable') {
     return NextResponse.json(
       {
@@ -27,7 +33,11 @@ export async function GET(): Promise<Response> {
     );
   }
   return NextResponse.json(
-    { models: offered.models, default: offered.default },
+    {
+      models: offered.models,
+      default: offered.default,
+      ...(offered.resolved !== undefined ? { resolved: offered.resolved } : {}),
+    },
     { headers: { 'Cache-Control': 'private, no-store' } },
   );
 }

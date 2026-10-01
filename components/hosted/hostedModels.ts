@@ -1,4 +1,6 @@
 import type { ClaimActorDto } from '@/lib/dto/claim';
+import type { ResolvedWorkItemHostedModelDto } from '@/lib/dto/projectHostedAgentSettings';
+import { isWorkItemDifficulty } from '@/lib/issues/difficulty';
 
 // THE HOSTED DOORS' PURE HELPERS (Story MOTIR-683 · MOTIR-691; Story MOTIR-6527 ·
 // MOTIR-6796), lifted out of the item page's `HostedRunProvider` unchanged
@@ -8,11 +10,23 @@ import type { ClaimActorDto } from '@/lib/dto/claim';
 // ⚠️ LIFTED, NOT FORKED. Every function here keeps the body it had in the provider,
 // which now imports them back. A change to what a refusal means is made once.
 
+/** The card's resolved preselection (MOTIR-6996): the model its difficulty maps
+ *  to, why, and the difficulty it was resolved from — a straight read of the
+ *  server's `resolveForWorkItem`, never re-derived here. */
+export type HostedResolvedModel = ResolvedWorkItemHostedModelDto;
+
 /** The offered-model read, as the picker draws it: three faces, never one. */
 export type HostedModelsState =
   | { state: 'loading' }
   | { state: 'unavailable' }
-  | { state: 'ok'; models: { id: string; provider: string }[]; default: string | null };
+  | {
+      state: 'ok';
+      models: { id: string; provider: string }[];
+      default: string | null;
+      /** The card's resolved preselection — null where the read named no card
+       *  or the server could not resolve it. */
+      resolved?: HostedResolvedModel | null;
+    };
 
 /** One repository a run's App cannot write — the start route's 409 body, verbatim. */
 export interface HostedRepositoryRefusal {
@@ -55,23 +69,81 @@ export type FixHostedRefusal =
   | { kind: 'taken'; holder: ClaimActorDto | null; startedAt: string | null }
   | { kind: 'stale' };
 
-/** The model preselected from a list: the default, else the first offered. */
+/**
+ * The model preselected from a list (MOTIR-6996): the card's RESOLVED model when
+ * it is offered, else motir-ai's default when offered, else the first offered.
+ * Total: any state, any list — null only when there is nothing to pick.
+ */
 export function preselectedModel(models: HostedModelsState): string | null {
   if (models.state !== 'ok' || models.models.length === 0) return null;
-  if (models.default && models.models.some((m) => m.id === models.default)) return models.default;
+  const offered = (id: string | null | undefined): id is string =>
+    !!id && models.models.some((m) => m.id === id);
+  if (offered(models.resolved?.model)) return models.resolved.model;
+  if (offered(models.default)) return models.default;
   return models.models[0]!.id;
 }
 
-export async function readModels(): Promise<HostedModelsState> {
+/** The list without its card resolution — the preselect as it was before
+ *  MOTIR-6996, which Continue hosted keeps (a continuation is not re-resolved). */
+export function withoutResolution(models: HostedModelsState): HostedModelsState {
+  return models.state === 'ok' ? { ...models, resolved: null } : models;
+}
+
+/**
+ * The resolution the picker's line describes for `value`, or null when there is
+ * no line: nothing resolved, a source that is not about difficulty
+ * (`platform_default` / `first_offered` — today's *Default* label stands), or a
+ * value that is not the resolved model (the person picked another; design F6).
+ */
+export function provenanceFor(
+  models: HostedModelsState,
+  value: string | null,
+): HostedResolvedModel | null {
+  if (models.state !== 'ok' || !models.resolved || value === null) return null;
+  const r = models.resolved;
+  if (r.difficulty === null) return null;
+  if (r.source !== 'override' && r.source !== 'platform_level') return null;
+  if (r.model !== value || !models.models.some((m) => m.id === value)) return null;
+  return r;
+}
+
+const SOURCES = new Set(['override', 'platform_level', 'platform_default', 'first_offered']);
+
+/** The wire `resolved` → the client's, or null when it is absent or malformed. */
+function resolvedOf(v: unknown): HostedResolvedModel | null {
+  const o = v as Record<string, unknown> | null | undefined;
+  if (!o || typeof o !== 'object') return null;
+  if (typeof o.model !== 'string' || typeof o.source !== 'string' || !SOURCES.has(o.source)) {
+    return null;
+  }
+  return {
+    model: o.model,
+    source: o.source as HostedResolvedModel['source'],
+    difficulty: isWorkItemDifficulty(o.difficulty) ? o.difficulty : null,
+    fromLeaves: o.fromLeaves === true,
+  };
+}
+
+/** Read the offered list; with `workItemKey`, also that card's resolved model. */
+export async function readModels(workItemKey?: string | null): Promise<HostedModelsState> {
   try {
-    const res = await fetch('/api/hosted-runs/models', { headers: { Accept: 'application/json' } });
+    const url = workItemKey
+      ? `/api/hosted-runs/models?workItem=${encodeURIComponent(workItemKey)}`
+      : '/api/hosted-runs/models';
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!res.ok) return { state: 'unavailable' };
     const body = (await res.json()) as {
       models?: { id: string; provider: string }[];
       default?: string | null;
+      resolved?: unknown;
     };
     if (!Array.isArray(body.models)) return { state: 'unavailable' };
-    return { state: 'ok', models: body.models, default: body.default ?? null };
+    return {
+      state: 'ok',
+      models: body.models,
+      default: body.default ?? null,
+      resolved: resolvedOf(body.resolved),
+    };
   } catch {
     return { state: 'unavailable' };
   }

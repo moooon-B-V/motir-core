@@ -1835,6 +1835,7 @@
       "fields": "Fields",
       "components": "Components",
       "aiPlanning": "AI planning",
+      "hostedAgent": "Hosted agent",
       "rules": "Rules",
       "repositories": "Repositories",
       "monitoring": "Monitoring",
@@ -3730,6 +3731,35 @@
         "factKeptBy": "Kept"
       }
     },
+    "hostedAgent": {
+      "title": "Hosted agent",
+      "pageDescription": "Which model a hosted run uses. Run hosted preselects it from the work item’s difficulty; whoever starts the run can still pick another.",
+      "card": {
+        "title": "Model by difficulty",
+        "subtitle": "Each difficulty runs on the platform default unless you override it. A parent work item uses the model of the highest difficulty among its leaves."
+      },
+      "col": {
+        "difficulty": "Difficulty",
+        "model": "Model",
+        "source": "Source"
+      },
+      "modelFor": "Model for {difficulty}",
+      "source": {
+        "default": "Platform default",
+        "override": "Override"
+      },
+      "optionDefault": "Platform default for {difficulty}",
+      "reset": "Reset to default",
+      "withdrawn": "The saved model, <id>{model}</id>, is no longer offered, so {difficulty} runs use the platform default. Reset to clear it.",
+      "noDifficulty": "A work item with no difficulty runs on the platform default, <id>{model}</id> — the model Run hosted marks <b>Default</b>.",
+      "readOnlyBanner": "Only a project admin can change hosted agent settings.",
+      "unavailableBody": "Couldn’t reach Motir AI, so the hosted models can’t be shown or changed right now. Hosted runs are off until it answers.",
+      "emptyBody": "No model can run a hosted work item right now, so there is nothing to choose.",
+      "savedTitle": "Hosted agent settings saved",
+      "savedDesc": "New hosted runs use these models.",
+      "errorTitle": "Couldn’t save",
+      "saveError": "Your hosted agent settings weren’t saved. Please try again."
+    },
     "connectedApps": {
       "title": "Connected apps",
       "subtitle": "Apps you've signed into with your Motir account. Each one acts as you, in one workspace, with the scopes you approved.",
@@ -3979,6 +4009,7 @@
         "components": "Components are managed by project admins. Ask an admin if one needs adding or changing.",
         "bugs": "Where this project's bugs are filed is managed by project admins. Ask an admin if the destination needs changing.",
         "ai-planning": "AI planning for this project — its cadence and its planner model — is configured by project admins. Ask an admin if it needs changing.",
+        "hosted-agent": "Which model a hosted run uses is shown to people who can start a hosted run on this project. Ask a project admin if you need to see it.",
         "automation": "Project automation is managed by project admins. Ask an admin if you need a rule changed.",
         "monitoring": "This project's error-monitor connection is managed by people who can manage integrations. Ask a project admin if Sentry needs connecting or reconnecting."
       }
@@ -9234,7 +9265,11 @@
         "unavailableBody": "Couldn’t load the models, so Run is off for now.",
         "retry": "Try again",
         "emptyTrigger": "No model available",
-        "emptyBody": "No model can run this work item right now, so Run is off. Local runs are unaffected."
+        "emptyBody": "No model can run this work item right now, so Run is off. Local runs are unaffected.",
+        "fromDifficulty": "From difficulty: <b>{difficulty}</b>",
+        "override": "Project override for <b>{difficulty}</b>",
+        "fromLeaves": "Highest difficulty among its leaves: <b>{difficulty}</b>",
+        "overrideFromLeaves": "Project override for <b>{difficulty}</b>, the highest difficulty among its leaves"
       },
       "notReady": "Run is available once this work item is ready — it has {count, plural, one {# open blocker} other {# open blockers}}.",
       "refused": {

@@ -11,6 +11,8 @@ import 'server-only';
 // streams them, mapping the §5 problem+json taxonomy to motir-core typed errors.
 
 import { mintJobToken } from './jobToken';
+import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
+import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import {
   parseIndexAllowanceSummary,
   parseIndexAllowanceVerdict,
@@ -1950,12 +1952,50 @@ export interface AgentModel {
  * a body that is not a model list must never read as "no models exist".
  */
 export type AgentModelsRead =
-  | { state: 'ok'; models: AgentModel[]; default: string | null }
+  | {
+      state: 'ok';
+      models: AgentModel[];
+      default: string | null;
+      defaultsByDifficulty: AgentModelDefaultsByDifficulty;
+    }
   | { state: 'unavailable'; reason: string };
+
+/**
+ * motir-ai's platform default model per leaf difficulty (MOTIR-6990 · MOTIR-6993):
+ * all four levels, each an offered bare id or null.
+ */
+export type AgentModelDefaultsByDifficulty = Record<WorkItemDifficultyDto, string | null>;
+
+/** Every level null — what an older motir-ai, which serves no such field, reads as. */
+function noDifficultyDefaults(): AgentModelDefaultsByDifficulty {
+  return { trivial: null, low: null, medium: null, high: null };
+}
+
+/**
+ * `defaultsByDifficulty` is ADDITIVE on the contract, so a missing field (an older
+ * motir-ai) is all-null rather than a refusal. A present field that is not an
+ * object, or a level that is neither a string nor null, is a malformed answer.
+ */
+function parseDefaultsByDifficulty(value: unknown): AgentModelDefaultsByDifficulty | null {
+  if (value === undefined) return noDifficultyDefaults();
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const out = noDifficultyDefaults();
+  for (const level of WORK_ITEM_DIFFICULTIES) {
+    const id = (value as Record<string, unknown>)[level];
+    if (id === undefined || id === null) continue;
+    if (typeof id !== 'string' || !id) return null;
+    out[level] = id;
+  }
+  return out;
+}
 
 function parseAgentModels(body: unknown): AgentModelsRead | null {
   if (!body || typeof body !== 'object') return null;
-  const { models, default: defaultId } = body as { models?: unknown; default?: unknown };
+  const {
+    models,
+    default: defaultId,
+    defaultsByDifficulty,
+  } = body as { models?: unknown; default?: unknown; defaultsByDifficulty?: unknown };
   if (!Array.isArray(models)) return null;
   const parsed: AgentModel[] = [];
   for (const m of models) {
@@ -1964,7 +2004,14 @@ function parseAgentModels(body: unknown): AgentModelsRead | null {
     parsed.push({ id, provider });
   }
   if (defaultId !== null && defaultId !== undefined && typeof defaultId !== 'string') return null;
-  return { state: 'ok', models: parsed, default: defaultId ?? null };
+  const byDifficulty = parseDefaultsByDifficulty(defaultsByDifficulty);
+  if (!byDifficulty) return null;
+  return {
+    state: 'ok',
+    models: parsed,
+    default: defaultId ?? null,
+    defaultsByDifficulty: byDifficulty,
+  };
 }
 
 /**

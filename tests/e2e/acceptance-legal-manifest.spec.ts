@@ -88,6 +88,14 @@ test.beforeEach(async () => {
   await resetDatabase();
 });
 
+// The manifest is a PROCESS-WIDE server read, and this spec leaves it configured.
+// Every later spec on the same lane server would then meet the re-consent gate
+// on sign-in, so put the server back to the unconfigured arm it started from.
+test.afterEach(async ({ request }) => {
+  const cleared = await setLegalManifest(request, null);
+  expect(cleared.status, 'the manifest is unset for the specs that follow').toBe('unconfigured');
+});
+
 test.afterAll(async () => {
   await adminDb.$disconnect();
 });

@@ -19,6 +19,9 @@ const LIST = {
   default: 'claude-opus-5-5',
 };
 
+/** What a motir-ai that predates MOTIR-6990 is read as: every level null. */
+const NO_LEVELS = { trivial: null, low: null, medium: null, high: null };
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -41,7 +44,11 @@ describe('getAgentModels (the client read)', () => {
     const fetchMock = vi.fn(async () => json(LIST));
     vi.stubGlobal('fetch', fetchMock);
 
-    expect(await getAgentModels()).toEqual({ state: 'ok', ...LIST });
+    expect(await getAgentModels()).toEqual({
+      state: 'ok',
+      ...LIST,
+      defaultsByDifficulty: NO_LEVELS,
+    });
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://ai.test/v1/agent-models');
     expect(init.method).toBe('GET');
@@ -53,7 +60,38 @@ describe('getAgentModels (the client read)', () => {
       'fetch',
       vi.fn(async () => json({ models: LIST.models, default: null })),
     );
-    expect(await getAgentModels()).toEqual({ state: 'ok', models: LIST.models, default: null });
+    expect(await getAgentModels()).toEqual({
+      state: 'ok',
+      models: LIST.models,
+      default: null,
+      defaultsByDifficulty: NO_LEVELS,
+    });
+  });
+
+  it('carries defaultsByDifficulty through, a null level as null (MOTIR-6993)', async () => {
+    const defaultsByDifficulty = {
+      trivial: 'claude-sonnet-4-6',
+      low: 'claude-sonnet-4-6',
+      medium: 'claude-opus-5-5',
+      high: null,
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ ...LIST, defaultsByDifficulty })),
+    );
+    expect(await getAgentModels()).toEqual({ state: 'ok', ...LIST, defaultsByDifficulty });
+  });
+
+  it('reads a defaultsByDifficulty with a level missing as that level null', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ ...LIST, defaultsByDifficulty: { high: 'claude-opus-5-5' } })),
+    );
+    const read = await getAgentModels();
+    expect(read.state === 'ok' && read.defaultsByDifficulty).toEqual({
+      ...NO_LEVELS,
+      high: 'claude-opus-5-5',
+    });
   });
 
   it.each([
@@ -64,6 +102,14 @@ describe('getAgentModels (the client read)', () => {
     [
       'a 2xx whose model rows are malformed',
       async () => json({ models: [{ id: 3 }], default: null }),
+    ],
+    [
+      'a 2xx whose defaultsByDifficulty is not an object',
+      async () => json({ ...LIST, defaultsByDifficulty: 'opus' }),
+    ],
+    [
+      'a 2xx whose defaultsByDifficulty level is not a string',
+      async () => json({ ...LIST, defaultsByDifficulty: { low: 7 } }),
     ],
     ['a 2xx that is not JSON', async () => new Response('<html>', { status: 200 })],
   ])('answers unavailable — never an empty list — on %s', async (_name, impl) => {
@@ -114,6 +160,7 @@ describe('hostedRunModelService.listOfferedModels', () => {
       state: 'ok',
       models: LIST.models,
       default: LIST.default,
+      defaultsByDifficulty: NO_LEVELS,
     });
   });
 

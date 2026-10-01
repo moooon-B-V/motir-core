@@ -9,6 +9,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   PROJECT_SETTINGS_NAV,
   hasVisibleSettingsArea,
+  settingsEntryViewKey,
   visibleSettingsNav,
 } from '@/lib/settings/projectSettingsNav';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
@@ -207,7 +208,8 @@ const EXPECTED: Record<LegacyAccessLevel, Record<Role, { browse: boolean; manage
 // its questions on a build where every room exists. The deployment axis has its
 // own coverage in `tests/settings/projectSettingsNav.test.ts`, where it costs no
 // database.
-const ON_CLOUD = { publicProjectsAvailable: true };
+// MOTIR-6995 adds the hosted-runs axis beside it, so every room exists here.
+const ON_CLOUD = { publicProjectsAvailable: true, hostedRunsAvailable: true };
 
 const LEVELS: LegacyAccessLevel[] = ['open', 'limited', 'private', 'public'];
 const ROLES: Role[] = ['owner', 'wsAdmin', 'plainMember', 'viewer', 'member', 'admin', 'nonMember'];
@@ -261,7 +263,10 @@ describe('settings-area role-gating matrix — nav visibility (driven from the r
             // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
             // MOTIR-5394); MOTIR-5278's browse view is reverted.
             // MOTIR-5278 had read the entry's VIEW key here.
-            expect(visibleIds.has(entry.id)).toBe(held.has(entry.permission));
+            // MOTIR-6995 — Hosted agent declares a distinct VIEW key again
+            // (`work_item:edit`), so visibility is read through the entry's
+            // effective view key, which IS `permission` for every other entry.
+            expect(visibleIds.has(entry.id)).toBe(held.has(settingsEntryViewKey(entry)));
           }
         });
 
@@ -282,8 +287,13 @@ describe('settings-area role-gating matrix — nav visibility (driven from the r
           // MOTIR-5394); MOTIR-5278's browse view is reverted.
           // MOTIR-5278 had added a third arm between these two: a non-admin browser
           // sees exactly Approvals.
+          // MOTIR-6995 — a third arm between the two: a non-admin who may EDIT
+          // work (a member) sees exactly the Hosted agent room, read-only, because
+          // its view key is `work_item:edit` (design MOTIR-6991).
           if (held.has('project:administer')) {
             expect(visible).toEqual(PROJECT_SETTINGS_NAV);
+          } else if (held.has('work_item:edit')) {
+            expect(visible.map((e) => e.id)).toEqual(['hosted-agent']);
           } else {
             expect(visible).toEqual([]);
           }

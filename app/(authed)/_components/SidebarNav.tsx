@@ -173,6 +173,12 @@ export interface SidebarNavProps {
    */
   publicProjectsAvailable?: boolean;
   /**
+   * Whether this build runs hosted agents (`isHostedRunsAvailable()`, MOTIR-6995)
+   * — the registry's `hostedRunsAvailable` axis, which drops the **Hosted agent**
+   * room off a build without them. Defaults FALSE, like the flag above.
+   */
+  hostedRunsAvailable?: boolean;
+  /**
    * The Help control for the rail's FOOTER (MOTIR-4239) — a ready-made
    * `<HelpMenu placement="footer" />`, built by the layout so this component
    * stays agnostic of `docsIndexUrl` / `legalIndexUrl` (the Docs and Legal
@@ -211,6 +217,7 @@ export function SidebarNav({
   workspace = null,
   workspaceTierRevealed = false,
   publicProjectsAvailable = false,
+  hostedRunsAvailable = false,
   helpMenu,
 }: SidebarNavProps) {
   const t = useTranslations('shell');
@@ -249,7 +256,7 @@ export function SidebarNav({
   // The registry's SECOND axis (MOTIR-4243) — what this BUILD has, beside what
   // this actor holds. Built here with `held`, for the same reason: the rail and
   // the area door must filter on one answer, not two.
-  const availability = { publicProjectsAvailable };
+  const availability = { publicProjectsAvailable, hostedRunsAvailable };
 
   // WORKSPACE-settings AREA (Story MOTIR-4843 · MOTIR-4846): the FOURTH and last
   // settings tier to become an area. Like the account and organisation branches

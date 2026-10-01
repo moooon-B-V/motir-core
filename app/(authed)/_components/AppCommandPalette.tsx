@@ -102,6 +102,12 @@ export interface AppCommandPaletteProps {
    */
   publicProjectsAvailable?: boolean;
   /**
+   * Whether this build runs hosted agents (MOTIR-6995) — the registry's
+   * `hostedRunsAvailable` axis, so ⌘K offers **Hosted agent** only where the
+   * room exists. Defaults CLOSED, like the prop above.
+   */
+  hostedRunsAvailable?: boolean;
+  /**
    * `orgCan(activeOrg.role, 'manageOrgSettings')` (MOTIR-6175 · MOTIR-6305) — the org-settings deep links
    * are offered through `visibleOrganizationSettingsNav`, the registry the org
    * rail and the org menu read. Defaults CLOSED, like the two props above.
@@ -117,6 +123,7 @@ export function AppCommandPalette({
   settingsPermissions,
   aiPlanningConfigured = false,
   publicProjectsAvailable = false,
+  hostedRunsAvailable = false,
   isOrgAdmin = false,
 }: AppCommandPaletteProps) {
   const t = useTranslations('shell');
@@ -425,6 +432,7 @@ export function AppCommandPalette({
   {
     const settingsEntries = visibleSettingsNav(held, PROJECT_SETTINGS_ROUTES, {
       publicProjectsAvailable,
+      hostedRunsAvailable,
     });
     if (settingsEntries.length > 0) {
       groups.push({

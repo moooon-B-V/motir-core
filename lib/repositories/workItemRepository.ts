@@ -7,6 +7,7 @@ import {
   type EstimationStatistic,
   type Executor,
   type WorkItem,
+  type WorkItemDifficulty,
   type WorkItemImplementationSource,
   type WorkItemFixReason,
   type WorkItemKind,
@@ -2813,6 +2814,52 @@ export const workItemRepository = {
              depth::int AS "depth"
         FROM subtree
         ORDER BY depth ASC, "position" ASC`;
+  },
+
+  /**
+   * The DIFFICULTY of every live LEAF in a work item's subtree that is not
+   * finished (Story MOTIR-6989 · MOTIR-6993) — what a hosted run on a PARENT
+   * resolves its model from (the highest of them). A leaf is a live row with no
+   * live child; "finished" is its status sitting in the project's `done`
+   * category. The ROOT itself is always returned when it is a leaf, whatever its
+   * status, so a leaf card answers its own difficulty. Archived / triage rows are
+   * excluded on both the anchor and the recursive step, and the walk is
+   * `workspaceId`-gated (finding #26). `difficulty` is null for a leaf that
+   * carries none.
+   */
+  async findUnfinishedLeafDifficulties(
+    rootId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ difficulty: WorkItemDifficulty | null }[]> {
+    const client = tx ?? dbRead;
+    return client.$queryRaw<{ difficulty: WorkItemDifficulty | null }[]>`
+      WITH RECURSIVE subtree AS (
+        SELECT w."id", w."projectId", w."status", w."difficulty"
+          FROM "work_item" w
+          WHERE w."id" = ${rootId}
+            AND w."workspaceId" = ${workspaceId}
+            AND w."archivedAt" IS NULL
+            AND w."triagedAt" IS NULL
+        UNION ALL
+        SELECT w."id", w."projectId", w."status", w."difficulty"
+          FROM "work_item" w
+          JOIN subtree s ON w."parentId" = s."id"
+          WHERE w."workspaceId" = ${workspaceId}
+            AND w."archivedAt" IS NULL
+            AND w."triagedAt" IS NULL
+      )
+      SELECT s."difficulty"::text AS "difficulty"
+        FROM subtree s
+        LEFT JOIN "workflow_status" ws
+              ON ws."project_id" = s."projectId" AND ws."key" = s."status"
+        WHERE NOT EXISTS (
+                SELECT 1 FROM "work_item" c
+                 WHERE c."parentId" = s."id"
+                   AND c."archivedAt" IS NULL
+                   AND c."triagedAt" IS NULL
+              )
+          AND (s."id" = ${rootId} OR ws."category" IS DISTINCT FROM 'done')`;
   },
 
   /**
