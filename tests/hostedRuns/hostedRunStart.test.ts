@@ -85,7 +85,10 @@ function stub(s: Stub = {}): void {
         if (status !== 200) return json(status, { code: 'internal_error' });
         const ids = s.models?.ids ?? [MODEL];
         return json(200, {
-          models: ids.map((id) => ({ id, provider: 'anthropic' })),
+          models: ids.map((id) => ({
+            id,
+            provider: id.startsWith('deepseek') ? 'deepseek' : 'anthropic',
+          })),
           default: ids[0] ?? null,
           ...(s.models?.defaultsByDifficulty
             ? {
@@ -1020,5 +1023,60 @@ describe('continue hosted — a leg of a dead PARENT run', () => {
       origin: 'hosted',
       scopeWorkItemId: story.id,
     });
+  });
+});
+
+// ── MOTIR-7208: a DeepSeek offered entry — the env is <provider>/<id>, the key BARE ──
+const DEEPSEEK = 'deepseek-v4-pro';
+
+describe('a DeepSeek model offered (MOTIR-7208) — OpenCode is named by the entry’s own provider', () => {
+  it('Run hosted: MOTIR_MODEL=deepseek/<id>, while the key, the run row and the card hold the bare id', async () => {
+    stub({ models: { ids: [MODEL, DEEPSEEK] } });
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const card = await newCard({ kind: 'task', title: 'a deepseek card' });
+
+    const started = await start(card.identifier, DEEPSEEK);
+
+    expect(fakeOrchestrator.specs[0]!.env['MOTIR_MODEL']).toBe(`deepseek/${DEEPSEEK}`);
+    expect(mintCalls()[0]!.body!['models']).toEqual([DEEPSEEK]);
+    const [run] = await runRows();
+    expect(run).toMatchObject({ id: started.dispatchRunId, model: DEEPSEEK });
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).implementationModel,
+    ).toBe(DEEPSEEK);
+  });
+
+  it('Run hosted on Claude from the same mixed list is unchanged: anthropic/<id>', async () => {
+    stub({ models: { ids: [MODEL, DEEPSEEK] } });
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const card = await newCard({ kind: 'task', title: 'a claude card' });
+
+    await start(card.identifier, MODEL);
+
+    expect(fakeOrchestrator.specs[0]!.env['MOTIR_MODEL']).toBe(`anthropic/${MODEL}`);
+    expect(mintCalls()[0]!.body!['models']).toEqual([MODEL]);
+  });
+
+  it('Continue hosted on DeepSeek: the same bare/prefixed split', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card } = await deadCard();
+    stub({ models: { ids: [MODEL, DEEPSEEK] } });
+
+    const started = await hostedRunService.start(
+      {
+        workItemKey: card.identifier,
+        model: DEEPSEEK,
+        idempotencyKey: `idem-${++seq}`,
+        mode: 'continue',
+      },
+      fx.ctx,
+    );
+
+    expect(started.created).toBe(true);
+    expect(fakeOrchestrator.specs.at(-1)!.env).toMatchObject({
+      MOTIR_MODEL: `deepseek/${DEEPSEEK}`,
+      MOTIR_RUN_MODE: 'continue',
+    });
+    expect(mintCalls().at(-1)!.body!['models']).toEqual([DEEPSEEK]);
   });
 });

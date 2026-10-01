@@ -187,7 +187,10 @@ describe('hostedRunModelService.assertOffered', () => {
       'fetch',
       vi.fn(async () => json(LIST)),
     );
-    await expect(hostedRunModelService.assertOffered('claude-sonnet-4-6')).resolves.toBeUndefined();
+    await expect(hostedRunModelService.assertOffered('claude-sonnet-4-6')).resolves.toEqual({
+      id: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+    });
   });
 
   it('throws HostedModelNotOfferedError for an id not on the list', async () => {
@@ -223,11 +226,60 @@ describe('hostedRunModelService.assertOffered', () => {
   });
 });
 
+describe('hostedRunModelService.assertOffered over a mixed list (MOTIR-7208)', () => {
+  it('resolves to the DeepSeek entry, provider included', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        json({
+          ...LIST,
+          models: [...LIST.models, { id: 'deepseek-v4-pro', provider: 'deepseek' }],
+        }),
+      ),
+    );
+    await expect(hostedRunModelService.assertOffered('deepseek-v4-pro')).resolves.toEqual({
+      id: 'deepseek-v4-pro',
+      provider: 'deepseek',
+    });
+  });
+});
+
+describe('hostedRunModelService.defaultOffered (MOTIR-7208)', () => {
+  it('resolves to the default ENTRY, provider included', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json(LIST)),
+    );
+    await expect(hostedRunModelService.defaultOffered()).resolves.toEqual({
+      id: 'claude-opus-5-5',
+      provider: 'anthropic',
+    });
+  });
+
+  it('falls back to the first offered entry — a DeepSeek one keeps its provider', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        json({ models: [{ id: 'deepseek-v4-pro', provider: 'deepseek' }], default: null }),
+      ),
+    );
+    await expect(hostedRunModelService.defaultOffered()).resolves.toEqual({
+      id: 'deepseek-v4-pro',
+      provider: 'deepseek',
+    });
+  });
+});
+
 describe('toOpenCodeModel', () => {
-  it('adds the anthropic/ provider prefix to a bare id', () => {
-    expect(toOpenCodeModel('claude-opus-5-5')).toBe('anthropic/claude-opus-5-5');
-    expect(hostedRunModelService.toOpenCodeModel('claude-opus-5-5')).toBe(
+  it("prefixes the offered entry's OWN provider: <provider>/<bare id>", () => {
+    expect(toOpenCodeModel({ id: 'claude-opus-5-5', provider: 'anthropic' })).toBe(
       'anthropic/claude-opus-5-5',
     );
+    expect(toOpenCodeModel({ id: 'deepseek-v4-pro', provider: 'deepseek' })).toBe(
+      'deepseek/deepseek-v4-pro',
+    );
+    expect(
+      hostedRunModelService.toOpenCodeModel({ id: 'claude-opus-5-5', provider: 'anthropic' }),
+    ).toBe('anthropic/claude-opus-5-5');
   });
 });

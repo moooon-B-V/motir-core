@@ -1,0 +1,45 @@
+{
+  "name": "@motir/pages",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The pages module: the page model types, the pure tree rules (placement, cycle refusal, depth limit, fractional positions) and the record's constants. The app binds its ports at lib/pages/index.ts.",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moooon-B-V/motir-core.git",
+    "directory": "packages/pages"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -b tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "fractional-indexing": "^3.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.19",
+    "tsup": "^8.5.0",
+    "typescript": "^5",
+    "vitest": "^4.1.7"
+  }
+}

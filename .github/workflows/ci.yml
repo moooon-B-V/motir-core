@@ -275,8 +275,17 @@ jobs:
   # fails until the dependency's directory sets the flag too.
   #
   # ⚠️ A PACKAGE-ONLY CHANGE STILL SETS `app=true`. The app consumes the
-  # packages and root tests read package files, so these flags narrow the three
-  # package lanes and nothing else. They fail open with the other two: a push to
+  # packages and root tests read package files, so these flags narrow the
+  # package lanes and nothing else.
+  #
+  # ⚠️ …EXCEPT `packages/pages/`, AND ONLY WHILE THE APP DOES NOT IMPORT IT
+  # (MOTIR-5758). `@motir/pages` has no consumer yet, so nothing the `app` lanes
+  # run can reach it; what can (the root type-check, the structural guards, lint)
+  # runs on every pull request regardless of `app`. A pages-only change therefore
+  # runs the `pages` lane and not the Vitest/E2E matrix. The exception is held
+  # true by `tests/packages/importDirection.test.ts`, which goes red the moment
+  # an app file imports `@motir/pages` — at which point the arm below that skips
+  # `packages/pages/*` has to go (the schema story, MOTIR-5752). They fail open with the other two: a push to
   # `main` has no base, so it still runs every package lane.
   #
   # ⚠️ …EXCEPT A MANIFEST WHOSE ONLY CHANGES ARE THE ONES A RELEASE MAKES. The
@@ -316,7 +325,7 @@ jobs:
     # Observed 0.4–2.4 min → 10 (~4x). Ten is the floor every short job
     # gets; see the ceilings block above.
     timeout-minutes: 10
-    # Reads the diff, writes five booleans. Nothing else.
+    # Reads the diff, writes six booleans. Nothing else.
     permissions:
       contents: read
     outputs:
@@ -325,6 +334,7 @@ jobs:
       pkg_cli: ${{ steps.classify.outputs.pkg_cli }}
       pkg_orchestrator: ${{ steps.classify.outputs.pkg_orchestrator }}
       pkg_design_system: ${{ steps.classify.outputs.pkg_design_system }}
+      pkg_pages: ${{ steps.classify.outputs.pkg_pages }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -359,7 +369,8 @@ jobs:
             echo "pkg_cli=$3" >>"$GITHUB_OUTPUT"
             echo "pkg_orchestrator=$4" >>"$GITHUB_OUTPUT"
             echo "pkg_design_system=$5" >>"$GITHUB_OUTPUT"
-            echo "app=$1 images=$2 pkg_cli=$3 pkg_orchestrator=$4 pkg_design_system=$5"
+            echo "pkg_pages=$6" >>"$GITHUB_OUTPUT"
+            echo "app=$1 images=$2 pkg_cli=$3 pkg_orchestrator=$4 pkg_design_system=$5 pkg_pages=$6"
           }
 
           # Resolve the pair to diff FROM THE EVENT, and fail open on any event
@@ -389,7 +400,7 @@ jobs:
           # fail-CLOSED direction.
           if [ -z "$base" ] || [ -z "$head" ]; then
             echo "::warning::No base/head commit for event '$EVENT' — running every lane."
-            emit true true true true true
+            emit true true true true true true
             exit 0
           fi
 
@@ -397,12 +408,12 @@ jobs:
           # the diff's own exit status, which is the thing being guarded on.
           if ! files=$(git diff --name-only "$base...$head"); then
             echo '::warning::Could not diff against the merge base — running every lane.'
-            emit true true true true true
+            emit true true true true true true
             exit 0
           fi
           if [ -z "$files" ]; then
             echo '::warning::Empty changed-file set — running every lane.'
-            emit true true true true true
+            emit true true true true true true
             exit 0
           fi
           echo "$files"
@@ -457,20 +468,22 @@ jobs:
           pkg_cli=false
           pkg_orchestrator=false
           pkg_design_system=false
+          pkg_pages=false
 
           while IFS= read -r f; do
             [ -n "$f" ] || continue
             # The package lanes (MOTIR-5323): the package's own directory, then
-            # the install inputs all three lanes consume. The guard re-derives
+            # the install inputs every package lane consumes. The guard re-derives
             # those inputs from the lanes' job bodies and the composite action
             # they use, so a lane that gains an input this list lacks goes red.
             case "$f" in
               packages/cli/*) pkg_cli=true ;;
               packages/orchestrator/*) pkg_orchestrator=true ;;
               packages/design-system/*) pkg_design_system=true ;;
+              packages/pages/*) pkg_pages=true ;;
             esac
             case "$f" in
-              pnpm-lock.yaml|pnpm-workspace.yaml|package.json|.npmrc|.github/actions/pnpm/*|.github/workflows/ci.yml) pkg_cli=true pkg_orchestrator=true pkg_design_system=true ;;
+              pnpm-lock.yaml|pnpm-workspace.yaml|package.json|.npmrc|.github/actions/pnpm/*|.github/workflows/ci.yml) pkg_cli=true pkg_orchestrator=true pkg_design_system=true pkg_pages=true ;;
             esac
             # A release-only manifest (see the job header) stops here: its
             # package lane is set above, and it reaches neither `app` nor
@@ -511,8 +524,13 @@ jobs:
             # `*.md` would then swallow it again with no test in the way. A file
             # whose whole payload is a negation is not dead when its subject is
             # gone; it is dead when nothing can come back.
+            #
+            # ⚠️ `packages/pages/*` IS SKIPPED HERE ONLY WHILE NO APP FILE IMPORTS
+            # `@motir/pages` — see the job header. It sits ABOVE the catch-all
+            # for the same first-match-wins reason `content/*` does.
             case "$f" in
               content/*) app=true ;;
+              packages/pages/*) ;;
               docs/*|design/*|scripts/plan-seed/*|*.md) ;;
               *) app=true ;;
             esac
@@ -546,7 +564,7 @@ jobs:
             esac
           done <<<"$files"
 
-          emit "$app" "$images" "$pkg_cli" "$pkg_orchestrator" "$pkg_design_system"
+          emit "$app" "$images" "$pkg_cli" "$pkg_orchestrator" "$pkg_design_system" "$pkg_pages"
 
   lint:
     name: Lint + Prettier
@@ -878,6 +896,35 @@ jobs:
       - run: pnpm --filter @motir/orchestrator typecheck
       - run: pnpm --filter @motir/orchestrator build
       - run: pnpm --filter @motir/orchestrator test -- --coverage
+
+  pages:
+    name: Pages package
+    runs-on: ubuntu-latest
+    # No healthy run on record yet — this job is new (MOTIR-5758). Sized on the
+    # `orchestrator` job it copies, which takes the 10-minute short-job floor.
+    # Re-derive it from this lane's own runs once there are four, per
+    # MOTIR-3569's bar.
+    timeout-minutes: 10
+    # Gated on its own package's paths, as the package jobs above (MOTIR-5323).
+    needs: changes
+    if: ${{ needs.changes.outputs.pkg_pages == 'true' }}
+    # `@motir/pages`'s suite lives at `packages/pages/test/**`, which the root
+    # Vitest lane does not glob, so without this job the package's tests run
+    # nowhere. It also carries the package's per-file coverage floor.
+    #
+    # Pure unit tests: no Postgres, no Next app, no `prisma generate`.
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/pnpm
+      # No node_modules cache, for the reason the `cli` job gives: a filtered
+      # run needs packages/pages/node_modules, which the shared key does not
+      # cover.
+      - run: pnpm install --frozen-lockfile
+        env:
+          HUSKY: '0'
+      - run: pnpm --filter @motir/pages typecheck
+      - run: pnpm --filter @motir/pages build
+      - run: pnpm --filter @motir/pages test -- --coverage
 
   # ── The design-asset guards (MOTIR-2442) ──────────────────────────────────
   # The one lane in this file with NO branch-prefix `if:`, and that absence is
@@ -2618,6 +2665,7 @@ jobs:
         docs-guards,
         cli,
         orchestrator,
+        pages,
         build,
         test,
         coverage,

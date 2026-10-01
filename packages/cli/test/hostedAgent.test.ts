@@ -23,12 +23,22 @@ import {
  * visible, deliberate change to the security boundary rather than a silent one.
  * (The hosted image carried its own copy until MOTIR-6560; the CLI now owns the
  * only one, and this literal is what holds it to the contract.)
+ *
+ * Pinned to §2 as amended by MOTIR-7207 (story MOTIR-7205) — motir-gateway commit
+ * `7d96eda` on `parent/MOTIR-7205-hosted-deepseek`: `anthropic` AND `deepseek`, both
+ * at the gateway on the run key.
  */
 const EGRESS_CONTRACT_SECTION_2 = {
   $schema: 'https://opencode.ai/config.json',
-  enabled_providers: ['anthropic'],
+  enabled_providers: ['anthropic', 'deepseek'],
   provider: {
     anthropic: {
+      options: {
+        baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
+        apiKey: '{env:MOTIR_RUN_KEY}',
+      },
+    },
+    deepseek: {
       options: {
         baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
         apiKey: '{env:MOTIR_RUN_KEY}',
@@ -99,18 +109,41 @@ describe('hostedOpenCodeAgent (AC3)', () => {
     expect(JSON.parse(egressConfig()).provider.anthropic.options.apiKey).toBe(
       '{env:MOTIR_RUN_KEY}',
     );
+    expect(JSON.parse(egressConfig()).provider.deepseek.options.apiKey).toBe('{env:MOTIR_RUN_KEY}');
     expect(env['OPENCODE_DISABLE_AUTOUPDATE']).toBe('true');
     expect(env['OPENCODE_DISABLE_MODELS_FETCH']).toBe('true');
     expect(env['OPENCODE_DISABLE_CLAUDE_CODE']).toBe('true');
   });
 
-  it('refuses a missing run model, gateway or key, and a model outside the anthropic provider', () => {
+  it('refuses a missing run model, gateway or key, and a model outside the enabled providers', () => {
     const env = containerEnv();
     delete env['MOTIR_RUN_KEY'];
     expect(() => hostedOpenCodeAgent(env)).toThrow(/missing MOTIR_RUN_KEY/);
-    expect(() => hostedOpenCodeAgent({ ...containerEnv(), MOTIR_MODEL: 'gpt-5' })).toThrow(
-      /must be "anthropic\/<model id>"/,
-    );
+    for (const model of ['gpt-5', 'openai/gpt-5', 'deepseek/', '/deepseek-v4-pro']) {
+      expect(() => hostedOpenCodeAgent({ ...containerEnv(), MOTIR_MODEL: model })).toThrow(
+        /must be "<provider>\/<model id>" with provider one of anthropic, deepseek/,
+      );
+    }
+  });
+
+  it('launches a DeepSeek model with both providers configured (MOTIR-7208)', () => {
+    const agent = hostedOpenCodeAgent({
+      ...containerEnv(),
+      MOTIR_MODEL: 'deepseek/deepseek-v4-pro',
+    });
+    expect(agent.args).toEqual(['run', '--model', 'deepseek/deepseek-v4-pro', '--auto']);
+    const config = JSON.parse(agent.env!['OPENCODE_CONFIG_CONTENT']!);
+    expect(config.enabled_providers).toEqual(['anthropic', 'deepseek']);
+    expect(Object.keys(config.provider)).toEqual(['anthropic', 'deepseek']);
+  });
+
+  it('leaves an Anthropic model exactly as it was (MOTIR-7208)', () => {
+    expect(hostedOpenCodeAgent(containerEnv()).args).toEqual([
+      'run',
+      '--model',
+      'anthropic/claude-sonnet-5',
+      '--auto',
+    ]);
   });
 });
 

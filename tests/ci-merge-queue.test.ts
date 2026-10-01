@@ -165,6 +165,7 @@ const contextFor = (event: Event): Record<string, string> => ({
   'needs.changes.outputs.pkg_cli': 'true',
   'needs.changes.outputs.pkg_orchestrator': 'true',
   'needs.changes.outputs.pkg_design_system': 'true',
+  'needs.changes.outputs.pkg_pages': 'true',
 });
 
 /**
@@ -299,6 +300,10 @@ const PUSH_LANE = [
   // own `pkg_*` flag — and they are STILL here, because the `changes` job fails
   // open on a push (a push carries no base to diff) and emits every flag `true`.
   'orchestrator',
+  // The fourth package lane (MOTIR-5758), on the same fail-open argument: a
+  // push emits `pkg_pages=true`. Its install-typecheck-build-test shape is the
+  // orchestrator lane's, so the lane's length is still `lint`'s.
+  'pages',
   // The docs-guard lane (MOTIR-4408), here for the same reason the two guard
   // lanes above it are: it carries no `if:`, because a lane that exists to run
   // on the diff shape every other lane skips is not something a bypassed merge

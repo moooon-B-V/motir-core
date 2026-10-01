@@ -143,6 +143,19 @@ jobs:
           MOTIR_HOSTED_AGENT_IMAGE: ${{ env.LOCAL_TAG }}
         run: pnpm --filter @motir/cli exec vitest run sandbox/hosted/smoke.test.ts
 
+      # MOTIR-7208 — the OFFLINE PROVIDER PROBE, against the image just built. The
+      # smoke test drives a FAKE OpenCode, so it cannot see a provider the real
+      # one fails to load. This runs the image's own `opencode` on a DeepSeek AND an
+      # Anthropic model, configured only by the CLI's shipped egress document,
+      # against a stub gateway container on an `--internal` network — reachable,
+      # and nothing else is — and checks each provider's route and run-key header
+      # (motir-gateway `docs/hosted-run-egress.md` §2–§3). Before the publish, so a
+      # digest that cannot load a provider is never pushed.
+      - name: Probe the providers offline
+        env:
+          MOTIR_HOSTED_AGENT_IMAGE: ${{ env.LOCAL_TAG }}
+        run: pnpm --filter @motir/cli exec vitest run sandbox/hosted/providerProbe.test.ts
+
       # ── Publish: a push to `main` only, and only now the image is proven. ──
       - name: Log in to GHCR
         if: ${{ github.event_name == 'push' }}

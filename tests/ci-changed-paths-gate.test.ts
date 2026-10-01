@@ -209,10 +209,13 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       // lands here. Every one of the three is EXECUTED in `the merge-queue arm`
       // below; this count is what catches an arm added with no case written for
       // it.
-      // Five flags — `app`, `images` and the three package lanes' (MOTIR-5323)
-      // — so an early exit that forgets a newer one is not counted. (There was a
-      // sixth, `vitest_full`, from MOTIR-5325 until MOTIR-5948 removed it.)
-      expect([...changesCode.matchAll(/^\s*emit true true true true true$/gm)]).toHaveLength(3);
+      // Six flags — `app`, `images` and the four package lanes' (MOTIR-5323,
+      // `pkg_pages` since MOTIR-5758) — so an early exit that forgets a newer one
+      // is not counted. (`vitest_full` was a flag from MOTIR-5325 until
+      // MOTIR-5948 removed it.)
+      expect([...changesCode.matchAll(/^\s*emit true true true true true true$/gm)]).toHaveLength(
+        3,
+      );
     });
 
     it('stops on the first failure', () => {
@@ -333,6 +336,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       'runner-image-workflow': ['.github/workflows/runner-image.yml'],
       'app-only': ['app/page.tsx'],
       'cli-package-only': ['packages/cli/src/index.ts'],
+      'pages-package-only': ['packages/pages/src/index.ts', 'packages/pages/test/tree.test.ts'],
       'lib-only': ['lib/db.ts'],
       'lockfile-only': ['pnpm-lock.yaml'],
       // The Changesets release PR's own shape: CHANGELOGs, two version bumps,
@@ -439,6 +443,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       pkg_cli: string;
       pkg_orchestrator: string;
       pkg_design_system: string;
+      pkg_pages: string;
       stdout: string;
     };
 
@@ -492,6 +497,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         pkg_cli: outputs.pkg_cli!,
         pkg_orchestrator: outputs.pkg_orchestrator!,
         pkg_design_system: outputs.pkg_design_system!,
+        pkg_pages: outputs.pkg_pages!,
         stdout,
       };
     }
@@ -549,10 +555,16 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
     });
 
     describe('the package flags, executed (MOTIR-5323)', () => {
-      const packageFlags = ({ pkg_cli, pkg_orchestrator, pkg_design_system }: Outputs) => ({
+      const packageFlags = ({
         pkg_cli,
         pkg_orchestrator,
         pkg_design_system,
+        pkg_pages,
+      }: Outputs) => ({
+        pkg_cli,
+        pkg_orchestrator,
+        pkg_design_system,
+        pkg_pages,
       });
 
       it('runs only the CLI lane for a change inside packages/cli', () => {
@@ -561,6 +573,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
           pkg_cli: 'true',
           pkg_orchestrator: 'false',
           pkg_design_system: 'false',
+          pkg_pages: 'false',
         });
         // ⚠️ AND THE APP LANES STILL RUN. The app consumes the package and root
         // tests such as `tests/api/public/contract-drift.test.ts` read its files,
@@ -575,7 +588,26 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
           pkg_cli: 'false',
           pkg_orchestrator: 'false',
           pkg_design_system: 'false',
+          pkg_pages: 'false',
         });
+      });
+
+      it('runs only the pages lane, and NOT the app lanes, for a change inside packages/pages', () => {
+        // MOTIR-5758. The one package-only change that skips `app`: nothing the
+        // app lanes run imports `@motir/pages` yet, and
+        // `tests/packages/importDirection.test.ts` goes red the moment that stops
+        // being true, which is when this row has to flip back.
+        const outputs = asPullRequest('pages-package-only');
+        expect(packageFlags(outputs)).toEqual({
+          pkg_cli: 'false',
+          pkg_orchestrator: 'false',
+          pkg_design_system: 'false',
+          pkg_pages: 'true',
+        });
+        expect(outputs.app).toBe('false');
+        // The image lanes are untouched by the exception: the sandbox image's
+        // builder installs every workspace manifest, so a package is an input.
+        expect(outputs.images).toBe('true');
       });
 
       it('runs every package lane when the lockfile changes', () => {
@@ -584,6 +616,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
           pkg_cli: 'true',
           pkg_orchestrator: 'true',
           pkg_design_system: 'true',
+          pkg_pages: 'true',
         });
       });
     });
@@ -608,6 +641,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
           pkg_cli: 'false',
           pkg_orchestrator: 'false',
           pkg_design_system: 'true',
+          pkg_pages: 'false',
         });
       });
 
@@ -637,6 +671,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       pkg_cli: 'true',
       pkg_orchestrator: 'true',
       pkg_design_system: 'true',
+      pkg_pages: 'true',
     };
 
     describe('and every fail-open arm still fires — executed, not asserted in prose', () => {
@@ -977,6 +1012,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       ['design-system', 'pkg_design_system'],
       ['cli', 'pkg_cli'],
       ['orchestrator', 'pkg_orchestrator'],
+      ['pages', 'pkg_pages'],
     ])('%s is gated on needs.changes.outputs.%s', (job, flag) => {
       const code = codeOf(ciJobs.get(job) ?? '');
       expect(code, `${job} exists`).not.toBe('');
@@ -987,7 +1023,14 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
     });
 
     it('declares every output it is read for', () => {
-      for (const flag of ['app', 'images', 'pkg_cli', 'pkg_orchestrator', 'pkg_design_system']) {
+      for (const flag of [
+        'app',
+        'images',
+        'pkg_cli',
+        'pkg_orchestrator',
+        'pkg_design_system',
+        'pkg_pages',
+      ]) {
         expect(changesCode, flag).toMatch(
           new RegExp(`^\\s*${flag}: \\$\\{\\{ steps\\.classify\\.outputs\\.${flag} \\}\\}$`, 'm'),
         );
@@ -1188,6 +1231,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       { job: 'cli', flag: 'pkg_cli', dir: 'packages/cli' },
       { job: 'orchestrator', flag: 'pkg_orchestrator', dir: 'packages/orchestrator' },
       { job: 'design-system', flag: 'pkg_design_system', dir: 'packages/design-system' },
+      { job: 'pages', flag: 'pkg_pages', dir: 'packages/pages' },
     ] as const;
 
     type Manifest = {

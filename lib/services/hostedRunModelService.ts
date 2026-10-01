@@ -41,20 +41,18 @@ export type OfferedModels =
   | { state: 'unavailable' };
 
 /**
- * The provider prefix OpenCode's `--model` flag needs (§7, *one id, two
- * spellings*). The gateway's allow-list, `DispatchRun.model` and
- * `implementationModel` all hold the BARE id; putting the prefixed form on the
- * key's allow-list gets every model call refused with 403.
+ * An offered model → the id OpenCode is started with: `<provider>/<bare id>`
+ * (`docs/decisions/hosted-agent-run.md` §7, *one id, two spellings*, as amended
+ * by MOTIR-7206). The provider comes from motir-ai's offered ENTRY, never from
+ * parsing the id and never from a list kept here.
+ *
+ * THE ONE PLACE a provider prefix is written — `tests/hostedRuns/openCodeModelPrefix.test.ts`
+ * holds every other module to never writing one. The gateway's allow-list,
+ * `DispatchRun.model` and `implementationModel` all hold the BARE id; putting the
+ * prefixed form on the key's allow-list gets every model call refused with 403.
  */
-const OPENCODE_PROVIDER_PREFIX = 'anthropic/';
-
-/**
- * The bare gateway id → the id OpenCode is started with. THE ONE PLACE the
- * `anthropic/` prefix is added — `tests/hostedRuns/openCodeModelPrefix.test.ts`
- * holds every other module to never writing it.
- */
-export function toOpenCodeModel(id: string): string {
-  return `${OPENCODE_PROVIDER_PREFIX}${id}`;
+export function toOpenCodeModel(model: Pick<AgentModel, 'id' | 'provider'>): string {
+  return `${model.provider}/${model.id}`;
 }
 
 export const hostedRunModelService = {
@@ -71,31 +69,33 @@ export const hostedRunModelService = {
   },
 
   /**
-   * Resolves when `model` (a bare gateway id) is on the offered list right now.
-   * Throws `HostedModelNotOfferedError` when it is not, and
+   * Resolves to the OFFERED ENTRY when `model` (a bare gateway id) is on the
+   * offered list right now, so the start path has its provider without a second
+   * read of motir-ai. Throws `HostedModelNotOfferedError` when it is not, and
    * `HostedModelsUnavailableError` when motir-ai cannot answer — an unanswered
    * question is never an acceptance.
    */
-  async assertOffered(model: string): Promise<void> {
+  async assertOffered(model: string): Promise<AgentModel> {
     const read = await getAgentModels();
     if (read.state === 'unavailable') throw new HostedModelsUnavailableError(read.reason);
-    if (!read.models.some((m) => m.id === model)) throw new HostedModelNotOfferedError(model);
+    const offered = read.models.find((m) => m.id === model);
+    if (!offered) throw new HostedModelNotOfferedError(model);
+    return offered;
   },
 
   /**
    * The model a run with NOBODY TO CHOOSE takes — a REVIEW run (MOTIR-6820;
    * `hosted-agent-run.md` §7's pointer): the list's default, else the first model offered.
+   * Resolves to the offered ENTRY, so its provider travels with it (MOTIR-7208).
    * Throws `HostedModelsUnavailableError` when motir-ai cannot answer, and
    * `HostedNoModelOfferedError` when it answers an empty list — either is a review that
    * could not run, reason _no model_.
    */
-  async defaultOffered(): Promise<string> {
+  async defaultOffered(): Promise<AgentModel> {
     const read = await getAgentModels();
     if (read.state === 'unavailable') throw new HostedModelsUnavailableError(read.reason);
     const chosen =
-      read.default && read.models.some((m) => m.id === read.default)
-        ? read.default
-        : read.models[0]?.id;
+      (read.default ? read.models.find((m) => m.id === read.default) : undefined) ?? read.models[0];
     if (!chosen) throw new HostedNoModelOfferedError();
     return chosen;
   },
