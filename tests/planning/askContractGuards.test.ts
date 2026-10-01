@@ -58,13 +58,23 @@ describe('one surface, no mode', () => {
       expect(action.href).not.toContain('mode=ask');
       // The registry entry is a LABEL plus the shared href — no third field
       // through which a row could start choosing what the thread is about.
-      expect(Object.keys(action).sort()).toEqual([
+      //
+      // ONE optional field is allowed (MOTIR-7050): `prefillKey`, the copy key
+      // of TEXT the row leaves in the composer, unsent. It chooses nothing — the
+      // href is still the shared one, nothing is sent, and the server still
+      // reads whatever the person finally sends — so it is held to exactly that
+      // shape below: a catalog key under the row's own copy, never a value.
+      const { prefillKey, ...label } = action;
+      expect(Object.keys(label).sort()).toEqual([
         'descriptionKey',
         'href',
         'icon',
         'id',
         'titleKey',
       ]);
+      if (prefillKey !== undefined) {
+        expect(prefillKey).toBe(`aiCallout.actions.${action.id}.prefill`);
+      }
     }
   });
 

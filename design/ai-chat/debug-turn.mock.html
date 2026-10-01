@@ -1,0 +1,1555 @@
+<!doctype html>
+<!--
+  design/ai-chat/debug-turn.mock.html — MOTIR-7045 (story MOTIR-7042)
+
+  DELTA on the rail's turn forms: `design/ai-chat/ask-answers.mock.html` panels
+  2 and 7 (the cited answer turn and its states) and
+  `design/ai-chat/plan-change-run-live.mock.html` sheet 3 (the act rail), and on
+  `design/ai-chat/design-notes.md` § "Ask about this project — the cited ANSWER
+  turn, and the chrome that follows the turn". It draws only what a DEBUG turn
+  adds: the turn running, its two finished outcomes (a diagnosis written onto a
+  triage bug; an existing card enriched instead), the honest "could not ground"
+  outcome, and the out-of-credits state.
+
+  Read before drawing, and mirrored here:
+    - components/planning/PlanChangeRail.tsx — the <aside> and its head, Bubble
+      (avatar, --el-chat-bubble-ai / --el-chat-bubble-user, the mono label
+      slot), the user turn's target row (PlanningTargetKeyChip on-accent), the
+      act rail <ol> (glyph · 16-wide mono label · line, live row = Spinner),
+      the centred marker lines, the `answeredFrom` foot line, the correction
+      marker, and the out-of-credits slot `<AiPaywall triggeredOutOfCredits />`.
+    - components/planning/PlanChangeComposer.tsx — the running bar (Spinner,
+      the live act's line, a SECONDARY Stop).
+    - components/ai/AiPaywall.tsx — PaywallShell: Card, 48px tinted icon chip,
+      serif title, body, actions, note; the owner out_of_credits face.
+    - components/ui/markdown-editor.css `.wi-chip` via WorkItemRefChip — how an
+      assistant bubble links a card.
+
+  Decision the asset carries: docs/decisions/conversation-turn-intent.md
+  AMENDMENT 1 — A1.4 (exactly one card written, no status moved, nothing
+  promoted), A1.5 (a correction leaves the write), Consequence 2 (a settled
+  debug turn links the one card it touched, or says it found nothing).
+
+  TOKENS ARE EXTRACTED, NOT TYPED: the three blocks below are the declarations
+  of packages/design-system/theme.css's @theme, [data-theme='dark'] and
+  :root,[data-appearance-scope] blocks, comments stripped.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The debug turn in the Motir AI rail</title>
+    <style>
+      /* ── Tier 0 (light) — extracted from packages/design-system/theme.css @theme ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --width-rail-chrome: 20px;
+        --spacing-rail-inset: 0px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      /* ── Tier 0 (dark) — theme.css [data-theme='dark'] ── */
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      /* ── Tier 3 (--el-*) — theme.css :root,[data-appearance-scope] ── */
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-notif-access-refused: var(--color-warning);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob: var(--color-primary-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-choice: var(--color-charcoal);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 30px 26px 44px;
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── board chrome ─────────────────────────────────────────────── */
+      .board {
+        max-width: 1140px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .boardhead h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        letter-spacing: -0.01em;
+        color: var(--el-text-strong);
+      }
+      .boardhead p {
+        margin: 0;
+        max-width: 92ch;
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .boardhead p + p {
+        margin-top: 8px;
+      }
+      .panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .panel-label {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .panel-label .n {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .panel-label h2 {
+        margin: 0;
+        font-size: 15px;
+        color: var(--el-text-strong);
+      }
+      .panel-label .cap {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .panel-body {
+        padding: 18px;
+      }
+      .cols {
+        display: grid;
+        gap: 22px;
+        align-items: start;
+      }
+      .c2 {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+      .sub {
+        margin: 0 0 8px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .note {
+        margin: 10px 0 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        padding: 0 4px;
+        border-radius: var(--radius-kbd);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+      }
+      .stage {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 20px 16px;
+        border-radius: var(--radius-card);
+        background: var(--el-canvas);
+      }
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      table.spec th {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--el-border);
+        text-align: left;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      table.spec td {
+        padding: 7px 8px;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: top;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .ic {
+        display: block;
+        width: 14px;
+        height: 14px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .glyph {
+        display: block;
+      }
+
+      /* ── the rail — PlanChangeRail's <aside>, reproduced ──────────── */
+      .rail {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: 360px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        overflow: hidden;
+      }
+      .railhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .railhead .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        background: var(--el-success);
+      }
+      .railhead .lbl {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .railhead .pill {
+        margin-left: auto;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .turns {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+      }
+
+      /* Bubble */
+      .turn {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .turn.u {
+        flex-direction: row-reverse;
+      }
+      .av {
+        display: inline-flex;
+        flex: none;
+        width: 28px;
+        height: 28px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .av.user {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .bub {
+        min-width: 0;
+        padding: 8px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-chat-bubble-ai);
+        color: var(--el-text);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .turn.u .bub {
+        background: var(--el-chat-bubble-user);
+        color: var(--el-accent-text);
+      }
+      .bub p {
+        margin: 0;
+      }
+      .bub p + p {
+        margin-top: 6px;
+      }
+      .bub .lbl {
+        display: block;
+        margin-bottom: 2px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .tgt-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+        margin-bottom: 4px;
+      }
+      .tgt-lbl {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      /* PlanningTargetKeyChip, tone on-accent */
+      .keychip {
+        display: inline-flex;
+        align-items: center;
+        padding: 1px var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-accent-pressed);
+        color: var(--el-accent-text);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+      }
+
+      /* the marker vocabulary — a centred quiet line, never a bubble */
+      .marker {
+        margin: 0;
+        text-align: center;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .marker.act {
+        font-weight: 600;
+        color: var(--el-link);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      /* the act rail — the <ol data-testid="plan-change-acts"> */
+      .acts {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 0;
+        padding: 8px 12px;
+        list-style: none;
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .act {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .act.live {
+        color: var(--el-text);
+      }
+      .act-ic {
+        display: inline-flex;
+        margin-top: 1px;
+        color: var(--el-text-secondary);
+      }
+      .act-k {
+        width: 64px;
+        flex: none;
+        margin-top: 1px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .act-line {
+        min-width: 0;
+        flex: 1;
+      }
+      /* Spinner size sm */
+      .spin {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        flex: none;
+        border: 1.5px solid currentColor;
+        border-top-color: transparent;
+        border-radius: 9999px;
+      }
+
+      /* the OUTCOME line (new) — the `answeredFrom` foot slot, carrying the
+         one card the turn wrote to */
+      .outcome {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text);
+      }
+      .outcome-ic {
+        display: inline-flex;
+        margin-top: 2px;
+        color: var(--el-text-secondary);
+      }
+
+      /* WorkItemRefChip — components/ui/markdown-editor.css .wi-chip */
+      .wi-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        vertical-align: baseline;
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        font-size: 0.92em;
+        line-height: 1.35;
+        white-space: nowrap;
+        color: var(--el-text);
+      }
+      .wi-type {
+        width: 9px;
+        height: 9px;
+        flex: none;
+        border-radius: 2px;
+        background: var(--el-type-bug);
+      }
+      .wi-key {
+        font-family: var(--font-mono);
+        font-size: 0.9em;
+        font-weight: 500;
+        color: var(--el-link);
+      }
+      .wi-title {
+        color: var(--el-text);
+      }
+      .wi-dot {
+        width: 6px;
+        height: 6px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-text-faint);
+      }
+      .wi-dot.s-inprogress {
+        background: var(--el-info);
+      }
+
+      /* the composer — PlanChangeComposer */
+      .composer {
+        border-top: 1px solid var(--el-border);
+        padding: 12px;
+      }
+      .runbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        padding: 8px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+      }
+      .runbar-line {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-btn);
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .btn.secondary {
+        border-color: var(--el-button-border);
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn.primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn.md {
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        font-size: 14px;
+      }
+      .cfield {
+        position: relative;
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+      }
+      .cinput {
+        flex: 1;
+        min-width: 0;
+        min-height: var(--height-input);
+        padding: var(--spacing-input-y) var(--spacing-input-x) var(--spacing-input-y) 32px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .ctrigger {
+        position: absolute;
+        left: 6px;
+        bottom: 6px;
+        display: inline-flex;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+      }
+
+      /* AiPaywall's PaywallShell — a Card */
+      .paycard {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: var(--spacing-card-padding);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        text-align: center;
+      }
+      .pay-ic {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 48px;
+        height: 48px;
+        margin-bottom: var(--spacing-md);
+        border-radius: var(--radius-control);
+        background: var(--el-tint-yellow);
+        color: var(--el-warning);
+      }
+      .pay-ic .ic {
+        width: 24px;
+        height: 24px;
+      }
+      .pay-title {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--el-text);
+      }
+      .pay-body {
+        margin: var(--spacing-sm) 0 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .pay-acts {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-top: var(--spacing-md);
+      }
+      .pay-note {
+        margin: var(--spacing-sm) 0 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <path
+          id="i-mark"
+          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+          fill="currentColor"
+        />
+        <g id="i-send">
+          <path
+            d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+          />
+          <path d="m21.854 2.147-10.94 10.939" />
+        </g>
+        <g id="i-scan">
+          <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+          <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+          <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+          <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+          <circle cx="12" cy="12" r="3" />
+          <path d="m16 16-1.9-1.9" />
+        </g>
+        <g id="i-corner">
+          <path d="m15 10 5 5-5 5" />
+          <path d="M4 4v7a4 4 0 0 0 4 4h12" />
+        </g>
+        <g id="i-book">
+          <path d="M12 7v14" />
+          <path d="M16 12h2" />
+          <path d="M16 8h2" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+          <path d="M6 12h2" />
+          <path d="M6 8h2" />
+        </g>
+        <g id="i-searchcheck">
+          <path d="m8 11 2 2 4-4" />
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g id="i-filepen">
+          <path
+            d="M14.364 13.634a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506l4.013-4.009a1 1 0 0 0-3.004-3.004z"
+          />
+          <path d="M14.487 7.858A1 1 0 0 1 14 7V2" />
+          <path
+            d="M20 19.645V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l2.516 2.516"
+          />
+          <path d="M8 18h1" />
+        </g>
+        <g id="i-stop">
+          <circle cx="12" cy="12" r="10" />
+          <rect x="9" y="9" width="6" height="6" rx="1" />
+        </g>
+        <g id="i-search">
+          <path d="m21 21-4.34-4.34" />
+          <circle cx="11" cy="11" r="8" />
+        </g>
+        <g id="i-pause">
+          <rect x="14" y="3" width="5" height="18" rx="1" />
+          <rect x="5" y="3" width="5" height="18" rx="1" />
+        </g>
+        <g id="i-arrowup">
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="board">
+      <header class="boardhead">
+        <h1>The debug turn in the Motir AI rail</h1>
+        <p>
+          <b>MOTIR-7045 · story MOTIR-7042.</b> A turn the server reads as <b>debug</b> reads the
+          code, names the likely cause, checks whether a card already covers the bug, and then
+          writes to <b>exactly one</b> card. It moves no status and promotes nothing (A1.4). The
+          rail draws it with the parts it already has: the user bubble, the act rail, the assistant
+          bubble, the marker line and the shipped paywall. It adds <b>one</b> new element, the
+          <b>outcome line</b> that names and links the card the turn wrote to.
+        </p>
+        <p>
+          <b>Both entrances end here.</b> The report widget's accept
+          (<code>design/triage/report-widget--debug-offer.mock.html</code>) sends the turn anchored
+          on the triage bug it just filed. The orb row
+          (<code>ai-callout-menu--debug-row.mock.html</code>) pre-fills the composer, and the person
+          sends the turn themselves, with no anchor. The panels below use the widget path, and each
+          finished panel shows the orb path's variant of the outcome line.
+        </p>
+      </header>
+
+      <!-- ═══════════════ 1 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">1</span>
+          <h2>Running — the sent turn, the hand-off, and the act rail</h2>
+          <span class="cap">state · running</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div class="stage">
+              <aside class="rail" aria-label="Motir AI">
+                <div class="railhead">
+                  <span class="dot" aria-hidden="true"></span><span class="lbl">Motir AI</span>
+                  <span class="pill">plan</span>
+                </div>
+                <div class="turns" role="log">
+                  <div class="turn u">
+                    <span class="av user" aria-hidden="true">·</span>
+                    <div class="bub">
+                      <span class="lbl">turn 1</span>
+                      <span class="tgt-row"
+                        ><span class="tgt-lbl">Targeting 1 item</span
+                        ><span class="keychip">PROD-412</span></span
+                      >
+                      Board drag drops the card one column short<br /><br />Dragging a card into the
+                      rightmost column puts it in the column to its left. Expected it to land where
+                      I dropped it.
+                    </div>
+                  </div>
+                  <p class="marker">Sent to Motir AI</p>
+                  <p class="marker">Reading it as a bug — tracing the likely cause</p>
+                  <ol class="acts" aria-live="polite">
+                    <li class="act">
+                      <span class="act-ic"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-scan" /></svg></span
+                      ><span class="act-k">reading</span
+                      ><span class="act-line">Reading your request…</span>
+                    </li>
+                    <li class="act">
+                      <span class="act-ic"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-corner" /></svg></span
+                      ><span class="act-k">hand-off</span
+                      ><span class="act-line">Tracing the bug…</span>
+                    </li>
+                    <li class="act">
+                      <span class="act-ic"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-book" /></svg></span
+                      ><span class="act-k">retrieval</span
+                      ><span class="act-line">Read the code graph</span>
+                    </li>
+                    <li class="act">
+                      <span class="act-ic"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-book" /></svg></span
+                      ><span class="act-k">retrieval</span
+                      ><span class="act-line">Read the plan tree</span>
+                    </li>
+                    <li class="act live">
+                      <span class="spin" aria-hidden="true"></span><span class="act-k">match</span
+                      ><span class="act-line">Checking whether a card already covers it</span>
+                    </li>
+                  </ol>
+                </div>
+                <div class="composer">
+                  <div class="runbar">
+                    <span class="spin" aria-hidden="true"></span>
+                    <span class="runbar-line">Checking whether a card already covers it</span>
+                    <span class="btn secondary"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-stop" /></svg
+                      >Stop</span
+                    >
+                  </div>
+                  <div class="cfield">
+                    <div class="cinput">Reply, or refine further…</div>
+                    <span class="ctrigger" aria-label="Search work items to plan"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-search" /></svg
+                    ></span>
+                    <span class="btn primary"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-send" /></svg
+                      >Send</span
+                    >
+                  </div>
+                </div>
+              </aside>
+            </div>
+            <div>
+              <p class="note">
+                <b>The anchor is a key chip on the turn, not a header.</b> The widget opens the
+                <b>project</b> conversation (its mode pill stays <code>plan</code>) and sends
+                <code>{ body, targets: [PROD-412] }</code>. The only mark of the anchor is the
+                target row the shipped user bubble already renders for a turn with targets:
+                “Targeting 1 item” and a <code>PlanningTargetKeyChip</code> (tone
+                <code>on-accent</code>). There is no item header, the composer's target tray stays
+                empty, and there is no debug mode.
+              </p>
+              <p class="note">
+                <b>The hand-off marker names the reading.</b> Every turn goes through the one ask
+                door (§2). When the verdict is <code>debug</code>, the rail attaches to the debug
+                job, the second stream of Consequence 3. It says so in the marker line that the
+                plan-change redirect already uses (<code>conversation.handoff</code>), with its own
+                key <code>conversation.handoffDebug</code>: “Reading it as a bug — tracing the
+                likely cause”.
+              </p>
+              <p class="note">
+                <b>The act rail grows by two kinds, not by a new treatment.</b>
+                <code>match</code> (glyph <code>SearchCheck</code>) is the duplicate check, and
+                <code>write</code> (glyph <code>FilePenLine</code>) is the one write. The code and
+                plan reads reuse the shipped <code>retrieval</code> lines. The live row is the
+                Spinner in <code>--el-text</code>. Settled rows are
+                <code>--el-text-secondary</code> on <code>--el-surface-soft</code>. The composer
+                stays live, and the running bar repeats the live line beside a
+                <b>secondary</b> Stop.
+              </p>
+              <table class="spec">
+                <tr>
+                  <th>New act</th>
+                  <th>Mono label</th>
+                  <th>Line</th>
+                </tr>
+                <tr>
+                  <td>hand-off (debug)</td>
+                  <td><code>hand-off</code></td>
+                  <td>Tracing the bug…</td>
+                </tr>
+                <tr>
+                  <td><code>matching</code></td>
+                  <td><code>match</code></td>
+                  <td>Checking whether a card already covers it</td>
+                </tr>
+                <tr>
+                  <td><code>writing</code></td>
+                  <td><code>write</code></td>
+                  <td>Writing the diagnosis onto {key}</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════ 2 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">2</span>
+          <h2>Finished — the diagnosis written onto the triage bug, linked</h2>
+          <span class="cap">outcome · wrote</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div class="stage">
+              <aside class="rail" aria-label="Motir AI">
+                <div class="turns" role="log">
+                  <div class="turn">
+                    <span class="av" aria-hidden="true"
+                      ><svg class="glyph" viewBox="0 0 24 24" width="13" height="13">
+                        <use href="#i-mark" /></svg
+                    ></span>
+                    <div class="bub">
+                      <p>
+                        <b>Likely cause:</b> the board's drop handler clamps the target column index
+                        to <code>columns.length - 2</code>. A drop on the rightmost column resolves
+                        to the column before it.
+                      </p>
+                      <p>
+                        The same index function serves the keyboard move, so a keyboard move into
+                        the last column fails the same way. No card covers this yet.
+                      </p>
+                      <div class="outcome">
+                        <span class="outcome-ic"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-filepen" /></svg
+                        ></span>
+                        <span
+                          >Wrote the diagnosis onto
+                          <span class="wi-chip"
+                            ><span class="wi-type" aria-hidden="true"></span
+                            ><span class="wi-key">PROD-412</span
+                            ><span class="wi-title">Board drag drops the card one column short</span
+                            ><span class="wi-dot" aria-hidden="true"></span></span
+                          >. It stays in Triage, and nothing else changed.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <p class="marker act">Answer this instead</p>
+                </div>
+              </aside>
+              <aside class="rail" aria-label="Motir AI, orb path">
+                <div class="turns">
+                  <p class="sub">orb path · no anchor · the outcome line</p>
+                  <div class="outcome">
+                    <span class="outcome-ic"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-filepen" /></svg
+                    ></span>
+                    <span
+                      >Filed
+                      <span class="wi-chip"
+                        ><span class="wi-type" aria-hidden="true"></span
+                        ><span class="wi-key">PROD-414</span
+                        ><span class="wi-title">Drag drops one column short</span
+                        ><span class="wi-dot" aria-hidden="true"></span
+                      ></span>
+                      in Triage with the diagnosis. Nothing else changed.</span
+                    >
+                  </div>
+                </div>
+              </aside>
+            </div>
+            <div>
+              <p class="note">
+                <b>The prose is Motir AI's; the outcome line is Motir's.</b> The bubble body is the
+                model's diagnosis, rendered through <code>MarkdownView</code> like any assistant
+                turn. The <b>outcome line</b> is new. It sits in the <code>answeredFrom</code> foot
+                slot (hairline <code>--el-border-soft</code>, 12px) and is built from the job's
+                <b>result</b>, not from the model's words. So it always names the one card that was
+                written, even when the prose does not mention it.
+              </p>
+              <p class="note">
+                <b>The link is the shipped work-item chip.</b> <code>WorkItemRefChip</code> is the
+                same chip an answer cites with (bug hue <code>--el-type-bug</code>, key
+                <code>--el-link</code>, on <code>--el-surface-soft</code>). Clicking it opens the
+                shipped peek, not a navigation, so the person can read what was written and keep
+                talking. A triage bug resolves by key (A1.2), so the chip and the peek work for it.
+              </p>
+              <p class="note">
+                <b>“It stays in Triage” is load-bearing.</b> The write does not promote the bug and
+                does not change its status (A1.4). The line says so, so the person is not left
+                looking for the bug on the board.
+              </p>
+              <p class="note">
+                <b>Correction (§3, A1.5).</b> The latest assistant turn carries the shipped
+                correction marker. Under a debug result it reads <b>“Answer this instead”</b>. It
+                re-runs the same user turn as <code>ask</code>, and the diagnosis already written
+                <b>stays</b> on PROD-412. After a re-run, the shipped “Re-read as a question” marker
+                sits above the new answer.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════ 3 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">3</span>
+          <h2>Finished — an existing card enriched instead, and nothing new filed</h2>
+          <span class="cap">outcome · enriched</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div class="stage">
+              <aside class="rail" aria-label="Motir AI">
+                <div class="turns" role="log">
+                  <div class="turn">
+                    <span class="av" aria-hidden="true"
+                      ><svg class="glyph" viewBox="0 0 24 24" width="13" height="13">
+                        <use href="#i-mark" /></svg
+                    ></span>
+                    <div class="bub">
+                      <p>
+                        This is the defect
+                        <span class="wi-chip"
+                          ><span class="wi-type" aria-hidden="true"></span
+                          ><span class="wi-key">PROD-318</span
+                          ><span class="wi-title">Last board column rejects drops</span
+                          ><span class="wi-dot s-inprogress" aria-hidden="true"></span
+                        ></span>
+                        already tracks: the drop handler clamps the target column index, so the last
+                        column cannot be reached by drag.
+                      </p>
+                      <p>
+                        Your report adds one thing it did not have: the keyboard move fails the same
+                        way.
+                      </p>
+                      <div class="outcome">
+                        <span class="outcome-ic"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-filepen" /></svg
+                        ></span>
+                        <span
+                          >Added the diagnosis to
+                          <span class="wi-chip"
+                            ><span class="wi-type" aria-hidden="true"></span
+                            ><span class="wi-key">PROD-318</span
+                            ><span class="wi-title">Last board column rejects drops</span
+                            ><span class="wi-dot s-inprogress" aria-hidden="true"></span></span
+                          >, which already covers this bug. Nothing new was filed, and PROD-412 is
+                          left as it is.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <p class="marker act">Answer this instead</p>
+                </div>
+              </aside>
+              <aside class="rail" aria-label="Motir AI, orb path">
+                <div class="turns">
+                  <p class="sub">orb path · no anchor · the outcome line</p>
+                  <div class="outcome">
+                    <span class="outcome-ic"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-filepen" /></svg
+                    ></span>
+                    <span
+                      >Added the diagnosis to
+                      <span class="wi-chip"
+                        ><span class="wi-type" aria-hidden="true"></span
+                        ><span class="wi-key">PROD-318</span
+                        ><span class="wi-title">Last board column rejects drops</span
+                        ><span class="wi-dot s-inprogress" aria-hidden="true"></span></span
+                      >, which already covers this bug. Nothing new was filed.</span
+                    >
+                  </div>
+                </div>
+              </aside>
+            </div>
+            <div>
+              <p class="note">
+                <b>The existing card is named twice, on purpose.</b> The prose cites it where it
+                explains the match. The outcome line names it as the card that was
+                <b>written to</b>. The first is an argument and the second is a record. Only the
+                second is guaranteed to appear.
+              </p>
+              <p class="note">
+                <b>The person's own report is accounted for.</b> On the widget path the turn was
+                anchored on PROD-412, and A1.4 leaves it as it is when another card already covers
+                the defect. The line ends “PROD-412 is left as it is”. It is plain text, not a
+                second chip, because the turn did not touch it. Marking it a duplicate stays the
+                Triage inbox's act.
+              </p>
+              <p class="note">
+                <b>An enrichment adds and never replaces.</b> What a person wrote on PROD-318 stays
+                as it is (A1.4). The field-level shape of what is added belongs to MOTIR-7049, not
+                to this drawing. The existing card keeps its status (the in-progress dot here),
+                because a debug turn never moves one.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════ 4 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">4</span>
+          <h2>Finished — could not ground the report, so nothing was written</h2>
+          <span class="cap">outcome · no write</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div class="stage">
+              <aside class="rail" aria-label="Motir AI">
+                <div class="turns" role="log">
+                  <div class="turn">
+                    <span class="av" aria-hidden="true"
+                      ><svg class="glyph" viewBox="0 0 24 24" width="13" height="13">
+                        <use href="#i-mark" /></svg
+                    ></span>
+                    <div class="bub">
+                      <p>
+                        I couldn't find the code that decides where a dragged card lands, so I can't
+                        name a likely cause. Tell me which screen this happens on, or paste the
+                        error you saw.
+                      </p>
+                      <div class="outcome">
+                        <span class="outcome-ic"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-searchcheck" /></svg
+                        ></span>
+                        <span>Couldn't trace this to the code, so nothing was written.</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p class="marker act">Answer this instead</p>
+                </div>
+              </aside>
+            </div>
+            <div>
+              <p class="note">
+                <b>Not in the card's list, but in the decision.</b> A1.4's fourth row, “the report
+                cannot be grounded: no write”, and Consequence 2 (“or says that it found nothing to
+                ground”) make this a terminal state the rail has to draw. Without it, a silent turn
+                would read as a failure.
+              </p>
+              <p class="note">
+                It is an <b>ordinary</b> bubble, not the error block. Nothing failed, as with ask's
+                “no confident answer”. The outcome line uses the same slot and glyph family as a
+                write, so the person can see that nothing was written. On the widget path, PROD-412
+                is still the person's own report, unchanged. The composer is live, and a reply with
+                more detail is a new turn.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════ 5 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">5</span>
+          <h2>Out of credits — the shipped paywall, in the rail's own slot</h2>
+          <span class="cap">state · out of credits</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div class="stage">
+              <aside class="rail" aria-label="Motir AI">
+                <div class="turns" role="log">
+                  <div class="turn u">
+                    <span class="av user" aria-hidden="true">·</span>
+                    <div class="bub">
+                      <span class="lbl">turn 1</span>
+                      <span class="tgt-row"
+                        ><span class="tgt-lbl">Targeting 1 item</span
+                        ><span class="keychip">PROD-412</span></span
+                      >
+                      Board drag drops the card one column short
+                    </div>
+                  </div>
+                  <p class="marker">Sent to Motir AI</p>
+                  <div class="paycard" role="status">
+                    <span class="pay-ic"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-pause" /></svg
+                    ></span>
+                    <h2 class="pay-title">Planning is paused — you're out of credits</h2>
+                    <p class="pay-body">
+                      The Acme organization has used all of this month's 1,000 Team credits, so new
+                      planning runs are paused. Existing plans stay fully editable.
+                    </p>
+                    <div class="pay-acts">
+                      <span class="btn primary md"
+                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-arrowup" /></svg
+                        >Upgrade plan</span
+                      >
+                      <span class="btn secondary md">Buy credit top-up</span>
+                    </div>
+                    <p class="pay-note">Renews 1 Nov 2026 · or upgrade now to keep planning.</p>
+                  </div>
+                </div>
+              </aside>
+            </div>
+            <div>
+              <p class="note">
+                <b>Reused unchanged, as the card asks.</b> <code>state.outOfCredits</code> renders
+                <code>&lt;AiPaywall triggeredOutOfCredits /&gt;</code> in the rail's own slot, below
+                the thread. This is the owner face with a named tier. A member sees the shipped
+                member face (“AI is out of credits for this org”, “Ask an admin to upgrade”), and a
+                free org sees the tier gate. This design adds no copy and no treatment to it.
+              </p>
+              <p class="note">
+                <b>Nothing was written.</b> The credit check refuses the turn before the debug job
+                runs. PROD-412 exists, because the widget filed it before the offer was pressed, but
+                it carries no diagnosis. The user turn stays on the thread.
+              </p>
+              <p class="note">
+                <b>Known wording debt, recorded rather than fixed here.</b> The shipped title and
+                note say <i>planning</i> (“Planning is paused”, “to keep planning”). A debug turn
+                inherits that wording because the card says to reuse the treatment. Renaming the
+                paywall's noun changes every AI surface that shows it, so it is not part of this
+                card.
+              </p>
+              <table class="spec">
+                <tr>
+                  <th>Element</th>
+                  <th>Colour · shape (shipped)</th>
+                </tr>
+                <tr>
+                  <td>card</td>
+                  <td>
+                    <code>Card</code>: <code>--el-card</code>, <code>--el-border</code>,
+                    <code>--radius-card</code>, <code>--spacing-card-padding</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>icon chip</td>
+                  <td>
+                    <code>--el-tint-yellow</code> · glyph <code>--el-warning</code> ·
+                    <code>--radius-control</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>title · body · note</td>
+                  <td>
+                    serif <code>--el-text</code> · <code>--el-text-muted</code> on
+                    <code>--el-card</code> (white, 4.54:1) · <code>--el-text-secondary</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>actions</td>
+                  <td>
+                    <code>Button</code> primary / secondary, size md (<code>--height-btn-md</code>,
+                    <code>--radius-btn</code>)
+                  </td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

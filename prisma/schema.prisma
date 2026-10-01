@@ -8468,15 +8468,15 @@ model PlanChangeSession {
 ///                nothing happened. System turns are NOT part of the intent.
 /// Workspace-scoped tenant data (RLS in the same migration).
 model PlanChangeTurn {
-  id              String                @id @default(cuid())
-  workspaceId     String                @map("workspace_id")
-  sessionId       String                @map("session_id")
+  id                    String                @id @default(cuid())
+  workspaceId           String                @map("workspace_id")
+  sessionId             String                @map("session_id")
   /// 0-based position in the thread. Unique per session — the DB backstop for the
   /// locked allocation; a violation means a lost append race and surfaces as a
   /// typed domain error, never a raw P2002.
-  seq             Int
-  role            PlanChangeTurnRole
-  body            String                @db.Text
+  seq                   Int
+  role                  PlanChangeTurnRole
+  body                  String                @db.Text
   /// The producing motir-ai job token — set on a `system` submission marker (the
   /// job that submission produced) AND on an `assistant` turn (the job whose
   /// result carried the utterance, MOTIR-2226; it is also the idempotency key
@@ -8486,18 +8486,18 @@ model PlanChangeTurn {
   /// the settle is then a single keyed, replayable lookup rather than "the most
   /// recent user turn". Null on a `user` turn of the shipped plan-change path,
   /// whose submission is a separate gesture writing a `system` marker.
-  jobId           String?               @map("job_id")
+  jobId                 String?               @map("job_id")
   /// The ONE Gate-2 question an `assistant` turn asked (MOTIR-2222's
   /// `PlanningTurn.question`), or null when the turn only reported its findings.
   /// It is what makes the awaiting-your-answer state DERIVABLE from the persisted
   /// thread rather than held in client state — so re-opening the workspace hours
   /// later comes back to the same pending question. Null on every other role.
-  question        String?               @db.Text
+  question              String?               @db.Text
   /// A `user` turn sent as the REPLY to the pending question (through the answer
   /// bar), as opposed to one that changed the subject and SUPERSEDED it. The two
   /// dispositions render different markers (design state C vs E), and neither may
   /// rest on reading the words — so which affordance sent it is recorded here.
-  isAnswer        Boolean               @default(false) @map("is_answer")
+  isAnswer              Boolean               @default(false) @map("is_answer")
   /// What this turn ASKED FOR — `ask` (answer my question, change nothing) or
   /// `plan_change` (propose a plan delta), MOTIR-1816 /
   /// `docs/decisions/conversation-turn-intent.md`. Set on `user` turns only
@@ -8509,13 +8509,22 @@ model PlanChangeTurn {
   /// disposition — what actually ran for this turn — not a stored guess, which
   /// is why a re-run under the other intent MOVES it rather than adding a second
   /// row (the `isAnswer` posture: the thread records what Motir DID).
-  intent          PlanChangeTurnIntent? @map("intent")
+  intent                PlanChangeTurnIntent? @map("intent")
   /// Whether this turn was RE-RUN under the other intent after Motir read it
   /// wrong (ADR §3). `intent` alone cannot say so — it holds what finally ran —
   /// and the transcript is a record, so the correction has to survive as a fact
   /// rather than as the absence of the first reading. Also the one number that
   /// says whether ADR §4's default ever needs revisiting.
-  intentCorrected Boolean               @default(false) @map("intent_corrected")
+  intentCorrected       Boolean               @default(false) @map("intent_corrected")
+  /// When a `debug` turn's ONE write was CLAIMED (MOTIR-7049,
+  /// `docs/decisions/conversation-turn-intent.md` AMENDMENT 1 · A1.4). Set on a
+  /// `user` turn only, by a compare-and-set under the session's row lock BEFORE
+  /// the card is written, so of two settles of the same `debug_bug` job exactly
+  /// one writes. Null on every other turn, and on a debug turn nothing has been
+  /// landed for. Released (back to null) only when the write was refused inside
+  /// its own transaction, so nothing committed; a claim that outlives a crash
+  /// stays set — the landing fails CLOSED rather than filing a second bug.
+  debugLandingClaimedAt DateTime?             @map("debug_landing_claimed_at")
   /// The work items an `assistant` ANSWER rests on, as work-item IDENTIFIERS
   /// ("MOTIR-812"), in the order the answer cites them. Empty on every other
   /// role and on an answer the graphs could not support.
@@ -8527,12 +8536,12 @@ model PlanChangeTurn {
   /// WRITE time (`workItemRepository.findByIdentifiers`), so a cross-project or
   /// unresolvable key is dropped rather than persisted as a chip that renders
   /// broken. Queryable without a join (`citations @> ARRAY['MOTIR-812']`).
-  citations       String[]              @default([])
+  citations             String[]              @default([])
   /// The author of a `user` turn (null for `system` / `assistant` turns, and
   /// cleared if the author is deleted — SetNull, the session's `createdBy`
   /// semantics).
-  authorId        String?               @map("author_id")
-  createdAt       DateTime              @default(now()) @map("created_at")
+  authorId              String?               @map("author_id")
+  createdAt             DateTime              @default(now()) @map("created_at")
 
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   /// COMPOSITE FK (MOTIR-1735) — the turn points at `(session_id, workspace_id)`,
@@ -8682,14 +8691,18 @@ enum PlanChangeTurnRole {
 /// `docs/decisions/conversation-turn-intent.md`). ONE thread carries both, and a
 /// thread may alternate freely turn by turn — the previous turn's intent places
 /// no constraint on the next, which is why this sits on the TURN and never on
-/// the session. There is deliberately no third "unknown" value: every turn that
-/// ran, ran as one of these two, and a turn that never ran carries null.
+/// the session. There is deliberately no "unknown" value: every turn that ran,
+/// ran as one of these, and a turn that never ran carries null.
 enum PlanChangeTurnIntent {
   /// Propose a plan delta — the shipped path, unchanged.
   plan_change
   /// Answer a question about the project from its plan tree and code graph,
   /// with citations. Writes nothing.
   ask
+  /// Diagnose a REPORT OF BROKEN BEHAVIOUR (MOTIR-7047 · the ADR's AMENDMENT 1,
+  /// A1.6): `ask_project` redirected the turn and a `debug_bug` job ran for it.
+  /// It writes at most ONE card (A1.4) — landed by MOTIR-7049, not here.
+  debug
 
   @@map("plan_change_turn_intent")
 }

@@ -9,6 +9,7 @@ import {
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 import { parsePullRequestReference } from '@/lib/github/prReferenceQuery';
+import { PENDING_MERGEABLE_STATE } from '@/lib/github/mergeability';
 
 // GitHub pull-request repository — single Prisma operations on the
 // `github_pull_request` table (Story 7.10 · MOTIR-891). `repoId` is the INTERNAL
@@ -617,17 +618,21 @@ export const githubPullRequestRepository = {
     return result.count;
   },
 
-  /** FORGET a stored mergeability reading — a new head's is uncomputed, so a
-   *  `synchronize` clears it rather than let the old head's `dirty` hold the new one
-   *  (MOTIR-5913). One statement over the row; a row with nothing stored matches
-   *  nothing. Write path → `tx`. */
-  async clearMergeability(pullRequestId: string, tx: Prisma.TransactionClient): Promise<number> {
+  /** Mark the reading OWED at a new head — a `synchronize` replaces the old head's
+   *  reading, so its `dirty` cannot hold the new one (MOTIR-5913), with the host's
+   *  "not computed yet" word AT that head rather than with nothing (MOTIR-7063): `null`
+   *  read as "no conflict", and CI promoted a head nobody had asked about. The
+   *  `pull-request/head-moved` re-read overwrites it with the host's answer. One
+   *  statement, unconditional: a `NOT { … }` guard would skip exactly the never-read
+   *  row, whose NULL columns make the comparison unknown. Write path → `tx`. */
+  async markMergeabilityPending(
+    pullRequestId: string,
+    headSha: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
     const result = await tx.githubPullRequest.updateMany({
-      where: {
-        id: pullRequestId,
-        OR: [{ mergeableState: { not: null } }, { mergeableStateHeadSha: { not: null } }],
-      },
-      data: { mergeableState: null, mergeableStateHeadSha: null },
+      where: { id: pullRequestId },
+      data: { mergeableState: PENDING_MERGEABLE_STATE, mergeableStateHeadSha: headSha },
     });
     return result.count;
   },

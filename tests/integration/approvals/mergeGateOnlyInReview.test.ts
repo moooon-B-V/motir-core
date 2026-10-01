@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { linkPrByIdentifier } from '../../helpers/prLink';
+import { hostAnswersCleanAt } from '../../helpers/hostMergeability';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 
 // THE MERGE QUESTION IS ASKED ONLY AT `in_review` (Bug MOTIR-6971; ADR
@@ -311,6 +312,8 @@ describe('an `approved` card whose commits moved is asked again AT In Review, ne
     await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'approved' } });
 
     await pullRequest('synchronize', 61, headRef, 'sha-b');
+    // The host says the new head still merges (MOTIR-7063) — until then nobody is asked.
+    await hostAnswersCleanAt(s.workspace.id, 61, 'sha-b');
     await ci('sha-b', 61);
 
     expect(await statusOf(item.id)).toBe('in_review');

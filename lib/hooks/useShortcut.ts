@@ -101,7 +101,11 @@ export function useShortcut(
         // `c` shortcut. Shift is allowed: printable combos like `?` need it.
         return;
       }
-      if (event.key.toLowerCase() !== key) return;
+      // Not every `keydown` carries a `key`: Chrome's autofill / password
+      // manager dispatches a plain `Event('keydown')` when it fills a field,
+      // and its `key` is undefined (MOTIR-7033). Such an event is never a
+      // shortcut.
+      if (typeof event.key !== 'string' || event.key.toLowerCase() !== key) return;
       if (!whenInputFocused && isEditableTarget(event.target)) return;
 
       event.preventDefault();

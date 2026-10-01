@@ -136,6 +136,48 @@ describe('the sign-in check — stat only, three states', () => {
     });
   });
 
+  // MOTIR-7053: an API-key sign-in leaves no credential file, so the header
+  // read "Not signed in" while the agent's Chat worked on that same key.
+  it('claude: a set ANTHROPIC_API_KEY is a sign-in with no credentials file', async () => {
+    const env = { HOME: tempHome(), MOTIR_SANDBOX_AGENT: 'claude' };
+    expect(await checkSignIn({ ...env, ANTHROPIC_API_KEY: 'sk-test-not-real' })).toEqual({
+      profile: 'claude',
+      state: 'signed_in',
+    });
+    // An EMPTY variable is not a sign-in, exactly as an empty file is not.
+    expect(await checkSignIn({ ...env, ANTHROPIC_API_KEY: '' })).toEqual({
+      profile: 'claude',
+      state: 'signed_out',
+    });
+  });
+
+  it('codex: a set OPENAI_API_KEY is a sign-in with no auth.json', async () => {
+    const env = { HOME: tempHome(), MOTIR_SANDBOX_AGENT: 'codex', OPENAI_API_KEY: 'sk-x' };
+    expect(await checkSignIn(env)).toEqual({ profile: 'codex', state: 'signed_in' });
+  });
+
+  it('a profile whose only credential is a variable: signed in when it is set', async () => {
+    const home = tempHome();
+    expect(
+      await checkSignIn({ HOME: home, MOTIR_SANDBOX_AGENT: 'aider', OPENAI_API_KEY: 'k' }),
+    ).toEqual({ profile: 'aider', state: 'signed_in' });
+    expect(
+      await checkSignIn({ HOME: home, MOTIR_SANDBOX_AGENT: 'cursor', CURSOR_API_KEY: 'k' }),
+    ).toEqual({ profile: 'cursor', state: 'signed_in' });
+  });
+
+  it('a set variable answers without a stat — the check never reaches the disk', async () => {
+    const stat = (): never => {
+      throw new Error('stat must not be called');
+    };
+    expect(
+      await checkSignIn(
+        { HOME: '/h', MOTIR_SANDBOX_AGENT: 'claude', ANTHROPIC_API_KEY: 'k' },
+        stat,
+      ),
+    ).toEqual({ profile: 'claude', state: 'signed_in' });
+  });
+
   it.each(['kimi', 'aider', 'goose'])('%s pins no file: unknown (can’t tell)', async (profile) => {
     expect(await checkSignIn({ HOME: tempHome(), MOTIR_SANDBOX_AGENT: profile })).toEqual({
       profile,

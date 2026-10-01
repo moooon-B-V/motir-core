@@ -22,7 +22,13 @@ import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
 import { toWorkItemDto } from '@/lib/mappers/workItemMappers';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { WorkItemKindDto, WorkItemDto } from '@/lib/dto/workItems';
+import type {
+  ExecutorDto,
+  WorkItemDifficultyDto,
+  WorkItemKindDto,
+  WorkItemDto,
+  WorkItemTypeDto,
+} from '@/lib/dto/workItems';
 import type {
   TriageQueuePageDto,
   TriageItemDetailDto,
@@ -66,6 +72,27 @@ export interface CreateTriageSubmissionInput {
    * 6.12 owns its public route + the `canSubmitToTriage` grant.
    */
   submittedByUserId?: string;
+  /**
+   * The PLANNED fields a debug turn's diagnosis carries (Story MOTIR-7042 ·
+   * MOTIR-7049; ADR `conversation-turn-intent.md` AMENDMENT 1 · A1.4), so a bug
+   * filed from the orb's debug turn is BORN with its diagnosis in this one create
+   * — one transaction, no half-written card. Absent on every other submission
+   * (the widget, the public form), which stay exactly as they were. The
+   * diagnosis's description rides in `descriptionMd`.
+   */
+  diagnosis?: TriageSubmissionDiagnosis;
+}
+
+/** The planned fields of {@link CreateTriageSubmissionInput.diagnosis} — the
+ *  validated `AuthoredBug` sizing and explanation (`lib/ai/authoredBug.ts`). */
+export interface TriageSubmissionDiagnosis {
+  explanationMd: string;
+  type: WorkItemTypeDto;
+  executor: ExecutorDto;
+  storyPoints: number;
+  estimateMinutes: number;
+  /** `null` when the answer carried no difficulty — then none is written. */
+  difficulty: WorkItemDifficultyDto | null;
 }
 
 const TRIAGE_SUBMISSION_KINDS: ReadonlySet<string> = new Set<TriageSubmissionKind>(['bug', 'task']);
@@ -276,6 +303,22 @@ export const triageService = {
         // promotion (6.11.5) sets the parent/rank. The triage marker carries the
         // real submitter; the reporter is the member actor (`ctx.userId`).
         triage: { submittedByUserId: input.submittedByUserId ?? ctx.userId },
+        // A debug turn's diagnosis (MOTIR-7049), in the SAME create — so the bug
+        // is never visible half-planned. The explanation is the model's draft,
+        // and says so (`ai_draft`), as the monitor enrichment's does.
+        ...(input.diagnosis
+          ? {
+              explanationMd: input.diagnosis.explanationMd,
+              explanationSource: 'ai_draft' as const,
+              type: input.diagnosis.type,
+              executor: input.diagnosis.executor,
+              storyPoints: input.diagnosis.storyPoints,
+              estimateMinutes: input.diagnosis.estimateMinutes,
+              ...(input.diagnosis.difficulty !== null
+                ? { difficulty: input.diagnosis.difficulty }
+                : {}),
+            }
+          : {}),
       },
       ctx,
     );

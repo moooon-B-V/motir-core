@@ -1019,6 +1019,103 @@ export const planChangeSessionsService = {
   },
 
   /**
+   * Move a `user` turn's intent from `from` to `to` ONLY if it still reads `from`
+   * — a compare-and-set under the session's row lock (MOTIR-7047).
+   *
+   * It exists for a dispatch that must happen AT MOST ONCE per turn but is
+   * reached from a replayable call: `aiAskService.settle`'s debug arm. Reading the
+   * turn's intent outside a lock and then recording it would let two concurrent
+   * settles of the same job both see `ask` and both submit a `debug_bug` job; the
+   * lock serialises them, so exactly one sees `from` and wins. Returns the fresh
+   * session when this call moved the turn, `null` when another call already had
+   * (or the turn never read `from`) — the loser's cue to submit nothing.
+   */
+  async claimTurnIntent(
+    turnId: string,
+    change: { from: PlanChangeTurnIntent; to: PlanChangeTurnIntent },
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanChangeSessionDto | null> {
+    const session = await requireSession(pctx, address);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        const turn = await planChangeTurnRepository.findByIdInSession(
+          turnId,
+          session.id,
+          pctx.workspaceId,
+          tx,
+        );
+        if (!turn) throw new PlanChangeTurnNotFoundError(turnId);
+        if (turn.intent !== change.from) return null;
+        await planChangeTurnRepository.updateIntent(turn.id, { intent: change.to }, tx);
+        const fresh = await planChangeSessionRepository.update(
+          session.id,
+          { lastActivityAt: new Date() },
+          tx,
+        );
+        return toDto(fresh, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * CLAIM the ONE write a `debug` turn may make (MOTIR-7049; ADR AMENDMENT 1 ·
+   * A1.4) — a compare-and-set of the turn's `debugLandingClaimedAt` under the
+   * session's row lock, the same serialisation {@link claimTurnIntent} gives the
+   * debug DISPATCH. Returns `true` when THIS call claimed it; `false` when an
+   * earlier or concurrent settle of the same job already had — the loser's cue to
+   * write nothing. Only a `user` turn that ran as `debug` can be claimed.
+   */
+  async claimDebugLanding(
+    turnId: string,
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<boolean> {
+    const session = await requireSession(pctx, address);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        const turn = await planChangeTurnRepository.findByIdInSession(
+          turnId,
+          session.id,
+          pctx.workspaceId,
+          tx,
+        );
+        if (!turn || turn.role !== 'user') throw new PlanChangeTurnNotFoundError(turnId);
+        if (turn.intent !== 'debug') return false;
+        return planChangeTurnRepository.claimDebugLanding(turn.id, pctx.workspaceId, tx);
+      },
+    );
+  },
+
+  /**
+   * RELEASE a debug landing's claim (MOTIR-7049). The caller does this ONLY when
+   * the write was refused inside its own transaction — so nothing committed — and
+   * a later settle may try again. A claim is never released after a write that
+   * may have committed: the landing fails closed rather than writing twice.
+   */
+  async releaseDebugLanding(
+    turnId: string,
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<void> {
+    const session = await requireSession(pctx, address);
+    await withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        await planChangeTurnRepository.releaseDebugLanding(turnId, pctx.workspaceId, tx);
+      },
+    );
+  },
+
+  /**
    * Record the PLANNER's turn for a settled job — the consuming half of
    * MOTIR-2222's contract (MOTIR-2226).
    *

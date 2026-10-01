@@ -1,0 +1,502 @@
+// @vitest-environment happy-dom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { renderWithIntl } from '../helpers/renderWithIntl';
+import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
+import { parsePlanningLaunch } from '@/lib/planning/launcher';
+import { indexPlanReview } from '@/lib/planning/planChangeDiff';
+import { resetPickAutoSendClaimsForTests } from '@/lib/planning/pickAutoSend';
+import { debugAutoSendKey } from '@/lib/planning/surfaceSeed';
+import type {
+  DebugLandingDto,
+  PlanChangeSessionDto,
+  PlanChangeTurnDto,
+} from '@/lib/dto/planChange';
+import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
+
+// MOTIR-7050 — the DEBUG turn as the rail renders it
+// (`design/ai-chat/debug-turn.mock.html`; `design/ai-chat/design-notes.md`
+// § "⭐ Debug with Motir AI" §3–§5), and the widget's one seeded send.
+//
+// The rail is presentational — the host owns the conversation — so each case
+// hands it the state the hook produces, the way `ask-answer-rail.test.tsx` does.
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => '/backlog',
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+const LAUNCH = parsePlanningLaunch({ mode: 'project', from: 'project' });
+
+let seq = 0;
+function turn(
+  role: PlanChangeTurnDto['role'],
+  body: string,
+  extra: Partial<PlanChangeTurnDto> = {},
+): PlanChangeTurnDto {
+  seq += 1;
+  return {
+    id: `t${seq}`,
+    seq,
+    role,
+    body,
+    jobId: null,
+    question: null,
+    isAnswer: false,
+    intent: null,
+    intentCorrected: false,
+    citations: [],
+    authorId: role === 'user' ? 'u1' : null,
+    createdAt: '2026-09-30T10:00:00.000Z',
+    ...extra,
+  };
+}
+
+function session(turns: PlanChangeTurnDto[]): PlanChangeSessionDto {
+  return {
+    id: 's1',
+    projectId: 'p1',
+    targetKeys: [],
+    turnCount: turns.length,
+    lastJobId: null,
+    lastSubmittedAt: null,
+    lastActivityAt: '2026-09-30T10:00:00.000Z',
+    origin: 'conversation',
+    createdAt: '2026-09-30T09:00:00.000Z',
+    updatedAt: '2026-09-30T10:00:00.000Z',
+    turns,
+    workItemRefs: {},
+  };
+}
+
+const REPORT =
+  'Board drag drops the card one column short\n\nDragging a card into the rightmost column puts it in the column to its left.';
+
+/** The widget path's thread: the person's report, anchored on PROD-412, and the
+ *  diagnosis the debug job's settle appended — joined by the debug job's id. */
+function debugged(landing: DebugLandingDto, opts: { anchored?: boolean } = {}) {
+  const anchored = opts.anchored ?? true;
+  const user = turn('user', REPORT, { jobId: 'debug-1', intent: 'debug' });
+  const reply = turn('assistant', '**Likely cause:** the drop handler clamps the column index.', {
+    jobId: 'debug-1',
+    citations: landing.workItemKey ? [landing.workItemKey] : [],
+  });
+  return {
+    session: session([user, reply]),
+    turnAnchors: anchored ? { [user.id]: 'PROD-412' } : {},
+    debugLandings: { 'debug-1': landing },
+  };
+}
+
+const BASE: PlanChangeConversationState = {
+  phase: 'idle',
+  session: session([]),
+  progress: null,
+  acts: [],
+  review: null,
+  liveReview: null,
+  liveVersion: 0,
+  liveFailing: false,
+  discardedReview: null,
+  decided: null,
+  jobId: null,
+  planId: null,
+  approved: null,
+  errorCode: null,
+  outOfCredits: false,
+  stopping: false,
+  stopped: false,
+  queued: [],
+  earlier: null,
+  reopened: null,
+  readOnly: false,
+};
+
+const handlers = {
+  onSend: vi.fn(),
+  onRetry: vi.fn(),
+  onCorrectTurn: vi.fn(),
+  onApprove: vi.fn(),
+  onDiscard: vi.fn(),
+  onAddTarget: vi.fn(),
+  onRemoveTarget: vi.fn(),
+  onStop: vi.fn(),
+};
+
+function railElement(
+  state: Partial<PlanChangeConversationState> = {},
+  extra: Partial<React.ComponentProps<typeof PlanChangeRail>> = {},
+) {
+  const merged = { ...BASE, ...state };
+  return (
+    <PlanChangeRail
+      launch={LAUNCH}
+      projectName="PayFlow"
+      state={merged}
+      index={indexPlanReview(merged.review)}
+      targets={[]}
+      {...handlers}
+      {...extra}
+    />
+  );
+}
+
+function renderRail(
+  state: Partial<PlanChangeConversationState> = {},
+  extra: Partial<React.ComponentProps<typeof PlanChangeRail>> = {},
+) {
+  return renderWithIntl(railElement(state, extra));
+}
+
+beforeEach(() => {
+  seq = 0;
+  resetPickAutoSendClaimsForTests();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('{}', { status: 200 })),
+  );
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  for (const fn of Object.values(handlers)) fn.mockReset();
+});
+
+describe('the debug turn, RUNNING (panel 1)', () => {
+  const user = () => turn('user', REPORT, { jobId: 'debug-1', intent: 'debug' });
+
+  it('puts the anchored triage bug on the sent turn as a key chip — no item header', () => {
+    const sent = user();
+    renderRail({
+      phase: 'streaming',
+      session: session([sent]),
+      turnAnchors: { [sent.id]: 'PROD-412' },
+      progress: { kind: 'reading' },
+      acts: [{ kind: 'reading' }],
+    });
+
+    // The shipped target row: "Targeting 1 item" + the key chip.
+    expect(screen.getByText('Targeting 1 item')).toBeTruthy();
+    expect(screen.getByText('PROD-412')).toBeTruthy();
+    // The person's words, line breaks kept.
+    expect(screen.getByText(/Board drag drops the card one column short/)).toBeTruthy();
+    // The rail head keeps the PROJECT mode pill: the conversation is the project's.
+    expect(screen.getByTestId('planning-mode-chip').textContent).toBe('plan');
+  });
+
+  it('draws no target row on an UNANCHORED turn (the orb path)', () => {
+    renderRail({ phase: 'streaming', session: session([user()]) });
+    expect(screen.queryByText('Targeting 1 item')).toBeNull();
+  });
+
+  it('names the debug hand-off and narrates the new acts, the live one with the running bar', () => {
+    renderRail({
+      phase: 'streaming',
+      session: session([user()]),
+      progress: { kind: 'matching' },
+      acts: [
+        { kind: 'reading' },
+        { kind: 'redirectedDebug' },
+        { kind: 'retrieval', family: 'code_graph', blocked: false },
+        { kind: 'retrieval', family: 'plan_tree', blocked: false },
+        { kind: 'matching' },
+      ],
+    });
+
+    expect(screen.getByTestId('plan-change-handoff-debug').textContent).toBe(
+      'Reading it as a bug — tracing the likely cause',
+    );
+    // The plan-change hand-off is NOT drawn: this turn is not a plan change.
+    expect(screen.queryByTestId('plan-change-handoff')).toBeNull();
+
+    const acts = screen.getByTestId('plan-change-acts');
+    const handoff = within(acts).getByTestId('plan-change-act-redirectedDebug');
+    expect(handoff.textContent).toContain('hand-off');
+    expect(handoff.textContent).toContain('Tracing the bug…');
+    expect(within(acts).getByText('Read the code graph')).toBeTruthy();
+    expect(within(acts).getByText('Read the plan tree')).toBeTruthy();
+    const match = within(acts).getByTestId('plan-change-act-matching');
+    expect(match.textContent).toContain('match');
+    expect(match.textContent).toContain('Checking whether a work item already covers it');
+    // The live act is the one row in `--el-text`; settled rows are secondary.
+    expect(match.className).toContain('text-(--el-text)');
+    expect(handoff.className).toContain('text-(--el-text-secondary)');
+
+    // The running bar repeats the live line beside Stop, and the composer stays live.
+    expect(screen.getAllByText('Checking whether a work item already covers it')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
+  });
+
+  it('names the write when the card is known before the settle', () => {
+    renderRail({
+      phase: 'streaming',
+      session: session([user()]),
+      progress: { kind: 'writing', key: 'PROD-412' },
+      acts: [{ kind: 'redirectedDebug' }, { kind: 'writing', key: 'PROD-412' }],
+    });
+
+    const write = screen.getByTestId('plan-change-act-writing');
+    expect(write.textContent).toContain('write');
+    expect(write.textContent).toContain('Writing the diagnosis onto PROD-412');
+  });
+
+  it('takes the hand-off marker down once the run has settled', () => {
+    renderRail({
+      phase: 'idle',
+      session: session([user()]),
+      acts: [{ kind: 'redirectedDebug' }],
+    });
+    expect(screen.queryByTestId('plan-change-handoff-debug')).toBeNull();
+  });
+});
+
+describe('the debug turn, FINISHED — the outcome line (panels 2–4)', () => {
+  function outcomeLine() {
+    return screen.getByTestId('plan-change-debug-outcome');
+  }
+
+  it('diagnose onto the anchored triage bug: "It stays in Triage", with the card linked', () => {
+    renderRail(
+      debugged({
+        outcome: 'diagnose',
+        workItemKey: 'PROD-412',
+        title: 'Board drag drops the card one column short',
+        createdInTriage: false,
+      }),
+    );
+
+    const line = outcomeLine();
+    expect(line.getAttribute('data-outcome')).toBe('diagnose');
+    expect(line.textContent).toBe(
+      'Wrote the diagnosis onto PROD-412Board drag drops the card one column short. It stays in Triage, and nothing else changed.',
+    );
+    // The card is the shipped chip — a peek link, never a navigation away.
+    const chip = within(line).getByRole('link');
+    expect(chip.className).toContain('wi-chip');
+    expect(chip.textContent).toContain('PROD-412');
+    // The outcome line takes the foot slot: no "Answered from 1 work item" beside it.
+    expect(screen.queryByTestId('plan-change-citation-count')).toBeNull();
+    // The prose is Motir AI's own, in the ordinary assistant bubble.
+    expect(screen.getByTestId('plan-change-report').textContent).toContain('Likely cause:');
+  });
+
+  it('diagnose with no anchor (the orb path): the bug it FILED in Triage', () => {
+    renderRail(
+      debugged(
+        {
+          outcome: 'diagnose',
+          workItemKey: 'PROD-414',
+          title: 'Drag drops one column short',
+          createdInTriage: true,
+        },
+        { anchored: false },
+      ),
+    );
+
+    expect(outcomeLine().textContent).toBe(
+      'Filed PROD-414Drag drops one column short in Triage with the diagnosis. Nothing else changed.',
+    );
+  });
+
+  it('enrich_existing on the widget path names the covering card, and the anchor left as it is', () => {
+    renderRail(
+      debugged({
+        outcome: 'enrich_existing',
+        workItemKey: 'PROD-318',
+        title: 'Last board column rejects drops',
+        createdInTriage: false,
+      }),
+    );
+
+    const line = outcomeLine();
+    expect(line.textContent).toBe(
+      'Added the diagnosis to PROD-318Last board column rejects drops, which already covers this bug. Nothing new was filed, and PROD-412 is left as it is.',
+    );
+    // The anchor is PLAIN TEXT — the turn did not touch it — so only one chip.
+    expect(within(line).getAllByRole('link')).toHaveLength(1);
+  });
+
+  it('enrich_existing on the orb path', () => {
+    renderRail(
+      debugged(
+        {
+          outcome: 'enrich_existing',
+          workItemKey: 'PROD-318',
+          title: 'Last board column rejects drops',
+          createdInTriage: false,
+        },
+        { anchored: false },
+      ),
+    );
+
+    expect(outcomeLine().textContent).toBe(
+      'Added the diagnosis to PROD-318Last board column rejects drops, which already covers this bug. Nothing new was filed.',
+    );
+  });
+
+  it('ungrounded: nothing written, no card named — an ordinary bubble, not the error block', () => {
+    renderRail(
+      debugged({ outcome: 'ungrounded', workItemKey: null, title: null, createdInTriage: false }),
+    );
+
+    const line = outcomeLine();
+    expect(line.textContent).toBe("Couldn't trace this to the code, so nothing was written.");
+    expect(within(line).queryByRole('link')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('prefers the thread’s resolved reference for the chip (its status dot included)', () => {
+    const state = debugged({
+      outcome: 'enrich_existing',
+      workItemKey: 'PROD-318',
+      title: 'Stale title',
+      createdInTriage: false,
+    });
+    state.session.workItemRefs = {
+      'PROD-318': {
+        accessible: true,
+        id: 'wi_318',
+        identifier: 'PROD-318',
+        title: 'Last board column rejects drops',
+        kind: 'bug',
+        archived: false,
+        status: { key: 'in_progress', label: 'In progress', category: 'in_progress' },
+      },
+    };
+    renderRail(state);
+
+    const line = outcomeLine();
+    expect(line.textContent).toContain('Last board column rejects drops');
+    expect(line.querySelector('.wi-dot.s-inprogress')).not.toBeNull();
+  });
+
+  it('carries the correction marker, labelled "Answer this instead", re-running the USER turn', () => {
+    const state = debugged({
+      outcome: 'diagnose',
+      workItemKey: 'PROD-412',
+      title: 'Board drag drops the card one column short',
+      createdInTriage: false,
+    });
+    renderRail(state);
+
+    const marker = screen.getByTestId('plan-change-correct');
+    expect(marker.textContent).toBe('Answer this instead');
+    expect(marker.getAttribute('data-direction')).toBe('ask');
+    fireEvent.click(marker);
+    expect(handlers.onCorrectTurn).toHaveBeenCalledWith(state.session.turns[0]?.id);
+  });
+
+  it('draws the ordinary answer foot for a debug reply the rail holds no landing for', () => {
+    // A reloaded thread: the turn DTO carries no landing, so the reply reads as
+    // an ordinary cited answer rather than inventing an outcome.
+    const state = debugged({
+      outcome: 'diagnose',
+      workItemKey: 'PROD-412',
+      title: 'Board drag drops the card one column short',
+      createdInTriage: false,
+    });
+    renderRail({ session: state.session });
+
+    expect(screen.queryByTestId('plan-change-debug-outcome')).toBeNull();
+    expect(screen.getByTestId('plan-change-citation-count').textContent).toBe(
+      'Answered from 1 work item',
+    );
+  });
+});
+
+describe('the debug turn, OUT OF CREDITS (panel 5)', () => {
+  it('is the shipped paywall, unchanged — the user turn stays, nothing else is drawn', () => {
+    const sent = turn('user', REPORT, { jobId: 'ask-1', intent: 'ask' });
+    renderRail({
+      session: session([sent]),
+      turnAnchors: { [sent.id]: 'PROD-412' },
+      outOfCredits: true,
+    });
+
+    expect(screen.getByText(/you're out of credits/i)).toBeTruthy();
+    expect(screen.getByText(/Board drag drops the card one column short/)).toBeTruthy();
+    expect(screen.queryByTestId('plan-change-debug-outcome')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('the WIDGET’s seeded send — exactly once', () => {
+  const seedProps = (onAutoSend: (text: string) => void) => ({
+    autoSendTurn: REPORT,
+    autoSendKey: debugAutoSendKey('PROD-412'),
+    autoSendIntoThread: true,
+    onAutoSend,
+  });
+
+  it('sends the report once, through its own sender, as soon as the thread is idle', () => {
+    const onAutoSend = vi.fn();
+    renderRail({}, seedProps(onAutoSend));
+
+    expect(onAutoSend).toHaveBeenCalledTimes(1);
+    expect(onAutoSend).toHaveBeenCalledWith(REPORT);
+    // Not through the composer's ordinary send, which carries no anchor.
+    expect(handlers.onSend).not.toHaveBeenCalled();
+  });
+
+  it('JOINS a thread that already holds turns — the project conversation is resumed', () => {
+    const onAutoSend = vi.fn();
+    renderRail(
+      { session: session([turn('user', 'an earlier question', { intent: 'ask' })]) },
+      seedProps(onAutoSend),
+    );
+    expect(onAutoSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits while the thread is still loading, then sends once', () => {
+    const onAutoSend = vi.fn();
+    const view = renderRail({ phase: 'loading', session: null }, seedProps(onAutoSend));
+    expect(onAutoSend).not.toHaveBeenCalled();
+
+    view.rerender(railElement({ phase: 'idle' }, seedProps(onAutoSend)));
+    view.rerender(railElement({ phase: 'streaming' }, seedProps(onAutoSend)));
+    view.rerender(railElement({ phase: 'idle' }, seedProps(onAutoSend)));
+    expect(onAutoSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('a REMOUNT or a second open on the same page does not send it again', () => {
+    const onAutoSend = vi.fn();
+    const first = renderRail({}, seedProps(onAutoSend));
+    first.unmount();
+    renderRail({}, seedProps(onAutoSend));
+
+    expect(onAutoSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('never sends into a conversation this viewer may only read', () => {
+    const onAutoSend = vi.fn();
+    renderRail({ readOnly: true }, seedProps(onAutoSend));
+    expect(onAutoSend).not.toHaveBeenCalled();
+  });
+});
+
+describe('the ORB row’s pre-fill — sent by nobody but the person', () => {
+  const PREFILL = 'Something is broken. What happens: \nWhat should happen instead: ';
+
+  it('holds the template UNSENT, focused with the caret at the end of the first line', () => {
+    renderRail(
+      { session: session([turn('user', 'an earlier question', { intent: 'ask' })]) },
+      { initialDraft: PREFILL, initialDraftCaret: PREFILL.indexOf('\n') },
+    );
+
+    const field = screen.getByRole('textbox') as HTMLTextAreaElement;
+    expect(field.value).toBe(PREFILL);
+    expect(document.activeElement).toBe(field);
+    expect(field.selectionStart).toBe(PREFILL.indexOf('\n'));
+    expect(field.selectionEnd).toBe(PREFILL.indexOf('\n'));
+    // Nothing went anywhere.
+    expect(handlers.onSend).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps the starter chips hidden while the template is in the field', () => {
+    renderRail({}, { initialDraft: PREFILL, initialDraftCaret: PREFILL.indexOf('\n') });
+    expect(screen.queryByText('Add work to an epic')).toBeNull();
+  });
+});

@@ -101,6 +101,11 @@ export interface RetiredStepId {
  * its one reader is the job's own return value, which nothing destructures.
  */
 export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
+  '`head-settle-${pass}`': {
+    file: 'lib/jobs/definitions/pullRequestHeadMoved.ts',
+    shape:
+      '{ gatesRaised: number; held: number; outcome: "clean" | "conflicted" | "failed" | "skipped" | "unknown"; promoted: number; withdrawn: number }',
+  },
   '`index-admit:${subject}`': {
     file: 'lib/services/codeGraphIndexDispatchService.ts',
     shape:
