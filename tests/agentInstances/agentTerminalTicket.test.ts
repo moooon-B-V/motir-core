@@ -346,6 +346,8 @@ describe('the connection record and the sweep (Q3, Q8)', () => {
       'sweep-agent-instances',
       'sweep-agent-terminal-tickets',
       'sweep-lost-terminal-connections',
+      // MOTIR-6921: the plan-lapse pass, its own step for the same memoized-shape reason.
+      'sweep-agent-plan-lapse',
     ]);
     expect(await adminDb.agentTerminalTicket.count()).toBe(1);
     clock.advance(60_000);

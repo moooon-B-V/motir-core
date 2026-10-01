@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import { BILLING_CATALOG } from '@/lib/billing/catalog';
@@ -69,6 +69,9 @@ function activeStandard(): BillingStatusDTO {
     // renders them). The default is a zero month, so the base fixture exercises
     // the `nothing_to_bill` shape and the spend cases opt in explicitly.
     search: { totalSpend: 0, monthSpend: 0 },
+    // The Agents line (MOTIR-6920). A paid plan with nothing charged, so the
+    // base fixture draws the zero band and the other states opt in.
+    agents: { spend: { machineMonthSpend: 0, storageMonthSpend: 0 }, hasPaidAiPlan: true },
     motir: { scaledTrackerSubscription: null, aiIncludedSeat: false },
     motirAi: {
       tier: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 2000 },
@@ -933,5 +936,160 @@ describe('BillingClient — the Motir Search line', () => {
     renderWithBody(withSearch({ totalSpend: 1204, monthSpend: 312 }));
     const link = await screen.findByRole('link', { name: /See which runs spent it/ });
     expect(link.getAttribute('href')).toBe('/settings/organization/usage');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The Agents line (MOTIR-6920; `design/billing/billing--agents-line.mock.html`,
+// `design-notes.md` "Delta 2026-09-29"). Machine time + storage + their sum,
+// after ③ Motir CI and before ④ Motir Search.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function withAgents(
+  agents: BillingStatusDTO['agents'],
+  over: Partial<BillingStatusDTO> = {},
+): BillingStatusDTO {
+  return { ...activeStandard(), agents, ...over };
+}
+
+function agentsLine(): HTMLElement {
+  return screen.getByTestId('billing-agents-line');
+}
+
+describe('BillingClient — the Agents line', () => {
+  it('shows machine time, storage and their sum in credits (AC 1)', async () => {
+    renderWithBody(
+      withAgents({
+        spend: { machineMonthSpend: 1240, storageMonthSpend: 900 },
+        hasPaidAiPlan: true,
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Agents', level: 2 })).toBeTruthy(),
+    );
+
+    const line = within(agentsLine());
+    expect(line.getByText('Machine time')).toBeTruthy();
+    expect(line.getByText('Storage')).toBeTruthy();
+    expect(line.getByText('Total this month')).toBeTruthy();
+    expect(line.getByText('1,240')).toBeTruthy();
+    expect(line.getByText('900')).toBeTruthy();
+    expect(line.getByText('2,140')).toBeTruthy();
+    expect(line.getByText('Per use')).toBeTruthy();
+    expect(line.getByText(/Storage is 10 credits per agent per day, asleep or not\./)).toBeTruthy();
+    expect(agentsLine().textContent ?? '').not.toContain('$');
+  });
+
+  it('shows zero figures when nothing was charged, never hiding the line (AC 2)', async () => {
+    renderWithBody(activeStandard());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Agents', level: 2 })).toBeTruthy(),
+    );
+
+    const line = within(agentsLine());
+    expect(line.getAllByText('0')).toHaveLength(3);
+    expect(line.getByText(/No agents ran or existed this month\./)).toBeTruthy();
+  });
+
+  it('shows the no-plan sentence and no figures without a paid AI plan (AC 3)', async () => {
+    renderWithBody(
+      withAgents({
+        spend: { machineMonthSpend: 0, storageMonthSpend: 0 },
+        hasPaidAiPlan: false,
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Agents', level: 2 })).toBeTruthy(),
+    );
+
+    const line = within(agentsLine());
+    expect(
+      line.getByText(/Agents need a paid AI plan \(Standard, Pro, Max or Enterprise\)\./),
+    ).toBeTruthy();
+    expect(line.queryByText('Machine time')).toBeNull();
+    expect(line.queryByText('Per use')).toBeNull();
+
+    // The link opens the in-page plans view, as ②'s own button does.
+    fireEvent.click(line.getByRole('button', { name: 'Choose an AI plan' }));
+    await waitFor(() => expect(screen.queryByTestId('billing-agents-line')).toBeNull());
+  });
+
+  it('keeps real charges on screen when the plan lapsed while agents still exist', async () => {
+    renderWithBody(
+      withAgents({
+        spend: { machineMonthSpend: 180, storageMonthSpend: 600 },
+        hasPaidAiPlan: false,
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Agents', level: 2 })).toBeTruthy(),
+    );
+
+    const line = within(agentsLine());
+    expect(line.getByText('780')).toBeTruthy();
+    expect(line.getByText(/Agents need a paid AI plan/)).toBeTruthy();
+  });
+
+  it('shows the sentence without the link to an admin who cannot manage billing', async () => {
+    renderWithBody(
+      withAgents(
+        { spend: { machineMonthSpend: 0, storageMonthSpend: 0 }, hasPaidAiPlan: false },
+        { access: { role: 'admin', canManageBilling: false } },
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Agents', level: 2 })).toBeTruthy(),
+    );
+
+    const line = within(agentsLine());
+    expect(line.getByText(/Agents need a paid AI plan/)).toBeTruthy();
+    expect(line.queryByRole('button', { name: 'Choose an AI plan' })).toBeNull();
+  });
+
+  it('renders UNAVAILABLE as dashes and a note, never as zero (AC 4)', async () => {
+    renderWithBody(withAgents({ spend: null, hasPaidAiPlan: true }));
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Agents', level: 2 })).toBeTruthy(),
+    );
+
+    const line = within(agentsLine());
+    expect(line.getAllByLabelText('Unavailable')).toHaveLength(3);
+    expect(line.queryByText('0')).toBeNull();
+    expect(line.getByText(/Agent figures aren’t available right now\./)).toBeTruthy();
+    // The other lines are untouched.
+    expect(screen.getByRole('heading', { name: 'Motir Search', level: 2 })).toBeTruthy();
+  });
+
+  it('sits after Motir CI and before Motir Search (AC 5)', async () => {
+    renderWithBody(activeStandard());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Agents', level: 2 })).toBeTruthy(),
+    );
+
+    const order = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(order.indexOf('Agents')).toBe(order.indexOf('Motir CI') + 1);
+    expect(order.indexOf('Motir Search')).toBe(order.indexOf('Agents') + 1);
+  });
+
+  it('does not join the hoist when CI is paused', async () => {
+    renderWithBody({
+      ...withCi({
+        state: 'ci_credits_exhausted',
+        consumedMinutes: 2410,
+        remainingMinutes: 0,
+        overageMinutes: 610,
+        chargedCredits: 610,
+        balance: 0,
+      }),
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Agents', level: 2 })).toBeTruthy(),
+    );
+
+    const order = screen
+      .getAllByRole('heading', { level: 2 })
+      .map((h) => h.textContent)
+      .filter((x) => ['Motir', 'Motir AI', 'Motir CI', 'Agents', 'Motir Search'].includes(x ?? ''));
+    expect(order).toEqual(['Motir CI', 'Motir', 'Motir AI', 'Agents', 'Motir Search']);
   });
 });

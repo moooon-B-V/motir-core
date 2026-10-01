@@ -116,6 +116,10 @@ const USAGE_CONTRACT: RawUsageResponse = {
     attributedSpend: 31,
     unattributedSpend: 9,
   },
+  // The agent blocks (MOTIR-6915 producer / MOTIR-6920 consumer) — optional on
+  // the mirror for the same rolling-deploy reason as `search`.
+  agentMachine: { totalSpend: 3000, monthSpend: 1240 },
+  agentStorage: { totalSpend: 2000, monthSpend: 900 },
 };
 
 const SUBSCRIPTION_CONTRACT: RawSubscriptionResponse = {

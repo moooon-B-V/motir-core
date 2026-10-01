@@ -60,6 +60,7 @@ import { supervisionSweepService } from '@/lib/services/supervisionSweepService'
 import { agentInstanceSweepService } from '@/lib/services/agentInstanceSweepService';
 import { agentInstanceRunService } from '@/lib/services/agentInstanceRunService';
 import { agentTerminalRelayService } from '@/lib/services/agentTerminalRelayService';
+import { agentInstanceStorageChargeService } from '@/lib/services/agentInstanceStorageChargeService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
 // (Story 1.6 · Subtask 1.6.2). This is the seam that keeps the 4-layer rule
@@ -177,6 +178,8 @@ export const jobServices = {
   // deletes terminal tickets past their 60-second life; the third (MOTIR-6959)
   // closes connections a dead relay left open.
   agentTerminalRelay: agentTerminalRelayService,
+  // Agent storage (Story MOTIR-6914 · MOTIR-6919): the per-day storage charge.
+  agentInstanceStorageCharge: agentInstanceStorageChargeService,
 };
 
 export type JobServices = typeof jobServices;

@@ -140,6 +140,22 @@ export const billingService = {
       // UNAVAILABLE, and zeroing it here would render "you spent nothing on
       // search" on a boundary that never answered.
       search: usage.search ?? null,
+      // The Agents line (MOTIR-6920), off the same read. Either block missing is
+      // UNAVAILABLE — a total over one real figure and one invented zero would
+      // understate the charge.
+      agents: {
+        spend:
+          usage.agentMachine && usage.agentStorage
+            ? {
+                machineMonthSpend: usage.agentMachine.monthSpend,
+                storageMonthSpend: usage.agentStorage.monthSpend,
+              }
+            : null,
+        hasPaidAiPlan:
+          isPaidAiSubscriptionStatus(subscription.status) ||
+          (org?.isMeta ?? false) ||
+          (org?.internalBilling ?? false),
+      },
       catalog: BILLING_CATALOG,
     };
   },

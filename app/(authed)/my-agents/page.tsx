@@ -1,7 +1,11 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { INSTANCE_MAX_PER_USER } from '@/lib/agentInstances/config';
+import {
+  INSTANCE_MAX_PER_USER,
+  INSTANCE_STORAGE_CREDITS_PER_DAY,
+} from '@/lib/agentInstances/config';
+import { isCloudBilling } from '@/lib/billing/availability';
 import { MY_AGENTS_LIST_LIMIT } from '@/lib/agentInstances/presentation';
 import { OFFERED_AGENT_PROFILES } from '@/lib/agentInstances/profiles';
 import { memberPageContext, pageScope } from '@/lib/pages/projectPageContext';
@@ -86,6 +90,8 @@ async function MyAgentsData({
       initial={initial}
       profiles={OFFERED_AGENT_PROFILES.map((p) => ({ id: p.id, name: p.name }))}
       maxPerUser={INSTANCE_MAX_PER_USER}
+      // agent-instance-storage.md §2: storage is charged on a cloud build only.
+      storageCreditsPerDay={isCloudBilling() ? INSTANCE_STORAGE_CREDITS_PER_DAY : null}
       openAgentId={openAgentId}
     />
   );

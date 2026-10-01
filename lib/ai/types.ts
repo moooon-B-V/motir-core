@@ -683,6 +683,20 @@ export interface RawUsageResponse {
    */
   search?: RawUsageSearch;
   searchRuns?: RawUsageSearchRuns;
+  /**
+   * Agent-instance MACHINE TIME and STORAGE spend (motir-ai MOTIR-6915,
+   * `docs/decisions/agent-instance-storage.md` §6) — org-level like `search`,
+   * this month and all time. Optional for the same ROLLING-DEPLOY reason as
+   * `search`: `undefined` means UNAVAILABLE, never zero.
+   */
+  agentMachine?: RawUsageAgentSpend;
+  agentStorage?: RawUsageAgentSpend;
+}
+
+/** `GET /v1/usage` — one agent charge kind's org-level spend (MOTIR-6915). */
+export interface RawUsageAgentSpend {
+  totalSpend: number;
+  monthSpend: number;
 }
 
 // POST /v1/credits/ci-overage (MOTIR-1899 · motir-ai `docs/contract.md` §2.4) —

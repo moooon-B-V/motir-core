@@ -81,6 +81,7 @@ import { agentInstanceIdleCheck } from './definitions/agentInstanceIdleCheck';
 import { agentInstanceRunLaunch } from './definitions/agentInstanceRunLaunch';
 import { agentInstanceRunSupervise } from './definitions/agentInstanceRunSupervise';
 import { agentInstanceSweep } from './definitions/agentInstanceSweep';
+import { agentInstanceStorageCharge } from './definitions/agentInstanceStorageCharge';
 
 // EVERY JOB THIS IMAGE KNOWS (Story 1.6 · Subtask 1.6.2; re-based onto the
 // Postgres engine by Story MOTIR-3418).
@@ -183,4 +184,6 @@ export const jobDefinitions = [
   agentInstanceRunLaunch,
   agentInstanceRunSupervise,
   agentInstanceSweep,
+  // Agent storage (Story MOTIR-6914 · MOTIR-6919): one debit per agent per UTC day.
+  agentInstanceStorageCharge,
 ];

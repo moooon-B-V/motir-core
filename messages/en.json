@@ -946,6 +946,16 @@
       "lede": "{organization} has been deleted. Its workspaces, projects, members, and the repositories Motir hosted for it have been erased.",
       "kept": "Motir keeps only its billing records, as the law requires, until {year}. They are deleted then too.",
       "footer": "You are receiving this because you were the Owner or an Admin of the organization."
+    },
+    "agentsDeletionScheduled": {
+      "subject": "Your agents in {organization} will be deleted on {date}",
+      "preview": "Your organization’s AI plan has ended — your agents will be deleted on {date}",
+      "greeting": "Hi {name},",
+      "lede": "Your organization’s AI plan has ended. Your agents will be deleted on {date} unless the plan is renewed.",
+      "agents": "{count, plural, one {This agent of yours in {organization} will be deleted, with its home and everything in it:} other {These # agents of yours in {organization} will be deleted, with their homes and everything in them:}}",
+      "renew": "Renewing the AI plan before {date} cancels the deletion. Until then your agents cannot be created or woken, and their storage is still charged every day.",
+      "openBilling": "Renew the AI plan",
+      "footer": "You are receiving this because you own agents in this organization."
     }
   },
   "auth": {
@@ -6125,6 +6135,21 @@
       "optionMoveCta": "Move repositories",
       "viewUsage": "View Usage & cost"
     },
+    "agents": {
+      "name": "Agents",
+      "tagline": "The agents your organization hosts — their machine time and their storage.",
+      "perUse": "Per use",
+      "machineLabel": "Machine time",
+      "storageLabel": "Storage",
+      "totalLabel": "Total this month",
+      "creditsUnit": "credits",
+      "rate": "Machine time is 1 credit per running minute. Storage is 10 credits per agent per day, asleep or not. Both draw from your Motir AI balance.",
+      "zero": "No agents ran or existed this month. Machine time is 1 credit per running minute. Storage is 10 credits per agent per day, asleep or not.",
+      "noPlan": "Agents need a paid AI plan (Standard, Pro, Max or Enterprise).",
+      "choosePlan": "Choose an AI plan",
+      "unavailable": "Agent figures aren’t available right now. Your agents are still being charged — this is the display, not the billing.",
+      "unavailableValue": "Unavailable"
+    },
     "search": {
       "name": "Motir Search",
       "tagline": "The web searches your planning runs make to ground themselves in current sources.",
@@ -8841,6 +8866,7 @@
     "newAgent": "New agent",
     "emptyTitle": "No agents yet",
     "emptyBody": "Each is your own coding agent — Claude Code, Codex and others — on its own machine in Motir’s cloud, with this project’s code and signed in with your own account. Motir charges only its machine time, and it sleeps when you stop using it.",
+    "emptyBodyWithStorage": "Each is your own coding agent — Claude Code, Codex and others — on its own machine in Motir’s cloud, with this project’s code and signed in with your own account. Motir charges its machine time while it runs and its storage every day, and it sleeps when you stop using it.",
     "loadFailed": "We couldn’t load your agents. Refresh to try again — nothing about them has changed.",
     "col": {
       "name": "Name",
@@ -8889,6 +8915,7 @@
       "codingAgent": "Coding agent",
       "vendorHint": "The coding agent’s model usage is billed to you by its vendor, not by Motir. Motir never sees your sign-in.",
       "price": "<b>1 credit per minute</b> while it runs. It hibernates after 30 minutes without use and costs nothing while hibernated.",
+      "priceWithStorage": "<b>1 credit per minute</b> while it runs, and <b>{perDay} credits a day</b> for its storage, running or hibernated. It hibernates after 30 minutes without use.",
       "cancel": "Cancel",
       "submit": "Create agent"
     },
@@ -8901,9 +8928,12 @@
       "goose": "Uses your own model provider key. For Claude models, your Anthropic API key."
     },
     "refusal": {
-      "credits": "Your organization’s credits can’t start a machine right now. <link>Add credits</link> to create or wake an agent.",
+      "aiPlanRequired": "Agents need a paid AI plan (Standard, Pro, Max or Enterprise). <link>Choose an AI plan</link> to create or wake one.",
+      "aiPlanUnknown": "Motir could not check your organization’s AI plan just now. Try again in a moment.",
+      "credits": "Your organization is out of credits. Agents use credits while they run and for their storage every day, asleep or not. <link>Add credits</link> to create or wake an agent.",
       "creditsUnknown": "Motir could not check your organization’s credits just now. Try again in a moment.",
-      "userCap": "You already have {count} agents. Delete one to create another.",
+      "userCap": "You already have {count} agents. Each one is charged for its storage every day, even asleep. Delete one to create another.",
+      "orgRunningLimit": "Your organization is running {limit} of its {limit} agents. Hibernate one to start another.",
       "busy": "Motir is running as many machines as it can right now. Try again in a few minutes.",
       "notOffered": "That coding agent isn’t offered: its terms don’t yet allow a platform to host it. Choose another coding agent.",
       "nameTaken": "You already have an agent called {name} on this project.",
@@ -8911,6 +8941,19 @@
       "unavailable": "My agents aren’t available on this deployment.",
       "conflict": "That agent changed while you were looking. The list is up to date now.",
       "generic": "Something went wrong. Try again."
+    },
+    "refusalTitle": {
+      "aiPlanRequired": "Needs an AI plan",
+      "aiPlanUnknown": "Couldn’t check your AI plan",
+      "credits": "Out of credits",
+      "userCap": "Your limit",
+      "orgRunningLimit": "Your organization’s limit"
+    },
+    "lapse": {
+      "bannerLead": "Your organization’s AI plan has ended.",
+      "bannerBody": "Your agents will be deleted on {date} unless the plan is renewed.",
+      "renew": "Renew the AI plan",
+      "rowLine": "Will be deleted on {date}"
     },
     "delete": {
       "title": "Delete {name}?",
