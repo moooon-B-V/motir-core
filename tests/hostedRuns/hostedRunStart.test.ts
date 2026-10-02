@@ -15,6 +15,7 @@ import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { HOSTED_AGENT_MAX_TIMEOUT_MS } from '@/lib/services/hostedAgentContainerService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { runCredentialService } from '@/lib/services/runCredentialService';
 import { scopeClaimService } from '@/lib/services/scopeClaimService';
@@ -695,6 +696,46 @@ describe('a parent card — one run over its children', () => {
     const runs = await runRows();
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({ status: 'failed', stopReason: 'halted' });
+  });
+});
+
+// MOTIR-7330: a double-click on Run hosted. The second press can pass step 0's
+// key read before the first press opens its run; the first press then opens it
+// and claims the card, so the second press's readiness check reads a card its
+// own first press moved. Forced here by making step 0 miss once: the answer must
+// be the first press's run, never a "not ready" refusal of the press itself.
+describe('Run hosted — a second press of the same key that missed step 0', () => {
+  const press = (key: string) =>
+    hostedRunService.start({ workItemKey: key, model: MODEL, idempotencyKey: 'dbl' }, fx.ctx);
+
+  it('a leaf: answers the first press’s run, never "in_progress, not in the to-do category"', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const card = await newCard({ kind: 'task', title: 'a card' });
+
+    const a = await press(card.identifier);
+    vi.spyOn(dispatchRunRepository, 'findByIdempotencyKey').mockResolvedValueOnce(null);
+    const b = await press(card.identifier);
+
+    expect(a.created).toBe(true);
+    expect(b).toEqual({ dispatchRunId: a.dispatchRunId, created: false });
+    expect(await runRows()).toHaveLength(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+  });
+
+  it('a parent: answers the first press’s run, never the scope preview’s refusal', async () => {
+    const site = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const story = await newCard({ kind: 'story', title: 'a story' });
+    const child = await newCard({ kind: 'task', title: 'a child', parentId: story.id });
+    await pinRepos(child.id, [site]);
+
+    const a = await press(story.identifier);
+    vi.spyOn(dispatchRunRepository, 'findByIdempotencyKey').mockResolvedValueOnce(null);
+    const b = await press(story.identifier);
+
+    expect(a.created).toBe(true);
+    expect(b).toEqual({ dispatchRunId: a.dispatchRunId, created: false });
+    expect(await runRows()).toHaveLength(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
   });
 });
 
