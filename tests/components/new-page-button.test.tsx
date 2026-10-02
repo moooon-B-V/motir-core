@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import type { PageParentDto } from '@/lib/dto/pages';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
@@ -21,11 +22,11 @@ import { NewPageButton } from '@/app/(authed)/pages/_components/NewPageButton';
 
 const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>();
 
-function mount(permissions: PermissionKey[] = ['page:view', 'page:edit']) {
+function mount(permissions: PermissionKey[] = ['page:view', 'page:edit'], parent?: PageParentDto) {
   return renderWithIntl(
     <ToastProvider>
       <ProjectAccessProvider permissions={permissions}>
-        <NewPageButton />
+        <NewPageButton parent={parent} />
       </ProjectAccessProvider>
     </ToastProvider>,
   );
@@ -71,10 +72,25 @@ describe('NewPageButton', () => {
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(String(url)).toBe('/api/pages');
     expect(init?.method).toBe('POST');
+    // No parent given: the project root (MOTIR-7373).
+    expect(JSON.parse(String(init?.body))).toEqual({ parent: { kind: 'root' } });
     expect(push).toHaveBeenCalledWith('/pages/pg_123');
     // The browser is leaving: the button stays pending, so a second press cannot
     // create a second page.
     expect(screen.getByTestId('new-page-button')).toHaveProperty('disabled', true);
+  });
+
+  it('creates the page under the parent it is given (MOTIR-7373)', async () => {
+    fetchMock.mockResolvedValueOnce(json({ id: 'pg_7' }, 201));
+    mount(undefined, { kind: 'folder', id: 'f-1' });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'New page' }));
+    });
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(String(init?.body))).toEqual({ parent: { kind: 'folder', id: 'f-1' } });
+    expect(push).toHaveBeenCalledWith('/pages/pg_7');
   });
 
   it('is disabled and reads "Creating page…" while the POST is in flight', async () => {

@@ -5,8 +5,8 @@ import type { WorkspaceRole } from '@/generated/prisma/client';
 // The two SERVER pages of Story MOTIR-5752 — the `/pages` index (MOTIR-7300) and
 // the page at its address (MOTIR-7280) — rendered with the RSC harness
 // (`tests/helpers/serverPageHarness.tsx`) against real Postgres. Part of the
-// story's coverage gate (MOTIR-7281): the index's `page:view` gate and its list
-// read, the page's one-read gate with every not-found case, and both pages'
+// story's coverage gate (MOTIR-7281): the index's `page:view` gate and its
+// root-level tree read (MOTIR-7373), the page's one-read gate with every not-found case, and both pages'
 // metadata.
 //
 // Mocked: the session and the active project (they need cookies), and the two
@@ -150,7 +150,7 @@ describe('/pages — the index', () => {
     ['member', true],
     ['viewer', false],
   ] as const)(
-    'a %s gets the header and the list, newest edit first (canEdit %s)',
+    'a %s gets the header and the tree’s root level, in position order (canEdit %s)',
     async (role, canEdit) => {
       const f = await makeFixture();
       const first = await pagesService.createPage(f.manager, {
@@ -160,6 +160,12 @@ describe('/pages — the index', () => {
       const second = await pagesService.createPage(f.manager, {
         projectId: f.manager.projectId,
         title: 'Second',
+      });
+      // A sub-page sits one level down — not in the root level.
+      await pagesService.createPage(f.manager, {
+        projectId: f.manager.projectId,
+        title: 'Under first',
+        parent: { kind: 'page', id: first.id },
       });
       // A page in the OTHER project is never listed here.
       await pagesService.createPage(f.manager, {
@@ -177,22 +183,36 @@ describe('/pages — the index', () => {
       )!;
       expect(boundary.props.fallback.type).toBe(PagesIndexFrame);
 
-      const list = (await settle(boundary.props.children)) as ReactElement<{
-        pages: { id: string; title: string }[];
-        viewerId: string;
+      const body = (await settle(boundary.props.children)) as ReactElement<{
+        root: {
+          rows: { kind: string; id: string; name?: string; hasChildren: boolean }[];
+          nextCursor: null;
+        };
+        projectKey: string;
         canEdit: boolean;
       }>;
-      expect(list.type).toBe(PagesIndex);
-      expect(list.props.canEdit).toBe(canEdit);
-      expect(list.props.viewerId).toBe(reader.current.userId);
-      expect(list.props.pages.map((p) => p.id)).toEqual([second.id, first.id]);
+      expect(body.type).toBe(PagesIndex);
+      expect(body.props.canEdit).toBe(canEdit);
+      expect(body.props.projectKey).toBe('RSC');
+      // Folders first — every project is created with its `Bugs` folder — then
+      // the root's pages; the sub-page is only its parent's `hasChildren`.
+      expect(
+        body.props.root.rows.map((r) =>
+          r.kind === 'folder' ? ['folder', r.name] : [r.id, r.hasChildren],
+        ),
+      ).toEqual([
+        ['folder', 'Bugs'],
+        [first.id, true],
+        [second.id, false],
+      ]);
+      expect(body.props.root.nextCursor).toBeNull();
     },
   );
 
-  it('a reader without `page:view` gets notFound() and the list is never read', async () => {
+  it('a reader without `page:view` gets notFound() and the tree is never read', async () => {
     const f = await makeFixture();
     reader.current = await browserWithoutPageKeys(f);
-    const list = vi.spyOn(pagesService, 'listPages');
+    const list = vi.spyOn(pagesService, 'listTreeLevel');
     await expect(renderTree(IndexPage.default)).rejects.toBeInstanceOf(NotFound);
     expect(list).not.toHaveBeenCalled();
   });

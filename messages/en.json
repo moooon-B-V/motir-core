@@ -11513,18 +11513,29 @@
     "untitled": "Untitled",
     "index": {
       "title": "Pages",
-      "subtitle": "Specs, runbooks and notes for this project — most recently edited first.",
       "newPage": "New page",
       "creating": "Creating page…",
       "createFailed": "Couldn’t create the page. Try again.",
-      "listLabel": "Pages in this project",
-      "edited": "Edited {time} by {name}",
-      "editedByYou": "Edited {time} by you",
       "empty": {
         "title": "No pages yet",
         "member": "Write down a spec, a runbook or the notes from a meeting — it stays here, beside the project’s work.",
         "viewer": "When someone in this project writes a page, it appears here."
       }
+    },
+    "tree": {
+      "subtitle": "Specs, runbooks and notes for this project, kept in folders and pages.",
+      "label": "Folders and pages in this project",
+      "newPageHere": "New page here",
+      "newSubPage": "New sub-page",
+      "pageActionsAria": "Page actions for {title}",
+      "expandAria": "Expand {title}",
+      "collapseAria": "Collapse {title}",
+      "noPagesHere": "No pages here",
+      "loadingLevel": "Loading pages…",
+      "rootFailed": "Couldn’t load the pages.",
+      "levelFailed": "Couldn’t load what’s inside.",
+      "loadMore": "Load more",
+      "shown": "{count} shown"
     },
     "page": {
       "back": "Pages",

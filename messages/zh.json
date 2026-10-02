@@ -11509,18 +11509,29 @@
     "untitled": "无标题",
     "index": {
       "title": "页面",
-      "subtitle": "此项目的规格说明、运行手册和笔记——最近编辑的排在最前。",
       "newPage": "新建页面",
       "creating": "正在创建页面…",
       "createFailed": "无法创建页面，请重试。",
-      "listLabel": "此项目中的页面",
-      "edited": "{name}于{time}编辑",
-      "editedByYou": "你于{time}编辑",
       "empty": {
         "title": "还没有页面",
         "member": "写下规格说明、运行手册或会议记录——它们会留在这里，与项目的工作放在一起。",
         "viewer": "当项目成员写下页面后，它会显示在这里。"
       }
+    },
+    "tree": {
+      "subtitle": "此项目的规格说明、运行手册和笔记，按文件夹和页面整理。",
+      "label": "此项目中的文件夹和页面",
+      "newPageHere": "在此新建页面",
+      "newSubPage": "新建子页面",
+      "pageActionsAria": "“{title}”的页面操作",
+      "expandAria": "展开“{title}”",
+      "collapseAria": "收起“{title}”",
+      "noPagesHere": "这里还没有页面",
+      "loadingLevel": "正在加载页面…",
+      "rootFailed": "无法加载页面。",
+      "levelFailed": "无法加载其中的内容。",
+      "loadMore": "加载更多",
+      "shown": "已显示 {count} 项"
     },
     "page": {
       "back": "页面",
