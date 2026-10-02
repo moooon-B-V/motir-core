@@ -161,7 +161,7 @@ describe('pageStoreFor(tx) — the package procedures on real Postgres', () => {
             `
           )[0]!.n,
       )
-      .toBe(1n);
+      .toBe(BigInt(1));
     expect(secondDone).toBe(false);
 
     release();

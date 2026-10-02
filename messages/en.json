@@ -357,6 +357,7 @@
       "plan": "Plans",
       "run": "Agent runs",
       "instance": "Personal agents",
+      "page": "Pages",
       "public_request": "Public requests",
       "member": "Members & access",
       "board": "Boards",
@@ -433,6 +434,14 @@
     "instance_use": {
       "label": "Use your own agents",
       "description": "Create, wake, hibernate and delete your own agents on this project — machines charged per running minute. It never opens anyone else's."
+    },
+    "page_view": {
+      "label": "Read pages",
+      "description": "Open and read the project's pages."
+    },
+    "page_edit": {
+      "label": "Edit pages",
+      "description": "Create pages, rename them and change what they say."
     },
     "public_request_comment": {
       "label": "Comment on requests",

@@ -1,4 +1,5 @@
 import type { Page } from '@/generated/prisma/client';
+import type { PageDto } from '@/lib/dto/pages';
 import type { LockedPageRow, PageRow } from '@/lib/pages';
 
 // Page rows ↔ `@motir/pages`' port rows (Story MOTIR-5752 · MOTIR-7276).
@@ -60,5 +61,26 @@ export function toLockedPageRow(record: PageLockedRecord): LockedPageRow {
   return {
     ...toPageRow(record),
     bodyState: new Uint8Array(body.buffer, body.byteOffset, body.byteLength),
+  };
+}
+
+/**
+ * The page as the read model returns it (MOTIR-7277): the canonical state as
+ * base64 — the editor's seed, from which it derives everything else — and
+ * whether THIS caller may write it.
+ */
+export function toPageDto(row: LockedPageRow, canEdit: boolean): PageDto {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    title: row.title,
+    revision: row.revision,
+    bodyState: Buffer.from(
+      row.bodyState.buffer,
+      row.bodyState.byteOffset,
+      row.bodyState.byteLength,
+    ).toString('base64'),
+    updatedAt: row.updatedAt.toISOString(),
+    canEdit,
   };
 }

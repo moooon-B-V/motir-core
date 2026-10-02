@@ -61,6 +61,21 @@ export const pageRepository = {
     return rows[0] ?? null;
   },
 
+  /**
+   * Read one page WITH its body state and no lock — the read model's door
+   * (`pagesService.getPage`). A reader never blocks a save, and a save never
+   * waits on a reader. `null` when absent or invisible.
+   */
+  async findWithBodyById(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PageLockedRecord | null> {
+    return tx.page.findUnique({
+      where: { id },
+      select: { ...PAGE_RECORD_SELECT, bodyState: true },
+    });
+  },
+
   /** Read one page without its body. `null` when absent or invisible. */
   async findById(id: string, tx: Prisma.TransactionClient): Promise<PageRecord | null> {
     return tx.page.findUnique({ where: { id }, select: PAGE_RECORD_SELECT });

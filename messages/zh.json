@@ -357,6 +357,7 @@
       "plan": "计划",
       "run": "智能体运行",
       "instance": "个人智能体",
+      "page": "页面",
       "public_request": "公开请求",
       "member": "成员与访问",
       "board": "面板",
@@ -433,6 +434,14 @@
     "instance_use": {
       "label": "使用自己的智能体",
       "description": "在此项目上创建、唤醒、休眠和删除你自己的智能体——按运行分钟计费的机器。它从不开放他人的智能体。"
+    },
+    "page_view": {
+      "label": "阅读页面",
+      "description": "打开并阅读此项目的页面。"
+    },
+    "page_edit": {
+      "label": "编辑页面",
+      "description": "创建页面、重命名页面并修改其内容。"
     },
     "public_request_comment": {
       "label": "评论请求",
