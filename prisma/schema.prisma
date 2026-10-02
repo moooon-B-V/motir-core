@@ -409,6 +409,8 @@ model User {
   // Folders this person created (Story MOTIR-5308 · MOTIR-5312). Restrict,
   // matching `WorkItem.reporter`: the creator is durable attribution.
   createdFolders                   Folder[]                      @relation("FolderCreator")
+  createdPages                     Page[]                        @relation("PageCreator")
+  updatedPages                     Page[]                        @relation("PageUpdater")
   // Monitor connections this person BOUND (Story MOTIR-4926 · MOTIR-4929 ·
   // MOTIR-5576) — whose identity the reconciler files each monitor bug as.
   // SetNull, NOT Cascade: removing the person must not remove the binding; the
@@ -1569,6 +1571,7 @@ model Workspace {
   dispatchRunGitCredentials   DispatchRunGitCredential[]
   /// Folders in this workspace's projects (Story MOTIR-5308). Cascade.
   folders                     Folder[]
+  pages                       Page[]
   /// Users' agent instances in this workspace's projects (MOTIR-6870). Cascade.
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]
@@ -2063,6 +2066,7 @@ model Project {
   /// The project's folders (Story MOTIR-5308) — named, nestable places in its
   /// tree that carry no workflow. Cascade.
   folders                       Folder[]
+  pages                         Page[]
   /// The folder this project's filed bugs land in (Story MOTIR-4927 · MOTIR-4934).
   /// NULL MEANS THE PROJECT ROOT, CHOSEN — nullable with no default, and never to
   /// be made required. `NoAction`, the `Folder.parentFolder` idiom: a folder this
@@ -11668,6 +11672,7 @@ model Folder {
   childFolders            Folder[]   @relation("FolderParent")
   createdBy               User       @relation("FolderCreator", fields: [createdById], references: [id], onDelete: Restrict)
   workItems               WorkItem[] @relation("WorkItemFolder")
+  pages                   Page[]     @relation("PageFolder")
   /// The project whose bug destination this folder is, if any (MOTIR-4934) —
   /// at most its own project, by `trg_project_bug_destination_folder_tenancy`.
   bugDestinationOf        Project[]  @relation("ProjectBugDestinationFolder")
@@ -11693,6 +11698,54 @@ model Folder {
 /// ⚠️ THE CREDENTIAL LIVES HERE AND NOWHERE ELSE. Storing a copy per bound
 /// project would mean N copies of one secret, N things to rotate, and N chances
 /// for one of them to be the stale one.
+// PAGES — a project's documents (Epic MOTIR-5746 · Story MOTIR-5752 · MOTIR-7273).
+//
+// `docs/decisions/pages.md` §3–§4. `bodyState` is the CANONICAL body — the
+// encoding of a Yjs document (`Y.encodeStateAsUpdate`), the schema's first
+// `bytea` — and `bodyJson` / `bodyMarkdown` / `bodyText` are DERIVED from it in
+// the same transaction as every save; nothing reads a derived column to produce
+// the canonical one. `revision` counts saves, 1 at creation.
+//
+// The tree: a page sits under a page (`parentPageId`) OR in a folder
+// (`folderId`), never both (CHECK `page_parent_xor_folder`); both null is the
+// project root. `ancestorPageIds` holds the page ids root-first, excluding the
+// page itself, and the CHECK `page_depth_limit` caps it below 10 —
+// `PAGE_DEPTH_LIMIT` levels. Tenancy of the parent page and the folder, and the
+// no-cycle rule, are SECURITY DEFINER triggers in the migration; RLS is the
+// `folder` pair. Prisma does not model CHECK constraints or triggers.
+model Page {
+  id              String   @id @default(cuid())
+  workspaceId     String   @map("workspace_id")
+  projectId       String   @map("project_id")
+  title           String   @default("") @db.Text
+  parentPageId    String?  @map("parent_page_id")
+  folderId        String?  @map("folder_id")
+  position        String   @db.Text
+  ancestorPageIds String[] @default([]) @map("ancestor_page_ids")
+  bodyState       Bytes    @map("body_state")
+  bodyJson        Json     @map("body_json")
+  bodyMarkdown    String   @default("") @map("body_markdown") @db.Text
+  bodyText        String   @default("") @map("body_text") @db.Text
+  revision        Int      @default(1)
+  createdById     String   @map("created_by_id")
+  updatedById     String   @map("updated_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentPage Page?     @relation("PageParent", fields: [parentPageId], references: [id], onDelete: NoAction)
+  childPages Page[]    @relation("PageParent")
+  folder     Folder?   @relation("PageFolder", fields: [folderId], references: [id], onDelete: NoAction)
+  createdBy  User      @relation("PageCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy  User      @relation("PageUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@index([projectId, parentPageId, position, id])
+  @@index([projectId, folderId, position, id])
+  @@index([workspaceId])
+  @@map("page")
+}
+
 model MonitorInstallation {
   id String @id @default(cuid())
 
@@ -12128,28 +12181,28 @@ model AgentInstance {
 
   /// Unique per (owner, project) among LIVE instances — a partial unique index
   /// in the migration, so a deleted instance's name can be reused.
-  name        String
+  name                String
   /// The sandbox profile id (`claude`, `codex`, … — `profiles.json`).
-  profileId   String @map("profile_id")
+  profileId           String    @map("profile_id")
   /// The moving tag the digest was resolved from, for display.
-  imageTag    String @map("image_tag")
+  imageTag            String    @map("image_tag")
   /// The image DIGEST the instance boots, pinned at create (§1). It changes only
   /// when an update's new image passes its liveness check, so it always names a
   /// digest that has run on this agent (`agent-image-update.md` Q6).
-  imageDigest String @map("image_digest")
+  imageDigest         String    @map("image_digest")
   /// The `x.y.z` of `imageDigest` (Q1, Q6): written at create and by a successful
   /// update; null on an agent created before versions were recorded.
-  imageVersion String? @map("image_version")
+  imageVersion        String?   @map("image_version")
   /// The digest Update pinned (Q6). With `hibernated`, an update waiting for the
   /// next wake; with `updating`, the image being moved to. Cleared when it settles.
-  targetImageDigest  String? @map("target_image_digest")
+  targetImageDigest   String?   @map("target_image_digest")
   /// The version of `targetImageDigest`; set and cleared with it.
-  targetImageVersion String? @map("target_image_version")
+  targetImageVersion  String?   @map("target_image_version")
   /// The last update's failure, in words (Q4): set on a rollback (or a failed
   /// one); cleared at the next Update press and when a move succeeds.
-  updateFailureReason String? @map("update_failure_reason")
+  updateFailureReason String?   @map("update_failure_reason")
   /// When the last update failed — and, while `updating`, when its rollback began.
-  updateFailedAt     DateTime? @map("update_failed_at")
+  updateFailedAt      DateTime? @map("update_failed_at")
 
   /// The persistent handle `provisionPersistent` returns (§1, §7). Null until
   /// the provision call answers; the region is fixed at create.
