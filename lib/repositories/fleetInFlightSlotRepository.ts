@@ -177,6 +177,39 @@ export const fleetInFlightSlotRepository = {
     });
   },
 
+  /**
+   * The DISTINCT organisations holding at least one LIVE slot, any workload — the
+   * slot-backed term of the fleet monitor's "who is running anything"
+   * (MOTIR-7316). Agent instances hold `agent_instance` slots, so they are
+   * counted here too. Rides `[organization_id, expires_at]`.
+   */
+  async listOrganizationsInFlight(now: Date, tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.fleetInFlightSlot.findMany({
+      where: { expiresAt: { gt: now } },
+      distinct: ['organizationId'],
+      select: { organizationId: true },
+    });
+    return rows.map((row) => row.organizationId);
+  },
+
+  /**
+   * When one organisation's OLDEST live slot of the given workloads was claimed,
+   * or null — the fleet monitor's "has this been running longer than a period"
+   * for hosted runs and agent instances (MOTIR-7316).
+   */
+  async oldestLiveClaimForOrganization(
+    organizationId: string,
+    workloads: readonly string[],
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<Date | null> {
+    const agg = await tx.fleetInFlightSlot.aggregate({
+      where: { organizationId, workload: { in: [...workloads] }, expiresAt: { gt: now } },
+      _min: { claimedAt: true },
+    });
+    return agg._min.claimedAt ?? null;
+  },
+
   /** One slot by its workload-owned key — the read that answers "is this run
    *  still holding capacity?" without counting the whole fleet. */
   async findByRef(

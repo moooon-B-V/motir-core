@@ -33,6 +33,29 @@ export const fleetMachineKillRepository = {
     await tx.fleetMachineKill.update({ where: { id }, data: { completedAt: at } });
   },
 
+  /**
+   * The kill record since `since`, NEWEST FIRST — the platform fleet monitor's
+   * list (MOTIR-7316). Paged by offset because the console pages by number with
+   * a total ({@link countSince}). Rides `decided_at`.
+   */
+  async listSince(
+    since: Date,
+    page: { offset: number; limit: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetMachineKill[]> {
+    return tx.fleetMachineKill.findMany({
+      where: { decidedAt: { gte: since } },
+      orderBy: [{ decidedAt: 'desc' }, { id: 'desc' }],
+      skip: page.offset,
+      take: page.limit,
+    });
+  },
+
+  /** How many kills were decided since `since` — the list's total. */
+  async countSince(since: Date, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.fleetMachineKill.count({ where: { decidedAt: { gte: since } } });
+  },
+
   /** The provider refused; the next pass decides again. */
   async markFailed(id: string, detail: string, tx: Prisma.TransactionClient): Promise<void> {
     await tx.fleetMachineKill.update({ where: { id }, data: { failureDetail: detail } });

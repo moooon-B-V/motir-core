@@ -212,6 +212,11 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
     source: 'scan',
     why: 'organization_active',
   },
+  'lib/services/platformFleetMonitorService.ts#judgeOrganization': {
+    tables: ['ci_period_charge', 'organization'],
+    source: 'scan',
+    why: 'organization_active / ci_period_charge_org_or_system',
+  },
   'lib/services/fleetCeilingService.ts#resolveOrgPool': {
     tables: ['organization'],
     source: 'scan',
