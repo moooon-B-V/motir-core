@@ -93,3 +93,12 @@ export function treeRowClass(density: PageTreeDensity): string {
 
 export const CHEVRON_CLASS =
   'relative z-10 flex h-4 w-4 shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-icon-muted) hover:text-(--el-text) focus-visible:outline-none';
+
+/**
+ * Where a row's glyph starts — its indent, then the 16px chevron slot and the
+ * 8px gap. A drag's before / after line starts here (MOTIR-7376, panel 11).
+ */
+export function glyphLeft(item: TreeItemProps): number {
+  const pad = item.style.paddingLeft;
+  return (typeof pad === 'number' ? pad : 0) + 24;
+}

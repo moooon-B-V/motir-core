@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -24,12 +25,19 @@ import type { FolderDeletionPreviewDto, FolderPickerNodeDto } from '@/lib/dto/fo
 import type { PageParentDto, PageTreeLevelDto, PageTreeRowDto } from '@/lib/dto/pages';
 import { serverActionRejectionKey } from '@/lib/utils/serverActionRejection';
 import { PagePlacementPicker } from './PagePlacementPicker';
+import {
+  PageTreeDnd,
+  PageTreeDndRow,
+  PageTreeRootDropZone,
+  type DndRowInfo,
+  type RowDnd,
+} from './PageTreeDnd';
 import { PageRowMenu } from './PageRowMenu';
 import { PageTreeFolderMenu } from './PageTreeFolderMenu';
 import { PageTreeFolderRow } from './PageTreeFolderRow';
 import { PageTreePageRow } from './PageTreePageRow';
 import { useCreatePage } from './useCreatePage';
-import { reorderNeighbours, usePageMove } from './usePageMove';
+import { reorderNeighbours, usePageMove, type PageMoveRequest } from './usePageMove';
 import {
   DENSITY,
   ROOT_LEVEL,
@@ -92,10 +100,18 @@ import {
 // container keeps the full height, and it degrades to rendering every row where
 // no viewport is measurable.
 //
-// ── SEAMS FOR THE NEXT CARDS ───────────────────────────────────────────────
+// ── DRAG (MOTIR-7376) ──────────────────────────────────────────────────────
+// For an editor at `/pages`' default density the tree is wrapped in
+// `PageTreeDnd`: page rows drag, every row is a drop target, and a root zone
+// appears at the foot while a drag is live. A drop commits through the SAME
+// `usePageMove` (whose `refresh` is this tree's `refreshLevels`), so nothing is
+// moved before the server answers: on success the target opens, on a refusal
+// the row is where it always was, keeps focus, and a toast says the move's own
+// sentence. The sidebar (`density="compact"`) and a viewer get no drag at all.
+//
+// ── SEAMS ──────────────────────────────────────────────────────────────────
 // `pageMenuEntries` / `folderMenuEntries` still append to a row's menu, after
-// everything above. Drag (MOTIR-7376) moves through the same `usePageMove`,
-// whose `refresh` is this tree's `refreshLevels`.
+// everything above.
 //
 // ── A PATH OPEN ON ARRIVAL (MOTIR-7375) ────────────────────────────────────
 // `expandedPath` names the rows open on first paint, root-first (the page
@@ -264,6 +280,8 @@ export function PageTree({
   const { toast } = useToast();
   const { pending, create } = useCreatePage();
   const foldersEditable = canEdit && canEditFolders && folderActions !== undefined;
+  // Arranging the tree happens in `/pages`; the sidebar is navigation only.
+  const dragEnabled = canEdit && density === 'default';
   const metrics = DENSITY[density];
 
   const [levels, setLevels] = useState<Record<LevelKey, LevelState>>(() => ({
@@ -1019,6 +1037,40 @@ export function PageTree({
     }
   }, [range, items]);
 
+  // ── Drag (MOTIR-7376) ─────────────────────────────────────────────────────
+  const dndRows = useMemo<DndRowInfo[]>(
+    () =>
+      rowItems.map(({ item }) => ({
+        key: item.key,
+        row: item.row,
+        parent: item.parent,
+        expandable: item.expandable,
+        expanded: item.expanded,
+      })),
+    [rowItems],
+  );
+  const levelPages = useCallback(
+    (levelKey: LevelKey) =>
+      (levels[levelKey]?.rows ?? []).filter((r) => r.kind === 'page').map((r) => r.id),
+    [levels],
+  );
+  // A drop is one placement write: on success the target opens so the page is
+  // in view; a refusal leaves the tree as it was, keeps the row focused and says
+  // the move's own sentence — the snap-back of panel 11.
+  const commitDrop = useCallback(
+    async (request: PageMoveRequest) => {
+      const outcome = await move(request);
+      if (outcome === null) return;
+      if (outcome.ok) {
+        reveal(parentKey(outcome.result.parent));
+        return;
+      }
+      toast({ variant: 'error', title: outcome.message });
+      focusRow(`page:${request.pageId}`);
+    },
+    [move, reveal, toast, focusRow],
+  );
+
   const onRowKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>, item: Extract<Item, { type: 'row' }>) => {
       if (e.target !== e.currentTarget) return; // a control inside the row owns its keys
@@ -1255,40 +1307,55 @@ export function PageTree({
         },
         style,
       };
-      return item.row.kind === 'folder' ? (
-        <PageTreeFolderRow
-          key={item.key}
-          row={item.row}
-          item={treeItem}
-          itemRef={itemRef}
-          expanded={item.expanded}
-          busy={item.busy}
-          onToggle={() => toggle(item.key)}
-          density={density}
-          menu={folderMenu(item.row, item.parent ?? ROOT_LEVEL)}
-          nameField={
-            draft?.mode === 'rename' && draft.folderId === item.row.id
-              ? nameField(item.row.name)
-              : undefined
-          }
-        />
+      const renderRow = (dnd?: RowDnd) => {
+        const ref = dnd
+          ? (el: HTMLDivElement | null) => {
+              itemRef(el);
+              dnd.setNodeRef(el);
+            }
+          : itemRef;
+        return item.row.kind === 'folder' ? (
+          <PageTreeFolderRow
+            row={item.row}
+            item={treeItem}
+            itemRef={ref}
+            dnd={dnd}
+            expanded={item.expanded}
+            busy={item.busy}
+            onToggle={() => toggle(item.key)}
+            density={density}
+            menu={folderMenu(item.row, item.parent ?? ROOT_LEVEL)}
+            nameField={
+              draft?.mode === 'rename' && draft.folderId === item.row.id
+                ? nameField(item.row.name)
+                : undefined
+            }
+          />
+        ) : (
+          <PageTreePageRow
+            row={item.row}
+            item={treeItem}
+            itemRef={ref}
+            dnd={dnd}
+            expanded={item.expanded}
+            busy={item.busy}
+            onToggle={() => toggle(item.key)}
+            linkRef={(el: HTMLAnchorElement | null) => {
+              if (el) linkRefs.current.set(item.key, el);
+              else linkRefs.current.delete(item.key);
+            }}
+            menu={pageMenu(item.row, item.parent ?? ROOT_LEVEL)}
+            selected={item.key === selectedKey}
+            density={density}
+          />
+        );
+      };
+      return dragEnabled ? (
+        <PageTreeDndRow key={item.key} rowKey={item.key} draggable={item.row.kind === 'page'}>
+          {renderRow}
+        </PageTreeDndRow>
       ) : (
-        <PageTreePageRow
-          key={item.key}
-          row={item.row}
-          item={treeItem}
-          itemRef={itemRef}
-          expanded={item.expanded}
-          busy={item.busy}
-          onToggle={() => toggle(item.key)}
-          linkRef={(el: HTMLAnchorElement | null) => {
-            if (el) linkRefs.current.set(item.key, el);
-            else linkRefs.current.delete(item.key);
-          }}
-          menu={pageMenu(item.row, item.parent ?? ROOT_LEVEL)}
-          selected={item.key === selectedKey}
-          density={density}
-        />
+        <Fragment key={item.key}>{renderRow()}</Fragment>
       );
     }
 
@@ -1394,19 +1461,36 @@ export function PageTree({
     );
   };
 
+  const treeFrame = (
+    <div className={frame} data-surface={compact ? undefined : 'card'}>
+      <div
+        ref={containerRef}
+        role="tree"
+        aria-label={compact ? t('sidebar.label') : t('label')}
+        className={compact ? undefined : 'divide-y divide-(--el-border-soft)'}
+        style={windowing ? { position: 'relative', height: totalSize } : undefined}
+      >
+        {items.slice(range.start, range.end).map((item, i) => renderItem(item, range.start + i))}
+      </div>
+    </div>
+  );
+
   return (
     <>
-      <div className={frame} data-surface={compact ? undefined : 'card'}>
-        <div
-          ref={containerRef}
-          role="tree"
-          aria-label={compact ? t('sidebar.label') : t('label')}
-          className={compact ? undefined : 'divide-y divide-(--el-border-soft)'}
-          style={windowing ? { position: 'relative', height: totalSize } : undefined}
+      {dragEnabled ? (
+        <PageTreeDnd
+          rows={dndRows}
+          levelPages={levelPages}
+          onExpand={reveal}
+          onCommit={(request) => void commitDrop(request)}
+          rowPx={metrics.rowPx}
         >
-          {items.slice(range.start, range.end).map((item, i) => renderItem(item, range.start + i))}
-        </div>
-      </div>
+          {treeFrame}
+          <PageTreeRootDropZone />
+        </PageTreeDnd>
+      ) : (
+        treeFrame
+      )}
       {dialog}
     </>
   );

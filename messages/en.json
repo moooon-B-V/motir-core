@@ -11547,6 +11547,10 @@
         "crossProject": "That folder or page belongs to another project. The page stayed where it was.",
         "gone": "That folder or page no longer exists. The page stayed where it was."
       },
+      "drop": {
+        "root": "Drop here to move it to the project root",
+        "refusedSelf": "Can’t drop a page into its own sub-page."
+      },
       "sidebar": {
         "label": "Page tree",
         "hide": "Hide page tree",

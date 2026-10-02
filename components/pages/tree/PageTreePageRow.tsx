@@ -5,8 +5,10 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { ChevronRight, NotebookText } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
+import { RowDndMarks, rowDndClass, type RowDnd } from './PageTreeDnd';
 import {
   CHEVRON_CLASS,
+  glyphLeft,
   TREE_ROW_SELECTED_CLASS,
   treeRowClass,
   type PageTreeDensity,
@@ -33,6 +35,13 @@ import {
 // SELECTED (MOTIR-7375, `page--tree-sidebar.mock.html` panel 1): the page being
 // read, in the page route's sidebar — `aria-selected`, the rail's active-row
 // treatment, its glyph in `--el-icon-active`, and the link `aria-current="page"`.
+//
+// DRAG (MOTIR-7376, panel 11): for an editor in `/pages` the whole row is the
+// draggable (`dnd`, from `PageTreeDndRow`) — the `GripVertical` handle in its
+// gutter shows on hover and focus, and the title link's native drag is off so
+// the pointer drag owns the gesture. The row also draws what a drag over it
+// means: the before / after line, the INSIDE tint, the refused outline, or the
+// dashed origin slot while it is the row being dragged.
 
 export interface PageTreePageRowProps {
   row: PageTreePageRowDto;
@@ -50,6 +59,8 @@ export interface PageTreePageRowProps {
   selected?: boolean;
   /** Row metrics and chrome: `/pages`' rows, or the sidebar's compact ones. */
   density?: PageTreeDensity;
+  /** The drag, when the tree offers it (an editor in `/pages`). */
+  dnd?: RowDnd;
 }
 
 export function PageTreePageRow({
@@ -63,11 +74,13 @@ export function PageTreePageRow({
   menu,
   selected = false,
   density = 'default',
+  dnd,
 }: PageTreePageRowProps) {
   const t = useTranslations('pages');
   const title = row.title || t('untitled');
   return (
     <div
+      {...dnd?.listeners}
       ref={itemRef}
       role="treeitem"
       aria-level={item.depth}
@@ -79,9 +92,10 @@ export function PageTreePageRow({
       onKeyDown={item.onKeyDown}
       onFocus={item.onFocus}
       data-testid="page-tree-page"
-      className={cn(treeRowClass(density), selected && TREE_ROW_SELECTED_CLASS)}
+      className={cn(treeRowClass(density), selected && TREE_ROW_SELECTED_CLASS, rowDndClass(dnd))}
       style={item.style}
     >
+      <RowDndMarks dnd={dnd} glyphLeft={glyphLeft(item)} />
       {row.hasChildren ? (
         <button
           type="button"
@@ -114,6 +128,7 @@ export function PageTreePageRow({
         ref={linkRef}
         href={`/pages/${encodeURIComponent(row.id)}`}
         tabIndex={-1}
+        draggable={dnd?.handle ? false : undefined}
         aria-current={selected ? 'page' : undefined}
         className={cn(
           'min-w-0 truncate hover:underline focus-visible:outline-none',
