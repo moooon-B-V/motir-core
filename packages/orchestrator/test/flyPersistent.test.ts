@@ -614,7 +614,7 @@ describe('exec — one command inside a running machine (MOTIR-6872)', () => {
     expect(calls[0]).toMatchObject({
       method: 'POST',
       url: `${API}/apps/${APP}/machines/m-1/exec`,
-      body: { cmd: ['sh', '-c', 'exit 3'], timeout: 30 },
+      body: { command: ['sh', '-c', 'exit 3'], timeout: 30 },
       auth: 'Bearer instances-token',
     });
   });
@@ -626,16 +626,38 @@ describe('exec — one command inside a running machine (MOTIR-6872)', () => {
       stdout: '',
       stderr: '',
     });
-    expect(calls[0]!.body).toEqual({ cmd: ['true'], timeout: 120 });
+    expect(calls[0]!.body).toEqual({ command: ['true'], timeout: 120 });
     // stdin rides in the body only when given (MOTIR-7026) — never in argv.
     await flyPersistentOrchestrator.exec(HANDLE, ['cat'], { stdin: '{"token":"t"}' });
-    expect(calls[1]!.body).toEqual({ cmd: ['cat'], timeout: 120, stdin: '{"token":"t"}' });
+    expect(calls[1]!.body).toEqual({ command: ['cat'], timeout: 120, stdin: '{"token":"t"}' });
     handler = () => json(200, null);
     expect((await flyPersistentOrchestrator.exec(HANDLE, ['true'])).exitCode).toBe(-1);
     handler = () => json(412, { error: 'machine not started' });
     await expect(flyPersistentOrchestrator.exec(HANDLE, ['true'])).rejects.toThrow(
       OrchestratorApiError,
     );
+  });
+
+  // MOTIR-7347: the Machines API reads exec's argv from `command` (an array).
+  // `cmd` is its legacy STRING field, and an array there is refused 400 "body is
+  // missing command: json: cannot unmarshal array into Go struct field
+  // machineExecRequestRaw.cmd of type string" — which every exec on production
+  // answered while the tests above asserted `cmd` against this mock. So the
+  // field name is pinned for every door into exec, and `cmd` may never appear.
+  it('sends the argv as `command` and never as `cmd`, through every door into exec', async () => {
+    handler = () => json(200, { exit_code: 0, stdout: '', stderr: '' });
+    await flyPersistentOrchestrator.exec(HANDLE, ['git', 'clone', 'x']);
+    await flyPersistentOrchestrator.exec(HANDLE, ['cat'], { stdin: 'secret' });
+    await flyPersistentOrchestrator.checkLiveness(HANDLE, ['claude', '--version']);
+    expect(calls.map((c) => c.body)).toEqual([
+      { command: ['git', 'clone', 'x'], timeout: 120 },
+      { command: ['cat'], timeout: 120, stdin: 'secret' },
+      { command: ['claude', '--version'], timeout: 60 },
+    ]);
+    for (const call of calls) {
+      expect(call.body).not.toHaveProperty('cmd');
+      expect(Array.isArray(call.body?.['command'])).toBe(true);
+    }
   });
 });
 
@@ -993,7 +1015,7 @@ describe('checkLiveness — is the coding agent alive on the new image? (MOTIR-6
     });
     expect(calls[0]).toMatchObject({
       url: `${API}/apps/${APP}/machines/m-1/exec`,
-      body: { cmd: LIVENESS, timeout: 60 },
+      body: { command: LIVENESS, timeout: 60 },
     });
   });
 

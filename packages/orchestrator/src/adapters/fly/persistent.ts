@@ -551,10 +551,15 @@ const flyInstancesClient = {
     const res = await flyRequest(path(app, `/machines/${encodeURIComponent(id)}/exec`), {
       method: 'POST',
       token: config.token,
-      // `stdin` is the Machines API's `MachineExecRequest.Stdin` (fly-go): the
-      // one field a secret may ride in, because it is neither argv nor env.
+      // The argv goes in `command`. `cmd` is the Machines API's legacy STRING
+      // field: an array there is refused 400 "body is missing command: json:
+      // cannot unmarshal array into … machineExecRequestRaw.cmd of type string"
+      // (MOTIR-7347). It is not `init.cmd` on a machine config, which IS an
+      // array. `stdin` is the Machines API's `MachineExecRequest.Stdin`
+      // (fly-go): the one field a secret may ride in, because it is neither
+      // argv nor env.
       body: JSON.stringify({
-        cmd: [...command],
+        command: [...command],
         timeout: timeoutSeconds,
         ...(stdin !== undefined ? { stdin } : {}),
       }),
