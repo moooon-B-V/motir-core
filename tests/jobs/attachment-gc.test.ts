@@ -30,10 +30,11 @@ const blobDelete = vi.mocked(deleteAttachmentBlob);
 const { attachmentGc, ATTACHMENT_GC_CRON } = await import('@/lib/jobs/definitions/attachmentGc');
 const { attachmentsService } = await import('@/lib/services/attachmentsService');
 const { jobDefinitions } = await import('@/lib/jobs/registry');
+const { pagesService } = await import('@/lib/services/pagesService');
 
 async function truncateAll(): Promise<void> {
   await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "attachment", "work_item" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "attachment", "work_item", "page" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
   await truncateJobRuns();
@@ -55,7 +56,12 @@ const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 /** Insert an attachment row directly (test setup — the legitimate cross-layer reach). */
 async function makeAttachment(
   fx: WorkItemFixture,
-  overrides: Partial<{ workItemId: string | null; blobPathname: string; createdAt: Date }> = {},
+  overrides: Partial<{
+    workItemId: string | null;
+    pageId: string | null;
+    blobPathname: string;
+    createdAt: Date;
+  }> = {},
 ): Promise<Attachment> {
   return adminDb.attachment.create({
     data: {
@@ -68,6 +74,7 @@ async function makeAttachment(
       sizeBytes: 4,
       originalFilename: 'f.png',
       ...(overrides.workItemId !== undefined ? { workItemId: overrides.workItemId } : {}),
+      ...(overrides.pageId !== undefined ? { pageId: overrides.pageId } : {}),
       ...(overrides.createdAt ? { createdAt: overrides.createdAt } : {}),
     },
   });
@@ -128,6 +135,22 @@ describe('the scheduled sweep (in-process Inngest run)', () => {
     const second = await new JobTestEngine({ function: attachmentGc }).execute();
     expect(second.result).toEqual({ scanned: 1, deleted: 1, failed: 0 });
     expect(await exists(failing.id)).toBe(false);
+  });
+});
+
+describe('a page image is never an orphan (Story MOTIR-5752 · MOTIR-7279)', () => {
+  it('sweeps an unowned row past the window and leaves a page-owned row of the same age, blob included', async () => {
+    const fx = await makeWorkItemFixture();
+    const page = await pagesService.createPage(fx.ctx, { projectId: fx.projectId });
+    const pageImage = await makeAttachment(fx, { pageId: page.id, createdAt: daysAgo(30) });
+    const unowned = await makeAttachment(fx, { createdAt: daysAgo(30) });
+
+    const summary = await attachmentsService.sweepOrphanAttachments();
+
+    expect(summary).toEqual({ scanned: 1, deleted: 1, failed: 0 });
+    expect(await exists(unowned.id)).toBe(false);
+    expect(await exists(pageImage.id)).toBe(true);
+    expect(blobDelete.mock.calls).toEqual([[unowned.blobPathname]]);
   });
 });
 

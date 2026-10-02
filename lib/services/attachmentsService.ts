@@ -30,6 +30,9 @@ import { toAttachmentDto } from '@/lib/mappers/attachmentMappers';
 import type { AttachmentDTO, AttachmentsPageDTO } from '@/lib/dto/attachments';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { readWorkItem } from '@/lib/workspaces/tenantRead';
+import { pageRepository } from '@/lib/repositories/pageRepository';
+import { PageNotFoundError } from '@/lib/pages';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 
 // Attachment upload (Subtask 2.3.7, finding #52). GENERAL — not image-only: the
 // same primitive serves the description editor's inline-image case AND Epic 5's
@@ -295,6 +298,22 @@ export const attachmentsService = {
         if (!row || row.workspaceId !== ctx.workspaceId) {
           throw new AttachmentNotFoundError(attachmentId);
         }
+        // A PAGE image (MOTIR-7279) is authorised by `page:view` on its page's
+        // project. Every refusal — the page gone, the project hidden, the key
+        // missing — reads as the same 404 as a missing attachment.
+        if (row.pageId !== null) {
+          const page = await pageRepository.findById(row.pageId, tx);
+          if (!page) throw new AttachmentNotFoundError(attachmentId);
+          try {
+            await projectAccessService.assertCanViewPages(page.projectId, ctx, tx);
+          } catch (err) {
+            if (err instanceof ProjectAccessDeniedError || err instanceof ProjectNotFoundError) {
+              throw new AttachmentNotFoundError(attachmentId);
+            }
+            throw err;
+          }
+          return signedDownloadUrl(row.blobPathname, { download: opts.download });
+        }
         // Authorize against the owning item; an orphan (null workItemId) is on no
         // item to gate against → not addressable (404).
         if (row.workItemId === null) throw new AttachmentNotFoundError(attachmentId);
@@ -302,6 +321,43 @@ export const attachmentsService = {
         return signedDownloadUrl(row.blobPathname, { download: opts.download });
       },
     );
+  },
+
+  /**
+   * Upload an IMAGE into a page (Story MOTIR-5752 · MOTIR-7279): the attachment
+   * is filed under the page (`pageId`) so the orphan sweep never takes it, and
+   * the page never unlinks it on save — an older version restored later may
+   * still name it. `page:edit` and the page's presence in `projectId` are
+   * checked FIRST, so a refused caller never spends a blob round-trip; then the
+   * shipped `uploadAttachment` primitive runs its own gates (size, allowlist,
+   * rate, storage cap) and writes the blob and the row; then one transaction
+   * re-checks the page and files the row under it.
+   *
+   * Two transactions, for `attachToWorkItem`'s reason: the blob call must not run
+   * inside an open DB transaction. If the page is deleted between the two, the
+   * row stays unowned and the sweep reclaims it with its blob.
+   */
+  async uploadPageImage(
+    file: File,
+    input: { ctx: ServiceContext; projectId: string; pageId: string },
+  ): Promise<{ url: string }> {
+    const { ctx, projectId, pageId } = input;
+    const scope = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId };
+    const assertPageInProject = async (tx: Prisma.TransactionClient) => {
+      await projectAccessService.assertCanEditPages(projectId, ctx, tx);
+      const page = await pageRepository.findById(pageId, tx);
+      if (!page || page.projectId !== projectId) throw new PageNotFoundError(pageId);
+    };
+
+    await withWorkspaceContext(scope, assertPageInProject);
+    if (!isImageType(file.type)) throw new UnsupportedFileTypeError(file.type);
+
+    const uploaded = await this.uploadAttachment(file, { ...ctx, projectId });
+    await withWorkspaceContext(scope, async (tx) => {
+      await assertPageInProject(tx);
+      await attachmentRepository.linkToPage(uploaded.id, pageId, tx);
+    });
+    return { url: uploaded.url };
   },
 
   /**

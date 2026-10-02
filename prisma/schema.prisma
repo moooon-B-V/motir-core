@@ -4731,6 +4731,12 @@ model Attachment {
   // so the orphan-GC (5.2.7) can also remove the BLOB; a cascade would
   // vaporise the rows and strand their blobs invisibly.
   workItemId       String?          @map("work_item_id")
+  // The PAGE this file belongs to (Story MOTIR-5752 · MOTIR-7279) — an image
+  // pasted into a page, owned from upload so the orphan-GC never takes it. At
+  // most one of `workItemId` / `pageId` is set (CHECK
+  // `attachment_owner_at_most_one`, in the migration SQL). `SetNull` for the
+  // `workItemId` reason above: a deleted page's rows stay for the GC to reclaim.
+  pageId           String?          @map("page_id")
   // Default `editor`: every pre-5.2 row came through the editor upload path,
   // so the migration's ADD COLUMN backfills existing rows correctly.
   source           AttachmentSource @default(editor)
@@ -4743,6 +4749,7 @@ model Attachment {
   workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   uploader           User                @relation(fields: [uploaderUserId], references: [id], onDelete: Cascade)
   workItem           WorkItem?           @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  page               Page?               @relation(fields: [pageId], references: [id], onDelete: SetNull)
   // Back-relations for AcceptanceEvidence: an `acceptance_video` Attachment is
   // the video of one evidence row (MOTIR-1629); an `acceptance_trace` Attachment
   // is its trace (MOTIR-1674). Both FKs SetNull, so the orphan-GC deleting a blob
@@ -4758,6 +4765,8 @@ model Attachment {
   @@index([workspaceId, createdAt(sort: Desc)])
   // The paged panel read (5.2.2): an issue's attachments, newest first.
   @@index([workItemId, createdAt(sort: Desc)])
+  // A page's images, newest first (MOTIR-7279).
+  @@index([pageId, createdAt(sort: Desc)])
   @@map("attachment")
 }
 
@@ -11732,13 +11741,15 @@ model Page {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parentPage Page?     @relation("PageParent", fields: [parentPageId], references: [id], onDelete: NoAction)
-  childPages Page[]    @relation("PageParent")
-  folder     Folder?   @relation("PageFolder", fields: [folderId], references: [id], onDelete: NoAction)
-  createdBy  User      @relation("PageCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy  User      @relation("PageUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentPage  Page?        @relation("PageParent", fields: [parentPageId], references: [id], onDelete: NoAction)
+  childPages  Page[]       @relation("PageParent")
+  // The page's images (MOTIR-7279) — attachments it owns from upload.
+  attachments Attachment[]
+  folder      Folder?      @relation("PageFolder", fields: [folderId], references: [id], onDelete: NoAction)
+  createdBy   User         @relation("PageCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy   User         @relation("PageUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
 
   @@index([projectId, parentPageId, position, id])
   @@index([projectId, folderId, position, id])
