@@ -1,4 +1,5 @@
 import { INSTANCE_MAX_PER_USER } from '@/lib/agentInstances/config';
+import { isLegalTransition } from '@/lib/agentInstances/stateMachine';
 import type { AgentInstanceState } from '@/lib/dto/agentInstances';
 import type { RunTone } from '@/lib/runs/timeline';
 
@@ -50,17 +51,16 @@ export type AgentMove = 'wake' | 'hibernate' | 'delete';
 /**
  * Panel 3: the moves `agent-instances.md` §4 allows from each state. A move the
  * state does not allow is shown DISABLED, never hidden, so the menu keeps one shape.
+ * Delete is read from §4's own table, so the menu, the panel header and the
+ * service cannot disagree about it (AMENDMENT 4: a boot or a stop that never
+ * settles must still be deletable).
  */
 export function allowedAgentMoves(state: AgentInstanceState): ReadonlySet<AgentMove> {
-  switch (state) {
-    case 'running':
-      return new Set(['hibernate', 'delete']);
-    case 'hibernated':
-    case 'failed':
-      return new Set(['wake', 'delete']);
-    default:
-      return new Set();
-  }
+  const moves = new Set<AgentMove>();
+  if (state === 'running') moves.add('hibernate');
+  if (state === 'hibernated' || state === 'failed') moves.add('wake');
+  if (isLegalTransition(state, 'deleting')) moves.add('delete');
+  return moves;
 }
 
 /**

@@ -592,11 +592,11 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         });
       });
 
-      it('runs only the pages lane, and NOT the app lanes, for a change inside packages/pages', () => {
-        // MOTIR-5758. The one package-only change that skips `app`: nothing the
-        // app lanes run imports `@motir/pages` yet, and
-        // `tests/packages/importDirection.test.ts` goes red the moment that stops
-        // being true, which is when this row has to flip back.
+      it('runs the pages lane AND the app lanes for a change inside packages/pages', () => {
+        // MOTIR-5758 let a pages-only change skip `app` while no app file
+        // imported `@motir/pages`; MOTIR-7276's composition root
+        // (`lib/pages/index.ts`) is that import, so the package is consumed like
+        // the others and its changes run the app's Vitest and E2E lanes again.
         const outputs = asPullRequest('pages-package-only');
         expect(packageFlags(outputs)).toEqual({
           pkg_cli: 'false',
@@ -604,9 +604,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
           pkg_design_system: 'false',
           pkg_pages: 'true',
         });
-        expect(outputs.app).toBe('false');
-        // The image lanes are untouched by the exception: the sandbox image's
-        // builder installs every workspace manifest, so a package is an input.
+        expect(outputs.app).toBe('true');
         expect(outputs.images).toBe('true');
       });
 

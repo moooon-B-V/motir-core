@@ -138,6 +138,10 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   // NEW, so no actor loses anything by its arriving; a custom role holds it only
   // when an admin ticks it.
   'instance:use',
+  // MOTIR-7277 — a project's pages (`docs/decisions/pages.md` §5): `admin` holds
+  // both through this whole set, `member` both, `viewer` `page:view` only.
+  'page:view',
+  'page:edit',
   // MOTIR-2256 — the twelve per-domain administrative keys that fall out of
   // `project:administer`. Admin holds all twelve, which is what makes the split
   // neutral wherever the umbrella already stood.
@@ -268,6 +272,9 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceRole, ReadonlySet<Permi
     'run:view_any',
     // MOTIR-6872 — a member runs their own agent instances (§8).
     'instance:use',
+    // MOTIR-7277 — a member reads and writes the project's pages.
+    'page:view',
+    'page:edit',
   ]),
   // MOTIR-6328 — the same three view-any keys, and NOTHING that authors, decides
   // or starts (DECISION MOTIR-6165 Q2). A viewer opens Plans, Approvals and Runs
@@ -280,6 +287,9 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceRole, ReadonlySet<Permi
     'approval:view_any',
     'plan:view_any',
     'run:view_any',
+    // MOTIR-7277 — a viewer reads pages and writes none; `VISITOR_PERMISSIONS`
+    // derives from this set, so a visitor reads them too (pages ADR §5).
+    'page:view',
   ]),
 };
 

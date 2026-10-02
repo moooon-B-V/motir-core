@@ -15,9 +15,9 @@ import {
 } from 'lucide-react';
 import { RunTonePill } from '@/components/runs/RunTonePill';
 import { Button } from '@/components/ui/Button';
-import { AGENT_STATE_TONE } from '@/lib/agentInstances/presentation';
+import { AGENT_STATE_TONE, allowedAgentMoves } from '@/lib/agentInstances/presentation';
 import { agentSignInHint } from '@/lib/agentInstances/profiles';
-import type { AgentInstanceListItemDto, AgentInstanceState } from '@/lib/dto/agentInstances';
+import type { AgentInstanceListItemDto } from '@/lib/dto/agentInstances';
 import { AgentImageVersion } from './AgentImageVersion';
 import { AgentRunLine } from './AgentRunLine';
 import type { TerminalSignIn } from './useAgentTerminal';
@@ -25,7 +25,7 @@ import type { TerminalSignIn } from './useAgentTerminal';
 // THE PANEL'S HEADER (Story MOTIR-6861 · MOTIR-6941; `design/my-agents/design-notes.md`
 // § the agent panel, panels 2, 3 and 7): the list row's facts promoted — name,
 // the list's own state pill, coding agent · project — with Hibernate (running
-// only), Delete… (disabled, never hidden, while the agent is in motion) and ×;
+// only), Delete… (disabled, never hidden, where §4 allows no Delete) and ×;
 // then the sign-in status the terminal server pushed, and the §9 sentence.
 //
 // THE AGENT'S LIVE RUN (Story MOTIR-6864 · MOTIR-7029, `my-agents--run.mock.html`
@@ -33,15 +33,6 @@ import type { TerminalSignIn } from './useAgentTerminal';
 // works in the agent Hibernate and Delete wear their disabled face with ONE line
 // saying why — the server refuses both during a run (`agent_instance_run_active`),
 // so the panel does not offer a press it knows will be refused.
-
-/** Delete… is disabled in these states — the row menu's own rule (panel 2). */
-const DELETE_DISABLED: ReadonlySet<AgentInstanceState> = new Set([
-  'starting',
-  'hibernating',
-  'waking',
-  'deleting',
-  'updating',
-]);
 
 /**
  * Is an update offered to this agent (`agent-image-update.md` Q1, Q5)? A newer
@@ -82,7 +73,8 @@ export function AgentPanelHeader({
 }) {
   const t = useTranslations('myAgents');
   const runActive = agent.activeRun !== null;
-  const deleteOff = DELETE_DISABLED.has(agent.state) || runActive;
+  // Delete… follows the row menu's own rule (panel 2), read from §4's table.
+  const deleteOff = !allowedAgentMoves(agent.state).has('delete') || runActive;
   const updating = agent.state === 'updating';
   // The update delta, panel 1: Update is the FIRST action, shown while an update
   // is offered; while the agent updates it stays, disabled, with the other two.

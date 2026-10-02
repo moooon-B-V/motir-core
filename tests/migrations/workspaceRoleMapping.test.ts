@@ -54,11 +54,12 @@ const sorted = (s: Iterable<string>) => [...s].sort();
  * is asserted to be exactly the literal plus these (the same list
  * `workspaceRoleNeverWider.test.ts` carries).
  * MOTIR-6872 — `instance:use` (agent instances), granted to member and above.
+ * MOTIR-7277 — `page:view` (every built-in) and `page:edit` (member and above).
  */
 const KEYS_ADDED_AFTER_MIGRATION: Record<'admin' | 'member' | 'viewer', string[]> = {
-  admin: ['instance:use'],
-  member: ['instance:use'],
-  viewer: [],
+  admin: ['instance:use', 'page:view', 'page:edit'],
+  member: ['instance:use', 'page:view', 'page:edit'],
+  viewer: ['page:view'],
 };
 
 async function runMigration(): Promise<void> {

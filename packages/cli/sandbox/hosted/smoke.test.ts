@@ -768,6 +768,12 @@ async function startStub(): Promise<Stub> {
           cards: [],
         });
       }
+      // The heartbeat (MOTIR-6530): the reporter beats the moment it adopts the
+      // run (MOTIR-7328), so every shape reaches this route at least once.
+      if (method === 'POST' && path === `/api/v1/dispatch-runs/${s.runId}/heartbeat`) {
+        res.writeHead(204, { connection: 'close' });
+        return res.end();
+      }
       if (method === 'POST' && path === `/api/v1/dispatch-runs/${s.runId}/close`) {
         stub.closed.push(body);
         return json(200, dispatchRun(s, 'succeeded'));
@@ -1128,6 +1134,8 @@ describe('the hosted image, as processes: the launcher runs the real CLI (MOTIR-
     const paths = stub.requests.map((r) => `${r.method} ${r.path}`);
     expect(paths).toContain(`GET /api/v1/dispatch-runs/${s.runId}`);
     expect(paths).not.toContain('POST /api/v1/dispatch-runs');
+    // The adopted run beat at once, so it is never read as a legacy run (MOTIR-7328).
+    expect(paths).toContain(`POST /api/v1/dispatch-runs/${s.runId}/heartbeat`);
     expect(stub.requests.filter((r) => r.path === '/api/v1/workspaces')).toEqual([]);
     // Every Motir call carried the run credential (the gateway call carries the run key).
     const motir = stub.requests.filter((r) => r.path.startsWith('/api/'));

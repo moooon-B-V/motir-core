@@ -82,6 +82,9 @@ test('an app connects to the workspace the person picks, reads only there, and R
     await expect(page.getByRole('option', { name: seed.homeLabel })).toBeVisible();
     await expect(page.getByRole('option', { name: seed.targetLabel })).toBeVisible();
     await page.keyboard.press('Escape');
+    // The trigger is a toggle: a click while the menu is still open SHUTS it, so
+    // wait on the closed state before pickWorkspace opens it again (MOTIR-7345).
+    await expect(picker).toHaveAttribute('aria-expanded', 'false');
     await pickWorkspace(page, seed.targetLabel);
     await expect(page.getByRole('button', { name: 'All projects' })).toHaveAttribute(
       'aria-pressed',

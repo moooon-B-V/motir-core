@@ -205,6 +205,16 @@ describe('what each built-in role is offered', () => {
     }
   });
 
+  it('Pages opens on `page:view` — a Viewer and a Member keep it, a reader without it does not (MOTIR-7300)', () => {
+    expect(canOfferNavDestination('/pages', VIEWER)).toBe(true);
+    expect(canOfferNavDestination('/pages', MEMBER)).toBe(true);
+    expect(canOfferNavDestination('/pages', ADMIN)).toBe(true);
+    expect(canOfferNavDestination('/pages', new Set(['project:browse']) as never)).toBe(false);
+    expect(
+      canOfferNavDestination('/pages', new Set(['project:browse', 'page:view']) as never),
+    ).toBe(true);
+  });
+
   it('the AI entrances need `ai:plan` — a viewer is not offered them', () => {
     expect(satisfiesRequirement(AI_PLANNING_REQUIREMENT, MEMBER)).toBe(true);
     expect(satisfiesRequirement(AI_PLANNING_REQUIREMENT, VIEWER)).toBe(false);

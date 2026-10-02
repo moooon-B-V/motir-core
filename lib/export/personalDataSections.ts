@@ -124,6 +124,7 @@ export type PersonalDataDelegate =
   | 'planChangeMailboxEntry'
   | 'workItemTodo'
   | 'folder'
+  | 'page'
   | 'monitorConnection'
   | 'approvalGate'
   | 'planRevision';
@@ -499,6 +500,20 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     tier: 'tenant',
     basis: 'Folders the reader created.',
     where: (userId) => ({ createdById: userId }),
+  },
+  {
+    // `created_by_id` / `updated_by_id` attribute acts — making a page, and the
+    // latest edit to it — to a person, the same shape as `folder` directly above,
+    // so it is EXPORTED (Story MOTIR-5752). The body ships as `body_markdown`, its
+    // readable form; `body_state` is the binary Yjs document that markdown is
+    // derived from, which would serialize as a byte-indexed object nobody can
+    // read, so it is not selected.
+    table: 'page',
+    model: 'page',
+    tier: 'tenant',
+    basis: 'Pages the reader created or last edited.',
+    redact: ['bodyState'],
+    where: (userId) => ({ OR: [{ createdById: userId }, { updatedById: userId }] }),
   },
   {
     // `bound_by_user_id` attributes an act — binding a monitored project to this

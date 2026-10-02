@@ -450,6 +450,14 @@ export function Combobox<T extends string>({
     if (!open && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
       e.preventDefault();
       openMenu();
+    } else if (open && e.key === 'Escape') {
+      // The open menu takes focus from a `setTimeout(0)` (the on-open effect),
+      // so an Escape pressed before that fires lands HERE, not on the list.
+      // Ignoring it left the menu open, and the next click on the trigger then
+      // toggled it SHUT — the picker closed for good (MOTIR-7345). Focus is
+      // already on the trigger, so close without moving it.
+      e.preventDefault();
+      closeMenu();
     }
   }
 

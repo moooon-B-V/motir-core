@@ -439,6 +439,8 @@ export const config = {
     // The no-project landing (MOTIR-6548).
     '/no-project/:path*',
     '/onboarding/:path*',
+    // The page at its own address (MOTIR-7280).
+    '/pages/:path*',
     '/planning/:path*',
     '/plans/:path*',
     '/ready/:path*',
