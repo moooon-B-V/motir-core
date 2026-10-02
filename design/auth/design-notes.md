@@ -5,16 +5,17 @@ Design reference for the `auth` area: the signed-out surfaces served from
 (`/device`, `/unsubscribe/filter-subscription`) that joined the group after this
 asset was drawn.
 
-| Surface             | Asset                                            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Auth 2.0**        | **`auth-screens.pen`** (Pencil source)           | Twelve artboards — five desktop screens, three desktop states, four mobile. Exported as `01-signin-desktop.png` … `12-reset-request-mobile.png`, one PNG per artboard. **Gates Story 1.1** (auth).                                                                                                                                                                                                                                                         |
-| **2FA challenge**   | **`two-factor-challenge.mock.html`** (HTML mock) | The second-factor step between the password and the session (Story 8.11 · MOTIR-1216): the six-digit field, the two fallbacks, remember-this-device, and the three refusals. The area's FIRST HTML mock — built from shipped code, not from the artboards. **Gates MOTIR-1221.**                                                                                                                                                                           |
-| **Passkey sign-in** | **`passkey-sign-in.mock.html`** (HTML mock)      | The one control Story 8.12 (MOTIR-1214 · MOTIR-3609) adds to the signed-out card: **Sign in with a passkey**, on the EMAIL step, beside the Google button and before the password. A passkey sign-in mints a session directly, so it never reaches the password step and never reaches `TwoFactorChallenge`. **Gates MOTIR-3613**; the account-side half is `../settings/passkeys.mock.html`.                                                              |
-| **2FA required**    | **`two-factor-required.mock.html`** (HTML mock)  | The screen a member without a second factor meets once their organization or workspace starts REQUIRING one (Story 8.13 · MOTIR-3643): who is asking, the three ways to satisfy it, the mounted enrolment surface, the return to where they were going, and the way out. Signed IN but held — it wears the `(auth)` frame precisely so nothing else is reachable. **Gates MOTIR-3648**; the admin-facing half is `../org-admin/security-policy.mock.html`. |
-| **Legal agreement** | **`legal-agreement.mock.html`** (HTML mock)      | Two surfaces, one agreement (Story 8.4 · MOTIR-3679): the notice at the sign-up card's FOOT — on BOTH steps, because `Continue with Google` creates an account from step 1 and never saw the old one — and the re-consent interstitial a material change holds a signed-in reader on. **Gates MOTIR-1135**; for the agreement element it SUPERSEDES `03-signup-desktop.png`, and for everything else on that screen it does not.                           |
-| **OAuth consent**   | **`oauth-consent.mock.html`** (HTML mock)        | The page an MCP client’s browser redirect lands on (Story MOTIR-6973 · MOTIR-6980): the app asking and where it returns, one workspace, all projects or one, the grant in the token picker’s columns, Approve / Deny, and the signed-out, no-workspace, invalid-request, approved and denied states. **Gates MOTIR-6985.** See § OAuth consent.                                                                                                            |
-| CLI hand-off        | `../cli-connect/cli-connect.mock.html`           | `/device` and the banner it adds to the sign-in card. Drawn later, in its own area — this file does not re-specify it.                                                                                                                                                                                                                                                                                                                                     |
-| Brand lockup        | `../brand/brand-mark.mock.html` §7b              | The `BrandMark` the `(auth)` card renders top-left. Supersedes this asset's "P" tile (see the ledger below).                                                                                                                                                                                                                                                                                                                                               |
+| Surface                               | Asset                                                            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auth 2.0**                          | **`auth-screens.pen`** (Pencil source)                           | Twelve artboards — five desktop screens, three desktop states, four mobile. Exported as `01-signin-desktop.png` … `12-reset-request-mobile.png`, one PNG per artboard. **Gates Story 1.1** (auth).                                                                                                                                                                                                                                                         |
+| **2FA challenge**                     | **`two-factor-challenge.mock.html`** (HTML mock)                 | The second-factor step between the password and the session (Story 8.11 · MOTIR-1216): the six-digit field, the two fallbacks, remember-this-device, and the three refusals. The area's FIRST HTML mock — built from shipped code, not from the artboards. **Gates MOTIR-1221.**                                                                                                                                                                           |
+| **Passkey sign-in**                   | **`passkey-sign-in.mock.html`** (HTML mock)                      | The one control Story 8.12 (MOTIR-1214 · MOTIR-3609) adds to the signed-out card: **Sign in with a passkey**, on the EMAIL step, beside the Google button and before the password. A passkey sign-in mints a session directly, so it never reaches the password step and never reaches `TwoFactorChallenge`. **Gates MOTIR-3613**; the account-side half is `../settings/passkeys.mock.html`.                                                              |
+| **2FA required**                      | **`two-factor-required.mock.html`** (HTML mock)                  | The screen a member without a second factor meets once their organization or workspace starts REQUIRING one (Story 8.13 · MOTIR-3643): who is asking, the three ways to satisfy it, the mounted enrolment surface, the return to where they were going, and the way out. Signed IN but held — it wears the `(auth)` frame precisely so nothing else is reachable. **Gates MOTIR-3648**; the admin-facing half is `../org-admin/security-policy.mock.html`. |
+| **Legal agreement**                   | **`legal-agreement.mock.html`** (HTML mock)                      | Two surfaces, one agreement (Story 8.4 · MOTIR-3679): the notice at the sign-up card's FOOT — on BOTH steps, because `Continue with Google` creates an account from step 1 and never saw the old one — and the re-consent interstitial a material change holds a signed-in reader on. **Gates MOTIR-1135**; for the agreement element it SUPERSEDES `03-signup-desktop.png`, and for everything else on that screen it does not.                           |
+| **OAuth consent**                     | **`oauth-consent.mock.html`** (HTML mock)                        | The page an MCP client’s browser redirect lands on (Story MOTIR-6973 · MOTIR-6980): the app asking and where it returns, one workspace, all projects or one, the grant in the token picker’s columns, Approve / Deny, and the signed-out, no-workspace, invalid-request, approved and denied states. **Gates MOTIR-6985.** See § OAuth consent.                                                                                                            |
+| **OAuth consent — pinned action bar** | **`oauth-consent--sticky-actions.mock.html`** (HTML mock, delta) | MOTIR-7379: the consent card widens to 64rem in two panes, and the summary + Deny + Approve and connect move into a bar pinned to the bottom of the viewport. Amends § OAuth consent. **Gates MOTIR-7380.** See § OAuth consent — the pinned action bar.                                                                                                                                                                                                   |
+| CLI hand-off                          | `../cli-connect/cli-connect.mock.html`                           | `/device` and the banner it adds to the sign-in card. Drawn later, in its own area — this file does not re-specify it.                                                                                                                                                                                                                                                                                                                                     |
+| Brand lockup                          | `../brand/brand-mark.mock.html` §7b                              | The `BrandMark` the `(auth)` card renders top-left. Supersedes this asset's "P" tile (see the ledger below).                                                                                                                                                                                                                                                                                                                                               |
 
 `auth-screens.pen` is a **legacy Pencil source** — one of the fourteen `.pen`
 files still in the tree, and this area holds no HTML mock beside it. New assets
@@ -1706,3 +1707,131 @@ data is the shipped derivation read from code, not recalled: `GRANTABLE_PERMISSI
 = 14 keys, `DEFAULT_TOKEN_GRANT` = 13, catalog-domain groups, a 7 | 7 column split.
 Panels were rendered in headless Chromium at 1240px wide to check layout; no image is
 part of the asset.
+
+## OAuth consent — the pinned action bar and the wider card (MOTIR-7379)
+
+**Asset:** `oauth-consent--sticky-actions.mock.html` (HTML mock, a DELTA, 4 panel groups) ·
+**Card:** MOTIR-7379 · **Builds it:** [OAuth consent — build the wider card and the bottom-pinned action bar](motir:cmure4rmw00cdhvoi7ry6vm86)
+(MOTIR-7380). **Amends** § OAuth consent above — its § _The frame_ (the 40rem width and the
+_Fold_ bullet), the Summary line / Deny / Approve / Foot / Empty grant rows of § _Per element —
+consent_, and Panels 1–3, 8 and 11 of `oauth-consent.mock.html`, which is a record and is not edited.
+
+**Design system** (read, not assumed): `package.json` depends on `@motir/design-system`
+(`workspace:*`, `packages/design-system` 0.8.1) AND `app/globals.css` imports
+`@motir/design-system/theme.css`, so the project is on Motir Design. The mock does not use
+`renderMock`: it copies the base mock's token block and component rules byte for byte (they were
+lifted from that `theme.css` and the shipped primitives), so the delta composes from exactly the
+markup the base asset already reviewed. Every part is shipped (`Button`, `Pill`, `Segmented`,
+`Combobox`, `Switch`, the `(auth)` frame, DeviceApproval's detail box); nothing is proposed to
+the package, and nothing new is product-local beyond the bar's wrapper `div`.
+
+### Why — what ships today
+
+Found on 2026-10-02 while verifying MOTIR-7177 on app.motir.co: _"Connect claude.ai to Motir?"_
+opened with no Approve and connect in view. Measured on the base mock's Panel 1 (one workspace,
+All projects) in Chromium at 1440 × 800: the 40rem card is **937px** tall and the Deny / Approve
+row starts **836px** into it, so with the wide state's `py-8` it begins at **868px**, below an
+800px screen. Two workspaces (the case that was seen) add a Combobox and push it further. The
+_Fold_ bullet above accepted this on the strength of the summary line; the direction from Zhu Yue
+is that the decision must be reachable without scrolling.
+
+### The card's width — 64rem, two panes at `lg`
+
+- **The consent page renders `data-auth-wide="consent"`**, and the `(auth)` layout gains one
+  variant: `has-[[data-auth-wide=consent]]:max-w-[64rem]`. The bare `data-auth-wide` still means
+  40rem, so the other two wide pages are untouched (below).
+- **64rem, and why that number:** the grant keeps exactly today's width. Today's 40rem card minus
+  its `sm:px-8` is a **36rem** content column, which is the width the token picker's two columns
+  (`permissionColumnsForTokens()`, 7 | 7) were drawn and measured at. Beside it goes a **22rem
+  who-and-where pane**, with a **2rem** gutter, inside the card's **2 × 2rem** padding:
+  36 + 22 + 2 + 4 = **64rem**. More grant columns were weighed and rejected: the domain captions,
+  not the rows, set the height, so a three-way split saves almost nothing and would fork the
+  picker from the create-token modal it shares a function with.
+- **The panes (`lg`, ≥ 1024px):** left, the detail box in ONE column (`DetailColumn` × 2 stacked,
+  the divided column's rule moving from left to top, which is DeviceApproval's own narrow shape),
+  then _Where it can act_ and, in One project, the Project field. Right, _What it can do_ in its
+  two columns, then the disconnect footnote. Grid `22rem minmax(0, 1fr)`, `gap-x-8`, `items-start`.
+  Between 1024px and the 1104px a full 64rem card needs, the card shrinks with the viewport and the
+  grant pane narrows (still two columns).
+- **Below `lg`:** today's 40rem single column, with the 2 × 2 detail box at `sm` and the stacked
+  one below it, unchanged except for the bar.
+- **Measured** (Chromium, the mock's frames): at 1440 × 800 the All-projects page is 800px and the
+  bar's top sits at 657px; One project is 1054px, so the page scrolls and the bar is pinned.
+
+### The action bar
+
+| Part        | Markup / tokens                                                                                                                                                                                                                                             |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Position    | the LAST child of the card, `sticky bottom-0 z-10`, IN FLOW (never `fixed`)                                                                                                                                                                                 |
+| Surface     | `bg-(--el-page-bg)` (the card's own white), full bleed to the card edge (`-mx-8` cancelling the card's `sm:px-8`; `-mx-4` / `-mx-6` with the narrower paddings), `border-t border-(--el-border)`, `rounded-b-(--radius-card)` so it closes the card at rest |
+| Padding     | `pt-3 pb-5 px-8` (`lg`, `sm`); `pt-3 pb-4 px-4` on a phone — the card's bottom padding moves INTO the bar (the card becomes `pb-0`)                                                                                                                         |
+| Elevation   | none of its own: the top rule over the scrolling list is the separation, and the card keeps `--shadow-elevated`. No upward shadow token exists, and inventing one would be a raw value                                                                      |
+| Summary     | the shipped summary line minus its top hairline (the bar's rule replaces it): `Info` + `text-sm text-(--el-text-secondary)`, emphasis `--el-text`. On the white bar this is 6.80:1; `--el-text-muted` is not used anywhere in the bar                       |
+| Buttons     | unchanged: Deny `Button variant="secondary" size="lg"` + `CircleX`, border + glyph `--el-danger`, label `--el-text`, FIRST in the DOM; Approve `Button size="lg"`. Same `role="group"` and name, "Approve or deny {app}"                                    |
+| `lg` layout | one row: the summary `flex-1`, then the two buttons, each `min-w-44` (11rem) and the same width, `gap-5` between summary and buttons                                                                                                                        |
+| `sm`–`lg`   | the summary on its own line, then Deny \| Approve 50/50 (`flex gap-3`, both `w-full`) — today's composition, inside the bar                                                                                                                                 |
+| `< sm`      | the summary, then the two buttons STACKED, Deny on top, both `w-full` and the same `--height-btn-lg`, `gap-2`: neither is shortened, so equal weight survives the narrow width                                                                              |
+
+**The scroll rule, which is two rules.**
+
+1. **Scroll-to-end needs no padding**, because the bar is in flow: it occupies its own height at
+   the end of the document, so when the reader reaches the end the bar has come to rest at the
+   card's foot and the last permission row (_Approve or decline AI plans_) ends above it (Panel 2,
+   bottom; Panel 3, phone at the end). A `fixed` bar would need a spacer; this one does not.
+2. **Focus needs `scroll-padding-bottom`** on the scroller (the `<html>`, since the `(auth)` page
+   scrolls the document): a Switch reached with Tab while the bar is stuck must scroll into view
+   above it, not under it. The value is the bar's height. Measured in the mock: **81px** at `lg`,
+   **111px** at `sm`–`lg`, **183px** on a phone (the summary wraps to two lines and the buttons
+   stack). MOTIR-7380 sets it from the bar's measured height (a `ResizeObserver` writing a CSS
+   variable the page's `scroll-pb-[var(--consent-bar-h)]` reads), so a wrapping summary or a
+   longer locale cannot leave a gap; a fixed `scroll-pb-48` is the acceptable fallback, since
+   over-padding only scrolls a little further.
+
+**Breakpoints, in one place:** `< sm` (640px) phone, stacked buttons; `sm`–`lg` 40rem card, 50/50
+row under the summary; `≥ lg` (1024px) 64rem card in two panes, summary and buttons in one row.
+At 1280 × 640 (Panel 3) the two panes hold, the page is 741px, and the bar is pinned from the
+first paint.
+
+### What moves, and the copy
+
+- **The disconnect footnote** leaves the end of the form for the **end of the scrolling content**:
+  the last element of the grant pane at `lg`, the last element of the single column below it. Same
+  copy and `text-xs`; its colour changes from `--el-text-muted` to `--el-text-secondary` so it does
+  not depend on which surface it ends up over. The bar holds the decision and nothing else; the
+  same reassurance is repeated on the Approved state's foot (base Panel 9).
+- **The empty-grant alert** (One project, every switch off) MOVES into the bar, into the summary's
+  slot, beside the button it disables: `p role="alert"` + `TriangleAlert`,
+  `text-(--el-danger-on-surface)` (≥ 4.77:1 on the page in all twenty palette × theme contexts;
+  never `--el-danger-text`), copy unchanged — **Grant at least one permission to connect.** It is
+  no longer drawn under the grant: once, beside Approve.
+- **No project picked yet** (One project, the Project field empty): Approve is disabled and the
+  summary slot reads, in `--el-text-secondary` with `Info`, `role="status"`: **Pick a project to
+  see what {app} gets.** New key `oauthConsent.summary.pickProject`. Today this case renders
+  `summary.one` with an empty `{project}` ("… gets **0** permissions, in [blank] only."). The Project
+  Combobox shows its placeholder, _Choose a project_.
+- **Connecting:** unchanged in kind — Approve `loading` with **Connecting…**, Deny disabled — and
+  now inside the bar, with the summary still beside it. A failure stays the shipped `ErrorBanner`
+  at the top of the card (base Panel 8), not in the bar.
+
+### Unchanged
+
+- **/device** (`DeviceApproval`) and **/two-factor-required** render a bare `data-auth-wide` and
+  keep the 40rem column, their padding and their in-flow actions. /device was measured to fit
+  1366 × 648 with no scroll (the `(auth)` layout's own comment), and neither screen puts its
+  actions below a fold, so neither gets the bar.
+- Everything else on the consent screen: the headline and subhead, the detail box's content and
+  the verified / unverified / registered app rows (MOTIR-7172 as shipped), the reach control, the
+  grant (fixed rows, picker rows, locked rows, the danger card), and every terminal state.
+
+### Panels
+
+| #   | Frame                                   | What it shows                                                                                         |
+| --- | --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1   | 1440 × 800                              | landing · claude.ai verified · two workspaces · All projects · the whole card and its bar in view     |
+| 2   | 1440 × 800, twice                       | One project (descriptions + switches): landing with the bar pinned; scrolled to the end, bar at rest  |
+| 3   | 1280 × 640 · 390 × 844 twice · 834 wide | short screen (pinned at first paint) · phone at landing and at the end · tablet (`sm`–`lg` bar shape) |
+| 4   | bar strips                              | Approve disabled (no project; empty grant) · connecting                                               |
+
+The board's frames print their own measurements (page height, bar height, where the bar's top
+sits, stuck or at rest) from a review-only script; the numbers in this section are those. Light
+and dark were both rendered in headless Chromium; no image is part of the asset.
