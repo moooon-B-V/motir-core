@@ -125,6 +125,7 @@ export type PersonalDataDelegate =
   | 'workItemTodo'
   | 'folder'
   | 'page'
+  | 'pageVersion'
   | 'monitorConnection'
   | 'approvalGate'
   | 'planRevision';
@@ -514,6 +515,18 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     basis: 'Pages the reader created or last edited.',
     redact: ['bodyState'],
     where: (userId) => ({ OR: [{ createdById: userId }, { updatedById: userId }] }),
+  },
+  {
+    // `author_id` attributes an act — a run of saves to a page, or a restore — to
+    // a person, the same shape as `page.updated_by_id` directly above, so it is
+    // EXPORTED (Story MOTIR-5754). As there, the snapshot ships as its readable
+    // `body_markdown` and the binary `body_state` is not selected.
+    table: 'page_version',
+    model: 'pageVersion',
+    tier: 'tenant',
+    basis: 'Versions of pages the reader saved or restored.',
+    redact: ['bodyState'],
+    where: (userId) => ({ authorId: userId }),
   },
   {
     // `bound_by_user_id` attributes an act — binding a monitored project to this
