@@ -69,10 +69,13 @@ export async function setPlannerModelAction(
     if (err instanceof MissingAuditReasonError) return { ok: false, code: 'REASON_REQUIRED' };
     if (err instanceof NotPlatformStaffError) return { ok: false, code: 'NOT_PERMITTED' };
     if (err instanceof PlannerAudienceUnknownError) {
-      console.error(`[admin] planner-model action got an unknown audience "${audience}"`);
+      console.error(
+        '[admin] planner-model action got an unknown audience',
+        JSON.stringify(audience),
+      );
       return { ok: false, code: 'FAILED' };
     }
-    console.error(`[admin] planner-model action failed for the ${audience} audience`, err);
+    console.error('[admin] planner-model action failed', { audience }, err);
     return { ok: false, code: 'FAILED' };
   }
 }

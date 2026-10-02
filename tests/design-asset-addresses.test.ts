@@ -288,21 +288,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/settings/workspace/github',
     why: 'Named as the PRE-collapse address, in a table of where things used to be and in the §3 argument for removing the row. MOTIR-4669 retired it in favour of `/settings/organization/git`. Pointing the prose at the live address would make the asset claim the collapse it documents never happened.',
   },
-  // ── FORWARD-LOOKING: the operator console's AI planning page ─────────────
-  //  MOTIR-7222 draws the console's `AI planning` page (story MOTIR-7220) before
-  //  MOTIR-7231 builds it, and the way in has to be drawn with its address. These
-  //  two rows DELETE THEMSELVES: the tight arm below fails the pull request that
-  //  adds `app/(authed)/admin/ai-planning/page.tsx`, and that card removes them.
-  {
-    file: 'design/platform-admin/console--ai-planning.mock.html',
-    address: '/admin/ai-planning',
-    why: 'A planned route: MOTIR-7231 builds the page this mock draws. Remove when it ships.',
-  },
-  {
-    file: 'design/platform-admin/design-notes.md',
-    address: '/admin/ai-planning',
-    why: 'A planned route: MOTIR-7231 builds the page this section specifies. Remove when it ships.',
-  },
   // ── The RETIRED landing, which the app still answers on ──────────────────
   //  MOTIR-4782 moved the signed-in landing from `/home` to `/workbench` and
   //  kept the old address alive as a permanent 308 (`LANDING_REDIRECTS`), so

@@ -1,5 +1,5 @@
 import { expect, test } from './_helpers/acceptance-video';
-import { db, resetDatabase } from './_helpers/db-reset';
+import { adminDb, resetDatabase } from './_helpers/db-reset';
 import {
   paidOrgState,
   resetBillingFixture,
@@ -69,7 +69,7 @@ test('a superadmin chooses the planning model, and no tenant surface names it', 
       credits: 1_400,
     })),
   });
-  await db.user.update({ where: { email: OWNER }, data: { platformRole: 'superadmin' } });
+  await adminDb.user.update({ where: { email: OWNER }, data: { platformRole: 'superadmin' } });
 
   const main = page.getByRole('main');
   const internal = main.getByTestId('ai-planning-row-internal');
@@ -116,7 +116,7 @@ test('a superadmin chooses the planning model, and no tenant surface names it', 
     expect(storedPlannerModel('internal')).toBe('claude-sonnet-5-5');
     expect(storedPlannerModel('customer')).toBe('claude-opus-5-5');
     expect(storedPlannerModel('meta')).toBe('claude-opus-5-5');
-    const audit = await db.platformAuditLog.findMany({
+    const audit = await adminDb.platformAuditLog.findMany({
       where: { action: 'ai.planner_model.set' },
     });
     expect(audit).toHaveLength(1);
