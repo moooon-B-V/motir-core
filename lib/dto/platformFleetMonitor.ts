@@ -42,6 +42,9 @@ export interface FleetOrgRowDTO {
   /** Null when the org row could not be read (deleted between the reads). */
   name: string | null;
   isMeta: boolean;
+  /** Billed through an offsetting internal credit (`Organization.internalBilling`,
+   *  MOTIR-4565): debited like any tenant, so its verdicts are judged as one. */
+  internalBilling: boolean;
   /** Running containers per workload — the census the admission reads. */
   byWorkload: Record<FleetWorkloadKind, number>;
   /** Containers counted against the org's pool (shared-pool workloads only). */

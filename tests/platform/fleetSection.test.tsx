@@ -42,6 +42,7 @@ function row(overrides: Partial<FleetOrgRowDTO> = {}): FleetOrgRowDTO {
     organizationId: 'org_acme',
     name: 'Acme Corp',
     isMeta: false,
+    internalBilling: false,
     byWorkload: { ci_runner: 42, hosted_agent: 6, code_graph_index: 2, agent_instance: 3 },
     poolUsed: 50,
     pool: 500,

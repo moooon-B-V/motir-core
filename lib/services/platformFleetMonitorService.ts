@@ -192,6 +192,9 @@ export interface FleetOrgReading {
   organizationId: string;
   /** The org's name as its own row reads it; null when the row is gone. */
   name: string | null;
+  /** `Organization.internalBilling` — carried for the row, never a verdict input:
+   *  an internally billed org is debited like any other (MOTIR-4565). */
+  internalBilling: boolean;
   facts: FleetFacts;
   verdicts: FleetVerdict[];
   byWorkload: Record<FleetWorkloadKind, number>;
@@ -260,6 +263,7 @@ function toRow(
     organizationId: reading.organizationId,
     name: org?.name ?? reading.name,
     isMeta: org?.isMeta ?? reading.facts.isMeta,
+    internalBilling: reading.internalBilling,
     byWorkload: reading.byWorkload,
     poolUsed: reading.poolUsed,
     pool: reading.pool,
@@ -363,6 +367,7 @@ export const platformFleetMonitorService = {
         name: row?.name ?? null,
         // A missing row judges as charged — the safe direction, as the meters do.
         isMeta: row?.isMeta ?? false,
+        internalBilling: row?.internalBilling ?? false,
         charge: await ciPeriodChargeRepository.findForPeriod(
           organizationId,
           periodStartFor(now),
@@ -410,6 +415,7 @@ export const platformFleetMonitorService = {
     return {
       organizationId,
       name: org.name,
+      internalBilling: org.internalBilling,
       facts,
       verdicts: classify(facts, now),
       byWorkload: fleet.census.byWorkload,

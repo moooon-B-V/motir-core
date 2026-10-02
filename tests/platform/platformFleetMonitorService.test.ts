@@ -146,7 +146,7 @@ const auditRows = () => adminDb.platformAuditLog.count();
 
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "fleet_machine_kill", "fleet_in_flight_slot", "ci_live_accrual", "ci_runner_provisioning_intent", "ci_period_charge", "ci_period_usage" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "fleet_machine_kill", "ci_period_usage", "fleet_in_flight_slot", "ci_live_accrual", "ci_runner_provisioning_intent", "ci_period_charge" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
   const staff = await createTestUser({ email: `ops+fleet${seq++}@moooon.net` });
