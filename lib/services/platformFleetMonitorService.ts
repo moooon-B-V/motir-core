@@ -189,6 +189,8 @@ export function classify(facts: FleetFacts, now: Date): FleetVerdict[] {
 /** What one organisation's gather produced: its facts plus the counts the row shows. */
 export interface FleetOrgReading {
   organizationId: string;
+  /** The org's name as its own row reads it; null when the row is gone. */
+  name: string | null;
   facts: FleetFacts;
   verdicts: FleetVerdict[];
   byWorkload: Record<FleetWorkloadKind, number>;
@@ -248,7 +250,7 @@ function toRow(
   const charge = reading.facts.charge;
   return {
     organizationId: reading.organizationId,
-    name: org?.name ?? null,
+    name: org?.name ?? reading.name,
     isMeta: org?.isMeta ?? reading.facts.isMeta,
     byWorkload: reading.byWorkload,
     poolUsed: reading.poolUsed,
@@ -341,11 +343,19 @@ export const platformFleetMonitorService = {
         census: await fleetCeilingService.orgCensus(organizationId, now, tx),
       };
     });
-    const org = await withOrgServiceWriteContext(organizationId, async (tx) => ({
-      // A missing row judges as charged — the safe direction, as the meters do.
-      isMeta: (await organizationRepository.findByIdInTx(organizationId, tx))?.isMeta ?? false,
-      charge: await ciPeriodChargeRepository.findForPeriod(organizationId, periodStartFor(now), tx),
-    }));
+    const org = await withOrgServiceWriteContext(organizationId, async (tx) => {
+      const row = await organizationRepository.findByIdInTx(organizationId, tx);
+      return {
+        name: row?.name ?? null,
+        // A missing row judges as charged — the safe direction, as the meters do.
+        isMeta: row?.isMeta ?? false,
+        charge: await ciPeriodChargeRepository.findForPeriod(
+          organizationId,
+          periodStartFor(now),
+          tx,
+        ),
+      };
+    });
     const pool = await fleetCeilingService.resolveOrgPool(organizationId);
 
     const oldestCiJobStartedAt = earliest(...fleet.inFlight.map((intent) => intent.startedAt));
@@ -384,6 +394,7 @@ export const platformFleetMonitorService = {
 
     return {
       organizationId,
+      name: org.name,
       facts,
       verdicts: classify(facts, now),
       byWorkload: fleet.census.byWorkload,
