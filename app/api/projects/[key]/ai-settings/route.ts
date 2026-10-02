@@ -65,7 +65,9 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
   // Forward only the PRESENT keys — the patch is partial by contract (an absent
   // field is left untouched), and the service owns every value check, so the
   // route stays a transport. `in` (not a truthiness test) so `false` / `0` /
-  // `null` are forwarded rather than dropped.
+  // `null` are forwarded rather than dropped. A key this route does not name is
+  // IGNORED, never a 400 — so a stale client still sending the retired planner
+  // model (MOTIR-7228) saves the rest of its patch.
   const raw = (body ?? {}) as Record<string, unknown>;
   const patch: UpdateProjectAiSettingsInput = {};
   if ('aiAutoPlanEnabled' in raw) {
@@ -79,9 +81,6 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
   }
   if ('aiSprintLengthDays' in raw) {
     patch.aiSprintLengthDays = raw.aiSprintLengthDays as number;
-  }
-  if ('aiPlannerModel' in raw) {
-    patch.aiPlannerModel = raw.aiPlannerModel as string | null;
   }
   if ('aiGenerateExplanations' in raw) {
     patch.aiGenerateExplanations = raw.aiGenerateExplanations as boolean;

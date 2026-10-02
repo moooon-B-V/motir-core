@@ -19,9 +19,9 @@ import {
 // anything. Both go through here, so a model can never appear in the picker and
 // then be refused by a second, differently-built check — or the reverse.
 //
-// ⚠️ THE LIST IS motir-ai's, AND NOTHING HERE KEEPS A COPY. The planning picker's
-// hard-coded copy (`lib/projectAiSettings/plannerModels.ts`) is the counter-
-// example §7 names: it went stale. So there is no constant list and NO CACHE —
+// ⚠️ THE LIST IS motir-ai's, AND NOTHING HERE KEEPS A COPY. A hard-coded copy is
+// the counter-example §7 names: the retired project planning picker kept one, and
+// it went stale (it was removed with the setting, MOTIR-7228). So there is no constant list and NO CACHE —
 // the start path must refuse a model withdrawn a minute ago, and a list stale
 // for even one TTL is exactly the window that would let it through.
 //

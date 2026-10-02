@@ -9,7 +9,7 @@ import { resolveRecordPlanningMistakes } from '@/lib/projectAiSettings/limits';
 /**
  * Map a project's AI-settings columns to a `ProjectAiSettingsDto`. Accepts the
  * full `Project` row OR the narrow `projectRepository.findAiSettings` projection
- * — both carry exactly these seven fields — so the read path can stay a
+ * — both carry exactly these six fields — so the read path can stay a
  * projection while the write path maps the updated row it already has.
  *
  * `aiRecordPlanningMistakes` is the one field that is TRANSFORMED rather than
@@ -22,7 +22,6 @@ export function toProjectAiSettingsDto(row: {
   aiAutoPlanThreshold: number;
   aiSprintPlanningEnabled: boolean;
   aiSprintLengthDays: number;
-  aiPlannerModel: string | null;
   aiGenerateExplanations: boolean;
   aiRecordPlanningMistakes: boolean | null;
 }): ProjectAiSettingsDto {
@@ -31,7 +30,6 @@ export function toProjectAiSettingsDto(row: {
     aiAutoPlanThreshold: row.aiAutoPlanThreshold,
     aiSprintPlanningEnabled: row.aiSprintPlanningEnabled,
     aiSprintLengthDays: row.aiSprintLengthDays,
-    aiPlannerModel: row.aiPlannerModel,
     aiGenerateExplanations: row.aiGenerateExplanations,
     aiRecordPlanningMistakes: resolveRecordPlanningMistakes(row.aiRecordPlanningMistakes),
   };

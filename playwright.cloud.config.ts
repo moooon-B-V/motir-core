@@ -85,6 +85,9 @@ const CODE_HEALTH_FIXTURE = path.join(__dirname, 'out', 'e2e-code-health-fixture
 // the library's three screens are all SERVER rendered, so `page.route` reaches
 // none of them and the spec seeds through this file instead.
 const LESSONS_FIXTURE = path.join(__dirname, 'out', 'e2e-lessons-fixture.json');
+// The console's AI PLANNING page (MOTIR-7231) — server rendered with a Server
+// Action write, so the spec seeds and reads back through this file.
+const PLANNER_MODEL_FIXTURE = path.join(__dirname, 'out', 'e2e-planner-model-fixture.json');
 const MOTIR_GITHUB_CONTROL_PATH = path.resolve('/tmp/motir-cloud-github-control.json');
 const MOTIR_GITHUB_JOURNAL_PATH = path.resolve('/tmp/motir-cloud-github-journal.jsonl');
 process.env['MOTIR_GITHUB_CONTROL_PATH'] ??= MOTIR_GITHUB_CONTROL_PATH;
@@ -254,6 +257,8 @@ export default defineConfig({
         MOTIR_AI_CODE_HEALTH_FIXTURE_PATH: CODE_HEALTH_FIXTURE,
         E2E_TEST_LESSONS: '1',
         MOTIR_AI_LESSONS_FIXTURE_PATH: LESSONS_FIXTURE,
+        E2E_TEST_PLANNER_MODEL: '1',
+        MOTIR_AI_PLANNER_MODEL_FIXTURE_PATH: PLANNER_MODEL_FIXTURE,
         E2E_TEST_GITHUB_REPOS: '1',
         MOTIR_GITHUB_CONTROL_PATH,
         MOTIR_GITHUB_JOURNAL_PATH,

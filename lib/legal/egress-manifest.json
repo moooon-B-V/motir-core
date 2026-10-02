@@ -85,7 +85,7 @@
       "vendor": "DeepSeek",
       "basis": "not-evidenced-here",
       "evidence": [],
-      "reason": "reached THROUGH the gateway; motir-core names only the model IDS (lib/projectAiSettings/plannerModels.ts), never a host or an SDK"
+      "reason": "reached THROUGH the gateway; motir-core names no DeepSeek model id either: the planner model is a motir-ai platform setting, and hosted-run ids come from motir-ai's GET /v1/agent-models"
     },
     {
       "vendor": "Anthropic",

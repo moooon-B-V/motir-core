@@ -93,6 +93,19 @@ export const PLATFORM_AUDIT_ACTIONS = {
    * their offsets are history, not state.
    */
   'org.internal_billing_unset': { reason: 'required' },
+  /**
+   * The platform PLANNING MODEL for one audience was changed (Story MOTIR-7220 ·
+   * MOTIR-7227) — which model plans for every customer org, the meta org or the
+   * internal orgs, from the next planning job on.
+   *
+   * `required`, at the `superadmin` degree of ADR §7: it changes what every
+   * organization in the audience is planned WITH, and so what each is charged
+   * per turn. Target is `platform` with the audience as `targetId`, because the
+   * setting belongs to no single tenant; `metadata` carries
+   * `{ audience, fromModel, toModel }`. The domain is `ai` — the SUBJECT is the
+   * planner, not the console screen.
+   */
+  'ai.planner_model.set': { reason: 'required' },
 } as const satisfies Record<string, { reason: PlatformAuditReasonPolicy }>;
 
 /**

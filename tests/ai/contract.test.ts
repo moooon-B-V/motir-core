@@ -39,6 +39,11 @@ const CANONICAL_ERROR_CODES = [
   // order because an unrecognised code falls to `errorFromProblem`'s status-class
   // branch, and 500 already yields `MotirAiUnavailableError`.
   'ai_job_abandoned',
+  // `model_unreachable` (Story MOTIR-7220 — motir-ai MOTIR-7236, this side
+  // MOTIR-7227): a planner-model save refused because its one-token probe failed.
+  // 422, so the status-class fallback already made it a bad request; it is named
+  // in `errorFromProblem` so nobody reads it as retryable.
+  'model_unreachable',
   'internal_error',
 ] as const;
 
@@ -106,6 +111,7 @@ const EXPECTED_MAPPING: Record<string, new (...args: never[]) => MotirAiError> =
   rate_limited: MotirAiUnavailableError,
   out_of_credits: MotirAiOutOfCreditsError, // 402 → its own typed error (the 8.1.8 paywall)
   ai_job_failed: MotirAiUnavailableError,
+  model_unreachable: MotirAiBadRequestError, // 422 — a different model or a gateway fix, never a retry
   ai_job_abandoned: MotirAiUnavailableError, // 500 — same class as ai_job_failed; the DISCRIMINATION is the code, not the type
   internal_error: MotirAiUnavailableError,
 };
