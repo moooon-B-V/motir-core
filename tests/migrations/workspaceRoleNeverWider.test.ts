@@ -69,15 +69,17 @@ const PUBLIC_SET_AT_MIGRATION = [
  * constants are asserted to be exactly the literal plus these, and the SQL copy
  * of the resolver is compared with the TypeScript one minus these.
  * MOTIR-6872 — `instance:use` (agent instances), granted to member and above.
+ * MOTIR-7277 — `page:view` (every built-in) and `page:edit` (member and above).
  */
 const KEYS_ADDED_AFTER_MIGRATION = {
-  gated: ['instance:use'],
-  member: ['instance:use'],
-  viewer: [] as string[],
+  gated: ['instance:use', 'page:view', 'page:edit'],
+  member: ['instance:use', 'page:view', 'page:edit'],
+  viewer: ['page:view'],
 };
 const ADDED_AFTER = new Set([
   ...KEYS_ADDED_AFTER_MIGRATION.gated,
   ...KEYS_ADDED_AFTER_MIGRATION.member,
+  ...KEYS_ADDED_AFTER_MIGRATION.viewer,
 ]);
 
 const implicitSnapshot = JSON.parse(
@@ -119,10 +121,11 @@ describe('the literal sets', () => {
     // migration ran with the public set as it stood before the Visitor role
     // (MOTIR-6642) added `approval:view_any` and `report:view`; the migration is
     // not rewritten, so its literal is pinned to that set and the live constant
-    // is asserted to be exactly it plus those two.
+    // is asserted to be exactly it plus those two — and MOTIR-7277's `page:view`,
+    // which the Visitor takes from the Viewer set.
     expect(literal('public')).toEqual(sorted(PUBLIC_SET_AT_MIGRATION));
     expect(sorted(PUBLIC_PROJECT_PERMISSIONS)).toEqual(
-      sorted([...PUBLIC_SET_AT_MIGRATION, 'approval:view_any', 'report:view']),
+      sorted([...PUBLIC_SET_AT_MIGRATION, 'approval:view_any', 'report:view', 'page:view']),
     );
   });
 

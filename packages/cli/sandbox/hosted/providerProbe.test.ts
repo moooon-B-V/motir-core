@@ -14,12 +14,14 @@ import { startProbeGateway } from './providerProbeGateway.mjs';
 //
 // The REAL OpenCode, configured ONLY by what the CLI ships (`hostedAgentEnv` →
 // `OPENCODE_CONFIG_CONTENT` = the egress contract's §2 document), runs one turn
-// on a DeepSeek model and on an Anthropic model against a stub gateway, and the
+// on each enabled provider's model — DeepSeek, GLM (`z-ai`), Qwen and Anthropic
+// (MOTIR-7244 added the middle two) — against a stub gateway, and the
 // stub records what arrived. `smoke.test.ts` drives a FAKE OpenCode, so it cannot
 // see a provider OpenCode fails to load; this is the check that can.
 //
 // What each run must show (motir-gateway `docs/hosted-run-egress.md` §2–§3):
-//   - `deepseek/<id>` → `POST /v1/chat/completions` carrying `Authorization: Bearer <run key>`;
+//   - `deepseek/<id>`, `z-ai/<id>`, `qwen/<id>` → `POST /v1/chat/completions` carrying
+//     `Authorization: Bearer <run key>`;
 //   - `anthropic/<id>` → `POST /v1/messages` carrying `x-api-key: <run key>`;
 //   - no request on any other route, and the run exits 0.
 //
@@ -52,6 +54,22 @@ const PROVIDERS = [
   {
     model: 'deepseek/deepseek-v4-pro',
     bare: 'deepseek-v4-pro',
+    route: '/v1/chat/completions',
+    credentialOf: (r: ProbeRequest) => r.authorization,
+    credential: `Bearer ${RUN_KEY}`,
+  },
+  // GLM and Qwen (MOTIR-7244): CUSTOM providers on `@ai-sdk/openai-compatible`,
+  // loadable only because the CLI writes the run's model into their block.
+  {
+    model: 'z-ai/glm-4.6',
+    bare: 'glm-4.6',
+    route: '/v1/chat/completions',
+    credentialOf: (r: ProbeRequest) => r.authorization,
+    credential: `Bearer ${RUN_KEY}`,
+  },
+  {
+    model: 'qwen/qwen-plus',
+    bare: 'qwen-plus',
     route: '/v1/chat/completions',
     credentialOf: (r: ProbeRequest) => r.authorization,
     credential: `Bearer ${RUN_KEY}`,
@@ -132,6 +150,8 @@ describe.skipIf(!OPENCODE_BIN)('provider probe — PROCESS (OPENCODE_BIN)', () =
           HOME: home,
           MOTIR_GATEWAY_URL: url,
           MOTIR_RUN_KEY: RUN_KEY,
+          // The run's model, which the CLI writes into a custom provider's block.
+          MOTIR_MODEL: provider.model,
         });
         const run = await runAsync(OPENCODE_BIN!, ['run', '--model', provider.model, PROMPT], {
           cwd: project,
@@ -203,6 +223,7 @@ describe.skipIf(!IMAGE)('provider probe — IMAGE (MOTIR_HOSTED_AGENT_IMAGE, off
         HOME: '/home/node',
         MOTIR_GATEWAY_URL: `http://${gateway}:8080`,
         MOTIR_RUN_KEY: RUN_KEY,
+        MOTIR_MODEL: provider.model,
       });
       const envArgs = Object.entries(env).flatMap(([k, v]) => ['-e', `${k}=${v ?? ''}`]);
       const run = docker(

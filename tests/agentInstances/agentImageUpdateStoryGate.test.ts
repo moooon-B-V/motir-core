@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { WorkspaceContext } from '@/lib/workspaces';
-import { fakeDigestFor, imageCatalogSeam } from '@/lib/agentInstances/imageCatalog';
+import { fakeDigestFor, imageCatalog, imageCatalogSeam } from '@/lib/agentInstances/imageCatalog';
 import { pinnedImageReference } from '@/lib/agentInstances/imageDigest';
 import { sandboxImageTag } from '@/lib/agentInstances/profiles';
 import { agentInstanceLifecycleService as lifecycle } from '@/lib/services/agentInstanceLifecycleService';
@@ -209,6 +209,48 @@ describe('3 · the guards', () => {
     // Raced (a conflict), or arrived after the first settled (already newest): both legitimate.
     expect(['agent_instance_state_conflict', 'agent_instance_up_to_date']).toContain(refused.code);
     expect(await record(a.id)).toMatchObject({ state: 'running', imageDigest: NEW_DIGEST });
+  });
+
+  it('a press that read the agent before an earlier update settled is refused, not run a second time (MOTIR-7340)', async () => {
+    const a = await agentOnOld();
+    // The interleaving a loaded runner produces by chance, pinned: press B reads
+    // the agent on 0.4.0, then press A runs start to finish, then B carries on
+    // from its stale read. Only the catalog read is held; the rest is real.
+    const newestFor = imageCatalog.newestFor.bind(imageCatalog);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let entered!: () => void;
+    const bHasRead = new Promise<void>((resolve) => (entered = resolve));
+    let calls = 0;
+    const spy = vi.spyOn(imageCatalog, 'newestFor').mockImplementation(async (...args) => {
+      calls += 1;
+      if (calls === 1) {
+        entered();
+        await held;
+      }
+      return newestFor(...args);
+    });
+    try {
+      const b = updateRoute.POST(post(a.id, 'update'), idParams(a.id));
+      await bHasRead;
+      const first = await updateRoute.POST(post(a.id, 'update'), idParams(a.id));
+      expect(first.status).toBe(200);
+      expect(await record(a.id)).toMatchObject({ state: 'running', imageDigest: NEW_DIGEST });
+      const settledAt = (await record(a.id)).stateChangedAt;
+
+      release();
+      const second = await b;
+      expect(second.status).toBe(409);
+      expect(((await second.json()) as { code: string }).code).toBe('agent_instance_up_to_date');
+      // B moved nothing: no second `updating`, the agent where A left it.
+      expect(await record(a.id)).toMatchObject({
+        state: 'running',
+        imageDigest: NEW_DIGEST,
+        stateChangedAt: settledAt,
+      });
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('update racing hibernate: one wins, the loser is refused, and the agent is never left mid-update', async () => {

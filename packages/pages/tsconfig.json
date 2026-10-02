@@ -16,7 +16,8 @@
   // mapping back.
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
@@ -37,5 +38,12 @@
     "outDir": "../../.tsout/packages/pages",
     "tsBuildInfoFile": "../../.tsout/packages/pages/tsconfig.tsbuildinfo"
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "tsup.config.ts", "vitest.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "test/**/*.ts",
+    "test/**/*.tsx",
+    "tsup.config.ts",
+    "vitest.config.ts"
+  ]
 }

@@ -63,7 +63,7 @@ const MAX_ARGV_PROMPT_BYTES = 100 * 1024;
  */
 export const EGRESS_DOCUMENT = {
   $schema: 'https://opencode.ai/config.json',
-  enabled_providers: ['anthropic', 'deepseek'],
+  enabled_providers: ['anthropic', 'deepseek', 'z-ai', 'qwen'],
   provider: {
     anthropic: {
       options: {
@@ -72,6 +72,20 @@ export const EGRESS_DOCUMENT = {
       },
     },
     deepseek: {
+      options: {
+        baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
+        apiKey: '{env:MOTIR_RUN_KEY}',
+      },
+    },
+    'z-ai': {
+      npm: '@ai-sdk/openai-compatible',
+      options: {
+        baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
+        apiKey: '{env:MOTIR_RUN_KEY}',
+      },
+    },
+    qwen: {
+      npm: '@ai-sdk/openai-compatible',
       options: {
         baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
         apiKey: '{env:MOTIR_RUN_KEY}',
@@ -89,9 +103,27 @@ export const EGRESS_DOCUMENT = {
  */
 export const HOSTED_MODEL_PROVIDERS: readonly string[] = EGRESS_DOCUMENT.enabled_providers;
 
-/** The egress contract's document, as OpenCode reads it (`OPENCODE_CONFIG_CONTENT`). */
-export function egressConfig(): string {
-  return JSON.stringify(EGRESS_DOCUMENT);
+/**
+ * The egress contract's document, as OpenCode reads it (`OPENCODE_CONFIG_CONTENT`).
+ *
+ * ⚠️ For a CUSTOM provider (one whose block names its own `npm` package — `z-ai`
+ * and `qwen`) the contract's document is a TEMPLATE: at OpenCode `1.18.32` a model
+ * under such a provider resolves only when its block declares it, and a block with
+ * no `models` is dropped altogether (egress contract §2, MOTIR-7243). So the run's
+ * ONE model is written into its provider's `models` here, and nothing else is.
+ * `anthropic` and `deepseek` take their models from the catalog bundled in the
+ * binary, so for them — and with no model — this is the static document verbatim.
+ */
+export function egressConfig(model?: string): string {
+  const slash = model ? model.indexOf('/') : -1;
+  const provider = slash > 0 ? model!.slice(0, slash) : '';
+  const id = slash > 0 ? model!.slice(slash + 1) : '';
+  const block = (EGRESS_DOCUMENT.provider as Record<string, object>)[provider];
+  if (!block || !('npm' in block) || !id) return JSON.stringify(EGRESS_DOCUMENT);
+  return JSON.stringify({
+    ...EGRESS_DOCUMENT,
+    provider: { ...EGRESS_DOCUMENT.provider, [provider]: { ...block, models: { [id]: {} } } },
+  });
 }
 
 /**
@@ -101,7 +133,7 @@ export function egressConfig(): string {
 export function hostedAgentEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const source: NodeJS.ProcessEnv = {
     ...env,
-    OPENCODE_CONFIG_CONTENT: egressConfig(),
+    OPENCODE_CONFIG_CONTENT: egressConfig(env[HOSTED_MODEL_ENV]?.trim()),
     OPENCODE_DISABLE_AUTOUPDATE: 'true',
     OPENCODE_DISABLE_MODELS_FETCH: 'true',
     OPENCODE_DISABLE_CLAUDE_CODE: 'true',

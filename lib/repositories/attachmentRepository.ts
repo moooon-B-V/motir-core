@@ -164,6 +164,15 @@ export const attachmentRepository = {
   },
 
   /**
+   * File one row under a PAGE (Story MOTIR-5752 · MOTIR-7279) — a page image is
+   * owned from upload, so the orphan sweep never takes it. A page never unlinks
+   * its images on save: an older version restored later may still name one.
+   */
+  async linkToPage(id: string, pageId: string, tx: Prisma.TransactionClient): Promise<Attachment> {
+    return tx.attachment.update({ where: { id }, data: { pageId } });
+  },
+
+  /**
    * Unlink rows from their issue (a body edit de-referenced them, 5.2.3) —
    * the row survives, GC-eligible (5.2.7). `source` is kept as-is: it records
    * how the row entered, not whether it is currently linked. Empty input is a
@@ -237,7 +246,10 @@ export const attachmentRepository = {
   ): Promise<Attachment[]> {
     const { olderThan, take = 200, cursor } = options;
     return tx.attachment.findMany({
-      where: { workItemId: null, createdAt: { lt: olderThan } },
+      // ⚠️ OWNED BY NEITHER a work item NOR a page (MOTIR-7279). A page image
+      // carries no work item, so the pre-page predicate would delete every one of
+      // them, blob first, a week after it was pasted.
+      where: { workItemId: null, pageId: null, createdAt: { lt: olderThan } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),

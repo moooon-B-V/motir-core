@@ -71,6 +71,8 @@ const MANAGER: readonly PermissionKey[] = [
   'lesson:reinforce',
   'lesson:view',
   'member:manage',
+  'page:edit',
+  'page:view',
   'plan:view_any',
   'project:administer',
   'project:browse',
@@ -99,6 +101,8 @@ const MEMBER: readonly PermissionKey[] = [
   'attachment:create',
   'comment:add',
   'instance:use',
+  'page:edit',
+  'page:view',
   'plan:view_any',
   'project:browse',
   'report:view',
@@ -113,6 +117,8 @@ const MEMBER: readonly PermissionKey[] = [
 /** A Viewer: reads, including every room's view-any key. */
 const VIEWER: readonly PermissionKey[] = [
   'approval:view_any',
+  // MOTIR-7277 — a viewer reads pages and writes none.
+  'page:view',
   'plan:view_any',
   'project:browse',
   'report:view',
@@ -135,6 +141,8 @@ const CUSTOM: readonly PermissionKey[] = [
 const PUBLIC: readonly PermissionKey[] = [
   // MOTIR-6642 — the Visitor holds the Viewer's view keys.
   'approval:view_any',
+  // MOTIR-7277 — and, through the Viewer set, `page:view` (pages ADR §5).
+  'page:view',
   'plan:view_any',
   'project:browse',
   'report:view',

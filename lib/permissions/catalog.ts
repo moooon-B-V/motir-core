@@ -151,6 +151,10 @@ export const PERMISSION_DOMAINS = [
   // an act on anybody's run, and folding it into `ai` or `work_item` would let a
   // workspace grant one without the other only by accident.
   'instance',
+  // Story MOTIR-5752 · MOTIR-7277 — a project's PAGES (`docs/decisions/pages.md`
+  // §5). Its own domain: a page is not a work item, and folding its keys into
+  // `work_item` would let a role edit pages only as a side effect of editing items.
+  'page',
   'public_request',
   'member',
   'board',
@@ -264,6 +268,11 @@ export const PERMISSIONS = [
   // this project (§8). It never grants another user's instance: every read and
   // operation is also owner-scoped, whatever keys the reader holds.
   'instance:use',
+  // Story MOTIR-5752 · MOTIR-7277 — reading and writing a project's pages
+  // (`docs/decisions/pages.md` §5). `page:delete` is NOT here: it arrives with
+  // MOTIR-5755, in the change that first asserts it.
+  'page:view',
+  'page:edit',
   'public_request:comment',
   'public_request:submit',
   'public_request:upvote',
@@ -389,6 +398,10 @@ const PERMISSION_META: Record<
   // `enforced` on arrival — the gate lands in the same change as the key:
   // `agentInstanceLifecycleService` asserts it on every instance operation.
   'instance:use': { domain: 'instance', enforcement: 'enforced' }, // MOTIR-6872
+  // `enforced` on arrival — `pagesService` asserts both through
+  // `projectAccessService.assertCanViewPages` / `assertCanEditPages`.
+  'page:view': { domain: 'page', enforcement: 'enforced' }, // MOTIR-7277
+  'page:edit': { domain: 'page', enforcement: 'enforced' }, // MOTIR-7277
   'public_request:comment': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:submit': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:upvote': { domain: 'public_request', enforcement: 'enforced' },

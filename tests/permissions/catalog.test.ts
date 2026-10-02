@@ -318,6 +318,12 @@ const SAVED_FILTER_ANY_ENFORCED: PermissionKey[] = ['saved_filter:manage_any'];
 const ROOM_VIEW_ENFORCED: PermissionKey[] = ['plan:view_any', 'run:view_any'];
 /** MOTIR-6872 — agent instances, enforced on arrival: `agentInstanceLifecycleService` asserts it. */
 const INSTANCE_ENFORCED: PermissionKey[] = ['instance:use'];
+/**
+ * MOTIR-7277 — a project's pages, enforced on arrival: `pagesService` asserts both
+ * through `projectAccessService.assertCanViewPages` / `assertCanEditPages`, which
+ * consult them via `canViewPages` / `canEditPages`.
+ */
+const PAGE_ENFORCED: PermissionKey[] = ['page:view', 'page:edit'];
 
 // ⚠️ `MERGE_GATE_ENFORCED` WAS HERE — MOTIR-4793's `work_item:merge_pull_request`,
 // the floor the `pull_request_merge` handler named. Bug MOTIR-5603 · MOTIR-5616
@@ -415,6 +421,16 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS.filter((k) => INSTANCE_ENFORCED.includes(k))).toEqual(
       INSTANCE_ENFORCED,
     );
+    // …and MOTIR-7277's two page keys.
+    expect(ENFORCED_PERMISSIONS.filter((k) => PAGE_ENFORCED.includes(k))).toEqual(PAGE_ENFORCED);
+    expect(PERMISSION_CATALOG['page:view']).toMatchObject({
+      domain: 'page',
+      enforcement: 'enforced',
+    });
+    expect(PERMISSION_CATALOG['page:edit']).toMatchObject({
+      domain: 'page',
+      enforcement: 'enforced',
+    });
     expect(ENFORCED_PERMISSIONS).toHaveLength(
       shipped.length +
         ADMINISTRATIVE_ENFORCED.length +
@@ -426,7 +442,8 @@ describe('enforcement — the seam that lets naming and wiring land separately',
         APPROVAL_ENFORCED.length +
         SAVED_FILTER_ANY_ENFORCED.length +
         ROOM_VIEW_ENFORCED.length +
-        INSTANCE_ENFORCED.length,
+        INSTANCE_ENFORCED.length +
+        PAGE_ENFORCED.length,
     );
   });
 

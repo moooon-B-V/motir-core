@@ -174,6 +174,8 @@ describe('the two RAILS stay above and below the custom set', () => {
         'plan:view_any',
         'run:view_any',
         'project:browse',
+        // MOTIR-7277 — the Viewer's `page:view`, through the Visitor set.
+        'page:view',
         'public_request:comment',
         'public_request:submit',
         'public_request:upvote',

@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   LayoutList,
   LogOut,
+  NotebookText,
   Plus,
   ShieldCheck,
   Sparkles,
@@ -295,6 +296,12 @@ export function AppCommandPalette({
         label: t('commandPalette.goToIssues'),
         icon: <CircleDot />,
         onSelect: () => go('/items'),
+      }),
+      ...offerNav('/pages', {
+        id: 'nav-pages',
+        label: t('commandPalette.goToPages'),
+        icon: <NotebookText />,
+        onSelect: () => go('/pages'),
       }),
       ...offerNav('/boards', {
         id: 'nav-boards',

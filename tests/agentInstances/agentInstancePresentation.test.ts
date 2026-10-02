@@ -15,10 +15,12 @@ describe('the row menu offers exactly the moves §4 allows', () => {
     ['running', ['delete', 'hibernate']],
     ['hibernated', ['delete', 'wake']],
     ['failed', ['delete', 'wake']],
-    ['starting', []],
-    ['hibernating', []],
-    ['waking', []],
+    // AMENDMENT 4 (MOTIR-7341): a boot or a stop that never settles is deletable.
+    ['starting', ['delete']],
+    ['hibernating', ['delete']],
+    ['waking', ['delete']],
     ['deleting', []],
+    ['updating', []],
   ] as const)('%s → %j', (state, moves) => {
     expect([...allowedAgentMoves(state)].sort()).toEqual([...moves]);
   });

@@ -445,6 +445,7 @@ describe('attachmentMappers.toAttachmentDto (the loud-failure contracts)', () =>
     workspaceId: 'ws_1',
     uploaderUserId: 'user_1',
     workItemId: 'wi_1',
+    pageId: null,
     source: 'panel',
     blobPathname: 'https://blob.example/x',
     mimeType: 'image/png',

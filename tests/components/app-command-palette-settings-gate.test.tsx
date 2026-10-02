@@ -146,3 +146,19 @@ describe('⌘K settings deep links follow the registry (MOTIR-2468)', () => {
     }
   });
 });
+
+// MOTIR-7300 — the Pages navigation rides the same nav map as the rail: offered
+// on `page:view`, and to nobody without it.
+describe('⌘K offers Pages exactly to a reader holding `page:view` (MOTIR-7300)', () => {
+  const goToPages = () => screen.queryByRole('option', { name: /Go to Pages/ });
+
+  it('a Viewer — who holds `page:view` — is offered Go to Pages', () => {
+    renderPalette([...BUILTIN_ROLE_PERMISSIONS.viewer]);
+    expect(goToPages()).not.toBeNull();
+  });
+
+  it('a reader without `page:view` is not', () => {
+    renderPalette([...BUILTIN_ROLE_PERMISSIONS.viewer].filter((k) => k !== 'page:view'));
+    expect(goToPages()).toBeNull();
+  });
+});

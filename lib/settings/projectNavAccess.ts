@@ -92,6 +92,13 @@ export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
     evidence: 'The page gates on `canBrowse` (6.4.6) and renders the no-access state below it.',
   },
   {
+    href: '/pages',
+    requires: 'page:view',
+    evidence:
+      'MOTIR-7277: every `pagesService` read asserts `page:view`; the page and the index answer ' +
+      '`notFound()` to a reader without it (`docs/decisions/pages.md`).',
+  },
+  {
     href: '/ready',
     requires: 'browse-only',
     evidence: '`workItemsService.listReady` / `countReady` assert no key past the browse gate.',
