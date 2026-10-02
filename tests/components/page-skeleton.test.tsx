@@ -248,8 +248,12 @@ describe('the primitive is token-only, and ships nothing that consumes it (MOTIR
     expect(CLASSES).toContain('rounded-(--radius-control)');
   });
 
-  it('ORDERING — no page under app/ imports or renders it in this PR', () => {
-    // This card ships the primitive and nothing that consumes it. The settings
+  it('ORDERING — the only page under app/ that renders it is the one that adopted it', () => {
+    // MOTIR-7280 is the first page consumer: `/pages/<id>`'s in-page frame is
+    // `PageSkeleton`, as `design/pages/design-notes.md` § State 11 draws it. The
+    // list is exact, so a further consumer is a deliberate edit here, not drift.
+    //
+    // Originally: this card ships the primitive and nothing that consumes it. The settings
     // family (MOTIR-3443) and whatever rebuilds `/items/[key]`'s frame wire it
     // in on their own branches; a test asserting a consumer's behaviour belongs
     // to that consumer's card, not this one.
@@ -262,6 +266,8 @@ describe('the primitive is token-only, and ships nothing that consumes it (MOTIR
       const src = readFileSync(f, 'utf8');
       return /^\s*import\b[^;]*\bPageSkeleton\b/m.test(src) || /<PageSkeleton[\s/>]/.test(src);
     });
-    expect(consumers.map((f) => relative(ROOT, f).split(sep).join('/'))).toEqual([]);
+    expect(consumers.map((f) => relative(ROOT, f).split(sep).join('/'))).toEqual([
+      'app/(authed)/pages/[pageId]/page.tsx',
+    ]);
   });
 });

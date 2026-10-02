@@ -11195,5 +11195,60 @@
       "carriedValueUnverified": "一个自称“{app}”、Motir尚未验证的应用——接下来你将选择工作区并批准。",
       "foot": "只有你登录的这个账号才能批准——也只能选择它所在的工作区。"
     }
+  },
+  "pages": {
+    "untitled": "无标题",
+    "page": {
+      "back": "页面",
+      "backLabel": "返回页面",
+      "titleLabel": "页面标题",
+      "titleTooLong": "标题过长——请控制在 {limit} 个字符以内。",
+      "renameFailed": "无法保存标题，请检查网络连接后重试。"
+    },
+    "editor": {
+      "bodyLabel": "页面正文",
+      "bodyPlaceholder": "开始写作。使用工具栏添加标题、列表、表格、代码和图片。",
+      "imageUploadFailed": "无法上传图片，请重试。",
+      "toolbar": {
+        "label": "格式",
+        "bold": "粗体",
+        "italic": "斜体",
+        "strike": "删除线",
+        "heading": "标题",
+        "quote": "引用",
+        "codeBlock": "代码块",
+        "bulletList": "项目符号列表",
+        "orderedList": "编号列表",
+        "taskList": "任务列表",
+        "link": "链接",
+        "linkPrompt": "链接地址",
+        "image": "插入图片",
+        "table": "插入表格"
+      },
+      "table": {
+        "addRow": "+ 行",
+        "addRowLabel": "在下方添加行",
+        "addColumn": "+ 列",
+        "addColumnLabel": "在右侧添加列",
+        "deleteRow": "− 行",
+        "deleteRowLabel": "删除行",
+        "deleteColumn": "− 列",
+        "deleteColumnLabel": "删除列",
+        "deleteTable": "删除表格"
+      },
+      "status": {
+        "saved": "已保存",
+        "saving": "正在保存…",
+        "offline": "离线——编辑已保留",
+        "offlineDetail": "上次保存未能送达 Motir。你的编辑保留在此标签页中，网络恢复后会立即发送——在显示“已保存”之前请保持此标签页打开。",
+        "tooLarge": "未保存"
+      },
+      "tooLarge": {
+        "title": "页面过大，无法保存",
+        "body": "自上次保存以来的编辑会使页面超过 2 MB 的上限，因此未被保存——此标签页之后的编辑也不会再保存。请先复制需要保留的内容，然后重新加载以回到上次保存的版本。如需腾出空间，可将较长的部分移到新页面，或删除大型表格和粘贴的文本。",
+        "reload": "重新加载已保存版本",
+        "newPageNewTab": "在新标签页中新建页面"
+      }
+    }
   }
 }
