@@ -269,6 +269,26 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //  kept only as the evidence that it fired once, and is itself deletable.
   //  It fired a second time for the Approval records room: MOTIR-5300 drew
   //  `/approvals` before MOTIR-5302 built the page, and that card removed the row.
+  // ── FORWARD-LOOKING: the planning-lessons console (MOTIR-1409) ─────────────
+  //  The design names the page's two addresses before MOTIR-1411 builds them.
+  //  These rows DELETE THEMSELVES the way the approvals rows above did: when
+  //  `app/(admin)/admin/planning-lessons/page.tsx` and its `[id]` page land, the
+  //  stale-entry arm goes red in that pull request, which removes them.
+  {
+    file: 'design/platform-admin/console--planning-lessons.mock.html',
+    address: '/admin/planning-lessons',
+    why: 'Forward-looking: MOTIR-1411 builds the page this mock draws. Remove when it lands.',
+  },
+  {
+    file: 'design/platform-admin/design-notes.md',
+    address: '/admin/planning-lessons',
+    why: 'Forward-looking: MOTIR-1411 builds the page the Planning lessons amendment specifies. Remove when it lands.',
+  },
+  {
+    file: 'design/platform-admin/design-notes.md',
+    address: '/admin/planning-lessons/[id]',
+    why: 'Forward-looking: MOTIR-1411 builds the lesson detail page the amendment specifies. Remove when it lands.',
+  },
   // ── An address named as HISTORY, by the asset that retires it ─────────────
   // `design/code-context/design-notes.md` (MOTIR-1764) documents a collapse:
   // Code health, the code index and Git were three things in two rail sections
