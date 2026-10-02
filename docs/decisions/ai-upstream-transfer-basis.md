@@ -25,6 +25,9 @@
   places. The amendment directly below is the whole change. The original text is
   kept and struck in place, because the reasoning trail is the point of a decision
   record.
+- **EXTENDED 2026-10-02 (MOTIR-4332):** §2 gains dated rows for **Z.ai (GLM)**
+  and **Alibaba Cloud Model Studio, Frankfurt (Qwen)**, transcribed from the
+  legal card MOTIR-7192. No decision in §3 changes.
 
 > Convention per `work-item-type-taxonomy.md`: **Status → Context → Decision →
 > Consequences**, load-bearing facts pinned in explicit tables.
@@ -307,6 +310,55 @@ is the definition of systematic.
 > the gate (Art. 46(2)(c) SCCs reach any third country), the real gap is DeepSeek's
 > missing Art. 28 processing agreement, and the regulators acted against DeepSeek's
 > consumer app, not against API callers. See the amendment at the top of this record.
+
+### Added 2026-10-02 (MOTIR-4332): Z.ai (GLM) and Alibaba Cloud Model Studio, Frankfurt (Qwen)
+
+Both rows are transcribed field for field from the dated readings commented on
+the legal card **MOTIR-7192**, read 2026-10-02 as moooon B.V. (controller and
+exporter). A **basis** is two recorded facts, an Art. 28 agreement AND an Art.
+46/45 mechanism (`motir-gateway` `motir/residency/residency.go`), and the verdict
+column is that card's verdict, unparaphrased.
+
+| Upstream                                                   | Vendor and jurisdiction                                                                                                                                              | Endpoint                                        | Art. 28 instrument                                                                                                                                                                                                                                  | Chapter V mechanism                                                                                                                                                                                                                             | Filed at                                                                  | Verdict                                                       | Read on    |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------- |
+| **Z.ai (GLM)**                                             | JINGSHENG HENGXING TECHNOLOGY PTE.LTD (Z.ai), **Singapore**                                                                                                          | `https://api.z.ai`                              | _"Data Processing Addendum for API Services"_, inside the Z.ai Privacy Policy (last updated 2025-09-29), incorporated into the Additional Terms for API Services §2(a); accepted by use on 2026-10-02 by Zhu Yue (Google sign-in, no click-through) | **NONE.** DPA §3(b) says only _"legally recognized transfer mechanisms"_; no SCCs are named, and Singapore has no adequacy decision                                                                                                             | `https://docs.z.ai/legal-agreement/privacy-policy`                        | **no basis — served in default only, outside transfer-basis** | 2026-10-02 |
+| **Alibaba Cloud Model Studio, Germany (Frankfurt) (Qwen)** | Intelligent Cloud Computing (Singapore) Private Limited (Alibaba Cloud international edition, `alibabacloud.com`; entity as shown in the account console), Singapore | `https://235341.eu-central-1.maas.aliyuncs.com` | _"EEA Data Processing Addendum"_ (last updated 2023-08-02), which _"forms part of Your Membership Agreement"_ (§1); accepted on 2026-10-02 by Zhu Yue at account registration                                                                       | **No transfer — EU-resident.** Workspace `235341` in `eu-central-1` with deployment scope **EU** (_"Service deployment scope: Determines the inference execution location"_); the DPA's §2 references the 2021/914 SCCs for any onward transfer | the Alibaba Cloud account; `alibabacloud.com/help/en/legal/latest/ae8upq` | **basis recorded**                                            | 2026-10-02 |
+
+Training and retention, as each vendor's international documents state them
+(the full quotes are on MOTIR-7192):
+
+- **Z.ai:** API content is not used _"to develop or improve Services, unless you
+  explicitly agree"_ (Additional Terms §3(b), a sentence Z.ai prints in square
+  brackets), and is _"processed in real-time … and is not saved on our servers"_
+  (DPA §4(b)).
+- **Alibaba:** _"never uses your data for model training"_ (Model Studio FAQ);
+  retention of API calls is **not stated**.
+
+**Why these endpoints and not the mainland ones.**
+
+- **Z.ai:** the earlier Zhipu reading (_"no Art. 28 agreement on offer"_,
+  2026-08-27) was taken from `open.bigmodel.cn`, the mainland platform, which by
+  the **MOTIR-6258** precedent requires a PRC-registered company and so is not one
+  Motir can use. `api.z.ai` is the international platform moooon B.V. holds an
+  account on, and the platform this row reads.
+- **Alibaba:** the account is on `alibabacloud.com` (international), not
+  `aliyun.com`, and the endpoint is the Frankfurt workspace URL in the form
+  Alibaba's _Regions and endpoints_ page gives
+  (`https://<WorkspaceId>.eu-central-1.maas.aliyuncs.com`,
+  `alibabacloud.com/help/en/model-studio/regions`). That is the EU-resident
+  inference the public subprocessor page already promises.
+
+**What each verdict means for routing.** **Z.ai's _no basis_ does not switch
+GLM off.** The channel is **served**: enabled in the gateway's `default` group
+and kept out of `transfer-basis`, the treatment DeepSeek has under **MOTIR-3665**
+(the amendment at the top), chosen for these two upstreams by the hosted-agent
+epic's decision **MOTIR-7242** on 2026-10-01. A caller that needs a basis
+excludes it per request. Qwen's _basis recorded_ puts the Frankfurt channel in
+both `default` and `transfer-basis`.
+
+**Who reaches them.** For both vendors: **the hosted planner**, when a caller
+asks for a GLM or Qwen model, and **hosted agent runs**, when a person picks one
+for a run or a project's per-level default names one (`hosted-agent-run.md` §7).
 
 ---
 
