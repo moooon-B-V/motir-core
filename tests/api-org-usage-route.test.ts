@@ -120,6 +120,46 @@ describe('GET /api/organizations/[orgId]/usage', () => {
     expect(project.id).toBeTruthy();
   });
 
+  it('200 — carries NO model id, even when motir-ai still reports them (MOTIR-7229)', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    getOrgUsageMock.mockResolvedValue(
+      rawResponse({
+        recentRuns: {
+          runs: [
+            {
+              jobId: 'job_run_1',
+              jobKind: 'plan',
+              model: 'claude-opus-4-8',
+              coreWorkspaceId: workspace.id,
+              coreProjectId: project.id,
+              inputTokens: 100,
+              outputTokens: 50,
+              credits: 7,
+              startedAt: '2026-09-05T14:22:00.000Z',
+            },
+          ],
+          page: 1,
+          pageSize: 10,
+          total: 1,
+        },
+      }),
+    );
+
+    signInAs(owner);
+    const { req, ctx } = usageReq(workspace.organizationId, '?scope=org');
+    const res = await GET(req, ctx);
+
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    const body = JSON.parse(text) as { perModel?: unknown; recentRuns: { runs: object[] } };
+    // Which model planned is a platform setting, never an organization's fact.
+    expect(body).not.toHaveProperty('perModel');
+    expect(body.recentRuns.runs).toHaveLength(1);
+    expect(body.recentRuns.runs[0]).not.toHaveProperty('model');
+    expect(text).not.toContain('claude-opus-4-8');
+  });
+
   it('200 — serializes the SEARCH blocks through the route (MOTIR-4555)', async () => {
     const { workspace, owner } = await createTestWorkspace();
     await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });

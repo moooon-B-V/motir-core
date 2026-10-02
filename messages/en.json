@@ -5962,7 +5962,7 @@
   },
   "aiUsage": {
     "title": "Usage & cost",
-    "subtitle": "Token cost for the {org} organization — credits spent planning across all its workspaces. Credits are a usage allotment shared across every model.",
+    "subtitle": "Token cost for the {org} organization — credits spent planning across all its workspaces.",
     "breadcrumb": "Organization · {org} · Usage & cost",
     "summary": {
       "balance": "Credit balance",
@@ -5996,22 +5996,10 @@
       "workspaceLevel": "Workspace",
       "projectLevel": "Project",
       "orgSegment": "{org} (org)",
-      "note": "Drilling re-scopes every panel — the balance share, the per-model breakdown and the run log — to the active level.",
+      "note": "Drilling re-scopes every panel — the balance share and the run log — to the active level.",
       "pickWorkspace": "Workspace",
       "pickProject": "Project",
       "backToOrg": "Back to org total"
-    },
-    "byModel": {
-      "title": "By model",
-      "subtitle": "Where the org's credits went this month, per model. Tokens drive the credit cost; a costlier model debits more per token.",
-      "model": "Model",
-      "tokensIn": "Tokens in",
-      "tokensOut": "Tokens out",
-      "share": "Share of credits",
-      "credits": "Credits",
-      "foot": "{in} tokens in · {out} out",
-      "footCredits": "{n} credits",
-      "count": "{n} models"
     },
     "activity": {
       "title": "Recent activity",
@@ -6021,7 +6009,6 @@
       "scopeNote": "Scope: {scope}",
       "when": "When",
       "run": "Run",
-      "model": "Model",
       "tokens": "Tokens",
       "credits": "Credits",
       "kindPlan": "Planning",
@@ -6036,7 +6023,6 @@
       "next": "Next",
       "unknownProject": "Unknown project",
       "webSearch": "Web search",
-      "noModel": "No model",
       "noTokens": "No tokens"
     },
     "member": {
@@ -6064,7 +6050,7 @@
     },
     "states": {
       "emptyTitle": "No usage yet",
-      "emptyDescription": "Once your team runs the AI planner, every run's credit cost shows up here — broken down by workspace, project and model.",
+      "emptyDescription": "Once your team runs the AI planner, every run's credit cost shows up here — broken down by workspace and project.",
       "openPlanner": "Open the planner",
       "errorTitle": "Couldn't load usage",
       "errorDescription": "Something went wrong fetching this organization's usage. The figures are temporarily unavailable — your credits are safe.",

@@ -5962,7 +5962,7 @@
   },
   "aiUsage": {
     "title": "用量与费用",
-    "subtitle": "{org} 组织的 Token 费用 —— 跨所有工作区在规划中消耗的额度。额度是所有模型共享的用量配额。",
+    "subtitle": "{org} 组织的 Token 费用 —— 跨所有工作区在规划中消耗的额度。",
     "breadcrumb": "组织 · {org} · 用量与费用",
     "summary": {
       "balance": "额度余额",
@@ -5996,22 +5996,10 @@
       "workspaceLevel": "工作区",
       "projectLevel": "项目",
       "orgSegment": "{org}（组织）",
-      "note": "下钻会将每个面板 —— 余额占比、按模型明细与运行记录 —— 重新限定到当前层级。",
+      "note": "下钻会将每个面板 —— 余额占比与运行记录 —— 重新限定到当前层级。",
       "pickWorkspace": "工作区",
       "pickProject": "项目",
       "backToOrg": "返回组织总计"
-    },
-    "byModel": {
-      "title": "按模型",
-      "subtitle": "本月组织的额度按模型的去向。Token 决定额度成本；更贵的模型每 token 扣减更多。",
-      "model": "模型",
-      "tokensIn": "输入 Token",
-      "tokensOut": "输出 Token",
-      "share": "额度占比",
-      "credits": "额度",
-      "foot": "输入 {in} token · 输出 {out}",
-      "footCredits": "{n} 额度",
-      "count": "{n} 个模型"
     },
     "activity": {
       "title": "近期活动",
@@ -6021,7 +6009,6 @@
       "scopeNote": "范围：{scope}",
       "when": "时间",
       "run": "运行",
-      "model": "模型",
       "tokens": "Token",
       "credits": "额度",
       "kindPlan": "规划",
@@ -6036,7 +6023,6 @@
       "next": "下一页",
       "unknownProject": "未知项目",
       "webSearch": "网页搜索",
-      "noModel": "无模型",
       "noTokens": "无 token"
     },
     "member": {
@@ -6064,7 +6050,7 @@
     },
     "states": {
       "emptyTitle": "暂无用量",
-      "emptyDescription": "当你的团队运行 AI 规划器后，每次运行的额度费用都会显示在这里 —— 按工作区、项目和模型细分。",
+      "emptyDescription": "当你的团队运行 AI 规划器后，每次运行的额度费用都会显示在这里 —— 按工作区和项目细分。",
       "openPlanner": "打开规划器",
       "errorTitle": "无法加载用量",
       "errorDescription": "获取该组织用量时出错。数据暂时不可用 —— 你的额度是安全的。",

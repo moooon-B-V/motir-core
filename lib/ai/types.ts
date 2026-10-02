@@ -666,6 +666,13 @@ export interface RawUsageResponse {
   totalSpend: number;
   monthSpend: number;
   monthlyHistory: { yearMonth: string; credits: number }[];
+  /**
+   * Still on the WIRE, and deliberately NOT forwarded to a tenant (Story
+   * MOTIR-7220 · MOTIR-7229): `aiUsageService` drops it, and each run's `model`,
+   * at the `UsageDTO` boundary, because the planning model is a platform setting
+   * no tenant sees. Kept here because motir-ai sends it and the redaction is
+   * core's read-boundary decision, not a wire change.
+   */
   perModel: { model: string; inputTokens: number; outputTokens: number; credits: number }[];
   recentRuns: { runs: RawUsageRun[]; page: number; pageSize: number; total: number };
   /**

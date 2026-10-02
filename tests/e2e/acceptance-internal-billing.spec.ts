@@ -224,8 +224,9 @@ test('an internal org is classified by staff, and then bills like a customer', a
     // dashboard around it with real figures. ONE hold for the panel, not two:
     // the figures arrive together and a viewer reads them together.
     await expect(page.getByText(/of this month.s .* allotment remaining/).first()).toBeVisible();
-    await expect(page.getByText(enMessages.aiUsage.byModel.title).first()).toBeVisible();
-    await expect(page.getByText('claude-opus-4-8').first()).toBeVisible();
+    // MOTIR-7229 retired the per-model panel: the fixture still reports a
+    // breakdown, and no model id reaches the page.
+    await expect(page.getByText('claude-opus-4-8')).toHaveCount(0);
     await expect(page.getByText(sum.searchThisMonth).first()).toBeVisible();
     await beat();
   });
