@@ -82,14 +82,18 @@ describe('every built-in role that browses holds the three view-any keys', () =>
         'ai:decide_plan',
         // MOTIR-6872 — a member runs their own agent instances.
         'instance:use',
+        // MOTIR-7277 — a member reads and writes the project's pages.
+        'page:view',
+        'page:edit',
         ...ROOM_VIEW_KEYS,
       ].sort(),
     );
   });
 
-  it('viewer is EXACTLY browse, reports and the three view-any keys', () => {
+  it('viewer is EXACTLY browse, reports, the three view-any keys and page:view', () => {
+    // MOTIR-7277 — `page:view` is a read; the viewer takes no `page:edit`.
     expect([...BUILTIN_ROLE_PERMISSIONS.viewer].sort()).toEqual(
-      ['project:browse', 'report:view', ...ROOM_VIEW_KEYS].sort(),
+      ['project:browse', 'report:view', ...ROOM_VIEW_KEYS, 'page:view'].sort(),
     );
   });
 
@@ -114,6 +118,8 @@ describe('the implicit grant gains exactly the Plans and Runs view keys', () => 
         'approval:view_any',
         'plan:view_any',
         'run:view_any',
+        // MOTIR-7277 — the Viewer's `page:view`, which the Visitor derives.
+        'page:view',
         'public_request:submit',
         'public_request:upvote',
         'public_request:comment',

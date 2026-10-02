@@ -1,0 +1,2000 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Pages — the section and its index (MOTIR-7271)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE PAGES SECTION: the rail row and the index.
+      Story MOTIR-5752, design subtask MOTIR-7271. Gates MOTIR-7300 (the section,
+      its rail row and New page). Its sibling page.mock.html draws the page itself
+      (MOTIR-7275, MOTIR-7280).
+
+      A REDRAW. The first version put New page in the /items toolbar; Yue refused
+      it on 2026-10-02 ("pages should not be in /items, it should have its own
+      page" — and: "page will have its own nav item in the sidebar, but pages and
+      items share the same folder system ... we don't need to show them in the
+      same tree yet"). So nothing here touches /items: Pages is its own primary
+      rail row and its own index.
+
+      Composes, does not invent: the rail is components/ui/Sidebar's row grammar
+      in SidebarNav.tsx's real order; the header is every authed page's serif h1;
+      the empty state is the design system's EmptyState; the frame is
+      PageSkeleton. Colour is --el-* only, shape is the element shape tokens.
+
+      Panels: 1 the access path · 2 populated (member) · 3 empty (member, viewer)
+      · 4 populated (viewer) · 5 loading. Each in light and dark; zh where marked.
+      Spec, copy and keys: design-notes.md.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — values copied from
+         packages/design-system/theme.css (base palette, default style). ───── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        --color-accent: #ff64c8;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --focus-ring-width: 2px;
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      /* The Tier-3 layer is declared on EVERY themed scope, not on :root alone.
+         A custom property's var() is substituted where it is DECLARED, so an
+         --el-* declared only on :root would compute against the light palette
+         and a nested data-theme="dark" board would inherit the light value
+         (tests/design-dark-parity.test.ts, MOTIR-3592). */
+      :root,
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-identifier: var(--color-slate);
+
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-muted: var(--color-muted);
+        --el-card: var(--color-background);
+
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning: var(--color-warning);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success: var(--color-success);
+
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-mint: var(--color-tint-mint);
+
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-text-subtitle: var(--color-slate);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+
+        --focus-ring-color: var(--color-primary);
+      }
+      /* theme.css's dark-only lifts (MOTIR-3745 accent ink; the sidebar hover). */
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+      }
+    </style>
+    <style>
+      /* ── Board chrome (the review sheet, NOT part of the design) ────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        font-family: var(--font-sans);
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .pg-sheet {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 40px;
+      }
+      .pg-sheetHead h1 {
+        font-family: var(--font-serif);
+        font-size: 1.75rem;
+        font-weight: 600;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .pg-sheetHead p {
+        margin: 6px 0 0;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 880px;
+      }
+      .pg-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .pg-panelTitle {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pg-panelNum {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pg-panelNote {
+        margin: 0;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 960px;
+      }
+      .pg-boards {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .pg-board {
+        padding: 16px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        color: var(--el-text);
+      }
+      .pg-boardTag {
+        margin: 0 0 10px;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── The authed shell, cut down to the two things these states touch:
+         the rail (components/ui/Sidebar) and <main>. ───────────────────── */
+      .pg-app {
+        display: grid;
+        grid-template-columns: 224px minmax(0, 1fr);
+        min-height: 360px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      /* Sidebar.tsx — `bg-(--el-sidebar-bg) border-r border-(--el-sidebar-border) px-3 py-3`. */
+      .pg-rail {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 12px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+      }
+      /* SidebarRow, expanded: `h-(--height-control) gap-3 rounded-(--radius-control)
+         px-(--spacing-control-x) text-sm text-(--el-text-secondary)`; the glyph is
+         18px in `--el-icon-muted`. */
+      .pg-railRow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid transparent;
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .pg-railRow svg {
+        flex: none;
+        width: 18px;
+        height: 18px;
+        color: var(--el-icon-muted);
+      }
+      /* The active row: `bg-(--el-sidebar-item-bg-active) font-medium text-(--el-text)
+         shadow-(--shadow-subtle) border border-(--el-sidebar-border)`; the glyph
+         turns `--el-icon-active`. */
+      .pg-railRow[aria-current='page'] {
+        background: var(--el-sidebar-item-bg-active);
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .pg-railRow[aria-current='page'] svg {
+        color: var(--el-icon-active);
+      }
+      .pg-railElided {
+        padding: 6px var(--spacing-control-x);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .pg-main {
+        padding: 24px 32px 32px;
+        background: var(--el-page-bg);
+        min-width: 0;
+      }
+
+      /* ── Button (packages/design-system Button) ──────────────────────────── */
+      .pg-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        border-radius: var(--radius-btn);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+        text-decoration: none;
+      }
+      .pg-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .pg-btnPrimary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+    </style>
+    <style>
+      /* ── Panel 1: the access path, drawn as rails side by side ─────────── */
+      .pg-railSet {
+        display: grid;
+        grid-template-columns: repeat(3, 240px);
+        gap: 20px;
+        align-items: start;
+      }
+      .pg-railCaption {
+        margin: 0 0 8px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .pg-railSet .pg-rail {
+        border: 1px solid var(--el-sidebar-border);
+        border-radius: var(--radius-card);
+      }
+      /* Board annotation only: marks the ONE row this card adds. Not shipped. */
+      .pg-isNew {
+        outline: 2px dashed var(--el-highlight);
+        outline-offset: 2px;
+      }
+
+      /* ── The page header — every authed page's `<h1 className="font-serif
+         text-2xl font-semibold">` plus its optional subtitle. ───────────── */
+      .pg-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .pg-h1 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 1.5rem;
+        line-height: 2rem;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pg-sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── The list — a Card-framed list of row links (the TableShell frame:
+         a rounded bordered wrapper, soft rules between rows). ────────────── */
+      .pg-list {
+        list-style: none;
+        margin: 24px 0 0;
+        padding: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        overflow: hidden;
+      }
+      .pg-list li + li {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .pg-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px var(--spacing-card-padding);
+        text-decoration: none;
+        color: var(--el-text);
+      }
+      .pg-row svg {
+        flex: none;
+        width: 18px;
+        height: 18px;
+        color: var(--el-icon-muted);
+      }
+      /* Drawn hovered, as a CLASS so the resting ink guard measures it: the row
+         tint is --el-surface-soft, under which both inks still clear AA. */
+      .pg-rowHover {
+        background: var(--el-surface-soft);
+      }
+      .pg-rowText {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .pg-rowTitle {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .pg-rowUntitled {
+        font-style: italic;
+        color: var(--el-text-secondary);
+      }
+      .pg-rowMeta {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── EmptyState (packages/design-system): a Card, centred; glyph in
+         --el-icon-muted, serif title, --el-text-subtitle description. ────── */
+      .pg-empty {
+        margin-top: 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 40px var(--spacing-card-padding);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+      }
+      .pg-empty > svg {
+        width: 48px;
+        height: 48px;
+        margin-bottom: var(--spacing-md);
+        color: var(--el-icon-muted);
+      }
+      .pg-emptyTitle {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 1.25rem;
+        font-weight: 400;
+        color: var(--el-text);
+      }
+      .pg-emptyDesc {
+        margin: var(--spacing-sm) 0 0;
+        max-width: 42ch;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-subtitle);
+      }
+      .pg-emptyAction {
+        margin-top: var(--spacing-md);
+      }
+
+      /* ── The pending New page button — Button's own disabled + Spinner. ── */
+      .pg-btnPending {
+        opacity: 0.6;
+      }
+      .pg-strip {
+        margin-top: 20px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding-top: 16px;
+        border-top: 1px dashed var(--el-border);
+      }
+      .pg-stripNote {
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── PageSkeleton's Block: `rounded-(--radius-control) bg-(--el-muted)`. */
+      .pg-block {
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .pg-blockGlyph {
+        flex: none;
+        width: 18px;
+        height: 18px;
+      }
+      .pg-blockTitle {
+        height: 14px;
+        width: 260px;
+      }
+      .pg-blockMeta {
+        height: 10px;
+        width: 180px;
+      }
+      .pg-srOnly {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+      <symbol
+        id="i-house"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
+        <path
+          d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+        />
+      </symbol>
+      <symbol
+        id="i-circle-dot"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <circle cx="12" cy="12" r="1" />
+      </symbol>
+      <symbol
+        id="i-notebook"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M2 6h4" />
+        <path d="M2 10h4" />
+        <path d="M2 14h4" />
+        <path d="M2 18h4" />
+        <rect width="16" height="20" x="4" y="2" rx="2" />
+        <path d="M9.5 8h5" />
+        <path d="M9.5 12H16" />
+        <path d="M9.5 16H14" />
+      </symbol>
+      <symbol
+        id="i-circle-play"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"
+        />
+        <circle cx="12" cy="12" r="10" />
+      </symbol>
+      <symbol
+        id="i-waypoints"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m10.586 5.414-5.172 5.172" />
+        <path d="m18.586 13.414-5.172 5.172" />
+        <path d="M6 12h12" />
+        <circle cx="12" cy="20" r="2" />
+        <circle cx="12" cy="4" r="2" />
+        <circle cx="20" cy="12" r="2" />
+        <circle cx="4" cy="12" r="2" />
+      </symbol>
+      <symbol
+        id="i-square-terminal"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m7 11 2-2-2-2" />
+        <path d="M11 13h4" />
+        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+      </symbol>
+      <symbol
+        id="i-columns"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="M9 3v18" />
+        <path d="M15 3v18" />
+      </symbol>
+      <symbol
+        id="i-map"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"
+        />
+        <path d="M15 5.764v15" />
+        <path d="M9 3.236v15" />
+      </symbol>
+      <symbol
+        id="i-sparkles"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+        />
+        <path d="M20 2v4" />
+        <path d="M22 4h-4" />
+        <circle cx="4" cy="20" r="2" />
+      </symbol>
+      <symbol
+        id="i-layout-list"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="7" height="7" x="3" y="3" rx="1" />
+        <rect width="7" height="7" x="3" y="14" rx="1" />
+        <path d="M14 4h7" />
+        <path d="M14 9h7" />
+        <path d="M14 15h7" />
+        <path d="M14 20h7" />
+      </symbol>
+      <symbol
+        id="i-layout-dashboard"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="7" height="9" x="3" y="3" rx="1" />
+        <rect width="7" height="5" x="14" y="3" rx="1" />
+        <rect width="7" height="9" x="14" y="12" rx="1" />
+        <rect width="7" height="5" x="3" y="16" rx="1" />
+      </symbol>
+      <symbol
+        id="i-inbox"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+        <path
+          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+        />
+      </symbol>
+      <symbol
+        id="i-chart"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+        <path d="M18 17V9" />
+        <path d="M13 17V5" />
+        <path d="M8 17v-3" />
+      </symbol>
+      <symbol
+        id="i-stamp"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-6 0c0 2 1 2 1 3.5V13" />
+        <path
+          d="M20 15.5a2.5 2.5 0 0 0-2.5-2.5h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1z"
+        />
+        <path d="M5 22h14" />
+      </symbol>
+      <symbol
+        id="i-code"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m16 18 6-6-6-6" />
+        <path d="m8 6-6 6 6 6" />
+      </symbol>
+      <symbol
+        id="i-plus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 12h14" />
+        <path d="M12 5v14" />
+      </symbol>
+      <symbol
+        id="i-loader"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+      </symbol>
+    </svg>
+    <div class="pg-sheet">
+      <div class="pg-sheetHead">
+        <h1>Pages — the section and its index</h1>
+        <p>
+          MOTIR-7271 for Story MOTIR-5752. A project’s pages get their own primary row in the rail
+          and their own index. They will share the project’s folder system with work items
+          (MOTIR-5753), but this story shows them in neither the <code>/items</code> tree nor its
+          toolbar.
+        </p>
+      </div>
+      <section class="pg-panel">
+        <h2 class="pg-panelTitle">
+          <span class="pg-panelNum">1</span>THE ACCESS PATH — a Pages row in the rail, directly
+          under Work Items.
+        </h2>
+        <p class="pg-panelNote">
+          <strong>Position: directly after Work Items.</strong> Work Items are the work; Pages are
+          what is written about it. The two are the only surfaces that will share the project’s
+          folder system (the tree is MOTIR-5753’s), so they sit together, and Pages lands above the
+          run surfaces (Ready, Runs, My agents) rather than among them. It is a primary row because
+          every top-level project view is one — the convention <code>SidebarNav.tsx</code> records
+          row by row.
+        </p>
+        <p class="pg-panelNote">
+          <strong>Glyph: <code>NotebookText</code>.</strong> Unused anywhere in the app.
+          <code>FileText</code>, the obvious choice, is already the <code>content</code> work-item
+          TYPE glyph (<code>lib/issues/workItemTypeMeta.ts</code>) and the plan-page destination
+          tag; once pages and work items share one tree, a page row with the content-type glyph
+          would read as a content work item. The rail’s own glyphs are all taken by peers (House,
+          CircleDot, CirclePlay, Waypoints, SquareTerminal, Columns3, Map, Sparkles, LayoutList,
+          LayoutDashboard, Inbox, BarChart3, Stamp, Code; History for Resume onboarding), and
+          <code>BookOpen</code> is the Help menu’s Docs.
+        </p>
+        <p class="pg-panelNote">
+          <strong>Registered, not only rendered.</strong> <code>PROJECT_NAV_ACCESS</code> gains
+          <code>{ href: '/pages', requires: 'page:view' }</code>; without the row
+          <code>canOfferNavDestination</code> answers false and the row silently disappears. A
+          reader without <code>page:view</code> gets no row and the rows below close up — no
+          disabled row, no gap (third rail). The ⌘K Go-to list reads the same map, so it offers
+          Pages under the same rule.
+        </p>
+        <div class="pg-boards">
+          <div class="pg-board" data-theme="light">
+            <p class="pg-boardTag">Light · en — full rail</p>
+            <div class="pg-railSet">
+              <div>
+                <p class="pg-railCaption">
+                  On <code>/items</code>. The new row (outlined for review only) under Work Items.
+                </p>
+                <nav class="pg-rail" aria-label="Project navigation">
+                  <a class="pg-railRow" href="/workbench"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                    >Workbench</a
+                  ><a class="pg-railRow" href="/items" aria-current="page"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                    >Work Items</a
+                  ><a class="pg-railRow pg-isNew" href="/pages"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                    >Pages</a
+                  ><a class="pg-railRow" href="/ready"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                    >Ready</a
+                  ><a class="pg-railRow" href="/runs"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                    >Runs</a
+                  ><a class="pg-railRow" href="/my-agents"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-square-terminal" /></svg
+                    >My agents</a
+                  ><a class="pg-railRow" href="/boards"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-columns" /></svg
+                    >Boards</a
+                  ><a class="pg-railRow" href="/roadmap"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-map" /></svg
+                    >Roadmap</a
+                  ><a class="pg-railRow" href="/plans"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sparkles" /></svg
+                    >Plans</a
+                  ><a class="pg-railRow" href="/backlog"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-layout-list" /></svg
+                    >Backlog</a
+                  ><a class="pg-railRow" href="/dashboard"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-layout-dashboard" /></svg
+                    >Dashboard</a
+                  ><a class="pg-railRow" href="/triage"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-inbox" /></svg
+                    >Triage</a
+                  ><a class="pg-railRow" href="/reports"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chart" /></svg
+                    >Reports</a
+                  ><a class="pg-railRow" href="/approvals"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-stamp" /></svg
+                    >Approval records</a
+                  ><a class="pg-railRow" href="/code"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-code" /></svg
+                    >Codebase</a
+                  >
+                </nav>
+              </div>
+              <div>
+                <p class="pg-railCaption">
+                  On <code>/pages</code> and on any <code>/pages/{id}</code> — the row is active for
+                  the whole subtree.
+                </p>
+                <nav class="pg-rail" aria-label="Project navigation">
+                  <a class="pg-railRow" href="/workbench"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                    >Workbench</a
+                  ><a class="pg-railRow" href="/items"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                    >Work Items</a
+                  ><a class="pg-railRow" href="/pages" aria-current="page"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                    >Pages</a
+                  ><a class="pg-railRow" href="/ready"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                    >Ready</a
+                  ><a class="pg-railRow" href="/runs"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                    >Runs</a
+                  ><a class="pg-railRow" href="/my-agents"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-square-terminal" /></svg
+                    >My agents</a
+                  ><a class="pg-railRow" href="/boards"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-columns" /></svg
+                    >Boards</a
+                  ><a class="pg-railRow" href="/roadmap"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-map" /></svg
+                    >Roadmap</a
+                  ><a class="pg-railRow" href="/plans"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sparkles" /></svg
+                    >Plans</a
+                  ><a class="pg-railRow" href="/backlog"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-layout-list" /></svg
+                    >Backlog</a
+                  ><a class="pg-railRow" href="/dashboard"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-layout-dashboard" /></svg
+                    >Dashboard</a
+                  ><a class="pg-railRow" href="/triage"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-inbox" /></svg
+                    >Triage</a
+                  ><a class="pg-railRow" href="/reports"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chart" /></svg
+                    >Reports</a
+                  ><a class="pg-railRow" href="/approvals"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-stamp" /></svg
+                    >Approval records</a
+                  ><a class="pg-railRow" href="/code"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-code" /></svg
+                    >Codebase</a
+                  >
+                </nav>
+              </div>
+              <div>
+                <p class="pg-railCaption">
+                  A reader without <code>page:view</code>: no row; Ready moves up.
+                </p>
+                <nav class="pg-rail" aria-label="Project navigation">
+                  <a class="pg-railRow" href="/workbench"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                    >Workbench</a
+                  ><a class="pg-railRow" href="/items" aria-current="page"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                    >Work Items</a
+                  ><a class="pg-railRow" href="/ready"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                    >Ready</a
+                  ><a class="pg-railRow" href="/runs"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                    >Runs</a
+                  ><a class="pg-railRow" href="/my-agents"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-square-terminal" /></svg
+                    >My agents</a
+                  ><a class="pg-railRow" href="/boards"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-columns" /></svg
+                    >Boards</a
+                  ><a class="pg-railRow" href="/roadmap"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-map" /></svg
+                    >Roadmap</a
+                  ><a class="pg-railRow" href="/plans"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sparkles" /></svg
+                    >Plans</a
+                  ><a class="pg-railRow" href="/backlog"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-layout-list" /></svg
+                    >Backlog</a
+                  ><a class="pg-railRow" href="/dashboard"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-layout-dashboard" /></svg
+                    >Dashboard</a
+                  ><a class="pg-railRow" href="/triage"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-inbox" /></svg
+                    >Triage</a
+                  ><a class="pg-railRow" href="/reports"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chart" /></svg
+                    >Reports</a
+                  ><a class="pg-railRow" href="/approvals"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-stamp" /></svg
+                    >Approval records</a
+                  ><a class="pg-railRow" href="/code"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-code" /></svg
+                    >Codebase</a
+                  >
+                </nav>
+              </div>
+            </div>
+          </div>
+          <div class="pg-board" data-theme="dark" lang="zh">
+            <p class="pg-boardTag">Dark · zh — full rail</p>
+            <div class="pg-railSet">
+              <div>
+                <p class="pg-railCaption">
+                  在工作项页面：新行位于“工作项”下方（虚线框仅用于评审）。
+                </p>
+                <nav class="pg-rail" aria-label="项目导航">
+                  <a class="pg-railRow" href="/workbench"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                    >工作台</a
+                  ><a class="pg-railRow" href="/items" aria-current="page"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                    >工作项</a
+                  ><a class="pg-railRow pg-isNew" href="/pages"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                    >页面</a
+                  ><a class="pg-railRow" href="/ready"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                    >就绪</a
+                  ><a class="pg-railRow" href="/runs"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                    >运行</a
+                  ><a class="pg-railRow" href="/my-agents"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-square-terminal" /></svg
+                    >我的智能体</a
+                  ><a class="pg-railRow" href="/boards"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-columns" /></svg
+                    >面板</a
+                  ><a class="pg-railRow" href="/roadmap"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-map" /></svg
+                    >路线图</a
+                  ><a class="pg-railRow" href="/plans"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sparkles" /></svg
+                    >计划</a
+                  ><a class="pg-railRow" href="/backlog"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-layout-list" /></svg
+                    >待办列表</a
+                  ><a class="pg-railRow" href="/dashboard"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-layout-dashboard" /></svg
+                    >仪表盘</a
+                  ><a class="pg-railRow" href="/triage"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-inbox" /></svg
+                    >分诊</a
+                  ><a class="pg-railRow" href="/reports"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chart" /></svg
+                    >报表</a
+                  ><a class="pg-railRow" href="/approvals"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-stamp" /></svg
+                    >审批记录</a
+                  ><a class="pg-railRow" href="/code"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-code" /></svg
+                    >代码库</a
+                  >
+                </nav>
+              </div>
+              <div>
+                <p class="pg-railCaption">在页面索引及任一页面上：该行处于激活状态。</p>
+                <nav class="pg-rail" aria-label="项目导航">
+                  <a class="pg-railRow" href="/workbench"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                    >工作台</a
+                  ><a class="pg-railRow" href="/items"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                    >工作项</a
+                  ><a class="pg-railRow" href="/pages" aria-current="page"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                    >页面</a
+                  ><a class="pg-railRow" href="/ready"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                    >就绪</a
+                  ><a class="pg-railRow" href="/runs"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                    >运行</a
+                  ><a class="pg-railRow" href="/my-agents"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-square-terminal" /></svg
+                    >我的智能体</a
+                  ><a class="pg-railRow" href="/boards"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-columns" /></svg
+                    >面板</a
+                  ><a class="pg-railRow" href="/roadmap"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-map" /></svg
+                    >路线图</a
+                  ><a class="pg-railRow" href="/plans"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sparkles" /></svg
+                    >计划</a
+                  ><a class="pg-railRow" href="/backlog"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-layout-list" /></svg
+                    >待办列表</a
+                  ><a class="pg-railRow" href="/dashboard"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-layout-dashboard" /></svg
+                    >仪表盘</a
+                  ><a class="pg-railRow" href="/triage"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-inbox" /></svg
+                    >分诊</a
+                  ><a class="pg-railRow" href="/reports"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chart" /></svg
+                    >报表</a
+                  ><a class="pg-railRow" href="/approvals"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-stamp" /></svg
+                    >审批记录</a
+                  ><a class="pg-railRow" href="/code"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-code" /></svg
+                    >代码库</a
+                  >
+                </nav>
+              </div>
+              <div>
+                <p class="pg-railCaption">没有 page:view 权限的读者：没有该行。</p>
+                <nav class="pg-rail" aria-label="项目导航">
+                  <a class="pg-railRow" href="/workbench"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                    >工作台</a
+                  ><a class="pg-railRow" href="/items" aria-current="page"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                    >工作项</a
+                  ><a class="pg-railRow" href="/ready"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                    >就绪</a
+                  ><a class="pg-railRow" href="/runs"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                    >运行</a
+                  ><a class="pg-railRow" href="/my-agents"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-square-terminal" /></svg
+                    >我的智能体</a
+                  ><a class="pg-railRow" href="/boards"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-columns" /></svg
+                    >面板</a
+                  ><a class="pg-railRow" href="/roadmap"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-map" /></svg
+                    >路线图</a
+                  ><a class="pg-railRow" href="/plans"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sparkles" /></svg
+                    >计划</a
+                  ><a class="pg-railRow" href="/backlog"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-layout-list" /></svg
+                    >待办列表</a
+                  ><a class="pg-railRow" href="/dashboard"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-layout-dashboard" /></svg
+                    >仪表盘</a
+                  ><a class="pg-railRow" href="/triage"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-inbox" /></svg
+                    >分诊</a
+                  ><a class="pg-railRow" href="/reports"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chart" /></svg
+                    >报表</a
+                  ><a class="pg-railRow" href="/approvals"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-stamp" /></svg
+                    >审批记录</a
+                  ><a class="pg-railRow" href="/code"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-code" /></svg
+                    >代码库</a
+                  >
+                </nav>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pg-panel">
+        <h2 class="pg-panelTitle">
+          <span class="pg-panelNum">2</span>THE INDEX, populated — a member (holds
+          <code>page:edit</code>).
+        </h2>
+        <p class="pg-panelNote">
+          The heading, the subtitle and <strong>New page</strong> in the header, where every authed
+          page puts its primary action. The project’s pages, newest edit first, as a flat list — the
+          tree, sub-pages and folders are MOTIR-5753’s. Each row is ONE link to the page: the
+          NotebookText glyph, the title (or <em>Untitled</em>, in italic secondary ink, so a blank
+          page is still a findable row), and <em>Edited &lt;relative time&gt; by &lt;name&gt;</em> —
+          “by you” when the last editor is the reader. A long title truncates on one line; the full
+          title is the page’s own heading.
+        </p>
+        <p class="pg-panelNote">
+          The third row is drawn hovered (<code>--el-surface-soft</code>). Below the list: what
+          <strong>New page</strong> looks like while its POST is in flight. It creates an empty page
+          at the project root and moves to it; there is no dialog and no title prompt, because the
+          title is the first thing the page itself asks for (panel 6 of
+          <code>page.mock.html</code>).
+        </p>
+        <div class="pg-boards">
+          <div class="pg-board" data-theme="light">
+            <p class="pg-boardTag">Light · en</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-head">
+                  <div>
+                    <h1 class="pg-h1">Pages</h1>
+                    <p class="pg-sub">
+                      Specs, runbooks and notes for this project — most recently edited first.
+                    </p>
+                  </div>
+                  <button class="pg-btn pg-btnPrimary" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus" /></svg>New page
+                  </button>
+                </div>
+                <ul class="pg-list" aria-label="Pages in this project">
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">Release runbook — v2.4</span
+                        ><span class="pg-rowMeta">Edited 2 minutes ago by Mia Chen</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle pg-rowUntitled">Untitled</span
+                        ><span class="pg-rowMeta">Edited 14 minutes ago by you</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row pg-rowHover" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">迁移计划：工作区设置</span
+                        ><span class="pg-rowMeta">Edited 1 hour ago by Zhu Yue</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">API rate-limit design notes</span
+                        ><span class="pg-rowMeta">Edited yesterday by Arjun Patel</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle"
+                          >Onboarding checklist for new contributors — what to read first, who to
+                          ask, and where the staging credentials live</span
+                        ><span class="pg-rowMeta">Edited 2 weeks ago by Lena Fischer</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">Incident 2026-09-14: webhook backlog</span
+                        ><span class="pg-rowMeta">Edited 3 weeks ago by Mia Chen</span></span
+                      ></a
+                    >
+                  </li>
+                </ul>
+                <div class="pg-strip">
+                  <button class="pg-btn pg-btnPrimary pg-btnPending" type="button" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-loader" /></svg
+                    >Creating page…
+                  </button>
+                  <p class="pg-stripNote">
+                    After New page is pressed: the button disables with the spinner until the POST
+                    returns and the browser moves to the new page.
+                  </p>
+                </div>
+              </main>
+            </div>
+          </div>
+          <div class="pg-board" data-theme="dark" lang="zh">
+            <p class="pg-boardTag">Dark · zh</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="项目导航">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >工作台</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >工作项</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >页面</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >就绪</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >运行</a
+                >
+                <p class="pg-railElided">…其余主导航行不变</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-head">
+                  <div>
+                    <h1 class="pg-h1">页面</h1>
+                    <p class="pg-sub">此项目的规格说明、运行手册和笔记——最近编辑的排在最前。</p>
+                  </div>
+                  <button class="pg-btn pg-btnPrimary" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus" /></svg>新建页面
+                  </button>
+                </div>
+                <ul class="pg-list" aria-label="此项目中的页面">
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">Release runbook — v2.4</span
+                        ><span class="pg-rowMeta">陈米娅于2分钟前编辑</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle pg-rowUntitled">无标题</span
+                        ><span class="pg-rowMeta">你于14分钟前编辑</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row pg-rowHover" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">迁移计划：工作区设置</span
+                        ><span class="pg-rowMeta">朱越于1小时前编辑</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">API rate-limit design notes</span
+                        ><span class="pg-rowMeta">Arjun Patel于昨天编辑</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle"
+                          >Onboarding checklist for new contributors — what to read first, who to
+                          ask, and where the staging credentials live</span
+                        ><span class="pg-rowMeta">Lena Fischer于2周前编辑</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">Incident 2026-09-14: webhook backlog</span
+                        ><span class="pg-rowMeta">陈米娅于3周前编辑</span></span
+                      ></a
+                    >
+                  </li>
+                </ul>
+                <div class="pg-strip">
+                  <button class="pg-btn pg-btnPrimary pg-btnPending" type="button" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-loader" /></svg
+                    >正在创建页面…
+                  </button>
+                  <p class="pg-stripNote">
+                    按下“新建页面”后：按钮停用并显示加载图标，直到 POST 返回并跳转到新页面。
+                  </p>
+                </div>
+              </main>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pg-panel">
+        <h2 class="pg-panelTitle">
+          <span class="pg-panelNum">3</span>THE INDEX, empty — the member variant and the viewer
+          variant.
+        </h2>
+        <p class="pg-panelNote">
+          The shipped <code>EmptyState</code>. For a member, <strong>New page</strong> is the call
+          to action and the header keeps its own New page — two doors to one action is what every
+          empty authed index does. For a viewer (no <code>page:edit</code>) there is no action
+          anywhere and the description says who writes pages, so an empty room does not read as a
+          broken one.
+        </p>
+        <div class="pg-boards">
+          <div class="pg-board" data-theme="light">
+            <p class="pg-boardTag">Light · en — member</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-head">
+                  <div>
+                    <h1 class="pg-h1">Pages</h1>
+                    <p class="pg-sub">
+                      Specs, runbooks and notes for this project — most recently edited first.
+                    </p>
+                  </div>
+                  <button class="pg-btn pg-btnPrimary" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus" /></svg>New page
+                  </button>
+                </div>
+                <div class="pg-empty">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg>
+                  <h2 class="pg-emptyTitle">No pages yet</h2>
+                  <p class="pg-emptyDesc">
+                    Write down a spec, a runbook or the notes from a meeting — it stays here, beside
+                    the project’s work.
+                  </p>
+                  <div class="pg-emptyAction">
+                    <button class="pg-btn pg-btnPrimary" type="button">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus" /></svg>New
+                      page
+                    </button>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+          <div class="pg-board" data-theme="dark">
+            <p class="pg-boardTag">Dark · en — member</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-head">
+                  <div>
+                    <h1 class="pg-h1">Pages</h1>
+                    <p class="pg-sub">
+                      Specs, runbooks and notes for this project — most recently edited first.
+                    </p>
+                  </div>
+                  <button class="pg-btn pg-btnPrimary" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus" /></svg>New page
+                  </button>
+                </div>
+                <div class="pg-empty">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg>
+                  <h2 class="pg-emptyTitle">No pages yet</h2>
+                  <p class="pg-emptyDesc">
+                    Write down a spec, a runbook or the notes from a meeting — it stays here, beside
+                    the project’s work.
+                  </p>
+                  <div class="pg-emptyAction">
+                    <button class="pg-btn pg-btnPrimary" type="button">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus" /></svg>New
+                      page
+                    </button>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+          <div class="pg-board" data-theme="light" lang="zh">
+            <p class="pg-boardTag">Light · zh — viewer</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="项目导航">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >工作台</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >工作项</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >页面</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >就绪</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >运行</a
+                >
+                <p class="pg-railElided">…其余主导航行不变</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-head">
+                  <div>
+                    <h1 class="pg-h1">页面</h1>
+                    <p class="pg-sub">此项目的规格说明、运行手册和笔记——最近编辑的排在最前。</p>
+                  </div>
+                </div>
+                <div class="pg-empty">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg>
+                  <h2 class="pg-emptyTitle">还没有页面</h2>
+                  <p class="pg-emptyDesc">当项目成员写下页面后，它会显示在这里。</p>
+                </div>
+              </main>
+            </div>
+          </div>
+          <div class="pg-board" data-theme="dark">
+            <p class="pg-boardTag">Dark · en — viewer</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-head">
+                  <div>
+                    <h1 class="pg-h1">Pages</h1>
+                    <p class="pg-sub">
+                      Specs, runbooks and notes for this project — most recently edited first.
+                    </p>
+                  </div>
+                </div>
+                <div class="pg-empty">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg>
+                  <h2 class="pg-emptyTitle">No pages yet</h2>
+                  <p class="pg-emptyDesc">
+                    When someone in this project writes a page, it appears here.
+                  </p>
+                </div>
+              </main>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pg-panel">
+        <h2 class="pg-panelTitle">
+          <span class="pg-panelNum">4</span>THE INDEX for a viewer, populated — no New page.
+        </h2>
+        <p class="pg-panelNote">
+          The same list, the same row links — a viewer holds <code>page:view</code> and opens every
+          page read-only (<code>page.mock.html</code> panel 10). The header simply has no button;
+          nothing is drawn disabled, because a disabled button is a promise the product then
+          refuses.
+        </p>
+        <div class="pg-boards">
+          <div class="pg-board" data-theme="light">
+            <p class="pg-boardTag">Light · en</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-head">
+                  <div>
+                    <h1 class="pg-h1">Pages</h1>
+                    <p class="pg-sub">
+                      Specs, runbooks and notes for this project — most recently edited first.
+                    </p>
+                  </div>
+                </div>
+                <ul class="pg-list" aria-label="Pages in this project">
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">Release runbook — v2.4</span
+                        ><span class="pg-rowMeta">Edited 2 minutes ago by Mia Chen</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle pg-rowUntitled">Untitled</span
+                        ><span class="pg-rowMeta">Edited 14 minutes ago by you</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">迁移计划：工作区设置</span
+                        ><span class="pg-rowMeta">Edited 1 hour ago by Zhu Yue</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">API rate-limit design notes</span
+                        ><span class="pg-rowMeta">Edited yesterday by Arjun Patel</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle"
+                          >Onboarding checklist for new contributors — what to read first, who to
+                          ask, and where the staging credentials live</span
+                        ><span class="pg-rowMeta">Edited 2 weeks ago by Lena Fischer</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">Incident 2026-09-14: webhook backlog</span
+                        ><span class="pg-rowMeta">Edited 3 weeks ago by Mia Chen</span></span
+                      ></a
+                    >
+                  </li>
+                </ul>
+              </main>
+            </div>
+          </div>
+          <div class="pg-board" data-theme="dark">
+            <p class="pg-boardTag">Dark · en</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-head">
+                  <div>
+                    <h1 class="pg-h1">Pages</h1>
+                    <p class="pg-sub">
+                      Specs, runbooks and notes for this project — most recently edited first.
+                    </p>
+                  </div>
+                </div>
+                <ul class="pg-list" aria-label="Pages in this project">
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">Release runbook — v2.4</span
+                        ><span class="pg-rowMeta">Edited 2 minutes ago by Mia Chen</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle pg-rowUntitled">Untitled</span
+                        ><span class="pg-rowMeta">Edited 14 minutes ago by you</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">迁移计划：工作区设置</span
+                        ><span class="pg-rowMeta">Edited 1 hour ago by Zhu Yue</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">API rate-limit design notes</span
+                        ><span class="pg-rowMeta">Edited yesterday by Arjun Patel</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle"
+                          >Onboarding checklist for new contributors — what to read first, who to
+                          ask, and where the staging credentials live</span
+                        ><span class="pg-rowMeta">Edited 2 weeks ago by Lena Fischer</span></span
+                      ></a
+                    >
+                  </li>
+                  <li>
+                    <a class="pg-row" href="/pages/{id}"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                      ><span class="pg-rowText"
+                        ><span class="pg-rowTitle">Incident 2026-09-14: webhook backlog</span
+                        ><span class="pg-rowMeta">Edited 3 weeks ago by Mia Chen</span></span
+                      ></a
+                    >
+                  </li>
+                </ul>
+              </main>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pg-panel">
+        <h2 class="pg-panelTitle">
+          <span class="pg-panelNum">5</span>THE INDEX loading — an in-page frame while the list
+          resolves.
+        </h2>
+        <p class="pg-panelNote">
+          <code>PageSkeleton</code> with a REAL header: the heading and subtitle are static strings
+          and New page depends only on the permission the gate has already read, so they paint from
+          above the boundary and are not drawn as bars. The body is five row-shaped blocks (glyph,
+          title, meta) inside the same Card frame, so the list settles in place with no vertical
+          shift. It is an in-page <code>&lt;Suspense&gt;</code> placed after the gate, never a
+          <code>loading.tsx</code> (<code>design/shell/design-notes.md</code> § The
+          navigation-pending grammar). Announced once as “Loading page”; the blocks are
+          <code>aria-hidden</code>.
+        </p>
+        <div class="pg-boards">
+          <div class="pg-board" data-theme="light">
+            <p class="pg-boardTag">Light · en</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div aria-busy="true">
+                  <span class="pg-srOnly">Loading page</span>
+                  <div class="pg-head">
+                    <div>
+                      <h1 class="pg-h1">Pages</h1>
+                      <p class="pg-sub">
+                        Specs, runbooks and notes for this project — most recently edited first.
+                      </p>
+                    </div>
+                    <button class="pg-btn pg-btnPrimary" type="button">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus" /></svg>New
+                      page
+                    </button>
+                  </div>
+                  <ul class="pg-list" aria-hidden="true">
+                    <li>
+                      <span class="pg-row"
+                        ><span class="pg-block pg-blockGlyph"></span
+                        ><span class="pg-rowText"
+                          ><span class="pg-block pg-blockTitle" style="width: 260px"></span
+                          ><span class="pg-block pg-blockMeta"></span></span
+                      ></span>
+                    </li>
+                    <li>
+                      <span class="pg-row"
+                        ><span class="pg-block pg-blockGlyph"></span
+                        ><span class="pg-rowText"
+                          ><span class="pg-block pg-blockTitle" style="width: 180px"></span
+                          ><span class="pg-block pg-blockMeta"></span></span
+                      ></span>
+                    </li>
+                    <li>
+                      <span class="pg-row"
+                        ><span class="pg-block pg-blockGlyph"></span
+                        ><span class="pg-rowText"
+                          ><span class="pg-block pg-blockTitle" style="width: 310px"></span
+                          ><span class="pg-block pg-blockMeta"></span></span
+                      ></span>
+                    </li>
+                    <li>
+                      <span class="pg-row"
+                        ><span class="pg-block pg-blockGlyph"></span
+                        ><span class="pg-rowText"
+                          ><span class="pg-block pg-blockTitle" style="width: 220px"></span
+                          ><span class="pg-block pg-blockMeta"></span></span
+                      ></span>
+                    </li>
+                    <li>
+                      <span class="pg-row"
+                        ><span class="pg-block pg-blockGlyph"></span
+                        ><span class="pg-rowText"
+                          ><span class="pg-block pg-blockTitle" style="width: 280px"></span
+                          ><span class="pg-block pg-blockMeta"></span></span
+                      ></span>
+                    </li>
+                  </ul>
+                </div>
+              </main>
+            </div>
+          </div>
+          <div class="pg-board" data-theme="dark">
+            <p class="pg-boardTag">Dark · en</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div aria-busy="true">
+                  <span class="pg-srOnly">Loading page</span>
+                  <div class="pg-head">
+                    <div>
+                      <h1 class="pg-h1">Pages</h1>
+                      <p class="pg-sub">
+                        Specs, runbooks and notes for this project — most recently edited first.
+                      </p>
+                    </div>
+                    <button class="pg-btn pg-btnPrimary" type="button">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus" /></svg>New
+                      page
+                    </button>
+                  </div>
+                  <ul class="pg-list" aria-hidden="true">
+                    <li>
+                      <span class="pg-row"
+                        ><span class="pg-block pg-blockGlyph"></span
+                        ><span class="pg-rowText"
+                          ><span class="pg-block pg-blockTitle" style="width: 260px"></span
+                          ><span class="pg-block pg-blockMeta"></span></span
+                      ></span>
+                    </li>
+                    <li>
+                      <span class="pg-row"
+                        ><span class="pg-block pg-blockGlyph"></span
+                        ><span class="pg-rowText"
+                          ><span class="pg-block pg-blockTitle" style="width: 180px"></span
+                          ><span class="pg-block pg-blockMeta"></span></span
+                      ></span>
+                    </li>
+                    <li>
+                      <span class="pg-row"
+                        ><span class="pg-block pg-blockGlyph"></span
+                        ><span class="pg-rowText"
+                          ><span class="pg-block pg-blockTitle" style="width: 310px"></span
+                          ><span class="pg-block pg-blockMeta"></span></span
+                      ></span>
+                    </li>
+                    <li>
+                      <span class="pg-row"
+                        ><span class="pg-block pg-blockGlyph"></span
+                        ><span class="pg-rowText"
+                          ><span class="pg-block pg-blockTitle" style="width: 220px"></span
+                          ><span class="pg-block pg-blockMeta"></span></span
+                      ></span>
+                    </li>
+                    <li>
+                      <span class="pg-row"
+                        ><span class="pg-block pg-blockGlyph"></span
+                        ><span class="pg-rowText"
+                          ><span class="pg-block pg-blockTitle" style="width: 280px"></span
+                          ><span class="pg-block pg-blockMeta"></span></span
+                      ></span>
+                    </li>
+                  </ul>
+                </div>
+              </main>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

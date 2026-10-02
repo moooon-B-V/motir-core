@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   LayoutList,
   Map,
+  NotebookText,
   Settings,
   Sparkles,
   Waypoints,
@@ -427,6 +428,23 @@ export function SidebarNav({
         label: t('nav.issues'),
         href: '/items',
         active: isActive(pathname, '/items'),
+      },
+      {
+        // PAGES (Story MOTIR-5752 · MOTIR-7300) — the project's written pages, a
+        // top-level project view and so a primary entry, per
+        // `design/pages/design-notes.md` § THE ACCESS PATH. It sits directly after
+        // Work Items: work items are the work and pages are what is written about
+        // it, and they are the two surfaces that share the project's folder system
+        // (MOTIR-5753). It sits ABOVE Ready → Runs → My agents so that run of rows
+        // still reads as one flow. The glyph is `NotebookText`, unused elsewhere —
+        // not `FileText`, which is the `content` work-item type's glyph, and not
+        // `BookOpen` (the Help menu's Docs) or `NotebookPen` (AI planning
+        // settings). Offered on `page:view` (`projectNavAccess.ts`), so a viewer
+        // keeps it.
+        icon: <NotebookText />,
+        label: t('nav.pages'),
+        href: '/pages',
+        active: isActive(pathname, '/pages'),
       },
       {
         // The AI dispatch surface (Subtask 7.0.6) — sits BETWEEN Issues and

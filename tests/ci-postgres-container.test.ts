@@ -87,6 +87,9 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // above: the rollup, the children aggregate and the story gate all run
       // against a real database.
       'ci.yml:story-4905-coverage',
+      // MOTIR-7281's pages coverage lane (Story MOTIR-5752): the story gate and
+      // the per-card page suites it measures run against a real database.
+      'ci.yml:story-5752-coverage',
       // MOTIR-6621's story coverage floor: the item read over real delivery rows
       // and the changed-files route both run against a real database.
       'ci.yml:story-6617-coverage',
