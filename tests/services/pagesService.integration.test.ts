@@ -203,6 +203,16 @@ describe('pagesService — access', () => {
     expect(untouched).toMatchObject({ title: '', revision: 1 });
   });
 
+  it('binds the transaction to the project the call names, not a stale active one', async () => {
+    const f = await makeFixture();
+    // A context still carrying the OTHER project, as an active-project cookie can.
+    const ctx = { ...f.manager, projectId: f.otherProjectId };
+    const created = await pagesService.createPage(ctx, { projectId: f.projectId });
+    expect(created.projectId).toBe(f.projectId);
+    const page = await pagesService.getPage(ctx, { projectId: f.projectId, pageId: created.id });
+    expect(page.id).toBe(created.id);
+  });
+
   it('passes the package’s content refusals through unchanged', async () => {
     const f = await makeFixture();
     const created = await pagesService.createPage(f.manager, { projectId: f.projectId });

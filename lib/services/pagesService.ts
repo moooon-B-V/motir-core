@@ -54,6 +54,17 @@ async function findInProject(store: PageStore, projectId: string, pageId: string
   return row;
 }
 
+/**
+ * The transaction's context, bound to the project the call names. `page` carries
+ * a project-narrowing policy (`page_project_narrow`), so a context still bound to
+ * a DIFFERENT active project would make an insert there a raw RLS violation
+ * rather than a decision this service made. The gate still reads the caller's
+ * own `ctx` — a token's project binding is enforced there, not bypassed here.
+ */
+function scopeTo(ctx: ServiceContext, projectId: string) {
+  return { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId };
+}
+
 function toSummary(row: PageRow): PageSummaryDto {
   return {
     id: row.id,
@@ -68,7 +79,7 @@ function toSummary(row: PageRow): PageSummaryDto {
 export const pagesService = {
   /** Create an empty page, last at the project's root. `page:edit`. */
   async createPage(ctx: ServiceContext, input: CreatePageInput): Promise<PageSummaryDto> {
-    return withWorkspaceContext(ctx, async (tx) => {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
       const row = await createPageProcedure(pageStoreFor(tx), systemClock, {
         workspaceId: ctx.workspaceId,
@@ -85,7 +96,7 @@ export const pagesService = {
    * `page:view`. The read takes no row lock, so it never waits on a save.
    */
   async getPage(ctx: ServiceContext, input: GetPageInput): Promise<PageDto> {
-    return withWorkspaceContext(ctx, async (tx) => {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
       const record = await pageRepository.findWithBodyById(input.pageId, tx);
       if (!record || record.projectId !== input.projectId) {
@@ -102,7 +113,7 @@ export const pagesService = {
 
   /** Rename a page. `page:edit`. */
   async renamePage(ctx: ServiceContext, input: RenamePageInput): Promise<PageSummaryDto> {
-    return withWorkspaceContext(ctx, async (tx) => {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
       const store = pageStoreFor(tx);
       await findInProject(store, input.projectId, input.pageId);
@@ -120,7 +131,7 @@ export const pagesService = {
     ctx: ServiceContext,
     input: SavePageUpdateInput,
   ): Promise<SavePageResultDto> {
-    return withWorkspaceContext(ctx, async (tx) => {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
       const store = pageStoreFor(tx);
       await findInProject(store, input.projectId, input.pageId);
