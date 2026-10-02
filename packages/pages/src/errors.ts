@@ -47,6 +47,41 @@ export class PageDepthExceededError extends PageTreeError {
   }
 }
 
+/** A placement whose parent page or folder belongs to another project. */
+export class CrossProjectPageParentError extends PageTreeError {
+  readonly code = 'CROSS_PROJECT_PAGE_PARENT' as const;
+  constructor(
+    readonly parentKind: 'page' | 'folder',
+    readonly parentId: string,
+  ) {
+    super(`A page can only be placed under a ${parentKind} in its own project.`);
+    this.name = 'CrossProjectPageParentError';
+  }
+}
+
+/**
+ * A move's `beforeId` / `afterId` that does not name a sibling at the target:
+ * a page that is not a child of the target parent (`not_sibling`), the moving
+ * page itself (`self`), or two neighbours named in the wrong order (`order`).
+ */
+export class PageNeighbourInvalidError extends PageTreeError {
+  readonly code = 'PAGE_NEIGHBOUR_INVALID' as const;
+  constructor(
+    readonly side: 'before' | 'after',
+    readonly neighbourId: string,
+    readonly reason: 'not_sibling' | 'self' | 'order',
+  ) {
+    super(
+      reason === 'order'
+        ? 'The page to place after must come before the page to place before.'
+        : reason === 'self'
+          ? 'A page cannot be placed next to itself.'
+          : `The ${side} neighbour is not a page at the destination.`,
+    );
+    this.name = 'PageNeighbourInvalidError';
+  }
+}
+
 /** Base class for the save procedures' refusals, each carrying its HTTP status. */
 export abstract class PageError extends Error {
   abstract readonly code: string;
@@ -107,5 +142,20 @@ export class PageUpdateMalformedError extends PageError {
         : 'The page update could not be decoded as a Yjs update.',
     );
     this.name = 'PageUpdateMalformedError';
+  }
+}
+
+/**
+ * A folder placement naming a folder that does not exist or is outside the
+ * caller's scope. The wire code is the folder domain's own `FOLDER_NOT_FOUND`
+ * (404), so a client reads one refusal for a missing folder whichever door it
+ * came through.
+ */
+export class PageFolderNotFoundError extends PageError {
+  readonly code = 'FOLDER_NOT_FOUND' as const;
+  readonly status = 404 as const;
+  constructor(readonly folderId: string) {
+    super('Folder not found.');
+    this.name = 'PageFolderNotFoundError';
   }
 }

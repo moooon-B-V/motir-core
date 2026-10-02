@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  CrossProjectPageParentError,
+  PAGE_DEPTH_LIMIT,
+  PageDepthExceededError,
+  PageFolderNotFoundError,
   PAGE_BODY_MAX_BYTES,
   PAGE_SAVE_MAX_BYTES,
   PAGE_TITLE_MAX_LENGTH,
@@ -79,6 +83,87 @@ describe('createPage', () => {
       createPage(store, clock, { ...scope, title: 'x'.repeat(PAGE_TITLE_MAX_LENGTH + 1) }),
     ).rejects.toBeInstanceOf(PageTitleTooLongError);
     expect(store.calls).toEqual([]);
+  });
+});
+
+describe('createPage — placement', () => {
+  it('files a page in a folder: a folder id, no parent page, a chain of its own', async () => {
+    store.addFolder('f1', 'p1');
+    await createPage(store, clock, { ...scope, title: 'Root page' });
+    const first = await createPage(store, clock, {
+      ...scope,
+      parent: { kind: 'folder', folderId: 'f1' },
+    });
+    const second = await createPage(store, clock, {
+      ...scope,
+      parent: { kind: 'folder', folderId: 'f1' },
+    });
+
+    expect(first).toMatchObject({ folderId: 'f1', parentPageId: null, ancestorPageIds: [] });
+    expect(first.position < second.position).toBe(true);
+    expect(store.calls.filter((c) => c.method === 'lockSiblings').at(-1)!.args).toEqual([
+      'p1',
+      { kind: 'folder', folderId: 'f1' },
+    ]);
+  });
+
+  it('creates a sub-page under a page: no folder id, the parent chain plus the parent', async () => {
+    store.addFolder('f1', 'p1');
+    const top = await createPage(store, clock, {
+      ...scope,
+      parent: { kind: 'folder', folderId: 'f1' },
+    });
+    const child = await createPage(store, clock, {
+      ...scope,
+      parent: { kind: 'page', pageId: top.id },
+    });
+    const grandchild = await createPage(store, clock, {
+      ...scope,
+      parent: { kind: 'page', pageId: child.id },
+    });
+
+    expect(child).toMatchObject({ parentPageId: top.id, folderId: null });
+    expect(child.ancestorPageIds).toEqual([top.id]);
+    expect(grandchild.ancestorPageIds).toEqual([top.id, child.id]);
+  });
+
+  it('refuses a page at level 11, writing nothing', async () => {
+    let parent = await createPage(store, clock, scope);
+    for (let level = 2; level <= PAGE_DEPTH_LIMIT; level += 1) {
+      parent = await createPage(store, clock, {
+        ...scope,
+        parent: { kind: 'page', pageId: parent.id },
+      });
+    }
+    const inserts = store.called('insertPage');
+    const err = await createPage(store, clock, {
+      ...scope,
+      parent: { kind: 'page', pageId: parent.id },
+    }).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(PageDepthExceededError);
+    expect(err).toMatchObject({ limit: 10, attemptedLevel: 11 });
+    expect(store.called('insertPage')).toBe(inserts);
+  });
+
+  it('refuses a missing parent and a parent in another project, writing nothing', async () => {
+    store.addFolder('fx', 'p2');
+    const elsewhere = await createPage(store, clock, { ...scope, projectId: 'p2' });
+    const inserts = store.called('insertPage');
+
+    await expect(
+      createPage(store, clock, { ...scope, parent: { kind: 'folder', folderId: 'gone' } }),
+    ).rejects.toBeInstanceOf(PageFolderNotFoundError);
+    await expect(
+      createPage(store, clock, { ...scope, parent: { kind: 'page', pageId: 'gone' } }),
+    ).rejects.toBeInstanceOf(PageNotFoundError);
+    await expect(
+      createPage(store, clock, { ...scope, parent: { kind: 'folder', folderId: 'fx' } }),
+    ).rejects.toBeInstanceOf(CrossProjectPageParentError);
+    await expect(
+      createPage(store, clock, { ...scope, parent: { kind: 'page', pageId: elsewhere.id } }),
+    ).rejects.toBeInstanceOf(CrossProjectPageParentError);
+    expect(store.called('insertPage')).toBe(inserts);
   });
 });
 

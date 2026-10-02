@@ -1,12 +1,17 @@
-import type {
-  Clock,
-  DerivedPageLink,
-  LockedPageRow,
-  PageBodyWrite,
-  PageInsert,
-  PagePlacement,
-  PageRow,
-  PageStore,
+import {
+  rebaseAncestorIds,
+  type Clock,
+  type DerivedPageLink,
+  type FolderRef,
+  type NeighbourPositions,
+  type PagePlacementWrite,
+  type SubtreePage,
+  type LockedPageRow,
+  type PageBodyWrite,
+  type PageInsert,
+  type PagePlacement,
+  type PageRow,
+  type PageStore,
 } from '../../src';
 
 /** A stored page in the fake: the row plus its body columns. */
@@ -29,6 +34,7 @@ const sameParent = (page: PageRow, parent: PagePlacement): boolean =>
  */
 export class MemoryPageStore implements PageStore {
   readonly pages = new Map<string, MemoryPage>();
+  readonly folders = new Map<string, FolderRef>();
   readonly calls: { method: keyof PageStore; args: unknown[] }[] = [];
   private nextId = 0;
 
@@ -61,6 +67,80 @@ export class MemoryPageStore implements PageStore {
       .map((page) => page.position)
       .sort();
     return positions.at(-1) ?? null;
+  }
+
+  /** Adds a folder a placement can name. */
+  addFolder(id: string, projectId: string): FolderRef {
+    const folder = { id, projectId };
+    this.folders.set(id, folder);
+    return folder;
+  }
+
+  /** One level's pages in `(position, id)` order. */
+  level(projectId: string, parent: PagePlacement): MemoryPage[] {
+    return [...this.pages.values()]
+      .filter((page) => page.projectId === projectId && sameParent(page, parent))
+      .sort((a, b) =>
+        a.position !== b.position ? (a.position < b.position ? -1 : 1) : a.id < b.id ? -1 : 1,
+      );
+  }
+
+  async findFolder(folderId: string): Promise<FolderRef | null> {
+    this.record('findFolder', folderId);
+    return this.folders.get(folderId) ?? null;
+  }
+
+  async findSubtree(pageId: string): Promise<SubtreePage[]> {
+    this.record('findSubtree', pageId);
+    return [...this.pages.values()]
+      .filter((page) => page.ancestorPageIds.includes(pageId))
+      .map((page) => ({ id: page.id, ancestorPageIds: page.ancestorPageIds }));
+  }
+
+  async siblingNeighbours(
+    projectId: string,
+    parent: PagePlacement,
+    beforeId: string | null,
+    afterId: string | null,
+  ): Promise<NeighbourPositions> {
+    this.record('siblingNeighbours', projectId, parent, beforeId, afterId);
+    const level = this.level(projectId, parent);
+    const at = (id: string) => level.findIndex((page) => page.id === id);
+    if (beforeId !== null && afterId !== null) {
+      return { before: level[at(beforeId)]!.position, after: level[at(afterId)]!.position };
+    }
+    if (beforeId !== null) {
+      const i = at(beforeId);
+      return { before: level[i]!.position, after: level[i + 1]?.position ?? null };
+    }
+    if (afterId !== null) {
+      const i = at(afterId);
+      return { before: level[i - 1]?.position ?? null, after: level[i]!.position };
+    }
+    return { before: level.at(-1)?.position ?? null, after: null };
+  }
+
+  async updatePlacement(
+    pageId: string,
+    placement: PagePlacementWrite,
+    updatedById: string,
+  ): Promise<PageRow> {
+    this.record('updatePlacement', pageId, placement, updatedById);
+    const page = this.pages.get(pageId)!;
+    const moved = { ...page, ...placement, updatedById };
+    this.pages.set(pageId, moved);
+    return moved;
+  }
+
+  async rebaseDescendants(pageId: string, newAncestorPageIds: readonly string[]): Promise<void> {
+    this.record('rebaseDescendants', pageId, newAncestorPageIds);
+    for (const page of [...this.pages.values()]) {
+      if (!page.ancestorPageIds.includes(pageId)) continue;
+      this.pages.set(page.id, {
+        ...page,
+        ancestorPageIds: rebaseAncestorIds(page.ancestorPageIds, pageId, newAncestorPageIds),
+      });
+    }
   }
 
   async insertPage(row: PageInsert): Promise<PageRow> {
