@@ -8535,6 +8535,9 @@
             "planner_model": {
               "set": "Changed the planning model"
             }
+          },
+          "fleet": {
+            "stop": "Stopped the fleet containers"
           }
         }
       }

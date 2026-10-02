@@ -193,6 +193,24 @@ export const fleetInFlightSlotRepository = {
   },
 
   /**
+   * One organisation's LIVE slots of one workload, oldest first — what a
+   * platform admin's stop of that org acts on (MOTIR-7317): a `hosted_agent`
+   * slot's `ref` names the run it holds. Bounded by the org's pool. Rides
+   * `[organization_id, expires_at]`.
+   */
+  async listLiveForOrganization(
+    organizationId: string,
+    workload: string,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetInFlightSlot[]> {
+    return tx.fleetInFlightSlot.findMany({
+      where: { organizationId, workload, expiresAt: { gt: now } },
+      orderBy: { claimedAt: 'asc' },
+    });
+  },
+
+  /**
    * When one organisation's OLDEST live slot of the given workloads was claimed,
    * or null — the fleet monitor's "has this been running longer than a period"
    * for hosted runs and agent instances (MOTIR-7316).
