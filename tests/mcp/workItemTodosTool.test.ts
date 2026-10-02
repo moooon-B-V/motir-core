@@ -3,11 +3,15 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
 import {
   ADD_WORK_ITEM_TODO_TOOL_NAME,
+  DELETE_WORK_ITEM_TODO_TOOL_NAME,
   LIST_WORK_ITEM_TODOS_TOOL_NAME,
   SET_WORK_ITEM_TODO_DONE_TOOL_NAME,
+  UPDATE_WORK_ITEM_TODO_TOOL_NAME,
   runAddWorkItemTodo,
+  runDeleteWorkItemTodo,
   runListWorkItemTodos,
   runSetWorkItemTodoDone,
+  runUpdateWorkItemTodo,
 } from '@/lib/mcp/tools/workItemTodos';
 import { CLI_TOKEN_GRANT, TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
@@ -91,20 +95,26 @@ async function add(key: string, text: string): Promise<TodoOut> {
 }
 
 describe('the tools are registered, gated and exempt as documented', () => {
-  it('registers all three', () => {
+  it('registers all five', () => {
     expect(MCP_TOOL_NAMES).toContain(LIST_WORK_ITEM_TODOS_TOOL_NAME);
     expect(MCP_TOOL_NAMES).toContain(ADD_WORK_ITEM_TODO_TOOL_NAME);
     expect(MCP_TOOL_NAMES).toContain(SET_WORK_ITEM_TODO_DONE_TOOL_NAME);
+    expect(MCP_TOOL_NAMES).toContain(UPDATE_WORK_ITEM_TODO_TOOL_NAME);
+    expect(MCP_TOOL_NAMES).toContain(DELETE_WORK_ITEM_TODO_TOOL_NAME);
   });
 
-  it('the read is browse, the writes are work_item:edit — all three in the CLI grant', () => {
+  it('the read is browse, the writes are work_item:edit — all five in the CLI grant', () => {
     expect(TOOL_PERMISSIONS[LIST_WORK_ITEM_TODOS_TOOL_NAME]).toBe('project:browse');
     expect(TOOL_PERMISSIONS[ADD_WORK_ITEM_TODO_TOOL_NAME]).toBe('work_item:edit');
     expect(TOOL_PERMISSIONS[SET_WORK_ITEM_TODO_DONE_TOOL_NAME]).toBe('work_item:edit');
+    expect(TOOL_PERMISSIONS[UPDATE_WORK_ITEM_TODO_TOOL_NAME]).toBe('work_item:edit');
+    expect(TOOL_PERMISSIONS[DELETE_WORK_ITEM_TODO_TOOL_NAME]).toBe('work_item:edit');
     for (const name of [
       LIST_WORK_ITEM_TODOS_TOOL_NAME,
       ADD_WORK_ITEM_TODO_TOOL_NAME,
       SET_WORK_ITEM_TODO_DONE_TOOL_NAME,
+      UPDATE_WORK_ITEM_TODO_TOOL_NAME,
+      DELETE_WORK_ITEM_TODO_TOOL_NAME,
     ] as const) {
       expect(CLI_TOKEN_GRANT).toContain(TOOL_PERMISSIONS[name]);
       expect(Object.keys(EXEMPT_TOOLS)).toContain(name);
@@ -247,5 +257,108 @@ describe('set_work_item_todo_done', () => {
       await runSetWorkItemTodoDone({ key, todoId: 'tdo_nope', done: true }, fx.ctx),
     );
     expect(text).toContain('WORK_ITEM_TODO_NOT_FOUND');
+  });
+});
+
+describe('update_work_item_todo', () => {
+  it('changes only the fields sent, and an empty patch is a no-op answer', async () => {
+    const key = await makeItem('Edit me');
+    const step = ok<WriteOut>(
+      await runAddWorkItemTodo(
+        { key, text: 'Old text', notesMd: 'Keep these notes.', commandText: 'make it' },
+        fx.ctx,
+      ),
+    ).todo;
+
+    const out = ok<WriteOut>(
+      await runUpdateWorkItemTodo({ key, todoId: step.id, text: 'New text' }, fx.ctx),
+    );
+    expect(out.workItemKey).toBe(key);
+    expect(out.todo).toMatchObject({
+      id: step.id,
+      text: 'New text',
+      notesMd: 'Keep these notes.',
+      commandText: 'make it',
+    });
+    expect(out.progress).toEqual({ done: 0, total: 1 });
+
+    const same = ok<WriteOut>(await runUpdateWorkItemTodo({ key, todoId: step.id }, fx.ctx));
+    expect(same.todo.text).toBe('New text');
+  });
+
+  it('null clears the notes, the command and the executor', async () => {
+    const key = await makeItem('Clear me');
+    const step = ok<WriteOut>(
+      await runAddWorkItemTodo(
+        { key, text: 'Step', notesMd: 'n', commandText: 'c', executor: 'coding_agent' },
+        fx.ctx,
+      ),
+    ).todo;
+    const out = ok<WriteOut>(
+      await runUpdateWorkItemTodo(
+        { key, todoId: step.id, notesMd: null, commandText: null, executor: null },
+        fx.ctx,
+      ),
+    );
+    expect(out.todo).toMatchObject({ notesMd: null, commandText: null, executor: null });
+  });
+
+  it('refuses a step that belongs to ANOTHER card, and leaves it as it was', async () => {
+    const mine = await makeItem('Mine');
+    const other = await makeItem('Other');
+    const foreign = await add(other, 'Their step');
+    const text = errorText(
+      await runUpdateWorkItemTodo({ key: mine, todoId: foreign.id, text: 'Hijacked' }, fx.ctx),
+    );
+    expect(text).toContain('WORK_ITEM_TODO_NOT_FOUND');
+    const row = await adminDb.workItemTodo.findUniqueOrThrow({ where: { id: foreign.id } });
+    expect(row.text).toBe('Their step');
+  });
+
+  it('refuses whitespace-only text with the store’s own code', async () => {
+    const key = await makeItem('Blank');
+    const step = await add(key, 'Step');
+    expect(
+      errorText(await runUpdateWorkItemTodo({ key, todoId: step.id, text: '  ' }, fx.ctx)),
+    ).toContain('EMPTY_TODO_TEXT');
+  });
+});
+
+describe('delete_work_item_todo', () => {
+  it('removes the step and reports what went and the new progress', async () => {
+    const key = await makeItem('Delete from me');
+    const keep = await add(key, 'Keep');
+    const drop = await add(key, 'Drop');
+    const out = ok<{
+      workItemKey: string;
+      removed: { id: string; text: string };
+      progress: { done: number; total: number };
+    }>(await runDeleteWorkItemTodo({ key, todoId: drop.id }, fx.ctx));
+    expect(out).toEqual({
+      workItemKey: key,
+      removed: { id: drop.id, text: 'Drop' },
+      progress: { done: 0, total: 1 },
+    });
+    const list = ok<ListOut>(await runListWorkItemTodos({ key }, fx.ctx));
+    expect(list.items.map((t) => t.id)).toEqual([keep.id]);
+  });
+
+  it('refuses a step that belongs to ANOTHER card, and leaves it in place', async () => {
+    const mine = await makeItem('Mine');
+    const other = await makeItem('Other');
+    const foreign = await add(other, 'Their step');
+    const text = errorText(await runDeleteWorkItemTodo({ key: mine, todoId: foreign.id }, fx.ctx));
+    expect(text).toContain('WORK_ITEM_TODO_NOT_FOUND');
+    expect(await adminDb.workItemTodo.count({ where: { id: foreign.id } })).toBe(1);
+  });
+
+  it('refuses a step id that names nothing, and an unknown key', async () => {
+    const key = await makeItem('Ghost');
+    expect(errorText(await runDeleteWorkItemTodo({ key, todoId: 'tdo_nope' }, fx.ctx))).toContain(
+      'WORK_ITEM_TODO_NOT_FOUND',
+    );
+    expect(
+      errorText(await runDeleteWorkItemTodo({ key: 'PROD-99999', todoId: 'tdo_nope' }, fx.ctx)),
+    ).toContain('NOT_FOUND');
   });
 });

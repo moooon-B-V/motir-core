@@ -264,11 +264,13 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // same legacy bucket; the real gate is `comment:add` in `toolPermissions.ts`.
   edit_comment: 'work_items:write',
   delete_comment: 'work_items:write',
-  // The to-do tools (MOTIR-6725) — the read under `read`, the two writes in the
-  // legacy write bucket; the real gates are in `toolPermissions.ts`.
+  // The to-do tools (MOTIR-6725 · MOTIR-7306) — the read under `read`, the
+  // writes in the legacy write bucket; the real gates are in `toolPermissions.ts`.
   list_work_item_todos: 'read',
   add_work_item_todo: 'work_items:write',
   set_work_item_todo_done: 'work_items:write',
+  update_work_item_todo: 'work_items:write',
+  delete_work_item_todo: 'work_items:write',
   // The repair tools (MOTIR-6807) — three writes, in the legacy write bucket; the
   // real gate is `work_item:edit` in `toolPermissions.ts`.
   claim_work_item_repair: 'work_items:write',

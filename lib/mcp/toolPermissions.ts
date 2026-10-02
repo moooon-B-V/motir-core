@@ -206,6 +206,11 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // steps of the card it was handed; the grant is NOT widened.
   add_work_item_todo: 'work_item:edit',
   set_work_item_todo_done: 'work_item:edit',
+  // Edit and delete a step (MOTIR-7306) — the same one key ADR §4 names for
+  // every to-do write. No author / moderator split exists on a to-do, so the
+  // door's one key is the service's whole decision (cf. MOTIR-5298).
+  update_work_item_todo: 'work_item:edit',
+  delete_work_item_todo: 'work_item:edit',
   // The REPAIR tools (MOTIR-6807) — the key the REST repair route
   // (`claimWorkItemRepair`) and the dispatch-run heartbeat / close routes assert.
   // `workItemRepairService.claimRepair` asserts `assertCanEdit` up front, and

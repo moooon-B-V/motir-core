@@ -137,6 +137,18 @@ async function revisionCount(workItemIdentifier: string): Promise<number> {
   return adminDb.workItemRevision.count({ where: { workItemId: item.id } });
 }
 
+/** The card's newest revision's `diff` — what the History feed renders. */
+async function latestRevisionDiff(workItemIdentifier: string): Promise<unknown> {
+  const item = await adminDb.workItem.findFirstOrThrow({
+    where: { identifier: workItemIdentifier },
+  });
+  const row = await adminDb.workItemRevision.findFirstOrThrow({
+    where: { workItemId: item.id },
+    orderBy: { changedAt: 'desc' },
+  });
+  return row.diff;
+}
+
 describe('an editor: append, tick and untick through the transport', () => {
   it('appends at the end, ticks with doneAt + progress, and unticks both away', async () => {
     const fx = await makeWorkItemFixture();
@@ -176,7 +188,7 @@ describe('an editor: append, tick and untick through the transport', () => {
     const key = await makeCard(fx, 'Edited in the UI');
     const client = await connect(fx.ctx, GRANTABLE_PERMISSIONS);
     const step = ok<WriteOut>(await call(client, 'add_work_item_todo', { key, text: 'Anyone' }));
-    // The item page's edit path — the tools deliberately expose no edit.
+    // The item page's edit path — the same service `update_work_item_todo` calls.
     await workItemTodosService.updateTodo(step.todo.id, { executor: null }, fx.ctx);
 
     const res = await call(client, 'list_work_item_todos', { key });
@@ -354,6 +366,240 @@ describe('cross-tenant — another workspace’s card is not found, on every too
     const rows = await todoRows(key);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.doneAt).toBeNull();
+    await outsider.close();
+  });
+});
+
+// MOTIR-7306 — `update_work_item_todo` and `delete_work_item_todo`, through the
+// same assembled path. Each case is chosen so a bypass fails it:
+//
+//   - THE SPARSE EDIT sends only `text` and re-reads the ROW: a tool that
+//     forwarded every field as `undefined → null` would blank the notes and the
+//     command it was never sent.
+//   - THE DELETE is compared against the revision the SERVICE writes for the
+//     item page's delete, field by field — the tool must not write its own.
+//   - THE FOREIGN STEP is addressed at the caller's own card and re-read
+//     unchanged: a tool passing only `todoId` to the service would edit or
+//     delete it, because the service's own gate is the OTHER card's edit right.
+describe('an editor: edit and delete a step through the transport (MOTIR-7306)', () => {
+  it('an edit changes ONLY the fields sent, null clears one, and each edit records a revision', async () => {
+    const fx = await makeWorkItemFixture();
+    const key = await makeCard(fx, 'Rotate the key');
+    const client = await connect(fx.ctx, GRANTABLE_PERMISSIONS);
+    const step = ok<WriteOut>(
+      await call(client, 'add_work_item_todo', {
+        key,
+        text: 'Mint the key',
+        notesMd: 'In the **dashboard**.',
+        commandText: 'stripe keys create',
+        executor: 'human',
+      }),
+    );
+    const before = await revisionCount(key);
+
+    const edited = ok<WriteOut & { todo: { notesMd: string | null; commandText: string | null } }>(
+      await call(client, 'update_work_item_todo', {
+        key,
+        todoId: step.todo.id,
+        text: 'Mint a restricted key',
+      }),
+    );
+    expect(edited.todo.text).toBe('Mint a restricted key');
+    expect(edited.progress).toEqual({ done: 0, total: 1 });
+    const [row] = await todoRows(key);
+    expect(row).toMatchObject({
+      text: 'Mint a restricted key',
+      notesMd: 'In the **dashboard**.',
+      commandText: 'stripe keys create',
+      executor: 'human',
+    });
+    expect(await revisionCount(key)).toBe(before + 1);
+    expect(await latestRevisionDiff(key)).toMatchObject({
+      todos: {
+        edited: [
+          {
+            id: step.todo.id,
+            from: { text: 'Mint the key', commandText: 'stripe keys create' },
+            to: { text: 'Mint a restricted key', commandText: 'stripe keys create' },
+          },
+        ],
+      },
+    });
+
+    ok(
+      await call(client, 'update_work_item_todo', {
+        key,
+        todoId: step.todo.id,
+        commandText: null,
+        executor: null,
+      }),
+    );
+    const [cleared] = await todoRows(key);
+    expect(cleared).toMatchObject({
+      text: 'Mint a restricted key',
+      notesMd: 'In the **dashboard**.',
+      commandText: null,
+      executor: null,
+    });
+    await client.close();
+  });
+
+  it('an edit is refused over the cap with the store’s error, and the row is unchanged', async () => {
+    const fx = await makeWorkItemFixture();
+    const key = await makeCard(fx, 'Too long edit');
+    const client = await connect(fx.ctx, GRANTABLE_PERMISSIONS);
+    const step = ok<WriteOut>(await call(client, 'add_work_item_todo', { key, text: 'Short' }));
+    const text = refusal(
+      await call(client, 'update_work_item_todo', {
+        key,
+        todoId: step.todo.id,
+        text: 'x'.repeat(TODO_TEXT_MAX_LENGTH + 1),
+      }),
+    );
+    expect(text).toContain('TODO_TEXT_TOO_LONG');
+    const [row] = await todoRows(key);
+    expect(row?.text).toBe('Short');
+    await client.close();
+  });
+
+  it('a delete removes the step, returns what went and the new progress, and records the item page’s revision', async () => {
+    const fx = await makeWorkItemFixture();
+    const key = await makeCard(fx, 'Re-planned');
+    const client = await connect(fx.ctx, GRANTABLE_PERMISSIONS);
+    const a = ok<WriteOut>(await call(client, 'add_work_item_todo', { key, text: 'Keep me' }));
+    const b = ok<WriteOut>(await call(client, 'add_work_item_todo', { key, text: 'Drop me' }));
+    ok(await call(client, 'set_work_item_todo_done', { key, todoId: a.todo.id, done: true }));
+    const before = await revisionCount(key);
+
+    const res = await call(client, 'delete_work_item_todo', { key, todoId: b.todo.id });
+    const out = ok<{
+      workItemKey: string;
+      removed: { id: string; text: string };
+      progress: { done: number; total: number };
+    }>(res);
+    expect(out.workItemKey).toBe(key);
+    expect(out.removed).toEqual({ id: b.todo.id, text: 'Drop me' });
+    // The denominator moves: 1 of 2 → 1 of 1, so the card can now close.
+    expect(out.progress).toEqual({ done: 1, total: 1 });
+    expect((await todoRows(key)).map((r) => r.id)).toEqual([a.todo.id]);
+
+    expect(await revisionCount(key)).toBe(before + 1);
+    expect(await latestRevisionDiff(key)).toEqual({
+      todos: { removed: [{ id: b.todo.id, text: 'Drop me' }] },
+    });
+
+    // A repeat finds nothing and changes nothing.
+    expect(
+      refusal(await call(client, 'delete_work_item_todo', { key, todoId: b.todo.id })),
+    ).toContain('WORK_ITEM_TODO_NOT_FOUND');
+    expect(await revisionCount(key)).toBe(before + 1);
+    await client.close();
+  });
+
+  it('a step from a DIFFERENT card of the same project is not found by either, and is untouched', async () => {
+    const fx = await makeWorkItemFixture();
+    const mine = await makeCard(fx, 'Mine');
+    const other = await makeCard(fx, 'Other');
+    const client = await connect(fx.ctx, GRANTABLE_PERMISSIONS);
+    const foreign = ok<WriteOut>(
+      await call(client, 'add_work_item_todo', { key: other, text: 'Theirs' }),
+    );
+    const before = await revisionCount(other);
+
+    for (const [name, args] of [
+      ['update_work_item_todo', { key: mine, todoId: foreign.todo.id, text: 'Hijacked' }],
+      ['delete_work_item_todo', { key: mine, todoId: foreign.todo.id }],
+    ] as const) {
+      expect(refusal(await call(client, name, args)), name).toContain('WORK_ITEM_TODO_NOT_FOUND');
+    }
+    const rows = await todoRows(other);
+    expect(rows.map((r) => r.text)).toEqual(['Theirs']);
+    expect(await revisionCount(other)).toBe(before);
+    await client.close();
+  });
+});
+
+describe('edit and delete — permissions and tenancy (MOTIR-7306)', () => {
+  it('a BROWSE-ONLY role is refused both by the role, and nothing changes', async () => {
+    const fx = await makeWorkItemFixture();
+    const key = await makeCard(fx, 'Read only');
+    const owner = await connect(fx.ctx, GRANTABLE_PERMISSIONS);
+    const step = ok<WriteOut>(await call(owner, 'add_work_item_todo', { key, text: 'Seeded' }));
+    await owner.close();
+    const before = await revisionCount(key);
+
+    const viewer = await connect(await viewerOf(fx), GRANTABLE_PERMISSIONS);
+    ok(await call(viewer, 'list_work_item_todos', { key }));
+    for (const [name, args] of [
+      ['update_work_item_todo', { key, todoId: step.todo.id, text: 'Sneaky' }],
+      ['delete_work_item_todo', { key, todoId: step.todo.id }],
+    ] as const) {
+      expect(refusal(await call(viewer, name, args)), name).toContain('PROJECT_ACCESS_DENIED');
+    }
+    const rows = await todoRows(key);
+    expect(rows.map((r) => r.text)).toEqual(['Seeded']);
+    expect(await revisionCount(key)).toBe(before);
+    await viewer.close();
+  });
+
+  it('a token WITHOUT work_item:edit is refused both at the gate by name, and nothing changes', async () => {
+    const fx = await makeWorkItemFixture();
+    const key = await makeCard(fx, 'Grant narrowed');
+    const owner = await connect(fx.ctx, GRANTABLE_PERMISSIONS);
+    const step = ok<WriteOut>(await call(owner, 'add_work_item_todo', { key, text: 'Seeded' }));
+    await owner.close();
+
+    const narrowed = await connect(fx.ctx, ['project:browse']);
+    for (const [name, args] of [
+      ['update_work_item_todo', { key, todoId: step.todo.id, text: 'Nope' }],
+      ['delete_work_item_todo', { key, todoId: step.todo.id }],
+    ] as const) {
+      const text = refusal(await call(narrowed, name, args));
+      expect(text, name).toContain(PERMISSION_NOT_GRANTED_CODE);
+      expect(text, name).toContain('work_item:edit');
+    }
+    const rows = await todoRows(key);
+    expect(rows.map((r) => r.text)).toEqual(['Seeded']);
+    await narrowed.close();
+  });
+
+  it('a CLI-grant token (a dispatched agent) edits and deletes', async () => {
+    const fx = await makeWorkItemFixture();
+    const key = await makeCard(fx, 'Dispatched');
+    const agent = await connect(fx.ctx, CLI_TOKEN_GRANT);
+    const step = ok<WriteOut>(await call(agent, 'add_work_item_todo', { key, text: 'Agent step' }));
+    ok(await call(agent, 'update_work_item_todo', { key, todoId: step.todo.id, text: 'Renamed' }));
+    ok(await call(agent, 'delete_work_item_todo', { key, todoId: step.todo.id }));
+    expect(await todoRows(key)).toHaveLength(0);
+    await agent.close();
+  });
+
+  it('another workspace’s card and step are not found by either, and tenant A is untouched', async () => {
+    const a = await makeWorkItemFixture();
+    const key = await makeCard(a, 'Tenant A card');
+    const ownerA = await connect(a.ctx, GRANTABLE_PERMISSIONS);
+    const step = ok<WriteOut>(await call(ownerA, 'add_work_item_todo', { key, text: 'A’s step' }));
+    await ownerA.close();
+
+    const b = await makeWorkItemFixture({ name: 'Other Co', identifier: 'OTHER' });
+    const outsider = await connect(b.ctx, GRANTABLE_PERMISSIONS);
+    const ownKey = await makeCard(b, 'Tenant B card');
+    for (const [name, args, code] of [
+      ['update_work_item_todo', { key, todoId: step.todo.id, text: 'leak?' }, 'NOT_FOUND'],
+      ['delete_work_item_todo', { key, todoId: step.todo.id }, 'NOT_FOUND'],
+      [
+        'update_work_item_todo',
+        { key: ownKey, todoId: step.todo.id, text: 'leak?' },
+        'WORK_ITEM_TODO_NOT_FOUND',
+      ],
+      ['delete_work_item_todo', { key: ownKey, todoId: step.todo.id }, 'WORK_ITEM_TODO_NOT_FOUND'],
+    ] as const) {
+      const text = refusal(await call(outsider, name, args));
+      expect(text, name).toContain(code);
+      expect(text, `${name} must not leak A's step`).not.toContain('A’s step');
+    }
+    const rows = await todoRows(key);
+    expect(rows.map((r) => r.text)).toEqual(['A’s step']);
     await outsider.close();
   });
 });
