@@ -1132,7 +1132,10 @@ at the top rung (`platform-staff-auth.md` §7 gains the row in MOTIR-7227).
    Combobox's `group` header), the stored one checked, a one-line footer. **Save is disabled until
    the row's selection differs from its stored model** (Internal has been changed, so its Save is
    the primary; the other two are disabled secondaries). Save is per row because the confirm names
-   ONE audience and the audit row records one from → to.
+   ONE audience and the audit row records one from → to. **The open listbox floats OVER the card's
+   bottom edge** (it is the last row's picker): the shipped `Combobox` panel is a `Popover` that
+   portals out of the card, so the card never clips it. _(Revised after review: the first version
+   drew it clipped by the card.)_
 2. **Populated, read-only (operator · support)** — the same three rows with each model as plain text
    (id in mono + provider as secondary), no picker, no Save, no action column, and one quiet line
    under the card: _Only a superadmin can change these._ Nothing on the panel is interactive.

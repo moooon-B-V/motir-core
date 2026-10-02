@@ -1995,6 +1995,12 @@
         --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
       }
 
+      /* A card holding an OPEN Combobox: the listbox floats over the card's edge, as
+         the shipped Popover does (it portals out of the card), so the card does not
+         clip it here either. */
+      .card.has-open-popover {
+        overflow: visible;
+      }
       /* ── Combobox (components/ui/Combobox) — trigger + panel + grouped listbox ── */
       .cb {
         position: relative;
@@ -2273,7 +2279,7 @@
                 <span class="page-line"><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg><span><strong>Tenants never see this choice.</strong> No tenant page, usage view or plan names the model that planned.</span></span>
               </div>
               <div class="stack">
-                <div class="card">
+                <div class="card has-open-popover">
                   <div class="card-head">
                     <div class="ttl">
                       <span class="ico ent-org" style="width: 30px; height: 30px"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
@@ -2305,7 +2311,7 @@
                     </table>
                   </div>
                 </div>
-                <div style="height: 120px"></div>
+                <div style="height: 210px"></div>
               </div>
             </div>
           </div>
