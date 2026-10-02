@@ -1,4 +1,4 @@
-import { type Prisma } from '@/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 
 /**
  * Cross-tenant ESTATE access for the operator console — the platform tier's
@@ -90,7 +90,114 @@ export const platformEstateRepository = {
   ): Promise<number> {
     return tx.organizationMembership.count({ where: { organizationId } });
   },
+
+  /**
+   * How many of each tier were CREATED since `since` — the overview's period
+   * deltas (MOTIR-731). One statement of four indexed `count(*)`s, never a row load.
+   */
+  async countCreatedSince(
+    since: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ organizations: number; workspaces: number; projects: number; users: number }> {
+    const rows = await tx.$queryRaw<
+      { organizations: bigint; workspaces: bigint; projects: bigint; users: bigint }[]
+    >`
+      SELECT (SELECT count(*) FROM "organization" WHERE "createdAt" >= ${since}) AS organizations,
+             (SELECT count(*) FROM "workspace" WHERE "createdAt" >= ${since}) AS workspaces,
+             (SELECT count(*) FROM "project" WHERE "createdAt" >= ${since}) AS projects,
+             (SELECT count(*) FROM "user" WHERE "createdAt" >= ${since}) AS users`;
+    const r = rows[0] as {
+      organizations: bigint;
+      workspaces: bigint;
+      projects: bigint;
+      users: bigint;
+    };
+    return {
+      organizations: Number(r.organizations),
+      workspaces: Number(r.workspaces),
+      projects: Number(r.projects),
+      users: Number(r.users),
+    };
+  },
+
+  /**
+   * The newest TENANT EVENTS — organizations, workspaces and projects created —
+   * across the estate, newest first under one keyset on `(createdAt, id)`
+   * (MOTIR-731). Each branch is LIMITed before the merge, so a page reads at most
+   * `take` rows per table through its `createdAt` order, never a table.
+   *
+   * Each row carries its tenant path's names and, where the estate records one,
+   * who it belongs to: an organization's first owner, a workspace's first manager.
+   * A project records no creator, so its detail is its key.
+   */
+  async listTenantEvents(
+    input: { take: number; before: { at: Date; id: string } | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<PlatformTenantEventRow[]> {
+    const older = (alias: string) =>
+      input.before
+        ? Prisma.sql`WHERE (${Prisma.raw(alias)}."createdAt", ${Prisma.raw(alias)}."id") < (${input.before.at}, ${input.before.id})`
+        : Prisma.empty;
+    return tx.$queryRaw<PlatformTenantEventRow[]>`
+      SELECT * FROM (
+        (SELECT 'organization'::text AS "kind", o."id", o."createdAt" AS "at",
+                o."id" AS "organizationId", o."name" AS "organizationName",
+                NULL::text AS "workspaceId", NULL::text AS "workspaceName",
+                NULL::text AS "projectName",
+                (SELECT u."email" FROM "organization_membership" m JOIN "user" u ON u."id" = m."userId"
+                  WHERE m."organizationId" = o."id" AND m."role" = 'owner'
+                  ORDER BY m."createdAt" ASC LIMIT 1) AS "detail"
+         FROM "organization" o ${older('o')}
+         ORDER BY o."createdAt" DESC, o."id" DESC LIMIT ${input.take})
+        UNION ALL
+        (SELECT 'workspace'::text, w."id", w."createdAt", o."id", o."name", w."id", w."name", NULL::text,
+                (SELECT u."email" FROM "workspace_membership" m JOIN "user" u ON u."id" = m."userId"
+                  WHERE m."workspaceId" = w."id" AND m."workspace_role" = 'manager'
+                  ORDER BY m."createdAt" ASC LIMIT 1)
+         FROM "workspace" w JOIN "organization" o ON o."id" = w."organizationId" ${older('w')}
+         ORDER BY w."createdAt" DESC, w."id" DESC LIMIT ${input.take})
+        UNION ALL
+        (SELECT 'project'::text, p."id", p."createdAt", o."id", o."name", w."id", w."name", p."name",
+                p."identifier"
+         FROM "project" p JOIN "workspace" w ON w."id" = p."workspaceId"
+         JOIN "organization" o ON o."id" = w."organizationId" ${older('p')}
+         ORDER BY p."createdAt" DESC, p."id" DESC LIMIT ${input.take})
+      ) e
+      ORDER BY e."at" DESC, e."id" DESC
+      LIMIT ${input.take}`;
+  },
+
+  /**
+   * The names behind core ids a remote read returned (the runs slice's org,
+   * workspace and project ids), so a page can label them — one statement.
+   */
+  async findTenantNames(
+    ids: { organizationIds: string[]; workspaceIds: string[]; projectIds: string[] },
+    tx: Prisma.TransactionClient,
+  ): Promise<{ kind: 'organization' | 'workspace' | 'project'; id: string; name: string }[]> {
+    const list = (values: string[]) => (values.length ? Prisma.join(values) : Prisma.sql`NULL`);
+    return tx.$queryRaw`
+      SELECT 'organization'::text AS "kind", "id", "name" FROM "organization" WHERE "id" IN (${list(ids.organizationIds)})
+      UNION ALL
+      SELECT 'workspace'::text, "id", "name" FROM "workspace" WHERE "id" IN (${list(ids.workspaceIds)})
+      UNION ALL
+      SELECT 'project'::text, "id", "name" FROM "project" WHERE "id" IN (${list(ids.projectIds)})`;
+  },
 };
+
+/** One row of `listTenantEvents`. */
+export interface PlatformTenantEventRow {
+  kind: 'organization' | 'workspace' | 'project';
+  id: string;
+  at: Date;
+  organizationId: string;
+  organizationName: string;
+  workspaceId: string | null;
+  workspaceName: string | null;
+  projectName: string | null;
+  /** The owner's / manager's email, or a project's key. Null when none is recorded. */
+  detail: string | null;
+}
 
 /** One row of `listWorkspacesForOrganization`. */
 export type PlatformWorkspaceRow = Awaited<

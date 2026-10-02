@@ -2250,3 +2250,79 @@ export async function purgeOrgRetained(
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as OrgPurgeRetainedResult;
 }
+
+// ── The PLATFORM RUNS SLICE (Story MOTIR-727 · MOTIR-731 · motir-ai MOTIR-7239) ──
+
+/** One planning run or hosted agent run, as `GET /v1/platform/runs` returns it. */
+export interface RawPlatformRun {
+  kind: 'planning' | 'coding';
+  id: string;
+  /** The planning run's job id, or the hosted run's `DispatchRun.id`. */
+  ref: string;
+  coreOrganizationId: string;
+  coreWorkspaceId: string | null;
+  coreProjectId: string | null;
+  model: string | null;
+  status: string | null;
+  startedAt: string;
+  lastActivityAt: string;
+  inputTokens: number;
+  outputTokens: number;
+  credits: number;
+}
+
+export interface RawPlatformRunsPage {
+  items: RawPlatformRun[];
+  nextCursor: string | null;
+  codingRunsUnattributedExcluded: boolean;
+}
+
+export interface PlatformRunsQuery {
+  coreOrganizationId?: string | null;
+  coreWorkspaceId?: string | null;
+  coreProjectId?: string | null;
+  kind?: 'planning' | 'coding' | null;
+  limit?: number | null;
+  /** A cursor the route issued, or one {@link platformRunsCursorAt} built. */
+  cursor?: string | null;
+}
+
+/**
+ * The runs slice's cursor for "everything strictly older than (startedAt, id)".
+ *
+ * ⚠️ BUILT HERE ON PURPOSE. motir-ai's keyset is `(startedAt DESC, id DESC)` and its
+ * cursor is exactly that position (`docs/contract.md` § `GET /v1/platform/runs`), so
+ * a page merged from TWO sources — the overview feed, which interleaves motir-core's
+ * own tenant events with these runs — can resume the run half from the last run it
+ * actually SHOWED, rather than from the end of a page it only partly used.
+ */
+export function platformRunsCursorAt(startedAt: Date, id: string): string {
+  return Buffer.from(JSON.stringify({ t: startedAt.toISOString(), i: id })).toString('base64url');
+}
+
+/**
+ * GET /v1/platform/runs — the estate's recent planning and hosted runs, newest
+ * first, keyset-paged, optionally scoped. Read-through: the caller is a
+ * `platform*Service` method that has already passed the platform-staff gate.
+ */
+export async function getPlatformRuns(query: PlatformRunsQuery): Promise<RawPlatformRunsPage> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams();
+  for (const key of [
+    'coreOrganizationId',
+    'coreWorkspaceId',
+    'coreProjectId',
+    'kind',
+    'cursor',
+  ] as const) {
+    const value = query[key];
+    if (value) params.set(key, value);
+  }
+  if (query.limit) params.set('limit', String(query.limit));
+  const res = await aiFetch(`${url}/v1/platform/runs?${params.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawPlatformRunsPage;
+}

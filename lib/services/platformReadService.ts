@@ -1,6 +1,14 @@
 import 'server-only';
 
-import type { PlatformEstateCountsDTO, PlatformOrganizationEstateDTO } from '@/lib/dto/platform';
+import type {
+  PlatformActivityItemDTO,
+  PlatformEstateCountsDTO,
+  PlatformOrganizationEstateDTO,
+  PlatformOverviewDTO,
+  PlatformOverviewPeriod,
+} from '@/lib/dto/platform';
+import { getPlatformRuns, platformRunsCursorAt, type RawPlatformRun } from '@/lib/ai/motirAiClient';
+import { toPlatformRunActivityDTO, toPlatformTenantEventDTO } from '@/lib/mappers/platformMappers';
 import {
   toPlatformOrganizationSummaryDTO,
   toPlatformWorkspaceSummaryDTO,
@@ -70,6 +78,91 @@ export const platformReadService = {
   },
 
   /**
+   * The estate overview (MOTIR-731, design D1): the four tier counts, how many of
+   * each were created in the PERIOD, and one activity feed that interleaves the
+   * tenants created with the planning and hosted runs motir-ai recorded.
+   *
+   * The run half is read FIRST and OUTSIDE the transaction — an HTTP call must not
+   * hold the audited read's connection open — and its failure is a STATE of the
+   * page (`runsUnavailable`), never an error: the counts and tenant events are
+   * motir-core's own and still render. Everything motir-core reads, including the
+   * names behind the runs' ids, is ONE audited read.
+   *
+   * The feed pages on `(at, id)` across both halves: the cursor is the last row
+   * SHOWN, and each half resumes strictly older than it, so a row one half held
+   * back from a page is never skipped.
+   */
+  async getOverview(
+    principal: PlatformPrincipal,
+    input: { period: PlatformOverviewPeriod; cursor?: string | null; now?: Date },
+  ): Promise<PlatformOverviewDTO> {
+    await requirePlatformStaff('support');
+
+    const take = OVERVIEW_FEED_PAGE;
+    const now = input.now ?? new Date();
+    const since = periodStart(input.period, now);
+    const before = decodeFeedCursor(input.cursor);
+
+    let runs: RawPlatformRun[] = [];
+    let moreRuns = false;
+    let runsUnavailable = false;
+    try {
+      const page = await getPlatformRuns({
+        limit: take,
+        cursor: before ? platformRunsCursorAt(before.at, before.id) : null,
+      });
+      runs = page.items;
+      moreRuns = page.nextCursor !== null;
+    } catch {
+      runsUnavailable = true;
+    }
+
+    return withPlatformRead(
+      principal,
+      { action: 'estate.read', targetKind: 'platform', targetLabel: 'estate overview' },
+      async (tx) => {
+        const organizations = await platformEstateRepository.countOrganizations(tx);
+        const workspaces = await platformEstateRepository.countWorkspaces(tx);
+        const projects = await platformEstateRepository.countProjects(tx);
+        const users = await platformEstateRepository.countUsers(tx);
+        const deltas = await platformEstateRepository.countCreatedSince(since, tx);
+        const events = await platformEstateRepository.listTenantEvents({ take, before }, tx);
+        const nameRows = runs.length
+          ? await platformEstateRepository.findTenantNames(
+              {
+                organizationIds: unique(runs.map((r) => r.coreOrganizationId)),
+                workspaceIds: unique(runs.map((r) => r.coreWorkspaceId)),
+                projectIds: unique(runs.map((r) => r.coreProjectId)),
+              },
+              tx,
+            )
+          : [];
+        const names = new Map(nameRows.map((n) => [n.id, n.name]));
+
+        const merged: PlatformActivityItemDTO[] = [
+          ...events.map(toPlatformTenantEventDTO),
+          ...runs.map((run) => toPlatformRunActivityDTO(run, names)),
+        ].sort((a, b) => (a.at === b.at ? (a.id < b.id ? 1 : -1) : a.at < b.at ? 1 : -1));
+        const items = merged.slice(0, take);
+        const last = items[items.length - 1];
+        const hasMore = merged.length > take || moreRuns || events.length === take;
+
+        return {
+          period: input.period,
+          since: since.toISOString(),
+          counts: { organizations, workspaces, projects, users },
+          deltas,
+          feed: {
+            items,
+            nextCursor: hasMore && last ? encodeFeedCursor(last.at, last.id) : null,
+            runsUnavailable,
+          },
+        };
+      },
+    );
+  },
+
+  /**
    * One organization and the tiers beneath it: its member count and its
    * workspaces, each with project and member counts.
    *
@@ -121,3 +214,37 @@ export const platformReadService = {
     );
   },
 };
+
+/** One page of the overview's activity feed. */
+export const OVERVIEW_FEED_PAGE = 25;
+
+/** The instant a period's deltas count from — UTC, like every period in the console. */
+export function periodStart(period: PlatformOverviewPeriod, now: Date): Date {
+  if (period === 'month') return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const days = period === '7d' ? 7 : 30;
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+}
+
+function encodeFeedCursor(at: string, id: string): string {
+  return Buffer.from(JSON.stringify({ t: at, i: id })).toString('base64url');
+}
+
+/** A malformed cursor reads as the first page, never an error — it is a URL a person can edit. */
+function decodeFeedCursor(cursor: string | null | undefined): { at: Date; id: string } | null {
+  if (!cursor) return null;
+  try {
+    const raw = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as {
+      t?: unknown;
+      i?: unknown;
+    };
+    if (typeof raw.t !== 'string' || typeof raw.i !== 'string') return null;
+    const at = new Date(raw.t);
+    return Number.isNaN(at.getTime()) ? null : { at, id: raw.i };
+  } catch {
+    return null;
+  }
+}
+
+function unique(values: (string | null)[]): string[] {
+  return [...new Set(values.filter((v): v is string => v !== null))];
+}

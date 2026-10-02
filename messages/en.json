@@ -8408,11 +8408,43 @@
       "searchPlaceholder": "Search organizations, workspaces, projects, users…"
     },
     "overview": {
-      "breadcrumb": "Platform · Overview",
       "title": "Platform overview",
-      "subtitle": "The whole estate at a glance — how many organizations, workspaces, projects and users Motir hosts, and what's happened recently across every tenant. Read-only; tenant governance lives in the Governance toolkit.",
-      "pendingTitle": "The estate is not wired up yet",
-      "pendingDescription": "The counts and the activity feed read across every tenant, which is the audited cross-tenant read layer — a separate work item. This console's gate, its audit trail and this shell are in place; the numbers arrive with them."
+      "subtitle": "The whole estate at a glance — how many organizations, workspaces, projects and users Motir hosts, and what has happened recently across every tenant. Read-only.",
+      "periodLabel": "Period",
+      "period": {
+        "7d": "7 days",
+        "30d": "30 days",
+        "month": "this month"
+      },
+      "counts": {
+        "organizations": "Organizations",
+        "workspaces": "Workspaces",
+        "projects": "Projects",
+        "users": "Users"
+      },
+      "delta": "+{count, number} in the last {period}",
+      "feed": {
+        "title": "Recent activity",
+        "when": "When",
+        "event": "Event",
+        "where": "Where",
+        "detail": "Detail",
+        "kind": {
+          "new_organization": "New organization",
+          "new_workspace": "New workspace",
+          "new_project": "New project",
+          "planning_run": "Planning run",
+          "coding_run": "Agent run"
+        },
+        "unattributed": "(unattributed)",
+        "runDetail": "{model} · {credits} credits",
+        "runsUnavailable": "Runs can't be shown right now — the AI service did not answer. Tenant events and counts below are current.",
+        "emptyTitle": "Nothing has happened yet on this page",
+        "emptyDescription": "No tenant was created and no run was recorded before this point.",
+        "emptyEstateTitle": "The estate is empty",
+        "emptyEstateDescription": "No organization exists yet. New organizations, workspaces, projects and runs will appear here.",
+        "older": "Show older activity"
+      }
     },
     "users": {
       "breadcrumb": "Platform · Users",

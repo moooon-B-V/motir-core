@@ -8404,11 +8404,43 @@
       "searchPlaceholder": "搜索组织、工作区、项目、用户…"
     },
     "overview": {
-      "breadcrumb": "平台·总览",
-      "title": "平台总览",
-      "subtitle": "一眼看清全部租户——Motir托管了多少组织、工作区、项目和用户，以及各租户最近发生了什么。只读；租户治理在治理工具中。",
-      "pendingTitle": "租户数据尚未接入",
-      "pendingDescription": "这些统计和动态需要跨租户读取，属于带审计的跨租户读取层，由另一个工作项交付。控制台的准入、审计记录和外壳已就绪，数据会随之而来。"
+      "title": "平台概览",
+      "subtitle": "一眼看清整个平台——Motir 托管了多少组织、工作区、项目和用户，以及所有租户最近发生了什么。只读。",
+      "periodLabel": "时间段",
+      "period": {
+        "7d": "7 天",
+        "30d": "30 天",
+        "month": "本月"
+      },
+      "counts": {
+        "organizations": "组织",
+        "workspaces": "工作区",
+        "projects": "项目",
+        "users": "用户"
+      },
+      "delta": "最近 {period} +{count, number}",
+      "feed": {
+        "title": "最近活动",
+        "when": "时间",
+        "event": "事件",
+        "where": "位置",
+        "detail": "详情",
+        "kind": {
+          "new_organization": "新组织",
+          "new_workspace": "新工作区",
+          "new_project": "新项目",
+          "planning_run": "规划运行",
+          "coding_run": "智能体运行"
+        },
+        "unattributed": "（未归属）",
+        "runDetail": "{model} · {credits} 积分",
+        "runsUnavailable": "暂时无法显示运行记录——AI 服务没有响应。下方的租户事件和计数是最新的。",
+        "emptyTitle": "此处还没有活动",
+        "emptyDescription": "在此之前没有创建租户，也没有记录运行。",
+        "emptyEstateTitle": "平台还是空的",
+        "emptyEstateDescription": "还没有任何组织。新的组织、工作区、项目和运行会显示在这里。",
+        "older": "显示更早的活动"
+      }
     },
     "users": {
       "breadcrumb": "平台·用户",

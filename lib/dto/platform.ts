@@ -206,3 +206,39 @@ export interface PlatformOrganizationEstateDTO {
   /** True when the org holds more workspaces than `workspaces` shows. */
   hasMoreWorkspaces: boolean;
 }
+
+/** The overview's period control (design D1): what every delta is counted over. */
+export type PlatformOverviewPeriod = '7d' | '30d' | 'month';
+
+/** One row of the overview's activity feed — a tenant event or a run (MOTIR-731). */
+export interface PlatformActivityItemDTO {
+  kind: 'new_organization' | 'new_workspace' | 'new_project' | 'planning_run' | 'coding_run';
+  id: string;
+  at: string;
+  organization: { id: string; name: string } | null;
+  workspace: { id: string; name: string } | null;
+  project: { id: string; name: string } | null;
+  /** A run whose org is known but that names no workspace/project ("(unattributed)"). */
+  unattributed: boolean;
+  /** Who a tenant belongs to (an owner's / manager's email) or a project's key. */
+  detail: string | null;
+  /** A run's model and credits. */
+  model: string | null;
+  credits: number | null;
+}
+
+/** The estate overview (MOTIR-731, design D1/D2) — one audited read. */
+export interface PlatformOverviewDTO {
+  period: PlatformOverviewPeriod;
+  /** The start of the period every delta counts from. */
+  since: string;
+  counts: PlatformEstateCountsDTO;
+  deltas: PlatformEstateCountsDTO;
+  feed: {
+    items: PlatformActivityItemDTO[];
+    /** Older items exist past this page. */
+    nextCursor: string | null;
+    /** The run half could not be read — the tenant half still renders. */
+    runsUnavailable: boolean;
+  };
+}
