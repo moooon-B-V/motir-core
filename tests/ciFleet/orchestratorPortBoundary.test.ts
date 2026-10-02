@@ -169,6 +169,14 @@ const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
     why: "the CERTIFICATE port's composition root — it selects that adapter, not the fleet's",
   },
   {
+    // The daily health check's credential registry (MOTIR-1933) DECLARES the
+    // read token by name so its expiry is watched (MOTIR-7332). It reads the
+    // variable's presence through the probe, never its value, and calls no API.
+    file: join('lib', 'health', 'credentialRegistry.ts'),
+    tell: /\bFLY_DEPLOYMENT_READ_TOKEN\b/,
+    why: "declares the deployment read token's expiry for the daily health check — a name, not a client",
+  },
+  {
     file: join('lib', 'deployment', 'providers.ts'),
     tell: /deployment\/adapters\/fly/,
     why: "the DEPLOYMENT-STATUS port's composition root — it selects that adapter, not the fleet's (MOTIR-7332)",
