@@ -680,6 +680,12 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'onboarding-fresh.spec.ts': 9.3,
   'onboarding-migrate.spec.ts': 42.0,
   'onboarding-ran-gate.spec.ts': 14.1,
+  // MOTIR-7280 — a brand-new spec, ESTIMATED rather than measured: two tests,
+  // a sign-up each; the first creates a page over HTTP, renames it, types a line
+  // and reloads, the second reads one 404. Rounded UP, because under-estimating
+  // unbalances the bin-packer. RE-MEASURE from the first green CI run that
+  // includes it.
+  'pages-smoke.spec.ts': 20.0,
   'pages-stream.spec.ts': 12.0,
   'org-admin.spec.ts': 8.6,
   // MOTIR-6405 — measured LOCALLY in one run (47.0 s wall, which includes the

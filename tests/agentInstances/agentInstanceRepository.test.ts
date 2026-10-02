@@ -127,6 +127,10 @@ describe('the §4 transition table', () => {
         'waking→failed',
         'failed→waking',
         'failed→deleting',
+        // AMENDMENT 4 (MOTIR-7341) — a boot or a stop that never settles is deletable.
+        'starting→deleting',
+        'waking→deleting',
+        'hibernating→deleting',
         // agent-image-update.md Q6 — the update's own four.
         'running→updating',
         'hibernated→updating',
@@ -136,8 +140,30 @@ describe('the §4 transition table', () => {
     );
   });
 
+  // AMENDMENT 4: every state's Delete answer, pinned one by one — the service's
+  // guard, the sweep's plan-lapse delete and the panel all read this table.
+  it.each([
+    ['starting', true],
+    ['running', true],
+    ['hibernating', true],
+    ['hibernated', true],
+    ['waking', true],
+    ['failed', true],
+    ['deleting', false],
+    ['updating', false],
+  ] as const)('Delete from %s → %s', (state, legal) => {
+    expect(isLegalTransition(state, 'deleting')).toBe(legal);
+  });
+
   it('derives the prior-state set a guarded update names', () => {
-    expect(statesThatMayEnter('deleting').sort()).toEqual(['failed', 'hibernated', 'running']);
+    expect(statesThatMayEnter('deleting').sort()).toEqual([
+      'failed',
+      'hibernated',
+      'hibernating',
+      'running',
+      'starting',
+      'waking',
+    ]);
     expect(statesThatMayEnter('running').sort()).toEqual(['starting', 'updating', 'waking']);
     expect(statesThatMayEnter('starting')).toEqual([]);
   });
@@ -215,6 +241,23 @@ describe('agentInstanceRepository', () => {
     );
     expect(after?.state).toBe('starting');
     expect(after?.stateChangedAt.getTime()).toBe(row.stateChangedAt.getTime());
+  });
+
+  it('a transition guarded on an image digest moves only while the row still carries it (MOTIR-7340)', async () => {
+    const f = await seedFixture();
+    const row = await createInstance(f);
+    const stale = await withWorkspaceServiceContext(f.workspaceId, (tx) =>
+      agentInstanceRepository.transition(row.id, ['starting'], 'running', new Date(), {}, tx, {
+        imageDigest: 'sha256:not-the-one-it-runs',
+      }),
+    );
+    expect(stale).toBe(0);
+    const current = await withWorkspaceServiceContext(f.workspaceId, (tx) =>
+      agentInstanceRepository.transition(row.id, ['starting'], 'running', new Date(), {}, tx, {
+        imageDigest: row.imageDigest,
+      }),
+    );
+    expect(current).toBe(1);
   });
 
   it('TWO CONCURRENT transitions from the same state: exactly one wins', async () => {

@@ -31,24 +31,27 @@ export const AGENT_INSTANCE_STATES = [
 export const AGENT_INSTANCE_TRANSITIONS: Readonly<
   Record<AgentInstanceState, readonly AgentInstanceState[]>
 > = {
-  // create's first boot: the machine reports running, or the boot fails.
-  starting: ['running', 'failed'],
+  // create's first boot: the machine reports running, or the boot fails; Delete
+  // (AMENDMENT 4 — a boot can fail to settle, so its owner must be able to leave it).
+  starting: ['running', 'failed', 'deleting'],
   // Hibernate (owner, idle sweep, backstop, credit refusal); the reconcile
   // finding the machine already stopped; the reconcile finding it gone; Delete;
   // Update (`agent-image-update.md` Q6).
   running: ['hibernating', 'hibernated', 'failed', 'deleting', 'updating'],
-  // The machine reports stopped; or the reconcile finds it gone.
-  hibernating: ['hibernated', 'failed'],
+  // The machine reports stopped; or the reconcile finds it gone; Delete (AMENDMENT 4).
+  hibernating: ['hibernated', 'failed', 'deleting'],
   // Wake (or a later story's door into the instance); Delete; Wake with an
   // update pinned, which takes the new image at this wake (Q5).
   hibernated: ['waking', 'deleting', 'updating'],
-  // The machine reports running; the start fails or the reconcile finds it gone.
-  waking: ['running', 'failed'],
+  // The machine reports running; the start fails or the reconcile finds it gone;
+  // Delete (AMENDMENT 4).
+  waking: ['running', 'failed', 'deleting'],
   // Wake, while the machine and volume still exist; Delete.
   failed: ['waking', 'deleting'],
   deleting: [],
   // Q6: the new image passed (or the rollback reached running); the rollback
-  // failed, or the reconcile found the machine gone.
+  // failed, or the reconcile found the machine gone. No Delete: Q6 refuses it, and
+  // the settle's own deadlines end every update in `running` or `failed`.
   updating: ['running', 'failed'],
 };
 

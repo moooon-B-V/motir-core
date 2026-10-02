@@ -23,6 +23,9 @@
 //   * LOCAL, LEGACY (`lastHeartbeatAt === null`, a CLI too old to heartbeat) —
 //     alive until the existing 12-hour age reap would close it. Never marked
 //     dead before then: it cannot prove it is alive, so absence proves nothing.
+//     A current CLI beats the moment it holds a run (MOTIR-7328), so a run that
+//     dies in its first minute is HEARTBEATING, not legacy. Before that, the first
+//     beat waited a full interval, and such a run read alive here for 12 hours.
 
 /** How often a local run reports it is alive. */
 export const RUN_HEARTBEAT_INTERVAL_MS = 60_000;

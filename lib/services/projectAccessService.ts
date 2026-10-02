@@ -20,6 +20,8 @@ import {
   canModerateComments,
   canSubmitToTriage,
   canUpvotePublicRequest,
+  canViewPages,
+  canEditPages,
   type ProjectAccessInputs,
 } from '@/lib/projects/access';
 import {
@@ -580,6 +582,54 @@ export const projectAccessService = {
     const inputs = await resolveInputs(projectId, ctx, tx);
     if (!canBrowse(inputs)) throw new ProjectAccessDeniedError(projectId, 'browse');
     if (!canEdit(inputs)) throw new ProjectAccessDeniedError(projectId, 'edit');
+  },
+
+  /**
+   * Assert the actor may READ the project's pages (MOTIR-7277). Shaped exactly
+   * like {@link assertCanEdit}: a non-browser is refused as 'browse' (→ 404,
+   * hidden), a browser without `page:view` as 'edit' (→ 403).
+   */
+  async assertCanViewPages(
+    projectId: string,
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const inputs = await resolveInputs(projectId, ctx, tx);
+    if (!canBrowse(inputs)) throw new ProjectAccessDeniedError(projectId, 'browse');
+    if (!canViewPages(inputs)) throw new ProjectAccessDeniedError(projectId, 'edit');
+  },
+
+  /**
+   * Assert the actor may WRITE the project's pages — create, rename, save
+   * (MOTIR-7277). A non-browser is refused as 'browse' (→ 404), a browser
+   * without `page:edit` as 'edit' (→ 403).
+   */
+  async assertCanEditPages(
+    projectId: string,
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const inputs = await resolveInputs(projectId, ctx, tx);
+    if (!canBrowse(inputs)) throw new ProjectAccessDeniedError(projectId, 'browse');
+    if (!canEditPages(inputs)) throw new ProjectAccessDeniedError(projectId, 'edit');
+  },
+
+  /**
+   * The actor's PAGE capabilities — the non-throwing form, for the read that
+   * renders the editor writable or read-only (`pagesService.getPage`'s `canEdit`).
+   * Throws only ProjectNotFoundError.
+   */
+  async getPageCapabilities(
+    projectId: string,
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ canViewPages: boolean; canEditPages: boolean }> {
+    const inputs = await resolveInputs(projectId, ctx, tx);
+    const browse = canBrowse(inputs);
+    return {
+      canViewPages: browse && canViewPages(inputs),
+      canEditPages: browse && canEditPages(inputs),
+    };
   },
 
   // --- Public-project access (Story 6.12 · Subtask 6.12.3) -------------------
