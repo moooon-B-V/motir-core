@@ -94,6 +94,10 @@ const BILLING_SURFACES: ReadonlyArray<readonly [file: string, why: string]> = [
     'charges every agent instance its storage once per UTC day in credits (MOTIR-6919, agent-instance-storage.md §2) — the interval charge’s billing-build switch; a self-hosted build charges nothing',
   ],
   [
+    'lib/services/platformFleetMonitorService.ts',
+    'Monitoring · Fleet and the tenant Fleet card (MOTIR-6905) — compares running containers with the credits the fleet meter debits, which exist only on a billing build; off it the read answers `{ meter: "disabled" }`',
+  ],
+  [
     'lib/services/platformOrgIndexCostService.ts',
     'the org page’s Index & fleet cost card (MOTIR-5341) — the same billing-build switch as the fleet meter it reads',
   ],

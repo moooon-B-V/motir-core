@@ -138,6 +138,10 @@ describe('append-only, as an application property', () => {
     // assertion rather than passing review.
     expect(Object.keys(platformAuditLogRepository).sort()).toEqual([
       'create',
+      // MOTIR-6905's last-stop line on the tenant page's Fleet card (MOTIR-7320):
+      // the newest `fleet.stop` on one target. A READ, added by the story and
+      // missed here until its integration gate (MOTIR-7321) ran this file.
+      'findLatestByTargetAndAction',
       'listByActor',
       'listByOrganization',
       // MOTIR-1167's target read — Panel 9's "Support actions" log. A READ, so
