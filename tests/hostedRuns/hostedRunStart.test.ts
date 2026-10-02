@@ -836,8 +836,9 @@ describe('continue hosted — a leaf whose run died', () => {
     const { card } = await deadCard();
 
     // Whichever way the two interleave — the second seeing the first's run at the
-    // short-circuit, or both passing it and the claim replaying the opening —
-    // the answer is the same run, opened once.
+    // short-circuit, both passing it and the claim replaying the opening, or the
+    // second's PREVIEW running after the first's claim committed (re-read by key,
+    // MOTIR-7312; forced in the next test) — the answer is the same run, opened once.
     const [a, b] = await Promise.all([
       startContinue(card.identifier, 'double-click'),
       startContinue(card.identifier, 'double-click'),
