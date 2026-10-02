@@ -21,6 +21,7 @@ import type {
   PersistentContainerSpec,
   PersistentContainerState,
   PersistentContainerStatus,
+  PersistentMachineEvent,
   PersistentExecResult,
   PersistentLivenessResult,
   PersistentPublicService,
@@ -276,6 +277,25 @@ export function currentRunInstants(machine: FlyMachine): {
     if (!stoppedAt || event.timestamp.getTime() > stoppedAt.getTime()) stoppedAt = event.timestamp;
   }
   return { startedAt, stoppedAt };
+}
+
+/**
+ * The machine's own lifecycle events, oldest first (MOTIR-7396). Pure: an event
+ * without a timestamp cannot be placed on a timeline and is skipped; an
+ * unrecognised type passes through as its own string. The sort is stable.
+ */
+export function toPersistentEvents(machine: FlyMachine): PersistentMachineEvent[] {
+  const out: PersistentMachineEvent[] = [];
+  for (const event of machine.events) {
+    if (!event.timestamp) continue;
+    out.push({
+      type: event.type,
+      status: event.status,
+      at: event.timestamp,
+      ...(event.exitCode !== null ? { exitCode: event.exitCode } : {}),
+    });
+  }
+  return out.sort((a, b) => a.at.getTime() - b.at.getTime());
 }
 
 /** How long `destroyPersistent` waits for a destroyed machine to release its volume. */
@@ -710,6 +730,7 @@ export const flyPersistentOrchestrator: PersistentContainerOrchestrator = {
         providerState: '',
         startedAt: null,
         stoppedAt: null,
+        events: [],
       };
     }
     const instants = currentRunInstants(machine);
@@ -721,6 +742,7 @@ export const flyPersistentOrchestrator: PersistentContainerOrchestrator = {
       stoppedAt: instants.stoppedAt,
       // Only an exit of the CURRENT run says anything about it (MOTIR-7336).
       exitCode: instants.stoppedAt ? exitCodeOf(machine) : null,
+      events: toPersistentEvents(machine),
       image: machine.image ?? null,
     };
   },

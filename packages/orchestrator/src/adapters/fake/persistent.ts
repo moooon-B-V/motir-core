@@ -10,6 +10,7 @@ import type {
   PersistentContainerStatus,
   PersistentExecResult,
   PersistentLivenessResult,
+  PersistentMachineEvent,
   PersistentTerminalConfig,
   PersistentTerminalEndpoint,
 } from '../../types';
@@ -34,6 +35,28 @@ import { livenessViaExec } from '../../persistentLiveness';
 // reason: the E2E lane's web server provisions and its worker sweeps, so the
 // two processes must see one fleet. Absent the variable it is an in-memory map.
 
+interface FakeMachineEvent {
+  type: string;
+  status: string;
+  at: string;
+  exitCode?: number;
+}
+
+function recordEvent(
+  machine: FakePersistentMachine,
+  type: string,
+  status: string,
+  at: string,
+  exitCode?: number,
+): void {
+  (machine.events ??= []).push({
+    type,
+    status,
+    at,
+    ...(exitCode === undefined ? {} : { exitCode }),
+  });
+}
+
 interface FakePersistentMachine {
   handle: PersistentContainerHandle;
   spec: PersistentContainerSpec;
@@ -42,6 +65,8 @@ interface FakePersistentMachine {
   stoppedAt: string | null;
   /** The main process's exit code when it exited on its own (MOTIR-7336); null otherwise. */
   exitCode?: number | null;
+  /** The machine's own timeline, oldest first (MOTIR-7396). Absent in an older store file. */
+  events?: FakeMachineEvent[];
   starts: number;
   /** The terminal machine-config version the machine was last written with; 0 = none (Q8). */
   configVersion: number;
@@ -314,6 +339,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
         machine.state = 'running';
         machine.startedAt = now().toISOString();
         machine.stoppedAt = null;
+        recordEvent(machine, 'start', 'started', machine.startedAt);
       }
       save();
     },
@@ -329,6 +355,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       const machine = machineOrThrow(machineId);
       machine.state = 'stopped';
       machine.stoppedAt = now().toISOString();
+      recordEvent(machine, 'stop', 'stopped', machine.stoppedAt);
       save();
     },
     exitOutside(machineId, exitCode) {
@@ -338,6 +365,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       machine.startedAt ??= at;
       machine.stoppedAt = at;
       machine.exitCode = exitCode;
+      recordEvent(machine, 'exit', 'stopped', at, exitCode);
       save();
     },
     backdateRun(machineId, startedAt) {
@@ -453,6 +481,9 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
         configVersion: spec.terminal?.version ?? 0,
         keyId: spec.terminal?.keyId ?? null,
       };
+      const created = store.machines[machineId]!;
+      recordEvent(created, 'launch', 'created', createdAt.toISOString());
+      if (boots) recordEvent(created, 'start', 'started', createdAt.toISOString());
       store.volumes[volumeId]!.attachedMachineId = machineId;
       operations.push(`machine:create:${machineId}`);
       save();
@@ -469,6 +500,8 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       if (!machine || machine.state === 'stopped') return;
       machine.state = 'stopped';
       machine.stoppedAt = now().toISOString();
+      recordEvent(machine, 'stop', 'stopped', machine.stoppedAt);
+      recordEvent(machine, 'exit', 'stopped', machine.stoppedAt, 0);
       save();
     },
 
@@ -487,6 +520,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       machine.stoppedAt = null;
       machine.exitCode = null;
       machine.starts += 1;
+      if (bootBehaviour === 'start') recordEvent(machine, 'start', 'started', machine.startedAt!);
       save();
     },
 
@@ -502,6 +536,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
           providerState: '',
           startedAt: null,
           stoppedAt: null,
+          events: [],
         };
       }
       return {
@@ -511,6 +546,14 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
         startedAt: machine.startedAt ? new Date(machine.startedAt) : null,
         stoppedAt: machine.stoppedAt ? new Date(machine.stoppedAt) : null,
         exitCode: machine.state === 'stopped' ? (machine.exitCode ?? null) : null,
+        events: (machine.events ?? []).map(
+          (e): PersistentMachineEvent => ({
+            type: e.type,
+            status: e.status,
+            at: new Date(e.at),
+            ...(e.exitCode === undefined ? {} : { exitCode: e.exitCode }),
+          }),
+        ),
         image: machine.spec.image,
       };
     },

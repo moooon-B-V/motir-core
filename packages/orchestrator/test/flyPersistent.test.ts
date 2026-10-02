@@ -406,6 +406,28 @@ describe('describePersistent', () => {
     expect(toPersistentState('something-new')).toBe('starting');
   });
 
+  it('reports the machine’s own events oldest first, unknown types passed through (MOTIR-7396)', async () => {
+    const events = [
+      {
+        type: 'exit',
+        status: 'stopped',
+        timestamp: Date.parse('2026-09-28T10:02:00Z'),
+        request: { exit_event: { exit_code: 0 } },
+      },
+      { type: 'launch', status: 'created', timestamp: Date.parse('2026-09-28T10:00:00Z') },
+      { type: 'start', status: 'started', timestamp: Date.parse('2026-09-28T10:01:00Z') },
+      { type: 'brand-new-fly-type', status: 'odd', timestamp: Date.parse('2026-09-28T10:03:00Z') },
+    ];
+    handler = () => json(200, flyMachine('stopped', events));
+    const status = await flyPersistentOrchestrator.describePersistent(HANDLE);
+    expect(status.events).toEqual([
+      { type: 'launch', status: 'created', at: new Date('2026-09-28T10:00:00Z') },
+      { type: 'start', status: 'started', at: new Date('2026-09-28T10:01:00Z') },
+      { type: 'exit', status: 'stopped', at: new Date('2026-09-28T10:02:00Z'), exitCode: 0 },
+      { type: 'brand-new-fly-type', status: 'odd', at: new Date('2026-09-28T10:03:00Z') },
+    ]);
+  });
+
   it('reads the CURRENT run’s start and stop — never the first start', async () => {
     const events = [
       { type: 'start', status: 'started', timestamp: Date.parse('2026-09-28T09:00:00Z') },
@@ -475,6 +497,7 @@ describe('describePersistent', () => {
       providerState: '',
       startedAt: null,
       stoppedAt: null,
+      events: [],
     });
     handler = () => json(500, { error: 'down' });
     await expect(flyPersistentOrchestrator.describePersistent(HANDLE)).rejects.toThrow(
