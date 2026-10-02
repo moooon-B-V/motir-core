@@ -55,6 +55,8 @@ These come from the epic and are not re-argued here:
 4. **Link, never parent.** A page and a work item may link both ways. Neither ever parents
    the other.
 5. **One tree view.** A single project tree view shows folders, pages and work items together.
+   _Superseded by [AMENDMENT 1 (2026-10-02)](#amendment-1-2026-10-02--pages-get-their-own-tree-in-pages):
+   pages have their own tree in `/pages`, and a combined tree is deferred._
 6. **Co-editing later.** Live co-editing is planned, at low priority.
 7. **Descriptions stay separate.** Work-item descriptions are not pages, now or later.
 
@@ -194,9 +196,12 @@ already globs `packages/*`, so it covers the package with no change to the test.
   from the topmost page's `folder_id` and the folder chain, as the shipped folder breadcrumb
   reads it, because folders carry no ancestor array.
 - **Order within a level.** Pages carry `page.position`, a fractional key among the pages that
-  share their parent. In the one mixed tree view a level shows its **folders first** (the
-  shipped `/items` rule), **then its pages, then its work items**, each kind in its own
-  position order. A page is reordered among pages, not between a folder and a work item.
+  share their parent. The page tree lives in the Pages section, `/pages`, and a level there
+  shows its **folders first** (the shipped `/items` rule), **then its pages**, each kind in its
+  own position order. `/items` is unchanged and shows no pages. A page is reordered among pages,
+  not between a folder and a work item. (Rewritten by
+  [AMENDMENT 1](#amendment-1-2026-10-02--pages-get-their-own-tree-in-pages); this sentence
+  previously described one mixed tree view of three kinds.)
 - **Paging per level.** A level's pages are read one parent at a time, ordered by
   `(position, id)`, with a keyset cursor on that pair: **50 per page by default, at most 100**.
   Children are fetched when a node is expanded, never as a whole-project walk.
@@ -323,6 +328,55 @@ Sources, read 2026-10-01:
 Rows marked "n/a" are where the product has no equivalent; "none documented" means the
 reference read names no limit, not that none exists.
 
+### AMENDMENT 1 (2026-10-02) — Pages get their own tree in `/pages`
+
+- **Decided by:** Yue, 2026-10-02. Recorded by MOTIR-7366.
+- **Supersedes:** MOTIR-5753's earlier scope (_"page rows beside folders and work items in
+  `/items`"_) and MOTIR-5746's "One tree view" requester-decision bullet (§1 item 5).
+- **Consumed by:** MOTIR-5753 (pages in the project tree) · MOTIR-5755 (archive, delete and
+  restore) · MOTIR-5760 (agents read and write a page over the MCP).
+- **Amends:** the ordering sentence in §4 _Order within a level_, and the Consequences entry
+  for MOTIR-5753. Every other §4 rule stands word for word: the parent kinds, the depth limit
+  of 10, the stored `ancestor_page_ids`, fractional positions, keyset paging (50 / 100) and a
+  folder delete moving pages up.
+
+**What the requester said.** Yue refused the `/items` placement in the first design of
+MOTIR-7271: _"wrong design, pages should not be in /items, it should have its own page"_. Then
+clarified: _"page will have its own nav item in the sidebar, but pages and items share the same
+folder system — that's the same 'tree' about. but we don't need to show them in the same tree
+yet"_. The approved, redrawn design records both quotes in `design/pages/design-notes.md`
+§"This is a REDRAW, and it follows a refusal", and the planning conversation for MOTIR-5753
+re-confirmed that the tree lives in `/pages`.
+
+**The decision.** Pages are organised in their **own tree in the Pages section (`/pages`)**,
+not in the work-item tree in `/items`. Pages and work items **share one folder system**: a page
+files into the same `folder` rows a work item does, and deleting a folder moves both up. But
+each surface shows its own kind. `/pages` shows folders and pages; `/items` keeps showing
+folders and work items, unchanged. One combined tree showing all three kinds together is **not
+planned now**. A page's parent is still a page, a folder or the root and never a work item, and
+a work item is never parented by a page.
+
+**What this changes, and what it does not.**
+
+- The page tree lives in `/pages`: folders and pages, sub-pages up to 10 levels of pages,
+  filing into the project's shared folders, moving and reordering with fractional positions,
+  stored ancestors for the breadcrumb, and a sidebar tree on the page route.
+- `/items` shows no pages. A combined three-kind tree is deferred, and no card plans it.
+- Unchanged from the 2026-09-19 decisions: no workspace-level pages; a page and a work item may
+  link both ways and never parent each other; co-editing comes later, at low priority;
+  work-item descriptions stay separate.
+
+**What this amendment does NOT decide.**
+
+- **The design of the `/pages` tree, its rows or its sidebar tree.** That is MOTIR-5753's
+  design card.
+- **Whether, when or how a combined tree is ever built.** It is deferred, not designed and not
+  ruled out.
+- **Any change to the data model.** The columns, CHECKs, triggers and limits of §4 are the same
+  for a `/pages` tree as for the mixed one; nothing here adds or removes a column.
+- **How a folder that holds only pages, or only work items, shows on the other surface.**
+  That is a tree-view question for MOTIR-5753.
+
 ---
 
 ## Consequences
@@ -332,7 +386,8 @@ reference read names no limit, not that none exists.
 - **MOTIR-5752 is the first migration**: `page` with the columns of §3 and §4, its CHECKs,
   triggers and RLS, and `lib/pages/index.ts`. It is also the first `bytea` column in the
   schema.
-- **The tree view changes in MOTIR-5753**: a level now holds three kinds, folders first.
+- **MOTIR-5753 builds the page tree in `/pages`** (AMENDMENT 1): a level holds folders, then
+  pages; the `/items` tree view does not change.
   `foldersService.deleteFolder` gains pages in the set it moves up.
 - **The package's dependencies grow** by `yjs`, `y-prosemirror`, `prosemirror-markdown`,
   `markdown-it` and the Tiptap packages the editor already uses. None of them enter the app's
