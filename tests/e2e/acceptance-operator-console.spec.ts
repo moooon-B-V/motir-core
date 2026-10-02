@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { expect, test } from './_helpers/acceptance-video';
-import { db, resetDatabase } from './_helpers/db-reset';
+import { adminDb, resetDatabase } from './_helpers/db-reset';
 import {
   paidOrgState,
   resetBillingFixture,
@@ -61,21 +61,21 @@ test('platform staff walk the console end to end; a tenant member and owner are 
   const memberContext = await browser.newContext();
   const memberPage = await memberContext.newPage();
   const other = await seedBillingOwner(memberPage, MEMBER);
-  await db.organizationMembership.create({
+  await adminDb.organizationMembership.create({
     data: { organizationId: acme.organizationId, userId: other.ownerId, role: 'member' },
   });
-  await db.workspaceMembership.create({
+  await adminDb.workspaceMembership.create({
     data: { workspaceId: acme.workspaceId, userId: other.ownerId, workspaceRole: 'member' },
   });
-  const acmeOrg = await db.organization.update({
+  const acmeOrg = await adminDb.organization.update({
     where: { id: acme.organizationId },
     data: { name: 'Acme Console Corp' },
   });
-  const otherOrg = await db.organization.update({
+  const otherOrg = await adminDb.organization.update({
     where: { id: other.organizationId },
     data: { name: 'Bravo Console Ltd' },
   });
-  const project = await db.project.findUniqueOrThrow({ where: { id: acme.projectId } });
+  const project = await adminDb.project.findUniqueOrThrow({ where: { id: acme.projectId } });
 
   const fixture: PlatformUsageFixture = {
     orgs: [
@@ -134,7 +134,7 @@ test('platform staff walk the console end to end; a tenant member and owner are 
   });
 
   // The owner is made platform staff; the gate reads a fresh row per request.
-  await db.user.update({ where: { email: OWNER }, data: { platformRole: 'superadmin' } });
+  await adminDb.user.update({ where: { email: OWNER }, data: { platformRole: 'superadmin' } });
 
   await chapter(
     'The operator opens the console from the account menu: the estate overview',
