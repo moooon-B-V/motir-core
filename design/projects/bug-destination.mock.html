@@ -20,7 +20,7 @@
         · the three-way choice reuses the shipped `choice-card` grammar from
           design/projects/components.mock.html (the delete-with-reassign dialog);
         · the folder picker is the shipped FolderPicker panel
-          (app/(authed)/items/_components/FolderPicker.tsx) — a title, the search
+          (components/folders/FolderPicker.tsx) — a title, the search
           Input, a listbox indented per level, the current location tagged.
       What it ADDS is this room's content: the three choices, the folder picker,
       the save states, and the rail entry.
@@ -1045,7 +1045,7 @@
         font-size: 12px;
         color: var(--el-text-identifier);
       }
-      /* The FOLDER PICKER — app/(authed)/items/_components/FolderPicker.tsx's panel:
+      /* The FOLDER PICKER — components/folders/FolderPicker.tsx's panel:
          a title, the search Input, and a listbox indented 22px per level, the
          current location tagged. Drawn in flow, like the menu it replaces. */
       .dest .fg {
