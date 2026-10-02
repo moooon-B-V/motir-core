@@ -1,0 +1,3307 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Pages — the page’s sidebar tree and breadcrumb (MOTIR-7367)</title>
+    <!--
+      DESIGN ASSET (HTML mockup, DELTA) — THE PAGE'S SIDEBAR TREE AND BREADCRUMB.
+      Story MOTIR-5753, design subtask MOTIR-7367. Amends design/pages/page.mock.html
+      (MOTIR-7271), whose "← Pages" link was named the breadcrumb's placeholder.
+      Only what changes is drawn: the sidebar column, the breadcrumb, the collapsed
+      sidebar, and where a breadcrumb segment leads.
+
+      Composes, does not invent: the sidebar is the /pages PageTree (pages--tree.mock.html)
+      at a compact density; its selected row is components/ui/Sidebar's active row;
+      the breadcrumb's "…" opens a Popover menu in FolderRowMenu's grammar; the
+      overlay uses the theme's --el-overlay-scrim and --shadow-modal. Colour is
+      --el-* only, shape is the element shape tokens.
+
+      Panels: 1 selected + expanded + breadcrumb · 2 breadcrumb grammar incl. deep
+      truncation · 3 sidebar collapsed (wide, narrow, narrow opened) · 4 breadcrumb
+      → tree · 5 the sidebar's own states. Each in light and dark; zh on dark.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — values copied from
+         packages/design-system/theme.css (base palette, default style). ───── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        --color-accent: #ff64c8;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --focus-ring-width: 2px;
+
+        --radius-modal: 12px;
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      /* The Tier-3 layer is declared on EVERY themed scope, not on :root alone.
+         A custom property's var() is substituted where it is DECLARED, so an
+         --el-* declared only on :root would compute against the light palette
+         and a nested data-theme="dark" board would inherit the light value
+         (tests/design-dark-parity.test.ts, MOTIR-3592). */
+      :root,
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-identifier: var(--color-slate);
+
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-muted: var(--color-muted);
+        --el-card: var(--color-background);
+
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning: var(--color-warning);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success: var(--color-success);
+
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-mint: var(--color-tint-mint);
+
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-text-subtitle: var(--color-slate);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+
+        --focus-ring-color: var(--color-primary);
+        --el-overlay-scrim: #00000066;
+      }
+      /* theme.css's dark-only lifts (MOTIR-3745 accent ink; the sidebar hover). */
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-overlay-scrim: #000000a6;
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+      }
+    </style>
+
+    <style>
+      /* ── Board chrome (the review sheet) and the composed primitives. Every
+         rule here is carried by some element, and every class carried has a
+         rule. Colour is --el-* only; shape is the element shape tokens. ── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        font-family: var(--font-sans);
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+      }
+      .pt-sheet {
+        max-width: 1240px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 40px;
+      }
+      .pt-sheetTitle {
+        font-family: var(--font-serif);
+        font-size: 1.75rem;
+        font-weight: 600;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .pt-sheetLead {
+        margin: 6px 0 0;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 920px;
+      }
+      .pt-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .pt-panelTitle {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pt-panelNum {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pt-panelNote {
+        margin: 0;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 980px;
+      }
+      .pt-boards {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .pt-board {
+        padding: 16px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        color: var(--el-text);
+      }
+      .pt-boardTag {
+        margin: 0 0 10px;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .pt-grid2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        align-items: start;
+      }
+      .pt-grid3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        align-items: start;
+      }
+      .pt-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      .pt-caption {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .pt-app {
+        display: grid;
+        grid-template-columns: 200px minmax(0, 1fr);
+        min-height: 320px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .pt-app3 {
+        display: grid;
+        grid-template-columns: 200px 248px minmax(0, 1fr);
+        min-height: 420px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .pt-rail {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 12px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+      }
+      .pt-railRow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid transparent;
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .pt-railActive {
+        background: var(--el-sidebar-item-bg-active);
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .pt-railElided {
+        margin: 0;
+        padding: 6px var(--spacing-control-x);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .pt-main {
+        padding: 24px 28px 28px;
+        background: var(--el-page-bg);
+        min-width: 0;
+      }
+      .pt-i12 {
+        flex: none;
+        width: 12px;
+        height: 12px;
+      }
+      .pt-i14 {
+        flex: none;
+        width: 14px;
+        height: 14px;
+      }
+      .pt-i16 {
+        flex: none;
+        width: 16px;
+        height: 16px;
+      }
+      .pt-i18 {
+        flex: none;
+        width: 18px;
+        height: 18px;
+      }
+      .pt-icMuted {
+        color: var(--el-icon-muted);
+      }
+      .pt-icSecondary {
+        color: var(--el-text-secondary);
+      }
+      .pt-icActive {
+        color: var(--el-icon-active);
+      }
+      .pt-icDanger {
+        color: var(--el-danger);
+      }
+      .pt-icInherit {
+        color: inherit;
+      }
+      .pt-rot90 {
+        transform: rotate(90deg);
+      }
+      .pt-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .pt-h1 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 1.5rem;
+        line-height: 2rem;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pt-sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .pt-headActions {
+        display: flex;
+        gap: 8px;
+        flex: none;
+      }
+      .pt-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        border-radius: var(--radius-btn);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+        text-decoration: none;
+      }
+      .pt-btnPrimary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .pt-btnSecondary {
+        background: var(--el-page-bg);
+        border-color: var(--el-button-border);
+        color: var(--el-text);
+      }
+      .pt-tree {
+        margin: 20px 0 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        overflow: hidden;
+      }
+      .pt-row {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 40px;
+        padding-right: 8px;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .pt-row + .pt-row {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .pt-rowFocus {
+        box-shadow: inset 0 0 0 2px var(--focus-ring-color);
+      }
+      .pt-chev {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .pt-chevSlot {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .pt-name {
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pt-title {
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        color: var(--el-text);
+        text-decoration: none;
+      }
+      .pt-more {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        padding: var(--spacing-icon-btn);
+        flex: none;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .pt-synth {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .pt-synthText {
+        color: var(--el-text);
+      }
+      .pt-linkBtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font: inherit;
+        font-size: 13px;
+        color: var(--el-link);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .pt-pop {
+        width: 220px;
+        padding: 4px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        box-shadow: var(--shadow-elevated);
+      }
+      .pt-mi {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        font: inherit;
+        font-size: 13px;
+        text-align: left;
+        color: var(--el-text);
+      }
+      .pt-iconBtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-btn-sm);
+        height: var(--height-btn-sm);
+        padding: var(--spacing-icon-btn);
+        flex: none;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .pt-srOnly {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+      .pt-side {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 12px 8px;
+        background: var(--el-surface-soft);
+        border-right: 1px solid var(--el-border);
+        min-width: 0;
+      }
+      .pt-sideHead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 0 4px 8px 8px;
+      }
+      .pt-sideTitle {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        text-decoration: none;
+      }
+      .pt-srow {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding-right: 8px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text);
+      }
+      .pt-srowActive {
+        background: var(--el-sidebar-item-bg-active);
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+        font-weight: 500;
+      }
+      .pt-crumbs {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 6px;
+        min-width: 0;
+        font-size: 13px;
+      }
+      .pt-crumbBar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .pt-crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        max-width: 180px;
+        min-width: 0;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .pt-crumbText {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .pt-crumbCurrent {
+        display: inline-flex;
+        max-width: 220px;
+        min-width: 0;
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .pt-crumbMore {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 24px;
+        padding: 0 var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        font: inherit;
+        color: var(--el-text-secondary);
+      }
+      .pt-crumbMoreOpen {
+        background: var(--el-border-soft);
+        color: var(--el-text);
+      }
+      .pt-col {
+        max-width: 760px;
+      }
+      .pt-pageTitle {
+        margin: 12px 0 0;
+        font-family: var(--font-serif);
+        font-size: 1.5rem;
+        line-height: 2rem;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pt-strip {
+        margin-top: 12px;
+        padding: 8px 10px;
+        border-top: 1px solid var(--el-border);
+        border-bottom: 1px solid var(--el-border);
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .pt-prose {
+        margin: 16px 0 0;
+        font-size: 15px;
+        line-height: 1.65;
+        color: var(--el-text);
+      }
+      .pt-phone {
+        width: 390px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+        position: relative;
+      }
+      .pt-phoneTop {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 48px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--el-border);
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pt-phoneMain {
+        padding: 16px;
+      }
+      .pt-drawerWrap {
+        position: absolute;
+        inset: 48px 0 0 0;
+        display: flex;
+        background: var(--el-overlay-scrim);
+      }
+      .pt-drawer {
+        width: 300px;
+        height: 100%;
+        padding: 12px 8px;
+        background: var(--el-surface-soft);
+        border-right: 1px solid var(--el-border);
+        box-shadow: var(--shadow-modal);
+      }
+      .pt-app2 {
+        display: grid;
+        grid-template-columns: 200px minmax(0, 1fr);
+        min-height: 300px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+      <symbol
+        id="i-alert"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" x2="12" y1="8" y2="12" />
+        <line x1="12" x2="12.01" y1="16" y2="16" />
+      </symbol>
+      <symbol
+        id="i-chevron-down"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m6 9 6 6 6-6" />
+      </symbol>
+      <symbol
+        id="i-chevron-right"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m9 18 6-6-6-6" />
+      </symbol>
+      <symbol
+        id="i-circle-dot"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <circle cx="12" cy="12" r="1" />
+      </symbol>
+      <symbol
+        id="i-circle-play"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"
+        />
+        <circle cx="12" cy="12" r="10" />
+      </symbol>
+      <symbol
+        id="i-ellipsis"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="1" />
+        <circle cx="19" cy="12" r="1" />
+        <circle cx="5" cy="12" r="1" />
+      </symbol>
+      <symbol
+        id="i-folder"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+        />
+      </symbol>
+      <symbol
+        id="i-folder-plus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 10v6" />
+        <path d="M9 13h6" />
+        <path
+          d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+        />
+      </symbol>
+      <symbol
+        id="i-house"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
+        <path
+          d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+        />
+      </symbol>
+      <symbol
+        id="i-loader"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+      </symbol>
+      <symbol
+        id="i-menu"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="4" x2="20" y1="12" y2="12" />
+        <line x1="4" x2="20" y1="6" y2="6" />
+        <line x1="4" x2="20" y1="18" y2="18" />
+      </symbol>
+      <symbol
+        id="i-notebook"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M2 6h4" />
+        <path d="M2 10h4" />
+        <path d="M2 14h4" />
+        <path d="M2 18h4" />
+        <rect width="16" height="20" x="4" y="2" rx="2" />
+        <path d="M9.5 8h5" />
+        <path d="M9.5 12H16" />
+        <path d="M9.5 16H14" />
+      </symbol>
+      <symbol
+        id="i-panel-close"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="M9 3v18" />
+        <path d="m16 15-3-3 3-3" />
+      </symbol>
+      <symbol
+        id="i-panel-open"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="M9 3v18" />
+        <path d="m14 9 3 3-3 3" />
+      </symbol>
+      <symbol
+        id="i-plus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 12h14" />
+        <path d="M12 5v14" />
+      </symbol>
+      <symbol
+        id="i-waypoints"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m10.586 5.414-5.172 5.172" />
+        <path d="m18.586 13.414-5.172 5.172" />
+        <path d="M6 12h12" />
+        <circle cx="12" cy="20" r="2" />
+        <circle cx="12" cy="4" r="2" />
+        <circle cx="20" cy="12" r="2" />
+        <circle cx="4" cy="12" r="2" />
+      </symbol>
+    </svg>
+    <div class="pt-sheet">
+      <div>
+        <h1 class="pt-sheetTitle">Pages — the page’s sidebar tree and breadcrumb</h1>
+        <p class="pt-sheetLead">
+          MOTIR-7367 for Story MOTIR-5753. A DELTA on
+          <code>design/pages/page.mock.html</code> (MOTIR-7271): the page at
+          <code>/pages/{id}</code> gains a sidebar tree with the page selected, and a breadcrumb
+          that replaces “← Pages”. The title, toolbar, editor and save states are the approved
+          base’s and are not redrawn. Spec, copy and keys: <code>design-notes.md</code> § The page
+          tree.
+        </p>
+      </div>
+      <section class="pt-panel">
+        <h2 class="pt-panelTitle">
+          <span class="pt-panelNum">1</span>THE PAGE’S PLACE — the sidebar tree with this page
+          selected and its ancestors expanded, and the breadcrumb that replaces “← Pages”.
+        </h2>
+        <p class="pt-panelNote">
+          <strong>Sidebar:</strong> a second column between the rail and the page,
+          <code>--el-surface-soft</code> with a right rule, 248px. It is the same
+          <code>PageTree</code> as <code>/pages</code> (MOTIR-7373) in a compact density — 32px
+          rows, 14px per level — with <code>selectedPageId</code> and <code>expandedPath</code> from
+          the trail (MOTIR-7375), so the path to this page is open on arrival and the page itself is
+          the selected row: the rail’s active-row treatment,
+          <code>--el-sidebar-item-bg-active</code> + border + <code>--shadow-subtle</code>, its
+          glyph in <code>--el-icon-active</code>. Its head links back to <code>/pages</code> and
+          holds the hide button. <strong>The sidebar is navigation only</strong>: no New, no row
+          menu, no drag — arranging happens in <code>/pages</code>.
+        </p>
+        <p class="pt-panelNote">
+          <strong>Breadcrumb:</strong> above the title where “← Pages” stood, root-first:
+          <em>Pages › folder… › parent pages… › this page</em>, read from MOTIR-7370’s
+          <code>getPageTrail</code>. It always starts with <strong>Pages</strong>, so a root page
+          keeps its way back. A folder segment carries the Folder glyph; every segment but the last
+          is a link in <code>--el-text-secondary</code>; the last is the page,
+          <code>--el-text</code>, <code>aria-current="page"</code>, not a link. Separators are
+          <code>ChevronRight</code> in <code>--el-icon-muted</code>, <code>aria-hidden</code>.
+        </p>
+        <div class="pt-boards">
+          <div class="pt-board" data-theme="light">
+            <p class="pt-boardTag">Light · en · member, ≥ 1280px</p>
+            <div class="pt-app3">
+              <nav class="pt-rail" aria-label="Project navigation">
+                <a class="pt-railRow" href="/workbench"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pt-railRow" href="/items"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pt-railRow pt-railActive" href="/pages" aria-current="page"
+                  ><svg class="pt-i18 pt-icActive" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pt-railRow" href="/ready"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pt-railRow" href="/runs"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pt-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <aside class="pt-side" aria-label="Page tree">
+                <div class="pt-sideHead">
+                  <a class="pt-sideTitle" href="/pages">Pages</a
+                  ><button
+                    class="pt-iconBtn"
+                    type="button"
+                    aria-label="Hide page tree"
+                    aria-expanded="true"
+                  >
+                    <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-panel-close" />
+                    </svg>
+                  </button>
+                </div>
+                <div role="tree" aria-label="Page tree">
+                  <div
+                    class="pt-srow"
+                    role="treeitem"
+                    aria-level="1"
+                    aria-expanded="true"
+                    style="padding-left: 8px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg
+                        class="pt-i12 pt-icMuted pt-rot90"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-name">Specs</span>
+                  </div>
+                  <div
+                    class="pt-srow"
+                    role="treeitem"
+                    aria-level="2"
+                    aria-expanded="false"
+                    style="padding-left: 22px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-name">API</span>
+                  </div>
+                  <div
+                    class="pt-srow"
+                    role="treeitem"
+                    aria-level="2"
+                    aria-expanded="true"
+                    style="padding-left: 22px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg
+                        class="pt-i12 pt-icMuted pt-rot90"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_auth">Auth flow</a>
+                  </div>
+                  <div
+                    class="pt-srow"
+                    role="treeitem"
+                    aria-level="3"
+                    aria-expanded="true"
+                    style="padding-left: 36px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg
+                        class="pt-i12 pt-icMuted pt-rot90"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_refresh">Token refresh</a>
+                  </div>
+                  <div
+                    class="pt-srow pt-srowActive"
+                    role="treeitem"
+                    aria-level="4"
+                    aria-selected="true"
+                    style="padding-left: 50px"
+                  >
+                    <span class="pt-chevSlot" aria-hidden="true"></span
+                    ><svg class="pt-i16 pt-icActive" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_edge" aria-current="page">Edge cases</a>
+                  </div>
+                  <div class="pt-srow" role="treeitem" aria-level="3" style="padding-left: 36px">
+                    <span class="pt-chevSlot" aria-hidden="true"></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_session">Session storage</a>
+                  </div>
+                  <div
+                    class="pt-srow"
+                    role="treeitem"
+                    aria-level="2"
+                    aria-expanded="false"
+                    style="padding-left: 22px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_billing">Billing model</a>
+                  </div>
+                  <div
+                    class="pt-srow"
+                    role="treeitem"
+                    aria-level="1"
+                    aria-expanded="false"
+                    style="padding-left: 8px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-name">Runbooks</span>
+                  </div>
+                  <div class="pt-srow" role="treeitem" aria-level="1" style="padding-left: 8px">
+                    <span class="pt-chevSlot" aria-hidden="true"></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_onboard">Onboarding runbook</a>
+                  </div>
+                  <div class="pt-srow" role="treeitem" aria-level="1" style="padding-left: 8px">
+                    <span class="pt-chevSlot" aria-hidden="true"></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_notes">会议记录 2026-09</a>
+                  </div>
+                </div>
+              </aside>
+              <main class="pt-main">
+                <div class="pt-col">
+                  <nav class="pt-crumbs" aria-label="Where this page is">
+                    <a class="pt-crumb" href="/pages"><span class="pt-crumbText">Pages</span></a
+                    ><span aria-hidden="true"
+                      ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><a class="pt-crumb" href="/pages?folder=fd_specs"
+                      ><svg class="pt-i14 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg
+                      ><span class="pt-srOnly">Folder:</span
+                      ><span class="pt-crumbText">Specs</span></a
+                    ><span aria-hidden="true"
+                      ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><a class="pt-crumb" href="/pages/pg_auth"
+                      ><span class="pt-crumbText">Auth flow</span></a
+                    ><span aria-hidden="true"
+                      ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><a class="pt-crumb" href="/pages/pg_refresh"
+                      ><span class="pt-crumbText">Token refresh</span></a
+                    ><span aria-hidden="true"
+                      ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><span class="pt-crumbCurrent" aria-current="page"
+                      ><span class="pt-crumbText">Edge cases</span></span
+                    >
+                  </nav>
+                  <h1 class="pt-pageTitle">Edge cases</h1>
+                  <div class="pt-strip" aria-hidden="true">
+                    toolbar + save indicator — unchanged (page.mock.html, state 8)
+                  </div>
+                  <p class="pt-prose">
+                    Page content is the writer’s; the editor, the toolbar and the save indicator are
+                    unchanged from the approved page design.
+                  </p>
+                </div>
+              </main>
+            </div>
+          </div>
+          <div class="pt-board" data-theme="dark" lang="zh">
+            <p class="pt-boardTag">Dark · zh · member, ≥ 1280px</p>
+            <div class="pt-app3">
+              <nav class="pt-rail" aria-label="Project navigation">
+                <a class="pt-railRow" href="/workbench"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-house" /></svg
+                  >工作台</a
+                ><a class="pt-railRow" href="/items"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-dot" /></svg
+                  >工作项</a
+                ><a class="pt-railRow pt-railActive" href="/pages" aria-current="page"
+                  ><svg class="pt-i18 pt-icActive" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-notebook" /></svg
+                  >页面</a
+                ><a class="pt-railRow" href="/ready"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-play" /></svg
+                  >就绪</a
+                ><a class="pt-railRow" href="/runs"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-waypoints" /></svg
+                  >运行</a
+                >
+                <p class="pt-railElided">… 其余主要行不变</p>
+              </nav>
+              <aside class="pt-side" aria-label="页面树">
+                <div class="pt-sideHead">
+                  <a class="pt-sideTitle" href="/pages">页面</a
+                  ><button
+                    class="pt-iconBtn"
+                    type="button"
+                    aria-label="隐藏页面树"
+                    aria-expanded="true"
+                  >
+                    <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-panel-close" />
+                    </svg>
+                  </button>
+                </div>
+                <div role="tree" aria-label="页面树">
+                  <div
+                    class="pt-srow"
+                    role="treeitem"
+                    aria-level="1"
+                    aria-expanded="true"
+                    style="padding-left: 8px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg
+                        class="pt-i12 pt-icMuted pt-rot90"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-name">Specs</span>
+                  </div>
+                  <div
+                    class="pt-srow"
+                    role="treeitem"
+                    aria-level="2"
+                    aria-expanded="false"
+                    style="padding-left: 22px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-name">API</span>
+                  </div>
+                  <div
+                    class="pt-srow"
+                    role="treeitem"
+                    aria-level="2"
+                    aria-expanded="true"
+                    style="padding-left: 22px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg
+                        class="pt-i12 pt-icMuted pt-rot90"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_auth">Auth flow</a>
+                  </div>
+                  <div
+                    class="pt-srow"
+                    role="treeitem"
+                    aria-level="3"
+                    aria-expanded="true"
+                    style="padding-left: 36px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg
+                        class="pt-i12 pt-icMuted pt-rot90"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_refresh">Token refresh</a>
+                  </div>
+                  <div
+                    class="pt-srow pt-srowActive"
+                    role="treeitem"
+                    aria-level="4"
+                    aria-selected="true"
+                    style="padding-left: 50px"
+                  >
+                    <span class="pt-chevSlot" aria-hidden="true"></span
+                    ><svg class="pt-i16 pt-icActive" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_edge" aria-current="page">Edge cases</a>
+                  </div>
+                  <div class="pt-srow" role="treeitem" aria-level="3" style="padding-left: 36px">
+                    <span class="pt-chevSlot" aria-hidden="true"></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_session">Session storage</a>
+                  </div>
+                  <div
+                    class="pt-srow"
+                    role="treeitem"
+                    aria-level="2"
+                    aria-expanded="false"
+                    style="padding-left: 22px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_billing">Billing model</a>
+                  </div>
+                  <div
+                    class="pt-srow"
+                    role="treeitem"
+                    aria-level="1"
+                    aria-expanded="false"
+                    style="padding-left: 8px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-name">Runbooks</span>
+                  </div>
+                  <div class="pt-srow" role="treeitem" aria-level="1" style="padding-left: 8px">
+                    <span class="pt-chevSlot" aria-hidden="true"></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_onboard">Onboarding runbook</a>
+                  </div>
+                  <div class="pt-srow" role="treeitem" aria-level="1" style="padding-left: 8px">
+                    <span class="pt-chevSlot" aria-hidden="true"></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_notes">会议记录 2026-09</a>
+                  </div>
+                </div>
+              </aside>
+              <main class="pt-main">
+                <div class="pt-col">
+                  <nav class="pt-crumbs" aria-label="此页面所在位置">
+                    <a class="pt-crumb" href="/pages"><span class="pt-crumbText">页面</span></a
+                    ><span aria-hidden="true"
+                      ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><a class="pt-crumb" href="/pages?folder=fd_specs"
+                      ><svg class="pt-i14 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg
+                      ><span class="pt-srOnly">文件夹：</span
+                      ><span class="pt-crumbText">Specs</span></a
+                    ><span aria-hidden="true"
+                      ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><a class="pt-crumb" href="/pages/pg_auth"
+                      ><span class="pt-crumbText">Auth flow</span></a
+                    ><span aria-hidden="true"
+                      ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><a class="pt-crumb" href="/pages/pg_refresh"
+                      ><span class="pt-crumbText">Token refresh</span></a
+                    ><span aria-hidden="true"
+                      ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><span class="pt-crumbCurrent" aria-current="page"
+                      ><span class="pt-crumbText">Edge cases</span></span
+                    >
+                  </nav>
+                  <h1 class="pt-pageTitle">Edge cases</h1>
+                  <div class="pt-strip" aria-hidden="true">
+                    工具栏和保存指示——不变（page.mock.html，状态 8）
+                  </div>
+                  <p class="pt-prose">
+                    Page content is the writer’s; it is not translated. (The editor is unchanged.)
+                  </p>
+                </div>
+              </main>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pt-panel">
+        <h2 class="pt-panelTitle">
+          <span class="pt-panelNum">2</span>THE BREADCRUMB’S GRAMMAR — root page, filed page, and a
+          deep chain truncated in the middle.
+        </h2>
+        <p class="pt-panelNote">
+          <strong>Middle truncation:</strong> when the chain has more than five segments (Pages and
+          the page included), the breadcrumb keeps
+          <strong>Pages, the first segment, the parent and the page</strong> and folds everything
+          between into one “…” button (<code>pages.tree.breadcrumb.more</code> as its label). It
+          opens a menu of the hidden segments, root-first, each a link. Each visible segment
+          truncates at 180px (the page at 220px) with an ellipsis and its full text in
+          <code>title</code>. Folders and pages together can reach any depth — folders have no
+          limit, pages stop at 10 (ADR §4) — so truncation is by count, not by kind.
+        </p>
+        <div class="pt-boards">
+          <div class="pt-board" data-theme="light">
+            <p class="pt-boardTag">Light · en</p>
+            <div class="pt-grid2">
+              <div class="pt-cell">
+                <p class="pt-caption">A page at the project root.</p>
+                <nav class="pt-crumbs" aria-label="Where this page is">
+                  <a class="pt-crumb" href="/pages"><span class="pt-crumbText">Pages</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><span class="pt-crumbCurrent" aria-current="page"
+                    ><span class="pt-crumbText">Onboarding runbook</span></span
+                  >
+                </nav>
+              </div>
+              <div class="pt-cell">
+                <p class="pt-caption">A page filed in a folder.</p>
+                <nav class="pt-crumbs" aria-label="Where this page is">
+                  <a class="pt-crumb" href="/pages"><span class="pt-crumbText">Pages</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><a class="pt-crumb" href="/pages?folder=fd_specs"
+                    ><svg class="pt-i14 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-srOnly">Folder:</span
+                    ><span class="pt-crumbText">Specs</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><span class="pt-crumbCurrent" aria-current="page"
+                    ><span class="pt-crumbText">Billing model</span></span
+                  >
+                </nav>
+              </div>
+            </div>
+            <div class="pt-grid2">
+              <div class="pt-cell">
+                <p class="pt-caption">
+                  A deep chain (8 levels below Pages): the middle collapses to “…”.
+                </p>
+                <nav class="pt-crumbs" aria-label="Where this page is">
+                  <a class="pt-crumb" href="/pages"><span class="pt-crumbText">Pages</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><a class="pt-crumb" href="/pages?folder=fd_specs"
+                    ><svg class="pt-i14 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-srOnly">Folder:</span
+                    ><span class="pt-crumbText">Specs</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><button
+                    class="pt-crumbMore"
+                    type="button"
+                    aria-label="Show 5 more levels"
+                    aria-expanded="false"
+                  >
+                    <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-ellipsis" />
+                    </svg></button
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><a class="pt-crumb" href="/pages/pg_jitter"
+                    ><span class="pt-crumbText">Jitter</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><span class="pt-crumbCurrent" aria-current="page"
+                    ><span class="pt-crumbText">Backoff caps</span></span
+                  >
+                </nav>
+              </div>
+              <div class="pt-cell">
+                <p class="pt-caption">“…” opens the hidden segments, root-first, each a link.</p>
+                <nav class="pt-crumbs" aria-label="Where this page is">
+                  <a class="pt-crumb" href="/pages"><span class="pt-crumbText">Pages</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><a class="pt-crumb" href="/pages?folder=fd_specs"
+                    ><svg class="pt-i14 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-srOnly">Folder:</span
+                    ><span class="pt-crumbText">Specs</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><button
+                    class="pt-crumbMore pt-crumbMoreOpen"
+                    type="button"
+                    aria-label="Show 5 more levels"
+                    aria-expanded="true"
+                  >
+                    <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-ellipsis" />
+                    </svg></button
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><a class="pt-crumb" href="/pages/pg_jitter"
+                    ><span class="pt-crumbText">Jitter</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><span class="pt-crumbCurrent" aria-current="page"
+                    ><span class="pt-crumbText">Backoff caps</span></span
+                  >
+                </nav>
+                <div class="pt-pop" role="menu" aria-label="Show 5 more levels">
+                  <a class="pt-mi" role="menuitem" href="/pages?folder=fd_platform"
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    >Platform</a
+                  ><a class="pt-mi" role="menuitem" href="/pages?folder=fd_net"
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    >Networking</a
+                  ><a class="pt-mi" role="menuitem" href="/pages/pg_http"
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    >HTTP clients</a
+                  ><a class="pt-mi" role="menuitem" href="/pages/pg_retries"
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    >Retries</a
+                  ><a class="pt-mi" role="menuitem" href="/pages/pg_budget"
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    >Retry budget</a
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="pt-board" data-theme="dark" lang="zh">
+            <p class="pt-boardTag">Dark · zh</p>
+            <div class="pt-grid2">
+              <div class="pt-cell">
+                <p class="pt-caption">位于项目根目录的页面。</p>
+                <nav class="pt-crumbs" aria-label="此页面所在位置">
+                  <a class="pt-crumb" href="/pages"><span class="pt-crumbText">页面</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><span class="pt-crumbCurrent" aria-current="page"
+                    ><span class="pt-crumbText">Onboarding runbook</span></span
+                  >
+                </nav>
+              </div>
+              <div class="pt-cell">
+                <p class="pt-caption">归档在文件夹中的页面。</p>
+                <nav class="pt-crumbs" aria-label="此页面所在位置">
+                  <a class="pt-crumb" href="/pages"><span class="pt-crumbText">页面</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><a class="pt-crumb" href="/pages?folder=fd_specs"
+                    ><svg class="pt-i14 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-srOnly">文件夹：</span
+                    ><span class="pt-crumbText">Specs</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><span class="pt-crumbCurrent" aria-current="page"
+                    ><span class="pt-crumbText">Billing model</span></span
+                  >
+                </nav>
+              </div>
+            </div>
+            <div class="pt-grid2">
+              <div class="pt-cell">
+                <p class="pt-caption">较深的层级（Pages 下 8 层）：中间部分折叠为“…”。</p>
+                <nav class="pt-crumbs" aria-label="此页面所在位置">
+                  <a class="pt-crumb" href="/pages"><span class="pt-crumbText">页面</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><a class="pt-crumb" href="/pages?folder=fd_specs"
+                    ><svg class="pt-i14 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-srOnly">文件夹：</span
+                    ><span class="pt-crumbText">Specs</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><button
+                    class="pt-crumbMore"
+                    type="button"
+                    aria-label="显示另外 5 层"
+                    aria-expanded="false"
+                  >
+                    <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-ellipsis" />
+                    </svg></button
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><a class="pt-crumb" href="/pages/pg_jitter"
+                    ><span class="pt-crumbText">Jitter</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><span class="pt-crumbCurrent" aria-current="page"
+                    ><span class="pt-crumbText">Backoff caps</span></span
+                  >
+                </nav>
+              </div>
+              <div class="pt-cell">
+                <p class="pt-caption">“…”展开被隐藏的层级，从根开始，每项都是链接。</p>
+                <nav class="pt-crumbs" aria-label="此页面所在位置">
+                  <a class="pt-crumb" href="/pages"><span class="pt-crumbText">页面</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><a class="pt-crumb" href="/pages?folder=fd_specs"
+                    ><svg class="pt-i14 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-srOnly">文件夹：</span
+                    ><span class="pt-crumbText">Specs</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><button
+                    class="pt-crumbMore pt-crumbMoreOpen"
+                    type="button"
+                    aria-label="显示另外 5 层"
+                    aria-expanded="true"
+                  >
+                    <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-ellipsis" />
+                    </svg></button
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><a class="pt-crumb" href="/pages/pg_jitter"
+                    ><span class="pt-crumbText">Jitter</span></a
+                  ><span aria-hidden="true"
+                    ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" /></svg></span
+                  ><span class="pt-crumbCurrent" aria-current="page"
+                    ><span class="pt-crumbText">Backoff caps</span></span
+                  >
+                </nav>
+                <div class="pt-pop" role="menu" aria-label="显示另外 5 层">
+                  <a class="pt-mi" role="menuitem" href="/pages?folder=fd_platform"
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    >Platform</a
+                  ><a class="pt-mi" role="menuitem" href="/pages?folder=fd_net"
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    >Networking</a
+                  ><a class="pt-mi" role="menuitem" href="/pages/pg_http"
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    >HTTP clients</a
+                  ><a class="pt-mi" role="menuitem" href="/pages/pg_retries"
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    >Retries</a
+                  ><a class="pt-mi" role="menuitem" href="/pages/pg_budget"
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    >Retry budget</a
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pt-panel">
+        <h2 class="pt-panelTitle">
+          <span class="pt-panelNum">3</span>THE SIDEBAR COLLAPSED — by the reader at a wide width,
+          and by default at a narrow one.
+        </h2>
+        <p class="pt-panelNote">
+          <strong>At 1280px and wider</strong> the sidebar shows unless the reader hid it; the
+          choice is a per-viewer convenience kept in <code>localStorage</code> (it may come back
+          empty, and then the sidebar shows). <strong>Below 1280px</strong> it starts hidden — the
+          rail, a 248px tree and a 760px reading column do not fit — and
+          <strong>Show page tree</strong> opens it as an overlay over the page
+          (<code>--el-overlay-scrim</code>, <code>--shadow-modal</code>), the same component, closed
+          by Esc, by the scrim or by choosing a page. The page stays fully usable with the tree
+          hidden: the breadcrumb is the way up.
+        </p>
+        <div class="pt-boards">
+          <div class="pt-board" data-theme="light">
+            <p class="pt-boardTag">Light · en</p>
+            <div class="pt-cell">
+              <p class="pt-caption">
+                Wide, collapsed by the reader: the sidebar is gone and a “Show page tree” button
+                leads the breadcrumb row. The choice is remembered on this device.
+              </p>
+              <div class="pt-app2">
+                <nav class="pt-rail" aria-label="Project navigation">
+                  <a class="pt-railRow" href="/workbench"
+                    ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-house" /></svg
+                    >Workbench</a
+                  ><a class="pt-railRow" href="/items"
+                    ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-circle-dot" /></svg
+                    >Work Items</a
+                  ><a class="pt-railRow pt-railActive" href="/pages" aria-current="page"
+                    ><svg class="pt-i18 pt-icActive" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    >Pages</a
+                  ><a class="pt-railRow" href="/ready"
+                    ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-circle-play" /></svg
+                    >Ready</a
+                  ><a class="pt-railRow" href="/runs"
+                    ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-waypoints" /></svg
+                    >Runs</a
+                  >
+                  <p class="pt-railElided">… the other primary rows, unchanged</p>
+                </nav>
+                <main class="pt-main">
+                  <div class="pt-col">
+                    <div class="pt-crumbBar">
+                      <button
+                        class="pt-iconBtn"
+                        type="button"
+                        aria-label="Show page tree"
+                        aria-expanded="false"
+                      >
+                        <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-panel-open" />
+                        </svg>
+                      </button>
+                      <nav class="pt-crumbs" aria-label="Where this page is">
+                        <a class="pt-crumb" href="/pages"><span class="pt-crumbText">Pages</span></a
+                        ><span aria-hidden="true"
+                          ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-chevron-right" /></svg></span
+                        ><a class="pt-crumb" href="/pages?folder=fd_specs"
+                          ><svg class="pt-i14 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-folder" /></svg
+                          ><span class="pt-srOnly">Folder:</span
+                          ><span class="pt-crumbText">Specs</span></a
+                        ><span aria-hidden="true"
+                          ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-chevron-right" /></svg></span
+                        ><a class="pt-crumb" href="/pages/pg_auth"
+                          ><span class="pt-crumbText">Auth flow</span></a
+                        ><span aria-hidden="true"
+                          ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-chevron-right" /></svg></span
+                        ><a class="pt-crumb" href="/pages/pg_refresh"
+                          ><span class="pt-crumbText">Token refresh</span></a
+                        ><span aria-hidden="true"
+                          ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-chevron-right" /></svg></span
+                        ><span class="pt-crumbCurrent" aria-current="page"
+                          ><span class="pt-crumbText">Edge cases</span></span
+                        >
+                      </nav>
+                    </div>
+                    <h1 class="pt-pageTitle">Edge cases</h1>
+                    <div class="pt-strip" aria-hidden="true">
+                      toolbar + save indicator — unchanged (page.mock.html, state 8)
+                    </div>
+                    <p class="pt-prose">
+                      Page content is the writer’s; the editor, the toolbar and the save indicator
+                      are unchanged from the approved page design.
+                    </p>
+                  </div>
+                </main>
+              </div>
+            </div>
+            <div class="pt-grid2">
+              <div class="pt-cell">
+                <p class="pt-caption">
+                  Narrow (under 1280px; drawn at a phone’s 390px): the sidebar starts collapsed; the
+                  breadcrumb wraps and truncates.
+                </p>
+                <div class="pt-phone">
+                  <div class="pt-phoneTop">
+                    <svg class="pt-i18 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-menu" /></svg
+                    >Motir
+                  </div>
+                  <div class="pt-phoneMain">
+                    <div class="pt-col">
+                      <div class="pt-crumbBar">
+                        <button
+                          class="pt-iconBtn"
+                          type="button"
+                          aria-label="Show page tree"
+                          aria-expanded="false"
+                        >
+                          <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-panel-open" />
+                          </svg>
+                        </button>
+                        <nav class="pt-crumbs" aria-label="Where this page is">
+                          <a class="pt-crumb" href="/pages"
+                            ><span class="pt-crumbText">Pages</span></a
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><a class="pt-crumb" href="/pages?folder=fd_specs"
+                            ><svg
+                              class="pt-i14 pt-icInherit"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <use href="#i-folder" /></svg
+                            ><span class="pt-srOnly">Folder:</span
+                            ><span class="pt-crumbText">Specs</span></a
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><button
+                            class="pt-crumbMore"
+                            type="button"
+                            aria-label="Show 1 more levels"
+                            aria-expanded="false"
+                          >
+                            <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-ellipsis" />
+                            </svg></button
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><a class="pt-crumb" href="/pages/pg_refresh"
+                            ><span class="pt-crumbText">Token refresh</span></a
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><span class="pt-crumbCurrent" aria-current="page"
+                            ><span class="pt-crumbText">Edge cases</span></span
+                          >
+                        </nav>
+                      </div>
+                      <h1 class="pt-pageTitle">Edge cases</h1>
+                      <div class="pt-strip" aria-hidden="true">
+                        toolbar + save indicator — unchanged (page.mock.html, state 8)
+                      </div>
+                      <p class="pt-prose">
+                        Page content is the writer’s; the editor, the toolbar and the save indicator
+                        are unchanged from the approved page design.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="pt-cell">
+                <p class="pt-caption">
+                  Narrow, opened: the tree slides in over the page on the overlay scrim; choosing a
+                  page or pressing Esc closes it.
+                </p>
+                <div class="pt-phone">
+                  <div class="pt-phoneTop">
+                    <svg class="pt-i18 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-menu" /></svg
+                    >Motir
+                  </div>
+                  <div class="pt-phoneMain">
+                    <div class="pt-col">
+                      <div class="pt-crumbBar">
+                        <button
+                          class="pt-iconBtn"
+                          type="button"
+                          aria-label="Show page tree"
+                          aria-expanded="false"
+                        >
+                          <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-panel-open" />
+                          </svg>
+                        </button>
+                        <nav class="pt-crumbs" aria-label="Where this page is">
+                          <a class="pt-crumb" href="/pages"
+                            ><span class="pt-crumbText">Pages</span></a
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><a class="pt-crumb" href="/pages?folder=fd_specs"
+                            ><svg
+                              class="pt-i14 pt-icInherit"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <use href="#i-folder" /></svg
+                            ><span class="pt-srOnly">Folder:</span
+                            ><span class="pt-crumbText">Specs</span></a
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><button
+                            class="pt-crumbMore"
+                            type="button"
+                            aria-label="Show 1 more levels"
+                            aria-expanded="false"
+                          >
+                            <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-ellipsis" />
+                            </svg></button
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><a class="pt-crumb" href="/pages/pg_refresh"
+                            ><span class="pt-crumbText">Token refresh</span></a
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><span class="pt-crumbCurrent" aria-current="page"
+                            ><span class="pt-crumbText">Edge cases</span></span
+                          >
+                        </nav>
+                      </div>
+                      <h1 class="pt-pageTitle">Edge cases</h1>
+                      <div class="pt-strip" aria-hidden="true">
+                        toolbar + save indicator — unchanged (page.mock.html, state 8)
+                      </div>
+                      <p class="pt-prose">
+                        Page content is the writer’s; the editor, the toolbar and the save indicator
+                        are unchanged from the approved page design.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="pt-drawerWrap">
+                    <aside class="pt-drawer" aria-label="Page tree">
+                      <div class="pt-sideHead">
+                        <a class="pt-sideTitle" href="/pages">Pages</a
+                        ><button
+                          class="pt-iconBtn"
+                          type="button"
+                          aria-label="Hide page tree"
+                          aria-expanded="true"
+                        >
+                          <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-panel-close" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div role="tree" aria-label="Page tree">
+                        <div
+                          class="pt-srow"
+                          role="treeitem"
+                          aria-level="1"
+                          aria-expanded="true"
+                          style="padding-left: 8px"
+                        >
+                          <span class="pt-chev" aria-hidden="true"
+                            ><svg
+                              class="pt-i12 pt-icMuted pt-rot90"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <use href="#i-chevron-right" /></svg></span
+                          ><svg
+                            class="pt-i16 pt-icSecondary"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <use href="#i-folder" /></svg
+                          ><span class="pt-name">Specs</span>
+                        </div>
+                        <div
+                          class="pt-srow"
+                          role="treeitem"
+                          aria-level="2"
+                          aria-expanded="false"
+                          style="padding-left: 22px"
+                        >
+                          <span class="pt-chev" aria-hidden="true"
+                            ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><svg
+                            class="pt-i16 pt-icSecondary"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <use href="#i-folder" /></svg
+                          ><span class="pt-name">API</span>
+                        </div>
+                        <div
+                          class="pt-srow"
+                          role="treeitem"
+                          aria-level="2"
+                          aria-expanded="true"
+                          style="padding-left: 22px"
+                        >
+                          <span class="pt-chev" aria-hidden="true"
+                            ><svg
+                              class="pt-i12 pt-icMuted pt-rot90"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <use href="#i-chevron-right" /></svg></span
+                          ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-notebook" /></svg
+                          ><a class="pt-title" href="/pages/pg_auth">Auth flow</a>
+                        </div>
+                        <div
+                          class="pt-srow"
+                          role="treeitem"
+                          aria-level="3"
+                          aria-expanded="true"
+                          style="padding-left: 36px"
+                        >
+                          <span class="pt-chev" aria-hidden="true"
+                            ><svg
+                              class="pt-i12 pt-icMuted pt-rot90"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <use href="#i-chevron-right" /></svg></span
+                          ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-notebook" /></svg
+                          ><a class="pt-title" href="/pages/pg_refresh">Token refresh</a>
+                        </div>
+                        <div
+                          class="pt-srow pt-srowActive"
+                          role="treeitem"
+                          aria-level="4"
+                          aria-selected="true"
+                          style="padding-left: 50px"
+                        >
+                          <span class="pt-chevSlot" aria-hidden="true"></span
+                          ><svg class="pt-i16 pt-icActive" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-notebook" /></svg
+                          ><a class="pt-title" href="/pages/pg_edge" aria-current="page"
+                            >Edge cases</a
+                          >
+                        </div>
+                        <div
+                          class="pt-srow"
+                          role="treeitem"
+                          aria-level="3"
+                          style="padding-left: 36px"
+                        >
+                          <span class="pt-chevSlot" aria-hidden="true"></span
+                          ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-notebook" /></svg
+                          ><a class="pt-title" href="/pages/pg_session">Session storage</a>
+                        </div>
+                        <div
+                          class="pt-srow"
+                          role="treeitem"
+                          aria-level="2"
+                          aria-expanded="false"
+                          style="padding-left: 22px"
+                        >
+                          <span class="pt-chev" aria-hidden="true"
+                            ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-notebook" /></svg
+                          ><a class="pt-title" href="/pages/pg_billing">Billing model</a>
+                        </div>
+                      </div>
+                    </aside>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="pt-board" data-theme="dark" lang="zh">
+            <p class="pt-boardTag">Dark · zh</p>
+            <div class="pt-cell">
+              <p class="pt-caption">
+                宽屏，读者手动收起：侧栏消失，面包屑行首出现“显示页面树”按钮。此选择保存在本设备上。
+              </p>
+              <div class="pt-app2">
+                <nav class="pt-rail" aria-label="Project navigation">
+                  <a class="pt-railRow" href="/workbench"
+                    ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-house" /></svg
+                    >工作台</a
+                  ><a class="pt-railRow" href="/items"
+                    ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-circle-dot" /></svg
+                    >工作项</a
+                  ><a class="pt-railRow pt-railActive" href="/pages" aria-current="page"
+                    ><svg class="pt-i18 pt-icActive" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    >页面</a
+                  ><a class="pt-railRow" href="/ready"
+                    ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-circle-play" /></svg
+                    >就绪</a
+                  ><a class="pt-railRow" href="/runs"
+                    ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-waypoints" /></svg
+                    >运行</a
+                  >
+                  <p class="pt-railElided">… 其余主要行不变</p>
+                </nav>
+                <main class="pt-main">
+                  <div class="pt-col">
+                    <div class="pt-crumbBar">
+                      <button
+                        class="pt-iconBtn"
+                        type="button"
+                        aria-label="显示页面树"
+                        aria-expanded="false"
+                      >
+                        <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-panel-open" />
+                        </svg>
+                      </button>
+                      <nav class="pt-crumbs" aria-label="此页面所在位置">
+                        <a class="pt-crumb" href="/pages"><span class="pt-crumbText">页面</span></a
+                        ><span aria-hidden="true"
+                          ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-chevron-right" /></svg></span
+                        ><a class="pt-crumb" href="/pages?folder=fd_specs"
+                          ><svg class="pt-i14 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-folder" /></svg
+                          ><span class="pt-srOnly">文件夹：</span
+                          ><span class="pt-crumbText">Specs</span></a
+                        ><span aria-hidden="true"
+                          ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-chevron-right" /></svg></span
+                        ><a class="pt-crumb" href="/pages/pg_auth"
+                          ><span class="pt-crumbText">Auth flow</span></a
+                        ><span aria-hidden="true"
+                          ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-chevron-right" /></svg></span
+                        ><a class="pt-crumb" href="/pages/pg_refresh"
+                          ><span class="pt-crumbText">Token refresh</span></a
+                        ><span aria-hidden="true"
+                          ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-chevron-right" /></svg></span
+                        ><span class="pt-crumbCurrent" aria-current="page"
+                          ><span class="pt-crumbText">Edge cases</span></span
+                        >
+                      </nav>
+                    </div>
+                    <h1 class="pt-pageTitle">Edge cases</h1>
+                    <div class="pt-strip" aria-hidden="true">
+                      工具栏和保存指示——不变（page.mock.html，状态 8）
+                    </div>
+                    <p class="pt-prose">
+                      Page content is the writer’s; it is not translated. (The editor is unchanged.)
+                    </p>
+                  </div>
+                </main>
+              </div>
+            </div>
+            <div class="pt-grid2">
+              <div class="pt-cell">
+                <p class="pt-caption">
+                  窄屏（小于 1280px；按手机 390px 绘制）：侧栏默认收起；面包屑换行并截断。
+                </p>
+                <div class="pt-phone">
+                  <div class="pt-phoneTop">
+                    <svg class="pt-i18 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-menu" /></svg
+                    >Motir
+                  </div>
+                  <div class="pt-phoneMain">
+                    <div class="pt-col">
+                      <div class="pt-crumbBar">
+                        <button
+                          class="pt-iconBtn"
+                          type="button"
+                          aria-label="显示页面树"
+                          aria-expanded="false"
+                        >
+                          <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-panel-open" />
+                          </svg>
+                        </button>
+                        <nav class="pt-crumbs" aria-label="此页面所在位置">
+                          <a class="pt-crumb" href="/pages"
+                            ><span class="pt-crumbText">页面</span></a
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><a class="pt-crumb" href="/pages?folder=fd_specs"
+                            ><svg
+                              class="pt-i14 pt-icInherit"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <use href="#i-folder" /></svg
+                            ><span class="pt-srOnly">文件夹：</span
+                            ><span class="pt-crumbText">Specs</span></a
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><button
+                            class="pt-crumbMore"
+                            type="button"
+                            aria-label="显示另外 1 层"
+                            aria-expanded="false"
+                          >
+                            <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-ellipsis" />
+                            </svg></button
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><a class="pt-crumb" href="/pages/pg_refresh"
+                            ><span class="pt-crumbText">Token refresh</span></a
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><span class="pt-crumbCurrent" aria-current="page"
+                            ><span class="pt-crumbText">Edge cases</span></span
+                          >
+                        </nav>
+                      </div>
+                      <h1 class="pt-pageTitle">Edge cases</h1>
+                      <div class="pt-strip" aria-hidden="true">
+                        工具栏和保存指示——不变（page.mock.html，状态 8）
+                      </div>
+                      <p class="pt-prose">
+                        Page content is the writer’s; it is not translated. (The editor is
+                        unchanged.)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="pt-cell">
+                <p class="pt-caption">
+                  窄屏，已打开：页面树以覆盖层形式滑入页面之上；选择页面或按 Esc 即关闭。
+                </p>
+                <div class="pt-phone">
+                  <div class="pt-phoneTop">
+                    <svg class="pt-i18 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-menu" /></svg
+                    >Motir
+                  </div>
+                  <div class="pt-phoneMain">
+                    <div class="pt-col">
+                      <div class="pt-crumbBar">
+                        <button
+                          class="pt-iconBtn"
+                          type="button"
+                          aria-label="显示页面树"
+                          aria-expanded="false"
+                        >
+                          <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-panel-open" />
+                          </svg>
+                        </button>
+                        <nav class="pt-crumbs" aria-label="此页面所在位置">
+                          <a class="pt-crumb" href="/pages"
+                            ><span class="pt-crumbText">页面</span></a
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><a class="pt-crumb" href="/pages?folder=fd_specs"
+                            ><svg
+                              class="pt-i14 pt-icInherit"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <use href="#i-folder" /></svg
+                            ><span class="pt-srOnly">文件夹：</span
+                            ><span class="pt-crumbText">Specs</span></a
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><button
+                            class="pt-crumbMore"
+                            type="button"
+                            aria-label="显示另外 1 层"
+                            aria-expanded="false"
+                          >
+                            <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-ellipsis" />
+                            </svg></button
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><a class="pt-crumb" href="/pages/pg_refresh"
+                            ><span class="pt-crumbText">Token refresh</span></a
+                          ><span aria-hidden="true"
+                            ><svg class="pt-i14 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><span class="pt-crumbCurrent" aria-current="page"
+                            ><span class="pt-crumbText">Edge cases</span></span
+                          >
+                        </nav>
+                      </div>
+                      <h1 class="pt-pageTitle">Edge cases</h1>
+                      <div class="pt-strip" aria-hidden="true">
+                        工具栏和保存指示——不变（page.mock.html，状态 8）
+                      </div>
+                      <p class="pt-prose">
+                        Page content is the writer’s; it is not translated. (The editor is
+                        unchanged.)
+                      </p>
+                    </div>
+                  </div>
+                  <div class="pt-drawerWrap">
+                    <aside class="pt-drawer" aria-label="页面树">
+                      <div class="pt-sideHead">
+                        <a class="pt-sideTitle" href="/pages">页面</a
+                        ><button
+                          class="pt-iconBtn"
+                          type="button"
+                          aria-label="隐藏页面树"
+                          aria-expanded="true"
+                        >
+                          <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-panel-close" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div role="tree" aria-label="页面树">
+                        <div
+                          class="pt-srow"
+                          role="treeitem"
+                          aria-level="1"
+                          aria-expanded="true"
+                          style="padding-left: 8px"
+                        >
+                          <span class="pt-chev" aria-hidden="true"
+                            ><svg
+                              class="pt-i12 pt-icMuted pt-rot90"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <use href="#i-chevron-right" /></svg></span
+                          ><svg
+                            class="pt-i16 pt-icSecondary"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <use href="#i-folder" /></svg
+                          ><span class="pt-name">Specs</span>
+                        </div>
+                        <div
+                          class="pt-srow"
+                          role="treeitem"
+                          aria-level="2"
+                          aria-expanded="false"
+                          style="padding-left: 22px"
+                        >
+                          <span class="pt-chev" aria-hidden="true"
+                            ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><svg
+                            class="pt-i16 pt-icSecondary"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <use href="#i-folder" /></svg
+                          ><span class="pt-name">API</span>
+                        </div>
+                        <div
+                          class="pt-srow"
+                          role="treeitem"
+                          aria-level="2"
+                          aria-expanded="true"
+                          style="padding-left: 22px"
+                        >
+                          <span class="pt-chev" aria-hidden="true"
+                            ><svg
+                              class="pt-i12 pt-icMuted pt-rot90"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <use href="#i-chevron-right" /></svg></span
+                          ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-notebook" /></svg
+                          ><a class="pt-title" href="/pages/pg_auth">Auth flow</a>
+                        </div>
+                        <div
+                          class="pt-srow"
+                          role="treeitem"
+                          aria-level="3"
+                          aria-expanded="true"
+                          style="padding-left: 36px"
+                        >
+                          <span class="pt-chev" aria-hidden="true"
+                            ><svg
+                              class="pt-i12 pt-icMuted pt-rot90"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <use href="#i-chevron-right" /></svg></span
+                          ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-notebook" /></svg
+                          ><a class="pt-title" href="/pages/pg_refresh">Token refresh</a>
+                        </div>
+                        <div
+                          class="pt-srow pt-srowActive"
+                          role="treeitem"
+                          aria-level="4"
+                          aria-selected="true"
+                          style="padding-left: 50px"
+                        >
+                          <span class="pt-chevSlot" aria-hidden="true"></span
+                          ><svg class="pt-i16 pt-icActive" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-notebook" /></svg
+                          ><a class="pt-title" href="/pages/pg_edge" aria-current="page"
+                            >Edge cases</a
+                          >
+                        </div>
+                        <div
+                          class="pt-srow"
+                          role="treeitem"
+                          aria-level="3"
+                          style="padding-left: 36px"
+                        >
+                          <span class="pt-chevSlot" aria-hidden="true"></span
+                          ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-notebook" /></svg
+                          ><a class="pt-title" href="/pages/pg_session">Session storage</a>
+                        </div>
+                        <div
+                          class="pt-srow"
+                          role="treeitem"
+                          aria-level="2"
+                          aria-expanded="false"
+                          style="padding-left: 22px"
+                        >
+                          <span class="pt-chev" aria-hidden="true"
+                            ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-chevron-right" /></svg></span
+                          ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-notebook" /></svg
+                          ><a class="pt-title" href="/pages/pg_billing">Billing model</a>
+                        </div>
+                      </div>
+                    </aside>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pt-panel">
+        <h2 class="pt-panelTitle">
+          <span class="pt-panelNum">4</span>BREADCRUMB → TREE — a folder segment opens
+          <code>/pages</code> with that folder expanded.
+        </h2>
+        <p class="pt-panelNote">
+          A folder has no page of its own, so its segment links to
+          <code>/pages?folder=&lt;folderId&gt;</code>: the tree opens with the path to that folder
+          expanded, the folder scrolled into view and holding the tree’s focus (the focus ring drawn
+          on Specs). A page segment links to that page. The <strong>Pages</strong> segment and the
+          sidebar’s head link to <code>/pages</code> as it was left.
+        </p>
+        <div class="pt-boards">
+          <div class="pt-board" data-theme="light">
+            <p class="pt-boardTag">Light · en · after choosing “Specs” in the breadcrumb</p>
+            <div class="pt-app">
+              <nav class="pt-rail" aria-label="Project navigation">
+                <a class="pt-railRow" href="/workbench"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pt-railRow" href="/items"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pt-railRow pt-railActive" href="/pages" aria-current="page"
+                  ><svg class="pt-i18 pt-icActive" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pt-railRow" href="/ready"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pt-railRow" href="/runs"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pt-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pt-main">
+                <div class="pt-head">
+                  <div>
+                    <h1 class="pt-h1">Pages</h1>
+                    <p class="pt-sub">
+                      Specs, runbooks and notes for this project, kept in folders and pages.
+                    </p>
+                  </div>
+                  <div class="pt-headActions">
+                    <button class="pt-btn pt-btnSecondary" type="button">
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder-plus" /></svg
+                      >New folder</button
+                    ><button class="pt-btn pt-btnPrimary" type="button">
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-plus" /></svg
+                      >New page
+                    </button>
+                  </div>
+                </div>
+                <div class="pt-tree" role="tree" aria-label="Folders and pages in this project">
+                  <div
+                    class="pt-row pt-rowFocus"
+                    role="treeitem"
+                    aria-level="1"
+                    aria-expanded="true"
+                    style="padding-left: 28px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg
+                        class="pt-i12 pt-icMuted pt-rot90"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-name">Specs</span
+                    ><button class="pt-more" type="button" aria-label="Folder actions for Specs">
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-ellipsis" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div
+                    class="pt-row"
+                    role="treeitem"
+                    aria-level="2"
+                    aria-expanded="false"
+                    style="padding-left: 50px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-name">API</span
+                    ><button class="pt-more" type="button" aria-label="Folder actions for API">
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-ellipsis" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div
+                    class="pt-row"
+                    role="treeitem"
+                    aria-level="2"
+                    aria-expanded="false"
+                    style="padding-left: 50px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_auth">Auth flow</a
+                    ><button class="pt-more" type="button" aria-label="Page actions for Auth flow">
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-ellipsis" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div
+                    class="pt-row"
+                    role="treeitem"
+                    aria-level="2"
+                    aria-expanded="false"
+                    style="padding-left: 50px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_billing">Billing model</a
+                    ><button
+                      class="pt-more"
+                      type="button"
+                      aria-label="Page actions for Billing model"
+                    >
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-ellipsis" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div
+                    class="pt-row"
+                    role="treeitem"
+                    aria-level="1"
+                    aria-expanded="false"
+                    style="padding-left: 28px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-name">Runbooks</span
+                    ><button class="pt-more" type="button" aria-label="Folder actions for Runbooks">
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-ellipsis" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div class="pt-row" role="treeitem" aria-level="1" style="padding-left: 28px">
+                    <span class="pt-chevSlot" aria-hidden="true"></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_onboard">Onboarding runbook</a
+                    ><button
+                      class="pt-more"
+                      type="button"
+                      aria-label="Page actions for Onboarding runbook"
+                    >
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-ellipsis" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+          <div class="pt-board" data-theme="dark" lang="zh">
+            <p class="pt-boardTag">Dark · zh</p>
+            <div class="pt-app">
+              <nav class="pt-rail" aria-label="Project navigation">
+                <a class="pt-railRow" href="/workbench"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-house" /></svg
+                  >工作台</a
+                ><a class="pt-railRow" href="/items"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-dot" /></svg
+                  >工作项</a
+                ><a class="pt-railRow pt-railActive" href="/pages" aria-current="page"
+                  ><svg class="pt-i18 pt-icActive" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-notebook" /></svg
+                  >页面</a
+                ><a class="pt-railRow" href="/ready"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-circle-play" /></svg
+                  >就绪</a
+                ><a class="pt-railRow" href="/runs"
+                  ><svg class="pt-i18 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-waypoints" /></svg
+                  >运行</a
+                >
+                <p class="pt-railElided">… 其余主要行不变</p>
+              </nav>
+              <main class="pt-main">
+                <div class="pt-head">
+                  <div>
+                    <h1 class="pt-h1">页面</h1>
+                    <p class="pt-sub">此项目的规格说明、运行手册和笔记，按文件夹和页面整理。</p>
+                  </div>
+                  <div class="pt-headActions">
+                    <button class="pt-btn pt-btnSecondary" type="button">
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder-plus" /></svg
+                      >新建文件夹</button
+                    ><button class="pt-btn pt-btnPrimary" type="button">
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-plus" /></svg
+                      >新建页面
+                    </button>
+                  </div>
+                </div>
+                <div class="pt-tree" role="tree" aria-label="此项目中的文件夹和页面">
+                  <div
+                    class="pt-row pt-rowFocus"
+                    role="treeitem"
+                    aria-level="1"
+                    aria-expanded="true"
+                    style="padding-left: 28px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg
+                        class="pt-i12 pt-icMuted pt-rot90"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-name">Specs</span
+                    ><button class="pt-more" type="button" aria-label="“Specs”的文件夹操作">
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-ellipsis" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div
+                    class="pt-row"
+                    role="treeitem"
+                    aria-level="2"
+                    aria-expanded="false"
+                    style="padding-left: 50px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-name">API</span
+                    ><button class="pt-more" type="button" aria-label="“API”的文件夹操作">
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-ellipsis" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div
+                    class="pt-row"
+                    role="treeitem"
+                    aria-level="2"
+                    aria-expanded="false"
+                    style="padding-left: 50px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_auth">Auth flow</a
+                    ><button class="pt-more" type="button" aria-label="“Auth flow”的页面操作">
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-ellipsis" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div
+                    class="pt-row"
+                    role="treeitem"
+                    aria-level="2"
+                    aria-expanded="false"
+                    style="padding-left: 50px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_billing">Billing model</a
+                    ><button class="pt-more" type="button" aria-label="“Billing model”的页面操作">
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-ellipsis" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div
+                    class="pt-row"
+                    role="treeitem"
+                    aria-level="1"
+                    aria-expanded="false"
+                    style="padding-left: 28px"
+                  >
+                    <span class="pt-chev" aria-hidden="true"
+                      ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" /></svg></span
+                    ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg
+                    ><span class="pt-name">Runbooks</span
+                    ><button class="pt-more" type="button" aria-label="“Runbooks”的文件夹操作">
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-ellipsis" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div class="pt-row" role="treeitem" aria-level="1" style="padding-left: 28px">
+                    <span class="pt-chevSlot" aria-hidden="true"></span
+                    ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-notebook" /></svg
+                    ><a class="pt-title" href="/pages/pg_onboard">Onboarding runbook</a
+                    ><button
+                      class="pt-more"
+                      type="button"
+                      aria-label="“Onboarding runbook”的页面操作"
+                    >
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-ellipsis" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pt-panel">
+        <h2 class="pt-panelTitle">
+          <span class="pt-panelNum">5</span>THE SIDEBAR’S OWN STATES — loading, failed and long
+          levels, in the tree’s grammar.
+        </h2>
+        <p class="pt-panelNote">
+          The sidebar is <code>PageTree</code>, so it inherits the tree’s row states and strings
+          (panels 5–7 of <code>pages--tree.mock.html</code>) at its compact density. The path to the
+          page is read on the server with the trail, so the first paint already shows the selected
+          row; only levels the reader opens afterwards load lazily. A viewer’s sidebar is identical
+          — it carries no actions for anyone. The page’s not-found and read-only states are
+          unchanged (<code>page.mock.html</code> states 10 and 12): a page that 404s renders no
+          sidebar and no breadcrumb.
+        </p>
+        <div class="pt-boards">
+          <div class="pt-board" data-theme="light">
+            <p class="pt-boardTag">Light · en</p>
+            <div class="pt-grid3">
+              <div class="pt-cell">
+                <p class="pt-caption">A level loading.</p>
+                <aside class="pt-side" aria-label="Page tree">
+                  <div class="pt-sideHead">
+                    <a class="pt-sideTitle" href="/pages">Pages</a
+                    ><button
+                      class="pt-iconBtn"
+                      type="button"
+                      aria-label="Hide page tree"
+                      aria-expanded="true"
+                    >
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-panel-close" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div role="tree" aria-label="Page tree">
+                    <div
+                      class="pt-srow"
+                      role="treeitem"
+                      aria-level="1"
+                      aria-expanded="true"
+                      style="padding-left: 8px"
+                    >
+                      <span class="pt-chev" aria-hidden="true"
+                        ><svg
+                          class="pt-i12 pt-icMuted pt-rot90"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <use href="#i-chevron-right" /></svg></span
+                      ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg
+                      ><span class="pt-name">Specs</span>
+                    </div>
+                    <div
+                      class="pt-srow"
+                      role="treeitem"
+                      aria-level="2"
+                      aria-expanded="true"
+                      style="padding-left: 22px"
+                    >
+                      <span class="pt-chev" aria-hidden="true"
+                        ><svg
+                          class="pt-i12 pt-icMuted pt-rot90"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <use href="#i-chevron-right" /></svg></span
+                      ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-notebook" /></svg
+                      ><a class="pt-title" href="/pages/pg_auth">Auth flow</a>
+                    </div>
+                    <div class="pt-srow" role="none" style="padding-left: 36px">
+                      <span class="pt-synth" role="status"
+                        ><svg class="pt-i14 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-loader" /></svg
+                        >Loading pages…</span
+                      >
+                    </div>
+                    <div
+                      class="pt-srow"
+                      role="treeitem"
+                      aria-level="1"
+                      aria-expanded="false"
+                      style="padding-left: 8px"
+                    >
+                      <span class="pt-chev" aria-hidden="true"
+                        ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-chevron-right" /></svg></span
+                      ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg
+                      ><span class="pt-name">Runbooks</span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+              <div class="pt-cell">
+                <p class="pt-caption">A level failed — retry on its own row.</p>
+                <aside class="pt-side" aria-label="Page tree">
+                  <div class="pt-sideHead">
+                    <a class="pt-sideTitle" href="/pages">Pages</a
+                    ><button
+                      class="pt-iconBtn"
+                      type="button"
+                      aria-label="Hide page tree"
+                      aria-expanded="true"
+                    >
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-panel-close" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div role="tree" aria-label="Page tree">
+                    <div
+                      class="pt-srow"
+                      role="treeitem"
+                      aria-level="1"
+                      aria-expanded="true"
+                      style="padding-left: 8px"
+                    >
+                      <span class="pt-chev" aria-hidden="true"
+                        ><svg
+                          class="pt-i12 pt-icMuted pt-rot90"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <use href="#i-chevron-right" /></svg></span
+                      ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg
+                      ><span class="pt-name">Specs</span>
+                    </div>
+                    <div
+                      class="pt-srow"
+                      role="treeitem"
+                      aria-level="2"
+                      aria-expanded="true"
+                      style="padding-left: 22px"
+                    >
+                      <span class="pt-chev" aria-hidden="true"
+                        ><svg
+                          class="pt-i12 pt-icMuted pt-rot90"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <use href="#i-chevron-right" /></svg></span
+                      ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-notebook" /></svg
+                      ><a class="pt-title" href="/pages/pg_auth">Auth flow</a>
+                    </div>
+                    <div class="pt-srow" role="none" style="padding-left: 36px">
+                      <span class="pt-synth" role="alert"
+                        ><svg class="pt-i14 pt-icDanger" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-alert" /></svg
+                        ><span class="pt-synthText">Couldn’t load what’s inside.</span></span
+                      >
+                    </div>
+                    <div class="pt-srow" role="none" style="padding-left: 36px">
+                      <button class="pt-linkBtn" type="button">Try again</button>
+                    </div>
+                    <div
+                      class="pt-srow"
+                      role="treeitem"
+                      aria-level="1"
+                      aria-expanded="false"
+                      style="padding-left: 8px"
+                    >
+                      <span class="pt-chev" aria-hidden="true"
+                        ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-chevron-right" /></svg></span
+                      ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg
+                      ><span class="pt-name">Runbooks</span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+              <div class="pt-cell">
+                <p class="pt-caption">A long level — Load more, as in /pages.</p>
+                <aside class="pt-side" aria-label="Page tree">
+                  <div class="pt-sideHead">
+                    <a class="pt-sideTitle" href="/pages">Pages</a
+                    ><button
+                      class="pt-iconBtn"
+                      type="button"
+                      aria-label="Hide page tree"
+                      aria-expanded="true"
+                    >
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-panel-close" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div role="tree" aria-label="Page tree">
+                    <div
+                      class="pt-srow"
+                      role="treeitem"
+                      aria-level="1"
+                      aria-expanded="true"
+                      style="padding-left: 8px"
+                    >
+                      <span class="pt-chev" aria-hidden="true"
+                        ><svg
+                          class="pt-i12 pt-icMuted pt-rot90"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <use href="#i-chevron-right" /></svg></span
+                      ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg
+                      ><span class="pt-name">Specs</span>
+                    </div>
+                    <div class="pt-srow" role="treeitem" aria-level="2" style="padding-left: 22px">
+                      <span class="pt-chevSlot" aria-hidden="true"></span
+                      ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-notebook" /></svg
+                      ><a class="pt-title" href="/pages/pg_rfc49">RFC-049</a>
+                    </div>
+                    <div class="pt-srow" role="treeitem" aria-level="2" style="padding-left: 22px">
+                      <span class="pt-chevSlot" aria-hidden="true"></span
+                      ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-notebook" /></svg
+                      ><a class="pt-title" href="/pages/pg_rfc50">RFC-050</a>
+                    </div>
+                    <div class="pt-srow" role="none" style="padding-left: 36px">
+                      <button class="pt-linkBtn" type="button">
+                        <svg class="pt-i14 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-chevron-down" /></svg
+                        >Load more
+                      </button>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+          <div class="pt-board" data-theme="dark" lang="zh">
+            <p class="pt-boardTag">Dark · zh</p>
+            <div class="pt-grid3">
+              <div class="pt-cell">
+                <p class="pt-caption">某层正在加载。</p>
+                <aside class="pt-side" aria-label="页面树">
+                  <div class="pt-sideHead">
+                    <a class="pt-sideTitle" href="/pages">页面</a
+                    ><button
+                      class="pt-iconBtn"
+                      type="button"
+                      aria-label="隐藏页面树"
+                      aria-expanded="true"
+                    >
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-panel-close" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div role="tree" aria-label="页面树">
+                    <div
+                      class="pt-srow"
+                      role="treeitem"
+                      aria-level="1"
+                      aria-expanded="true"
+                      style="padding-left: 8px"
+                    >
+                      <span class="pt-chev" aria-hidden="true"
+                        ><svg
+                          class="pt-i12 pt-icMuted pt-rot90"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <use href="#i-chevron-right" /></svg></span
+                      ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg
+                      ><span class="pt-name">Specs</span>
+                    </div>
+                    <div
+                      class="pt-srow"
+                      role="treeitem"
+                      aria-level="2"
+                      aria-expanded="true"
+                      style="padding-left: 22px"
+                    >
+                      <span class="pt-chev" aria-hidden="true"
+                        ><svg
+                          class="pt-i12 pt-icMuted pt-rot90"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <use href="#i-chevron-right" /></svg></span
+                      ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-notebook" /></svg
+                      ><a class="pt-title" href="/pages/pg_auth">Auth flow</a>
+                    </div>
+                    <div class="pt-srow" role="none" style="padding-left: 36px">
+                      <span class="pt-synth" role="status"
+                        ><svg class="pt-i14 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-loader" /></svg
+                        >正在加载页面…</span
+                      >
+                    </div>
+                    <div
+                      class="pt-srow"
+                      role="treeitem"
+                      aria-level="1"
+                      aria-expanded="false"
+                      style="padding-left: 8px"
+                    >
+                      <span class="pt-chev" aria-hidden="true"
+                        ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-chevron-right" /></svg></span
+                      ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg
+                      ><span class="pt-name">Runbooks</span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+              <div class="pt-cell">
+                <p class="pt-caption">某层加载失败——在其所在行重试。</p>
+                <aside class="pt-side" aria-label="页面树">
+                  <div class="pt-sideHead">
+                    <a class="pt-sideTitle" href="/pages">页面</a
+                    ><button
+                      class="pt-iconBtn"
+                      type="button"
+                      aria-label="隐藏页面树"
+                      aria-expanded="true"
+                    >
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-panel-close" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div role="tree" aria-label="页面树">
+                    <div
+                      class="pt-srow"
+                      role="treeitem"
+                      aria-level="1"
+                      aria-expanded="true"
+                      style="padding-left: 8px"
+                    >
+                      <span class="pt-chev" aria-hidden="true"
+                        ><svg
+                          class="pt-i12 pt-icMuted pt-rot90"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <use href="#i-chevron-right" /></svg></span
+                      ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg
+                      ><span class="pt-name">Specs</span>
+                    </div>
+                    <div
+                      class="pt-srow"
+                      role="treeitem"
+                      aria-level="2"
+                      aria-expanded="true"
+                      style="padding-left: 22px"
+                    >
+                      <span class="pt-chev" aria-hidden="true"
+                        ><svg
+                          class="pt-i12 pt-icMuted pt-rot90"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <use href="#i-chevron-right" /></svg></span
+                      ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-notebook" /></svg
+                      ><a class="pt-title" href="/pages/pg_auth">Auth flow</a>
+                    </div>
+                    <div class="pt-srow" role="none" style="padding-left: 36px">
+                      <span class="pt-synth" role="alert"
+                        ><svg class="pt-i14 pt-icDanger" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-alert" /></svg
+                        ><span class="pt-synthText">无法加载其中的内容。</span></span
+                      >
+                    </div>
+                    <div class="pt-srow" role="none" style="padding-left: 36px">
+                      <button class="pt-linkBtn" type="button">重试</button>
+                    </div>
+                    <div
+                      class="pt-srow"
+                      role="treeitem"
+                      aria-level="1"
+                      aria-expanded="false"
+                      style="padding-left: 8px"
+                    >
+                      <span class="pt-chev" aria-hidden="true"
+                        ><svg class="pt-i12 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-chevron-right" /></svg></span
+                      ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg
+                      ><span class="pt-name">Runbooks</span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+              <div class="pt-cell">
+                <p class="pt-caption">较长的层级——与 /pages 相同的“加载更多”。</p>
+                <aside class="pt-side" aria-label="页面树">
+                  <div class="pt-sideHead">
+                    <a class="pt-sideTitle" href="/pages">页面</a
+                    ><button
+                      class="pt-iconBtn"
+                      type="button"
+                      aria-label="隐藏页面树"
+                      aria-expanded="true"
+                    >
+                      <svg class="pt-i16 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-panel-close" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div role="tree" aria-label="页面树">
+                    <div
+                      class="pt-srow"
+                      role="treeitem"
+                      aria-level="1"
+                      aria-expanded="true"
+                      style="padding-left: 8px"
+                    >
+                      <span class="pt-chev" aria-hidden="true"
+                        ><svg
+                          class="pt-i12 pt-icMuted pt-rot90"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <use href="#i-chevron-right" /></svg></span
+                      ><svg class="pt-i16 pt-icSecondary" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg
+                      ><span class="pt-name">Specs</span>
+                    </div>
+                    <div class="pt-srow" role="treeitem" aria-level="2" style="padding-left: 22px">
+                      <span class="pt-chevSlot" aria-hidden="true"></span
+                      ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-notebook" /></svg
+                      ><a class="pt-title" href="/pages/pg_rfc49">RFC-049</a>
+                    </div>
+                    <div class="pt-srow" role="treeitem" aria-level="2" style="padding-left: 22px">
+                      <span class="pt-chevSlot" aria-hidden="true"></span
+                      ><svg class="pt-i16 pt-icMuted" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-notebook" /></svg
+                      ><a class="pt-title" href="/pages/pg_rfc50">RFC-050</a>
+                    </div>
+                    <div class="pt-srow" role="none" style="padding-left: 36px">
+                      <button class="pt-linkBtn" type="button">
+                        <svg class="pt-i14 pt-icInherit" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-chevron-down" /></svg
+                        >加载更多
+                      </button>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
