@@ -65,6 +65,41 @@ export function toLockedPageRow(record: PageLockedRecord): LockedPageRow {
 }
 
 /**
+ * The raw row `pageRepository.findLevelAfter` returns (MOTIR-7369): one page of
+ * a tree level, no body, with whether it holds any sub-page.
+ */
+export interface PageLevelRecord {
+  id: string;
+  title: string;
+  position: string;
+  updatedAt: Date;
+  hasChildren: boolean;
+}
+
+/**
+ * One page of a `/pages` tree level, as the page service composes the level
+ * (MOTIR-7370): what the row renders, and the `(position, id)` the keyset cursor
+ * pages on.
+ */
+export interface PageLevelRow {
+  readonly id: string;
+  readonly title: string;
+  readonly position: string;
+  readonly updatedAt: Date;
+  readonly hasChildren: boolean;
+}
+
+export function toPageLevelRow(record: PageLevelRecord): PageLevelRow {
+  return {
+    id: record.id,
+    title: record.title,
+    position: record.position,
+    updatedAt: record.updatedAt,
+    hasChildren: Boolean(record.hasChildren),
+  };
+}
+
+/**
  * The page as the read model returns it (MOTIR-7277): the canonical state as
  * base64 — the editor's seed, from which it derives everything else — and
  * whether THIS caller may write it.
