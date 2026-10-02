@@ -1348,6 +1348,10 @@ export const agentInstanceLifecycleService = {
 
     // Running: the guarded move and the run check in ONE transaction, so a run
     // opened before the move commits is seen here and the move is undone (Q8).
+    // The move is guarded on the digest read above as well as the state: an
+    // earlier press can update the agent and settle it back to `running` between
+    // that read and this move, and the state alone would let this press run the
+    // same update a second time (MOTIR-7340).
     const moved = await inProject(project, ctx, async (tx) => {
       const n = await agentInstanceRepository.transition(
         row.id,
@@ -1356,6 +1360,7 @@ export const agentInstanceLifecycleService = {
         agentInstanceClock.now(),
         pin,
         tx,
+        { imageDigest: row.imageDigest },
       );
       if (n !== 1) return 0;
       const running = await dispatchRunRepository.findRunningByAgentInstance(row.id, tx);
@@ -1372,7 +1377,11 @@ export const agentInstanceLifecycleService = {
       return n;
     });
     if (moved !== 1) {
-      throw new AgentInstanceStateConflictError(row.id, (await reload(row)).state, 'updated');
+      const now = await reload(row);
+      if (now.state === 'running' && now.imageDigest === newest.digest) {
+        throw new AgentInstanceUpToDateError(row.id, now.imageVersion ?? newest.version);
+      }
+      throw new AgentInstanceStateConflictError(row.id, now.state, 'updated');
     }
 
     const fresh = await reload(row);

@@ -217,6 +217,23 @@ describe('agentInstanceRepository', () => {
     expect(after?.stateChangedAt.getTime()).toBe(row.stateChangedAt.getTime());
   });
 
+  it('a transition guarded on an image digest moves only while the row still carries it (MOTIR-7340)', async () => {
+    const f = await seedFixture();
+    const row = await createInstance(f);
+    const stale = await withWorkspaceServiceContext(f.workspaceId, (tx) =>
+      agentInstanceRepository.transition(row.id, ['starting'], 'running', new Date(), {}, tx, {
+        imageDigest: 'sha256:not-the-one-it-runs',
+      }),
+    );
+    expect(stale).toBe(0);
+    const current = await withWorkspaceServiceContext(f.workspaceId, (tx) =>
+      agentInstanceRepository.transition(row.id, ['starting'], 'running', new Date(), {}, tx, {
+        imageDigest: row.imageDigest,
+      }),
+    );
+    expect(current).toBe(1);
+  });
+
   it('TWO CONCURRENT transitions from the same state: exactly one wins', async () => {
     const f = await seedFixture();
     const row = await createInstance(f);

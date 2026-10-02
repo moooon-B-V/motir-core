@@ -152,6 +152,10 @@ export const agentInstanceRepository = {
    *
    * `stateChangedAt` is written by the same statement, so the timestamp can
    * never disagree with the state it dates.
+   *
+   * `expected.imageDigest` narrows the guard to the image the caller read as
+   * well (MOTIR-7340): a state alone cannot tell `running` before an update from
+   * `running` after one that already settled.
    */
   async transition(
     id: string,
@@ -160,9 +164,15 @@ export const agentInstanceRepository = {
     at: Date,
     patch: AgentInstanceTransitionPatch,
     tx: Prisma.TransactionClient,
+    expected: { imageDigest?: string } = {},
   ): Promise<number> {
     const result = await tx.agentInstance.updateMany({
-      where: { id, state: { in: [...from] }, ...LIVE },
+      where: {
+        id,
+        state: { in: [...from] },
+        ...(expected.imageDigest !== undefined ? { imageDigest: expected.imageDigest } : {}),
+        ...LIVE,
+      },
       data: {
         state: to,
         stateChangedAt: at,
