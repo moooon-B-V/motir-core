@@ -8503,6 +8503,11 @@
           "org": {
             "internal_billing_set": "已标记为内部计费",
             "internal_billing_unset": "已移除内部计费标记"
+          },
+          "ai": {
+            "planner_model": {
+              "set": "已更改规划模型"
+            }
           }
         }
       }

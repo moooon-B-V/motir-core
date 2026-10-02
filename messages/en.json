@@ -8507,6 +8507,11 @@
           "org": {
             "internal_billing_set": "Classified internal billing",
             "internal_billing_unset": "Internal classification removed"
+          },
+          "ai": {
+            "planner_model": {
+              "set": "Changed the planning model"
+            }
           }
         }
       }
