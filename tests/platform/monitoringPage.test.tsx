@@ -99,11 +99,12 @@ const HEALTHY_ERRORS: PlatformSignalDTO = {
 async function render(hosting = HEALTHY_HOSTING, errors = HEALTHY_ERRORS): Promise<string> {
   read.mockResolvedValue(board(hosting, errors));
   const html = await renderToHtml(await AdminMonitoringPage({ searchParams: Promise.resolve({}) }));
-  // Decode the entities React escapes, so the copy reads as written.
+  // Decode the entities React escapes, so the copy reads as written. `&amp;`
+  // goes last, so an escaped `&amp;quot;` decodes once and not twice.
   return html
     .replace(/&#x27;/g, "'")
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"');
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&');
 }
 
 /** The text of the card titled `title` — from its title to the next card's. */
