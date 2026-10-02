@@ -145,8 +145,9 @@ jobs:
 
       # MOTIR-7208 — the OFFLINE PROVIDER PROBE, against the image just built. The
       # smoke test drives a FAKE OpenCode, so it cannot see a provider the real
-      # one fails to load. This runs the image's own `opencode` on a DeepSeek AND an
-      # Anthropic model, configured only by the CLI's shipped egress document,
+      # one fails to load. This runs the image's own `opencode` on a DeepSeek, a GLM,
+      # a Qwen (MOTIR-7244) and an Anthropic model, configured only by the CLI's
+      # shipped egress document,
       # against a stub gateway container on an `--internal` network — reachable,
       # and nothing else is — and checks each provider's route and run-key header
       # (motir-gateway `docs/hosted-run-egress.md` §2–§3). Before the publish, so a
