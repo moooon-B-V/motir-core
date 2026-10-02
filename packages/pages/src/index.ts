@@ -5,13 +5,16 @@
 // `@motir/pages`, never a path inside `src/`, which
 // `tests/packages/importDirection.test.ts` asserts.
 //
-// Today it holds the page model types, the pure tree rules and the record's
-// constants. The document conversions, the editor and the save procedure arrive
-// with the stories that use them; the app's composition root
-// (`lib/pages/index.ts`) arrives with the schema story.
+// It holds the page model types, the pure tree rules, the record's constants,
+// and the page DOCUMENT: the one schema and the headless conversions between a
+// stored Yjs state and its derived formats (MOTIR-7272).
 
 export * from './constants';
 export * from './types';
 export * from './errors';
 export * from './tree';
 export * from './position';
+export * from './document/extensions';
+export * from './document/schema';
+export { parseMarkdown, serializeMarkdown } from './document/markdown';
+export * from './document/convert';
