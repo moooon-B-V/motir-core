@@ -278,15 +278,11 @@ jobs:
   # packages and root tests read package files, so these flags narrow the
   # package lanes and nothing else.
   #
-  # ⚠️ …EXCEPT `packages/pages/`, AND ONLY WHILE THE APP DOES NOT IMPORT IT
-  # (MOTIR-5758). `@motir/pages` has no consumer yet, so nothing the `app` lanes
-  # run can reach it; what can (the root type-check, the structural guards, lint)
-  # runs on every pull request regardless of `app`. A pages-only change therefore
-  # runs the `pages` lane and not the Vitest/E2E matrix. The exception is held
-  # true by `tests/packages/importDirection.test.ts`, which goes red the moment
-  # an app file imports `@motir/pages` — at which point the arm below that skips
-  # `packages/pages/*` has to go (the schema story, MOTIR-5752). They fail open with the other two: a push to
-  # `main` has no base, so it still runs every package lane.
+  # `packages/pages/` was exempt from that until the app imported it: MOTIR-5758
+  # let a pages-only change skip the Vitest/E2E matrix while nothing the app
+  # lanes run could reach the package, and MOTIR-7276 ended the exemption with
+  # the package's first app consumer (`lib/pages/index.ts`). The package flags
+  # fail open: a push to `main` has no base, so it still runs every package lane.
   #
   # ⚠️ …EXCEPT A MANIFEST WHOSE ONLY CHANGES ARE THE ONES A RELEASE MAKES. The
   # Changesets release PR (#3130) is CHANGELOGs, a consumed `.changeset/*.md`,
@@ -525,12 +521,8 @@ jobs:
             # whose whole payload is a negation is not dead when its subject is
             # gone; it is dead when nothing can come back.
             #
-            # ⚠️ `packages/pages/*` IS SKIPPED HERE ONLY WHILE NO APP FILE IMPORTS
-            # `@motir/pages` — see the job header. It sits ABOVE the catch-all
-            # for the same first-match-wins reason `content/*` does.
             case "$f" in
               content/*) app=true ;;
-              packages/pages/*) ;;
               docs/*|design/*|scripts/plan-seed/*|*.md) ;;
               *) app=true ;;
             esac
