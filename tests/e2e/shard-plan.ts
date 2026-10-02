@@ -608,6 +608,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'epic6-journey.spec.ts': 14.4,
   'estimation.spec.ts': 14.6,
   'filter-builder.spec.ts': 23.8,
+  // Story MOTIR-5753 PROMOTED this from the acceptance lane (it was
+  // `acceptance-folders.spec.ts`, Story MOTIR-5308's receipt). ESTIMATED, not
+  // measured — two tests: the folder walk over /items, /boards and /backlog, and
+  // the viewer's look. Rounded UP; re-measure from its first green bulk leg.
+  'folders-tidy.spec.ts': 30.0,
   'github.spec.ts': 8.3,
   'general-attachment.spec.ts': 8.0,
   'gitlab.spec.ts': 6.1,
@@ -687,6 +692,16 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // includes it.
   'pages-smoke.spec.ts': 20.0,
   'pages-stream.spec.ts': 12.0,
+  // MOTIR-7376 — ESTIMATED, not measured: three tests, a sign-up each; the
+  // third seeds a ten-page chain and expands nine levels before its drag. Rounded
+  // UP; re-measure from its first green bulk leg.
+  'pages-tree-drag.spec.ts': 35.0,
+  // Story MOTIR-5753 PROMOTED this from the acceptance lane (it was
+  // `acceptance-pages.spec.ts`, Story MOTIR-5752's receipt). ESTIMATED, not
+  // measured — four tests: the typed walk with ~7 debounced saves and a second
+  // session, then the 404, offline and too-large states. Rounded UP; re-measure
+  // from its first green bulk leg.
+  'pages-write.spec.ts': 45.0,
   'org-admin.spec.ts': 8.6,
   // MOTIR-6405 — measured LOCALLY in one run (47.0 s wall, which includes the
   // server's first compile of the routes it opens), so an upper bound:
