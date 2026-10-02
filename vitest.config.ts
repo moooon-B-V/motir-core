@@ -203,6 +203,19 @@ export default defineConfig({
         // `workItemContinue-transport.test.ts`): 100 / 90.62 / 100 / 100. Its
         // service, `workItemContinueService.ts`, is already gated.
         'lib/mcp/tools/workItemContinue.ts',
+        // Story MOTIR-7220 · MOTIR-7234 — the planner-model story's motir-core
+        // gate: the console seam (service + mapper), the one plan-read redaction
+        // helper, and the console's Server Action. MEASURED on this branch against
+        // the story's specs (`plannerModelStoryGate.test.ts`, the service, action
+        // and redaction suites): mapper 100 / 100 / 100 / 100, redaction
+        // 100 / 100 / 100 / 100, service 93.93 / 91.66 / 100 / 93.1, action
+        // 91.66 / 92.85 / 100 / 90. `lib/ai/motirAiClient.ts` is NOT pinned: the
+        // story adds two functions to a 2,300-line client whose other paths are
+        // other stories' and measure ~10 % here.
+        'lib/services/platformPlannerModelService.ts',
+        'lib/mappers/platformPlannerModelMappers.ts',
+        'lib/plans/redactNativeModel.ts',
+        'app/**/admin/ai-planning/actions.ts',
         // Story MOTIR-6574 · MOTIR-6584 — the OBSOLESCENCE story's two NEW modules
         // (the scale's one list, and the MCP write fields + text-block lines) and
         // the relationship model it widened with the `supersedes` pair, which had
@@ -3093,6 +3106,31 @@ export default defineConfig({
           statements: 90,
         },
         'lib/mcp/tools/workItemContinue.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-7220 · MOTIR-7234 — measured above, pinned at the floor.
+        'lib/services/platformPlannerModelService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/platformPlannerModelMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/plans/redactNativeModel.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ai-planning/actions.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
