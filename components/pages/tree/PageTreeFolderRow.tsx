@@ -1,13 +1,9 @@
 'use client';
 
-import type { Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronRight, Folder } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
-import {
-  FolderRowMenu,
-  type FolderMenuEntry,
-} from '@/app/(authed)/items/_components/FolderRowMenu';
 import {
   CHEVRON_CLASS,
   TREE_ROW_CLASS,
@@ -22,11 +18,14 @@ import {
 // ALWAYS expandable — whether it holds anything is only known after the read,
 // and is then said in words (_No pages here_).
 //
-// The menu is `/items`' shipped `FolderRowMenu` (MOTIR-7374 moves it to a shared
-// `folders` directory, with no visual change). This card supplies its first
-// entry, **New page here**; the shipped folder commands are appended after it
-// through `entries` (MOTIR-7374). A reader without `page:edit` gets no menu at
-// all — nothing drawn disabled (panel 8).
+// The menu is the shared `FolderRowMenu` (`components/folders/`, moved there
+// from `/items` by MOTIR-7374 with no visual change), built by the tree: New
+// page here first (MOTIR-7373), then the shipped folder commands — New folder
+// inside · Rename · Move to… | Move up · Move down | Delete… (MOTIR-7374) — and
+// anchoring the folder Move to… picker. A reader without `page:edit` gets no
+// menu at all — nothing drawn disabled (panel 8). While the folder is being
+// RENAMED the tree hands in the shipped inline `FolderNameField` in place of
+// the name and the menu.
 
 export interface PageTreeFolderRowProps {
   row: PageTreeFolderRowDto;
@@ -36,8 +35,10 @@ export interface PageTreeFolderRowProps {
   expanded: boolean;
   busy: boolean;
   onToggle: () => void;
-  /** The row menu's entries; `null` draws no menu (a reader without `page:edit`). */
-  menu: FolderMenuEntry[] | null;
+  /** The row menu, as the tree built it; `null` draws none (a reader without `page:edit`). */
+  menu: ReactNode | null;
+  /** The inline rename field, drawn in place of the name and the menu while it is open. */
+  nameField?: ReactNode;
 }
 
 export function PageTreeFolderRow({
@@ -48,6 +49,7 @@ export function PageTreeFolderRow({
   busy,
   onToggle,
   menu,
+  nameField,
 }: PageTreeFolderRowProps) {
   const t = useTranslations('folders');
   return (
@@ -85,8 +87,12 @@ export function PageTreeFolderRow({
         />
       </button>
       <Folder className="h-4 w-4 shrink-0 text-(--el-text-secondary)" aria-hidden />
-      <span className="min-w-0 truncate font-semibold text-(--el-text)">{row.name}</span>
-      {menu ? <FolderRowMenu label={t('actionsAria', { name: row.name })} entries={menu} /> : null}
+      {nameField ?? (
+        <>
+          <span className="min-w-0 truncate font-semibold text-(--el-text)">{row.name}</span>
+          {menu}
+        </>
+      )}
     </div>
   );
 }

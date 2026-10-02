@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import zhMessages from '@/messages/zh.json';
-import { FolderDeleteDialog } from '@/app/(authed)/items/_components/FolderDeleteDialog';
+import { FolderDeleteDialog } from '@/components/folders/FolderDeleteDialog';
 import type { FolderDeletionPreviewDto } from '@/lib/dto/folders';
 
 // The DELETE-FOLDER confirmation (Story MOTIR-5308 · MOTIR-5346): what moves and

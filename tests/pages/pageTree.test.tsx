@@ -461,7 +461,7 @@ describe('PageTree — New page here / New sub-page (panel 2)', () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it('a later card’s entries are appended after the New entry, on both kinds of row', async () => {
+  it('a later card’s entries are appended after the row’s own entries, on both kinds of row', async () => {
     const onMove = vi.fn();
     mount({
       pageMenuEntries: (row) => [
@@ -484,7 +484,7 @@ describe('PageTree — New page here / New sub-page (panel 2)', () => {
       within(menu)
         .getAllByRole('menuitem')
         .map((el) => el.textContent),
-    ).toEqual(['New sub-page', 'Move Auth flow']);
+    ).toEqual(['New sub-page', 'Move to…', 'Move down', 'Move Auth flow']);
     await press(within(menu).getByRole('menuitem', { name: 'Move Auth flow' }));
     expect(onMove).toHaveBeenCalledTimes(1);
 

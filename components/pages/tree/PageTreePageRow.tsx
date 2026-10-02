@@ -1,14 +1,10 @@
 'use client';
 
-import type { Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { ChevronRight, NotebookText } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
-import {
-  FolderRowMenu,
-  type FolderMenuEntry,
-} from '@/app/(authed)/items/_components/FolderRowMenu';
 import {
   CHEVRON_CLASS,
   TREE_ROW_CLASS,
@@ -28,9 +24,9 @@ import {
 // are out of the tab order — the treeitem is the one tab stop, and its keys
 // (Enter opens, arrows expand) operate both (`PageTree`).
 //
-// The menu's first entry is this card's **New sub-page**; MOTIR-7374 appends
-// Move to… · Move up · Move down through `entries`. A reader without
-// `page:edit` gets no menu (panel 8).
+// The menu is `PageRowMenu`, built by the tree: New sub-page (MOTIR-7373), then
+// Move to… | Move up · Move down (MOTIR-7374), anchoring the Move to… picker. A
+// reader without `page:edit` gets no menu (panel 8).
 
 export interface PageTreePageRowProps {
   row: PageTreePageRowDto;
@@ -42,8 +38,8 @@ export interface PageTreePageRowProps {
   onToggle: () => void;
   /** The title link — the tree's Enter key clicks it. */
   linkRef: Ref<HTMLAnchorElement>;
-  /** The row menu's entries; `null` draws no menu (a reader without `page:edit`). */
-  menu: FolderMenuEntry[] | null;
+  /** The row menu, as the tree built it; `null` draws none (a reader without `page:edit`). */
+  menu: ReactNode | null;
 }
 
 export function PageTreePageRow({
@@ -107,7 +103,7 @@ export function PageTreePageRow({
       >
         {title}
       </Link>
-      {menu ? <FolderRowMenu label={t('tree.pageActionsAria', { title })} entries={menu} /> : null}
+      {menu}
     </div>
   );
 }

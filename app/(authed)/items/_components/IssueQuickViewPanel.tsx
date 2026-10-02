@@ -54,7 +54,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { EditableRailField, RailStaleNotice, useQuickViewRailEdit } from './QuickViewRailEdit';
 import { QuickViewFolderControl } from './QuickViewFolderField';
-import { useFolderCommands } from './FolderCommands';
+import { useFolderCommands } from '@/components/folders/FolderCommands';
 import { fileWorkItemAction } from '../[key]/edit/actions';
 import { useLabelEditing, useComponentEditing } from './fieldChipEditing';
 import { useCustomFieldEditing } from './customFieldEditing';

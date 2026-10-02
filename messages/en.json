@@ -11535,7 +11535,18 @@
       "rootFailed": "Couldn’t load the pages.",
       "levelFailed": "Couldn’t load what’s inside.",
       "loadMore": "Load more",
-      "shown": "{count} shown"
+      "shown": "{count} shown",
+      "picker": {
+        "listLabel": "Folders and pages",
+        "loading": "Loading folders and pages…",
+        "isThisPage": "It’s this page — a page can’t move into itself or its sub-pages."
+      },
+      "refusal": {
+        "cycle": "A page can’t move into one of its own sub-pages. It stayed where it was.",
+        "depth": "Pages nest at most {limit} levels deep, and this move would go past that. It stayed where it was.",
+        "crossProject": "That folder or page belongs to another project. The page stayed where it was.",
+        "gone": "That folder or page no longer exists. The page stayed where it was."
+      }
     },
     "page": {
       "back": "Pages",

@@ -6,6 +6,17 @@ import { memberPageContext, pageScope } from '@/lib/pages/projectPageContext';
 import { pagesService } from '@/lib/services/pagesService';
 import type { PageTreeLevelDto } from '@/lib/dto/pages';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { FolderCommandsProvider } from '@/components/folders/FolderCommands';
+import type { FolderCommandActions } from '@/components/folders/folderActions';
+import {
+  createFolderAction,
+  deleteFolderAction,
+  describeFolderDeletionAction,
+  listProjectFoldersAction,
+  moveFolderAction,
+  renameFolderAction,
+} from '../items/actions';
+import { NewFolderButton } from './_components/NewFolderButton';
 import { NewPageButton } from './_components/NewPageButton';
 import { PagesIndex } from './_components/PagesIndex';
 import { PagesIndexFrame } from './_components/PagesIndexFrame';
@@ -36,6 +47,23 @@ import { PagesIndexFrame } from './_components/PagesIndexFrame';
 // failed root read is NOT a 500: the header and its New page still work —
 // creating a page does not need the read — so the tree renders its first-level
 // error state with Try again (panel 6), which re-reads through the route.
+//
+// ── THE FOLDER COMMANDS (MOTIR-7374) ───────────────────────────────────────
+// Folders are the project's, shared with `/items`, and so are their writes: the
+// `/items` server actions, handed to the client tree as props (`components/` may
+// not import `app/`). The header's New folder reaches the tree through the
+// shared `FolderCommandsProvider`, which wraps both. Folder writes assert
+// `work_item:edit`, so the tree offers them only to a reader holding it too.
+
+/** The shipped folder writes, as the `/pages` tree receives them. */
+const FOLDER_ACTIONS: FolderCommandActions = {
+  createFolder: createFolderAction,
+  renameFolder: renameFolderAction,
+  moveFolder: moveFolderAction,
+  listProjectFolders: listProjectFoldersAction,
+  describeFolderDeletion: describeFolderDeletionAction,
+  deleteFolder: deleteFolderAction,
+};
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('pages.index');
@@ -49,24 +77,32 @@ export default async function PagesIndexPage() {
   const scope = pageScope(ctx);
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('index.title')}</h1>
-          <p className="mt-1 text-sm text-(--el-text-secondary)">{t('tree.subtitle')}</p>
-        </div>
-        {/* Rendered only for `page:edit` — the button reads `useProjectAccess()`. */}
-        <NewPageButton />
-      </header>
-      <Suspense fallback={<PagesIndexFrame />}>
-        <PagesIndexData
-          service={scope.service}
-          projectId={scope.projectId}
-          projectKey={scope.project.identifier}
-          canEdit={held.has('page:edit')}
-        />
-      </Suspense>
-    </div>
+    <FolderCommandsProvider>
+      <div className="flex flex-col gap-6">
+        <header className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
+              {t('index.title')}
+            </h1>
+            <p className="mt-1 text-sm text-(--el-text-secondary)">{t('tree.subtitle')}</p>
+          </div>
+          {/* Each renders only for its keys — both read `useProjectAccess()`. */}
+          <div className="flex shrink-0 items-center gap-2">
+            <NewFolderButton />
+            <NewPageButton />
+          </div>
+        </header>
+        <Suspense fallback={<PagesIndexFrame />}>
+          <PagesIndexData
+            service={scope.service}
+            projectId={scope.projectId}
+            projectKey={scope.project.identifier}
+            canEdit={held.has('page:edit')}
+            canEditFolders={held.has('work_item:edit')}
+          />
+        </Suspense>
+      </div>
+    </FolderCommandsProvider>
   );
 }
 
@@ -75,11 +111,13 @@ async function PagesIndexData({
   projectId,
   projectKey,
   canEdit,
+  canEditFolders,
 }: {
   service: ServiceContext;
   projectId: string;
   projectKey: string;
   canEdit: boolean;
+  canEditFolders: boolean;
 }) {
   let root: PageTreeLevelDto | null;
   try {
@@ -88,5 +126,13 @@ async function PagesIndexData({
     console.error('[pages] the root level of the page tree could not be read', err);
     root = null;
   }
-  return <PagesIndex root={root} projectKey={projectKey} canEdit={canEdit} />;
+  return (
+    <PagesIndex
+      root={root}
+      projectKey={projectKey}
+      canEdit={canEdit}
+      canEditFolders={canEditFolders}
+      folderActions={FOLDER_ACTIONS}
+    />
+  );
 }
