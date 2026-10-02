@@ -373,6 +373,17 @@ export default defineConfig({
         // test seams the prod server trips (see lib/e2eProdHarness.ts). Test-only,
         // never a real deploy.
         E2E_PROD_HARNESS: '1',
+        // Story 10.2 (MOTIR-7333): the system-health board's three providers,
+        // bound to their in-memory fakes so the walk films populated cards without
+        // calling Sentry, Fly or the gateway. Read server-side at call time, so they
+        // must reach THIS process; each is refused in a production build unless
+        // E2E_PROD_HARNESS is also set. FLY_APP_NAME / FLY_REGION give the Hosting
+        // card the deployment identity it reports beside the fake fleet.
+        MOTIR_E2E_FAKE_ERROR_COUNT: '1',
+        MOTIR_E2E_FAKE_DEPLOYMENT_STATUS: '1',
+        MOTIR_E2E_FAKE_GATEWAY_STATUS: '1',
+        FLY_APP_NAME: 'motir-core-e2e',
+        FLY_REGION: 'iad',
         // `next build` is memory-heavy; give V8 old-space headroom (harmless for
         // the lightweight `next start` that follows). Inside the CI 16 GB budget.
         // MOTIR-1753 — size the libuv THREADPOOL for a Node-served build.
