@@ -147,7 +147,7 @@ export interface AgentInstanceLastRunDto {
 }
 
 /** The hibernations Motir makes on its own, which the page explains. */
-export type AgentInstanceStopReason = 'credits' | 'idle' | 'backstop';
+export type AgentInstanceStopReason = 'credits' | 'idle' | 'backstop' | 'admin_stop';
 
 export interface AgentInstanceListPageDto {
   instances: AgentInstanceListItemDto[];
