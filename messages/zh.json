@@ -8551,7 +8551,7 @@
     "monitoring": {
       "breadcrumb": "平台·监控",
       "title": "系统健康",
-      "subtitle": "机器还在转吗？六个只读信号，打开页面时刷新。每张卡片都跳转到对应服务商自己的控制台——Motir 只显示状态，从不重新部署、取消或重放。更深入的分服务商看板属于故事 10.2。",
+      "subtitle": "机器还在转吗？七个只读信号，打开页面时刷新。每张卡片都跳转到对应服务商自己的控制台——Motir 只显示状态，从不重新部署、取消或重放。",
       "state": {
         "healthy": "正常",
         "degraded": "降级",
@@ -8581,6 +8581,22 @@
             "notManaged": "此构建没有运行在 Fly 上，因此没有可跳转的托管控制台。本地或自托管实例出现这种情况是正常的。"
           },
           "linkOut": "Fly 控制台"
+        },
+        "gateway": {
+          "title": "网关",
+          "value": "可访问 · {ms} 毫秒",
+          "detail": "motir-gateway {version} · 自 {since} 起运行。",
+          "degradedValue": "响应慢 · {ms} 毫秒",
+          "degradedDetail": "有响应，但超过了 {threshold} 毫秒的阈值。motir-gateway {version} · 自 {since} 起运行。",
+          "unreachable": {
+            "noAnswer": "网关没有响应",
+            "notConfigured": "未配置网关"
+          },
+          "unreachableDetail": {
+            "noAnswer": "状态检查在 {timeout} 秒内没有得到响应。经过网关的 AI 请求可能正在失败。没有测到任何数据，因此不显示延迟。",
+            "notConfigured": "未设置 MOTIR_GATEWAY_URL，因此没有可检查的对象。不运行网关的实例出现这种情况是正常的。"
+          },
+          "linkOut": "网关状态"
         },
         "schedules": {
           "title": "定时任务",

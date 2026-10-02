@@ -7,6 +7,7 @@ import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthServic
 import { databaseHealthRepository } from '@/lib/repositories/databaseHealthRepository';
 import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
+import { httpGatewayStatusReader } from '@/lib/gateway/statusClient';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -109,6 +110,7 @@ describe('the six signals', () => {
     expect(health.signals.map((s) => s.id)).toEqual([
       'database',
       'hosting',
+      'gateway',
       'schedules',
       'failedJobs',
       'errors',
@@ -274,7 +276,7 @@ describe('⚠️ an unreachable probe never reads as a zero', () => {
     vi.spyOn(jobScheduleHealthService, 'check').mockRejectedValue(new Error('ledger gone'));
 
     const health = await platformHealthService.read(currentPrincipal);
-    expect(health.signals).toHaveLength(6);
+    expect(health.signals).toHaveLength(7);
     expect(signal(health.signals, 'database').state).toBe('healthy');
     expect(signal(health.signals, 'failedJobs').values['count']).toBe(0);
   });
@@ -484,6 +486,83 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
     expect(database.linkOut).toBeNull(); // never a console that is not this deployment's
   });
 });
+describe('the gateway signal (MOTIR-742)', () => {
+  // Driven through the real binding's `read` — the seam is the reader, never the
+  // service under test. `fetch` itself is covered by `tests/gateway/statusClient.test.ts`.
+  const answering = (latencyMs: number) =>
+    vi.spyOn(httpGatewayStatusReader, 'read').mockResolvedValue({
+      latencyMs,
+      version: 'v0.18.3',
+      startTime: '2026-09-29T14:02:00.000Z',
+    });
+
+  beforeEach(() => {
+    vi.stubEnv('MOTIR_E2E_FAKE_GATEWAY_STATUS', '');
+    vi.stubEnv('MOTIR_GATEWAY_URL', 'https://gateway.example.test');
+  });
+
+  it('a gateway answering in 120 ms is healthy, with latency, version and up-since', async () => {
+    answering(120);
+    const gateway = signal((await platformHealthService.read(currentPrincipal)).signals, 'gateway');
+    expect(gateway.state).toBe('healthy');
+    expect(gateway.values).toEqual({
+      ms: 120,
+      version: 'v0.18.3',
+      since: '2026-09-29T14:02:00.000Z',
+      threshold: 1000,
+    });
+    expect(gateway.linkOut).toBe('https://gateway.example.test/api/status');
+  });
+
+  it('is healthy AT the threshold and degraded one millisecond over it', async () => {
+    answering(1000);
+    let gateway = signal((await platformHealthService.read(currentPrincipal)).signals, 'gateway');
+    expect(gateway.state).toBe('healthy');
+
+    vi.restoreAllMocks();
+    answering(1001);
+    gateway = signal((await platformHealthService.read(currentPrincipal)).signals, 'gateway');
+    expect(gateway.state).toBe('degraded');
+    expect(gateway.values['ms']).toBe(1001);
+  });
+
+  it('a gateway that does not answer is unreachable with NO latency or version', async () => {
+    vi.spyOn(httpGatewayStatusReader, 'read').mockRejectedValue(new Error('answered 502'));
+    const health = await platformHealthService.read(currentPrincipal);
+    const gateway = signal(health.signals, 'gateway');
+    expect(gateway.state).toBe('unreachable');
+    // The reason, and the probe's own deadline the copy names — a setting, never
+    // a measurement. No `ms`, no `version`, no `since`.
+    expect(gateway.values).toEqual({ reason: 'noAnswer', timeout: 3 });
+    expect(gateway.linkOut).toBe('https://gateway.example.test/api/status');
+    // One failing gateway read does not take the other six cards down.
+    expect(health.signals).toHaveLength(7);
+    expect(signal(health.signals, 'database').state).toBe('healthy');
+  });
+
+  it('a malformed gateway URL is noAnswer with no link to an address that cannot be right', async () => {
+    vi.stubEnv('MOTIR_GATEWAY_URL', 'https://gateway.example.test/v1');
+    const gateway = signal((await platformHealthService.read(currentPrincipal)).signals, 'gateway');
+    expect(gateway.state).toBe('unreachable');
+    expect(gateway.values['reason']).toBe('noAnswer');
+    expect(gateway.linkOut).toBeNull();
+  });
+
+  it('no MOTIR_GATEWAY_URL is notConfigured — a different sentence from noAnswer', async () => {
+    vi.stubEnv('MOTIR_GATEWAY_URL', '');
+    const read = vi.spyOn(httpGatewayStatusReader, 'read');
+    const gateway = signal((await platformHealthService.read(currentPrincipal)).signals, 'gateway');
+    expect(gateway).toEqual({
+      id: 'gateway',
+      state: 'unreachable',
+      values: { reason: 'notConfigured' },
+      linkOut: null,
+    });
+    // Nothing to ask, so nothing is asked.
+    expect(read).not.toHaveBeenCalled();
+  });
+});
+
 describe('the audit trail', () => {
   it('records ONE `health.read` row per read, against the operator', async () => {
     await platformHealthService.read(currentPrincipal);

@@ -6,6 +6,7 @@ import {
   Database,
   ExternalLink,
   HeartPulse,
+  Network,
   ShieldAlert,
   Timer,
 } from 'lucide-react';
@@ -246,18 +247,31 @@ async function SignalBody({ signal }: { signal: PlatformSignalDTO }) {
   // A Server Component, so `format.dateTime` is deterministic — there is no
   // second render to disagree with the first (the hydration hazard that makes
   // `relativeTime` a client-side trap does not arise).
-  const values: Record<string, string | number> =
-    typeof signal.values['ranAt'] === 'string'
-      ? { ...signal.values, ranAt: format.dateTime(new Date(signal.values['ranAt'])) }
-      : signal.values;
+  //
+  // `since` (the Gateway card's up-since, MOTIR-742) is the same kind of reading
+  // and takes the same conversion.
+  const values: Record<string, string | number> = { ...signal.values };
+  for (const field of ['ranAt', 'since']) {
+    const iso = signal.values[field];
+    if (typeof iso === 'string') values[field] = format.dateTime(new Date(iso));
+  }
+  // A DEGRADED card says so in words where its copy carries a degraded sentence
+  // (the Gateway's "Slow · {ms} ms") — otherwise a slow gateway would headline
+  // "Reachable" under an amber chip. Cards without one keep their single string.
+  const degraded = (suffix: 'value' | 'detail') => {
+    const own = `monitoring.signal.${signal.id}.degraded${suffix === 'value' ? 'Value' : 'Detail'}`;
+    return signal.state === 'degraded' && t.has(own)
+      ? own
+      : `monitoring.signal.${signal.id}.${suffix}`;
+  };
   const key =
     signal.state === 'unreachable'
       ? `monitoring.signal.${signal.id}.unreachable.${String(signal.values['reason'])}`
-      : `monitoring.signal.${signal.id}.value`;
+      : degraded('value');
   const detailKey =
     signal.state === 'unreachable'
       ? `monitoring.signal.${signal.id}.unreachableDetail.${String(signal.values['reason'])}`
-      : `monitoring.signal.${signal.id}.detail`;
+      : degraded('detail');
 
   return (
     <div className="flex flex-col gap-2">
@@ -302,6 +316,7 @@ function Td({ children, className = '' }: { children: React.ReactNode; className
 const SIGNAL_ICONS: Record<PlatformSignalId, typeof Database> = {
   database: Database,
   hosting: Cloud,
+  gateway: Network,
   schedules: Timer,
   failedJobs: AlertTriangle,
   errors: ShieldAlert,

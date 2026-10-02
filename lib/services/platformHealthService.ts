@@ -7,6 +7,8 @@ import type {
   PlatformQueueHealthDTO,
   PlatformSignalDTO,
 } from '@/lib/dto/platformHealth';
+import { GATEWAY_STATUS_TIMEOUT_MS } from '@/lib/gateway/statusClient';
+import { gatewayStatusReader } from '@/lib/gateway/statusProvider';
 import { serverSentryDsn } from '@/lib/monitoring/config';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { databaseHealthRepository } from '@/lib/repositories/databaseHealthRepository';
@@ -35,7 +37,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
  * ⚠️ AND ONE FAILING PROBE MUST NOT TAKE THE BOARD DOWN. The design's argument
  * for putting all three tones on ONE board is that *"an operator's real screen is
  * mixed"* — which is only true if the mixed screen renders. Each probe absorbs
- * its own failure through `probe()` below, so the six run concurrently and none
+ * its own failure through `probe()` below, so the seven run concurrently and none
  * of them can reject; that is why the gather is a plain `Promise.all` and why
  * `probe()` is the ONE place a throw becomes `unreachable`.
  *
@@ -45,8 +47,8 @@ import { withSystemContext } from '@/lib/workspaces/context';
  * The ADR's §3a contract — *"the audit row is INSERTed as the first statement
  * inside the same transaction as the read"* — binds a CROSS-TENANT read to its
  * trail, so that a read cannot commit without one. This service reads no tenant
- * row at all: the six signals come from the job ledger, the dead-letter set and
- * the deployment's own environment, which is exactly why `health.read` is its
+ * row at all: the signals come from the job ledger, the dead-letter set, the
+ * gateway's status endpoint and the deployment's own environment, which is exactly why `health.read` is its
  * own action rather than an `estate.read`. The row is still written FIRST and
  * unconditionally, so the trail cannot be missing; what it is not is transacted
  * with reads that are not tenant reads and do not share its client.
@@ -113,6 +115,20 @@ const DLQ_BACKLOG_THRESHOLD = 1;
 const DB_SLOW_MS = 500;
 
 /**
+ * Above this, the gateway's status read reads as `degraded` rather than
+ * `healthy` (MOTIR-742).
+ *
+ * 1000ms, twice the database's bar, because this read crosses a network hop to
+ * another app rather than pinging a pooled connection — and, like `DB_SLOW_MS`,
+ * it is not an SLO. `/api/status` does no work beyond serialising a config map,
+ * so a second spent on it says the gateway's process or its network is struggling,
+ * which is when every coding run's model calls start to suffer too. The real
+ * latency is rendered beside the verdict, and the threshold rides in `values` so
+ * the card's detail can name it.
+ */
+const GATEWAY_SLOW_MS = 1000;
+
+/**
  * How long the OLDEST claimable run may wait before the queue reads `stalled`.
  *
  * ⚠️ AGE IS THE SIGNAL AND DEPTH IS THE CONTEXT, which is the whole shape of
@@ -152,10 +168,11 @@ export const platformHealthService = {
     });
 
     const schedules = probe(() => jobScheduleHealthService.check(now));
-    const [database, hosting, scheduleSignal, failedJobs, errors, lastHealthCheck] =
+    const [database, hosting, gateway, scheduleSignal, failedJobs, errors, lastHealthCheck] =
       await Promise.all([
         databaseSignal(),
         Promise.resolve(hostingSignal()),
+        gatewaySignal(),
         scheduleSignalFrom(schedules),
         failedJobsSignal(now),
         Promise.resolve(errorsSignal()),
@@ -172,7 +189,9 @@ export const platformHealthService = {
 
     return {
       checkedAt: now.toISOString(),
-      signals: [database, hosting, scheduleSignal, failedJobs, errors, lastHealthCheck],
+      // Gateway third, after Hosting, so the three infrastructure cards read as one
+      // row at three columns (design-notes § Panel 8 — Story 10.2 delta).
+      signals: [database, hosting, gateway, scheduleSignal, failedJobs, errors, lastHealthCheck],
       overdue: overdue.slice(0, OVERDUE_PAGE_SIZE),
       overdueTotal: overdue.length,
       schedulesChecked: report?.entries.length ?? 0,
@@ -304,6 +323,57 @@ function hostingSignal(): PlatformSignalDTO {
       machineId: deployment.instanceId ?? '—',
     },
     linkOut: deployment.dashboardUrl,
+  };
+}
+
+/**
+ * Is motir-gateway answering, how fast, and which build (MOTIR-742).
+ *
+ * Every coding run's model calls go through the gateway, and before this card
+ * the console asked it nothing: an outage showed up only as runs failing one by
+ * one, each looking like its own problem, under an all-green board.
+ *
+ * ⚠️ TWO UNREACHABLE REASONS, AND THEY ARE NOT THE SAME SENTENCE. A deployment
+ * with no `MOTIR_GATEWAY_URL` runs no gateway — a self-hosted instance, a dev box
+ * — and that is `notConfigured`, an expected state. A configured gateway that
+ * does not answer cleanly is `noAnswer`, which is an incident. Neither carries a
+ * latency or a version: `values` holds the reason and, for `noAnswer`, the
+ * deadline the copy names ("no answer within {timeout} s") — a setting of this
+ * probe, never a measurement of the gateway.
+ *
+ * ⚠️ THE LINK-OUT IS THE STATUS ENDPOINT ITSELF, not a hosting dashboard. Naming
+ * the gateway's hosting provider here would leak it into `lib/`, which
+ * `tests/ciFleet/orchestratorPortBoundary.test.ts` forbids; the endpoint the probe
+ * read is provider-neutral and shows an operator exactly what the card measured.
+ */
+async function gatewaySignal(): Promise<PlatformSignalDTO> {
+  const reader = gatewayStatusReader();
+  if (!reader.configured()) return unreachable('gateway', 'notConfigured', null);
+
+  // A configured-but-malformed URL (e.g. one ending in `/v1`) throws here; the
+  // read below fails on the same URL, so the card is `noAnswer` with no link
+  // rather than a link to an address that cannot be right.
+  const linkOut = await probe(async () => reader.statusUrl());
+  const status = await probe(() => reader.read());
+  if (status === null) {
+    return {
+      id: 'gateway',
+      state: 'unreachable',
+      values: { reason: 'noAnswer', timeout: GATEWAY_STATUS_TIMEOUT_MS / 1000 },
+      linkOut,
+    };
+  }
+
+  return {
+    id: 'gateway',
+    state: status.latencyMs > GATEWAY_SLOW_MS ? 'degraded' : 'healthy',
+    values: {
+      ms: status.latencyMs,
+      version: status.version,
+      since: status.startTime,
+      threshold: GATEWAY_SLOW_MS,
+    },
+    linkOut,
   };
 }
 

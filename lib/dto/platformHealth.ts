@@ -2,8 +2,9 @@
  * The day-1 system-health glance — design `platform-admin/design-notes.md`
  * **Panel 8** (MOTIR-1167).
  *
- * Six read-only signals and one list, shaped so the UI renders them uniformly
- * and the SERVICE owns every judgement about what a signal means.
+ * Seven read-only signals (six from MOTIR-1167, Gateway from MOTIR-742) and one
+ * list, shaped so the UI renders them uniformly and the SERVICE owns every
+ * judgement about what a signal means.
  *
  * ⚠️ THE THREE STATES ARE NOT A SEVERITY SCALE, and the third is the reason
  * this file exists. The asset's own argument:
@@ -26,13 +27,21 @@ export type PlatformSignalState = 'healthy' | 'degraded' | 'unreachable';
 export type PlatformSignalId =
   | 'database'
   | 'hosting'
+  /**
+   * motir-gateway (MOTIR-742). `values` when it answers: `ms` (latency),
+   * `version`, `since` (ISO-8601, when the gateway process started) and
+   * `threshold` (the slow bar in ms). Unreachable: `reason` — `notConfigured`
+   * (no `MOTIR_GATEWAY_URL`) or `noAnswer`, the latter with `timeout` (the probe's
+   * deadline in seconds, a setting and not a measurement).
+   */
+  | 'gateway'
   | 'schedules'
   | 'failedJobs'
   | 'errors'
   | 'lastHealthCheck';
 
 /**
- * One of the six cards.
+ * One of the seven cards.
  *
  * `value` and `detail` are DATA the UI interpolates into its own localized copy
  * — never a rendered English sentence. The asset's copy strings are template

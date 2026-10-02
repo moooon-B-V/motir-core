@@ -8555,7 +8555,7 @@
     "monitoring": {
       "breadcrumb": "Platform · Monitoring",
       "title": "System health",
-      "subtitle": "Is the machinery running? Six signals, read-only, refreshed on load. Each card links OUT to the provider's own dashboard — Motir shows the state and never redeploys, cancels or replays. The deeper per-provider board is Story 10.2.",
+      "subtitle": "Is the machinery running? Seven signals, read-only, refreshed on load. Each card links OUT to the provider's own dashboard — Motir shows the state and never redeploys, cancels or replays.",
       "state": {
         "healthy": "Healthy",
         "degraded": "Degraded",
@@ -8585,6 +8585,22 @@
             "notManaged": "This build is not running on Fly, so there is no hosting dashboard to point at. Expected on a local or self-hosted instance."
           },
           "linkOut": "Fly dashboard"
+        },
+        "gateway": {
+          "title": "Gateway",
+          "value": "Reachable · {ms} ms",
+          "detail": "motir-gateway {version} · up since {since}.",
+          "degradedValue": "Slow · {ms} ms",
+          "degradedDetail": "Answering, but over the {threshold} ms threshold. motir-gateway {version} · up since {since}.",
+          "unreachable": {
+            "noAnswer": "No answer from the gateway",
+            "notConfigured": "Gateway not configured"
+          },
+          "unreachableDetail": {
+            "noAnswer": "The status check got no answer within {timeout} s. AI requests that go through the gateway may be failing. Nothing was measured, so no latency is shown.",
+            "notConfigured": "MOTIR_GATEWAY_URL is not set, so there is nothing to check. Expected on an instance that runs no gateway."
+          },
+          "linkOut": "Gateway status"
         },
         "schedules": {
           "title": "Scheduled jobs",
