@@ -262,4 +262,34 @@ describe('the board', () => {
     );
     expect(red).toContain("System health loaded. 2 of 7 signals are degraded or can't be reached.");
   });
+
+  it('the overdue list is unchanged: a never-fired cron says Never, a missing expectation a dash', async () => {
+    read.mockResolvedValue({
+      ...board(HEALTHY_HOSTING, HEALTHY_ERRORS),
+      overdue: [
+        {
+          functionId: 'system.daily-health-check',
+          cron: '0 9 * * *',
+          lastRunAt: null,
+          expectedAt: null,
+        },
+        {
+          functionId: 'system.attachment-gc',
+          cron: '0 3 * * *',
+          lastRunAt: '2026-09-30T03:00:00Z',
+          expectedAt: '2026-10-01T03:00:00Z',
+        },
+      ],
+      overdueTotal: 2,
+    });
+    const html = await renderToHtml(
+      await AdminMonitoringPage({ searchParams: Promise.resolve({}) }),
+    );
+    const text = html.replace(/<[^>]+>/g, '|');
+    expect(text).toContain('|system.daily-health-check|');
+    expect(text).toContain('|Never|');
+    expect(text).toContain('|—|');
+    expect(text).toContain('|system.attachment-gc|');
+    expect(text).toContain('9/30/2026');
+  });
 });

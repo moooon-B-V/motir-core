@@ -537,7 +537,7 @@ describe('the gateway signal (MOTIR-742)', () => {
     expect(gateway.state).toBe('unreachable');
     // The reason, and the probe's own deadline the copy names — a setting, never
     // a measurement. No `ms`, no `version`, no `since`.
-    expect(gateway.values).toEqual({ reason: 'noAnswer', timeout: 3 });
+    expect(gateway.values).toEqual({ reason: 'noAnswer', timeout: '3' });
     expect(gateway.linkOut).toBe('https://gateway.example.test/api/status');
     // One failing gateway read does not take the other six cards down.
     expect(health.signals).toHaveLength(7);

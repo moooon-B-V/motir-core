@@ -426,7 +426,9 @@ async function gatewaySignal(): Promise<PlatformSignalDTO> {
     return {
       id: 'gateway',
       state: 'unreachable',
-      values: { reason: 'noAnswer', timeout: GATEWAY_STATUS_TIMEOUT_MS / 1000 },
+      // The deadline crosses as TEXT: it is a setting, not a reading, and the
+      // board's rule is that no unreachable card carries a number (MOTIR-744).
+      values: { reason: 'noAnswer', timeout: String(GATEWAY_STATUS_TIMEOUT_MS / 1000) },
       linkOut,
     };
   }
