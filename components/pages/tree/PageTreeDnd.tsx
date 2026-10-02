@@ -25,7 +25,6 @@ import {
   type DragEndEvent,
   type DragMoveEvent,
   type DragStartEvent,
-  type DraggableSyntheticListeners,
 } from '@dnd-kit/core';
 import { ArrowUp, GripVertical, NotebookText } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
@@ -444,12 +443,28 @@ export function PageTreeDnd({
 
 // ── The rows' half ──────────────────────────────────────────────────────────
 
+/**
+ * The pointer listeners `useDraggable` hands a row: event name → handler, the
+ * shape of `@dnd-kit/core`'s `SyntheticListenerMap` (`Record<string, Function>`),
+ * which assigns to this without a cast.
+ *
+ * ⚠️ Spelled out here rather than imported, for TYPE-CHECK MEMORY. `RowDnd` is
+ * exported, so whatever it names is written into this module's emitted `.d.ts`,
+ * and every program that imports the module through the app project's
+ * declarations — the tests project, via `tests/pages/pageTreeDnd.test.tsx` and
+ * the row components — then loads the ~147 declaration files of `@dnd-kit/core`
+ * and `@dnd-kit/utilities` behind that one name. That closure is what pushed
+ * `tsconfig.tests.json` over the `assert-typecheck-headroom.mjs` line; this
+ * file is the only emitted declaration that named dnd-kit, so keep it that way.
+ */
+type RowListeners = Record<string, CallableFunction>;
+
 /** What a row draws for the drag — handed to `PageTreePageRow` / `PageTreeFolderRow`. */
 export interface RowDnd {
   /** The row element is both the draggable (page rows) and the droppable. */
   setNodeRef: (el: HTMLElement | null) => void;
   /** The pointer listeners; absent on a row that does not drag (a folder). */
-  listeners: DraggableSyntheticListeners | undefined;
+  listeners: RowListeners | undefined;
   /** Whether the row shows the drag handle in its gutter. */
   handle: boolean;
   /** This row is the one lifted — drawn as the dashed origin slot. */
