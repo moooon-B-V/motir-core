@@ -1080,26 +1080,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/login',
     why: "Not an address: Claude Code's own `/login` slash command, typed in the agent's terminal to sign in (docs/decisions/agent-terminal.md Q9: the sign-in completes through the vendor's own flow). The panel's not-signed-in line quotes it verbatim. PERMANENT.",
   },
-  // ── Pages (Story MOTIR-5752 · design MOTIR-7271) ──────────────────────────
-  //  FORWARD-LOOKING: the design draws the Pages section before MOTIR-7300 builds
-  //  `app/(authed)/pages/page.tsx`. The pull request that adds the page turns the
-  //  tight arm red on all three rows, which is the signal to delete them.
-  //  (`/pages/<id>` is a placeholder and never a finding.)
-  {
-    file: 'design/pages/design-notes.md',
-    address: '/pages',
-    why: 'FORWARD-LOOKING: the Pages index the notes specify (rail row, nav-access row, index states). MOTIR-7300 builds it; delete this row when it lands.',
-  },
-  {
-    file: 'design/pages/pages.mock.html',
-    address: '/pages',
-    why: 'FORWARD-LOOKING: the rail row’s href in the mock of the section MOTIR-7300 builds; delete this row when the page lands.',
-  },
-  {
-    file: 'design/pages/page.mock.html',
-    address: '/pages',
-    why: 'FORWARD-LOOKING: the rail row and the “← Pages” back link in the mock of the page MOTIR-7280 builds, pointing at the index MOTIR-7300 builds; delete this row when the index lands.',
-  },
 ];
 
 type Entry = { file: string; address: string; why: string };
