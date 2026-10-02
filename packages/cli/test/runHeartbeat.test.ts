@@ -58,30 +58,44 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('the heartbeat — one beat per interval while the run is open', () => {
-  it('beats every 60 s after open, and never after close', async () => {
+describe('the heartbeat — one beat at open, then one per interval while the run is open', () => {
+  it('beats AT open, then every 60 s, and never after close', async () => {
     const { client, calls } = fakeClient();
     const reporter = createDispatchRunReporter({ client });
     await reporter.open(OPEN);
 
-    expect(calls.beats).toEqual([]);
-    await vi.advanceTimersByTimeAsync(RUN_HEARTBEAT_INTERVAL_MS);
     expect(calls.beats).toEqual(['run_1']);
+    await vi.advanceTimersByTimeAsync(RUN_HEARTBEAT_INTERVAL_MS);
+    expect(calls.beats).toEqual(['run_1', 'run_1']);
     await vi.advanceTimersByTimeAsync(RUN_HEARTBEAT_INTERVAL_MS * 2);
-    expect(calls.beats).toHaveLength(3);
+    expect(calls.beats).toHaveLength(4);
 
     await reporter.close('completed');
     await vi.advanceTimersByTimeAsync(RUN_HEARTBEAT_INTERVAL_MS * 5);
-    expect(calls.beats).toHaveLength(3);
+    expect(calls.beats).toHaveLength(4);
     expect(RUN_HEARTBEAT_INTERVAL_MS).toBe(60_000);
   });
 
-  it('beats for an ADOPTED run too — the server-opened `fix` run is still a run', async () => {
+  // MOTIR-7328: a run killed inside its first interval used to have written no
+  // beat at all, so the server read it as a LEGACY run (`lastHeartbeatAt === null`,
+  // a CLI too old to heartbeat) and kept it alive for 12 hours. The beat at open is
+  // what makes every run this CLI holds carry a `lastHeartbeatAt` from its first
+  // second, so the five-minute lapse governs it however early it dies.
+  it('a run killed before its first interval has already beaten once', async () => {
+    const { client, calls } = fakeClient();
+    const reporter = createDispatchRunReporter({ client });
+    await reporter.open(OPEN);
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(calls.beats).toEqual(['run_1']);
+  });
+
+  it('beats for an ADOPTED run too, at adopt — the server-opened `fix` run is still a run', async () => {
     const { client, calls } = fakeClient();
     const reporter = createDispatchRunReporter({ client });
     reporter.adopt('run_fix');
-    await vi.advanceTimersByTimeAsync(RUN_HEARTBEAT_INTERVAL_MS);
     expect(calls.beats).toEqual(['run_fix']);
+    await vi.advanceTimersByTimeAsync(RUN_HEARTBEAT_INTERVAL_MS);
+    expect(calls.beats).toEqual(['run_fix', 'run_fix']);
     await reporter.close('completed');
   });
 
@@ -114,8 +128,9 @@ describe('the heartbeat — one beat per interval while the run is open', () => 
     const reporter = createDispatchRunReporter({ client, warn: (m) => warnings.push(m) });
     await reporter.open(OPEN);
 
+    // The beat at open fails; the three interval beats after it still go.
     await vi.advanceTimersByTimeAsync(RUN_HEARTBEAT_INTERVAL_MS * 3);
-    expect(calls.beats).toHaveLength(3);
+    expect(calls.beats).toHaveLength(4);
     expect(warnings).toEqual([]);
     expect(reporter.offline).toBe(false);
     await reporter.close('completed');
@@ -156,9 +171,9 @@ describe('the interrupt — the run closes `interrupted`, queued events flushed 
     expect(calls.appends).toBe(2);
     expect(calls.closes).toEqual(['interrupted']);
     expect(exits).toEqual([130]);
-    // …and the heartbeat is gone with the run.
+    // …and the heartbeat is gone with the run: only the beat sent at open.
     await vi.advanceTimersByTimeAsync(RUN_HEARTBEAT_INTERVAL_MS * 2);
-    expect(calls.beats).toEqual([]);
+    expect(calls.beats).toEqual(['run_1']);
   });
 
   it('exits 143 on SIGTERM', async () => {
