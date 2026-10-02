@@ -54,6 +54,8 @@ function dto(over: Partial<OrgUsageDTO> = {}): OrgUsageDTO {
     totalSpend: 7520,
     monthSpend: 7520,
     monthlyHistory: [],
+    // ⚠️ STALE WIRE KEYS, kept on purpose: motir-ai still reports a per-model
+    // breakdown, and the page must draw none of it (MOTIR-7229).
     perModel: [
       { model: 'claude-opus-4-8', inputTokens: 120_000, outputTokens: 40_000, credits: 6_100 },
       { model: 'claude-sonnet-4-5', inputTokens: 90_000, outputTokens: 30_000, credits: 1_420 },
@@ -117,7 +119,7 @@ function leafText(): Set<string> {
 }
 
 describe('the usage dashboard for an org classified `internalBilling`', () => {
-  it('renders the real balance, the ALLOTMENT BAR and the per-model breakdown', async () => {
+  it('renders the real balance and the ALLOTMENT BAR, and no per-model breakdown', async () => {
     await renderUsage(dto());
 
     // The figure, not a word — `summary.unlimited` stood here and is deleted.
@@ -129,11 +131,12 @@ describe('the usage dashboard for an org classified `internalBilling`', () => {
         sum.allotmentRemaining.replace('{pct}', '91').replace('{allotment}', '1,000'),
       ),
     ).toBeTruthy();
-    // …and the breakdown, whose rows are unconditional but whose surrounding
-    // hero was not.
-    expect(screen.getByText(enMessages.aiUsage.byModel.title)).toBeTruthy();
-    expect(screen.getByText('claude-opus-4-8')).toBeTruthy();
-    expect(screen.getByText('claude-sonnet-4-5')).toBeTruthy();
+    // …and NO per-model breakdown (MOTIR-7229): which model planned is a
+    // platform setting, so no model id reaches an organization's page even
+    // when a stale payload still carries one.
+    expect(screen.queryByText('By model')).toBeNull();
+    expect(screen.queryByText('claude-opus-4-8')).toBeNull();
+    expect(screen.queryByText('claude-sonnet-4-5')).toBeNull();
   });
 
   it('renders Panel 7a — the LOW-BALANCE banner — when the balance reaches that threshold', async () => {

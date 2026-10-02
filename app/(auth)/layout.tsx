@@ -55,12 +55,23 @@ import { BrandMark } from '@/components/brand/BrandMark';
  * so nothing the reader has to read gets compressed to buy it. Measured
  * in Chromium at 1366×648 after the change — card 558px, page 622px,
  * both CTAs ending at 590px, no scroll.
+ *
+ * ⚠️ AND ONE WIDE PAGE IS WIDER STILL — the OAuth consent screen, which
+ * renders `data-auth-wide="consent"` (MOTIR-7380, built to
+ * `design/auth/oauth-consent--sticky-actions.mock.html`). At `lg` its card is
+ * 64rem in two panes; below `lg` it is the same 40rem as the bare variant. The
+ * `lg:` prefix is what lets the one value override the other (a breakpoint
+ * variant sorts after the bare one). Its card also gives up its bottom padding
+ * (`pb-0`, marked important because it must beat the wide variant's own `py-5`, whose
+ * sort order against it is not guaranteed) and its narrow side padding drops to `px-4`, because the pinned
+ * action bar is the card's last child and carries both itself. `/device` and
+ * `/two-factor-required` render the bare attribute and are unchanged.
  */
 export default async function AuthLayout({ children }: { children: ReactNode }) {
   const t = await getTranslations('auth');
   return (
     <div className="flex min-h-dvh w-full items-center justify-center overflow-x-clip bg-(--el-auth-wash) px-6 py-12 has-[[data-auth-wide]]:py-8 sm:px-10">
-      <main className="w-full max-w-[28rem] has-[[data-auth-wide]]:max-w-[40rem]">
+      <main className="w-full max-w-[28rem] has-[[data-auth-wide]]:max-w-[40rem] lg:has-[[data-auth-wide=consent]]:max-w-[64rem]">
         {/* The card is the brand row's column: `gap-8` matches the rhythm
             `AuthShell` already sets inside itself, so the lockup reads as the
             first item of one stack rather than a header bolted on top.
@@ -68,7 +79,7 @@ export default async function AuthLayout({ children }: { children: ReactNode }) 
             wide screen is byte-identical to what it measured at. The variant is
             written as ONE arbitrary selector rather than a stacked
             `has-…:[&_…]` pair so what it compiles to is not in doubt. */}
-        <div className="flex flex-col gap-8 rounded-(--radius-card) bg-(--el-page-bg) px-6 py-10 shadow-(--shadow-elevated) [&:has([data-auth-wide])_[data-brand-lockup]]:hidden sm:px-10 has-[[data-auth-wide]]:py-5 sm:has-[[data-auth-wide]]:px-8">
+        <div className="flex flex-col gap-8 rounded-(--radius-card) bg-(--el-page-bg) px-6 py-10 shadow-(--shadow-elevated) [&:has([data-auth-wide])_[data-brand-lockup]]:hidden sm:px-10 has-[[data-auth-wide]]:py-5 sm:has-[[data-auth-wide]]:px-8 has-[[data-auth-wide=consent]]:px-4 has-[[data-auth-wide=consent]]:pb-0!">
           {/* Decorative glyph + visible wordmark, so the link takes its name
               from the text and carries NO `aria-label` — §8's "never both". */}
           <Link href="/" data-brand-lockup className="self-start">

@@ -15,10 +15,6 @@
  *   set drains below the threshold.
  * - `aiSprintPlanningEnabled` / `aiSprintLengthDays` — the AI sprint packing
  *   (MOTIR-917/918) and the length of the sprints it creates.
- * - `aiPlannerModel` — the per-project planner-model override; `null` means "use
- *   the platform default" (motir-ai's `plannerModel()`, 7.2.2). Core never
- *   resolves the default itself, so this DTO reports the override, not an
- *   effective value.
  * - `aiGenerateExplanations` — the Story-7.4 AI-drafted-explanations opt-in,
  *   surfaced in the same panel (MOTIR-919).
  * - `aiRecordPlanningMistakes` — whether this project's planner records what it
@@ -32,7 +28,6 @@ export interface ProjectAiSettingsDto {
   aiAutoPlanThreshold: number;
   aiSprintPlanningEnabled: boolean;
   aiSprintLengthDays: number;
-  aiPlannerModel: string | null;
   aiGenerateExplanations: boolean;
   aiRecordPlanningMistakes: boolean;
 }
@@ -43,16 +38,14 @@ export interface ProjectAiSettingsDto {
  * in place without clobbering the rest (the `updateDetails` / `setPublicOverview`
  * idiom).
  *
- * `aiPlannerModel: null` (or an empty / whitespace-only string) CLEARS the
- * override back to the platform default — clearing the field in the panel means
- * "use the default", never "the empty model".
+ * There is no planner-model field: the model that plans is a platform setting,
+ * never a project one (MOTIR-7228).
  */
 export interface UpdateProjectAiSettingsInput {
   aiAutoPlanEnabled?: boolean;
   aiAutoPlanThreshold?: number;
   aiSprintPlanningEnabled?: boolean;
   aiSprintLengthDays?: number;
-  aiPlannerModel?: string | null;
   aiGenerateExplanations?: boolean;
   aiRecordPlanningMistakes?: boolean;
 }

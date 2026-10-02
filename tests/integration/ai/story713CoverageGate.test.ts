@@ -18,11 +18,6 @@ import { aiSprintPlanningService } from '@/lib/services/aiSprintPlanningService'
 import { projectAiSettingsService } from '@/lib/services/projectAiSettingsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { InvalidAiSettingsError, ProjectNotFoundError } from '@/lib/projects/errors';
-import {
-  PLANNER_MODEL_OPTIONS,
-  choiceToPlannerModel,
-  plannerModelToChoice,
-} from '@/lib/projectAiSettings/plannerModels';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
@@ -39,15 +34,11 @@ import { connectAndLinkRepo } from '../../fixtures/codeContextFixtures';
 // What it adds is the residue those floors cannot reach, found by MEASURING
 // coverage over the merged surface rather than by re-reading the card's prose:
 //
-//   1. The PICKER ↔ VALIDATOR seam. `plannerModels.ts` (client, MOTIR-919) and
-//      `projectAiSettingsService` (server, MOTIR-915) are two modules with no
-//      compiler between them; the panel's component test drives the rendered
-//      Combobox and the service's suite drives raw strings, so nothing proves a
-//      value the picker OFFERS actually persists and reads back as the same
-//      choice. Driven here end to end through the real service.
+//   1. (Retired with the project planner model, MOTIR-7228: this was the
+//      planner-model PICKER ↔ VALIDATOR seam, and neither side exists now.)
 //   2. The ERROR-PATH branches each suite's happy fixtures miss — a non-Error
-//      rejection out of the motir-ai boundary, a non-string planner model off an
-//      untyped JSON body, and the sprint submit's cross-tenant project read.
+//      rejection out of the motir-ai boundary, a non-integer sprint length off
+//      an untyped JSON body, and the sprint submit's cross-tenant project read.
 //      Each is a REAL production shape, not a coverage-chasing synthetic.
 //   3. The OPEN-CORE boundary guard coverage cannot see (structural, not
 //      executed): the 7.13 surface crosses to motir-ai through the ONE HTTP
@@ -92,55 +83,6 @@ function projectCtx(fx: WorkItemFixture): ProjectContext {
     project: fx.project,
   };
 }
-
-describe('7.13 seam — the planner-model picker round-trips through the REAL service (MOTIR-920)', () => {
-  it('every choice the panel offers persists and reads back as the SAME choice', async () => {
-    const fx = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
-
-    for (const option of PLANNER_MODEL_OPTIONS) {
-      // The panel's save direction: chosen value → the stored override.
-      const stored = choiceToPlannerModel(option.value);
-
-      const written = await projectAiSettingsService.updateAiSettings(
-        fx.projectIdentifier,
-        { aiPlannerModel: stored },
-        ctxFor(fx),
-      );
-      expect(written.aiPlannerModel).toBe(stored);
-
-      // The panel's load direction: read the column back and re-derive the
-      // picker value. Anything but the original choice is silent data loss —
-      // the tenant's pinned model swapped under them on the next save.
-      const read = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
-      expect(plannerModelToChoice(read.aiPlannerModel)).toBe(option.value);
-    }
-  });
-
-  it('the Default choice CLEARS a previously pinned override, rather than storing a sentinel', async () => {
-    const fx = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
-
-    await projectAiSettingsService.updateAiSettings(
-      fx.projectIdentifier,
-      { aiPlannerModel: 'deepseek-v4-pro' },
-      ctxFor(fx),
-    );
-    // Now pick "Default" in the panel.
-    await projectAiSettingsService.updateAiSettings(
-      fx.projectIdentifier,
-      { aiPlannerModel: choiceToPlannerModel('default') },
-      ctxFor(fx),
-    );
-
-    // The COLUMN is null — the deployment's PLANNER_MODEL applies. If the
-    // sentinel string ever reached the DB, motir-ai would be asked to run a
-    // model literally named "default".
-    const row = await adminDb.project.findUnique({
-      where: { id: fx.projectId },
-      select: { aiPlannerModel: true },
-    });
-    expect(row?.aiPlannerModel).toBeNull();
-  });
-});
 
 describe('7.13 residue — the boundary error paths the happy fixtures miss (MOTIR-920)', () => {
   it('isolates a submit that rejects with a NON-Error value, and reports it readably', async () => {
@@ -195,15 +137,15 @@ describe('7.13 residue — the boundary error paths the happy fixtures miss (MOT
     expect(workItemCount).toBe(1);
   });
 
-  it('rejects a NON-STRING planner model with the typed error, and writes nothing', async () => {
+  it('rejects a NON-NUMBER sprint length with the typed error, and writes nothing', async () => {
     // The route hands the service a parsed JSON body, so a client can send
-    // `{"aiPlannerModel": 42}` — a shape TypeScript cannot rule out at runtime.
+    // `{"aiSprintLengthDays": "7"}` — a shape TypeScript cannot rule out at runtime.
     const fx = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
 
     await expect(
       projectAiSettingsService.updateAiSettings(
         fx.projectIdentifier,
-        { aiPlannerModel: 42 as unknown as string },
+        { aiSprintLengthDays: '7' as unknown as number },
         ctxFor(fx),
       ),
     ).rejects.toThrowError(InvalidAiSettingsError);
@@ -211,9 +153,9 @@ describe('7.13 residue — the boundary error paths the happy fixtures miss (MOT
     // Validation runs BEFORE the transaction opens — the column is untouched.
     const row = await adminDb.project.findUnique({
       where: { id: fx.projectId },
-      select: { aiPlannerModel: true },
+      select: { aiSprintLengthDays: true },
     });
-    expect(row?.aiPlannerModel).toBeNull();
+    expect(row?.aiSprintLengthDays).toBe(2);
   });
 
   it('names the offending FIELD on the typed error, so the panel can slot the message', async () => {
@@ -222,10 +164,10 @@ describe('7.13 residue — the boundary error paths the happy fixtures miss (MOT
     await expect(
       projectAiSettingsService.updateAiSettings(
         fx.projectIdentifier,
-        { aiPlannerModel: true as unknown as string },
+        { aiAutoPlanThreshold: true as unknown as number },
         ctxFor(fx),
       ),
-    ).rejects.toMatchObject({ code: 'INVALID_AI_SETTINGS', field: 'aiPlannerModel' });
+    ).rejects.toMatchObject({ code: 'INVALID_AI_SETTINGS', field: 'aiAutoPlanThreshold' });
   });
 
   it('the sprint submit reads its settings TENANT-SCOPED — a cross-workspace project is not-found', async () => {
@@ -275,7 +217,6 @@ describe('Open-core boundary guard — the 7.13 surface crosses to motir-ai ONCE
     'lib/services/projectAiSettingsService.ts',
     'lib/ai/sprintAssignment.ts',
     'lib/projectAiSettings/limits.ts',
-    'lib/projectAiSettings/plannerModels.ts',
     'lib/mappers/projectAiSettingsMappers.ts',
     'lib/jobs/definitions/autoPlanCadenceTick.ts',
   ];
@@ -316,7 +257,7 @@ describe('Open-core boundary guard — the 7.13 surface crosses to motir-ai ONCE
     const crossers = SURFACE.filter((file) =>
       importsOf(file).some((spec) => spec === '@/lib/ai/motirAiClient'),
     );
-    // The settings / limits / picker / mapper modules and the cron definition are
+    // The settings / limits / mapper modules and the cron definition are
     // pure core concerns and must not reach the boundary at all. The cadence
     // service reaches motir-ai only INDIRECTLY, by delegating to the shipped
     // `aiPlanEditsService.submitExpand` — it holds no client import of its own,
@@ -324,17 +265,12 @@ describe('Open-core boundary guard — the 7.13 surface crosses to motir-ai ONCE
     expect(crossers).toEqual(['lib/services/aiSprintPlanningService.ts']);
   });
 
-  it('the two picker modules stay dependency-free — importable by the client bundle', () => {
-    // `limits.ts` / `plannerModels.ts` exist as their own modules precisely so
-    // the settings PANEL can import the bounds and the options without pulling
-    // the service layer (and `db`) into the browser bundle. A single runtime
-    // import here would undo that, silently, with nothing else to catch it.
-    for (const file of [
-      'lib/projectAiSettings/limits.ts',
-      'lib/projectAiSettings/plannerModels.ts',
-    ]) {
-      expect(importsOf(file), `${file} must stay dependency-free`).toEqual([]);
-    }
+  it('the limits module stays dependency-free — importable by the client bundle', () => {
+    // `limits.ts` exists as its own module precisely so the settings PANEL can
+    // import the bounds without pulling the service layer (and `db`) into the
+    // browser bundle. A single runtime import here would undo that, silently,
+    // with nothing else to catch it.
+    expect(importsOf('lib/projectAiSettings/limits.ts')).toEqual([]);
   });
 
   it('the packing re-validation imports only the shared TYPE module — no data access', () => {

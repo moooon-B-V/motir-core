@@ -146,6 +146,20 @@ async function savedAfter(page: Page, pageId: string, input: () => Promise<void>
   await expect(indicatorOf(page)).toHaveText('Saved');
 }
 
+/**
+ * Press a toolbar button and wait for the caret to be back in the body.
+ *
+ * The click moves focus to the button, and the toolbar's command hands it back
+ * through tiptap's `focus()`, which defers `view.focus()` to the next animation
+ * frame on Chromium. Keys typed before that frame land on the button and are
+ * lost: merge-queue run 37046219599 saved the code block as "it tag …" with its
+ * first "g" gone. Waiting on the body's focus is the authoritative signal.
+ */
+async function fromToolbar(page: Page, name: string): Promise<void> {
+  await toolbarOf(page).getByRole('button', { name, exact: true }).click();
+  await expect(bodyOf(page)).toBeFocused();
+}
+
 /** Put the caret at the end of the paragraph that starts with `text`, and type. */
 async function appendToParagraph(body: Locator, page: Page, text: string, typed: string) {
   await body.getByText(text).click();
@@ -207,7 +221,7 @@ test('a member writes a page and reads it back; two sessions both keep their edi
 
       // A heading, from the toolbar.
       await savedAfter(page, pageId, async () => {
-        await page.getByRole('button', { name: 'Heading', exact: true }).click();
+        await fromToolbar(page, 'Heading');
         await page.keyboard.type(HEADING, TYPING);
         await page.keyboard.press('Enter');
       });
@@ -222,7 +236,7 @@ test('a member writes a page and reads it back; two sessions both keep their edi
       });
       // A bulleted list, from the toolbar; a second Enter on an empty item leaves it.
       await savedAfter(page, pageId, async () => {
-        await page.getByRole('button', { name: 'Bulleted list', exact: true }).click();
+        await fromToolbar(page, 'Bulleted list');
         await page.keyboard.type(LIST_ITEMS[0]!, TYPING);
         await page.keyboard.press('Enter');
         await page.keyboard.type(LIST_ITEMS[1]!, TYPING);
@@ -231,7 +245,7 @@ test('a member writes a page and reads it back; two sessions both keep their edi
       });
       // A code block, from the toolbar, then its language in the block's own field.
       await savedAfter(page, pageId, async () => {
-        await page.getByRole('button', { name: 'Code block', exact: true }).click();
+        await fromToolbar(page, 'Code block');
         await page.keyboard.type(CODE, TYPING);
       });
       await savedAfter(page, pageId, async () => {

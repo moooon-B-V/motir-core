@@ -23,6 +23,7 @@ import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { WorkItemContinueClaimDto } from '@/lib/dto/workItemContinue';
 import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
 import type { PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
+import { redactNativeActor } from '@/lib/plans/redactNativeModel';
 import { definePayload } from './define';
 import { mcpWorkItemSchema, type McpWorkItem } from './workItems';
 
@@ -255,7 +256,9 @@ export function presentMcpPlan(
     createdById: plan.createdById,
     authorSource: plan.authorSource,
     authorHarness: plan.authorHarness,
-    authorModel: plan.authorModel,
+    // Already null for a native author from `toPlanDto`; applied again so the
+    // MCP surface holds the rule on its own (MOTIR-7225).
+    authorModel: redactNativeActor(plan.authorSource, plan.authorModel),
     decisionReason: plan.decisionReason,
     sessionId: plan.sessionId,
     // Each proposal carries the folder it NAMES and that folder's path

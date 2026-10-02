@@ -871,9 +871,9 @@ export const projectRepository = {
 
   // --- AI-planning settings (Story 7.13 · Subtask MOTIR-915) ---------------
   // The project-scoped AI configuration (`aiAutoPlanEnabled` /
-  // `aiAutoPlanThreshold` / `aiSprintPlanningEnabled` / `aiSprintLengthDays` /
-  // `aiPlannerModel`, plus the Story-7.4 `aiGenerateExplanations` the same panel
-  // surfaces). Open-core `project` COLUMNS, not an AI-only table — so the read is
+  // `aiAutoPlanThreshold` / `aiSprintPlanningEnabled` / `aiSprintLengthDays`,
+  // plus the Story-7.4 `aiGenerateExplanations` the same panel surfaces).
+  // The retired planner-model column is `@ignore`d (MOTIR-7228): nothing selects it. Open-core `project` COLUMNS, not an AI-only table — so the read is
   // an ordinary project projection. Single Prisma ops; the read takes an optional
   // `tx` (the cadence engine reads it outside a transaction, the settings service
   // inside one), the update REQUIRES `tx`.
@@ -895,7 +895,6 @@ export const projectRepository = {
     aiAutoPlanThreshold: number;
     aiSprintPlanningEnabled: boolean;
     aiSprintLengthDays: number;
-    aiPlannerModel: string | null;
     aiGenerateExplanations: boolean;
     aiRecordPlanningMistakes: boolean | null;
   } | null> {
@@ -907,7 +906,6 @@ export const projectRepository = {
         aiAutoPlanThreshold: true,
         aiSprintPlanningEnabled: true,
         aiSprintLengthDays: true,
-        aiPlannerModel: true,
         aiGenerateExplanations: true,
         aiRecordPlanningMistakes: true,
       },
@@ -1136,8 +1134,6 @@ export const projectRepository = {
    * Update a project's AI-settings columns (any subset). `tx` REQUIRED; the
    * caller (`projectAiSettingsService`) has already resolved + admin-gated the
    * project and validated every value, so this is a plain id-keyed update.
-   * `aiPlannerModel: null` clears the per-project override back to the platform
-   * default.
    */
   /**
    * A project's four hosted-agent model overrides, one per leaf difficulty
@@ -1191,7 +1187,6 @@ export const projectRepository = {
       aiAutoPlanThreshold?: number;
       aiSprintPlanningEnabled?: boolean;
       aiSprintLengthDays?: number;
-      aiPlannerModel?: string | null;
       aiGenerateExplanations?: boolean;
       aiRecordPlanningMistakes?: boolean;
     },

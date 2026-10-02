@@ -980,3 +980,93 @@ added below it is the one that carries the real `moooon` shape.
   one clause family. Its criterion 3 is discharged by the per-element table
   above: the remaining elements are answered here rather than left to be
   re-opened one at a time.
+
+---
+
+# AMENDMENT 2026-10 — no planning model on the usage page (MOTIR-7224 · story MOTIR-7220)
+
+**Design system check (first, per the design-system rule).** Read `package.json` (depends on
+`@motir/design-system` `workspace:*`) and `app/globals.css` (`@import '@motir/design-system/theme.css'`).
+**Verdict: the project is on Motir Design** (package `0.8.0`); the delta is drawn from that system's
+`--el-*` / shape tokens and the primitives this file's _Primitives composed_ table already names.
+Nothing the package lacks is needed, and no token or primitive is added.
+
+**Mock (a DELTA):** [`usage--no-model.mock.html`](usage--no-model.mock.html), three panels — **A**
+(the org-level page as it now reads: subtitle, stat row, trend, credits note, the drill card without
+its per-model table, and the run log without its Model column), **B** (a run-log close-up where
+planning rows and web-search rows mix, so the column's removal is shown on both row kinds) and **C**
+(the rewritten empty state, and the recorded no-replacement decision for Panel 4).
+**Amends:** `usage.mock.html` panels 2 · 3 · 4 · 5 · 8a, and `search-spend.mock.html` panels 1 · 3;
+in this file, Panel 2, Panel 3, Panel 4, Panel 5 (and its MOTIR-4303 amendment's column list), Panel
+8, the _Colour roles_ model-chip row and the _Copy strings_ table. The older mocks are records and
+are not edited.
+**Gates:** **MOTIR-7229** — remove the planning model from the org usage page (the by-model panel,
+the run log's model column, the copy that names a model, and the DTO fields that carry it).
+
+**Why.** The planning model is now chosen by Motir — one platform setting per audience, set by a
+platform superadmin in the operator console (`design/platform-admin/console--ai-planning.mock.html`,
+MOTIR-7222) — and is **not** something a tenant sees. A tenant page that names the model that
+planned would publish that choice to every customer.
+
+## What LEFT
+
+| what                                                              | where it was                                   | disposition                                                                                                                                                                         |
+| ----------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Panel 4 — the per-model usage breakdown** (the _By model_ card) | the page, below the drill card                 | **Removed, with no replacement** (below).                                                                                                                                           |
+| The **Model** chip column of the run log                          | Panel 5 (and search-spend panel 3's mixed log) | **Removed.** The log is _When · Run · Tokens · Credits_. Widths re-balance to When 22% · Run (flex) · Tokens 16% · Credits 14%, right-aligned numerics unchanged.                   |
+| The `No model` cell a web-search row carried                      | search-spend panel 3                           | **Removed with its column** — a search row and a planning row now differ only by the run pill, which is what the 2026-09-05 amendment's decision 2 already said distinguishes them. |
+| The drill card's per-model mini-table                             | Panel 3 / search-spend panel 1                 | **Removed.** Drilling still re-scopes the balance share and the run log.                                                                                                            |
+| "Credits are a usage allotment shared across every model."        | the page subtitle (Panel 2)                    | **Removed** — the sentence's only job was to explain a mix the reader no longer sees.                                                                                               |
+| "and model" in the empty state                                    | Panel 8a                                       | **Removed.**                                                                                                                                                                        |
+
+**Composed unchanged** (and drawn so in Panel A, from search-spend panel 1): the stat row (balance,
+_Token spend, this month_ with its sigma glyph, the search figure), the trend, the credits note, the
+scope chips, every run-pill kind, the pager, the low-balance / out-of-credits / exempt states (Panel
+7, 7c) and the tier pill. None of them named a model.
+
+## Panel 4 — the no-replacement decision, recorded
+
+The space the _By model_ card held is **not refilled**. Two candidates were weighed:
+
+| option                                                     | verdict                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Nothing — the page closes up** — **chosen**              | ✓ The drill card already answers _where_ the credits went (by workspace and project) and the run log answers _on what_ (by run kind). A third card would restate one of those two at a coarser grain.                                   |
+| A **by-activity** breakdown (planning · expand · search …) | ✗ Declined. Every figure it would show is already a sum over the run log's pill column; a card of those sums adds a total, not a lever. If a by-kind figure is ever wanted it belongs as a filter on the log, which is a separate card. |
+
+### "Why this shape" — rewritten
+
+Panel 4's original rationale was that _a costlier model debits more per token_, so a customer seeing
+the model mix could act on it. **That premise is withdrawn: Motir chooses the planning model, so the
+model mix is not a lever the customer holds.** What the customer can act on is _how much_ planning
+runs and _where_ — and those are exactly the two axes the drill and the log keep. The credits note's
+sentence that tokens drive the cost stays true and stays put; it no longer needs a per-model table
+beneath it to be honest.
+
+## Copy strings — changed or removed (en; MOTIR-7229 lands each `zh` twin with it)
+
+| key                                | was                                                                                                                                                | is                                                                                                                    |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `aiUsage.subtitle`                 | Token cost for the {org} organization — credits spent planning across all its workspaces. Credits are a usage allotment shared across every model. | **Token cost for the {org} organization — credits spent planning across all its workspaces.**                         |
+| `aiUsage.drill.note`               | Drilling re-scopes every panel — the balance share, the per-model breakdown and the run log — to the active level.                                 | **Drilling re-scopes every panel — the balance share and the run log — to the active level.**                         |
+| `aiUsage.states.emptyDescription`  | Once your team runs the AI planner, every run's credit cost shows up here — broken down by workspace, project and model.                           | **Once your team runs the AI planner, every run's credit cost shows up here — broken down by workspace and project.** |
+| `aiUsage.byModel.*` (all ten keys) | the _By model_ card                                                                                                                                | **Deleted.**                                                                                                          |
+| `aiUsage.activity.model`           | Model                                                                                                                                              | **Deleted.**                                                                                                          |
+| `aiUsage.activity.noModel`         | No model                                                                                                                                           | **Deleted.**                                                                                                          |
+
+Every other `aiUsage.*` string is unchanged. `aiUsage.activity.subtitle` (_Every planning run that
+debited credits…_) never named a model and stays.
+
+## Colour + shape roles
+
+**Removed only.** The model chip's role (neutral `Pill`) leaves with its column; the _By model_
+card's share bars leave with the card. Nothing is added, so the base _Colour roles_ table and the
+2026-09-05 additions still govern every element the delta draws. Panel C's decision note is board
+chrome in `--el-text-secondary`, per `docs/decisions/design-board-chrome-aa.md`.
+
+## Out of scope for this amendment
+
+- **The ledger and the DTO's storage** — motir-ai keeps recording the model per debit for Motir's own
+  cost accounting; MOTIR-7229 stops the org usage DTO from carrying it to the page. That data stays
+  internal (the operator console's _Usage & cost_ page, 10.1, is the place it may surface).
+- **The project AI-planning room** — `design/ai-settings/` (MOTIR-7223).
+- **The hosted-agent model** — chosen and paid for by the tenant; untouched.

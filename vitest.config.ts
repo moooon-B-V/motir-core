@@ -203,6 +203,19 @@ export default defineConfig({
         // `workItemContinue-transport.test.ts`): 100 / 90.62 / 100 / 100. Its
         // service, `workItemContinueService.ts`, is already gated.
         'lib/mcp/tools/workItemContinue.ts',
+        // Story MOTIR-7220 · MOTIR-7234 — the planner-model story's motir-core
+        // gate: the console seam (service + mapper), the one plan-read redaction
+        // helper, and the console's Server Action. MEASURED on this branch against
+        // the story's specs (`plannerModelStoryGate.test.ts`, the service, action
+        // and redaction suites): mapper 100 / 100 / 100 / 100, redaction
+        // 100 / 100 / 100 / 100, service 93.93 / 91.66 / 100 / 93.1, action
+        // 91.66 / 92.85 / 100 / 90. `lib/ai/motirAiClient.ts` is NOT pinned: the
+        // story adds two functions to a 2,300-line client whose other paths are
+        // other stories' and measure ~10 % here.
+        'lib/services/platformPlannerModelService.ts',
+        'lib/mappers/platformPlannerModelMappers.ts',
+        'lib/plans/redactNativeModel.ts',
+        'app/**/admin/ai-planning/actions.ts',
         // Story MOTIR-6574 · MOTIR-6584 — the OBSOLESCENCE story's two NEW modules
         // (the scale's one list, and the MCP write fields + text-block lines) and
         // the relationship model it widened with the `supersedes` pair, which had
@@ -1273,7 +1286,6 @@ export default defineConfig({
         'lib/ai/sprintAssignment.ts',
         'lib/mappers/projectAiSettingsMappers.ts',
         'lib/projectAiSettings/limits.ts',
-        'lib/projectAiSettings/plannerModels.ts',
         'lib/jobs/definitions/autoPlanCadenceTick.ts',
         // Story MOTIR-1803 (roadmap auto-drill) · Subtask MOTIR-1808 — the
         // story's changed surface joins the gate once its code card (MOTIR-1807)
@@ -3094,6 +3106,31 @@ export default defineConfig({
           statements: 90,
         },
         'lib/mcp/tools/workItemContinue.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-7220 · MOTIR-7234 — measured above, pinned at the floor.
+        'lib/services/platformPlannerModelService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/platformPlannerModelMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/plans/redactNativeModel.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/ai-planning/actions.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
@@ -5289,15 +5326,14 @@ export default defineConfig({
         // Subtask 7.13.3 (MOTIR-916) — the unattended auto-plan cadence trigger.
         'lib/services/autoPlanCadenceService.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask 7.13.7 (MOTIR-920) — the rest of the Story 7.13 surface at the
-        // same floor. `limits.ts` / `plannerModels.ts` are the dependency-free
-        // modules the settings PANEL imports directly, so a regression in them
-        // reaches the browser with no service test in the way.
+        // same floor. `limits.ts` is the dependency-free module the settings
+        // PANEL imports directly, so a regression in it reaches the browser with
+        // no service test in the way.
         'lib/services/aiSprintPlanningService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/projectAiSettingsService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ai/sprintAssignment.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mappers/projectAiSettingsMappers.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/projectAiSettings/limits.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/projectAiSettings/plannerModels.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/jobs/definitions/autoPlanCadenceTick.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask MOTIR-1808 — the roadmap auto-drill surface at the same floor.
         // Story MOTIR-3833 · MOTIR-3840. Measured on the story's branch:

@@ -430,6 +430,43 @@ describe('describePersistent', () => {
     expect(stopped.stoppedAt?.toISOString()).toBe('2026-09-28T12:45:00.000Z');
   });
 
+  it('reports the exit code of the CURRENT run’s exit — never a code from an earlier run (MOTIR-7336)', async () => {
+    const exit = (at: string, code: number) => ({
+      type: 'exit',
+      status: 'stopped',
+      timestamp: Date.parse(at),
+      request: { exit_event: { exit_code: code, oom_killed: false, requested_stop: false } },
+    });
+    const earlier = [
+      { type: 'start', status: 'started', timestamp: Date.parse('2026-10-02T09:00:00Z') },
+      exit('2026-10-02T09:30:00Z', 137),
+    ];
+    // Running again after an earlier exit: no code for the run in progress.
+    handler = () =>
+      json(
+        200,
+        flyMachine('started', [
+          ...earlier,
+          { type: 'start', status: 'started', timestamp: Date.parse('2026-10-02T12:57:08Z') },
+        ]),
+      );
+    expect((await flyPersistentOrchestrator.describePersistent(HANDLE)).exitCode).toBeNull();
+
+    // The production machine: started, then the shell exited 0 two seconds later.
+    handler = () =>
+      json(
+        200,
+        flyMachine('stopped', [
+          ...earlier,
+          { type: 'start', status: 'started', timestamp: Date.parse('2026-10-02T12:57:08Z') },
+          exit('2026-10-02T12:57:10Z', 0),
+        ]),
+      );
+    const exited = await flyPersistentOrchestrator.describePersistent(HANDLE);
+    expect(exited).toMatchObject({ state: 'stopped', providerState: 'stopped', exitCode: 0 });
+    expect(exited.stoppedAt?.toISOString()).toBe('2026-10-02T12:57:10.000Z');
+  });
+
   it('reports a machine Fly no longer has as `gone`, and throws on a failed read', async () => {
     handler = () => json(404, {});
     expect(await flyPersistentOrchestrator.describePersistent(HANDLE)).toEqual({
@@ -614,7 +651,7 @@ describe('exec — one command inside a running machine (MOTIR-6872)', () => {
     expect(calls[0]).toMatchObject({
       method: 'POST',
       url: `${API}/apps/${APP}/machines/m-1/exec`,
-      body: { cmd: ['sh', '-c', 'exit 3'], timeout: 30 },
+      body: { command: ['sh', '-c', 'exit 3'], timeout: 30 },
       auth: 'Bearer instances-token',
     });
   });
@@ -626,16 +663,38 @@ describe('exec — one command inside a running machine (MOTIR-6872)', () => {
       stdout: '',
       stderr: '',
     });
-    expect(calls[0]!.body).toEqual({ cmd: ['true'], timeout: 120 });
+    expect(calls[0]!.body).toEqual({ command: ['true'], timeout: 120 });
     // stdin rides in the body only when given (MOTIR-7026) — never in argv.
     await flyPersistentOrchestrator.exec(HANDLE, ['cat'], { stdin: '{"token":"t"}' });
-    expect(calls[1]!.body).toEqual({ cmd: ['cat'], timeout: 120, stdin: '{"token":"t"}' });
+    expect(calls[1]!.body).toEqual({ command: ['cat'], timeout: 120, stdin: '{"token":"t"}' });
     handler = () => json(200, null);
     expect((await flyPersistentOrchestrator.exec(HANDLE, ['true'])).exitCode).toBe(-1);
     handler = () => json(412, { error: 'machine not started' });
     await expect(flyPersistentOrchestrator.exec(HANDLE, ['true'])).rejects.toThrow(
       OrchestratorApiError,
     );
+  });
+
+  // MOTIR-7347: the Machines API reads exec's argv from `command` (an array).
+  // `cmd` is its legacy STRING field, and an array there is refused 400 "body is
+  // missing command: json: cannot unmarshal array into Go struct field
+  // machineExecRequestRaw.cmd of type string" — which every exec on production
+  // answered while the tests above asserted `cmd` against this mock. So the
+  // field name is pinned for every door into exec, and `cmd` may never appear.
+  it('sends the argv as `command` and never as `cmd`, through every door into exec', async () => {
+    handler = () => json(200, { exit_code: 0, stdout: '', stderr: '' });
+    await flyPersistentOrchestrator.exec(HANDLE, ['git', 'clone', 'x']);
+    await flyPersistentOrchestrator.exec(HANDLE, ['cat'], { stdin: 'secret' });
+    await flyPersistentOrchestrator.checkLiveness(HANDLE, ['claude', '--version']);
+    expect(calls.map((c) => c.body)).toEqual([
+      { command: ['git', 'clone', 'x'], timeout: 120 },
+      { command: ['cat'], timeout: 120, stdin: 'secret' },
+      { command: ['claude', '--version'], timeout: 60 },
+    ]);
+    for (const call of calls) {
+      expect(call.body).not.toHaveProperty('cmd');
+      expect(Array.isArray(call.body?.['command'])).toBe(true);
+    }
   });
 });
 
@@ -687,6 +746,31 @@ describe('the terminal machine config (agent-terminal.md Q2–Q4 · MOTIR-6939)'
     expect(config['mounts']).toEqual([{ volume: 'vol_1', path: '/home/node' }]);
     expect(config['restart']).toEqual({ policy: 'on-failure' });
     expect(config['auto_destroy']).toBe(false);
+  });
+
+  it('with the terminal OFF, the idle command is the main process and there is no service — and the terminal’s command wins over it (MOTIR-7336)', async () => {
+    const IDLE = ['sleep', 'infinity'];
+    handler = provisionHandler([]);
+    await flyPersistentOrchestrator.provisionPersistent({ ...SPEC, idleCommand: IDLE });
+    const off = calls.at(-1)!.body!['config'] as Record<string, unknown>;
+    expect(off['init']).toEqual({ cmd: IDLE });
+    expect(off['services']).toBeUndefined();
+    expect(off['restart']).toEqual({ policy: 'on-failure' });
+
+    calls = [];
+    handler = provisionHandler([]);
+    await flyPersistentOrchestrator.provisionPersistent({
+      ...SPEC,
+      terminal: TERMINAL,
+      idleCommand: IDLE,
+    });
+    const on = calls.at(-1)!.body!['config'] as Record<string, unknown>;
+    expect(on['init']).toEqual({ cmd: TERMINAL.command });
+
+    calls = [];
+    handler = provisionHandler([]);
+    await flyPersistentOrchestrator.provisionPersistent(SPEC);
+    expect((calls.at(-1)!.body!['config'] as Record<string, unknown>)['init']).toBeUndefined();
   });
 
   it('allocates the app’s addresses ONCE — a second ensure, on an app that has them, allocates nothing', async () => {
@@ -993,7 +1077,7 @@ describe('checkLiveness — is the coding agent alive on the new image? (MOTIR-6
     });
     expect(calls[0]).toMatchObject({
       url: `${API}/apps/${APP}/machines/m-1/exec`,
-      body: { cmd: LIVENESS, timeout: 60 },
+      body: { command: LIVENESS, timeout: 60 },
     });
   });
 

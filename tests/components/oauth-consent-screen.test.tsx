@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ConsentScreen } from '@/app/(auth)/oauth/_components/ConsentScreen';
 import type { ConsentRequestDto } from '@/lib/dto/oauthConnections';
@@ -207,7 +207,12 @@ describe('ConsentScreen', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'One project' }));
     fireEvent.click(screen.getByRole('switch', { name: 'View project' }));
-    expect(screen.getByRole('alert').textContent).toContain('Grant at least one permission');
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain('Grant at least one permission');
+    // Said ONCE, beside the button it disables — in the pinned bar, in the
+    // summary's slot (MOTIR-7379 § What moves).
+    expect(alert.closest('[data-consent-bar]')).not.toBeNull();
+    expect(screen.queryByText(/Claude Code gets/)).toBeNull();
     expect(
       (screen.getByRole('button', { name: 'Approve and connect' }) as HTMLButtonElement).disabled,
     ).toBe(true);
@@ -248,6 +253,12 @@ describe('ConsentScreen', () => {
     expect(
       (screen.getByRole('button', { name: 'Approve and connect' }) as HTMLButtonElement).disabled,
     ).toBe(true);
+    // No project to read a grant from: the bar says so, rather than "gets 0
+    // permissions, in [blank] only" (`oauthConsent.summary.pickProject`).
+    expect(screen.getByRole('status').textContent).toBe(
+      'Pick a project to see what Claude Code gets.',
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('workspaces with nothing grantable are named', () => {
@@ -373,5 +384,83 @@ describe('ConsentScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(push).toHaveBeenCalledWith('/sign-in'));
     expect(signOut).toHaveBeenCalledOnce();
+  });
+});
+
+describe('ConsentScreen — the pinned action bar (MOTIR-7380)', () => {
+  // `design/auth/oauth-consent--sticky-actions.mock.html`. Layout — the bar in
+  // the viewport at 1440×800, at the end of the scroll, at 390px — is a real
+  // browser's to measure (`tests/e2e/oauth-consent.spec.ts`); this pins the
+  // markup the layout rests on.
+  function bar(): HTMLElement {
+    const el = document.querySelector<HTMLElement>('[data-consent-bar]');
+    expect(el).not.toBeNull();
+    return el!;
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('renders the consent variant of the wide card, with the bar as its last child', () => {
+    renderScreen();
+    const wide = document.querySelector('[data-auth-wide]');
+    expect(wide?.getAttribute('data-auth-wide')).toBe('consent');
+    expect(wide?.lastElementChild).toBe(bar());
+    expect(bar().className).toContain('sticky');
+    expect(bar().className).toContain('bottom-0');
+  });
+
+  it('holds the summary, then Deny before Approve, in one labelled group', () => {
+    renderScreen();
+    const inBar = within(bar());
+    expect(
+      inBar.getByText(
+        new RegExp(`${DEFAULT_TOKEN_GRANT.length} of ${GRANTABLE_PERMISSIONS.length}`),
+      ),
+    ).toBeTruthy();
+    const group = inBar.getByRole('group', { name: 'Approve or deny Claude Code' });
+    const buttons = within(group).getAllByRole('button');
+    expect(buttons.map((b) => b.textContent)).toEqual(['Deny', 'Approve and connect']);
+  });
+
+  it('leaves the disconnect footnote at the end of the content, outside the bar', () => {
+    renderScreen();
+    const foot = screen.getByText(/Disconnect it any time/);
+    expect(foot.closest('[data-consent-bar]')).toBeNull();
+    // Tab order runs form → bar: the footnote precedes the bar in the document.
+    expect(foot.compareDocumentPosition(bar()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(foot.className).toContain('--el-text-secondary');
+  });
+
+  it('keeps the summary beside a connecting Approve, with Deny disabled', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>(() => {})),
+    );
+    renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and connect' }));
+    const inBar = within(bar());
+    expect(await inBar.findByRole('button', { name: /Connecting/ })).toBeTruthy();
+    expect((inBar.getByRole('button', { name: 'Deny' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(inBar.getByText(/Claude Code gets/)).toBeTruthy();
+  });
+
+  it('pads the document scroller by the bar height, and takes it back when the bar leaves', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const height = this.hasAttribute('data-consent-bar') ? 80.4 : 0;
+      return { height, width: 0, top: 0, left: 0, right: 0, bottom: height, x: 0, y: 0 } as DOMRect;
+    });
+    stubFetch(200, { connectionId: 'k', redirectUrl: 'http://127.0.0.1/cb' });
+    const navigate = renderScreen();
+    // A Switch reached with Tab scrolls into view ABOVE the stuck bar.
+    expect(document.documentElement.style.scrollPaddingBottom).toBe('81px');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and connect' }));
+    await waitFor(() => expect(navigate).toHaveBeenCalled());
+    expect(document.querySelector('[data-consent-bar]')).toBeNull();
+    expect(document.documentElement.style.scrollPaddingBottom).toBe('');
   });
 });

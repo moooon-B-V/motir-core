@@ -84,7 +84,6 @@ function emptyDto(args: {
     totalSpend: 0,
     monthSpend: 0,
     monthlyHistory: [],
-    perModel: [],
     recentRuns: { runs: [], page: args.page, pageSize: args.pageSize, total: 0 },
     // NOT `null` here, and the difference from the mapping below is the point.
     // `null` means the BOUNDARY did not report the block; this branch never calls
@@ -239,7 +238,8 @@ export const aiUsageService = {
     const runs: UsageRunDTO[] = raw.recentRuns.runs.map((r) => ({
       jobId: r.jobId,
       jobKind: r.jobKind,
-      model: r.model,
+      // `r.model` is deliberately NOT forwarded (MOTIR-7229): the planning model
+      // is a platform setting a tenant does not see.
       projectId: r.coreProjectId,
       projectName: projectNameById.get(r.coreProjectId)?.name ?? '',
       inputTokens: r.inputTokens,
@@ -269,7 +269,7 @@ export const aiUsageService = {
       totalSpend: raw.totalSpend,
       monthSpend: raw.monthSpend,
       monthlyHistory: raw.monthlyHistory,
-      perModel: raw.perModel,
+      // `raw.perModel` is deliberately NOT forwarded — see `UsageDTO`'s header.
       recentRuns: {
         runs,
         page: raw.recentRuns.page,

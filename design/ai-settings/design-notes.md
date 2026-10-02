@@ -754,3 +754,140 @@ amendment introduces no second viewport.
 - **The provider table itself** — `motir-marketing/design/legal/` owns it. This asset links to it and
   never restates it.
 - **The GA default provider** — MOTIR-4744.
+
+---
+
+# AMENDMENT 2026-10 — the planner model is no longer a project setting (MOTIR-7223 · story MOTIR-7220)
+
+**Design system check (first, per the design-system rule).** Read `package.json` (depends on
+`@motir/design-system` `workspace:*`) and `app/globals.css` (`@import '@motir/design-system/theme.css'`).
+**Verdict: the project is on Motir Design** (package `0.8.0`), so the delta is drawn from that
+system's `--el-*` / shape tokens and the shipped primitives. The root layout applies the signed-in
+person's own `data-style` / `data-palette` / `data-type`; the mock draws the base values, and every
+element routes through a token. Nothing the package lacks is needed.
+
+**Mock (a DELTA):** [`ai-planning-settings--no-model.mock.html`](ai-planning-settings--no-model.mock.html),
+two panels — **A** (populated, a project admin: the rail door, the page, the four cards with the
+Planner card redrawn) and **B** (the read-only member view: the refusal line, and the locked Planner
+card). **Amends:** `ai-planning-settings.mock.html` panels 2 · 3 · 5 · 7, and §4, §6, §7, §9 and §D2
+of this file. The older mock is a record and is not edited.
+**Gates:** **MOTIR-7228** — the retirement of the project planner-model setting (the editor control,
+DTO, mapper, repository select, service validation, route field, `plannerModels.ts`, limits, error
+field, locale strings and permission copy), with `Project.aiPlannerModel` marked `@ignore` and its
+column left in place.
+
+**Why.** Motir, not the project, chooses the model that plans: one platform setting per audience
+(customer · meta · internal), set by a platform superadmin in the operator console
+(`design/platform-admin/console--ai-planning.mock.html`, MOTIR-7222). The project picker was stored
+and never sent to motir-ai, so it already changed nothing; after this amendment the tenant sees **no
+model anywhere on this page** — not as a control, not read-only, not in any sentence.
+
+**Drawn against the shipped room, not the older mock.** The rail is today's `PROJECT_SETTINGS_NAV`
+(three Automation rows: AI planning · Hosted agent · Rules), and the room has FOUR cards with the
+page's one Save footer on the fourth, **Planning mistakes** (MOTIR-3352 moved it there). The older
+mock predates both and shows the footer on Planner. Panel A composes the room as it ships; only the
+Planner card and the page description change.
+
+## What LEFT
+
+| what                                                      | where it was                                               | disposition                                                                                                            |
+| --------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| The **Planner model** `Combobox`, its label and its hint  | Planner card, below the explanations switch (§4, §5, §6)   | **Removed.** No disabled picker, no read-only "Default" line, no greyed id takes its place.                            |
+| §7's option table (Default · Thorough · Fast)             | §7                                                         | **Retired** — §7 is SUPERSEDED by this amendment (below), kept as the record of what the room offered.                 |
+| The `aiPlannerModel` mapping in §4's card/column table    | §4, the Planner row: "explanation switch · model combobox" | **Removed.** The Planner row now reads: controls **explanation switch** · backing column **`aiGenerateExplanations`**. |
+| "and which model drafts the work" in the page description | §6, Page                                                   | **Rewritten** (below).                                                                                                 |
+| "The model that drafts …" in the Planner card's sub-copy  | §6, Card 3                                                 | **Rewritten** (below).                                                                                                 |
+| "and its planner model" in the refusal line               | `settings.noAccess.section.ai-planning`                    | **Removed** (below).                                                                                                   |
+| "the planner model, " in the permission's description     | `permissions.ai_configure.description`                     | **Removed** (below) — the permission copy MOTIR-7228's title names.                                                    |
+
+## The new copy, verbatim
+
+| key                                                                                                                               | was                                                                                                                                    | is                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `settings.aiPlanning.pageDescription`                                                                                             | How Motir's planner keeps this project moving — when it expands the plan, how it packs sprints, and which model drafts the work.       | **How Motir's planner keeps this project moving — when it expands the plan, how it packs sprints, and what it writes for each item.** |
+| `settings.aiPlanning.planner.title`                                                                                               | Planner                                                                                                                                | **Planner** (unchanged — see below)                                                                                                   |
+| `settings.aiPlanning.planner.subtitle`                                                                                            | The model that drafts plans, sprints and explanations for this project.                                                                | **How the planner writes for this project.**                                                                                          |
+| `settings.noAccess.section.ai-planning`                                                                                           | AI planning for this project — its cadence and its planner model — is configured by project admins. Ask an admin if it needs changing. | **AI planning for this project — its cadence — is configured by project admins. Ask an admin if it needs changing.**                  |
+| `permissions.ai_configure.description`                                                                                            | Set the planning cadence, the planner model, and whether explanations are drafted.                                                     | **Set the planning cadence and whether explanations are drafted.**                                                                    |
+| `settings.aiPlanning.planner.modelLabel` · `modelHint` · `modelDefault` · `modelDefaultSecondary` · `modelThorough` · `modelFast` | (the picker)                                                                                                                           | **Deleted**, en and zh together.                                                                                                      |
+
+**Unchanged, and asserted so:** `settings.aiPlanning.planner.explanationsLabel` / `explanationsHint`,
+`settings.aiPlanning.readOnlyBanner` (_Only a project admin can change AI planning settings._ — it
+never named a model), every Auto-plan, AI sprint planning, Planning mistakes, footer, toast, paused
+and not-connected string, and the three data-practice strings below.
+
+**The card title stays "Planner".** What is left in the card is the explanations switch and the
+data-practice promise. Renaming the card **Explanations** would match the switch and mis-file the
+promise: the callout is about what the planner SENDS to a provider on every job — plans, sprints and
+explanations alike — not about explanations. "Planner" still names what the card is about, and the
+new sub-copy says which part of the planner the reader controls here: how it writes.
+
+## The data-practice callout stays — and D2, re-argued
+
+The callout stays at the **foot of the Planner card**, with its copy **byte-identical** to the
+shipped strings (§D3):
+
+> `aiPlanning.planner.dataPracticeCommitment` — Neither Motir nor its gateway trains on this project's content.
+> `aiPlanning.planner.dataPracticeReport` — What a provider does with a request once it reaches them is that provider's own published position.
+> `aiPlanning.planner.dataPracticeLink` — What each provider states
+
+Neither sentence names a model, so neither changes. Its link target, its `null`-manifest behaviour
+and MOTIR-3670's test that no provider fact appears in the component are untouched. (The delta mock draws the link with a placeholder `href="#"` so that it does not register a second KNOWN address row. The destination is the one `ai-planning-settings.mock.html` and §D3 already name.)
+
+**§D2's premise is gone, and its conclusion survives on a different premise.** D2 placed the callout
+under the picker because _"the promise qualifies the act of choosing a model."_ There is no longer a
+model to choose. Re-argued:
+
+| option                                  | verdict after this amendment                                                                                                                                                                                                                                                                  |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Foot of the Planner card** — **kept** | ✓ The promise qualifies **what the planner sends to a provider** for this project. The Planner card is the card about the planner's own work — how it writes, and with the callout, what happens to what it reads. That is the narrowest card the claim is true of, which was D2's real test. |
+| Page header, under the title            | ✗ **Still rejected, for D2's own reason.** It would read as a claim about the whole page — auto-plan cadence, sprint length, the mistakes switch — which are settings, not egress. A promise that appears to cover more than it does is worse than one placed narrowly.                       |
+| Its own card                            | ✗ Still rejected: a card on this page is where a decision lives; one with nothing to change reads as a control whose switch is missing.                                                                                                                                                       |
+| The Planning mistakes card              | ✗ Considered because that card is also about what Motir keeps. Rejected: its own always-on callout already says where the corrections stay; a second promise there would make two claims about two different flows read as one.                                                               |
+
+So the placement is unchanged and the reason is restated. The callout keeps its `--el-surface` +
+`--el-border` neutral role and the asset's `.clink` link (`--el-text-strong` + underline), exactly as
+§D4 specifies.
+
+## Panels
+
+- **A — populated (admin).** The rail with **Automation → AI planning** active (the door, unchanged);
+  the page title and the rewritten description; Auto-plan and AI sprint planning composed unchanged;
+  the **Planner** card: header _Planner_ / _How the planner writes for this project._, the
+  **Draft a why for each item** switch row, and the data-practice callout at its foot — nothing
+  between them; **Planning mistakes** with the page's Save footer, unchanged.
+- **B — read-only member view.** (a) A member without `ai:configure` meets the settings area's
+  shipped `NoAccessState` (`EmptyState` + `Lock` + a primary button back to the first rail entry
+  their own rail offers): _Admins only_ and the rewritten section line. The room has been
+  `ai:configure`-gated since the 2026-08-08 amendment, so this is the member's face of the room, and
+  the older mock never drew it. (b) The editor's `isAdmin = false` face of the Planner card — the
+  unchanged lock banner, the switch disabled, the callout, and **nothing where the picker was**.
+
+Saving, saved, validation, server error, not-connected and paused are **unchanged** and not redrawn:
+none of them drew the picker except as a member of the Planner card, whose redraw is Panel A.
+
+## §7 — SUPERSEDED by this amendment
+
+§7 (_Planner-model options — the real shipped set_) is **retired, not deleted**. It records what the
+room offered between MOTIR-914 and MOTIR-7228. Its premise — that a project chooses its planning
+model — is withdrawn: the model is a platform setting per audience (motir-ai
+`GET` / `PUT /v1/planner-model-settings`, MOTIR-7221) and never a tenant one. Read §7 as history;
+nothing in it is to be built. The same holds for the Planner-model rows of §5 (the `Combobox`
+primitive line), §6 (Card 3's Combobox label and hint), §9 (the Combobox token roles) and §10/§11
+where they mention the picker: superseded by this amendment, kept as the record.
+
+## Tokens, primitives, a11y
+
+**No new token, no new primitive.** The redraw removes elements and adds none. The one shape the
+older mock never drew — `NoAccessState` — is the shipped component (`components/projects/
+NoAccessState.tsx`): lock glyph `--el-icon-muted` (decorative), title `--el-text` serif, description
+`--el-text-secondary`, primary `Button`. With the picker gone the Planner card has one interactive
+control (the switch) and one link (the callout's), in that tab order.
+
+## Out of scope for this amendment
+
+- **The column drop** (`projects.ai_planner_model`) — a later release, behind the production check
+  (MOTIR-7230). MOTIR-7228 marks it `@ignore` and stops every reader.
+- **The console page** that now holds the choice — `design/platform-admin/` (MOTIR-7222).
+- **The hosted-agent model** (`Hosted agent` room, MOTIR-6989) — the tenant chooses and pays for
+  that model; it is not a secret and is untouched.

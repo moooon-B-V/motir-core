@@ -120,17 +120,11 @@ describe('the --el-type-* misuse is decoupled in every consumer', () => {
     expect(src).not.toMatch(/bg-\(--el-tint-/);
   });
 
-  it('OrgUsageClient model dots use --el-model-*, deepseek no longer borrows --el-type-subtask', () => {
-    const src = read('app/(authed)/settings/organization/usage/_components/OrgUsageClient.tsx');
-    const fn = src.slice(
-      src.indexOf('function modelColorVar'),
-      src.indexOf('function jobKindTint'),
-    );
-    expect(fn).not.toMatch(/--el-type-/);
-    for (const m of ['opus', 'sonnet', 'haiku', 'deepseek']) {
-      expect(fn).toContain(`var(--el-model-${m})`);
-    }
-  });
+  // ⚠️ RETIRED with its subject (MOTIR-7229). The org usage page drew a dot per
+  // model in its per-model panel and run log; no model id reaches an
+  // organization any more, so there is no dot left to bind. The `--el-model-*`
+  // tokens stay defined (and on the `/tokens` specimen) — the mapping test above
+  // still pins them, and a later surface that names a model reaches for them.
 
   it('label + role chips route through the dedicated families', () => {
     const picker = read('packages/design-system/src/components/ui/MultiSelectPicker.tsx');

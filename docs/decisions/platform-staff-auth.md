@@ -432,6 +432,7 @@ every consumer builds to.
 | Write-level impersonation (time-boxed)                           | 10.3 MOTIR-749                    | `superadmin` | yes             | yes     |
 | Per-org feature flags / kill-switches                            | 10.3 MOTIR-750                    | `superadmin` | yes             | yes     |
 | Classify an **organization** internal-billing / remove it        | **MOTIR-4565** (Story MOTIR-4337) | `superadmin` | **yes**         | yes     |
+| Set the platform planning model per audience                     | **MOTIR-7227** (Story MOTIR-7220) | `superadmin` | **yes**         | yes     |
 | The audit-log **VIEW**, searchable + tamper-evident (hash chain) | 10.3 MOTIR-751                    | `superadmin` | n/a             | n/a     |
 | Grant / revoke `platformRole`                                    | 10.3 (no card yet — §6)           | `superadmin` | yes             | yes     |
 
@@ -454,6 +455,15 @@ rather than introducing a second one.
 > `docs/decisions/internal-billing-classification.md` §5. Until they landed, the
 > _"deliberately does NOT decide"_ table's allocation meant a cross-tenant read of any
 > tenant table from this tier returned zero rows and raised nothing.
+
+> **⚠️ AMENDED 2026-10-02 (Story MOTIR-7220 · MOTIR-7227).** The planning-model row is the
+> second member from outside Epic 10. Which model Motir plans with is one platform setting per
+> audience — customer orgs, the meta org, internal orgs — stored in motir-ai, and changing one
+> changes what every organization in that audience is planned with and charged per turn, so it
+> takes `superadmin` like every other billing-class row. Its action, `ai.planner_model.set`, joins
+> `PLATFORM_AUDIT_ACTIONS` as `reason: 'required'`, with `targetKind: 'platform'`, the audience as
+> `targetId`, and `{ audience, fromModel, toModel }` as metadata. The page's READ is covered by the
+> first row's `support` minimum; it reads no tenant row, so it writes no audit row of its own.
 
 ---
 
