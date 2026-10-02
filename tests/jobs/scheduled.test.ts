@@ -697,6 +697,9 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
       await seedHealthyJobSchedules();
       greenExceptMonitorConfig();
       vi.stubEnv('GITHUB_BILLING_TOKEN', billingToken);
+      // The Fly read token (MOTIR-7331) is registered too; held unset so each case
+      // judges the billing token alone.
+      vi.stubEnv('FLY_DEPLOYMENT_READ_TOKEN', '');
     }
 
     it('PASSES months ahead of the declared expiry, and records the entry', async () => {
@@ -749,7 +752,11 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
 
       expect(result).toMatchObject({
         ok: true,
-        credentialExpiry: { verdict: 'ok', entries: [], skipped: ['GITHUB_BILLING_TOKEN'] },
+        credentialExpiry: {
+          verdict: 'ok',
+          entries: [],
+          skipped: ['GITHUB_BILLING_TOKEN', 'FLY_DEPLOYMENT_READ_TOKEN'],
+        },
       });
     });
 
