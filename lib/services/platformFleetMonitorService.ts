@@ -3,6 +3,7 @@ import { isCloudBilling } from '@/lib/billing/availability';
 import { CI_DEBIT_PERIOD_MINUTES } from '@/lib/ciMetering/allowance';
 import { isCiMeteringEnabled } from '@/lib/ciMetering/config';
 import { periodStartFor } from '@/lib/ciMetering/period';
+import { orgPoolCap } from '@/lib/ciFleet/limits';
 import { FLEET_WORKLOAD_KINDS, type FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
   isFleetMismatch,
@@ -197,25 +198,32 @@ export interface FleetOrgReading {
   poolUsed: number;
   pool: number | null;
   accruedMinutesInWindow: number;
+  /** The balance figure the zero-stop read returned, when it was read and answered. */
+  balanceCredits: number | null;
 }
 
 function detailOf(err: unknown): string {
   return err instanceof Error ? err.message.slice(0, 300) : 'unknown';
 }
 
-/** The balance as the zero stop reads it — through the same entitlement read. */
-async function readBalance(organizationId: string, now: Date): Promise<FleetFacts['balance']> {
+/** The balance as the zero stop reads it — through the same entitlement read —
+ *  plus the figure it answered, which the page prints beside an exhausted org. */
+async function readBalance(
+  organizationId: string,
+  now: Date,
+): Promise<{ balance: FleetFacts['balance']; credits: number | null }> {
   try {
     const state = await ciAllowanceService.getEntitlementState(organizationId, now);
-    if (state.state === 'ci_credits_exhausted') return 'exhausted';
-    if (state.applicable && state.balance === null) return 'unknown';
-    return 'readable';
+    const credits = state.balance ?? null;
+    if (state.state === 'ci_credits_exhausted') return { balance: 'exhausted', credits };
+    if (state.applicable && state.balance === null) return { balance: 'unknown', credits: null };
+    return { balance: 'readable', credits };
   } catch (err) {
     console.error('[platformFleetMonitorService] could not read the entitlement', {
       organizationId,
       detail: detailOf(err),
     });
-    return 'unknown';
+    return { balance: 'unknown', credits: null };
   }
 }
 
@@ -258,6 +266,12 @@ function toRow(
     accruedMinutesInWindow: reading.accruedMinutesInWindow,
     confirmedCreditsThisMonth: charge?.debitedCredits ?? 0,
     pendingCredits: charge ? Math.max(0, charge.chargedCredits - charge.debitedCredits) : 0,
+    pendingSince:
+      charge && charge.chargedCredits > charge.debitedCredits && charge.pendingDebitSince
+        ? charge.pendingDebitSince.toISOString()
+        : null,
+    latestAccrualTickAt: reading.facts.latestAccrualTickStart?.toISOString() ?? null,
+    balanceCredits: reading.balanceCredits,
     verdicts: reading.verdicts,
   };
 }
@@ -365,12 +379,13 @@ export const platformFleetMonitorService = {
     const meteringEnabled = isCiMeteringEnabled();
     // The balance crosses into motir-ai: read it only where the zero stop could
     // have owed something — a container older than one period.
-    const balance =
+    const balanceRead =
       meteringEnabled &&
       !org.isMeta &&
       before(earliest(oldestCiInFlightAt, fleet.oldestSlotClaimedAt), periodStart)
         ? await readBalance(organizationId, now)
-        : 'not_read';
+        : { balance: 'not_read' as const, credits: null };
+    const balance = balanceRead.balance;
 
     const facts: FleetFacts = {
       meteringEnabled,
@@ -401,6 +416,7 @@ export const platformFleetMonitorService = {
       poolUsed: fleet.census.total,
       pool,
       accruedMinutesInWindow: Math.floor(fleet.accruedSeconds / 60),
+      balanceCredits: balanceRead.credits,
     };
   },
 
@@ -456,6 +472,9 @@ export const platformFleetMonitorService = {
       rows: slice.map((reading) => toRow(reading, byId.get(reading.organizationId))),
       total,
       mismatched: readings.filter(hasMismatch).length,
+      pooledContainers: readings.reduce((sum, reading) => sum + reading.poolUsed, 0),
+      agentInstances: readings.reduce((sum, reading) => sum + reading.byWorkload.agent_instance, 0),
+      defaultPool: orgPoolCap(),
       page,
       pageSize: FLEET_ORGS_PAGE_SIZE,
       pageCount,
@@ -508,7 +527,10 @@ export const platformFleetMonitorService = {
     }
 
     const since = input.since ?? new Date(now.getTime() - FLEET_KILLS_DEFAULT_SINCE_MS);
-    const total = await withSystemContext((tx) => fleetMachineKillRepository.countSince(since, tx));
+    const [total, failed] = await withSystemContext(async (tx) => [
+      await fleetMachineKillRepository.countSince(since, tx),
+      await fleetMachineKillRepository.countFailedSince(since, tx),
+    ]);
     const { page, pageCount } = pageOf(input.page, total, FLEET_KILLS_PAGE_SIZE);
     const kills = await withSystemContext((tx) =>
       fleetMachineKillRepository.listSince(
@@ -532,6 +554,7 @@ export const platformFleetMonitorService = {
       since: since.toISOString(),
       rows: kills.map((kill) => toKillDto(kill, names)),
       total,
+      failed,
       page,
       pageSize: FLEET_KILLS_PAGE_SIZE,
       pageCount,

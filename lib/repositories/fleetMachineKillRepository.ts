@@ -56,6 +56,17 @@ export const fleetMachineKillRepository = {
     return tx.fleetMachineKill.count({ where: { decidedAt: { gte: since } } });
   },
 
+  /**
+   * How many kills decided since `since` the provider REFUSED — not completed,
+   * with a failure recorded. The monitor's "{n} failed" head count, over the
+   * whole window rather than one page of it.
+   */
+  async countFailedSince(since: Date, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.fleetMachineKill.count({
+      where: { decidedAt: { gte: since }, completedAt: null, failureDetail: { not: null } },
+    });
+  },
+
   /** The provider refused; the next pass decides again. */
   async markFailed(id: string, detail: string, tx: Prisma.TransactionClient): Promise<void> {
     await tx.fleetMachineKill.update({ where: { id }, data: { failureDetail: detail } });

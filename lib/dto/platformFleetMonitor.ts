@@ -54,6 +54,14 @@ export interface FleetOrgRowDTO {
   confirmedCreditsThisMonth: number;
   /** Credits booked locally and not yet confirmed (`charged − debited`). */
   pendingCredits: number;
+  /** ISO — since when the outstanding debit has waited; null when none is pending. */
+  pendingSince: string | null;
+  /** ISO — the start of the latest tick that accrued anything for the org; null
+   *  when none ever has. The page's "last tick {age} ago" under a zero accrual. */
+  latestAccrualTickAt: string | null;
+  /** The AI credit balance as the zero stop read it — null when it was not read
+   *  (nothing ran long enough to owe the stop) or could not be. */
+  balanceCredits: number | null;
   /** Every verdict that holds, mismatches first; `['ok']` when nothing does. */
   verdicts: FleetVerdict[];
 }
@@ -77,6 +85,12 @@ export type FleetRunningOrgsDTO =
       total: number;
       /** Of those, how many hold at least one mismatch. */
       mismatched: number;
+      /** Containers counted against per-org pools, summed over the whole set. */
+      pooledContainers: number;
+      /** Running agent instances (their own pool), summed over the whole set. */
+      agentInstances: number;
+      /** The environment's per-org pool — what an org without an override holds. */
+      defaultPool: number;
       page: number;
       pageSize: number;
       pageCount: number;
@@ -111,6 +125,8 @@ export type FleetKillsDTO =
       since: string;
       rows: FleetKillDTO[];
       total: number;
+      /** Of `total`, the kills the provider refused (not completed, a failure recorded). */
+      failed: number;
       page: number;
       pageSize: number;
       pageCount: number;

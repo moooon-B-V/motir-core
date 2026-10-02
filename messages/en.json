@@ -8742,6 +8742,142 @@
           "hours": "{n} h",
           "days": "{n, plural, one {# day} other {# days}}"
         }
+      },
+      "fleet": {
+        "orgs": {
+          "title": "Fleet · organisations running containers",
+          "subtitle": "Each organisation holding a container now, beside what the CI debit did for it in the last {minutes} minutes (two debit periods). Mismatched first.",
+          "mismatchedCount": "{count} mismatched",
+          "runningCount": "{count, plural, one {# org running} other {# orgs running}}",
+          "noMismatch": "No mismatch",
+          "stat": {
+            "orgs": "organisations running a container",
+            "pooled": "containers in per-org pools (CI · hosted · index)",
+            "instances": "agent instances · their own pool, not counted above",
+            "mismatched": "mismatched · running and debited disagree"
+          },
+          "group": {
+            "pool": "In the {pool}-container pool",
+            "own": "Own pool"
+          },
+          "col": {
+            "org": "Organisation",
+            "ciRunner": "CI runners",
+            "hostedAgent": "Hosted-agent runs",
+            "index": "Index containers",
+            "poolUsed": "Pool used",
+            "agentInstance": "Agent instances",
+            "agentInstanceNote": "not in the pool",
+            "accrued": "CI minutes · last {minutes} min",
+            "credits": "Credits this month · confirmed",
+            "verdict": "Verdict"
+          },
+          "poolOf": "{used} / {pool}",
+          "poolUnknown": "pool unreadable",
+          "metaTag": "meta org · isMeta",
+          "unnamed": "Organisation {id}",
+          "accrued": {
+            "none": "none",
+            "lastTick": "last tick {age} ago",
+            "minutes": "{minutes} min"
+          },
+          "credits": {
+            "pending": "+{credits} pending · {age}",
+            "pendingNoAge": "+{credits} pending",
+            "balance": "balance {credits}",
+            "unreadable": "balance unreadable",
+            "notCharged": "not charged"
+          },
+          "foot": "Showing {from}–{to} of {total} · mismatched first, then most containers · only CI is judged — it is the one workload debited while it runs",
+          "empty": {
+            "title": "No organisation is running a fleet container",
+            "body": "Every per-org pool is empty right now, so there is nothing to compare against the debit. This is a healthy reading, not a fault."
+          },
+          "error": {
+            "title": "Couldn’t read the fleet",
+            "body": "The fleet read didn’t answer, so these figures aren’t loaded — none of them is zero. The rest of this page is unaffected. Reload to try again."
+          },
+          "pagerLabel": "Fleet organisations pages"
+        },
+        "verdict": {
+          "ok": "OK — debited as it runs",
+          "running_not_debited": "Running, not debited",
+          "debited_nothing_running": "Debited, nothing running",
+          "exhausted_still_running": "At zero, still running",
+          "balance_unknown": "Balance unreadable — not judged",
+          "not_charged": "Meta org — not charged"
+        },
+        "verdictHint": {
+          "ok": "CI is debited as it runs, or there is nothing to judge.",
+          "running_not_debited": "Running, not debited — CI has run past one debit window and its minutes or credits are not landing.",
+          "debited_nothing_running": "Debited with nothing running — accrual landed in the window while no CI job of this org was in flight.",
+          "exhausted_still_running": "At or below zero and still running — the zero stop should already have fired.",
+          "balance_unknown": "Balance unreadable — cannot judge. Shown, never counted as a mismatch.",
+          "not_charged": "The meta org is never debited, so nothing is judged."
+        },
+        "disabled": {
+          "title": "Fleet",
+          "subtitle": "Fleet containers, their debit, and the reconciler’s kills.",
+          "pill": "Disabled on this deployment",
+          "empty": {
+            "title": "The fleet is not enabled on this deployment",
+            "body": "No container orchestrator is configured, so no fleet container runs and the reconciler has nothing to check. Nothing on this section is a zero — there is simply no fleet."
+          }
+        },
+        "kills": {
+          "title": "Fleet · reconciler kills · last 24 hours",
+          "subtitle": "Every machine the reconciler destroyed or stopped because no live charged record owned it. Newest first.",
+          "total": "{count} in 24 h",
+          "failedCount": "{count} failed",
+          "col": {
+            "when": "When",
+            "app": "App",
+            "machine": "Machine",
+            "age": "Age at kill",
+            "reason": "Reason",
+            "action": "Action",
+            "org": "Organisation"
+          },
+          "reason": {
+            "no_record": "No record",
+            "no_recordGloss": "no live charged record named this machine",
+            "record_ended": "Record ended",
+            "record_endedGloss": "its run had already finished",
+            "org_stopped": "Org stopped",
+            "org_stoppedGloss": "its organisation’s fleet was stopped"
+          },
+          "action": {
+            "destroyed": "Destroyed",
+            "stopped": "Stopped",
+            "destroyFailed": "Destroy failed",
+            "stopFailed": "Stop failed"
+          },
+          "failureDetail": "Not completed — {detail}",
+          "noOrg": "No organisation on record",
+          "foot": "Showing {from}–{to} of {total} · newest first",
+          "none": "None in 24 h",
+          "empty": {
+            "title": "No machine was killed in the last 24 hours",
+            "body": "Every machine the fleet runs was matched to an organisation’s live charged record."
+          },
+          "error": {
+            "title": "Couldn’t read the reconciler’s kills",
+            "body": "The kill record didn’t load, so this list isn’t shown — it is not an empty list. The organisations above are unaffected. Reload to try again."
+          },
+          "pagerLabel": "Reconciler kills pages"
+        },
+        "ago": "{age} ago",
+        "duration": {
+          "seconds": "{n} s",
+          "minutes": "{n} min",
+          "hours": "{h} h",
+          "hoursMinutes": "{h} h {m} min",
+          "days": "{d} d",
+          "daysHours": "{d} d {h} h"
+        },
+        "prev": "Prev",
+        "next": "Next",
+        "pageOf": "Page {page} of {pages}"
       }
     },
     "orgs": {

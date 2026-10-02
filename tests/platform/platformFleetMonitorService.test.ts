@@ -353,6 +353,8 @@ describe('judgeOrganization — the facts the verdict is judged on', () => {
     expect(reading.byWorkload.agent_instance).toBe(1);
     // An own-pool workload is shown and never counted against the pool.
     expect(reading.poolUsed).toBe(0);
+    // The figure the zero stop read rides along, for the page's "balance −3".
+    expect(reading.balanceCredits).toBe(-3);
   });
 
   it('AC4: an unreadable balance is balance_unknown, never a mismatch', async () => {
@@ -361,6 +363,7 @@ describe('judgeOrganization — the facts the verdict is judged on', () => {
     await seedSlot(t.organizationId, 'hosted_agent', ago(P + MIN));
     const reading = await platformFleetMonitorService.judgeOrganization(t.organizationId, NOW);
     expect(reading.verdicts).toEqual(['balance_unknown']);
+    expect(reading.balanceCredits).toBeNull();
   });
 
   it('AC4: a meta org is not_charged, and its balance is never read', async () => {
@@ -374,8 +377,9 @@ describe('judgeOrganization — the facts the verdict is judged on', () => {
   it('nothing older than a period never crosses into motir-ai', async () => {
     const t = await seedTenant();
     await seedSlot(t.organizationId, 'hosted_agent', ago(P - MIN));
-    await platformFleetMonitorService.judgeOrganization(t.organizationId, NOW);
+    const reading = await platformFleetMonitorService.judgeOrganization(t.organizationId, NOW);
     expect(usageMock).not.toHaveBeenCalled();
+    expect(reading.balanceCredits).toBeNull();
   });
 });
 
@@ -402,6 +406,10 @@ describe('listRunningOrgs', () => {
     if (first.meter !== 'enabled') throw new Error('expected the meter enabled');
     expect(first.total).toBe(60);
     expect(first.mismatched).toBe(1);
+    // The head stats sum the WHOLE set, not the page: 59 index slots + 1 runner.
+    expect(first.pooledContainers).toBe(60);
+    expect(first.agentInstances).toBe(0);
+    expect(first.defaultPool).toBe(500);
     expect(first.pageCount).toBe(3);
     expect(first.rows).toHaveLength(FLEET_ORGS_PAGE_SIZE);
     expect(first.rows[0]).toMatchObject({
@@ -461,6 +469,42 @@ describe('orgFleet', () => {
   });
 });
 
+describe('the row carries what the page prints beneath its figures', () => {
+  it('the pending debit, its age and the latest tick', async () => {
+    const t = await seedTenant();
+    await seedIntent(t, { startedAt: ago(3 * MIN) });
+    await seedAccrual(t, ago(5 * MIN));
+    await adminDb.ciPeriodCharge.create({
+      data: {
+        organizationId: t.organizationId,
+        periodStart: JULY_2026,
+        chargedCredits: 1_325,
+        debitedCredits: 1_240,
+        pendingDebitRef: 'ci:x:1240-1325',
+        pendingDebitCredits: 85,
+        pendingDebitSince: ago(4 * MIN),
+      },
+    });
+    const dto = await platformFleetMonitorService.orgFleet(currentPrincipal, t.organizationId, NOW);
+    if (dto.meter !== 'enabled') throw new Error('expected the meter enabled');
+    expect(dto.row).toMatchObject({
+      confirmedCreditsThisMonth: 1_240,
+      pendingCredits: 85,
+      pendingSince: ago(4 * MIN).toISOString(),
+      latestAccrualTickAt: ago(5 * MIN).toISOString(),
+      balanceCredits: null,
+    });
+  });
+
+  it('nothing pending and no tick ever: both null', async () => {
+    const t = await seedTenant();
+    const dto = await platformFleetMonitorService.orgFleet(currentPrincipal, t.organizationId, NOW);
+    if (dto.meter !== 'enabled') throw new Error('expected the meter enabled');
+    expect(dto.row.pendingSince).toBeNull();
+    expect(dto.row.latestAccrualTickAt).toBeNull();
+  });
+});
+
 describe('listKills', () => {
   it('AC5: newest first, paged, carrying failureDetail on an incomplete kill', async () => {
     const t = await seedTenant();
@@ -500,6 +544,8 @@ describe('listKills', () => {
     );
     if (dto.meter !== 'enabled') throw new Error('expected the meter enabled');
     expect(dto.total).toBe(30);
+    // The refused kill is counted over the window, not the page.
+    expect(dto.failed).toBe(1);
     expect(dto.rows).toHaveLength(25);
     expect(dto.rows[0]).toMatchObject({
       machineId: 'm-29',
