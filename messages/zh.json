@@ -8366,7 +8366,8 @@
       "groupPlatform": "平台",
       "groupOperations": "运维",
       "footerStaff": "平台员工",
-      "exitToApp": "返回应用"
+      "exitToApp": "返回应用",
+      "navAiPlanning": "AI 规划"
     },
     "nav": {
       "overview": "总览",
@@ -8814,6 +8815,93 @@
           "cogs": "内部 COGS"
         },
         "absentLine": "缺失——本周期没有运行 {workload} 容器（不是零）"
+      }
+    },
+    "aiPlanning": {
+      "breadcrumb": "平台 · AI 规划",
+      "title": "AI 规划",
+      "subtitle": "Motir 为三类受众分别使用哪个模型进行规划。更改从该受众中每个组织的下一个规划任务起生效。",
+      "precedence": "同时属于 meta 和内部的组织遵循 meta 行。",
+      "tenantSecretLead": "租户永远看不到这一选择。",
+      "tenantSecretBody": "任何租户页面、用量视图或计划都不会显示执行规划的模型。",
+      "card": {
+        "title": "按受众划分的规划模型",
+        "subtitle": "每个规划任务都根据其所属组织解析模型：先 meta，再内部，最后客户。",
+        "count": "3 类受众"
+      },
+      "col": {
+        "audience": "受众",
+        "model": "模型",
+        "lastChanged": "上次更改",
+        "action": "操作"
+      },
+      "audience": {
+        "customer": {
+          "name": "客户组织",
+          "desc": "既不是 meta 也不是内部的所有组织"
+        },
+        "meta": {
+          "name": "Motir meta 组织",
+          "desc": "moooon B.V.，isMeta"
+        },
+        "internal": {
+          "name": "内部组织",
+          "desc": "被归类为 internalBilling 的组织"
+        }
+      },
+      "pickerLabel": "规划模型",
+      "pickerAria": "规划模型 — {audience}",
+      "pickerFoot": "仅列出 motir-ai 提供用于规划的模型。网关支持的每个服务商都会列出。",
+      "save": "保存",
+      "readOnly": "只有超级管理员可以更改这些设置。",
+      "changed": {
+        "seeded": "初始默认值 · 从未更改",
+        "by": "{who} 于 {when} 更改",
+        "byUnknown": "于 {when} 更改",
+        "justNowByYou": "刚刚由你更改"
+      },
+      "confirm": {
+        "title": "更改 {audience} 的规划模型？",
+        "body": "{from} → {to}。更改将应用于该受众中每个组织的下一个规划任务。正在运行的任务会在其开始时使用的模型上完成。",
+        "reasonLabel": "原因 — 必填，将写入审计日志",
+        "reasonPlaceholder": "为什么要更改模型？",
+        "reasonHint": "之后查看此更改的任何运维人员都会看到。仅写“测试”说明不了任何问题。",
+        "cancel": "取消",
+        "confirm": "更改模型"
+      },
+      "saved": {
+        "title": "规划模型已更改",
+        "body": "{audience} 将从下一个任务起使用 {model} 进行规划。"
+      },
+      "refused": "{model} 已不再提供用于规划，因此未保存。列表已刷新 — 请选择其他模型。",
+      "withdrawn": {
+        "chip": "已不再提供",
+        "body": "在你选择其他模型之前，该受众的规划将回退到 {fallback}。",
+        "bodyReadOnly": "在超级管理员选择其他模型之前，该受众的规划将回退到 {fallback}。"
+      },
+      "unreachable": {
+        "save": "未保存：规划器无法访问 {model} — {reason}。",
+        "reason": {
+          "keyRefused": "服务商密钥被拒绝",
+          "noChannel": "没有为规划器提供此模型的已启用通道",
+          "timeout": "超时"
+        }
+      },
+      "failing": {
+        "chip": "规划失败",
+        "body": "该受众的规划正在失败：规划器无法访问此模型。上次测试于 {when}。",
+        "bodyNoTime": "该受众的规划正在失败：规划器无法访问此模型。"
+      },
+      "unavailable": {
+        "title": "无法加载规划模型",
+        "body": "规划服务（motir-ai）没有响应，因此不显示任何设置。这是获取错误 — 没有任何更改，也不会猜测任何值。",
+        "retry": "重试"
+      },
+      "error": {
+        "unchanged": "该受众已在使用 {model} 进行规划。",
+        "notPermitted": "只有超级管理员可以更改规划模型。",
+        "reasonRequired": "必须填写原因。",
+        "failed": "无法保存更改。未做任何更改。"
       }
     }
   },

@@ -8370,7 +8370,8 @@
       "groupPlatform": "Platform",
       "groupOperations": "Operations",
       "footerStaff": "Platform staff",
-      "exitToApp": "Exit to app"
+      "exitToApp": "Exit to app",
+      "navAiPlanning": "AI planning"
     },
     "nav": {
       "overview": "Overview",
@@ -8818,6 +8819,93 @@
           "cogs": "Internal COGS"
         },
         "absentLine": "absent — no {workload} container ran this period (not a zero)"
+      }
+    },
+    "aiPlanning": {
+      "breadcrumb": "Platform · AI planning",
+      "title": "AI planning",
+      "subtitle": "Which model Motir plans with, for each of three audiences. A change applies from the next planning job for every organisation in that audience.",
+      "precedence": "An organisation that is both meta and internal follows the meta row.",
+      "tenantSecretLead": "Tenants never see this choice.",
+      "tenantSecretBody": "No tenant page, usage view or plan names the model that planned.",
+      "card": {
+        "title": "Planning model by audience",
+        "subtitle": "Every planning job resolves its model from the organisation it runs for: meta, then internal, then customer.",
+        "count": "3 audiences"
+      },
+      "col": {
+        "audience": "Audience",
+        "model": "Model",
+        "lastChanged": "Last changed",
+        "action": "Action"
+      },
+      "audience": {
+        "customer": {
+          "name": "Customer organisations",
+          "desc": "Every organisation that is neither meta nor internal"
+        },
+        "meta": {
+          "name": "Motir meta org",
+          "desc": "moooon B.V., isMeta"
+        },
+        "internal": {
+          "name": "Internal organisations",
+          "desc": "Orgs classified internalBilling"
+        }
+      },
+      "pickerLabel": "Planning model",
+      "pickerAria": "Planning model — {audience}",
+      "pickerFoot": "Only models motir-ai offers for planning. Every provider the gateway serves is listed.",
+      "save": "Save",
+      "readOnly": "Only a superadmin can change these.",
+      "changed": {
+        "seeded": "Seeded default · never changed",
+        "by": "Changed {when} by {who}",
+        "byUnknown": "Changed {when}",
+        "justNowByYou": "Changed just now by you"
+      },
+      "confirm": {
+        "title": "Change the planning model for {audience}?",
+        "body": "{from} → {to}. The change applies to the next planning job for every organisation in this audience. Jobs already running finish on the model they started with.",
+        "reasonLabel": "Reason — required, written to the audit log",
+        "reasonPlaceholder": "Why are you changing the model?",
+        "reasonHint": "Shown to any operator reading this change later. “Testing” on its own answers nothing.",
+        "cancel": "Cancel",
+        "confirm": "Change model"
+      },
+      "saved": {
+        "title": "Planning model changed",
+        "body": "{audience} now plan on {model} from their next job."
+      },
+      "refused": "{model} is no longer offered for planning, so it was not saved. The list has been refreshed — choose another model.",
+      "withdrawn": {
+        "chip": "No longer offered",
+        "body": "Planning for this audience falls back to {fallback} until you choose another.",
+        "bodyReadOnly": "Planning for this audience falls back to {fallback} until a superadmin chooses another."
+      },
+      "unreachable": {
+        "save": "Not saved: the planner could not reach {model} — {reason}.",
+        "reason": {
+          "keyRefused": "the provider key was refused",
+          "noChannel": "no enabled channel serves this model for the planner",
+          "timeout": "timed out"
+        }
+      },
+      "failing": {
+        "chip": "Planning is failing",
+        "body": "Planning for this audience is failing: the planner cannot reach this model. Last tested {when}.",
+        "bodyNoTime": "Planning for this audience is failing: the planner cannot reach this model."
+      },
+      "unavailable": {
+        "title": "Couldn’t load the planning models",
+        "body": "The planning service (motir-ai) didn’t respond, so no setting is shown. This is a fetch error — nothing has changed, and no value is guessed.",
+        "retry": "Retry"
+      },
+      "error": {
+        "unchanged": "That audience already plans on {model}.",
+        "notPermitted": "Only a superadmin can change the planning model.",
+        "reasonRequired": "A reason is required.",
+        "failed": "The change could not be saved. Nothing was changed."
       }
     }
   },

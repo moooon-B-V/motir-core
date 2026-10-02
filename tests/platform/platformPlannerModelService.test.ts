@@ -181,6 +181,9 @@ describe('getSettings — any staff role reads', () => {
     const dto = await platformPlannerModelService.getSettings(changer);
     expect(dto.rows.find((r) => r.audience === 'internal')?.updatedBy).toBe('Ops superadmin');
     expect(dto.rows.find((r) => r.audience === 'customer')?.updatedBy).toBeNull();
+    // `seeded` tells a never-changed row from one whose changer is gone.
+    expect(dto.rows.find((r) => r.audience === 'internal')?.seeded).toBe(false);
+    expect(dto.rows.find((r) => r.audience === 'customer')?.seeded).toBe(true);
   });
 
   it('carries the withdrawn and unreachable signals through', async () => {

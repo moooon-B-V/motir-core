@@ -936,6 +936,14 @@ export interface RawPreplanStateResponse {
 export const PLANNER_AUDIENCES = ['customer', 'meta', 'internal'] as const;
 export type PlannerAudience = (typeof PLANNER_AUDIENCES)[number];
 
+/**
+ * The model a planning job runs on when its audience's stored model is no longer
+ * offered — motir-ai's `PLANNER_MODEL_FALLBACK` (`src/llm/plannerModels.ts`),
+ * mirrored here because the console names it in the withdrawn-model line. The
+ * open-core boundary means core cannot import it; change both together.
+ */
+export const PLANNER_MODEL_FALLBACK = 'claude-opus-5-5';
+
 /** One audience's setting as motir-ai serves it. */
 export interface PlannerModelSettingRead {
   audience: PlannerAudience;

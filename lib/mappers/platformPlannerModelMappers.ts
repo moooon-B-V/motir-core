@@ -37,6 +37,7 @@ export function toPlatformPlannerModelSettingsDTO(
       lastProbeError: s.lastProbeError ?? null,
       updatedAt: s.updatedAt,
       updatedBy: s.updatedByCoreUserId ? (nameById.get(s.updatedByCoreUserId) ?? null) : null,
+      seeded: !s.updatedByCoreUserId,
     });
   }
   return {

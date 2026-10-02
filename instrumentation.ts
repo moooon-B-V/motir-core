@@ -31,6 +31,10 @@
 //     the SERVER-rendered library — which a browser `page.route` cannot reach —
 //     with no motir-ai instance. A TRANSPORT mock: the real client and the real
 //     permission-asserting service both stay in the path.
+//   - E2E_TEST_PLANNER_MODEL=1 → lib/test-planner-model-mock intercepts the
+//     motir-ai PLANNER-MODEL settings (GET / PUT /v1/planner-model-settings) and
+//     answers from a JSON fixture, so the console's SERVER-rendered AI planning
+//     page (MOTIR-7231) can be driven with no motir-ai instance.
 //   - E2E_TEST_AI_JOBS=1 → lib/test-ai-jobs-mock intercepts the motir-ai JOBS
 //     seam (the MOTIR_AI_URL origin's POST /v1/jobs, GET /v1/jobs/:id and its
 //     /stream). The ask journey crosses that seam three times and only the

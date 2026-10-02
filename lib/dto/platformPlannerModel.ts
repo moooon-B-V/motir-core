@@ -18,6 +18,8 @@ export interface PlatformPlannerModelRowDTO {
   updatedAt: string;
   /** The changer's display name, or null for the seeded default (and an account since removed). */
   updatedBy: string | null;
+  /** True while no operator has ever changed the row — the seeded default. */
+  seeded: boolean;
 }
 
 /** A model the picker may offer. */

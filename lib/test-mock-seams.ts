@@ -163,6 +163,17 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
       installHostedRunMock(agent);
     },
   },
+  {
+    // MOTIR-7231 — the console AI planning page's GET / PUT
+    // /v1/planner-model-settings. The page is server rendered and writes through
+    // a Server Action, so `page.route` reaches neither.
+    flag: 'E2E_TEST_PLANNER_MODEL',
+    message: 'motir-ai planner-model settings seam mocked.',
+    install: async (agent) => {
+      const { installPlannerModelBoundaryMock } = await import('@/lib/test-planner-model-mock');
+      installPlannerModelBoundaryMock(agent);
+    },
+  },
 ];
 
 /**
