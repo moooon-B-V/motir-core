@@ -7,6 +7,10 @@ import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthServic
 import { databaseHealthRepository } from '@/lib/repositories/databaseHealthRepository';
 import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
+import { flyDeploymentStatusProvider } from '@/lib/deployment/adapters/fly/flyMachinesStatus';
+import type { DeploymentStatus } from '@/lib/deployment/deploymentStatus';
+import { httpGatewayStatusReader } from '@/lib/gateway/statusClient';
+import { httpErrorCountReader } from '@/lib/monitoring/sentryErrorCount';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -109,6 +113,7 @@ describe('the six signals', () => {
     expect(health.signals.map((s) => s.id)).toEqual([
       'database',
       'hosting',
+      'gateway',
       'schedules',
       'failedJobs',
       'errors',
@@ -274,7 +279,7 @@ describe('⚠️ an unreachable probe never reads as a zero', () => {
     vi.spyOn(jobScheduleHealthService, 'check').mockRejectedValue(new Error('ledger gone'));
 
     const health = await platformHealthService.read(currentPrincipal);
-    expect(health.signals).toHaveLength(6);
+    expect(health.signals).toHaveLength(7);
     expect(signal(health.signals, 'database').state).toBe('healthy');
     expect(signal(health.signals, 'failedJobs').values['count']).toBe(0);
   });
@@ -394,10 +399,11 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
     vi.stubEnv('FLY_APP_NAME', 'motir-core-test');
     vi.stubEnv('FLY_REGION', '');
     vi.stubEnv('FLY_MACHINE_ID', '');
+    vi.stubEnv('FLY_DEPLOYMENT_READ_TOKEN', '');
+    vi.stubEnv('MOTIR_E2E_FAKE_DEPLOYMENT_STATUS', '');
 
     const hosting = signal((await platformHealthService.read(currentPrincipal)).signals, 'hosting');
     expect(hosting).toMatchObject({
-      state: 'healthy',
       values: { app: 'motir-core-test', region: '—', machineId: '—' },
       linkOut: 'https://fly.io/apps/motir-core-test',
     });
@@ -484,6 +490,271 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
     expect(database.linkOut).toBeNull(); // never a console that is not this deployment's
   });
 });
+describe('the gateway signal (MOTIR-742)', () => {
+  // Driven through the real binding's `read` — the seam is the reader, never the
+  // service under test. `fetch` itself is covered by `tests/gateway/statusClient.test.ts`.
+  const answering = (latencyMs: number) =>
+    vi.spyOn(httpGatewayStatusReader, 'read').mockResolvedValue({
+      latencyMs,
+      version: 'v0.18.3',
+      startTime: '2026-09-29T14:02:00.000Z',
+    });
+
+  beforeEach(() => {
+    vi.stubEnv('MOTIR_E2E_FAKE_GATEWAY_STATUS', '');
+    vi.stubEnv('MOTIR_GATEWAY_URL', 'https://gateway.example.test');
+  });
+
+  it('a gateway answering in 120 ms is healthy, with latency, version and up-since', async () => {
+    answering(120);
+    const gateway = signal((await platformHealthService.read(currentPrincipal)).signals, 'gateway');
+    expect(gateway.state).toBe('healthy');
+    expect(gateway.values).toEqual({
+      ms: 120,
+      version: 'v0.18.3',
+      since: '2026-09-29T14:02:00.000Z',
+      threshold: 1000,
+    });
+    expect(gateway.linkOut).toBe('https://gateway.example.test/api/status');
+  });
+
+  it('is healthy AT the threshold and degraded one millisecond over it', async () => {
+    answering(1000);
+    let gateway = signal((await platformHealthService.read(currentPrincipal)).signals, 'gateway');
+    expect(gateway.state).toBe('healthy');
+
+    vi.restoreAllMocks();
+    answering(1001);
+    gateway = signal((await platformHealthService.read(currentPrincipal)).signals, 'gateway');
+    expect(gateway.state).toBe('degraded');
+    expect(gateway.values['ms']).toBe(1001);
+  });
+
+  it('a gateway that does not answer is unreachable with NO latency or version', async () => {
+    vi.spyOn(httpGatewayStatusReader, 'read').mockRejectedValue(new Error('answered 502'));
+    const health = await platformHealthService.read(currentPrincipal);
+    const gateway = signal(health.signals, 'gateway');
+    expect(gateway.state).toBe('unreachable');
+    // The reason, and the probe's own deadline the copy names — a setting, never
+    // a measurement. No `ms`, no `version`, no `since`.
+    expect(gateway.values).toEqual({ reason: 'noAnswer', timeout: '3' });
+    expect(gateway.linkOut).toBe('https://gateway.example.test/api/status');
+    // One failing gateway read does not take the other six cards down.
+    expect(health.signals).toHaveLength(7);
+    expect(signal(health.signals, 'database').state).toBe('healthy');
+  });
+
+  it('a malformed gateway URL is noAnswer with no link to an address that cannot be right', async () => {
+    vi.stubEnv('MOTIR_GATEWAY_URL', 'https://gateway.example.test/v1');
+    const gateway = signal((await platformHealthService.read(currentPrincipal)).signals, 'gateway');
+    expect(gateway.state).toBe('unreachable');
+    expect(gateway.values['reason']).toBe('noAnswer');
+    expect(gateway.linkOut).toBeNull();
+  });
+
+  it('no MOTIR_GATEWAY_URL is notConfigured — a different sentence from noAnswer', async () => {
+    vi.stubEnv('MOTIR_GATEWAY_URL', '');
+    const read = vi.spyOn(httpGatewayStatusReader, 'read');
+    const gateway = signal((await platformHealthService.read(currentPrincipal)).signals, 'gateway');
+    expect(gateway).toEqual({
+      id: 'gateway',
+      state: 'unreachable',
+      values: { reason: 'notConfigured' },
+      linkOut: null,
+    });
+    // Nothing to ask, so nothing is asked.
+    expect(read).not.toHaveBeenCalled();
+  });
+});
+
+describe('the hosting signal reads the fleet (MOTIR-7332)', () => {
+  const WORKER = { name: 'worker', started: 1, total: 1, expected: 1 };
+  const STATUS: DeploymentStatus = {
+    groups: [{ name: 'app', started: 2, total: 2, expected: 2 }, WORKER],
+    releases: ['deployment-01K6HXQ8'],
+  };
+
+  function onFly(token = 'fo1_read') {
+    vi.stubEnv('FLY_APP_NAME', 'motir-core');
+    vi.stubEnv('FLY_REGION', 'iad');
+    vi.stubEnv('FLY_MACHINE_ID', 'web1');
+    vi.stubEnv('FLY_DEPLOYMENT_READ_TOKEN', token);
+    vi.stubEnv('MOTIR_E2E_FAKE_DEPLOYMENT_STATUS', '');
+  }
+
+  async function hosting() {
+    return signal((await platformHealthService.read(currentPrincipal)).signals, 'hosting');
+  }
+
+  it('is healthy with every group at its expectation on one release', async () => {
+    onFly();
+    vi.spyOn(flyDeploymentStatusProvider, 'read').mockResolvedValue(STATUS);
+
+    expect(await hosting()).toEqual({
+      id: 'hosting',
+      state: 'healthy',
+      values: {
+        app: 'motir-core',
+        region: 'iad',
+        machineId: 'web1',
+        appStarted: 2,
+        appExpected: 2,
+        workerStarted: 1,
+        workerExpected: 1,
+        release: 'deployment-01K6HXQ8',
+      },
+      linkOut: 'https://fly.io/apps/motir-core',
+    });
+  });
+
+  it('is degraded with shortGroup naming the group that is short', async () => {
+    onFly();
+    vi.spyOn(flyDeploymentStatusProvider, 'read').mockResolvedValue({
+      ...STATUS,
+      groups: [{ name: 'app', started: 1, total: 2, expected: 2 }, WORKER],
+    });
+
+    const card = await hosting();
+    expect(card.state).toBe('degraded');
+    expect(card.values).toMatchObject({
+      reason: 'shortGroup',
+      group: 'app',
+      started: 1,
+      expected: 2,
+      appStarted: 1,
+      release: 'deployment-01K6HXQ8',
+    });
+  });
+
+  it('is degraded with mixedReleases when running machines carry two releases', async () => {
+    onFly();
+    vi.spyOn(flyDeploymentStatusProvider, 'read').mockResolvedValue({
+      ...STATUS,
+      releases: ['deployment-new', 'deployment-old'],
+    });
+
+    const card = await hosting();
+    expect(card.state).toBe('degraded');
+    expect(card.values).toMatchObject({
+      reason: 'mixedReleases',
+      count: 2,
+      release: 'deployment-new',
+    });
+  });
+
+  it('with no read token says noReadCredential, keeps the identity and counts nothing', async () => {
+    onFly('');
+    const read = vi.spyOn(flyDeploymentStatusProvider, 'read');
+
+    const card = await hosting();
+    expect(card).toMatchObject({
+      state: 'unreachable',
+      values: { reason: 'noReadCredential', app: 'motir-core', region: 'iad', machineId: 'web1' },
+      linkOut: 'https://fly.io/apps/motir-core',
+    });
+    expect(Object.values(card.values).some((v) => typeof v === 'number')).toBe(false);
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('a failed read is unreachable with no number, and the rest of the board still returns', async () => {
+    onFly();
+    vi.spyOn(flyDeploymentStatusProvider, 'read').mockRejectedValue(new Error('Fly answered 401'));
+
+    const health = await platformHealthService.read(currentPrincipal);
+    const card = signal(health.signals, 'hosting');
+    expect(card).toEqual({
+      id: 'hosting',
+      state: 'unreachable',
+      values: { reason: 'readFailed' },
+      linkOut: 'https://fly.io/apps/motir-core',
+    });
+    expect(health.signals).toHaveLength(7);
+    expect(signal(health.signals, 'database').state).toBe('healthy');
+  });
+});
+
+describe('the errors signal (MOTIR-740)', () => {
+  // Driven through the real binding's `read` — the seam is the reader, never the
+  // service. `fetch` itself is covered by `tests/monitoring/sentryErrorCount.test.ts`.
+  const counting = (count: number) =>
+    vi.spyOn(httpErrorCountReader, 'read').mockResolvedValue({
+      count,
+      projectId: '42',
+      org: 'motir',
+    });
+
+  beforeEach(() => {
+    vi.stubEnv('MOTIR_E2E_FAKE_ERROR_COUNT', '');
+    vi.stubEnv('SENTRY_READ_TOKEN', 'read-token');
+    vi.stubEnv('SENTRY_ORG', 'motir');
+    vi.stubEnv('SENTRY_PROJECT', 'motir-core');
+  });
+
+  it('12 errors in 24h is healthy, with the count, the window and the threshold', async () => {
+    counting(12);
+    const errors = signal((await platformHealthService.read(currentPrincipal)).signals, 'errors');
+    expect(errors).toEqual({
+      id: 'errors',
+      state: 'healthy',
+      values: { count: 12, windowHours: 24, threshold: 100 },
+      linkOut: 'https://motir.sentry.io/issues/?project=42&statsPeriod=24h',
+    });
+  });
+
+  it('a measured ZERO is healthy with count 0 — the one honest zero', async () => {
+    counting(0);
+    const errors = signal((await platformHealthService.read(currentPrincipal)).signals, 'errors');
+    expect(errors.state).toBe('healthy');
+    expect(errors.values['count']).toBe(0);
+  });
+
+  it('is healthy one under the threshold and DEGRADED at it — the boundary is inclusive', async () => {
+    counting(99);
+    let errors = signal((await platformHealthService.read(currentPrincipal)).signals, 'errors');
+    expect(errors.state).toBe('healthy');
+
+    vi.restoreAllMocks();
+    counting(100);
+    errors = signal((await platformHealthService.read(currentPrincipal)).signals, 'errors');
+    expect(errors.state).toBe('degraded');
+    expect(errors.values['count']).toBe(100);
+  });
+
+  it('a failed Sentry read is unreachable readFailed with NO count, and the board still renders', async () => {
+    vi.spyOn(httpErrorCountReader, 'read').mockRejectedValue(new Error('Sentry answered 401'));
+    const health = await platformHealthService.read(currentPrincipal);
+    const errors = signal(health.signals, 'errors');
+    expect(errors).toEqual({
+      id: 'errors',
+      state: 'unreachable',
+      values: { reason: 'readFailed' },
+      linkOut: 'https://sentry.io/issues/',
+    });
+    expect(errors.values).not.toHaveProperty('count');
+    expect(health.signals).toHaveLength(7);
+    expect(signal(health.signals, 'database').state).toBe('healthy');
+  });
+
+  it('a DSN without a read token is noReadCredential, and nothing is asked of Sentry', async () => {
+    vi.stubEnv('SENTRY_READ_TOKEN', '');
+    vi.stubEnv('SENTRY_DSN', 'https://public@o1.ingest.sentry.io/1');
+    const read = vi.spyOn(httpErrorCountReader, 'read');
+    const errors = signal((await platformHealthService.read(currentPrincipal)).signals, 'errors');
+    expect(errors).toMatchObject({
+      state: 'unreachable',
+      values: { reason: 'noReadCredential' },
+    });
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('no DSN and no read token is notConfigured', async () => {
+    vi.stubEnv('SENTRY_READ_TOKEN', '');
+    vi.stubEnv('SENTRY_DSN', '');
+    const errors = signal((await platformHealthService.read(currentPrincipal)).signals, 'errors');
+    expect(errors).toMatchObject({ state: 'unreachable', values: { reason: 'notConfigured' } });
+  });
+});
+
 describe('the audit trail', () => {
   it('records ONE `health.read` row per read, against the operator', async () => {
     await platformHealthService.read(currentPrincipal);

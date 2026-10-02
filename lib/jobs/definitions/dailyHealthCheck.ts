@@ -4,6 +4,8 @@ import type { FleetBootableVerdict } from '@/lib/orchestrator';
 import type { ContainerAiAddressVerdict } from '@/lib/ai/containerAiAddress';
 import type { IndexRebuildStreakVerdictDTO } from '@/lib/dto/indexRebuildStreak';
 import type { MonitorConfigVerdict } from '@/lib/monitors';
+import type { CredentialExpiryVerdict } from '@/lib/health/credentialExpiryProbe';
+import type { HostedRunProbeVerdictDTO } from '@/lib/dto/hostedRunProbe';
 
 // The canonical SCHEDULED job (Story 1.6 · Subtask 1.6.4) — the reference for
 // the cron primitive, and the replacement for the 1.6.2 `system.ping` smoke
@@ -119,6 +121,43 @@ import type { MonitorConfigVerdict } from '@/lib/monitors';
 // stated there: a reader who takes a green verdict for "the monitor is
 // configured" will be wrong.
 //
+// As of MOTIR-1933 it carries a SEVENTH probe, CREDENTIAL EXPIRY, and it is the
+// first one whose subject is a DATE somebody declared rather than a live system:
+// `lib/health/credentialRegistry.ts` lists every platform credential that lapses
+// silently, with the day it lapses. A lapsed `GITHUB_BILLING_TOKEN` is still SET,
+// so the reconciliation keeps calling GitHub with a refused token and the audit
+// that falsifies meter drift stops with nothing red. This probe fails thirty
+// days ahead instead (`LEAD_TIME_DAYS`).
+//
+// ⚠️ WHAT AN OPERATOR DOES WHEN IT FIRES. The DLQ row and the Sentry email are
+// the alert (`lib/monitoring/jobFailureAlert.ts`); the message names the
+// variable, its date and the registry entry's `renewal` sentence, which says
+// what to renew and where. Renew it, set the new value with `fly secrets set`,
+// and move the entry's `expiresAt` in the same change — the date is DECLARED,
+// so a renewed token with a stale entry keeps firing.
+//
+// ⚠️ AN UNSET VARIABLE IS SKIPPED, NOT FAILED, for the reason the monitor probe
+// does not fail on `not_applicable`: an unset credential is its feature's own
+// "not configured" state, and a check that fails on every deployment that never
+// wanted the feature is a check somebody silences.
+//
+// As of MOTIR-1934 it carries an EIGHTH probe, HOSTED RUNS IN AN OWNED ORG: a
+// metered CI run in a Motir-owned GitHub org (`lib/ciMetering/ownedOrgs.ts`)
+// completed in the last day on anything other than Motir's own runner fleet.
+// The $0 GitHub budget does not stop such a run (included minutes never count
+// against it), so without this probe a cleared runner variable is found by
+// whoever eventually reads a bill.
+//
+// ⚠️ WHAT AN OPERATOR DOES WHEN IT FIRES: this firing means `vars.MOTIR_RUNNER`
+// is missing or cleared at the org or the repo level, so `runs-on` fell back to
+// `ubuntu-latest` (MOTIR-1925). Check that variable FIRST — on the org, then on
+// the repository the row names.
+//
+// ⚠️ RESIDUAL EXPOSURE: detection is AFTER THE FACT. The probe reads completed,
+// metered runs, so by the time it fires the included minutes are already spent,
+// and it says so in the message. It is a fail-loud signal, not a stop — the
+// stop is MOTIR-1907's, and it is not this job's to perform.
+//
 // `retryPolicy: 'none'` (run at most once): a health check is a point-in-time
 // probe — retrying it minutes later would record a stale verdict, so a failed
 // tick dead-letters immediately rather than retrying. That is also what makes
@@ -173,6 +212,15 @@ export interface DailyHealthCheckResult {
    *  `blindSpot` rides on every arm; read it before drawing any conclusion from a
    *  green one. NAMES only — no value, length or digest is ever on this row. */
   monitorConfig: MonitorConfigVerdict;
+  /** Every registered credential's distance from its DECLARED expiry
+   *  (MOTIR-1933) — recorded on the healthy tick too, so the ledger answers
+   *  "how long did the billing token have left yesterday?". `skipped` names the
+   *  registered credentials this deployment does not set. NAMES only. */
+  credentialExpiry: CredentialExpiryVerdict;
+  /** Every metered run in a Motir-owned org in the last day, judged against the
+   *  fleet (MOTIR-1934) — recorded on the healthy tick too, with how many runs it
+   *  read, so a green `ok` over zero runs is distinguishable from one over many. */
+  hostedRuns: HostedRunProbeVerdictDTO;
 }
 
 /** The stable half of the resolved payload. Exported for the test. */
@@ -365,6 +413,88 @@ export class MonitorConfigIncompleteError extends Error {
   }
 }
 
+function describeCredentials(
+  entries: Extract<CredentialExpiryVerdict, { verdict: 'expiring' }>['offenders'],
+): string {
+  return entries
+    .map(
+      (e) =>
+        `${e.envVar} (${e.name}) expires ${e.expiresAt}` +
+        ` — ${e.daysRemaining < 0 ? `${-e.daysRemaining} day(s) ago` : `in ${e.daysRemaining} day(s)`}` +
+        `; to renew: ${e.renewal} [expiry declared by ${e.source}]`,
+    )
+    .join('; ');
+}
+
+/**
+ * Thrown when a registered platform credential is within its lead time of its
+ * DECLARED expiry (MOTIR-1933) and its variable is set.
+ *
+ * A SEPARATE error from {@link CredentialExpiredError}, and the message is the
+ * reason: nothing is broken YET, and the fix is a calm renewal rather than an
+ * outage. The message names the variable, the date and the renewal pointer —
+ * never the value.
+ */
+export class CredentialExpiringError extends Error {
+  constructor(readonly verdict: Extract<CredentialExpiryVerdict, { verdict: 'expiring' }>) {
+    super(
+      `${verdict.offenders.length} platform credential(s) expire within the lead time: ` +
+        `${describeCredentials(verdict.offenders)}. Nothing has failed yet — renew it before the ` +
+        `date, then move the entry's expiresAt in lib/health/credentialRegistry.ts (the date is ` +
+        `declared, not read from the token, so a renewed token with a stale entry keeps firing).`,
+    );
+    this.name = 'CredentialExpiringError';
+  }
+}
+
+/**
+ * Thrown when a registered platform credential is PAST its declared expiry and
+ * its variable is still set (MOTIR-1933) — the feature behind it is calling its
+ * provider with a dead token right now.
+ */
+export class CredentialExpiredError extends Error {
+  constructor(readonly verdict: Extract<CredentialExpiryVerdict, { verdict: 'expired' }>) {
+    const also =
+      verdict.expiring.length > 0
+        ? ` Also within the lead time: ${describeCredentials(verdict.expiring)}.`
+        : '';
+    super(
+      `${verdict.offenders.length} platform credential(s) are PAST their declared expiry and ` +
+        `still set: ${describeCredentials(verdict.offenders)}. The feature reading each one is ` +
+        `failing against its provider now. Renew it, then move the entry's expiresAt in ` +
+        `lib/health/credentialRegistry.ts; if the token was in fact renewed earlier, the ` +
+        `entry is what is stale.${also}`,
+    );
+    this.name = 'CredentialExpiredError';
+  }
+}
+
+/**
+ * Thrown when a metered CI run in a Motir-owned GitHub org ran on anything but
+ * Motir's runner fleet (MOTIR-1934). The message names the org, repository, run
+ * id and the runner families it ran on, the check to make first, and that the
+ * minutes are already spent.
+ */
+export class HostedRunInOwnedOrgError extends Error {
+  constructor(readonly verdict: Extract<HostedRunProbeVerdictDTO, { verdict: 'hosted_runs' }>) {
+    const runs = verdict.offenders
+      .map(
+        (run) =>
+          `${run.org}/${run.repo} run ${run.runId} (attempt ${run.runAttempt}, completed ` +
+          `${run.completedAt}) ran on ${run.families.join(', ')}`,
+      )
+      .join('; ');
+    super(
+      `${verdict.offenders.length} metered CI run(s) in a Motir-owned org ran OFF the runner ` +
+        `fleet since ${verdict.windowStart}: ${runs}. Check \`vars.MOTIR_RUNNER\` first — it is ` +
+        `missing or cleared at the org or the repository level, so runs-on fell back to ` +
+        `ubuntu-latest. Detected after the fact: these minutes are already spent, and the $0 ` +
+        `GitHub budget does not stop the next run.`,
+    );
+    this.name = 'HostedRunInOwnedOrgError';
+  }
+}
+
 export const dailyHealthCheck = defineJob(
   {
     id: 'system.daily-health-check',
@@ -398,6 +528,12 @@ export const dailyHealthCheck = defineJob(
     );
     const monitorConfig = await ctx.step.run('monitor-config-preflight', () =>
       services.monitorConfigPreflight.check(),
+    );
+    const credentialExpiry = await ctx.step.run('credential-expiry', () =>
+      services.credentialExpiry.check(),
+    );
+    const hostedRuns = await ctx.step.run('hosted-run-probe', () =>
+      services.hostedRunProbe.check(),
     );
     // ⚠️ EVERY PROBE RUNS BEFORE ANY OF THEM THROWS. A stopped schedule, an
     // unpullable runner image and an unpullable indexer image are independent
@@ -474,6 +610,19 @@ export const dailyHealthCheck = defineJob(
       throw new MonitorConfigIncompleteError(monitorConfig);
     }
 
+    // The CREDENTIAL probe, reported last and on the same terms: an unset
+    // variable is `skipped` inside the verdict, never a fault. EXPIRED outranks
+    // EXPIRING because the first is an outage and the second is a reminder.
+    if (credentialExpiry.verdict === 'expired') throw new CredentialExpiredError(credentialExpiry);
+    if (credentialExpiry.verdict === 'expiring') {
+      throw new CredentialExpiringError(credentialExpiry);
+    }
+
+    // The HOSTED-RUN probe. `not_applicable` (no owned org configured — every
+    // self-hosted build) is an answer, not a fault, exactly as the monitor probe
+    // treats an unconfigured provider.
+    if (hostedRuns.verdict === 'hosted_runs') throw new HostedRunInOwnedOrgError(hostedRuns);
+
     return {
       ...DAILY_HEALTH_CHECK_PAYLOAD,
       schedules,
@@ -482,6 +631,8 @@ export const dailyHealthCheck = defineJob(
       indexContainerAi,
       indexRebuildStreak,
       monitorConfig,
+      credentialExpiry,
+      hostedRuns,
     };
   },
 );
