@@ -7,7 +7,8 @@
 //
 // It holds the page model types, the pure tree rules, the record's constants,
 // and the page DOCUMENT: the one schema and the headless conversions between a
-// stored Yjs state and its derived formats (MOTIR-7272).
+// stored Yjs state and its derived formats (MOTIR-7272), and the React page
+// editor (MOTIR-7275), re-exported from its own `'use client'` entry.
 
 export * from './constants';
 export * from './types';
@@ -20,3 +21,10 @@ export { parseMarkdown, serializeMarkdown } from './document/markdown';
 export * from './document/convert';
 export * from './store';
 export * from './save';
+export {
+  PageEditor,
+  type PageEditorMessages,
+  type PageEditorProps,
+  type PageEditorTheme,
+  type SaveStatus,
+} from './editor';

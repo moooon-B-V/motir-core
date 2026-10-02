@@ -1,0 +1,79 @@
+import * as Y from 'yjs';
+import type { PageEditorMessages } from '../../src/editor/messages';
+import { PAGE_FRAGMENT, applyUpdate, emptyState, markdownToUpdate, stateToText } from '../../src';
+
+// Shared fixtures for the page editor's suites (MOTIR-7275).
+
+/** A state holding `markdown`, built the way the markdown write door builds one. */
+export function stateFromMarkdown(markdown: string): Uint8Array {
+  const empty = emptyState();
+  return applyUpdate(empty, markdownToUpdate(empty, markdown));
+}
+
+/** The plain text of `state` with every update in `updates` applied. */
+export function textAfter(state: Uint8Array, ...updates: Uint8Array[]): string {
+  return stateToText(updates.reduce((s, u) => applyUpdate(s, u), state));
+}
+
+/** A doc carrying `state`, with the page fragment ready. */
+export function docFrom(state: Uint8Array): Y.Doc {
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, state);
+  doc.getXmlFragment(PAGE_FRAGMENT);
+  return doc;
+}
+
+/** Labelled so a test can tell each string apart; the app supplies real copy. */
+export const MESSAGES: PageEditorMessages = {
+  bodyLabel: 'Page body',
+  bodyPlaceholder: 'Start writing.',
+  codeLanguage: 'Language',
+  imageUploadFailed: 'Couldn’t upload the image. Try again.',
+  toolbar: {
+    label: 'Formatting',
+    bold: 'Bold',
+    italic: 'Italic',
+    strike: 'Strikethrough',
+    heading: 'Heading',
+    quote: 'Quote',
+    codeBlock: 'Code block',
+    bulletList: 'Bulleted list',
+    orderedList: 'Numbered list',
+    taskList: 'Task list',
+    link: 'Link',
+    linkPrompt: 'Link URL',
+    image: 'Insert image',
+    table: 'Insert table',
+  },
+  table: {
+    addRow: '+ Row',
+    addRowLabel: 'Add row below',
+    addColumn: '+ Column',
+    addColumnLabel: 'Add column to the right',
+    deleteRow: '− Row',
+    deleteRowLabel: 'Delete row',
+    deleteColumn: '− Column',
+    deleteColumnLabel: 'Delete column',
+    deleteTable: 'Delete table',
+  },
+  status: {
+    saved: 'Saved',
+    saving: 'Saving…',
+    offline: 'Offline — edits kept',
+    offlineDetail: 'Your last save didn’t reach Motir.',
+    tooLarge: 'Not saved',
+  },
+  tooLarge: {
+    title: 'This page is too large to save',
+    body: 'Your edits since the last save would take the page past its 2 MB limit.',
+    reload: 'Reload saved version',
+    newPageNewTab: 'New page in a new tab',
+  },
+};
+
+/** The rejection the host raises for the save route's 413. */
+export function tooLargeError(): Error & { code: string } {
+  return Object.assign(new Error('This page body is too large.'), {
+    code: 'PAGE_BODY_TOO_LARGE',
+  });
+}

@@ -33,6 +33,13 @@ export function pageExtensions(): Extensions {
       // The editor binds history to the Yjs document (the collaboration
       // extension's undo), so ProseMirror's own history must stay off.
       undoRedo: false,
+      // Opening a page must not write it. The trailing node appends an empty
+      // paragraph to a body that ends in a code block or a table, and under the
+      // collaboration binding that append is a Yjs write — a save on open, and
+      // one duplicated by every tab that opened the same stale body (MOTIR-7275).
+      // It adds no node, so the schema is unchanged; the gap cursor and the code
+      // block's arrow-down exit still reach past a last block.
+      trailingNode: false,
     }),
     // A block image, `src` + `alt` (+ `title`); never inlined base64 — page
     // images are uploads filed under the page (MOTIR-7279).
