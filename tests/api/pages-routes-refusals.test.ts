@@ -40,6 +40,11 @@ const { pagesService } = await import('@/lib/services/pagesService');
 const { attachmentsService } = await import('@/lib/services/attachmentsService');
 const { EntitlementExceededError } = await import('@/lib/billing/errors');
 const { PermissionDeniedError } = await import('@/lib/projects/errors');
+const { pageErrorResponse } = await import('@/lib/pages/routeErrors');
+const { CrossProjectPageParentError, PageFolderNotFoundError, PageLevelCursorInvalidError } =
+  await import('@/lib/pages');
+const { PATCH: PLACE } = await import('@/app/api/pages/[pageId]/placement/route');
+const { GET: TREE } = await import('@/app/api/pages/tree/route');
 const { PAGE_SAVE_MAX_BYTES } = await import('@/lib/pages');
 const { projectsService } = await import('@/lib/services/projectsService');
 const { usersService } = await import('@/lib/services/usersService');
@@ -110,6 +115,11 @@ describe('a session with no active project', () => {
         params(id),
       ),
       await UPLOAD(uploadForm(new File(['x'], 'a.png', { type: 'image/png' })), params(id)),
+      await PLACE(
+        new Request(`${BASE}/${id}/placement`, { method: 'PATCH', body: '{}' }),
+        params(id),
+      ),
+      await TREE(new Request(`${BASE}/tree?parent=root`)),
     ];
     for (const res of responses) {
       expect(res.status).toBe(400);
@@ -286,5 +296,44 @@ describe('the image door maps the upload primitive’s refusals', () => {
     await expect(
       UPLOAD(uploadForm(new File(['x'], 'a.png', { type: 'image/png' })), params(f.pageId)),
     ).rejects.toThrow('boom');
+  });
+});
+
+describe('the tree doors’ request-shape and mapping arms (MOTIR-7372)', () => {
+  it('placement refuses a body that is not JSON, or not an object, as 400', async () => {
+    const f = await makeFixture();
+    signIn(f.manager);
+    for (const body of ['{not json', 'null', '"x"']) {
+      const res = await PLACE(
+        new Request(`${BASE}/${f.pageId}/placement`, { method: 'PATCH', body }),
+        params(f.pageId),
+      );
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ code: 'BAD_REQUEST' });
+    }
+  });
+
+  it('create refuses a non-object parent as 400', async () => {
+    const f = await makeFixture();
+    signIn(f.manager);
+    const res = await CREATE(
+      new Request(BASE, { method: 'POST', body: JSON.stringify({ parent: [] }) }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('maps CROSS_PROJECT_PAGE_PARENT to 422 with its code (unreachable end to end)', async () => {
+    const res = pageErrorResponse(new CrossProjectPageParentError('page', 'p1'));
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ code: 'CROSS_PROJECT_PAGE_PARENT' });
+  });
+
+  it('maps the folder-not-found and bad-cursor refusals to 404 and 400', async () => {
+    const folder = pageErrorResponse(new PageFolderNotFoundError('f1'));
+    expect(folder.status).toBe(404);
+    expect(await folder.json()).toMatchObject({ code: 'FOLDER_NOT_FOUND' });
+    const cursor = pageErrorResponse(new PageLevelCursorInvalidError());
+    expect(cursor.status).toBe(400);
+    expect(await cursor.json()).toMatchObject({ code: 'PAGE_CURSOR_INVALID' });
   });
 });
