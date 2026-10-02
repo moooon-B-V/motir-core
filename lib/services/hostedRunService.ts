@@ -533,6 +533,9 @@ async function startContinue(
     now,
   );
   if (!preview.ok) {
+    // The same press, committed since step 0: the run the preview refused is ours.
+    const replay = await runOpenedByPress(input.idempotencyKey, ctx);
+    if (replay) return replay;
     throw new HostedContinueRefusedError(
       identifier,
       preview.reason,
@@ -558,7 +561,9 @@ async function startContinue(
   });
   // ⚠️ RACE-ONLY BELOW: the preview refused every state the claim refuses, so
   // these three answers reach here only when a terminal continue or another
-  // start won in the gap between the preview and the claim's lock.
+  // start won in the gap between the preview and the claim's lock. (A press of
+  // the SAME key that won that gap is answered below as a replay; one that won it
+  // before the preview was answered above — MOTIR-7312.)
   /* v8 ignore next 9 -- race-only: the preview refused this state a moment earlier */
   if (claim.outcome === 'not_continuable') {
     throw new HostedContinueRefusedError(
@@ -607,6 +612,27 @@ async function startContinue(
 }
 
 /**
+ * THE SAME PRESS, READ AGAIN AFTER A REFUSING PREVIEW (MOTIR-7312). Step 0 of
+ * `start` answers a repeated key with the run it opened, but a double-click can
+ * interleave a third way: the second press passes step 0 before anything is
+ * opened, the first press's claim then commits, and only then does the second
+ * press's preview run — so it sees the first press's open run as somebody
+ * continuing (or repairing) the card and refuses `taken`. The holder it names is
+ * the press itself. So before a continue or fix preview's refusal is thrown, the
+ * key is read once more: a run this key opened answers the press, `created: false`,
+ * exactly as step 0 would have. No key match ⇒ the refusal stands.
+ */
+async function runOpenedByPress(
+  idempotencyKey: string,
+  ctx: ServiceContext,
+): Promise<HostedRunStarted | null> {
+  const opened = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    dispatchRunRepository.findByIdempotencyKey(ctx.workspaceId, idempotencyKey, tx),
+  );
+  return opened ? { dispatchRunId: opened.id, created: false } : null;
+}
+
+/**
  * The model a start runs on (MOTIR-6994): the person's pick when they sent one
  * (trimmed), else the card's resolution — a leaf's difficulty, a parent's highest
  * among its unfinished leaves. Nothing to resolve (motir-ai offers no model) is
@@ -651,7 +677,12 @@ async function startFix(
   options: HostedRunStartOptions,
 ): Promise<HostedRunStarted> {
   const preview = await workItemRepairService.previewHostedRepair(projectId, identifier, ctx);
-  if (!preview.ok) throw fixRefusal(preview.key, preview.refusal);
+  if (!preview.ok) {
+    // The same press, committed since step 0: the repair the preview refused is ours.
+    const replay = await runOpenedByPress(input.idempotencyKey, ctx);
+    if (replay) return replay;
+    throw fixRefusal(preview.key, preview.refusal);
+  }
   const target = preview.key;
   const legIds = [preview.workItemId];
   const checked = await preflight(input, projectId, legIds, ctx, 'write', 'repair');

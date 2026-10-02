@@ -486,6 +486,47 @@ describe('Fix on the hosted agent — the run it starts', () => {
     expect(await fixRuns(card.id)).toHaveLength(1);
     expect(fakeOrchestrator.provisioned).toHaveLength(1);
   });
+
+  // MOTIR-7312: a double-click whose second press passes the short-circuit, then
+  // previews only AFTER the first press's repair claim committed. The open repair
+  // the preview finds is the press's own, so it answers that run — never `taken`.
+  it('a second press whose preview runs AFTER the first press committed answers its run, never "taken"', async () => {
+    const { card } = await sentBackCard();
+
+    let secondReachedPreview!: () => void;
+    const secondAtPreview = new Promise<void>((resolve) => (secondReachedPreview = resolve));
+    let firstClaimed!: () => void;
+    const firstCommitted = new Promise<void>((resolve) => (firstClaimed = resolve));
+
+    const preview = workItemRepairService.previewHostedRepair.bind(workItemRepairService);
+    let previews = 0;
+    vi.spyOn(workItemRepairService, 'previewHostedRepair').mockImplementation(async (...args) => {
+      if (++previews === 2) {
+        secondReachedPreview();
+        await firstCommitted;
+      }
+      return preview(...args);
+    });
+    const claim = workItemRepairService.claimRepair.bind(workItemRepairService);
+    vi.spyOn(workItemRepairService, 'claimRepair').mockImplementation(async (...args) => {
+      // Held until the second press is past the short-circuit, or it would replay there.
+      await secondAtPreview;
+      const answered = await claim(...args);
+      firstClaimed();
+      return answered;
+    });
+
+    const [a, b] = await Promise.all([
+      pressFix(card.identifier, { idem: 'double-click' }),
+      pressFix(card.identifier, { idem: 'double-click' }),
+    ]);
+
+    expect(previews).toBe(2);
+    expect(a.dispatchRunId).toBe(b.dispatchRunId);
+    expect([a.created, b.created].sort()).toEqual([false, true]);
+    expect(await fixRuns(card.id)).toHaveLength(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+  });
 });
 
 describe('Fix on the hosted agent — who it is for', () => {
