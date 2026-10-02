@@ -2201,8 +2201,8 @@
       <div>
         <h1>Platform admin console — AI planning</h1>
         <p>
-          MOTIR-7222 · story MOTIR-7220. One new page in the shipped operator console: which
-          model Motir plans with for <strong>customer organisations</strong>, the
+          MOTIR-7222 · story MOTIR-7220. One new page in the shipped operator console: which model
+          Motir plans with for <strong>customer organisations</strong>, the
           <strong>Motir meta org</strong> and <strong>internal organisations</strong>. Any platform
           staff reads it; only a <strong>superadmin</strong> changes it, with a required reason and
           an audit row. Tenants never see it. Composes console.mock.html’s shell and confirm
@@ -2220,7 +2220,13 @@
       </button>
     </div>
     <div class="panel-label">
-      1 · Populated, EDITABLE — a <strong>superadmin</strong>. The ACCESS PATH is the new <strong>AI planning</strong> row in the rail’s <strong>Operations</strong> group, after Monitoring (active here). One <code>Combobox</code> per row lists ONLY the offered models, grouped by provider; Save stays DISABLED until the selection differs from the stored model (the Internal row has been changed, so its Save is live). The ids shown (<code>claude-opus-5-5</code>, <code>claude-sonnet-5-5</code>, <code>glm-5.2</code>) are EXAMPLES — the list is read from motir-ai at runtime.
+      1 · Populated, EDITABLE — a <strong>superadmin</strong>. The ACCESS PATH is the new
+      <strong>AI planning</strong> row in the rail’s <strong>Operations</strong> group, after
+      Monitoring (active here). One <code>Combobox</code> per row lists ONLY the offered models,
+      grouped by provider; Save stays DISABLED until the selection differs from the stored model
+      (the Internal row has been changed, so its Save is live). The ids shown
+      (<code>claude-opus-5-5</code>, <code>claude-sonnet-5-5</code>, <code>glm-5.2</code>) are
+      EXAMPLES — the list is read from motir-ai at runtime.
     </div>
     <div class="panel">
       <div class="stage">
@@ -2234,16 +2240,35 @@
               </div>
             </div>
             <div class="nav-group">Platform</div>
-            <div class="nav-item"><svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview</div>
-            <div class="nav-item muted"><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost<span class="soon">10.1</span></div>
-            <div class="nav-item"><svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants</div>
-            <div class="nav-item"><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost<span
+                class="soon"
+                >10.1</span
+              >
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
             <div class="nav-group">Operations</div>
-            <div class="nav-item"><svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
             <!-- THE DOOR (MOTIR-7222): a new row in Operations, after Monitoring,
                  visible to EVERY staff role (support · operator · superadmin). -->
-            <div class="nav-item active"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>AI planning</div>
-            <div class="nav-item muted"><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon">10.3</span></div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>AI planning
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
             <div class="spacer"></div>
             <div class="navfoot">
               <div class="who">
@@ -2253,39 +2278,67 @@
                   <div class="ws">ops@moooon.net</div>
                 </div>
               </div>
-              <div class="nav-item"><svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app</div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
             </div>
           </aside>
           <div class="shell-main">
             <div class="adminbar">
               <span class="staff-mark">
-                <span class="sm-ico"><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg></span>
-                <span><span class="sm-t">Platform staff</span><br /><span class="sm-s">all reads audited</span></span>
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
               </span>
               <div class="searchbar">
-                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations, workspaces, projects, users…<span class="kbd">⌘K</span>
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
               </div>
-              <span class="op"><span class="op-ava">OP</span><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg></span>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
             </div>
             <div class="page">
               <span class="crumb"><b>Platform</b> · AI planning</span>
               <h2>AI planning</h2>
               <p class="sub">
-                Which model Motir plans with, for each of three audiences. A change applies from
-                the next planning job for every organisation in that audience.
+                Which model Motir plans with, for each of three audiences. A change applies from the
+                next planning job for every organisation in that audience.
               </p>
               <div class="page-lines">
-                <span class="page-line"><svg viewBox="0 0 24 24"><use href="#i-info" /></svg><span>An organisation that is both meta and internal follows the meta row.</span></span>
-                <span class="page-line"><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg><span><strong>Tenants never see this choice.</strong> No tenant page, usage view or plan names the model that planned.</span></span>
+                <span class="page-line"
+                  ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg
+                  ><span
+                    >An organisation that is both meta and internal follows the meta row.</span
+                  ></span
+                >
+                <span class="page-line"
+                  ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+                  ><span
+                    ><strong>Tenants never see this choice.</strong> No tenant page, usage view or
+                    plan names the model that planned.</span
+                  ></span
+                >
               </div>
               <div class="stack">
                 <div class="card has-open-popover">
                   <div class="card-head">
                     <div class="ttl">
-                      <span class="ico ent-org" style="width: 30px; height: 30px"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                      ></span>
                       <div>
                         <h3>Planning model by audience</h3>
-                        <p class="hsub">Every planning job resolves its model from the organisation it runs for: meta, then internal, then customer.</p>
+                        <p class="hsub">
+                          Every planning job resolves its model from the organisation it runs for:
+                          meta, then internal, then customer.
+                        </p>
                       </div>
                     </div>
                     <span class="pill pill-neutral">3 audiences</span>
@@ -2293,20 +2346,117 @@
                   <div class="card-body">
                     <table class="tbl">
                       <thead>
-                        <tr><th>Audience</th><th>Model</th><th>Last changed</th><th></th></tr>
+                        <tr>
+                          <th>Audience</th>
+                          <th>Model</th>
+                          <th>Last changed</th>
+                          <th></th>
+                        </tr>
                       </thead>
                       <tbody>
-                        <tr><td><span class="aud-name">Customer organisations</span><span class="aud-desc">Every organisation that is neither meta nor internal</span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">claude-opus-5-5</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div></div></td><td><span class="changed">Seeded default · never changed</span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                        <tr><td><span class="aud-name">Motir meta org</span><span class="aud-desc">moooon B.V., <code>isMeta</code></span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">claude-opus-5-5</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div></div></td><td><span class="changed">Seeded default · never changed</span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                        <tr><td><span class="aud-name">Internal organisations</span><span class="aud-desc">Orgs classified <code>internalBilling</code></span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="true" aria-label="Planning model"><span class="cb-label">claude-sonnet-5-5</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div>
-                          <div class="cb-panel" role="listbox" aria-label="Planning model">
-                            <div class="cb-group" role="presentation">anthropic</div>
-                            <div class="cb-opt" role="option" aria-selected="false">claude-opus-5-5</div>
-                            <div class="cb-opt is-active" role="option" aria-selected="true">claude-sonnet-5-5<svg viewBox="0 0 24 24"><use href="#i-check" /></svg></div>
-                            <div class="cb-group" role="presentation">z-ai</div>
-                            <div class="cb-opt" role="option" aria-selected="false">glm-5.2</div>
-                            <p class="cb-foot">Only models motir-ai offers for planning. Every provider the gateway serves is listed.</p>
-                          </div></div></div></td><td><span class="changed">Seeded default · never changed</span></td><td class="num"><span class="btn btn-primary btn-sm">Save</span></td></tr>
+                        <tr>
+                          <td>
+                            <span class="aud-name">Customer organisations</span
+                            ><span class="aud-desc"
+                              >Every organisation that is neither meta nor internal</span
+                            >
+                          </td>
+                          <td>
+                            <div class="cell-stack">
+                              <div class="cb">
+                                <div
+                                  class="cb-trigger"
+                                  role="combobox"
+                                  aria-expanded="false"
+                                  aria-label="Planning model"
+                                >
+                                  <span class="cb-label">claude-opus-5-5</span
+                                  ><span class="cb-sec">anthropic</span
+                                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td><span class="changed">Seeded default · never changed</span></td>
+                          <td class="num">
+                            <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                              >Save</span
+                            >
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="aud-name">Motir meta org</span
+                            ><span class="aud-desc">moooon B.V., <code>isMeta</code></span>
+                          </td>
+                          <td>
+                            <div class="cell-stack">
+                              <div class="cb">
+                                <div
+                                  class="cb-trigger"
+                                  role="combobox"
+                                  aria-expanded="false"
+                                  aria-label="Planning model"
+                                >
+                                  <span class="cb-label">claude-opus-5-5</span
+                                  ><span class="cb-sec">anthropic</span
+                                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td><span class="changed">Seeded default · never changed</span></td>
+                          <td class="num">
+                            <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                              >Save</span
+                            >
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="aud-name">Internal organisations</span
+                            ><span class="aud-desc"
+                              >Orgs classified <code>internalBilling</code></span
+                            >
+                          </td>
+                          <td>
+                            <div class="cell-stack">
+                              <div class="cb">
+                                <div
+                                  class="cb-trigger"
+                                  role="combobox"
+                                  aria-expanded="true"
+                                  aria-label="Planning model"
+                                >
+                                  <span class="cb-label">claude-sonnet-5-5</span
+                                  ><span class="cb-sec">anthropic</span
+                                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                                </div>
+                                <div class="cb-panel" role="listbox" aria-label="Planning model">
+                                  <div class="cb-group" role="presentation">anthropic</div>
+                                  <div class="cb-opt" role="option" aria-selected="false">
+                                    claude-opus-5-5
+                                  </div>
+                                  <div class="cb-opt is-active" role="option" aria-selected="true">
+                                    claude-sonnet-5-5<svg viewBox="0 0 24 24">
+                                      <use href="#i-check" />
+                                    </svg>
+                                  </div>
+                                  <div class="cb-group" role="presentation">z-ai</div>
+                                  <div class="cb-opt" role="option" aria-selected="false">
+                                    glm-5.2
+                                  </div>
+                                  <p class="cb-foot">
+                                    Only models motir-ai offers for planning. Every provider the
+                                    gateway serves is listed.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td><span class="changed">Seeded default · never changed</span></td>
+                          <td class="num"><span class="btn btn-primary btn-sm">Save</span></td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
@@ -2319,7 +2469,10 @@
       </div>
     </div>
     <div class="panel-label">
-      2 · Populated, READ-ONLY — an <strong>operator</strong> or <strong>support</strong> viewer. The same three rows, each model as plain text (id + provider), NO picker, NO Save, no action column — nothing on this panel is interactive. One quiet line says who can change it. The rail row is the same: AI planning is visible to every staff role.
+      2 · Populated, READ-ONLY — an <strong>operator</strong> or <strong>support</strong> viewer.
+      The same three rows, each model as plain text (id + provider), NO picker, NO Save, no action
+      column — nothing on this panel is interactive. One quiet line says who can change it. The rail
+      row is the same: AI planning is visible to every staff role.
     </div>
     <div class="panel">
       <div class="stage">
@@ -2333,16 +2486,35 @@
               </div>
             </div>
             <div class="nav-group">Platform</div>
-            <div class="nav-item"><svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview</div>
-            <div class="nav-item muted"><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost<span class="soon">10.1</span></div>
-            <div class="nav-item"><svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants</div>
-            <div class="nav-item"><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost<span
+                class="soon"
+                >10.1</span
+              >
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
             <div class="nav-group">Operations</div>
-            <div class="nav-item"><svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
             <!-- THE DOOR (MOTIR-7222): a new row in Operations, after Monitoring,
                  visible to EVERY staff role (support · operator · superadmin). -->
-            <div class="nav-item active"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>AI planning</div>
-            <div class="nav-item muted"><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon">10.3</span></div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>AI planning
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
             <div class="spacer"></div>
             <div class="navfoot">
               <div class="who">
@@ -2352,39 +2524,67 @@
                   <div class="ws">operator@moooon.net</div>
                 </div>
               </div>
-              <div class="nav-item"><svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app</div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
             </div>
           </aside>
           <div class="shell-main">
             <div class="adminbar">
               <span class="staff-mark">
-                <span class="sm-ico"><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg></span>
-                <span><span class="sm-t">Platform staff</span><br /><span class="sm-s">all reads audited</span></span>
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
               </span>
               <div class="searchbar">
-                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations, workspaces, projects, users…<span class="kbd">⌘K</span>
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
               </div>
-              <span class="op"><span class="op-ava">OP</span><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg></span>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
             </div>
             <div class="page">
               <span class="crumb"><b>Platform</b> · AI planning</span>
               <h2>AI planning</h2>
               <p class="sub">
-                Which model Motir plans with, for each of three audiences. A change applies from
-                the next planning job for every organisation in that audience.
+                Which model Motir plans with, for each of three audiences. A change applies from the
+                next planning job for every organisation in that audience.
               </p>
               <div class="page-lines">
-                <span class="page-line"><svg viewBox="0 0 24 24"><use href="#i-info" /></svg><span>An organisation that is both meta and internal follows the meta row.</span></span>
-                <span class="page-line"><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg><span><strong>Tenants never see this choice.</strong> No tenant page, usage view or plan names the model that planned.</span></span>
+                <span class="page-line"
+                  ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg
+                  ><span
+                    >An organisation that is both meta and internal follows the meta row.</span
+                  ></span
+                >
+                <span class="page-line"
+                  ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+                  ><span
+                    ><strong>Tenants never see this choice.</strong> No tenant page, usage view or
+                    plan names the model that planned.</span
+                  ></span
+                >
               </div>
               <div class="stack">
                 <div class="card">
                   <div class="card-head">
                     <div class="ttl">
-                      <span class="ico ent-org" style="width: 30px; height: 30px"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                      ></span>
                       <div>
                         <h3>Planning model by audience</h3>
-                        <p class="hsub">Every planning job resolves its model from the organisation it runs for: meta, then internal, then customer.</p>
+                        <p class="hsub">
+                          Every planning job resolves its model from the organisation it runs for:
+                          meta, then internal, then customer.
+                        </p>
                       </div>
                     </div>
                     <span class="pill pill-neutral">3 audiences</span>
@@ -2392,17 +2592,68 @@
                   <div class="card-body">
                     <table class="tbl">
                       <thead>
-                        <tr><th>Audience</th><th>Model</th><th>Last changed</th></tr>
+                        <tr>
+                          <th>Audience</th>
+                          <th>Model</th>
+                          <th>Last changed</th>
+                        </tr>
                       </thead>
                       <tbody>
-                        <tr><td><span class="aud-name">Customer organisations</span><span class="aud-desc">Every organisation that is neither meta nor internal</span></td><td><span class="mdl"><span class="mdl-id">claude-opus-5-5</span><span class="mdl-prov">anthropic</span></span></td><td><span class="changed">Seeded default · never changed</span></td></tr>
-                        <tr><td><span class="aud-name">Motir meta org</span><span class="aud-desc">moooon B.V., <code>isMeta</code></span></td><td><span class="mdl"><span class="mdl-id">claude-opus-5-5</span><span class="mdl-prov">anthropic</span></span></td><td><span class="changed">Seeded default · never changed</span></td></tr>
-                        <tr><td><span class="aud-name">Internal organisations</span><span class="aud-desc">Orgs classified <code>internalBilling</code></span></td><td><span class="mdl"><span class="mdl-id">claude-sonnet-5-5</span><span class="mdl-prov">anthropic</span></span></td><td><span class="changed">Changed 2 Oct, 10:12 by <strong>ops@moooon.net</strong></span></td></tr>
+                        <tr>
+                          <td>
+                            <span class="aud-name">Customer organisations</span
+                            ><span class="aud-desc"
+                              >Every organisation that is neither meta nor internal</span
+                            >
+                          </td>
+                          <td>
+                            <span class="mdl"
+                              ><span class="mdl-id">claude-opus-5-5</span
+                              ><span class="mdl-prov">anthropic</span></span
+                            >
+                          </td>
+                          <td><span class="changed">Seeded default · never changed</span></td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="aud-name">Motir meta org</span
+                            ><span class="aud-desc">moooon B.V., <code>isMeta</code></span>
+                          </td>
+                          <td>
+                            <span class="mdl"
+                              ><span class="mdl-id">claude-opus-5-5</span
+                              ><span class="mdl-prov">anthropic</span></span
+                            >
+                          </td>
+                          <td><span class="changed">Seeded default · never changed</span></td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="aud-name">Internal organisations</span
+                            ><span class="aud-desc"
+                              >Orgs classified <code>internalBilling</code></span
+                            >
+                          </td>
+                          <td>
+                            <span class="mdl"
+                              ><span class="mdl-id">claude-sonnet-5-5</span
+                              ><span class="mdl-prov">anthropic</span></span
+                            >
+                          </td>
+                          <td>
+                            <span class="changed"
+                              >Changed 2 Oct, 10:12 by <strong>ops@moooon.net</strong></span
+                            >
+                          </td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
                 </div>
-                <span class="page-line"><svg viewBox="0 0 24 24"><use href="#i-key" /></svg><span>Only a superadmin can change these.</span></span>
+                <span class="page-line"
+                  ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg
+                  ><span>Only a superadmin can change these.</span></span
+                >
               </div>
             </div>
           </div>
@@ -2410,334 +2661,954 @@
       </div>
     </div>
     <div class="panel-label">
-      3 · Loading — the three rows as SKELETONS inside the real card (page region; the shell is Panel 1’s). The header, precedence line and tenant line are static copy, so they paint at once; only the rows wait on motir-ai. No model id is guessed while it loads.
+      3 · Loading — the three rows as SKELETONS inside the real card (page region; the shell is
+      Panel 1’s). The header, precedence line and tenant line are static copy, so they paint at
+      once; only the rows wait on motir-ai. No model id is guessed while it loads.
     </div>
     <div class="panel">
       <div class="stage">
         <div class="page">
-              <span class="crumb"><b>Platform</b> · AI planning</span>
-              <h2>AI planning</h2>
-              <p class="sub">
-                Which model Motir plans with, for each of three audiences. A change applies from
-                the next planning job for every organisation in that audience.
-              </p>
-              <div class="page-lines">
-                <span class="page-line"><svg viewBox="0 0 24 24"><use href="#i-info" /></svg><span>An organisation that is both meta and internal follows the meta row.</span></span>
-                <span class="page-line"><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg><span><strong>Tenants never see this choice.</strong> No tenant page, usage view or plan names the model that planned.</span></span>
-              </div>
+          <span class="crumb"><b>Platform</b> · AI planning</span>
+          <h2>AI planning</h2>
+          <p class="sub">
+            Which model Motir plans with, for each of three audiences. A change applies from the
+            next planning job for every organisation in that audience.
+          </p>
+          <div class="page-lines">
+            <span class="page-line"
+              ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg
+              ><span
+                >An organisation that is both meta and internal follows the meta row.</span
+              ></span
+            >
+            <span class="page-line"
+              ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+              ><span
+                ><strong>Tenants never see this choice.</strong> No tenant page, usage view or plan
+                names the model that planned.</span
+              ></span
+            >
+          </div>
           <div class="stack">
-                <div class="card" aria-busy="true">
-                  <div class="card-head">
-                    <div class="ttl">
-                      <span class="ico ent-org" style="width: 30px; height: 30px"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                      <div>
-                        <h3>Planning model by audience</h3>
-                        <p class="hsub">Every planning job resolves its model from the organisation it runs for: meta, then internal, then customer.</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="card-body">
-                    <table class="tbl">
-                      <thead><tr><th>Audience</th><th>Model</th><th>Last changed</th></tr></thead>
-                      <tbody>
-                        <tr><td><div class="sk sk-line" style="width: 150px; height: 12px"></div><div class="sk sk-line" style="width: 210px; margin-top: 6px"></div></td><td><div class="sk" style="width: 220px; height: 32px; border-radius: var(--radius-input)"></div></td><td><div class="sk sk-line" style="width: 160px"></div></td></tr>
-                        <tr><td><div class="sk sk-line" style="width: 150px; height: 12px"></div><div class="sk sk-line" style="width: 210px; margin-top: 6px"></div></td><td><div class="sk" style="width: 220px; height: 32px; border-radius: var(--radius-input)"></div></td><td><div class="sk sk-line" style="width: 160px"></div></td></tr>
-                        <tr><td><div class="sk sk-line" style="width: 150px; height: 12px"></div><div class="sk sk-line" style="width: 210px; margin-top: 6px"></div></td><td><div class="sk" style="width: 220px; height: 32px; border-radius: var(--radius-input)"></div></td><td><div class="sk sk-line" style="width: 160px"></div></td></tr>
-                      </tbody>
-                    </table>
+            <div class="card" aria-busy="true">
+              <div class="card-head">
+                <div class="ttl">
+                  <span class="ico ent-org" style="width: 30px; height: 30px"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                  ></span>
+                  <div>
+                    <h3>Planning model by audience</h3>
+                    <p class="hsub">
+                      Every planning job resolves its model from the organisation it runs for: meta,
+                      then internal, then customer.
+                    </p>
                   </div>
                 </div>
+              </div>
+              <div class="card-body">
+                <table class="tbl">
+                  <thead>
+                    <tr>
+                      <th>Audience</th>
+                      <th>Model</th>
+                      <th>Last changed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <div class="sk sk-line" style="width: 150px; height: 12px"></div>
+                        <div class="sk sk-line" style="width: 210px; margin-top: 6px"></div>
+                      </td>
+                      <td>
+                        <div
+                          class="sk"
+                          style="width: 220px; height: 32px; border-radius: var(--radius-input)"
+                        ></div>
+                      </td>
+                      <td><div class="sk sk-line" style="width: 160px"></div></td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <div class="sk sk-line" style="width: 150px; height: 12px"></div>
+                        <div class="sk sk-line" style="width: 210px; margin-top: 6px"></div>
+                      </td>
+                      <td>
+                        <div
+                          class="sk"
+                          style="width: 220px; height: 32px; border-radius: var(--radius-input)"
+                        ></div>
+                      </td>
+                      <td><div class="sk sk-line" style="width: 160px"></div></td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <div class="sk sk-line" style="width: 150px; height: 12px"></div>
+                        <div class="sk sk-line" style="width: 210px; margin-top: 6px"></div>
+                      </td>
+                      <td>
+                        <div
+                          class="sk"
+                          style="width: 220px; height: 32px; border-radius: var(--radius-input)"
+                        ></div>
+                      </td>
+                      <td><div class="sk sk-line" style="width: 160px"></div></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
     <div class="panel-label">
-      4 · Confirm — pressing Save opens the console’s confirm-with-MANDATORY-reason dialog, Panel 11/12’s grammar unchanged (<code>Modal</code> <code>role="alertdialog"</code>, an <code>Input</code> for the reason, primary disabled until it is non-blank). It names the AUDIENCE and OLD → NEW, and warns that the change applies to the next planning job for every organisation in the audience.
+      4 · Confirm — pressing Save opens the console’s confirm-with-MANDATORY-reason dialog, Panel
+      11/12’s grammar unchanged (<code>Modal</code> <code>role="alertdialog"</code>, an
+      <code>Input</code> for the reason, primary disabled until it is non-blank). It names the
+      AUDIENCE and OLD → NEW, and warns that the change applies to the next planning job for every
+      organisation in the audience.
     </div>
     <div class="panel">
       <div class="ctrl-grid">
         <div class="ctrl-cell">
-          <div class="ctrl-head"><span class="ctrl-key">a</span>Confirm — reason typed, primary enabled</div>
+          <div class="ctrl-head">
+            <span class="ctrl-key">a</span>Confirm — reason typed, primary enabled
+          </div>
           <div class="ctrl-body">
             <div class="confirm" style="width: auto" role="alertdialog">
-                <h4>Change the planning model for Internal organisations?</h4>
-                <p>
-                  <span class="mdl-id">claude-opus-5-5</span> → <span class="mdl-id">claude-sonnet-5-5</span>.
-                  The change applies to the next planning job for every organisation in this
-                  audience. Jobs already running finish on the model they started with.
-                </p>
-                <div class="field">
-                  <label>Reason <span class="req">— required, written to the audit log</span></label>
-                  <div class="input">Trial: Sonnet 5.5 on our own orgs before customers — compare plan quality for a week</div>
-                  <div class="hint">Shown to any operator reading this change later. “Testing” on its own answers nothing.</div>
+              <h4>Change the planning model for Internal organisations?</h4>
+              <p>
+                <span class="mdl-id">claude-opus-5-5</span> →
+                <span class="mdl-id">claude-sonnet-5-5</span>. The change applies to the next
+                planning job for every organisation in this audience. Jobs already running finish on
+                the model they started with.
+              </p>
+              <div class="field">
+                <label>Reason <span class="req">— required, written to the audit log</span></label>
+                <div class="input">
+                  Trial: Sonnet 5.5 on our own orgs before customers — compare plan quality for a
+                  week
                 </div>
-                <div class="confirm-actions">
-                  <span class="btn btn-secondary">Cancel</span>
-                  <span class="btn btn-primary"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>Change model</span>
+                <div class="hint">
+                  Shown to any operator reading this change later. “Testing” on its own answers
+                  nothing.
                 </div>
               </div>
+              <div class="confirm-actions">
+                <span class="btn btn-secondary">Cancel</span>
+                <span class="btn btn-primary"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>Change model</span
+                >
+              </div>
+            </div>
           </div>
         </div>
         <div class="ctrl-cell">
-          <div class="ctrl-head"><span class="ctrl-key">b</span>Reason missing — the primary is DISABLED, not a post-submit error</div>
+          <div class="ctrl-head">
+            <span class="ctrl-key">b</span>Reason missing — the primary is DISABLED, not a
+            post-submit error
+          </div>
           <div class="ctrl-body">
             <div class="confirm" style="width: auto" role="alertdialog">
-                <h4>Change the planning model for Internal organisations?</h4>
-                <p>
-                  <span class="mdl-id">claude-opus-5-5</span> → <span class="mdl-id">claude-sonnet-5-5</span>.
-                  The change applies to the next planning job for every organisation in this
-                  audience. Jobs already running finish on the model they started with.
-                </p>
-                <div class="field">
-                  <label>Reason <span class="req">— required, written to the audit log</span></label>
-                  <div class="input is-empty">Why are you changing the model?</div>
-                  <div class="hint">The button below stays disabled until a reason is typed — the same rule the server applies, so a client that ignored it would still be refused.</div>
-                </div>
-                <div class="confirm-actions">
-                  <span class="btn btn-secondary">Cancel</span>
-                  <span class="btn btn-primary is-disabled" aria-disabled="true"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>Change model</span>
-                </div>
-              </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="panel-label">
-      5 · Saved — the row shows the NEW model and <em>Changed just now by you</em>; its Save is disabled again (selection = stored). A success <code>Toast</code> confirms it. The <code>ai.planner_model.set</code> audit row (operator, audience, from → to, reason) is written in the same request; no audit browser is drawn (Story 10.3).
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="page">
-
-          <div class="stack">
-                <div class="card">
-                  <div class="card-head">
-                    <div class="ttl">
-                      <span class="ico ent-org" style="width: 30px; height: 30px"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                      <div>
-                        <h3>Planning model by audience</h3>
-                        <p class="hsub">Every planning job resolves its model from the organisation it runs for: meta, then internal, then customer.</p>
-                      </div>
-                    </div>
-                    <span class="pill pill-neutral">3 audiences</span>
-                  </div>
-                  <div class="card-body">
-                    <table class="tbl">
-                      <thead>
-                        <tr><th>Audience</th><th>Model</th><th>Last changed</th><th></th></tr>
-                      </thead>
-                      <tbody>
-                        <tr><td><span class="aud-name">Customer organisations</span><span class="aud-desc">Every organisation that is neither meta nor internal</span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">claude-opus-5-5</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div></div></td><td><span class="changed">Seeded default · never changed</span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                        <tr><td><span class="aud-name">Motir meta org</span><span class="aud-desc">moooon B.V., <code>isMeta</code></span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">claude-opus-5-5</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div></div></td><td><span class="changed">Seeded default · never changed</span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                        <tr><td><span class="aud-name">Internal organisations</span><span class="aud-desc">Orgs classified <code>internalBilling</code></span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">claude-sonnet-5-5</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div></div></td><td><span class="changed">Changed <strong>just now</strong> by <strong>you</strong></span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <div class="toast toast-ok" role="status" style="max-width: 460px">
-                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
-                  <span><strong>Planning model changed</strong><br />Internal organisations now plan on claude-sonnet-5-5 from their next job.</span>
-                </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="panel-label">
-      6 · Refused — the write came back <code>validation_error</code> because the chosen model stopped being offered between load and save. The row KEEPS the old value (the trigger reads the stored model again), shows an inline error naming the model, and the picker RE-READS the offered list. Nothing was written and no audit row exists.
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="page">
-
-          <div class="stack">
-                <div class="card">
-                  <div class="card-head">
-                    <div class="ttl">
-                      <span class="ico ent-org" style="width: 30px; height: 30px"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                      <div>
-                        <h3>Planning model by audience</h3>
-                        <p class="hsub">Every planning job resolves its model from the organisation it runs for: meta, then internal, then customer.</p>
-                      </div>
-                    </div>
-                    <span class="pill pill-neutral">3 audiences</span>
-                  </div>
-                  <div class="card-body">
-                    <table class="tbl">
-                      <thead>
-                        <tr><th>Audience</th><th>Model</th><th>Last changed</th><th></th></tr>
-                      </thead>
-                      <tbody>
-                        <tr><td><span class="aud-name">Customer organisations</span><span class="aud-desc">Every organisation that is neither meta nor internal</span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">claude-opus-5-5</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div><span class="row-err" role="alert"><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg><span><code>glm-5.2</code> is no longer offered for planning, so it was not saved. The list has been refreshed — choose another model.</span></span></div></td><td><span class="changed">Seeded default · never changed</span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                        <tr><td><span class="aud-name">Motir meta org</span><span class="aud-desc">moooon B.V., <code>isMeta</code></span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">claude-opus-5-5</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div></div></td><td><span class="changed">Seeded default · never changed</span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                        <tr><td><span class="aud-name">Internal organisations</span><span class="aud-desc">Orgs classified <code>internalBilling</code></span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">claude-sonnet-5-5</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div></div></td><td><span class="changed">Changed 2 Oct, 10:12 by <strong>ops@moooon.net</strong></span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="panel-label">
-      7 · Withdrawn model — a STORED model the offered list no longer carries (<code>offered: false</code> on the setting) gets a warning chip: the resolver’s fallback, made visible. The trigger still shows the stored id, because that is what is stored; the picker’s list does not contain it. Left: superadmin. Right: the read-only face of the same row.
-    </div>
-    <div class="panel">
-      <div class="split-2">
-      <div class="stage">
-        <div class="page">
-
-          <div class="stack">
-                <div class="card">
-                  <div class="card-head">
-                    <div class="ttl">
-                      <span class="ico ent-org" style="width: 30px; height: 30px"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                      <div>
-                        <h3>Planning model by audience</h3>
-                        <p class="hsub">Every planning job resolves its model from the organisation it runs for: meta, then internal, then customer.</p>
-                      </div>
-                    </div>
-                    <span class="pill pill-neutral">3 audiences</span>
-                  </div>
-                  <div class="card-body">
-                    <table class="tbl">
-                      <thead>
-                        <tr><th>Audience</th><th>Model</th><th>Last changed</th><th></th></tr>
-                      </thead>
-                      <tbody>
-                        <tr><td><span class="aud-name">Customer organisations</span><span class="aud-desc">Every organisation that is neither meta nor internal</span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">claude-sonnet-4-6</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div><span class="pill pill-warn"><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>No longer offered</span><span class="chip-note">Planning for this audience falls back to Claude Opus 5.5 until you choose another.</span></div></td><td><span class="changed">Changed 14 Sep, 16:40 by <strong>ops@moooon.net</strong></span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                        <tr><td><span class="aud-name">Motir meta org</span><span class="aud-desc">moooon B.V., <code>isMeta</code></span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">claude-opus-5-5</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div></div></td><td><span class="changed">Seeded default · never changed</span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                        <tr><td><span class="aud-name">Internal organisations</span><span class="aud-desc">Orgs classified <code>internalBilling</code></span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">claude-opus-5-5</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div></div></td><td><span class="changed">Seeded default · never changed</span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-          </div>
-        </div>
-      </div>
-      <div class="stage">
-        <div class="page">
-
-          <div class="stack">
-                <div class="card">
-                  <div class="card-head">
-                    <div class="ttl">
-                      <span class="ico ent-org" style="width: 30px; height: 30px"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                      <div>
-                        <h3>Planning model by audience</h3>
-                        <p class="hsub">Every planning job resolves its model from the organisation it runs for: meta, then internal, then customer.</p>
-                      </div>
-                    </div>
-                    <span class="pill pill-neutral">3 audiences</span>
-                  </div>
-                  <div class="card-body">
-                    <table class="tbl">
-                      <thead>
-                        <tr><th>Audience</th><th>Model</th><th>Last changed</th></tr>
-                      </thead>
-                      <tbody>
-                        <tr><td><span class="aud-name">Customer organisations</span><span class="aud-desc">Every organisation that is neither meta nor internal</span></td><td><div class="cell-stack"><span class="mdl"><span class="mdl-id">claude-sonnet-4-6</span><span class="mdl-prov">anthropic</span></span><span class="pill pill-warn"><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>No longer offered</span><span class="chip-note">Planning for this audience falls back to Claude Opus 5.5 until a superadmin chooses another.</span></div></td><td><span class="changed">Changed 14 Sep, 16:40 by <strong>ops@moooon.net</strong></span></td></tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-          </div>
-        </div>
-      </div>
-      </div>
-    </div>
-    <div class="panel-label">
-      8 · Unreachable — LEFT: a save whose one-token test call through the planner’s own gateway token failed (<code>model_unreachable</code>). The row keeps the old value and says why inline; the three reasons are drawn one per row. RIGHT: a STORED model whose last boot test failed gets a red chip with the time of that test — planning for that audience is down until someone chooses a reachable model.
-    </div>
-    <div class="panel">
-      <div class="split-2">
-      <div class="stage">
-        <div class="page">
-
-          <div class="stack">
-                <div class="card">
-                  <div class="card-head">
-                    <div class="ttl">
-                      <span class="ico ent-org" style="width: 30px; height: 30px"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                      <div>
-                        <h3>Planning model by audience</h3>
-                        <p class="hsub">Every planning job resolves its model from the organisation it runs for: meta, then internal, then customer.</p>
-                      </div>
-                    </div>
-                    <span class="pill pill-neutral">3 audiences</span>
-                  </div>
-                  <div class="card-body">
-                    <table class="tbl">
-                      <thead>
-                        <tr><th>Audience</th><th>Model</th><th>Last changed</th><th></th></tr>
-                      </thead>
-                      <tbody>
-                        <tr><td><span class="aud-name">Customer organisations</span><span class="aud-desc">Every organisation that is neither meta nor internal</span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">claude-opus-5-5</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div><span class="row-err" role="alert"><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg><span>Not saved: the planner could not reach <code>glm-5.2</code> — the provider key was refused.</span></span></div></td><td><span class="changed">Seeded default · never changed</span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                        <tr><td><span class="aud-name">Motir meta org</span><span class="aud-desc">moooon B.V., <code>isMeta</code></span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">claude-opus-5-5</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div><span class="row-err" role="alert"><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg><span>Not saved: the planner could not reach <code>glm-5.2</code> — no enabled channel serves this model for the planner.</span></span></div></td><td><span class="changed">Seeded default · never changed</span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                        <tr><td><span class="aud-name">Internal organisations</span><span class="aud-desc">Orgs classified <code>internalBilling</code></span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">claude-opus-5-5</span><span class="cb-sec">anthropic</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div><span class="row-err" role="alert"><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg><span>Not saved: the planner could not reach <code>glm-5.2</code> — timed out.</span></span></div></td><td><span class="changed">Seeded default · never changed</span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-          </div>
-        </div>
-      </div>
-      <div class="stage">
-        <div class="page">
-
-          <div class="stack">
-                <div class="card">
-                  <div class="card-head">
-                    <div class="ttl">
-                      <span class="ico ent-org" style="width: 30px; height: 30px"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                      <div>
-                        <h3>Planning model by audience</h3>
-                        <p class="hsub">Every planning job resolves its model from the organisation it runs for: meta, then internal, then customer.</p>
-                      </div>
-                    </div>
-                    <span class="pill pill-neutral">3 audiences</span>
-                  </div>
-                  <div class="card-body">
-                    <table class="tbl">
-                      <thead>
-                        <tr><th>Audience</th><th>Model</th><th>Last changed</th><th></th></tr>
-                      </thead>
-                      <tbody>
-                        <tr><td><span class="aud-name">Internal organisations</span><span class="aud-desc">Orgs classified <code>internalBilling</code></span></td><td><div class="cell-stack"><div class="cb"><div class="cb-trigger" role="combobox" aria-expanded="false" aria-label="Planning model"><span class="cb-label">glm-5.2</span><span class="cb-sec">z-ai</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg></div></div><span class="pill pill-down"><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg>Planning is failing</span><span class="chip-note">Planning for this audience is failing: the planner cannot reach this model. Last tested 2 Oct, 06:00.</span></div></td><td><span class="changed">Changed 1 Oct, 18:05 by <strong>ops@moooon.net</strong></span></td><td class="num"><span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true">Save</span></td></tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-          </div>
-        </div>
-      </div>
-      </div>
-    </div>
-    <div class="panel-label">
-      9 · Unavailable — motir-ai could not be reached. The page shows the console’s ERROR CARD (Panel 7’s) with Retry and NO rows, so staff never see a guessed value. The header and the two page lines stay; the table does not render at all.
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="page">
-              <span class="crumb"><b>Platform</b> · AI planning</span>
-              <h2>AI planning</h2>
-              <p class="sub">
-                Which model Motir plans with, for each of three audiences. A change applies from
-                the next planning job for every organisation in that audience.
+              <h4>Change the planning model for Internal organisations?</h4>
+              <p>
+                <span class="mdl-id">claude-opus-5-5</span> →
+                <span class="mdl-id">claude-sonnet-5-5</span>. The change applies to the next
+                planning job for every organisation in this audience. Jobs already running finish on
+                the model they started with.
               </p>
-              <div class="page-lines">
-                <span class="page-line"><svg viewBox="0 0 24 24"><use href="#i-info" /></svg><span>An organisation that is both meta and internal follows the meta row.</span></span>
-                <span class="page-line"><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg><span><strong>Tenants never see this choice.</strong> No tenant page, usage view or plan names the model that planned.</span></span>
+              <div class="field">
+                <label>Reason <span class="req">— required, written to the audit log</span></label>
+                <div class="input is-empty">Why are you changing the model?</div>
+                <div class="hint">
+                  The button below stays disabled until a reason is typed — the same rule the server
+                  applies, so a client that ignored it would still be refused.
+                </div>
               </div>
+              <div class="confirm-actions">
+                <span class="btn btn-secondary">Cancel</span>
+                <span class="btn btn-primary is-disabled" aria-disabled="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>Change model</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      5 · Saved — the row shows the NEW model and <em>Changed just now by you</em>; its Save is
+      disabled again (selection = stored). A success <code>Toast</code> confirms it. The
+      <code>ai.planner_model.set</code> audit row (operator, audience, from → to, reason) is written
+      in the same request; no audit browser is drawn (Story 10.3).
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="stack">
+            <div class="card">
+              <div class="card-head">
+                <div class="ttl">
+                  <span class="ico ent-org" style="width: 30px; height: 30px"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                  ></span>
+                  <div>
+                    <h3>Planning model by audience</h3>
+                    <p class="hsub">
+                      Every planning job resolves its model from the organisation it runs for: meta,
+                      then internal, then customer.
+                    </p>
+                  </div>
+                </div>
+                <span class="pill pill-neutral">3 audiences</span>
+              </div>
+              <div class="card-body">
+                <table class="tbl">
+                  <thead>
+                    <tr>
+                      <th>Audience</th>
+                      <th>Model</th>
+                      <th>Last changed</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <span class="aud-name">Customer organisations</span
+                        ><span class="aud-desc"
+                          >Every organisation that is neither meta nor internal</span
+                        >
+                      </td>
+                      <td>
+                        <div class="cell-stack">
+                          <div class="cb">
+                            <div
+                              class="cb-trigger"
+                              role="combobox"
+                              aria-expanded="false"
+                              aria-label="Planning model"
+                            >
+                              <span class="cb-label">claude-opus-5-5</span
+                              ><span class="cb-sec">anthropic</span
+                              ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td><span class="changed">Seeded default · never changed</span></td>
+                      <td class="num">
+                        <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                          >Save</span
+                        >
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <span class="aud-name">Motir meta org</span
+                        ><span class="aud-desc">moooon B.V., <code>isMeta</code></span>
+                      </td>
+                      <td>
+                        <div class="cell-stack">
+                          <div class="cb">
+                            <div
+                              class="cb-trigger"
+                              role="combobox"
+                              aria-expanded="false"
+                              aria-label="Planning model"
+                            >
+                              <span class="cb-label">claude-opus-5-5</span
+                              ><span class="cb-sec">anthropic</span
+                              ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td><span class="changed">Seeded default · never changed</span></td>
+                      <td class="num">
+                        <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                          >Save</span
+                        >
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <span class="aud-name">Internal organisations</span
+                        ><span class="aud-desc">Orgs classified <code>internalBilling</code></span>
+                      </td>
+                      <td>
+                        <div class="cell-stack">
+                          <div class="cb">
+                            <div
+                              class="cb-trigger"
+                              role="combobox"
+                              aria-expanded="false"
+                              aria-label="Planning model"
+                            >
+                              <span class="cb-label">claude-sonnet-5-5</span
+                              ><span class="cb-sec">anthropic</span
+                              ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span class="changed"
+                          >Changed <strong>just now</strong> by <strong>you</strong></span
+                        >
+                      </td>
+                      <td class="num">
+                        <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                          >Save</span
+                        >
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="toast toast-ok" role="status" style="max-width: 460px">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              <span
+                ><strong>Planning model changed</strong><br />Internal organisations now plan on
+                claude-sonnet-5-5 from their next job.</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      6 · Refused — the write came back <code>validation_error</code> because the chosen model
+      stopped being offered between load and save. The row KEEPS the old value (the trigger reads
+      the stored model again), shows an inline error naming the model, and the picker RE-READS the
+      offered list. Nothing was written and no audit row exists.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="stack">
+            <div class="card">
+              <div class="card-head">
+                <div class="ttl">
+                  <span class="ico ent-org" style="width: 30px; height: 30px"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                  ></span>
+                  <div>
+                    <h3>Planning model by audience</h3>
+                    <p class="hsub">
+                      Every planning job resolves its model from the organisation it runs for: meta,
+                      then internal, then customer.
+                    </p>
+                  </div>
+                </div>
+                <span class="pill pill-neutral">3 audiences</span>
+              </div>
+              <div class="card-body">
+                <table class="tbl">
+                  <thead>
+                    <tr>
+                      <th>Audience</th>
+                      <th>Model</th>
+                      <th>Last changed</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <span class="aud-name">Customer organisations</span
+                        ><span class="aud-desc"
+                          >Every organisation that is neither meta nor internal</span
+                        >
+                      </td>
+                      <td>
+                        <div class="cell-stack">
+                          <div class="cb">
+                            <div
+                              class="cb-trigger"
+                              role="combobox"
+                              aria-expanded="false"
+                              aria-label="Planning model"
+                            >
+                              <span class="cb-label">claude-opus-5-5</span
+                              ><span class="cb-sec">anthropic</span
+                              ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                            </div>
+                          </div>
+                          <span class="row-err" role="alert"
+                            ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+                            ><span
+                              ><code>glm-5.2</code> is no longer offered for planning, so it was not
+                              saved. The list has been refreshed — choose another model.</span
+                            ></span
+                          >
+                        </div>
+                      </td>
+                      <td><span class="changed">Seeded default · never changed</span></td>
+                      <td class="num">
+                        <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                          >Save</span
+                        >
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <span class="aud-name">Motir meta org</span
+                        ><span class="aud-desc">moooon B.V., <code>isMeta</code></span>
+                      </td>
+                      <td>
+                        <div class="cell-stack">
+                          <div class="cb">
+                            <div
+                              class="cb-trigger"
+                              role="combobox"
+                              aria-expanded="false"
+                              aria-label="Planning model"
+                            >
+                              <span class="cb-label">claude-opus-5-5</span
+                              ><span class="cb-sec">anthropic</span
+                              ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td><span class="changed">Seeded default · never changed</span></td>
+                      <td class="num">
+                        <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                          >Save</span
+                        >
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <span class="aud-name">Internal organisations</span
+                        ><span class="aud-desc">Orgs classified <code>internalBilling</code></span>
+                      </td>
+                      <td>
+                        <div class="cell-stack">
+                          <div class="cb">
+                            <div
+                              class="cb-trigger"
+                              role="combobox"
+                              aria-expanded="false"
+                              aria-label="Planning model"
+                            >
+                              <span class="cb-label">claude-sonnet-5-5</span
+                              ><span class="cb-sec">anthropic</span
+                              ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span class="changed"
+                          >Changed 2 Oct, 10:12 by <strong>ops@moooon.net</strong></span
+                        >
+                      </td>
+                      <td class="num">
+                        <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                          >Save</span
+                        >
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      7 · Withdrawn model — a STORED model the offered list no longer carries (<code
+        >offered: false</code
+      >
+      on the setting) gets a warning chip: the resolver’s fallback, made visible. The trigger still
+      shows the stored id, because that is what is stored; the picker’s list does not contain it.
+      Left: superadmin. Right: the read-only face of the same row.
+    </div>
+    <div class="panel">
+      <div class="split-2">
+        <div class="stage">
+          <div class="page">
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="ico ent-org" style="width: 30px; height: 30px"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                    ></span>
+                    <div>
+                      <h3>Planning model by audience</h3>
+                      <p class="hsub">
+                        Every planning job resolves its model from the organisation it runs for:
+                        meta, then internal, then customer.
+                      </p>
+                    </div>
+                  </div>
+                  <span class="pill pill-neutral">3 audiences</span>
+                </div>
+                <div class="card-body">
+                  <table class="tbl">
+                    <thead>
+                      <tr>
+                        <th>Audience</th>
+                        <th>Model</th>
+                        <th>Last changed</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <span class="aud-name">Customer organisations</span
+                          ><span class="aud-desc"
+                            >Every organisation that is neither meta nor internal</span
+                          >
+                        </td>
+                        <td>
+                          <div class="cell-stack">
+                            <div class="cb">
+                              <div
+                                class="cb-trigger"
+                                role="combobox"
+                                aria-expanded="false"
+                                aria-label="Planning model"
+                              >
+                                <span class="cb-label">claude-sonnet-4-6</span
+                                ><span class="cb-sec">anthropic</span
+                                ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                              </div>
+                            </div>
+                            <span class="pill pill-warn"
+                              ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>No longer
+                              offered</span
+                            ><span class="chip-note"
+                              >Planning for this audience falls back to Claude Opus 5.5 until you
+                              choose another.</span
+                            >
+                          </div>
+                        </td>
+                        <td>
+                          <span class="changed"
+                            >Changed 14 Sep, 16:40 by <strong>ops@moooon.net</strong></span
+                          >
+                        </td>
+                        <td class="num">
+                          <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                            >Save</span
+                          >
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="aud-name">Motir meta org</span
+                          ><span class="aud-desc">moooon B.V., <code>isMeta</code></span>
+                        </td>
+                        <td>
+                          <div class="cell-stack">
+                            <div class="cb">
+                              <div
+                                class="cb-trigger"
+                                role="combobox"
+                                aria-expanded="false"
+                                aria-label="Planning model"
+                              >
+                                <span class="cb-label">claude-opus-5-5</span
+                                ><span class="cb-sec">anthropic</span
+                                ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td><span class="changed">Seeded default · never changed</span></td>
+                        <td class="num">
+                          <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                            >Save</span
+                          >
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="aud-name">Internal organisations</span
+                          ><span class="aud-desc"
+                            >Orgs classified <code>internalBilling</code></span
+                          >
+                        </td>
+                        <td>
+                          <div class="cell-stack">
+                            <div class="cb">
+                              <div
+                                class="cb-trigger"
+                                role="combobox"
+                                aria-expanded="false"
+                                aria-label="Planning model"
+                              >
+                                <span class="cb-label">claude-opus-5-5</span
+                                ><span class="cb-sec">anthropic</span
+                                ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td><span class="changed">Seeded default · never changed</span></td>
+                        <td class="num">
+                          <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                            >Save</span
+                          >
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="page">
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="ico ent-org" style="width: 30px; height: 30px"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                    ></span>
+                    <div>
+                      <h3>Planning model by audience</h3>
+                      <p class="hsub">
+                        Every planning job resolves its model from the organisation it runs for:
+                        meta, then internal, then customer.
+                      </p>
+                    </div>
+                  </div>
+                  <span class="pill pill-neutral">3 audiences</span>
+                </div>
+                <div class="card-body">
+                  <table class="tbl">
+                    <thead>
+                      <tr>
+                        <th>Audience</th>
+                        <th>Model</th>
+                        <th>Last changed</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <span class="aud-name">Customer organisations</span
+                          ><span class="aud-desc"
+                            >Every organisation that is neither meta nor internal</span
+                          >
+                        </td>
+                        <td>
+                          <div class="cell-stack">
+                            <span class="mdl"
+                              ><span class="mdl-id">claude-sonnet-4-6</span
+                              ><span class="mdl-prov">anthropic</span></span
+                            ><span class="pill pill-warn"
+                              ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>No longer
+                              offered</span
+                            ><span class="chip-note"
+                              >Planning for this audience falls back to Claude Opus 5.5 until a
+                              superadmin chooses another.</span
+                            >
+                          </div>
+                        </td>
+                        <td>
+                          <span class="changed"
+                            >Changed 14 Sep, 16:40 by <strong>ops@moooon.net</strong></span
+                          >
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      8 · Unreachable — LEFT: a save whose one-token test call through the planner’s own gateway
+      token failed (<code>model_unreachable</code>). The row keeps the old value and says why
+      inline; the three reasons are drawn one per row. RIGHT: a STORED model whose last boot test
+      failed gets a red chip with the time of that test — planning for that audience is down until
+      someone chooses a reachable model.
+    </div>
+    <div class="panel">
+      <div class="split-2">
+        <div class="stage">
+          <div class="page">
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="ico ent-org" style="width: 30px; height: 30px"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                    ></span>
+                    <div>
+                      <h3>Planning model by audience</h3>
+                      <p class="hsub">
+                        Every planning job resolves its model from the organisation it runs for:
+                        meta, then internal, then customer.
+                      </p>
+                    </div>
+                  </div>
+                  <span class="pill pill-neutral">3 audiences</span>
+                </div>
+                <div class="card-body">
+                  <table class="tbl">
+                    <thead>
+                      <tr>
+                        <th>Audience</th>
+                        <th>Model</th>
+                        <th>Last changed</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <span class="aud-name">Customer organisations</span
+                          ><span class="aud-desc"
+                            >Every organisation that is neither meta nor internal</span
+                          >
+                        </td>
+                        <td>
+                          <div class="cell-stack">
+                            <div class="cb">
+                              <div
+                                class="cb-trigger"
+                                role="combobox"
+                                aria-expanded="false"
+                                aria-label="Planning model"
+                              >
+                                <span class="cb-label">claude-opus-5-5</span
+                                ><span class="cb-sec">anthropic</span
+                                ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                              </div>
+                            </div>
+                            <span class="row-err" role="alert"
+                              ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+                              ><span
+                                >Not saved: the planner could not reach <code>glm-5.2</code> — the
+                                provider key was refused.</span
+                              ></span
+                            >
+                          </div>
+                        </td>
+                        <td><span class="changed">Seeded default · never changed</span></td>
+                        <td class="num">
+                          <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                            >Save</span
+                          >
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="aud-name">Motir meta org</span
+                          ><span class="aud-desc">moooon B.V., <code>isMeta</code></span>
+                        </td>
+                        <td>
+                          <div class="cell-stack">
+                            <div class="cb">
+                              <div
+                                class="cb-trigger"
+                                role="combobox"
+                                aria-expanded="false"
+                                aria-label="Planning model"
+                              >
+                                <span class="cb-label">claude-opus-5-5</span
+                                ><span class="cb-sec">anthropic</span
+                                ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                              </div>
+                            </div>
+                            <span class="row-err" role="alert"
+                              ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+                              ><span
+                                >Not saved: the planner could not reach <code>glm-5.2</code> — no
+                                enabled channel serves this model for the planner.</span
+                              ></span
+                            >
+                          </div>
+                        </td>
+                        <td><span class="changed">Seeded default · never changed</span></td>
+                        <td class="num">
+                          <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                            >Save</span
+                          >
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="aud-name">Internal organisations</span
+                          ><span class="aud-desc"
+                            >Orgs classified <code>internalBilling</code></span
+                          >
+                        </td>
+                        <td>
+                          <div class="cell-stack">
+                            <div class="cb">
+                              <div
+                                class="cb-trigger"
+                                role="combobox"
+                                aria-expanded="false"
+                                aria-label="Planning model"
+                              >
+                                <span class="cb-label">claude-opus-5-5</span
+                                ><span class="cb-sec">anthropic</span
+                                ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                              </div>
+                            </div>
+                            <span class="row-err" role="alert"
+                              ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+                              ><span
+                                >Not saved: the planner could not reach <code>glm-5.2</code> — timed
+                                out.</span
+                              ></span
+                            >
+                          </div>
+                        </td>
+                        <td><span class="changed">Seeded default · never changed</span></td>
+                        <td class="num">
+                          <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                            >Save</span
+                          >
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="page">
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="ico ent-org" style="width: 30px; height: 30px"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                    ></span>
+                    <div>
+                      <h3>Planning model by audience</h3>
+                      <p class="hsub">
+                        Every planning job resolves its model from the organisation it runs for:
+                        meta, then internal, then customer.
+                      </p>
+                    </div>
+                  </div>
+                  <span class="pill pill-neutral">3 audiences</span>
+                </div>
+                <div class="card-body">
+                  <table class="tbl">
+                    <thead>
+                      <tr>
+                        <th>Audience</th>
+                        <th>Model</th>
+                        <th>Last changed</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <span class="aud-name">Internal organisations</span
+                          ><span class="aud-desc"
+                            >Orgs classified <code>internalBilling</code></span
+                          >
+                        </td>
+                        <td>
+                          <div class="cell-stack">
+                            <div class="cb">
+                              <div
+                                class="cb-trigger"
+                                role="combobox"
+                                aria-expanded="false"
+                                aria-label="Planning model"
+                              >
+                                <span class="cb-label">glm-5.2</span><span class="cb-sec">z-ai</span
+                                ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                              </div>
+                            </div>
+                            <span class="pill pill-down"
+                              ><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg>Planning is
+                              failing</span
+                            ><span class="chip-note"
+                              >Planning for this audience is failing: the planner cannot reach this
+                              model. Last tested 2 Oct, 06:00.</span
+                            >
+                          </div>
+                        </td>
+                        <td>
+                          <span class="changed"
+                            >Changed 1 Oct, 18:05 by <strong>ops@moooon.net</strong></span
+                          >
+                        </td>
+                        <td class="num">
+                          <span class="btn btn-secondary btn-sm is-disabled" aria-disabled="true"
+                            >Save</span
+                          >
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      9 · Unavailable — motir-ai could not be reached. The page shows the console’s ERROR CARD
+      (Panel 7’s) with Retry and NO rows, so staff never see a guessed value. The header and the two
+      page lines stay; the table does not render at all.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <span class="crumb"><b>Platform</b> · AI planning</span>
+          <h2>AI planning</h2>
+          <p class="sub">
+            Which model Motir plans with, for each of three audiences. A change applies from the
+            next planning job for every organisation in that audience.
+          </p>
+          <div class="page-lines">
+            <span class="page-line"
+              ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg
+              ><span
+                >An organisation that is both meta and internal follows the meta row.</span
+              ></span
+            >
+            <span class="page-line"
+              ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+              ><span
+                ><strong>Tenants never see this choice.</strong> No tenant page, usage view or plan
+                names the model that planned.</span
+              ></span
+            >
+          </div>
           <div class="stack">
             <div class="state err">
-              <span class="ico"><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg></span>
+              <span class="ico"
+                ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+              ></span>
               <h4>Couldn’t load the planning models</h4>
               <p>
                 The planning service (motir-ai) didn’t respond, so no setting is shown. This is a
                 fetch error — nothing has changed, and no value is guessed.
               </p>
               <div class="actions">
-                <span class="btn btn-secondary"><svg viewBox="0 0 24 24"><use href="#i-retry" /></svg>Retry</span>
+                <span class="btn btn-secondary"
+                  ><svg viewBox="0 0 24 24"><use href="#i-retry" /></svg>Retry</span
+                >
               </div>
             </div>
           </div>
@@ -2745,16 +3616,19 @@
       </div>
     </div>
     <div class="panel-label">
-      10 · Not staff — 404, the area’s existing rule, drawn BY REFERENCE (console.mock.html Panel 7a).
+      10 · Not staff — 404, the area’s existing rule, drawn BY REFERENCE (console.mock.html Panel
+      7a).
     </div>
     <div class="panel">
       <div class="note">
         <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
-        <span><strong>Not redrawn.</strong> A user who is not platform staff — an org owner
-          included — gets the standard app 404 at <code>/admin/ai-planning</code>, exactly as
+        <span
+          ><strong>Not redrawn.</strong> A user who is not platform staff — an org owner included —
+          gets the standard app 404 at <code>/admin/ai-planning</code>, exactly as
           <code>console.mock.html</code> Panel 7a draws it for every <code>/admin/*</code> route.
-          The rail row does not exist for them because the console does not. No “forbidden”
-          page, no hint the route is real.</span>
+          The rail row does not exist for them because the console does not. No “forbidden” page, no
+          hint the route is real.</span
+        >
       </div>
     </div>
 
