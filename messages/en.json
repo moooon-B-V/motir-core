@@ -11546,11 +11546,19 @@
         "depth": "Pages nest at most {limit} levels deep, and this move would go past that. It stayed where it was.",
         "crossProject": "That folder or page belongs to another project. The page stayed where it was.",
         "gone": "That folder or page no longer exists. The page stayed where it was."
+      },
+      "sidebar": {
+        "label": "Page tree",
+        "hide": "Hide page tree",
+        "show": "Show page tree"
+      },
+      "breadcrumb": {
+        "label": "Where this page is",
+        "more": "Show {count} more levels",
+        "folder": "Folder:"
       }
     },
     "page": {
-      "back": "Pages",
-      "backLabel": "Back to Pages",
       "titleLabel": "Page title",
       "titleTooLong": "The title is too long — keep it to {limit} characters.",
       "renameFailed": "Couldn’t save the title. Check your connection and try again."

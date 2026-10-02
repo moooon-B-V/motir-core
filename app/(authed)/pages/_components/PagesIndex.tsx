@@ -35,6 +35,12 @@ export interface PagesIndexProps {
   canEditFolders?: boolean;
   /** The folder writes, handed in by the page (MOTIR-7374). */
   folderActions?: FolderCommandActions;
+  /** `?folder=<id>`'s chain as row keys, open on arrival (MOTIR-7375). */
+  expandedPath?: string[];
+  /** The levels the server read for `expandedPath`. */
+  initialLevels?: Record<string, PageTreeLevelDto>;
+  /** The `?folder=<id>` row — scrolled into view and focused. */
+  revealKey?: string;
 }
 
 export function PagesIndex({
@@ -43,6 +49,9 @@ export function PagesIndex({
   canEdit,
   canEditFolders = false,
   folderActions,
+  expandedPath,
+  initialLevels,
+  revealKey,
 }: PagesIndexProps) {
   const t = useTranslations('pages.index');
   return (
@@ -52,6 +61,10 @@ export function PagesIndex({
       canEdit={canEdit}
       canEditFolders={canEditFolders}
       folderActions={folderActions}
+      expandedPath={expandedPath}
+      initialLevels={initialLevels}
+      revealKey={revealKey}
+      focusRevealed={revealKey !== undefined}
       emptyState={
         <EmptyState
           data-testid="pages-empty"

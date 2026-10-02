@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { memberPageContext, pageScope } from '@/lib/pages/projectPageContext';
 import { pagesService } from '@/lib/services/pagesService';
+import { foldersService } from '@/lib/services/foldersService';
 import type { PageTreeLevelDto } from '@/lib/dto/pages';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { FolderCommandsProvider } from '@/components/folders/FolderCommands';
@@ -54,6 +55,14 @@ import { PagesIndexFrame } from './_components/PagesIndexFrame';
 // not import `app/`). The header's New folder reaches the tree through the
 // shared `FolderCommandsProvider`, which wraps both. Folder writes assert
 // `work_item:edit`, so the tree offers them only to a reader holding it too.
+//
+// ── `?folder=<id>` — THE BREADCRUMB'S WAY INTO THE TREE (MOTIR-7375) ───────
+// A page's breadcrumb links a folder segment here (`page--tree-sidebar.mock.html`
+// panel 4): the tree opens with the path to that folder AND the folder itself
+// expanded, read on the server like the root, and the folder scrolled into view
+// holding the tree's focus. A folder that is unknown, in another project, or
+// that this reader cannot browse is IGNORED — the tree opens at its root, never
+// a 404 (design-notes § Open questions) — the roadmap's `?folder=` silence.
 
 /** The shipped folder writes, as the `/pages` tree receives them. */
 const FOLDER_ACTIONS: FolderCommandActions = {
@@ -70,11 +79,15 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t('title') };
 }
 
-export default async function PagesIndexPage() {
+type SearchParams = { searchParams?: Promise<Record<string, string | string[] | undefined>> };
+
+export default async function PagesIndexPage({ searchParams }: SearchParams = {}) {
   const ctx = await memberPageContext();
   const [held, t] = await Promise.all([ctx.permissions(), getTranslations('pages')]);
   if (!held.has('page:view')) notFound();
   const scope = pageScope(ctx);
+  const folderParam = (await searchParams)?.['folder'];
+  const folderId = typeof folderParam === 'string' && folderParam ? folderParam : null;
 
   return (
     <FolderCommandsProvider>
@@ -99,6 +112,7 @@ export default async function PagesIndexPage() {
             projectKey={scope.project.identifier}
             canEdit={held.has('page:edit')}
             canEditFolders={held.has('work_item:edit')}
+            folderId={folderId}
           />
         </Suspense>
       </div>
@@ -112,20 +126,44 @@ async function PagesIndexData({
   projectKey,
   canEdit,
   canEditFolders,
+  folderId = null,
 }: {
   service: ServiceContext;
   projectId: string;
   projectKey: string;
   canEdit: boolean;
   canEditFolders: boolean;
+  /** `?folder=<id>`: the folder to open the tree to. */
+  folderId?: string | null;
 }) {
-  let root: PageTreeLevelDto | null;
-  try {
-    root = await pagesService.listTreeLevel(service, { projectId, parent: { kind: 'root' } });
-  } catch (err) {
-    console.error('[pages] the root level of the page tree could not be read', err);
-    root = null;
-  }
+  // The folder's chain, root-first — silently none for a folder this reader
+  // cannot reach. Read alongside the root.
+  const chainRead = folderId
+    ? foldersService.getFolderTrail(projectId, folderId, service).catch(() => [])
+    : Promise.resolve([]);
+  const readRoot = pagesService
+    .listTreeLevel(service, { projectId, parent: { kind: 'root' } })
+    .catch((err: unknown) => {
+      console.error('[pages] the root level of the page tree could not be read', err);
+      return null;
+    });
+  const [root, chain] = await Promise.all([readRoot, chainRead]);
+
+  // Every level on the chain, the folder's own included; one that cannot be
+  // read is left to the tree's mount read.
+  const expandedPath = chain.map((f) => `folder:${f.id}`);
+  const levels = await Promise.all(
+    chain.map((f) =>
+      pagesService
+        .listTreeLevel(service, { projectId, parent: { kind: 'folder', id: f.id } })
+        .catch(() => null),
+    ),
+  );
+  const initialLevels: Record<string, PageTreeLevelDto> = {};
+  expandedPath.forEach((key, i) => {
+    const level = levels[i];
+    if (level) initialLevels[key] = level;
+  });
   return (
     <PagesIndex
       root={root}
@@ -133,6 +171,9 @@ async function PagesIndexData({
       canEdit={canEdit}
       canEditFolders={canEditFolders}
       folderActions={FOLDER_ACTIONS}
+      expandedPath={expandedPath}
+      initialLevels={initialLevels}
+      revealKey={expandedPath[expandedPath.length - 1]}
     />
   );
 }

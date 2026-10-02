@@ -7,7 +7,9 @@ import { ChevronRight, NotebookText } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import {
   CHEVRON_CLASS,
-  TREE_ROW_CLASS,
+  TREE_ROW_SELECTED_CLASS,
+  treeRowClass,
+  type PageTreeDensity,
   type PageTreePageRowDto,
   type TreeItemProps,
 } from './pageTreeRow';
@@ -27,6 +29,10 @@ import {
 // The menu is `PageRowMenu`, built by the tree: New sub-page (MOTIR-7373), then
 // Move to… | Move up · Move down (MOTIR-7374), anchoring the Move to… picker. A
 // reader without `page:edit` gets no menu (panel 8).
+//
+// SELECTED (MOTIR-7375, `page--tree-sidebar.mock.html` panel 1): the page being
+// read, in the page route's sidebar — `aria-selected`, the rail's active-row
+// treatment, its glyph in `--el-icon-active`, and the link `aria-current="page"`.
 
 export interface PageTreePageRowProps {
   row: PageTreePageRowDto;
@@ -40,6 +46,10 @@ export interface PageTreePageRowProps {
   linkRef: Ref<HTMLAnchorElement>;
   /** The row menu, as the tree built it; `null` draws none (a reader without `page:edit`). */
   menu: ReactNode | null;
+  /** Whether this is the page being read (the sidebar's selected row). */
+  selected?: boolean;
+  /** Row metrics and chrome: `/pages`' rows, or the sidebar's compact ones. */
+  density?: PageTreeDensity;
 }
 
 export function PageTreePageRow({
@@ -51,6 +61,8 @@ export function PageTreePageRow({
   onToggle,
   linkRef,
   menu,
+  selected = false,
+  density = 'default',
 }: PageTreePageRowProps) {
   const t = useTranslations('pages');
   const title = row.title || t('untitled');
@@ -59,7 +71,7 @@ export function PageTreePageRow({
       ref={itemRef}
       role="treeitem"
       aria-level={item.depth}
-      aria-selected={false}
+      aria-selected={selected}
       aria-expanded={row.hasChildren ? expanded : undefined}
       aria-busy={busy || undefined}
       aria-label={title}
@@ -67,7 +79,7 @@ export function PageTreePageRow({
       onKeyDown={item.onKeyDown}
       onFocus={item.onFocus}
       data-testid="page-tree-page"
-      className={TREE_ROW_CLASS}
+      className={cn(treeRowClass(density), selected && TREE_ROW_SELECTED_CLASS)}
       style={item.style}
     >
       {row.hasChildren ? (
@@ -91,11 +103,18 @@ export function PageTreePageRow({
       ) : (
         <span className="h-4 w-4 shrink-0" aria-hidden />
       )}
-      <NotebookText className="h-4 w-4 shrink-0 text-(--el-icon-muted)" aria-hidden />
+      <NotebookText
+        className={cn(
+          'h-4 w-4 shrink-0',
+          selected ? 'text-(--el-icon-active)' : 'text-(--el-icon-muted)',
+        )}
+        aria-hidden
+      />
       <Link
         ref={linkRef}
         href={`/pages/${encodeURIComponent(row.id)}`}
         tabIndex={-1}
+        aria-current={selected ? 'page' : undefined}
         className={cn(
           'min-w-0 truncate hover:underline focus-visible:outline-none',
           row.title ? 'text-(--el-text)' : 'text-(--el-text-secondary) italic',

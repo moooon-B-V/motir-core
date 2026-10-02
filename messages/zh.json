@@ -11542,11 +11542,19 @@
         "depth": "页面最多只能嵌套 {limit} 层，此次移动会超出该限制。它保持在原位。",
         "crossProject": "该文件夹或页面属于另一个项目。页面保持在原位。",
         "gone": "该文件夹或页面已不存在。页面保持在原位。"
+      },
+      "sidebar": {
+        "label": "页面树",
+        "hide": "隐藏页面树",
+        "show": "显示页面树"
+      },
+      "breadcrumb": {
+        "label": "此页面所在位置",
+        "more": "显示另外 {count} 层",
+        "folder": "文件夹："
       }
     },
     "page": {
-      "back": "页面",
-      "backLabel": "返回页面",
       "titleLabel": "页面标题",
       "titleTooLong": "标题过长——请控制在 {limit} 个字符以内。",
       "renameFailed": "无法保存标题，请检查网络连接后重试。"

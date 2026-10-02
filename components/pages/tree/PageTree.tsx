@@ -94,10 +94,18 @@ import {
 //
 // ── SEAMS FOR THE NEXT CARDS ───────────────────────────────────────────────
 // `pageMenuEntries` / `folderMenuEntries` still append to a row's menu, after
-// everything above. `density="compact"` is the page route's sidebar
-// (MOTIR-7375); `initialRoot` may be omitted there, and the root is then read on
-// mount. Drag (MOTIR-7376) moves through the same `usePageMove`, whose `refresh`
-// is this tree's `refreshLevels`.
+// everything above. Drag (MOTIR-7376) moves through the same `usePageMove`,
+// whose `refresh` is this tree's `refreshLevels`.
+//
+// ── A PATH OPEN ON ARRIVAL (MOTIR-7375) ────────────────────────────────────
+// `expandedPath` names the rows open on first paint, root-first (the page
+// route's trail, or `/pages?folder=<id>`'s chain), and `initialLevels` carries
+// the levels the server already read for them — so the path paints open, and a
+// level the server could not read is read here on mount. `selectedPageId` is the
+// page being read (`aria-selected`, the active-row treatment); `revealKey` (the
+// selected page's row by default) is the row scrolled into view and made the
+// tab stop, and `focusRevealed` also moves focus to it. `density="compact"` is
+// the page route's sidebar: no card frame, no rules, the rail's row grammar.
 
 const PAGE_LEVEL_SIZE = 50;
 /** The route's ceiling for one read — a re-read keeps up to this many loaded rows. */
@@ -208,6 +216,16 @@ export interface PageTreeProps {
   folderActions?: FolderCommandActions;
   /** Whether the reader may also write FOLDERS (`work_item:edit`, the key every folder write asserts). */
   canEditFolders?: boolean;
+  /** The page being read — its row is selected (the page route's sidebar). */
+  selectedPageId?: string;
+  /** Row keys (`folder:<id>` / `page:<id>`) open on first paint, root-first. */
+  expandedPath?: LevelKey[];
+  /** Levels the server already read for `expandedPath`, by key; any missing one is read on mount. */
+  initialLevels?: Record<LevelKey, PageTreeLevelDto>;
+  /** The row scrolled into view and made the tab stop once it is shown; the selected page's by default. */
+  revealKey?: LevelKey;
+  /** Also move focus to `revealKey`'s row once it is shown (`/pages?folder=<id>`). */
+  focusRevealed?: boolean;
 }
 
 /** Walk up from `el` to the nearest ancestor that scrolls vertically. */
@@ -231,6 +249,11 @@ export function PageTree({
   folderMenuEntries,
   folderActions,
   canEditFolders = false,
+  selectedPageId,
+  expandedPath,
+  initialLevels,
+  revealKey,
+  focusRevealed = false,
 }: PageTreeProps) {
   const t = useTranslations('pages.tree');
   const tc = useTranslations('common');
@@ -244,6 +267,12 @@ export function PageTree({
   const metrics = DENSITY[density];
 
   const [levels, setLevels] = useState<Record<LevelKey, LevelState>>(() => ({
+    ...Object.fromEntries(
+      Object.entries(initialLevels ?? {}).map(([key, level]) => [
+        key,
+        { ...FRESH, rows: level.rows, nextCursor: level.nextCursor },
+      ]),
+    ),
     [ROOT_LEVEL]:
       initialRoot === undefined
         ? { ...FRESH, loading: 'initial' }
@@ -251,7 +280,7 @@ export function PageTree({
           ? { ...FRESH, failed: 'initial' }
           : { ...FRESH, rows: initialRoot.rows, nextCursor: initialRoot.nextCursor },
   }));
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(expandedPath ?? []));
   const levelSeq = useRef<Record<LevelKey, number>>({});
 
   // ⚠️ THE ONE PLACE A LEVEL IS READ. `more` appends after the level's cursor;
@@ -340,12 +369,17 @@ export function PageTree({
   );
   const { move } = usePageMove({ refresh: refreshLevels });
 
-  // The root, when the server did not read it (the sidebar's case).
-  const readRootOnMount = useRef(initialRoot === undefined);
+  // The root when the server did not read it, and every open level of the
+  // arrival path the server did not hand in — read once, on mount.
+  const readOnMount = useRef<LevelKey[] | null>([
+    ...(initialRoot === undefined ? [ROOT_LEVEL] : []),
+    ...(expandedPath ?? []).filter((key) => key !== ROOT_LEVEL && !initialLevels?.[key]),
+  ]);
   useEffect(() => {
-    if (!readRootOnMount.current) return;
-    readRootOnMount.current = false;
-    void read(ROOT_LEVEL, false, null);
+    const keys = readOnMount.current;
+    if (!keys) return;
+    readOnMount.current = null;
+    for (const key of keys) void read(key, false, null);
   }, [read]);
 
   const toggle = useCallback(
@@ -905,7 +939,9 @@ export function PageTree({
     () => items.flatMap((item, index) => (item.type === 'row' ? [{ item, index }] : [])),
     [items],
   );
-  const [focusedKey, setFocusedKey] = useState<string | null>(null);
+  const selectedKey = selectedPageId ? `page:${selectedPageId}` : null;
+  const revealTarget = revealKey ?? selectedKey;
+  const [focusedKey, setFocusedKey] = useState<string | null>(revealTarget);
   const activeKey = useMemo(() => {
     if (focusedKey && rowItems.some(({ item }) => item.key === focusedKey)) return focusedKey;
     return rowItems[0]?.item.key ?? null;
@@ -920,16 +956,9 @@ export function PageTree({
     estimateRowHeight: metrics.rowPx,
   });
 
-  const focusRow = useCallback(
+  /** Scroll a row that is off the window to the middle of its scroller. */
+  const scrollToRow = useCallback(
     (key: string) => {
-      setFocusedKey(key);
-      const el = rowRefs.current.get(key);
-      if (el) {
-        el.focus();
-        return;
-      }
-      // Off the window: scroll it in, and focus it once it mounts.
-      pendingFocus.current = key;
       const index = items.findIndex((item) => item.key === key);
       const scroller = scrollParent(containerRef.current);
       if (scroller && index >= 0) {
@@ -943,6 +972,42 @@ export function PageTree({
     },
     [items, containerRef, getOffset],
   );
+
+  const focusRow = useCallback(
+    (key: string) => {
+      setFocusedKey(key);
+      const el = rowRefs.current.get(key);
+      if (el) {
+        el.focus();
+        return;
+      }
+      // Off the window: scroll it in, and focus it once it mounts.
+      pendingFocus.current = key;
+      scrollToRow(key);
+    },
+    [scrollToRow],
+  );
+
+  // The arrival row (MOTIR-7375): once it is shown — the path may still be
+  // reading — scroll it into view, and focus it when asked. Once only, so the
+  // reader's own scrolling and focus are never taken back.
+  const revealed = useRef(revealTarget === null);
+  useEffect(() => {
+    if (revealed.current || revealTarget === null) return;
+    if (!rowItems.some(({ item }) => item.key === revealTarget)) return;
+    revealed.current = true;
+    // The row is already the tab stop (`focusedKey` starts at it), so this only
+    // touches the DOM: focus it — once it mounts, if it is off the window — or
+    // scroll it into view.
+    const el = rowRefs.current.get(revealTarget);
+    if (el) {
+      if (focusRevealed) el.focus();
+      else el.scrollIntoView?.({ block: 'nearest' });
+      return;
+    }
+    if (focusRevealed) pendingFocus.current = revealTarget;
+    scrollToRow(revealTarget);
+  }, [rowItems, revealTarget, focusRevealed, scrollToRow]);
 
   useEffect(() => {
     const key = pendingFocus.current;
@@ -1118,12 +1183,19 @@ export function PageTree({
 
   // ── The whole-tree states ─────────────────────────────────────────────────
   const root = levels[ROOT_LEVEL]!;
-  const frame =
-    'overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-card)';
+  const compact = density === 'compact';
+  // The sidebar sits on its own column's surface — no card around it.
+  const frame = compact
+    ? ''
+    : 'overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-card)';
 
   if (root.failed === 'initial') {
     return (
-      <div className={frame} data-surface="card" data-testid="page-tree-failed">
+      <div
+        className={frame}
+        data-surface={compact ? undefined : 'card'}
+        data-testid="page-tree-failed"
+      >
         <div
           role="alert"
           className="flex items-center gap-2.5 px-(--spacing-card-padding) py-4 text-sm text-(--el-text)"
@@ -1192,6 +1264,7 @@ export function PageTree({
           expanded={item.expanded}
           busy={item.busy}
           onToggle={() => toggle(item.key)}
+          density={density}
           menu={folderMenu(item.row, item.parent ?? ROOT_LEVEL)}
           nameField={
             draft?.mode === 'rename' && draft.folderId === item.row.id
@@ -1213,6 +1286,8 @@ export function PageTree({
             else linkRefs.current.delete(item.key);
           }}
           menu={pageMenu(item.row, item.parent ?? ROOT_LEVEL)}
+          selected={item.key === selectedKey}
+          density={density}
         />
       );
     }
@@ -1321,12 +1396,12 @@ export function PageTree({
 
   return (
     <>
-      <div className={frame} data-surface="card">
+      <div className={frame} data-surface={compact ? undefined : 'card'}>
         <div
           ref={containerRef}
           role="tree"
-          aria-label={t('label')}
-          className="divide-y divide-(--el-border-soft)"
+          aria-label={compact ? t('sidebar.label') : t('label')}
+          className={compact ? undefined : 'divide-y divide-(--el-border-soft)'}
           style={windowing ? { position: 'relative', height: totalSize } : undefined}
         >
           {items.slice(range.start, range.end).map((item, i) => renderItem(item, range.start + i))}

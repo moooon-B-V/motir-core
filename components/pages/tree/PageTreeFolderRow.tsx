@@ -6,7 +6,8 @@ import { ChevronRight, Folder } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import {
   CHEVRON_CLASS,
-  TREE_ROW_CLASS,
+  treeRowClass,
+  type PageTreeDensity,
   type PageTreeFolderRowDto,
   type TreeItemProps,
 } from './pageTreeRow';
@@ -39,6 +40,8 @@ export interface PageTreeFolderRowProps {
   menu: ReactNode | null;
   /** The inline rename field, drawn in place of the name and the menu while it is open. */
   nameField?: ReactNode;
+  /** Row metrics and chrome: `/pages`' rows, or the sidebar's compact ones. */
+  density?: PageTreeDensity;
 }
 
 export function PageTreeFolderRow({
@@ -50,6 +53,7 @@ export function PageTreeFolderRow({
   onToggle,
   menu,
   nameField,
+  density = 'default',
 }: PageTreeFolderRowProps) {
   const t = useTranslations('folders');
   return (
@@ -66,7 +70,7 @@ export function PageTreeFolderRow({
       onFocus={item.onFocus}
       onClick={onToggle}
       data-testid="page-tree-folder"
-      className={cn(TREE_ROW_CLASS, 'cursor-pointer')}
+      className={cn(treeRowClass(density), 'cursor-pointer')}
       style={item.style}
     >
       <button

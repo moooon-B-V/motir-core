@@ -636,6 +636,7 @@ describe('pageTreeRow — level keys', () => {
   it('the compact density draws the sidebar’s 32px rows and 14px indent', () => {
     mount({ density: 'compact' });
     expect(item('Specs').style.height).toBe('32px');
-    expect(item('Specs').style.paddingLeft).toBe('20px');
+    // 8px in at the top level (MOTIR-7375: the sidebar has no drag gutter).
+    expect(item('Specs').style.paddingLeft).toBe('8px');
   });
 });

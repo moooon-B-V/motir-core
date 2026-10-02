@@ -19,6 +19,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { NewPageButton } from '@/app/(authed)/pages/_components/NewPageButton';
+import { NewFolderButton as PagesNewFolderButton } from '@/app/(authed)/pages/_components/NewFolderButton';
+import { FolderCommandsProvider } from '@/components/folders/FolderCommands';
 
 const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>();
 
@@ -167,4 +169,32 @@ describe('NewPageButton', () => {
     expect(await screen.findByText('Couldn’t create the page. Try again.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'New page' })).toHaveProperty('disabled', false);
   });
+});
+
+// NEW FOLDER on `/pages` (Story MOTIR-5753 · MOTIR-7374): rendered only for a
+// reader holding BOTH `page:edit` and `work_item:edit`, as the shared
+// `NewRootFolderButton` inside the page's folder command channel.
+describe('NewFolderButton (/pages)', () => {
+  function mountFolder(permissions: PermissionKey[]) {
+    return renderWithIntl(
+      <ProjectAccessProvider permissions={permissions}>
+        <FolderCommandsProvider>
+          <PagesNewFolderButton />
+        </FolderCommandsProvider>
+      </ProjectAccessProvider>,
+    );
+  }
+
+  it('renders New folder for a reader who may write pages AND folders', () => {
+    mountFolder(['page:view', 'page:edit', 'work_item:edit']);
+    expect(screen.getByRole('button', { name: 'New folder' })).toBeTruthy();
+  });
+
+  it.each([[['page:view', 'page:edit']], [['page:view', 'work_item:edit']]] as const)(
+    'renders nothing without both keys (%j)',
+    (permissions) => {
+      mountFolder([...permissions]);
+      expect(screen.queryByRole('button', { name: 'New folder' })).toBeNull();
+    },
+  );
 });
