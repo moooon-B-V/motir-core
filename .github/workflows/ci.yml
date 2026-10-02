@@ -895,7 +895,12 @@ jobs:
           HUSKY: '0'
       - run: pnpm --filter @motir/orchestrator typecheck
       - run: pnpm --filter @motir/orchestrator build
-      - run: pnpm --filter @motir/orchestrator test -- --coverage
+      # ⚠️ NO `--` BEFORE `--coverage` (MOTIR-7313, the same defect MOTIR-7281 fixed
+      # in the `pages` job). Under pnpm 11 the `--` is forwarded to the script, so
+      # it ran `vitest run -- --coverage`, where `--coverage` is a positional
+      # FILTER: coverage was never collected and the per-file floor never ran.
+      # Measured: that form prints no "Coverage enabled"; this one does.
+      - run: pnpm --filter @motir/orchestrator test --coverage
 
   pages:
     name: Pages package
