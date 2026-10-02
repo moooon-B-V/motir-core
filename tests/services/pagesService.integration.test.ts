@@ -142,17 +142,22 @@ describe('pagesService — access', () => {
     });
     expect(page).toMatchObject({ id: created.id, title: 'Spec', canEdit: false });
 
+    // Thunks, run one at a time: started together, a later refusal can reject
+    // before the loop attaches its handler, which vitest reports as an
+    // unhandled rejection and fails the run although every test passed.
     const refusals = [
-      pagesService.createPage(viewer, { projectId: f.projectId }),
-      pagesService.renamePage(viewer, { projectId: f.projectId, pageId: created.id, title: 'x' }),
-      pagesService.savePageUpdate(viewer, {
-        projectId: f.projectId,
-        pageId: created.id,
-        update: markdownToUpdate(emptyState(), 'nope'),
-      }),
+      () => pagesService.createPage(viewer, { projectId: f.projectId }),
+      () =>
+        pagesService.renamePage(viewer, { projectId: f.projectId, pageId: created.id, title: 'x' }),
+      () =>
+        pagesService.savePageUpdate(viewer, {
+          projectId: f.projectId,
+          pageId: created.id,
+          update: markdownToUpdate(emptyState(), 'nope'),
+        }),
     ];
     for (const refusal of refusals) {
-      const err = await refusal.then(
+      const err = await refusal().then(
         () => null,
         (e: unknown) => e,
       );
