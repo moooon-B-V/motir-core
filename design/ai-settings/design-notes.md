@@ -214,7 +214,7 @@ Adding a model later is one more option row — no layout change. **Do not inven
 the set from `PLANNER_MODELS` at implementation time.
 
 > **Amended 2026-10-02 (MOTIR-6257):** the **Fast** row is removed. DeepSeek retired
-> `deepseek-v4-flash` (absent from its own `/models` since the gateway's 2026-09-25 catalog
+> `deepseek-v4-flash` (absent from DeepSeek's own model listing since the gateway's 2026-09-25 catalog
 > refresh) and the gateway no longer prices or routes it, so the picker offers **Default** and
 > **Thorough** only. The table above and the mock's open picker stay as the record of their day.
 > The whole setting is retired by MOTIR-7228.
