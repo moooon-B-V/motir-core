@@ -916,7 +916,12 @@ jobs:
           HUSKY: '0'
       - run: pnpm --filter @motir/pages typecheck
       - run: pnpm --filter @motir/pages build
-      - run: pnpm --filter @motir/pages test -- --coverage
+      # ⚠️ NO `--` BEFORE `--coverage` (MOTIR-7281). Under pnpm 11 the `--` is
+      # forwarded to the script, so the script ran `vitest run -- --coverage`,
+      # where `--coverage` is a positional FILTER: coverage was never collected
+      # and the package's per-file floor never ran. Measured: that form prints no
+      # "Coverage enabled"; this one does, and fails on a file under the floor.
+      - run: pnpm --filter @motir/pages test --coverage
 
   # ── The design-asset guards (MOTIR-2442) ──────────────────────────────────
   # The one lane in this file with NO branch-prefix `if:`, and that absence is
@@ -2633,6 +2638,57 @@ jobs:
       - run: pnpm -r --filter './packages/*' build
       - run: pnpm coverage:review-agent
 
+  # Story MOTIR-5752 (write a page) — MOTIR-7281's story gate: a per-file floor over
+  # the app files the story created (`vitest.coverage.pages.config.ts`), measured by
+  # the story gate plus the per-card server and component suites. Needs Postgres for
+  # the same reason as the lanes above, and the package build: the app resolves
+  # `@motir/pages` from its `dist/`. The package's own floor is the `pages` job's.
+  story-5752-coverage:
+    name: Coverage (pages)
+    runs-on: ubuntu-latest
+    # A new lane with no CI run to quote yet. Observed 2.6 min of test time locally
+    # (16 files, coverage-instrumented, against Postgres), plus the fixed cost
+    # (checkout, Postgres, install, package build, `migrate deploy`). The 20-min
+    # ceiling bounds a hang rather than setting a target — replace it with a
+    # measured figure.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-5752
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-5752
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-5752.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-5752.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm coverage:pages
+
   ci-complete:
     name: CI complete
     # WHY `always()` AND an explicit result assertion — neither alone works:
@@ -2667,6 +2723,7 @@ jobs:
         story-683-coverage,
         story-6860-coverage,
         story-1626-coverage,
+        story-5752-coverage,
         e2e,
         e2e-at-scale,
         sandbox,

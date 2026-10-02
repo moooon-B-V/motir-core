@@ -19,8 +19,8 @@ import { PageView } from './_components/PageView';
 // `memberPageContext()` resolves the reader and their ACTIVE project, then
 // `pagesService.getPage` decides everything else in one transaction: whether
 // the reader may browse the project (`page:view`), whether the page exists, and
-// whether it lives in THIS project. Each refusal — `ProjectAccessDeniedError
-// ('browse')`, `PageNotFoundError` (an unknown id AND an id from another
+// whether it lives in THIS project. Each refusal — `ProjectAccessDeniedError`
+// (either kind), `PageNotFoundError` (an unknown id AND an id from another
 // project), `ProjectNotFoundError` — calls `notFound()`, so the three cases the
 // card names render the same screen under the same 404: the shared
 // `app/(authed)/not-found.tsx`, unchanged (design-notes § State 12 — a
@@ -44,8 +44,14 @@ const loadPage = cache(async (pageId: string): Promise<PageDto | null> => {
   try {
     return await pagesService.getPage(scope.service, { projectId: scope.projectId, pageId });
   } catch (err) {
+    // ⚠️ BOTH kinds of `ProjectAccessDeniedError` are a not-found here (MOTIR-7281).
+    // `getPage` asserts `page:view`, and a reader who may BROWSE the project but
+    // does not hold it — a workspace custom role, which holds `page:view` only
+    // when an admin ticks it — is refused with kind 'edit'. Rethrowing that sent
+    // them to the error boundary, while `/pages` answers the same reader with its
+    // `notFound()`. The page they cannot read is one they cannot see.
     if (
-      (err instanceof ProjectAccessDeniedError && err.kind === 'browse') ||
+      err instanceof ProjectAccessDeniedError ||
       err instanceof PageNotFoundError ||
       err instanceof ProjectNotFoundError
     ) {

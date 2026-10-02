@@ -98,6 +98,33 @@ describe('NewPageButton', () => {
     expect(push).toHaveBeenCalledWith('/pages/pg_9');
   });
 
+  it('the handler itself refuses a second create while one is in flight, not only the disabled attribute', async () => {
+    // `fireEvent.click` on the disabled button above never reaches the handler —
+    // React drops a click on a disabled control — so that case proves the
+    // ATTRIBUTE. This one proves the handler's own `pending` guard (MOTIR-7281),
+    // which is what stands if the control is ever re-enabled mid-flight: it calls
+    // the press React would dispatch, on the re-rendered (pending) button.
+    const answer = deferred<Response>();
+    fetchMock.mockReturnValueOnce(answer.promise);
+    mount();
+
+    fireEvent.click(screen.getByRole('button', { name: 'New page' }));
+    const button = screen.getByTestId('new-page-button');
+    const propsKey = Object.keys(button).find((k) => k.startsWith('__reactProps$'))!;
+    const { onClick } = (button as unknown as Record<string, { onClick: () => Promise<void> }>)[
+      propsKey
+    ]!;
+    await act(async () => {
+      await onClick();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      answer.resolve(json({ id: 'pg_1' }, 201));
+    });
+    expect(push).toHaveBeenCalledTimes(1);
+  });
+
   it('a refused create is a toast, nothing navigates, and the button returns', async () => {
     fetchMock.mockResolvedValueOnce(json({ code: 'PERMISSION_DENIED' }, 403));
     mount();
