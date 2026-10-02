@@ -2,10 +2,13 @@ import { Card } from '@/components/ui/Card';
 import { PageSkeleton } from '@/components/ui/PageSkeleton';
 
 /**
- * Panel 3 — loading. The page header and its two lines are static copy and
- * already painted above this frame; only the card's three rows wait, drawn as
- * a name, a trigger-sized block and a last-changed line. No model id is guessed
- * while motir-ai answers.
+ * The console AI planning page's loading frame (design panel 3). It lives under
+ * `components/`, like `SettingsPaneFrame`, because a page under `app/` does not
+ * consume `PageSkeleton` directly (tests/components/page-skeleton.test.tsx).
+ *
+ * The page header and its two lines are static copy and already painted above
+ * this frame; only the card's three rows wait, drawn as a name, a trigger-sized
+ * block and a last-changed line. No model id is guessed while motir-ai answers.
  */
 export function PlannerModelsSkeleton({ title }: { title: string }) {
   return (

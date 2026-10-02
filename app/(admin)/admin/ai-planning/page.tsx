@@ -7,7 +7,7 @@ import type { PlatformPlannerModelSettingsDTO } from '@/lib/dto/platformPlannerM
 import { requirePlatformStaff } from '@/lib/platform/auth';
 import { platformPlannerModelService } from '@/lib/services/platformPlannerModelService';
 import { PlannerModelRows } from './_components/PlannerModelRows';
-import { PlannerModelsSkeleton } from './_components/PlannerModelsSkeleton';
+import { PlannerModelsSkeleton } from '@/components/ai/PlannerModelsSkeleton';
 import { PlannerModelsUnavailable } from './_components/PlannerModelsUnavailable';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 
