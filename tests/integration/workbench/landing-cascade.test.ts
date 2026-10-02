@@ -8,6 +8,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import type { ProjectContext } from '@/lib/projects';
+import type { AbstractIntlMessages } from 'next-intl';
 
 // THE LANDING CASCADE, WIRED (Story MOTIR-5213 · MOTIR-5219) — the story gate's
 // integration seam, against real Postgres and the shipped services.
@@ -33,12 +34,15 @@ vi.mock('@/lib/auth', () => ({
   getSession: async () => (actor.ctx ? { user: { id: actor.ctx.userId } } : null),
 }));
 vi.mock('@/lib/projects', () => ({ getActiveProject: async () => actor.ctx }));
+// The catalogue goes in as `AbstractIntlMessages`: the namespace is chosen at
+// runtime, so a typed catalogue checks nothing here — it only makes
+// next-intl compute every key path in all ~600 KB of it.
 vi.mock('next-intl/server', async () => {
   const { createTranslator } = await import('next-intl');
-  const messages = (await import('@/messages/en.json')).default;
+  const messages = (await import('@/messages/en.json')).default as unknown as AbstractIntlMessages;
   return {
     getTranslations: async (namespace?: string) =>
-      createTranslator({ locale: 'en', messages, namespace: namespace as 'workbench' }),
+      createTranslator({ locale: 'en', messages, namespace: namespace as never }),
   };
 });
 vi.mock('next/navigation', () => ({

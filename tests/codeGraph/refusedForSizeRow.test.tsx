@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createTranslator } from 'next-intl';
+import { createTranslator, type AbstractIntlMessages } from 'next-intl';
 import enMessages from '@/messages/en.json';
 import zhMessages from '@/messages/zh.json';
 import type { CodeContextRepoDTO } from '@/lib/dto/codeContext';
@@ -16,12 +16,17 @@ import type { CodeContextRepoDTO } from '@/lib/dto/codeContext';
 
 const locale = vi.hoisted(() => ({ current: 'en' as 'en' | 'zh' }));
 
+// The catalogue goes in as `AbstractIntlMessages`: the namespace is chosen at
+// runtime (`as never`), so a typed catalogue checks nothing here — it only makes
+// next-intl compute every key path in all ~600 KB of it.
 vi.mock('next-intl/server', () => ({
   getLocale: async () => locale.current,
   getTranslations: async (namespace: string) =>
     createTranslator({
       locale: locale.current,
-      messages: locale.current === 'zh' ? zhMessages : enMessages,
+      messages: (locale.current === 'zh'
+        ? zhMessages
+        : enMessages) as unknown as AbstractIntlMessages,
       namespace: namespace as never,
     }),
 }));
