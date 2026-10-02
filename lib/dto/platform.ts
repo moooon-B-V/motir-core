@@ -1,3 +1,4 @@
+import type { CategoryFigures } from '@/lib/platform/spend';
 import type { PlatformAuditTargetKind, PlatformRole } from '@/generated/prisma/client';
 
 /**
@@ -281,4 +282,30 @@ export interface PlatformTenantListDTO {
   filterCapped: boolean;
   /** motir-ai could not be read; the list shows its error state. */
   unavailable: boolean;
+}
+
+/** One member row on the org page's Overview (MOTIR-733). Roles are read-only here. */
+export interface PlatformOrgMemberDTO {
+  id: string;
+  userId: string;
+  name: string | null;
+  email: string;
+  role: 'owner' | 'admin' | 'member';
+  joinedAt: string;
+}
+
+/** The org page's Overview tab (MOTIR-733, design D5) — one audited read. */
+export interface PlatformOrgOverviewDTO {
+  organization: PlatformOrganizationDetailDTO;
+  /** The operator writes recorded against the org — the shipped action log. */
+  actions: PlatformAuditLogDTO[];
+  /** This month's eight categories; null when motir-ai could not be read. */
+  monthCategories: CategoryFigures[] | null;
+  month: string;
+  members: { items: PlatformOrgMemberDTO[]; nextCursor: string | null; total: number };
+  workspaces: (PlatformWorkspaceSummaryDTO & { monthChargedCredits: number | null })[];
+  hasMoreWorkspaces: boolean;
+  /** This month's per-workspace credits could not be read. */
+  workspaceSpendUnavailable: boolean;
+  jobs: { items: PlatformActivityItemDTO[]; nextCursor: string | null; unavailable: boolean };
 }

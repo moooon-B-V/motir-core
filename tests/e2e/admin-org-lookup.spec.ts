@@ -78,7 +78,15 @@ test('@smoke platform staff reach the Tenants list and an org page; a tenant use
   await page.goto(`/admin/tenants/${org.id}`);
   await expect(page).toHaveURL(new RegExp(`/admin/tenants/${org.id}`));
   await expect(page.getByRole('heading', { name: org.name })).toBeVisible();
-  await expect(page.getByText('MOTIR-733').first()).toBeVisible();
+  // The org page's frame (MOTIR-733, design D5): ← Tenants and the three tabs.
+  await expect(page.getByRole('link', { name: 'Tenants' }).first()).toBeVisible();
+  const tabs = page.getByRole('navigation', { name: 'Organization sections' });
+  await expect(tabs.getByRole('link', { name: 'Overview' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(tabs.getByRole('link', { name: 'Usage & cost' })).toBeVisible();
+  await expect(tabs.getByRole('link', { name: 'Billing & plans' })).toBeVisible();
 
   // ── And the read wrote its audit row. The banner on screen claims it; this is
   //    the claim checked against the table, because a banner beside a read that

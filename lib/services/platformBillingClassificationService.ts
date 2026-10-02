@@ -91,7 +91,7 @@ export const PLATFORM_ORG_SEARCH_LIMIT = 20;
 export const PLATFORM_ORG_SEARCH_MIN_LENGTH = 2;
 
 /** How many audit rows the org page reads before filtering to the writes. */
-const PLATFORM_ORG_ACTION_LOG_LIMIT = 50;
+export const PLATFORM_ORG_ACTION_LOG_LIMIT = 50;
 
 /**
  * Is this row an operator WRITE, as the page's log means the word?
@@ -108,7 +108,7 @@ const PLATFORM_ORG_ACTION_LOG_LIMIT = 50;
  * and excluding it under-reports where including it would assert that a write
  * happened on the strength of not recognising the name.
  */
-function isOperatorWrite(row: { action: string }): boolean {
+export function isOperatorWrite(row: { action: string }): boolean {
   return isPlatformAuditAction(row.action) && reasonPolicyFor(row.action) === 'required';
 }
 

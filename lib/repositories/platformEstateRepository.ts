@@ -83,6 +83,38 @@ export const platformEstateRepository = {
     });
   },
 
+  /**
+   * One keyset page of an organization's MEMBERS (MOTIR-733), oldest first on
+   * `(createdAt, id)` — the person, their organization role and when they joined.
+   */
+  async listOrganizationMembers(
+    organizationId: string,
+    input: { take: number; after: { at: Date; id: string } | null },
+    tx: Prisma.TransactionClient,
+  ) {
+    return tx.organizationMembership.findMany({
+      where: {
+        organizationId,
+        ...(input.after
+          ? {
+              OR: [
+                { createdAt: { gt: input.after.at } },
+                { createdAt: input.after.at, id: { gt: input.after.id } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: input.take,
+      select: {
+        id: true,
+        role: true,
+        createdAt: true,
+        user: { select: { id: true, name: true, email: true } },
+      },
+    });
+  },
+
   /** How many accounts hold a membership of one organization. */
   async countOrganizationMembers(
     organizationId: string,

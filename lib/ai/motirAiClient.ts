@@ -2487,3 +2487,46 @@ export async function getPlatformUsageOrgs(query: {
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawPlatformUsageOrgs;
 }
+
+/** `GET /v1/platform/usage/children` — an entity's children's spend, one keyset page. */
+export interface RawPlatformUsageChildren {
+  period: string;
+  sort: SpendListSort;
+  level: PlatformUsageLevel;
+  entityId: string;
+  childLevel: PlatformUsageLevel;
+  items: RawSpendRow[];
+  nextCursor: string | null;
+  /** At organization scope: what no workspace holds (no project; org-level by nature). */
+  remainder: { noProject: RawSpendRow; orgLevel: RawSpendRow } | null;
+}
+
+/**
+ * GET /v1/platform/usage/children — the spend of an organization's workspaces (or
+ * a workspace's projects) for `period`, keyset-paged by `sort`; at organization
+ * scope it also carries the `remainder` rows no workspace holds.
+ */
+export async function getPlatformUsageChildren(query: {
+  period: string;
+  level: Exclude<PlatformUsageLevel, 'platform' | 'project'>;
+  entityId: string;
+  sort?: SpendListSort | null;
+  limit?: number | null;
+  cursor?: string | null;
+}): Promise<RawPlatformUsageChildren> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({
+    period: query.period,
+    level: query.level,
+    entityId: query.entityId,
+  });
+  if (query.sort) params.set('sort', query.sort);
+  if (query.limit) params.set('limit', String(query.limit));
+  if (query.cursor) params.set('cursor', query.cursor);
+  const res = await aiFetch(`${url}/v1/platform/usage/children?${params.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawPlatformUsageChildren;
+}

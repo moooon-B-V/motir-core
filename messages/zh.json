@@ -8741,10 +8741,6 @@
       }
     },
     "orgs": {
-      "breadcrumb": "平台 · 租户",
-      "breadcrumbAria": "面包屑导航",
-      "crumbPlatform": "平台",
-      "crumbTenants": "租户",
       "title": "组织",
       "subtitle": "按名称或标识查找组织。打开任一组织都会记录一次跨租户读取。",
       "auditBanner": "你正以平台staff身份查看 {name}。此次跨租户读取已记入审计日志（操作者 {operator}）。",
@@ -8757,12 +8753,6 @@
         "internalBilling": "internalBilling"
       },
       "pending": {
-        "usageTitle": "用量与成本",
-        "usageEmptyTitle": "尚未构建",
-        "membersTitle": "成员",
-        "membersEmptyTitle": "尚未构建",
-        "jobsTitle": "最近作业",
-        "jobsEmptyTitle": "尚未构建",
         "broughtBy": "该面板属于 {owner}。此处画作预留区域而非占位数字——写个 0 会看起来像一个答案。"
       },
       "action": {
@@ -8939,6 +8929,53 @@
       "unavailable": {
         "title": "暂时无法显示列表",
         "description": "保存用量汇总的 AI 服务没有响应。请稍后再试。"
+      }
+    },
+    "orgPage": {
+      "back": "租户",
+      "tabsLabel": "组织分区",
+      "tabs": {
+        "overview": "概览",
+        "usage": "用量与成本",
+        "billing": "账单与套餐"
+      },
+      "month": {
+        "title": "用量与成本 · {month}",
+        "open": "打开用量与成本",
+        "category": "类别",
+        "credits": "积分",
+        "cost": "Motir 成本",
+        "notCharged": "不收费",
+        "total": "合计",
+        "unavailable": "暂时无法显示本月用量——AI 服务没有响应。"
+      },
+      "members": {
+        "title": "成员",
+        "empty": "该组织没有成员。",
+        "next": "下一批成员",
+        "first": "第一批成员",
+        "role": {
+          "owner": "所有者",
+          "admin": "管理员",
+          "member": "成员"
+        }
+      },
+      "workspaces": {
+        "title": "工作区",
+        "empty": "该组织没有工作区。",
+        "name": "工作区",
+        "projects": "项目",
+        "members": "成员",
+        "credits": "本月积分",
+        "spendUnavailable": "暂时无法显示本月积分——AI 服务没有响应。",
+        "more": "工作区数量超过此列表显示的数量。"
+      },
+      "jobs": {
+        "title": "最近的任务",
+        "empty": "该组织没有记录任何规划或智能体运行。",
+        "unavailable": "暂时无法显示最近的任务——AI 服务没有响应。",
+        "newer": "更新",
+        "older": "更早"
       }
     }
   },

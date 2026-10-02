@@ -8745,10 +8745,6 @@
       }
     },
     "orgs": {
-      "breadcrumb": "Platform · Tenants",
-      "breadcrumbAria": "Breadcrumb",
-      "crumbPlatform": "Platform",
-      "crumbTenants": "Tenants",
       "title": "Organizations",
       "subtitle": "Find an organization by name or slug. Opening one is an audited cross-tenant read.",
       "auditBanner": "You are viewing {name} as platform staff. This cross-tenant read is recorded in the audit log (operator {operator}).",
@@ -8761,12 +8757,6 @@
         "internalBilling": "internalBilling"
       },
       "pending": {
-        "usageTitle": "Usage & cost",
-        "usageEmptyTitle": "Not built yet",
-        "membersTitle": "Members",
-        "membersEmptyTitle": "Not built yet",
-        "jobsTitle": "Recent jobs",
-        "jobsEmptyTitle": "Not built yet",
         "broughtBy": "This panel is {owner}’s. It is drawn as a reserved region rather than a placeholder figure — a zero here would look like an answer."
       },
       "action": {
@@ -8943,6 +8933,53 @@
       "unavailable": {
         "title": "The list can't be shown right now",
         "description": "The AI service that keeps the usage rollup did not answer. Try again in a moment."
+      }
+    },
+    "orgPage": {
+      "back": "Tenants",
+      "tabsLabel": "Organization sections",
+      "tabs": {
+        "overview": "Overview",
+        "usage": "Usage & cost",
+        "billing": "Billing & plans"
+      },
+      "month": {
+        "title": "Usage & cost · {month}",
+        "open": "Open Usage & cost",
+        "category": "Category",
+        "credits": "Credits",
+        "cost": "Motir cost",
+        "notCharged": "not charged",
+        "total": "Total",
+        "unavailable": "This month's usage can't be shown right now — the AI service did not answer."
+      },
+      "members": {
+        "title": "Members",
+        "empty": "This organization has no members.",
+        "next": "Next members",
+        "first": "First members",
+        "role": {
+          "owner": "Owner",
+          "admin": "Admin",
+          "member": "Member"
+        }
+      },
+      "workspaces": {
+        "title": "Workspaces",
+        "empty": "This organization has no workspaces.",
+        "name": "Workspace",
+        "projects": "Projects",
+        "members": "Members",
+        "credits": "Credits this month",
+        "spendUnavailable": "This month's credits can't be shown right now — the AI service did not answer.",
+        "more": "More workspaces exist than this list shows."
+      },
+      "jobs": {
+        "title": "Recent jobs",
+        "empty": "No planning or agent run was recorded for this organization.",
+        "unavailable": "Recent jobs can't be shown right now — the AI service did not answer.",
+        "newer": "Newer",
+        "older": "Older"
       }
     }
   },
