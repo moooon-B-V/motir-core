@@ -136,3 +136,32 @@ export class PlatformClassificationStateError extends Error {
     this.name = 'PlatformClassificationStateError';
   }
 }
+
+/**
+ * A planner-model save named the model the audience already holds (MOTIR-7227).
+ *
+ * Refused BEFORE the audited transaction opens, so the trail never records a
+ * change that changed nothing — the same reason `PlatformClassificationStateError`
+ * exists, one surface over.
+ */
+export class PlannerModelUnchangedError extends Error {
+  readonly code = 'PLANNER_MODEL_UNCHANGED';
+
+  constructor(
+    readonly audience: string,
+    readonly model: string,
+  ) {
+    super(`The ${audience} audience already plans with "${model}"`);
+    this.name = 'PlannerModelUnchangedError';
+  }
+}
+
+/** A planner-model save named an audience that is not one of the three (MOTIR-7227). */
+export class PlannerAudienceUnknownError extends Error {
+  readonly code = 'PLANNER_AUDIENCE_UNKNOWN';
+
+  constructor(readonly audience: string) {
+    super(`"${audience}" is not a planning audience — expected customer, meta or internal`);
+    this.name = 'PlannerAudienceUnknownError';
+  }
+}

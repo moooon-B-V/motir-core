@@ -177,6 +177,9 @@ describe('the reason rule', () => {
     // being billed again?" as readably as it answers why it stopped.
     'org.internal_billing_set': 'required',
     'org.internal_billing_unset': 'required',
+    // The platform planning model per audience (Story MOTIR-7220 · MOTIR-7227) —
+    // `superadmin` and `required`, like every billing-class row in ADR §7.
+    'ai.planner_model.set': 'required',
   } as const;
 
   it('every action carries the policy the ADR allocates it', () => {

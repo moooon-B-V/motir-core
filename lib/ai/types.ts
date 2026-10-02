@@ -918,3 +918,55 @@ export interface RawPreplanStateResponse {
   docs: RawPreplanArtifactLog[];
   catalog: RawPreplanCatalog | null;
 }
+
+// ── GET / PUT /v1/planner-model-settings — the platform planning model ────────
+// (Story MOTIR-7220 · MOTIR-7227; motir-ai `docs/contract.md` § The planner-model
+// settings.) A MIRROR of motir-ai's contract, the way `JobKind` mirrors §2.3:
+// which model Motir plans with is one setting per AUDIENCE, stored and validated
+// in motir-ai, and read and written only by the operator console.
+
+/** The three audiences, in the order motir-ai answers them. */
+export const PLANNER_AUDIENCES = ['customer', 'meta', 'internal'] as const;
+export type PlannerAudience = (typeof PLANNER_AUDIENCES)[number];
+
+/** One audience's setting as motir-ai serves it. */
+export interface PlannerModelSettingRead {
+  audience: PlannerAudience;
+  model: string;
+  /** False once the stored model left the offered list — jobs then run on the fallback. */
+  offered: boolean;
+  updatedAt: string;
+  updatedByCoreUserId: string | null;
+  /** The last probe's verdict; null when the model has never been probed. */
+  reachable: boolean | null;
+  lastProbeAt: string | null;
+  lastProbeError: string | null;
+}
+
+/** A model motir-ai would accept for planning, right now. */
+export interface PlannerOfferedModel {
+  id: string;
+  provider: string;
+}
+
+/** The raw `GET /v1/planner-model-settings` body. */
+export interface PlannerModelSettingsRead {
+  settings: PlannerModelSettingRead[];
+  offered: PlannerOfferedModel[];
+}
+
+/** The `PUT /v1/planner-model-settings` body. */
+export interface PlannerModelWriteInput {
+  audience: PlannerAudience;
+  model: string;
+  /** The core user making the change — motir-ai stores it as `updatedByCoreUserId`. */
+  actorCoreUserId: string;
+}
+
+/** The `PUT /v1/planner-model-settings` answer. `previousModel` was read under motir-ai's row lock. */
+export interface PlannerModelWriteResult {
+  audience: PlannerAudience;
+  previousModel: string;
+  model: string;
+  updatedAt: string;
+}
