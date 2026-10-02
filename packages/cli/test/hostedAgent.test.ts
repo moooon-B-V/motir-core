@@ -26,7 +26,7 @@ import {
  * only one, and this literal is what holds it to the contract.)
  *
  * Pinned to §2 as amended by MOTIR-7357 (story MOTIR-7351) — motir-gateway commit
- * `3e1ef68` on `parent/MOTIR-7351-hosted-kimi`: `anthropic`, `deepseek`, `z-ai`,
+ * `aa55517` on `parent/MOTIR-7351-hosted-kimi`: `anthropic`, `deepseek`, `z-ai`,
  * `qwen` and `moonshotai`, all at the gateway on the run key. The two custom
  * providers name their package (`@ai-sdk/openai-compatible`, bundled in the binary);
  * `moonshotai` is a bundled provider whose block only overrides `baseURL` and
