@@ -11680,6 +11680,43 @@
         "reload": "Reload saved version",
         "newPageNewTab": "New page in a new tab"
       }
+    },
+    "history": {
+      "open": "History",
+      "title": "History",
+      "close": "Close history",
+      "listLabel": "Versions of this page",
+      "version": "v{number}",
+      "versionLabel": "Version {number}",
+      "current": "Current",
+      "you": "You",
+      "restoredFrom": "Restored from v{number}",
+      "noLongerKept": "(no longer kept)",
+      "loading": "Loading history",
+      "loadFailed": "Couldn’t load the history.",
+      "retry": "Try again",
+      "loadMore": "Load more",
+      "keepsLatest": "A page keeps its latest 100 versions.",
+      "onlyVersion": "This is the only version so far. Each editing session adds one.",
+      "compare": {
+        "label": "Comparing v{number} with the current page",
+        "current": "Current page",
+        "close": "Close v{number}"
+      },
+      "restore": "Restore this version",
+      "confirm": {
+        "title": "Restore v{number}?",
+        "body": "The page will show v{number}’s content as a new version. Nothing is deleted.",
+        "action": "Restore v{number}"
+      },
+      "restoring": "Restoring…",
+      "restored": "Restored v{from} as v{number}.",
+      "refusal": {
+        "tooLarge": "v{number} can’t be restored: the page would pass its 2 MB limit. Nothing was changed.",
+        "gone": "v{number} is no longer kept — a page keeps its latest 100 versions. Nothing was changed, and the list has been refreshed.",
+        "failed": "v{number} couldn’t be restored. Nothing was changed — try again."
+      },
+      "unsavedHold": "Restore is held until your edits are saved. It becomes available as soon as the page says Saved."
     }
   }
 }

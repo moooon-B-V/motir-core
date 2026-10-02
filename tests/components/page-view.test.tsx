@@ -53,6 +53,7 @@ async function mount(page: Partial<PageViewPage> = {}) {
       <PageView
         page={{ id: 'page-1', title: '', bodyState: EMPTY_STATE, canEdit: true, ...page }}
         titleMaxLength={255}
+        viewerId="user-1"
       />
     </Suspense>,
   );
