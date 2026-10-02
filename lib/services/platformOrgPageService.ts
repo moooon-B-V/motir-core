@@ -5,9 +5,11 @@ import {
   getPlatformRuns,
   getPlatformUsage,
   getPlatformUsageChildren,
+  getPlatformUsageMonths,
   type RawPlatformRunsPage,
   type RawPlatformUsage,
   type RawPlatformUsageChildren,
+  type RawSpendRow,
 } from '@/lib/ai/motirAiClient';
 import type {
   PlatformOrgOverviewDTO,
@@ -49,6 +51,10 @@ import { PLATFORM_ORG_WORKSPACE_LIMIT } from '@/lib/services/platformReadService
 export const ORG_MEMBERS_PAGE = 20;
 /** The scope picker's cap on projects — an org beyond it picks through its workspaces. */
 export const ORG_SCOPE_PROJECT_LIMIT = 500;
+/** One read of an entity's children for the by-workspace table. */
+export const ORG_CHILDREN_LIMIT = 100;
+/** Months per page of the month-by-month table. */
+export const ORG_MONTHS_PAGE = 24;
 export const ORG_JOBS_PAGE = 10;
 
 function encodeCursor(at: Date, id: string): string {
@@ -218,7 +224,7 @@ export const platformOrgPageService = {
   async getUsageTab(
     principal: PlatformPrincipal,
     organizationId: string,
-    input: { period: string; scope?: string | null },
+    input: { period: string; scope?: string | null; monthsCursor?: string | null },
   ): Promise<PlatformOrgUsageTabDTO> {
     await requirePlatformStaff('support');
     const asked = parseScopeParam(input.scope);
@@ -265,17 +271,35 @@ export const platformOrgPageService = {
         };
     }
 
-    const [usage, balance] = await Promise.all([
-      settle(
-        getPlatformUsage({
-          period: input.period,
-          level: scope.level,
-          entityId: scope.level === 'organization' ? organizationId : scope.id,
-        }),
-      ),
+    const entityId = scope.level === 'organization' ? organizationId : scope.id;
+    const [usage, balance, children, months] = await Promise.all([
+      settle(getPlatformUsage({ period: input.period, level: scope.level, entityId })),
       settle(
         getOrgUsage({ coreOrganizationId: organizationId, scope: 'org' }).then((u) => u.balance),
       ),
+      scope.level === 'project'
+        ? Promise.resolve(null)
+        : settle(
+            getPlatformUsageChildren({
+              period: input.period,
+              level: scope.level,
+              entityId,
+              sort: 'cost',
+              limit: ORG_CHILDREN_LIMIT,
+            }),
+          ),
+      settle(
+        getPlatformUsageMonths({
+          level: scope.level,
+          entityId,
+          limit: ORG_MONTHS_PAGE,
+          cursor: input.monthsCursor ?? null,
+        }),
+      ),
+    ]);
+    const names = new Map<string, string>([
+      ...local.workspaces.map((w) => [w.id, w.name] as const),
+      ...local.projects.map((p) => [p.id, p.name] as const),
     ]);
 
     return {
@@ -291,6 +315,72 @@ export const platformOrgPageService = {
       })),
       usage,
       balance,
+      children: children
+        ? {
+            childLevel:
+              scope.level === 'organization' ? ('workspace' as const) : ('project' as const),
+            rows: children.items.map((r) => ({ ...r, name: names.get(r.entityId) ?? r.entityId })),
+            remainder: children.remainder,
+            truncated: children.nextCursor !== null,
+          }
+        : null,
+      childrenUnavailable: scope.level !== 'project' && children === null,
+      months,
+    };
+  },
+
+  /**
+   * One workspace's PROJECTS for the by-workspace table's expansion (MOTIR-7293).
+   * The workspace must belong to the org in the URL — checked in the ONE audited
+   * read before motir-ai is asked; anything else is a not-found.
+   */
+  async getWorkspaceProjectsSpend(
+    principal: PlatformPrincipal,
+    organizationId: string,
+    workspaceId: string,
+    period: string,
+  ): Promise<{ rows: (RawSpendRow & { name: string })[]; truncated: boolean } | null> {
+    await requirePlatformStaff('support');
+    const projects = await withPlatformRead(
+      principal,
+      {
+        action: 'estate.read',
+        targetKind: 'organization',
+        targetId: organizationId,
+        organizationId,
+        targetLabel: `usage workspace:${workspaceId} projects ${period}`,
+      },
+      async (tx) => {
+        const workspaces = await platformEstateRepository.listWorkspacesForOrganization(
+          organizationId,
+          PLATFORM_ORG_WORKSPACE_LIMIT,
+          tx,
+        );
+        if (!workspaces.some((w) => w.id === workspaceId)) {
+          throw new PlatformOrganizationNotFoundError(organizationId);
+        }
+        const all = await platformEstateRepository.listProjectsForOrganization(
+          organizationId,
+          ORG_SCOPE_PROJECT_LIMIT,
+          tx,
+        );
+        return all.filter((p) => p.workspaceId === workspaceId);
+      },
+    );
+    const page = await settle(
+      getPlatformUsageChildren({
+        period,
+        level: 'workspace',
+        entityId: workspaceId,
+        sort: 'cost',
+        limit: ORG_CHILDREN_LIMIT,
+      }),
+    );
+    if (!page) return null;
+    const names = new Map(projects.map((p) => [p.id, p.name]));
+    return {
+      rows: page.items.map((r) => ({ ...r, name: names.get(r.entityId) ?? r.entityId })),
+      truncated: page.nextCursor !== null,
     };
   },
 };

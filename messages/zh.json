@@ -9012,6 +9012,35 @@
       "unavailable": {
         "title": "暂时无法显示用量",
         "description": "保存用量汇总的 AI 服务没有响应。上方的组织信息是最新的。"
+      },
+      "children": {
+        "title": "按工作区和项目",
+        "workspace": "工作区",
+        "project": "项目",
+        "indexingMinutes": "索引（分钟）",
+        "charged": "收费",
+        "cost": "Motir 成本",
+        "empty": "此范围下在该时间段没有消费。",
+        "loading": "正在加载项目…",
+        "projectsUnavailable": "暂时无法显示该工作区的项目。",
+        "noProjects": "该工作区在此时间段没有项目产生消费。",
+        "noProject": "未关联项目的智能体运行",
+        "orgLevel": "组织级（不按项目）",
+        "truncated": "仅显示 Motir 成本最高的 100 项。",
+        "projectScope": "项目下没有工作区或项目。",
+        "unavailable": "暂时无法显示此表——AI 服务没有响应。"
+      },
+      "months": {
+        "title": "按月",
+        "month": "月份",
+        "indexingMinutes": "索引（分钟）",
+        "charged": "收费",
+        "cost": "Motir 成本",
+        "allTime": "全部时间",
+        "empty": "还没有任何月份产生消费。",
+        "older": "更早的月份",
+        "newest": "最新的月份",
+        "unavailable": "暂时无法显示此表——AI 服务没有响应。"
       }
     }
   },

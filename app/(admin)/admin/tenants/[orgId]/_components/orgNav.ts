@@ -29,3 +29,19 @@ export function orgTabHref(orgId: string, tab: OrgTab, backHref: string): string
   const q = p.toString();
   return `/admin/tenants/${encodeURIComponent(orgId)}${q ? `?${q}` : ''}`;
 }
+
+/**
+ * The Usage & cost tab's URL for a period (MOTIR-7293) — what a month row of the
+ * month-by-month table links to. Keeps the scope and `from`; a months cursor is
+ * only carried when given, so choosing a period starts the series at its newest.
+ */
+export function orgUsageHref(
+  orgId: string,
+  input: { period: string; scope?: string | null; months?: string | null; backHref: string },
+): string {
+  const p = new URLSearchParams({ tab: 'usage', period: input.period });
+  if (input.scope) p.set('scope', input.scope);
+  if (input.months) p.set('months', input.months);
+  if (input.backHref !== '/admin/tenants') p.set('from', input.backHref);
+  return `/admin/tenants/${encodeURIComponent(orgId)}?${p.toString()}`;
+}

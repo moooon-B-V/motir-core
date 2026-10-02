@@ -17,7 +17,13 @@ import { formatMicroUsd } from '../../_components/spendFormat';
 import { OrgIndexCostCard } from './_components/OrgIndexCostCard';
 import { OrgPageHeader } from './_components/OrgPageHeader';
 import { UsageTab } from './_components/UsageTab';
-import { orgTabHref, parseOrgTab, safeTenantsHref, type OrgTab } from './_components/orgNav';
+import {
+  orgTabHref,
+  orgUsageHref,
+  parseOrgTab,
+  safeTenantsHref,
+  type OrgTab,
+} from './_components/orgNav';
 
 /**
  * The operator's ORG PAGE — design `console--estate-usage-drilldown.mock.html`
@@ -53,6 +59,7 @@ export default async function AdminOrganizationPage({
     jobs?: string;
     period?: string;
     scope?: string;
+    months?: string;
   }>;
 }) {
   const principal = await requirePlatformStaff('support');
@@ -67,6 +74,7 @@ export default async function AdminOrganizationPage({
       usage = await platformOrgPageService.getUsageTab(principal, orgId, {
         period: parseSpendPeriod(query.period),
         scope: query.scope ?? null,
+        monthsCursor: query.months ?? null,
       });
     } catch (err) {
       if (err instanceof PlatformOrganizationNotFoundError) notFound();
@@ -80,7 +88,13 @@ export default async function AdminOrganizationPage({
           tab="usage"
           backHref={backHref}
         />
-        <UsageTab data={usage} />
+        <UsageTab
+          data={usage}
+          monthsCursor={query.months ?? null}
+          hrefFor={(period, months) =>
+            orgUsageHref(orgId, { period, scope: query.scope, months, backHref })
+          }
+        />
       </div>
     );
   }

@@ -1,5 +1,9 @@
 import type { CategoryFigures } from '@/lib/platform/spend';
-import type { RawPlatformUsage as RawPlatformUsageForDto } from '@/lib/ai/motirAiClient';
+import type {
+  RawPlatformUsage as RawPlatformUsageForDto,
+  RawPlatformUsageMonths,
+  RawSpendRow,
+} from '@/lib/ai/motirAiClient';
 import type { PlatformAuditTargetKind, PlatformRole } from '@/generated/prisma/client';
 
 /**
@@ -328,4 +332,18 @@ export interface PlatformOrgUsageTabDTO {
   usage: RawPlatformUsageForDto | null;
   /** The org's credit balance now; null when it could not be read. */
   balance: number | null;
+  /**
+   * BY WORKSPACE AND PROJECT (MOTIR-7293): the scope's children with their names,
+   * and — at org scope — the two rows no workspace holds. Null at project scope
+   * (a project has no children) or when motir-ai could not be read (`childrenUnavailable`).
+   */
+  children: {
+    childLevel: 'workspace' | 'project';
+    rows: (RawSpendRow & { name: string })[];
+    remainder: { noProject: RawSpendRow; orgLevel: RawSpendRow } | null;
+    truncated: boolean;
+  } | null;
+  childrenUnavailable: boolean;
+  /** MONTH BY MONTH (MOTIR-7293), newest first, with the all-time row. */
+  months: RawPlatformUsageMonths | null;
 }

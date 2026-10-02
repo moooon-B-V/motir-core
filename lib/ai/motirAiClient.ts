@@ -2530,3 +2530,52 @@ export async function getPlatformUsageChildren(query: {
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawPlatformUsageChildren;
 }
+
+/** One period's figures in the month series (`/v1/platform/usage/months`). */
+export interface RawMonthFigures {
+  /** `YYYY-MM`, or `all` for the all-time row. */
+  period: string;
+  categories: Record<
+    SpendCategory,
+    { credits: number; usageQuantity: number; costMicroUsd: number }
+  >;
+  spend: {
+    chargedCredits: number;
+    chargedCostMicroUsd: number;
+    costMicroUsdInclIndexing: number;
+    machineSeconds: number;
+  };
+}
+
+export interface RawPlatformUsageMonths {
+  level: PlatformUsageLevel;
+  entityId: string;
+  /** Newest first. */
+  items: RawMonthFigures[];
+  /** A `YYYY-MM` to pass back for the older months. */
+  nextCursor: string | null;
+  allTime: RawMonthFigures;
+}
+
+/**
+ * GET /v1/platform/usage/months — one entity's spend month by month, newest first,
+ * keyset on the month, with its all-time row.
+ */
+export async function getPlatformUsageMonths(query: {
+  level: PlatformUsageLevel;
+  entityId?: string | null;
+  limit?: number | null;
+  cursor?: string | null;
+}): Promise<RawPlatformUsageMonths> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ level: query.level });
+  if (query.entityId) params.set('entityId', query.entityId);
+  if (query.limit) params.set('limit', String(query.limit));
+  if (query.cursor) params.set('cursor', query.cursor);
+  const res = await aiFetch(`${url}/v1/platform/usage/months?${params.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawPlatformUsageMonths;
+}

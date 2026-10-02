@@ -6,19 +6,25 @@ import { buildSpendSheet, recentMonths } from '@/lib/platform/spend';
 import { SpendPeriodSwitch } from '../../../_components/SpendPeriodSwitch';
 import { formatMicroUsd } from '../../../_components/spendFormat';
 import { CategoryModelSheet } from './CategoryModelSheet';
+import { MonthTable } from './MonthTable';
 import { ScopePicker } from './ScopePicker';
+import { SpendChildrenTable } from './SpendChildrenTable';
 
 /**
  * The org page's USAGE & COST tab (MOTIR-7288, design D8 / D11): the scope picker on
  * the left and the period switch on the right of the toolbar row; four figures;
- * the category-and-model sheet. The two list tables beneath it are MOTIR-7293's.
+ * the category-and-model sheet (MOTIR-7288); by workspace and project, and month by
+ * month (MOTIR-7293).
  */
 export async function UsageTab({
   data,
-  children,
+  hrefFor,
+  monthsCursor,
 }: {
   data: PlatformOrgUsageTabDTO;
-  children?: React.ReactNode;
+  /** The tab's URL with the given `period` (and an optional months cursor). */
+  hrefFor: (period: string, monthsCursor?: string | null) => string;
+  monthsCursor: string | null;
 }) {
   const t = await getTranslations('platformAdmin.orgUsage');
   const tu = await getTranslations('platformAdmin.usage');
@@ -69,7 +75,56 @@ export async function UsageTab({
       ) : (
         <UsageBody data={data} t={t} />
       )}
-      {children}
+
+      <Card
+        className="overflow-x-auto p-0"
+        header={
+          <h2 className="font-sans text-sm font-semibold text-(--el-text)">
+            {t('children.title')}
+          </h2>
+        }
+      >
+        {data.scope.level === 'project' ? (
+          <p className="p-3 font-sans text-sm text-(--el-text-secondary)">
+            {t('children.projectScope')}
+          </p>
+        ) : data.childrenUnavailable || !data.children ? (
+          <p role="status" className="p-3 font-sans text-sm text-(--el-text-secondary)">
+            {t('children.unavailable')}
+          </p>
+        ) : (
+          <SpendChildrenTable
+            key={`${data.scope.level}:${data.period}`}
+            orgId={data.organization.id}
+            period={data.period}
+            childLevel={data.children.childLevel}
+            rows={data.children.rows}
+            remainder={data.children.remainder}
+            truncated={data.children.truncated}
+          />
+        )}
+      </Card>
+
+      <Card
+        className="overflow-x-auto p-0"
+        header={
+          <h2 className="font-sans text-sm font-semibold text-(--el-text)">{t('months.title')}</h2>
+        }
+      >
+        {!data.months ? (
+          <p role="status" className="p-3 font-sans text-sm text-(--el-text-secondary)">
+            {t('months.unavailable')}
+          </p>
+        ) : (
+          <MonthTable
+            months={data.months}
+            hrefFor={(period) => hrefFor(period)}
+            olderHref={data.months.nextCursor ? hrefFor(data.period, data.months.nextCursor) : null}
+            newestHref={monthsCursor ? hrefFor(data.period) : null}
+            currentPeriod={data.period}
+          />
+        )}
+      </Card>
     </>
   );
 }

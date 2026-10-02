@@ -9016,6 +9016,35 @@
       "unavailable": {
         "title": "Usage can't be shown right now",
         "description": "The AI service that keeps the usage rollup did not answer. The organization's own details above are current."
+      },
+      "children": {
+        "title": "By workspace and project",
+        "workspace": "Workspace",
+        "project": "Project",
+        "indexingMinutes": "Indexing (min)",
+        "charged": "Charged",
+        "cost": "Motir cost",
+        "empty": "Nothing beneath this scope spent in the period.",
+        "loading": "Loading projects…",
+        "projectsUnavailable": "This workspace's projects can't be shown right now.",
+        "noProjects": "No project in this workspace spent in the period.",
+        "noProject": "Agent runs with no project",
+        "orgLevel": "Org-level (not by project)",
+        "truncated": "Showing the 100 highest by Motir cost.",
+        "projectScope": "A project has no workspaces or projects beneath it.",
+        "unavailable": "This table can't be shown right now — the AI service did not answer."
+      },
+      "months": {
+        "title": "Month by month",
+        "month": "Month",
+        "indexingMinutes": "Indexing (min)",
+        "charged": "Charged",
+        "cost": "Motir cost",
+        "allTime": "All time",
+        "empty": "No month has spend yet.",
+        "older": "Older months",
+        "newest": "Newest months",
+        "unavailable": "This table can't be shown right now — the AI service did not answer."
       }
     }
   },

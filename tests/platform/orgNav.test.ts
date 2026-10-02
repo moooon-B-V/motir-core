@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   orgTabHref,
+  orgUsageHref,
   parseOrgTab,
   safeTenantsHref,
 } from '@/app/(admin)/admin/tenants/[orgId]/_components/orgNav';
@@ -43,5 +44,19 @@ describe('orgTabHref / parseOrgTab', () => {
     expect(parseOrgTab('billing')).toBe('billing');
     expect(parseOrgTab('nope')).toBe('overview');
     expect(parseOrgTab(undefined)).toBe('overview');
+  });
+});
+
+describe('orgUsageHref (MOTIR-7293)', () => {
+  it('a month row sets the tab’s period and keeps the scope and ← Tenants', () => {
+    const back = '/admin/tenants?sort=ci';
+    expect(
+      orgUsageHref('org_1', { period: '2026-07', scope: 'workspace:ws_1', backHref: back }),
+    ).toBe(
+      `/admin/tenants/org_1?tab=usage&period=2026-07&scope=workspace%3Aws_1&from=${encodeURIComponent(back)}`,
+    );
+    expect(
+      orgUsageHref('org_1', { period: 'all', backHref: '/admin/tenants', months: '2025-10' }),
+    ).toBe('/admin/tenants/org_1?tab=usage&period=all&months=2025-10');
   });
 });

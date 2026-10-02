@@ -20,6 +20,7 @@ const usageMock = vi.fn<(q: unknown) => Promise<RawPlatformUsage>>();
 const childrenMock = vi.fn<(q: unknown) => Promise<RawPlatformUsageChildren>>();
 const runsMock = vi.fn<(q: unknown) => Promise<RawPlatformRunsPage>>();
 const orgUsageMock = vi.fn<(q: unknown) => Promise<{ balance: number }>>();
+const monthsMock = vi.fn<(q: unknown) => Promise<unknown>>();
 
 vi.mock('@/lib/platform/auth', async () => {
   const actual = await vi.importActual<typeof import('@/lib/platform/auth')>('@/lib/platform/auth');
@@ -45,6 +46,7 @@ vi.mock('@/lib/ai/motirAiClient', async () => {
     getPlatformUsageChildren: (q: unknown) => childrenMock(q),
     getPlatformRuns: (q: unknown) => runsMock(q),
     getOrgUsage: (q: unknown) => orgUsageMock(q),
+    getPlatformUsageMonths: (q: unknown) => monthsMock(q),
   };
 });
 
@@ -89,6 +91,7 @@ beforeEach(async () => {
   childrenMock.mockReset();
   runsMock.mockReset();
   orgUsageMock.mockReset();
+  monthsMock.mockReset();
 });
 
 afterAll(async () => {
@@ -375,5 +378,166 @@ describe('platformOrgPageService.getUsageTab', () => {
     ).rejects.toBeInstanceOf(PlatformOrganizationNotFoundError);
     expect(usageMock).not.toHaveBeenCalled();
     expect(await adminDb.platformAuditLog.count()).toBe(0);
+  });
+});
+
+describe('the Usage tab’s two lists (MOTIR-7293)', () => {
+  const usage: RawPlatformUsage = {
+    period: '2026-09',
+    level: 'organization',
+    entityId: 'x',
+    categories: [],
+    models: { planning_tokens: [], agent_tokens: [] },
+    spend: {
+      chargedCredits: 0,
+      chargedCostMicroUsd: 0,
+      costMicroUsdInclIndexing: 0,
+      machineSeconds: 0,
+    },
+    orgsWithSpend: null,
+  };
+  const months = {
+    level: 'organization' as const,
+    entityId: 'x',
+    items: [],
+    nextCursor: null,
+    allTime: { period: 'all', categories: {} as never, spend: usage.spend },
+  };
+
+  it('names the children, keeps the remainder rows, and follows the scope and period', async () => {
+    const { workspace, owner } = await createTestWorkspace({ name: 'Eng' });
+    const orgId = workspace.organizationId;
+    const project = await createTestProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Mobile',
+      identifier: 'MOB',
+    });
+    usageMock.mockResolvedValue(usage);
+    orgUsageMock.mockResolvedValue({ balance: 0 });
+    monthsMock.mockResolvedValue(months);
+    childrenMock.mockImplementation(async (q) => ({
+      period: '2026-09',
+      sort: 'cost',
+      level: (q as { level: 'organization' | 'workspace' }).level,
+      entityId: orgId,
+      childLevel: 'workspace',
+      items: [
+        row((q as { level: string }).level === 'organization' ? workspace.id : project.id, 5),
+      ],
+      nextCursor: null,
+      remainder:
+        (q as { level: string }).level === 'organization'
+          ? { noProject: row('np', 1), orgLevel: row('ol', 2) }
+          : null,
+    }));
+
+    const org = await platformOrgPageService.getUsageTab(currentPrincipal!, orgId, {
+      period: '2026-09',
+    });
+    expect(org.children).toMatchObject({
+      childLevel: 'workspace',
+      rows: [{ entityId: workspace.id, name: 'Eng' }],
+      truncated: false,
+    });
+    expect(org.children!.remainder).not.toBeNull();
+    expect(monthsMock).toHaveBeenLastCalledWith({
+      level: 'organization',
+      entityId: orgId,
+      limit: 24,
+      cursor: null,
+    });
+    expect(org.months).toEqual(months);
+
+    const ws = await platformOrgPageService.getUsageTab(currentPrincipal!, orgId, {
+      period: '2026-09',
+      scope: `workspace:${workspace.id}`,
+      monthsCursor: '2025-10',
+    });
+    expect(ws.children).toMatchObject({
+      childLevel: 'project',
+      rows: [{ entityId: project.id, name: 'Mobile' }],
+      remainder: null,
+    });
+    expect(monthsMock).toHaveBeenLastCalledWith({
+      level: 'workspace',
+      entityId: workspace.id,
+      limit: 24,
+      cursor: '2025-10',
+    });
+
+    const pj = await platformOrgPageService.getUsageTab(currentPrincipal!, orgId, {
+      period: 'all',
+      scope: `project:${project.id}`,
+    });
+    expect(pj).toMatchObject({ children: null, childrenUnavailable: false });
+  });
+
+  it('motir-ai unreachable: both lists say so', async () => {
+    const { workspace } = await createTestWorkspace({ name: 'Solo' });
+    usageMock.mockRejectedValue(new Error('down'));
+    orgUsageMock.mockRejectedValue(new Error('down'));
+    childrenMock.mockRejectedValue(new Error('down'));
+    monthsMock.mockRejectedValue(new Error('down'));
+    const tab = await platformOrgPageService.getUsageTab(
+      currentPrincipal!,
+      workspace.organizationId,
+      { period: 'all' },
+    );
+    expect(tab).toMatchObject({ children: null, childrenUnavailable: true, months: null });
+  });
+
+  it('expanding a workspace reads its projects, named — and a workspace of another org is refused before motir-ai', async () => {
+    const mine = await createTestWorkspace({ name: 'Mine' });
+    const theirs = await createTestWorkspace({ name: 'Theirs' });
+    const project = await createTestProject({
+      workspaceId: mine.workspace.id,
+      actorUserId: mine.owner.id,
+      name: 'Api',
+      identifier: 'API',
+    });
+    childrenMock.mockResolvedValue({
+      period: '2026-09',
+      sort: 'cost',
+      level: 'workspace',
+      entityId: mine.workspace.id,
+      childLevel: 'project',
+      items: [row(project.id, 4)],
+      nextCursor: null,
+      remainder: null,
+    });
+    const got = await platformOrgPageService.getWorkspaceProjectsSpend(
+      currentPrincipal!,
+      mine.workspace.organizationId,
+      mine.workspace.id,
+      '2026-09',
+    );
+    expect(got).toEqual({
+      rows: [expect.objectContaining({ entityId: project.id, name: 'Api' })],
+      truncated: false,
+    });
+    expect(await adminDb.platformAuditLog.count()).toBe(1);
+
+    childrenMock.mockClear();
+    await expect(
+      platformOrgPageService.getWorkspaceProjectsSpend(
+        currentPrincipal!,
+        mine.workspace.organizationId,
+        theirs.workspace.id,
+        '2026-09',
+      ),
+    ).rejects.toBeInstanceOf(PlatformOrganizationNotFoundError);
+    expect(childrenMock).not.toHaveBeenCalled();
+    expect(await adminDb.platformAuditLog.count()).toBe(1);
+
+    childrenMock.mockRejectedValue(new Error('down'));
+    expect(
+      await platformOrgPageService.getWorkspaceProjectsSpend(
+        currentPrincipal!,
+        mine.workspace.organizationId,
+        mine.workspace.id,
+        'all',
+      ),
+    ).toBeNull();
   });
 });
