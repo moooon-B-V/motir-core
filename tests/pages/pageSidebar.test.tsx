@@ -2,9 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import Link from 'next/link';
+import { renderToString } from 'react-dom/server';
+import { NextIntlClientProvider } from 'next-intl';
 import type { PageTreeLevelDto, PageTreeRowDto } from '@/lib/dto/pages';
 import { ToastProvider } from '@/components/ui/Toast';
-import { renderWithIntl } from '../helpers/renderWithIntl';
+import { enMessages, renderWithIntl } from '../helpers/renderWithIntl';
 
 // THE PAGE'S PLACE (Story MOTIR-5753 · MOTIR-7375) —
 // `design/pages/page--tree-sidebar.mock.html` panels 1, 3, 4 and 5:
@@ -317,6 +319,40 @@ describe('PageSidebarLayout', () => {
     await open();
     setWide(true);
     expect(aside().getAttribute('data-state')).toBe('docked');
+  });
+
+  // Story MOTIR-5753 · MOTIR-7377 (the story's Vitest gate): the two arrivals the
+  // browser cases above cannot reach.
+  it('renders on the server docked and shown — no width, no stored choice to read', () => {
+    const html = renderToString(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <PageSidebarLayout tree={<p>tree</p>} breadcrumb={<nav aria-label="crumbs" />}>
+          <h1>Page</h1>
+        </PageSidebarLayout>
+      </NextIntlClientProvider>,
+    );
+    expect(html).toContain('data-state="docked"');
+    expect(html).not.toContain('data-state="hidden"');
+  });
+
+  it('a browser that refuses storage access outright reads the column as shown', () => {
+    stubWidth(true);
+    const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('denied', 'SecurityError');
+      },
+    });
+    try {
+      mountLayout();
+      expect(aside().getAttribute('data-state')).toBe('docked');
+      fireEvent.click(hideButton());
+      expect(aside().getAttribute('data-state')).toBe('hidden');
+    } finally {
+      if (descriptor) Object.defineProperty(window, 'localStorage', descriptor);
+      else delete (window as { localStorage?: Storage }).localStorage;
+    }
   });
 
   it('treats a browser with no media queries as wide', () => {
