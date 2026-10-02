@@ -56,6 +56,19 @@ const DELIVERY_META: Record<
   delivered_without_change_request: { icon: CircleCheck, className: 'text-(--el-success)' },
 };
 
+/**
+ * A state this bundle does not know is drawn as `unknown`, never thrown on
+ * (MOTIR-7298). The quick view reads `delivery` over HTTP from
+ * `/api/work-items/peek`, so a tab still running an older deploy can be handed a
+ * state added after it was built — MOTIR-7180's `delivered_without_change_request`
+ * reached a pre-7180 client on /roadmap and `DELIVERY_META[state].icon` crashed
+ * the page. `unknown` is the honest word for "Motir cannot say here": it holds
+ * nothing it would not otherwise hold, and the next reload draws the real state.
+ */
+function knownState(d: RepoDelivery): RepoDelivery {
+  return Object.hasOwn(DELIVERY_META, d.state) ? d : { ...d, state: 'unknown' };
+}
+
 /** Where following a repository GOES (design MOTIR-3038 panel 2d) — the row on
  *  the project's own settings page, anchored, NOT the host. The card points at a
  *  ROW, and a `proposed` row has no host repository at all, so a link out to
@@ -94,11 +107,12 @@ export interface RepositorySetFieldProps {
 }
 
 export function RepositorySetField({
-  delivery,
+  delivery: received,
   deliveries = [],
   compact = false,
 }: RepositorySetFieldProps) {
   const t = useTranslations('issueViews');
+  const delivery = received.map(knownState);
 
   // The EMPTY set — a deliberate state, not a hole. The value is the shipped
   // word every unset rail field uses, so the product never learns a second word
