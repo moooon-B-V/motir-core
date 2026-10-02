@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { PageParentDto } from '@/lib/dto/pages';
@@ -20,7 +21,11 @@ vi.mock('next/navigation', () => ({
 
 import { NewPageButton } from '@/app/(authed)/pages/_components/NewPageButton';
 import { NewFolderButton as PagesNewFolderButton } from '@/app/(authed)/pages/_components/NewFolderButton';
-import { FolderCommandsProvider } from '@/components/folders/FolderCommands';
+import {
+  FolderCommandsProvider,
+  NewRootFolderButton,
+  useFolderCommands,
+} from '@/components/folders/FolderCommands';
 
 const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>();
 
@@ -197,4 +202,66 @@ describe('NewFolderButton (/pages)', () => {
       expect(screen.queryByRole('button', { name: 'New folder' })).toBeNull();
     },
   );
+});
+
+// THE FOLDER COMMAND CHANNEL itself (`components/folders/FolderCommands.tsx`,
+// shared by `/items` and `/pages` since MOTIR-7374): a held New folder request,
+// its cancel, and a placement report with and without a registered tree.
+describe('FolderCommandsProvider', () => {
+  type Commands = NonNullable<ReturnType<typeof useFolderCommands>>;
+  function mountChannel(children?: ReactNode) {
+    let commands: Commands | null = null;
+    function Probe() {
+      commands = useFolderCommands();
+      return null;
+    }
+    renderWithIntl(
+      <FolderCommandsProvider>
+        <Probe />
+        {children}
+      </FolderCommandsProvider>,
+    );
+    return () => commands!;
+  }
+
+  it('drops a placement report while no tree is registered, and routes it once one is', () => {
+    const channel = mountChannel();
+    const placement = { workItemId: 'w1', folderId: 'f1', parentId: null };
+    expect(() => channel().reportWorkItemPlacement(placement)).not.toThrow();
+    const onPlacement = vi.fn();
+    channel().registerPlacementHandler(onPlacement);
+    channel().reportWorkItemPlacement(placement);
+    expect(onPlacement).toHaveBeenCalledWith(placement);
+    channel().registerPlacementHandler(null);
+    channel().reportWorkItemPlacement(placement);
+    expect(onPlacement).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds a New folder request until a tree registers, unless it was cancelled', () => {
+    const channel = mountChannel();
+    const handler = vi.fn();
+    channel().requestNewRootFolder();
+    channel().registerNewRootFolder(handler);
+    expect(handler).toHaveBeenCalledTimes(1);
+    channel().requestNewRootFolder();
+    expect(handler).toHaveBeenCalledTimes(2);
+
+    channel().registerNewRootFolder(null);
+    channel().requestNewRootFolder();
+    channel().cancelNewRootFolder();
+    const late = vi.fn();
+    channel().registerNewRootFolder(late);
+    expect(late).not.toHaveBeenCalled();
+  });
+
+  it('NewRootFolderButton asks the registered tree, and renders nothing outside a provider', () => {
+    const channel = mountChannel(<NewRootFolderButton />);
+    const handler = vi.fn();
+    channel().registerNewRootFolder(handler);
+    fireEvent.click(screen.getByRole('button', { name: 'New folder' }));
+    expect(handler).toHaveBeenCalledTimes(1);
+    cleanup();
+    renderWithIntl(<NewRootFolderButton />);
+    expect(screen.queryByRole('button', { name: 'New folder' })).toBeNull();
+  });
 });
