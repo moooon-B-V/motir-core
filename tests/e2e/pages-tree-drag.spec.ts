@@ -218,10 +218,14 @@ test.describe('dragging in the /pages tree', () => {
       (status, body) => status === 422 && body.code === 'PAGE_DEPTH_EXCEEDED',
     );
     expect(refused.status).toBe(422);
+    // The refusal is a toast; scope to the toast region (app chrome named
+    // "Notifications (F8)") so a streamed copy of the page cannot match.
     await expect(
-      page.getByText(
-        'Pages nest at most 10 levels deep, and this move would go past that. It stayed where it was.',
-      ),
+      page
+        .getByRole('region', { name: /Notifications/ })
+        .getByText(
+          'Pages nest at most 10 levels deep, and this move would go past that. It stayed where it was.',
+        ),
     ).toBeVisible();
     // The tree is unchanged: the loose page is still at the root and still focused.
     await expect(row('Loose page')).toHaveAttribute('aria-level', '1');
