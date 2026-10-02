@@ -82,6 +82,7 @@ export default defineConfig({
     include: [
       // The story gate — the assembly, on the real doors.
       'tests/integration/pagesStoryGate.test.ts',
+      'tests/integration/pageHistoryStoryGate.test.ts',
       // The per-card server suites (MOTIR-7276 · 7277 · 7278 · 7279 · 7300).
       'tests/page-schema-rls.test.ts',
       'tests/pages/*.test.ts',
