@@ -8751,17 +8751,6 @@
       "crumbTenants": "Tenants",
       "title": "Organizations",
       "subtitle": "Find an organization by name or slug. Opening one is an audited cross-tenant read.",
-      "searchLabel": "Name or slug",
-      "searchPlaceholder": "moooon, acme, northwind…",
-      "searchSubmit": "Search",
-      "tooShort": "Enter at least {n} characters.",
-      "idleTitle": "Search for an organization",
-      "idleDescription": "Type a name or slug above. Results are limited to {n}; every match you open is recorded in the audit log.",
-      "noneTitle": "No organizations match “{query}”",
-      "noneDescription": "Check the spelling, or search by slug. An organization that exists but is not shown is a bug — this lookup reads every tenant, not only the ones you belong to.",
-      "resultsTitle": "Results",
-      "resultsCount": "{n, plural, one {# organization} other {# organizations}}",
-      "capped": "Showing the first {n} matches. Narrow the query to see the rest.",
       "auditBanner": "You are viewing {name} as platform staff. This cross-tenant read is recorded in the audit log (operator {operator}).",
       "createdAt": "Created {at}",
       "paidAiPlan": "Paid AI plan",
@@ -8926,6 +8915,34 @@
       "unavailable": {
         "title": "Usage can't be shown right now",
         "description": "The AI service that keeps the usage rollup did not answer. Nothing is wrong with the figures — try again in a moment."
+      }
+    },
+    "tenants": {
+      "title": "Tenants",
+      "subtitle": "Every organization's spend for the period — credits per category, indexing minutes, the charged total and what it cost Motir. Open an organization for its workspaces, projects and billing.",
+      "filterLabel": "Filter organizations",
+      "filterPlaceholder": "Filter by name or slug",
+      "listTitle": "Organizations",
+      "estateRow": "Estate total (all organizations)",
+      "columns": {
+        "organization": "Organization",
+        "charged": "Charged",
+        "cost": "Motir cost",
+        "minutes": "min"
+      },
+      "chip": {
+        "isMeta": "Motir's own",
+        "internalBilling": "Internal billing"
+      },
+      "none": "No organization has spend in this period.",
+      "noneFiltered": "No organization matching “{filter}” has spend in this period.",
+      "filterCapped": "The filter matches more organizations than one list shows — narrow it to see the rest.",
+      "showMore": "Show more",
+      "loading": "Loading…",
+      "moreFailed": "More organizations can't be loaded right now — try again in a moment.",
+      "unavailable": {
+        "title": "The list can't be shown right now",
+        "description": "The AI service that keeps the usage rollup did not answer. Try again in a moment."
       }
     }
   },

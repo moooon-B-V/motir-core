@@ -47,7 +47,7 @@ import type {
   Tenant,
   UsageQuery,
 } from './types';
-import type { CategoryFigures } from '@/lib/platform/spend';
+import type { CategoryFigures, SpendCategory } from '@/lib/platform/spend';
 
 // The actor a job runs on behalf of — the read-back token is minted for them, so
 // motir-ai reads/proposes only what this user could (contract §4b).
@@ -2434,4 +2434,56 @@ export async function getPlatformUsage(query: {
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawPlatformUsage;
+}
+
+/** One entity's row in a spend LIST (`/v1/platform/usage/orgs`, `/children`). */
+export interface RawSpendRow {
+  entityId: string;
+  /** Credits per CHARGED category — indexing is never charged, so never here. */
+  credits: Record<Exclude<SpendCategory, 'indexing'>, number>;
+  /** Indexing's column is its seconds. */
+  indexingSeconds: number;
+  chargedCredits: number;
+  /** What it cost Motir, indexing included, micro-dollars. */
+  costMicroUsd: number;
+  cost: Record<SpendCategory, number>;
+}
+
+/** The sorts a spend list takes: Motir cost (default), charged total, or a category. */
+export type SpendListSort = 'cost' | 'charged' | SpendCategory;
+
+export interface RawPlatformUsageOrgs {
+  period: string;
+  sort: SpendListSort;
+  items: RawSpendRow[];
+  nextCursor: string | null;
+  /** The whole estate for the period — every organization, not this page or filter. */
+  estate: RawSpendRow;
+}
+
+/**
+ * GET /v1/platform/usage/orgs — the Tenants list: every organization's spend for
+ * `period`, keyset-paged by `sort`, optionally narrowed to `coreOrganizationIds`
+ * (an EMPTY list narrows to nothing and still answers the estate total).
+ */
+export async function getPlatformUsageOrgs(query: {
+  period: string;
+  sort?: SpendListSort | null;
+  limit?: number | null;
+  cursor?: string | null;
+  coreOrganizationIds?: string[] | null;
+}): Promise<RawPlatformUsageOrgs> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ period: query.period });
+  if (query.sort) params.set('sort', query.sort);
+  if (query.limit) params.set('limit', String(query.limit));
+  if (query.cursor) params.set('cursor', query.cursor);
+  if (query.coreOrganizationIds)
+    params.set('coreOrganizationIds', query.coreOrganizationIds.join(','));
+  const res = await aiFetch(`${url}/v1/platform/usage/orgs?${params.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawPlatformUsageOrgs;
 }

@@ -8747,17 +8747,6 @@
       "crumbTenants": "租户",
       "title": "组织",
       "subtitle": "按名称或标识查找组织。打开任一组织都会记录一次跨租户读取。",
-      "searchLabel": "名称或标识",
-      "searchPlaceholder": "moooon、acme、northwind…",
-      "searchSubmit": "搜索",
-      "tooShort": "请至少输入 {n} 个字符。",
-      "idleTitle": "搜索组织",
-      "idleDescription": "在上方输入名称或标识。最多显示 {n} 条；你打开的每一条都会记入审计日志。",
-      "noneTitle": "没有匹配“{query}”的组织",
-      "noneDescription": "请检查拼写，或改用标识搜索。若某个组织确实存在却未显示，那是缺陷——此查找会读取全部租户，而不只是你所属的那些。",
-      "resultsTitle": "结果",
-      "resultsCount": "{n} 个组织",
-      "capped": "仅显示前 {n} 条匹配。请缩小查询范围以查看其余结果。",
       "auditBanner": "你正以平台staff身份查看 {name}。此次跨租户读取已记入审计日志（操作者 {operator}）。",
       "createdAt": "创建于 {at}",
       "paidAiPlan": "付费 AI 套餐",
@@ -8922,6 +8911,34 @@
       "unavailable": {
         "title": "暂时无法显示用量",
         "description": "保存用量汇总的 AI 服务没有响应。数据本身没有问题——请稍后再试。"
+      }
+    },
+    "tenants": {
+      "title": "租户",
+      "subtitle": "每个组织在该时间段的消费——各类别积分、索引分钟、收费合计以及 Motir 成本。打开一个组织可查看其工作区、项目和账单。",
+      "filterLabel": "筛选组织",
+      "filterPlaceholder": "按名称或标识筛选",
+      "listTitle": "组织",
+      "estateRow": "平台合计（所有组织）",
+      "columns": {
+        "organization": "组织",
+        "charged": "收费",
+        "cost": "Motir 成本",
+        "minutes": "分钟"
+      },
+      "chip": {
+        "isMeta": "Motir 自有",
+        "internalBilling": "内部计费"
+      },
+      "none": "此时间段没有组织产生消费。",
+      "noneFiltered": "此时间段没有匹配“{filter}”的组织产生消费。",
+      "filterCapped": "匹配的组织超过一个列表能显示的数量——请缩小筛选范围。",
+      "showMore": "显示更多",
+      "loading": "加载中…",
+      "moreFailed": "暂时无法加载更多组织——请稍后再试。",
+      "unavailable": {
+        "title": "暂时无法显示列表",
+        "description": "保存用量汇总的 AI 服务没有响应。请稍后再试。"
       }
     }
   },

@@ -242,3 +242,43 @@ export interface PlatformOverviewDTO {
     runsUnavailable: boolean;
   };
 }
+
+/** One row of the Tenants list (MOTIR-7287, design D10): an org's spend for the period. */
+export interface PlatformTenantSpendRowDTO {
+  /** Null for the estate total row. A spend row whose org is gone keeps its id as its name. */
+  organization: {
+    id: string;
+    name: string;
+    slug: string | null;
+    isMeta: boolean;
+    internalBilling: boolean;
+  } | null;
+  credits: Record<
+    | 'planning_tokens'
+    | 'agent_tokens'
+    | 'agent_machine'
+    | 'agent_instance'
+    | 'agent_storage'
+    | 'ci'
+    | 'search',
+    number
+  >;
+  indexingSeconds: number;
+  chargedCredits: number;
+  costMicroUsd: number;
+}
+
+/** The Tenants list for one period, sort and filter. */
+export interface PlatformTenantListDTO {
+  period: string;
+  sort: string;
+  filter: string;
+  /** The total over EVERY organization — never the page, never the filter. */
+  estate: PlatformTenantSpendRowDTO | null;
+  rows: PlatformTenantSpendRowDTO[];
+  nextCursor: string | null;
+  /** The filter matched more organizations than one list can carry. */
+  filterCapped: boolean;
+  /** motir-ai could not be read; the list shows its error state. */
+  unavailable: boolean;
+}
