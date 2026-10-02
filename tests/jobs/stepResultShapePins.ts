@@ -333,6 +333,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ checkedAt: string; entries: Array<{ daysRemaining: number; envVar: string; expiresAt: string; name: string; renewal: string; source: string; state: "expired" | "expiring" | "healthy" }>; expiring: Array<{ daysRemaining: number; envVar: string; expiresAt: string; name: string; renewal: string; source: string; state: "expired" | "expiring" | "healthy" }>; offenders: Array<{ daysRemaining: number; envVar: string; expiresAt: string; name: string; renewal: string; source: string; state: "expired" | "expiring" | "healthy" }>; skipped: Array<string>; verdict: "expired" } | { checkedAt: string; entries: Array<{ daysRemaining: number; envVar: string; expiresAt: string; name: string; renewal: string; source: string; state: "expired" | "expiring" | "healthy" }>; offenders: Array<{ daysRemaining: number; envVar: string; expiresAt: string; name: string; renewal: string; source: string; state: "expired" | "expiring" | "healthy" }>; skipped: Array<string>; verdict: "expiring" } | { checkedAt: string; entries: Array<{ daysRemaining: number; envVar: string; expiresAt: string; name: string; renewal: string; source: string; state: "expired" | "expiring" | "healthy" }>; skipped: Array<string>; verdict: "ok" }',
   },
+  'hosted-run-probe': {
+    file: 'lib/jobs/definitions/dailyHealthCheck.ts',
+    shape:
+      '{ checkedAt: string; offenders: Array<{ completedAt: string; families: Array<string>; org: string; repo: string; runAttempt: number; runId: string }>; ownedOrgs: Array<string>; runsChecked: number; verdict: "hosted_runs"; windowStart: string } | { checkedAt: string; ownedOrgs: Array<string>; runsChecked: number; verdict: "not_applicable"; windowStart: string } | { checkedAt: string; ownedOrgs: Array<string>; runsChecked: number; verdict: "ok"; windowStart: string }',
+  },
   'notification-fan-in': {
     file: 'lib/jobs/definitions/notificationFanIn.ts',
     shape: '{ writtenUserIds: Array<string> }',

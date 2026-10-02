@@ -43,6 +43,7 @@ import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
 import { indexRebuildStreakService } from '@/lib/services/indexRebuildStreakService';
 import { monitorConfigPreflightService } from '@/lib/services/monitorConfigPreflightService';
 import { credentialExpiryService } from '@/lib/services/credentialExpiryService';
+import { hostedRunProbeService } from '@/lib/services/hostedRunProbeService';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
 import { planDriftService } from '@/lib/services/planDriftService';
@@ -125,6 +126,9 @@ export const jobServices = {
   // The credential-expiry probe (MOTIR-1933) — the daily check's seventh, and the
   // only one that reads a DECLARED date rather than a live system.
   credentialExpiry: credentialExpiryService,
+  // The hosted-run probe (MOTIR-1934) — a metered run in a Motir-owned org that
+  // ran on anything but the fleet.
+  hostedRunProbe: hostedRunProbeService,
   parentStatusRollup: parentStatusRollupService,
   childStatusCascade: childStatusCascadeService,
   planDrift: planDriftService,
