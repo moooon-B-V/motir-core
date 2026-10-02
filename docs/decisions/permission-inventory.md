@@ -771,12 +771,14 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `page`
 
-| Operation                     | Verbs     | Gate today                                                                                                                                                     | Permission                | Decision | Why |
-| ----------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | -------- | --- |
-| `/api/pages`                  | POST      | `pagesService.createPage` → `assertCanEditPages`                                                                                                               | `page:edit`               | new      | R82 |
-| `/api/pages/[pageId]`         | GET/PATCH | `pagesService.{getPage,renamePage}` → `assertCanViewPages` / `assertCanEditPages`                                                                              | `page:view` / `page:edit` | new      | R82 |
-| `/api/pages/[pageId]/updates` | POST      | `pagesService.savePageUpdate` → `assertCanEditPages`; the 1 MiB save cap is enforced on the stream                                                             | `page:edit`               | new      | R82 |
-| `/api/pages/[pageId]/images`  | POST      | `attachmentsService.uploadPageImage` → `assertCanEditPages`, then `uploadAttachment`'s own `attachment:create`; the image is filed under its page (MOTIR-7279) | `page:edit`               | new      | R82 |
+| Operation                       | Verbs     | Gate today                                                                                                                                                     | Permission                | Decision | Why |
+| ------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | -------- | --- |
+| `/api/pages`                    | POST      | `pagesService.createPage` → `assertCanEditPages`                                                                                                               | `page:edit`               | new      | R82 |
+| `/api/pages/[pageId]`           | GET/PATCH | `pagesService.{getPage,renamePage}` → `assertCanViewPages` / `assertCanEditPages`                                                                              | `page:view` / `page:edit` | new      | R82 |
+| `/api/pages/[pageId]/updates`   | POST      | `pagesService.savePageUpdate` → `assertCanEditPages`; the 1 MiB save cap is enforced on the stream                                                             | `page:edit`               | new      | R82 |
+| `/api/pages/[pageId]/images`    | POST      | `attachmentsService.uploadPageImage` → `assertCanEditPages`, then `uploadAttachment`'s own `attachment:create`; the image is filed under its page (MOTIR-7279) | `page:edit`               | new      | R82 |
+| `/api/pages/[pageId]/placement` | PATCH     | `pagesService.movePage` → `assertCanEditPages`; the move runs under the project's page-structure lock (MOTIR-7372)                                             | `page:edit`               | new      | R82 |
+| `/api/pages/tree`               | GET       | `pagesService.listTreeLevel` → `assertCanViewPages`; one level, folders then pages, keyset paged (MOTIR-7372)                                                  | `page:view`               | new      | R82 |
 
 ### `project`
 
