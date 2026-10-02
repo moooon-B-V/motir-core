@@ -18,3 +18,5 @@ export * from './document/extensions';
 export * from './document/schema';
 export { parseMarkdown, serializeMarkdown } from './document/markdown';
 export * from './document/convert';
+export * from './store';
+export * from './save';

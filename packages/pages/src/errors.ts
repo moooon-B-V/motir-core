@@ -1,4 +1,4 @@
-import { PAGE_DEPTH_LIMIT } from './constants';
+import { PAGE_DEPTH_LIMIT, PAGE_TITLE_MAX_LENGTH } from './constants';
 
 // The typed refusals the pure tree rules raise. Each carries the stable `code`
 // and HTTP `status` `docs/decisions/pages.md` §4 names, so the app's route layer
@@ -44,5 +44,50 @@ export class PageDepthExceededError extends PageTreeError {
       `Pages can be nested at most ${PAGE_DEPTH_LIMIT} levels deep; this would place one at level ${attemptedLevel}.`,
     );
     this.name = 'PageDepthExceededError';
+  }
+}
+
+/** Base class for the save procedures' refusals, each carrying its HTTP status. */
+export abstract class PageError extends Error {
+  abstract readonly code: string;
+  abstract readonly status: number;
+}
+
+/**
+ * A body over a size limit (§3) — a save REQUEST over `PAGE_SAVE_MAX_BYTES`, or a
+ * merged body over `PAGE_BODY_MAX_BYTES`. Either way nothing is written.
+ */
+export class PageBodyTooLargeError extends PageError {
+  readonly code = 'PAGE_BODY_TOO_LARGE' as const;
+  readonly status = 413 as const;
+  constructor(
+    readonly limit: number,
+    readonly size: number,
+  ) {
+    super(`This page body is ${size} bytes; the limit is ${limit} bytes.`);
+    this.name = 'PageBodyTooLargeError';
+  }
+}
+
+/** A page that does not exist, or is outside the caller's scope. */
+export class PageNotFoundError extends PageError {
+  readonly code = 'PAGE_NOT_FOUND' as const;
+  readonly status = 404 as const;
+  constructor(readonly pageId: string) {
+    super('Page not found.');
+    this.name = 'PageNotFoundError';
+  }
+}
+
+/** A title longer than `PAGE_TITLE_MAX_LENGTH` characters. */
+export class PageTitleTooLongError extends PageError {
+  readonly code = 'PAGE_TITLE_TOO_LONG' as const;
+  readonly status = 422 as const;
+  readonly limit = PAGE_TITLE_MAX_LENGTH;
+  constructor(readonly length: number) {
+    super(
+      `A page title can be at most ${PAGE_TITLE_MAX_LENGTH} characters; this one is ${length}.`,
+    );
+    this.name = 'PageTitleTooLongError';
   }
 }
