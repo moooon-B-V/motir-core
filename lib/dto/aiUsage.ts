@@ -5,6 +5,14 @@ import type { UsageScope } from '@/lib/ai/types';
 // motir-ai `/v1/usage` rollup (the figures) enriched with motir-core's own
 // workspace/project NAMES (motir-ai only knows ids) and the role-aware access
 // posture. Credits are an internal usage unit, NOT a currency — never a `$`.
+//
+// ⚠️ NO MODEL ID CROSSES THIS DTO (Story MOTIR-7220 · MOTIR-7229). The planning
+// model is a PLATFORM setting — one per audience, chosen by a platform superadmin
+// in the operator console — and it is not shown to a tenant. motir-ai's
+// `/v1/usage` still carries a per-model breakdown and each run's model (the
+// service-to-service wire, `RawUsageResponse`); this DTO is the tenant boundary,
+// so the redaction lives here, in the TYPE, where a browser reading the route's
+// JSON directly cannot get around it. There is deliberately no per-model field.
 
 export type { UsageScope };
 
@@ -13,17 +21,9 @@ export interface UsageScopeOption {
   name: string;
 }
 
-export interface UsageModelDTO {
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
-  credits: number;
-}
-
 export interface UsageRunDTO {
   jobId: string;
   jobKind: string;
-  model: string | null;
   projectId: string;
   projectName: string;
   inputTokens: number;
@@ -73,7 +73,7 @@ export interface SearchRunDTO {
  *
  * ⚠️ AND `runs` IS A DIFFERENT POPULATION FROM `recentRuns.runs`, paged
  * independently. A run appears here once it has spent on search — including a
- * search-only run, which `recentRuns` omits because it has no model. So a
+ * search-only run, which `recentRuns` omits because it has no planning turn. So a
  * consumer joining the two on `jobId` gets the search cost for every run in both,
  * and an ABSENT match means *not on this search page*, NEVER *spent nothing*.
  */
@@ -113,7 +113,7 @@ export interface OrgUsageDTO {
   // `OrgUsageClient.tsx`). It decides (1) whether an exhausted balance renders
   // the out-of-credits card (panel 7b) or the exempt state (7c), and (2) whether
   // the hero's pill names a commercial tier or reads "Not billed". It changes NO
-  // FIGURE: the balance, the allotment bar, the drill, the per-model breakdown,
+  // FIGURE: the balance, the allotment bar, the drill,
   // the run log and the search figures are computed identically for every org
   // (`design/ai-usage/design-notes.md` §§ AMENDMENT 2026-09-07, 2026-09-08).
   //
@@ -127,7 +127,7 @@ export interface OrgUsageDTO {
   // `docs/decisions/internal-billing-classification.md` §2).
   //
   // ⚠️ IT CHANGES NO FIGURE ON THIS DTO. The balance, the allotment, the
-  // per-model breakdown and the run log are computed exactly as they are for a
+  // run log are computed exactly as they are for a
   // paying org — this field says only WHICH KIND of org the reader is looking
   // at. A second field beside `isMeta` rather than a widening of it, because the
   // two mean opposite things.
@@ -135,11 +135,10 @@ export interface OrgUsageDTO {
   // Balance + tier are ALWAYS org-level (one ledger per org).
   balance: number;
   tier: UsageTierDTO | null;
-  // Spend + breakdown + runs follow the active scope.
+  // Spend + runs follow the active scope.
   totalSpend: number;
   monthSpend: number;
   monthlyHistory: { yearMonth: string; credits: number }[];
-  perModel: UsageModelDTO[];
   recentRuns: { runs: UsageRunDTO[]; page: number; pageSize: number; total: number };
   /**
    * Web-search spend — its own figure beside token spend, and the runs that spent

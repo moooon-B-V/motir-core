@@ -525,7 +525,7 @@
     },
     "ai_configure": {
       "label": "Configure AI planning",
-      "description": "Set the planning cadence, the planner model, and whether explanations are drafted."
+      "description": "Set the planning cadence and whether explanations are drafted."
     },
     "ai_plan": {
       "label": "Run AI planning",
@@ -3621,7 +3621,7 @@
     },
     "aiPlanning": {
       "title": "AI planning",
-      "pageDescription": "How Motir's planner keeps this project moving — when it expands the plan, how it packs sprints, and which model drafts the work.",
+      "pageDescription": "How Motir's planner keeps this project moving — when it expands the plan, how it packs sprints, and what it writes for each item.",
       "empty": {
         "description": "Create a project to configure its AI planning settings."
       },
@@ -3660,14 +3660,9 @@
       },
       "planner": {
         "title": "Planner",
-        "subtitle": "The model that drafts plans, sprints and explanations for this project.",
+        "subtitle": "How the planner writes for this project.",
         "explanationsLabel": "Draft a why for each item",
         "explanationsHint": "Every proposed work item gets a short “why this matters” you can read without opening the code.",
-        "modelLabel": "Planner model",
-        "modelHint": "Leave this on Default unless you have a reason to pin one. Usage is billed to this workspace either way.",
-        "modelDefault": "Default",
-        "modelDefaultSecondary": "recommended",
-        "modelThorough": "Thorough",
         "dataPracticeCommitment": "Neither Motir nor its gateway trains on this project's content.",
         "dataPracticeReport": "What a provider does with a request once it reaches them is that provider's own published position.",
         "dataPracticeLink": "What each provider states"
@@ -4026,7 +4021,7 @@
         "fields": "Custom fields are managed by project admins. Ask an admin if a field needs adding or changing.",
         "components": "Components are managed by project admins. Ask an admin if one needs adding or changing.",
         "bugs": "Where this project's bugs are filed is managed by project admins. Ask an admin if the destination needs changing.",
-        "ai-planning": "AI planning for this project — its cadence and its planner model — is configured by project admins. Ask an admin if it needs changing.",
+        "ai-planning": "AI planning for this project — its cadence — is configured by project admins. Ask an admin if it needs changing.",
         "hosted-agent": "Which model a hosted run uses is shown to people who can start a hosted run on this project. Ask a project admin if you need to see it.",
         "automation": "Project automation is managed by project admins. Ask an admin if you need a rule changed.",
         "monitoring": "This project's error-monitor connection is managed by people who can manage integrations. Ask a project admin if Sentry needs connecting or reconnecting."
@@ -5978,7 +5973,7 @@
   },
   "aiUsage": {
     "title": "Usage & cost",
-    "subtitle": "Token cost for the {org} organization — credits spent planning across all its workspaces. Credits are a usage allotment shared across every model.",
+    "subtitle": "Token cost for the {org} organization — credits spent planning across all its workspaces.",
     "breadcrumb": "Organization · {org} · Usage & cost",
     "summary": {
       "balance": "Credit balance",
@@ -6012,22 +6007,10 @@
       "workspaceLevel": "Workspace",
       "projectLevel": "Project",
       "orgSegment": "{org} (org)",
-      "note": "Drilling re-scopes every panel — the balance share, the per-model breakdown and the run log — to the active level.",
+      "note": "Drilling re-scopes every panel — the balance share and the run log — to the active level.",
       "pickWorkspace": "Workspace",
       "pickProject": "Project",
       "backToOrg": "Back to org total"
-    },
-    "byModel": {
-      "title": "By model",
-      "subtitle": "Where the org's credits went this month, per model. Tokens drive the credit cost; a costlier model debits more per token.",
-      "model": "Model",
-      "tokensIn": "Tokens in",
-      "tokensOut": "Tokens out",
-      "share": "Share of credits",
-      "credits": "Credits",
-      "foot": "{in} tokens in · {out} out",
-      "footCredits": "{n} credits",
-      "count": "{n} models"
     },
     "activity": {
       "title": "Recent activity",
@@ -6037,7 +6020,6 @@
       "scopeNote": "Scope: {scope}",
       "when": "When",
       "run": "Run",
-      "model": "Model",
       "tokens": "Tokens",
       "credits": "Credits",
       "kindPlan": "Planning",
@@ -6052,7 +6034,6 @@
       "next": "Next",
       "unknownProject": "Unknown project",
       "webSearch": "Web search",
-      "noModel": "No model",
       "noTokens": "No tokens"
     },
     "member": {
@@ -6080,7 +6061,7 @@
     },
     "states": {
       "emptyTitle": "No usage yet",
-      "emptyDescription": "Once your team runs the AI planner, every run's credit cost shows up here — broken down by workspace, project and model.",
+      "emptyDescription": "Once your team runs the AI planner, every run's credit cost shows up here — broken down by workspace and project.",
       "openPlanner": "Open the planner",
       "errorTitle": "Couldn't load usage",
       "errorDescription": "Something went wrong fetching this organization's usage. The figures are temporarily unavailable — your credits are safe.",
@@ -8400,7 +8381,8 @@
       "groupPlatform": "Platform",
       "groupOperations": "Operations",
       "footerStaff": "Platform staff",
-      "exitToApp": "Exit to app"
+      "exitToApp": "Exit to app",
+      "navAiPlanning": "AI planning"
     },
     "nav": {
       "overview": "Overview",
@@ -8548,6 +8530,11 @@
           "org": {
             "internal_billing_set": "Classified internal billing",
             "internal_billing_unset": "Internal classification removed"
+          },
+          "ai": {
+            "planner_model": {
+              "set": "Changed the planning model"
+            }
           }
         }
       }
@@ -8850,6 +8837,93 @@
           "cogs": "Internal COGS"
         },
         "absentLine": "absent — no {workload} container ran this period (not a zero)"
+      }
+    },
+    "aiPlanning": {
+      "breadcrumb": "Platform · AI planning",
+      "title": "AI planning",
+      "subtitle": "Which model Motir plans with, for each of three audiences. A change applies from the next planning job for every organisation in that audience.",
+      "precedence": "An organisation that is both meta and internal follows the meta row.",
+      "tenantSecretLead": "Tenants never see this choice.",
+      "tenantSecretBody": "No tenant page, usage view or plan names the model that planned.",
+      "card": {
+        "title": "Planning model by audience",
+        "subtitle": "Every planning job resolves its model from the organisation it runs for: meta, then internal, then customer.",
+        "count": "3 audiences"
+      },
+      "col": {
+        "audience": "Audience",
+        "model": "Model",
+        "lastChanged": "Last changed",
+        "action": "Action"
+      },
+      "audience": {
+        "customer": {
+          "name": "Customer organisations",
+          "desc": "Every organisation that is neither meta nor internal"
+        },
+        "meta": {
+          "name": "Motir meta org",
+          "desc": "moooon B.V., isMeta"
+        },
+        "internal": {
+          "name": "Internal organisations",
+          "desc": "Orgs classified internalBilling"
+        }
+      },
+      "pickerLabel": "Planning model",
+      "pickerAria": "Planning model — {audience}",
+      "pickerFoot": "Only models motir-ai offers for planning. Every provider the gateway serves is listed.",
+      "save": "Save",
+      "readOnly": "Only a superadmin can change these.",
+      "changed": {
+        "seeded": "Seeded default · never changed",
+        "by": "Changed {when} by {who}",
+        "byUnknown": "Changed {when}",
+        "justNowByYou": "Changed just now by you"
+      },
+      "confirm": {
+        "title": "Change the planning model for {audience}?",
+        "body": "{from} → {to}. The change applies to the next planning job for every organisation in this audience. Jobs already running finish on the model they started with.",
+        "reasonLabel": "Reason — required, written to the audit log",
+        "reasonPlaceholder": "Why are you changing the model?",
+        "reasonHint": "Shown to any operator reading this change later. “Testing” on its own answers nothing.",
+        "cancel": "Cancel",
+        "confirm": "Change model"
+      },
+      "saved": {
+        "title": "Planning model changed",
+        "body": "{audience} now plan on {model} from their next job."
+      },
+      "refused": "{model} is no longer offered for planning, so it was not saved. The list has been refreshed — choose another model.",
+      "withdrawn": {
+        "chip": "No longer offered",
+        "body": "Planning for this audience falls back to {fallback} until you choose another.",
+        "bodyReadOnly": "Planning for this audience falls back to {fallback} until a superadmin chooses another."
+      },
+      "unreachable": {
+        "save": "Not saved: the planner could not reach {model} — {reason}.",
+        "reason": {
+          "keyRefused": "the provider key was refused",
+          "noChannel": "no enabled channel serves this model for the planner",
+          "timeout": "timed out"
+        }
+      },
+      "failing": {
+        "chip": "Planning is failing",
+        "body": "Planning for this audience is failing: the planner cannot reach this model. Last tested {when}.",
+        "bodyNoTime": "Planning for this audience is failing: the planner cannot reach this model."
+      },
+      "unavailable": {
+        "title": "Couldn’t load the planning models",
+        "body": "The planning service (motir-ai) didn’t respond, so no setting is shown. This is a fetch error — nothing has changed, and no value is guessed.",
+        "retry": "Retry"
+      },
+      "error": {
+        "unchanged": "That audience already plans on {model}.",
+        "notPermitted": "Only a superadmin can change the planning model.",
+        "reasonRequired": "A reason is required.",
+        "failed": "The change could not be saved. Nothing was changed."
       }
     },
     "usage": {

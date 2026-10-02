@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useId, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useId, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
@@ -19,7 +19,6 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Combobox } from '@/components/ui/Combobox';
 import { SettingsCard } from '@/components/settings/SettingsCard';
 import { SwitchRow } from '@/components/settings/SwitchRow';
 import { useToast } from '@/components/ui/Toast';
@@ -29,12 +28,6 @@ import {
   AI_SPRINT_LENGTH_DAYS_MAX,
   AI_SPRINT_LENGTH_DAYS_MIN,
 } from '@/lib/projectAiSettings/limits';
-import {
-  PLANNER_MODEL_OPTIONS,
-  choiceToPlannerModel,
-  plannerModelToChoice,
-  type PlannerModelChoice,
-} from '@/lib/projectAiSettings/plannerModels';
 import type { ProjectAiSettingsDto } from '@/lib/dto/projectAiSettings';
 
 // AiPlanningSettingsEditor (Story 7.13 · Subtask MOTIR-919) — the AI-planning
@@ -53,12 +46,17 @@ import type { ProjectAiSettingsDto } from '@/lib/dto/projectAiSettings';
 //
 // FOUR cards, one shared footer on the LAST EDITABLE card governing the whole
 // page's dirty state — four decisions with different blast radius (when to
-// expand · how to pack sprints · which model runs · whether Motir writes down
-// what it got wrong), and a project may want one without the others:
+// expand · how to pack sprints · whether explanations are drafted · whether
+// Motir writes down what it got wrong), and a project may want one without the
+// others:
 //   * Auto-plan          — aiAutoPlanEnabled + aiAutoPlanThreshold
 //   * AI sprint planning — aiSprintPlanningEnabled + aiSprintLengthDays
 //   * Planner            — aiGenerateExplanations (the Story-7.4 column
-//                          SURFACED here, never duplicated) + aiPlannerModel
+//                          SURFACED here, never duplicated) + the
+//                          data-practice callout. NO model control: the model
+//                          that plans is a platform setting, never a project one
+//                          (MOTIR-7228; design-notes AMENDMENT 2026-10, which
+//                          also re-argues why the callout stays on this card)
 //   * Planning mistakes  — aiRecordPlanningMistakes (Story MOTIR-3331 ·
 //                          MOTIR-3352)
 //
@@ -100,14 +98,13 @@ export interface AutoPlanPauseView {
   staleCount: number;
 }
 
-/** The panel's working state — the DTO plus the picker's sentinel form. */
+/** The panel's working state — the DTO in the form the controls edit. */
 interface WorkingSettings {
   autoPlanEnabled: boolean;
   autoPlanThreshold: string;
   sprintPlanningEnabled: boolean;
   sprintLengthDays: string;
   generateExplanations: boolean;
-  plannerModel: PlannerModelChoice;
   recordPlanningMistakes: boolean;
 }
 
@@ -119,7 +116,6 @@ function toWorking(dto: ProjectAiSettingsDto): WorkingSettings {
     sprintPlanningEnabled: dto.aiSprintPlanningEnabled,
     sprintLengthDays: String(dto.aiSprintLengthDays),
     generateExplanations: dto.aiGenerateExplanations,
-    plannerModel: plannerModelToChoice(dto.aiPlannerModel),
     // Always a real boolean off the DTO — the mapper has already resolved the
     // nullable column's "never written" state to ON (MOTIR-3349), so the panel
     // never has to know the default.
@@ -135,7 +131,6 @@ export function aiSettingsEqual(a: WorkingSettings, b: WorkingSettings): boolean
     a.sprintPlanningEnabled === b.sprintPlanningEnabled &&
     a.sprintLengthDays === b.sprintLengthDays &&
     a.generateExplanations === b.generateExplanations &&
-    a.plannerModel === b.plannerModel &&
     a.recordPlanningMistakes === b.recordPlanningMistakes
   );
 }
@@ -257,7 +252,6 @@ export function AiPlanningSettingsEditor({
         aiSprintPlanningEnabled: next.sprintPlanningEnabled,
         aiSprintLengthDays: Number(next.sprintLengthDays),
         aiGenerateExplanations: next.generateExplanations,
-        aiPlannerModel: choiceToPlannerModel(next.plannerModel),
         aiRecordPlanningMistakes: next.recordPlanningMistakes,
       }),
     })
@@ -455,13 +449,6 @@ export function AiPlanningSettingsEditor({
           disabled={locked}
           label={t('aiPlanning.planner.explanationsLabel')}
           hint={t('aiPlanning.planner.explanationsHint')}
-        />
-
-        <PlannerModelField
-          value={working.plannerModel}
-          onChange={(v) => patch({ plannerModel: v })}
-          disabled={locked}
-          serverError={serverError?.field === 'aiPlannerModel' ? serverError.message : null}
         />
 
         {/* THE DATA-PRACTICE PROMISE (Story MOTIR-3665 · MOTIR-3670; design
@@ -731,65 +718,6 @@ function Stepper({
       <span className={`text-xs ${disabled ? 'text-(--el-text-faint)' : 'text-(--el-text-muted)'}`}>
         {unit}
       </span>
-    </div>
-  );
-}
-
-// ── Planner-model picker — the shipped Combobox, label + secondary rows ───────
-
-function PlannerModelField({
-  value,
-  onChange,
-  disabled,
-  serverError,
-}: {
-  value: PlannerModelChoice;
-  onChange: (next: PlannerModelChoice) => void;
-  disabled: boolean;
-  serverError: string | null;
-}) {
-  const t = useTranslations('settings');
-  const hintId = useId();
-  const errorId = useId();
-
-  const options = useMemo(
-    () =>
-      PLANNER_MODEL_OPTIONS.map((option) => ({
-        value: option.value,
-        label: t(`aiPlanning.planner.${option.labelKey}`),
-        secondary: option.modelId ?? t('aiPlanning.planner.modelDefaultSecondary'),
-      })),
-    [t],
-  );
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span
-        className={`text-sm font-medium ${disabled ? 'text-(--el-text-faint)' : 'text-(--el-text)'}`}
-      >
-        {t('aiPlanning.planner.modelLabel')}
-      </span>
-      <p
-        id={hintId}
-        className={`max-w-[52ch] text-xs leading-relaxed ${disabled ? 'text-(--el-text-faint)' : 'text-(--el-text-helper)'}`}
-      >
-        {t('aiPlanning.planner.modelHint')}
-      </p>
-      <div className="mt-0.5 w-full max-w-[320px]">
-        <Combobox
-          options={options}
-          value={value}
-          onChange={onChange}
-          label={t('aiPlanning.planner.modelLabel')}
-          searchable={false}
-          disabled={disabled}
-        />
-      </div>
-      {serverError ? (
-        <FieldError id={errorId} testId="ai-planning-model-error">
-          {serverError}
-        </FieldError>
-      ) : null}
     </div>
   );
 }

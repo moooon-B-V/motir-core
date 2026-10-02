@@ -44,7 +44,6 @@ function run(jobKind: string, i: number): UsageRunDTO {
   return {
     jobId: `job_${i}`,
     jobKind,
-    model: 'claude-opus-4-8',
     projectId: 'p1',
     projectName: 'Mobile App',
     inputTokens: 100,
@@ -68,7 +67,6 @@ function dto(runs: UsageRunDTO[]): OrgUsageDTO {
     totalSpend: 86,
     monthSpend: 86,
     monthlyHistory: [],
-    perModel: [],
     recentRuns: { runs, page: 1, pageSize: 20, total: runs.length },
     hasUsage: true,
   } as unknown as OrgUsageDTO;

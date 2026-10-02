@@ -244,8 +244,6 @@ export function OrgUsageClient({ orgId, orgName }: OrgUsageClientProps) {
 
       {!data.access.isAdmin ? <MemberLockNote t={t} /> : null}
 
-      <PerModelPanel data={data} t={t} />
-
       <RunLogPanel
         data={data}
         loading={status === 'loading'}
@@ -286,20 +284,6 @@ function monthLabel(yearMonth: string): string {
     month: 'short',
     timeZone: 'UTC',
   });
-}
-
-// Per-model hue → its DEDICATED `--el-model-*` element token (MOTIR-1274 ·
-// 1266.3). A named family now: DeepSeek used to BORROW the work-item-KIND teal
-// `--el-type-subtask` for non-type meaning (misuse #2); `--el-model-deepseek`
-// keeps that exact teal but decoupled. Each maps to its prior hue → zero change
-// (opus → `--el-model-opus` = the same `--color-primary-fill` `--el-accent` had).
-function modelColorVar(model: string | null): string {
-  const m = (model ?? '').toLowerCase();
-  if (m.includes('opus')) return 'var(--el-model-opus)';
-  if (m.includes('sonnet')) return 'var(--el-model-sonnet)';
-  if (m.includes('haiku')) return 'var(--el-model-haiku)';
-  if (m.includes('deepseek')) return 'var(--el-model-deepseek)';
-  return 'var(--el-text-muted)';
 }
 
 // ⚠️ TOTAL OVER A PERSISTED STRING, NOT OVER A LIVE ENUM (MOTIR-4305). `AiUsage.jobKind`
@@ -346,19 +330,6 @@ function jobKindTint(kind: string): string {
     default:
       return 'bg-(--el-surface)';
   }
-}
-
-function ModelChip({ model, label }: { model: string | null; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-2">
-      <span
-        aria-hidden
-        className="h-2.5 w-2.5 shrink-0 rounded-full"
-        style={{ backgroundColor: modelColorVar(model) }}
-      />
-      <span className="font-sans text-sm text-(--el-text)">{label}</span>
-    </span>
-  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -516,9 +487,8 @@ function SummaryPanel({
         </Card>
 
         {/* ── Search spend (MOTIR-4558) ────────────────────────────────────────
-            Its own figures beside token spend, because a search has NO MODEL and
-            NO TOKENS: it can be no row in the per-model breakdown and no token
-            count anywhere. `null` here is the META org, which renders none of
+            Its own figures beside token spend, because a search has NO TOKENS:
+            it can be no token count anywhere. `null` here is the META org, which renders none of
             this — it is never billed. */}
         {search ? (
           <>
@@ -790,84 +760,6 @@ function Sep() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Panel 4 — per-model breakdown
-function PerModelPanel({ data, t }: { data: OrgUsageDTO; t: T }) {
-  const rows = data.perModel;
-  const maxCredits = Math.max(1, ...rows.map((r) => r.credits));
-  const totalIn = rows.reduce((s, r) => s + r.inputTokens, 0);
-  const totalOut = rows.reduce((s, r) => s + r.outputTokens, 0);
-  const totalCredits = rows.reduce((s, r) => s + r.credits, 0);
-
-  return (
-    <Card
-      header={
-        <div className="flex items-center gap-2">
-          <h3 className="font-sans text-base font-semibold text-(--el-text)">
-            {t('byModel.title')}
-          </h3>
-          <Pill tone="neutral">{t('byModel.count', { n: rows.length })}</Pill>
-        </div>
-      }
-      footer={
-        <div className="flex items-center justify-between font-sans text-xs">
-          <span className="text-(--el-text-muted)">
-            {t('byModel.foot', { in: fmtTokens(totalIn), out: fmtTokens(totalOut) })}
-          </span>
-          <span className="font-semibold text-(--el-text-strong)">
-            {t('byModel.footCredits', { n: fmt(totalCredits) })}
-          </span>
-        </div>
-      }
-    >
-      {rows.length === 0 ? (
-        <p className="font-sans text-sm text-(--el-text-muted)">{t('states.emptyTitle')}</p>
-      ) : (
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-(--el-border-soft) border-b text-left font-sans text-xs text-(--el-text-muted)">
-              <th className="py-2 font-medium">{t('byModel.model')}</th>
-              <th className="py-2 text-right font-medium tabular-nums">{t('byModel.tokensIn')}</th>
-              <th className="py-2 text-right font-medium tabular-nums">{t('byModel.tokensOut')}</th>
-              <th className="hidden py-2 font-medium sm:table-cell">{t('byModel.share')}</th>
-              <th className="py-2 text-right font-medium tabular-nums">{t('byModel.credits')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.model} className="border-(--el-border-soft) border-b last:border-b-0">
-                <td className="py-2">
-                  <ModelChip model={r.model} label={r.model} />
-                </td>
-                <td className="py-2 text-right tabular-nums text-(--el-text-muted)">
-                  {fmtTokens(r.inputTokens)}
-                </td>
-                <td className="py-2 text-right tabular-nums text-(--el-text-muted)">
-                  {fmtTokens(r.outputTokens)}
-                </td>
-                <td className="hidden py-2 sm:table-cell">
-                  <span className="block h-1.5 w-full max-w-32 overflow-hidden rounded-full bg-(--el-muted)">
-                    <span
-                      className="block h-full rounded-full"
-                      style={{
-                        width: `${Math.round((r.credits / maxCredits) * 100)}%`,
-                        backgroundColor: modelColorVar(r.model),
-                      }}
-                    />
-                  </span>
-                </td>
-                <td className="py-2 text-right font-medium tabular-nums text-(--el-text-strong)">
-                  {fmt(r.credits)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </Card>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Panel 5 — recent activity / per-run log (PAGINATED)
 function RunLogPanel({
   data,
@@ -946,11 +838,19 @@ function RunLogPanel({
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-(--el-border-soft) border-b text-left font-sans text-xs text-(--el-text-muted)">
-            <th className="py-2 font-medium">{t('activity.when')}</th>
+            {/* No model column (MOTIR-7229): which model planned a run is a
+                platform setting, never shown to an organization. The widths are
+                the amended `design/ai-usage` mock's. */}
+            <th className="py-2 font-medium" style={{ width: '22%' }}>
+              {t('activity.when')}
+            </th>
             <th className="py-2 font-medium">{t('activity.run')}</th>
-            <th className="hidden py-2 font-medium sm:table-cell">{t('activity.model')}</th>
-            <th className="py-2 text-right font-medium tabular-nums">{t('activity.tokens')}</th>
-            <th className="py-2 text-right font-medium tabular-nums">{t('activity.credits')}</th>
+            <th className="py-2 text-right font-medium tabular-nums" style={{ width: '16%' }}>
+              {t('activity.tokens')}
+            </th>
+            <th className="py-2 text-right font-medium tabular-nums" style={{ width: '14%' }}>
+              {t('activity.credits')}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -973,9 +873,6 @@ function RunLogPanel({
                     </span>
                   </span>
                 </td>
-                <td className="hidden py-2 sm:table-cell">
-                  <ModelChip model={e.run.model} label={e.run.model ?? '—'} />
-                </td>
                 <td className="py-2 text-right tabular-nums text-(--el-text-muted)">
                   {fmtTokens(e.run.inputTokens + e.run.outputTokens)}
                 </td>
@@ -990,9 +887,8 @@ function RunLogPanel({
                  this surface are already spent (five of them on job kinds), so a
                  tint would put two meanings on one colour inside one table and
                  reusing `sky` would make a search read like an `expand` run.
-                 The model and token cells take an EM-DASH, never a `0`: a search
-                 does not use zero tokens, it uses none, and a `0` claims the
-                 first. */
+                 The token cell takes an EM-DASH, never a `0`: a search does not
+                 use zero tokens, it uses none, and a `0` claims the first. */
               <tr
                 key={`search:${e.search.jobId}`}
                 className="border-(--el-border-soft) border-b last:border-b-0"
@@ -1004,14 +900,6 @@ function RunLogPanel({
                       <Search className="mr-1 h-3 w-3" aria-hidden />
                       {t('activity.webSearch')}
                     </Pill>
-                  </span>
-                </td>
-                <td className="hidden py-2 sm:table-cell">
-                  <span
-                    className="font-sans text-xs tracking-wider text-(--el-text-secondary)"
-                    aria-label={t('activity.noModel')}
-                  >
-                    &mdash;
                   </span>
                 </td>
                 <td className="py-2 text-right">

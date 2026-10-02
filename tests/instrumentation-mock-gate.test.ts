@@ -61,6 +61,7 @@ const platformUsage = vi.hoisted(() => ({ installPlatformUsageBoundaryMock: vi.f
 const codeGraph = vi.hoisted(() => ({ installCodeGraphBoundaryMock: vi.fn() }));
 const hostedRun = vi.hoisted(() => ({ installHostedRunMock: vi.fn() }));
 const cimd = vi.hoisted(() => ({ installClientMetadataDocumentMock: vi.fn() }));
+const plannerModel = vi.hoisted(() => ({ installPlannerModelBoundaryMock: vi.fn() }));
 
 vi.mock('@/lib/test-mock-agent', () => ({ installSharedMockAgent }));
 vi.mock('@/lib/test-oauth-mock', () => oauth);
@@ -75,6 +76,7 @@ vi.mock('@/lib/test-platform-usage-mock', () => platformUsage);
 vi.mock('@/lib/test-code-graph-mock', () => codeGraph);
 vi.mock('@/lib/test-hosted-run-mock', () => hostedRun);
 vi.mock('@/lib/test-cimd-mock', () => cimd);
+vi.mock('@/lib/test-planner-model-mock', () => plannerModel);
 
 /** Which installers each flag owns — the assertion that the RIGHT seam ran. */
 const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
@@ -114,6 +116,8 @@ const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
   E2E_TEST_HOSTED_RUN: [hostedRun.installHostedRunMock],
   // MOTIR-7176 — the Client ID Metadata Document transport. Takes no agent.
   E2E_TEST_CIMD: [cimd.installClientMetadataDocumentMock],
+  // MOTIR-7231 — the console's planner-model settings seam.
+  E2E_TEST_PLANNER_MODEL: [plannerModel.installPlannerModelBoundaryMock],
 };
 
 const ALL_INSTALLERS = Object.values(INSTALLERS).flat();

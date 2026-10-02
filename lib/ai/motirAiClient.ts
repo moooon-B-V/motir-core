@@ -25,6 +25,8 @@ import {
 import {
   MotirAiConfigError,
   MotirAiUnavailableError,
+  PlannerModelNotOfferedError,
+  PlannerModelUnreachableError,
   errorFromProblem,
   type JobView,
 } from './errors';
@@ -33,6 +35,9 @@ import type {
   JobContextBag,
   JobKind,
   JobStreamEvent,
+  PlannerModelSettingsRead,
+  PlannerModelWriteInput,
+  PlannerModelWriteResult,
   PreplanStateQuery,
   Problem,
   RawCiOverageDebitResponse,
@@ -2118,6 +2123,94 @@ export async function getAgentModels(): Promise<AgentModelsRead> {
   } catch (err) {
     return { state: 'unavailable', reason: describe(err) };
   }
+}
+
+// ── The platform planning model (Story MOTIR-7220 · MOTIR-7227) ─────────────
+//
+// Which model Motir PLANS with, one setting per audience (customer · meta ·
+// internal). Stored and validated in motir-ai; read and written here only for the
+// operator console (`platformPlannerModelService`). Unlike `getAgentModels`, these
+// THROW rather than degrade: the console shows an error card with retry when
+// motir-ai cannot answer, so a guessed value is never drawn.
+
+function isPlannerModelSettingsRead(body: unknown): body is PlannerModelSettingsRead {
+  if (!body || typeof body !== 'object') return false;
+  const { settings, offered } = body as { settings?: unknown; offered?: unknown };
+  return Array.isArray(settings) && Array.isArray(offered);
+}
+
+/**
+ * GET /v1/planner-model-settings — the three audience settings and the offered
+ * planning models.
+ *
+ * @throws MotirAiUnavailableError on a transport failure, a 5xx or a body that is
+ *   not the settings shape; the §5 typed error for any other non-2xx.
+ */
+export async function getPlannerModelSettings(): Promise<PlannerModelSettingsRead> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/planner-model-settings`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body: unknown = await res.json().catch(() => null);
+  if (!isPlannerModelSettingsRead(body)) {
+    throw new MotirAiUnavailableError(
+      'motir-ai answered a body that is not planner-model settings',
+    );
+  }
+  return body;
+}
+
+/**
+ * The probe's reason out of a `model_unreachable` detail. motir-ai words it
+ * `model "<id>" is not reachable for the planner: <reason>`; anything else is
+ * passed through whole rather than dropped.
+ */
+function unreachableReason(detail: string | undefined, fallback: string): string {
+  if (!detail) return fallback;
+  const marker = 'is not reachable for the planner: ';
+  const at = detail.indexOf(marker);
+  return at === -1 ? detail : detail.slice(at + marker.length);
+}
+
+/**
+ * PUT /v1/planner-model-settings — set one audience's planning model.
+ *
+ * @throws PlannerModelNotOfferedError when motir-ai answers `validation_error`
+ *   (the model is not offered for planning — possibly no longer, since the page
+ *   loaded).
+ * @throws PlannerModelUnreachableError when its probe failed (`model_unreachable`).
+ * @throws MotirAiUnavailableError on a transport failure or a 5xx; the §5 typed
+ *   error for any other non-2xx.
+ */
+export async function setPlannerModel(
+  input: PlannerModelWriteInput,
+): Promise<PlannerModelWriteResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/planner-model-settings`, {
+    method: 'PUT',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const problem = await readProblem(res);
+    if (problem.code === 'validation_error') {
+      throw new PlannerModelNotOfferedError(input.model, problem.detail);
+    }
+    if (problem.code === 'model_unreachable') {
+      throw new PlannerModelUnreachableError(
+        input.model,
+        unreachableReason(problem.detail, problem.title),
+      );
+    }
+    throw errorFromProblem(problem);
+  }
+  const body = (await res.json().catch(() => null)) as PlannerModelWriteResult | null;
+  if (!body || typeof body.previousModel !== 'string' || typeof body.model !== 'string') {
+    throw new MotirAiUnavailableError('motir-ai answered a body that is not a planner-model write');
+  }
+  return body;
 }
 
 /** motir-ai's answer to the hosted-run credit pre-flight (MOTIR-6447). */

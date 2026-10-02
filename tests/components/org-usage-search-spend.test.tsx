@@ -33,7 +33,6 @@ function run(over: Partial<UsageRunDTO> = {}): UsageRunDTO {
   return {
     jobId: 'job_run_1',
     jobKind: 'plan',
-    model: 'claude-opus-4-8',
     projectId: 'p1',
     projectName: 'Mobile App',
     inputTokens: 100,
@@ -63,7 +62,6 @@ function dto(over: Partial<OrgUsageDTO> = {}): OrgUsageDTO {
     totalSpend: 7520,
     monthSpend: 7520,
     monthlyHistory: [],
-    perModel: [],
     recentRuns: { runs: [run()], page: 1, pageSize: 20, total: 1 },
     search: { totalSpend: 1204, monthSpend: 312 },
     searchRuns: {
@@ -319,11 +317,10 @@ describe('the search row in the activity log', () => {
     expect(cls).not.toContain('--el-tint-lavender');
   });
 
-  it('⚠️ puts an EM-DASH in the columns a search has no value for, never a zero', async () => {
+  it('⚠️ puts an EM-DASH in the token column a search has no value for, never a zero', async () => {
     await renderUsage(dto());
     // A search does not use zero tokens — it uses none, and a `0` claims the
     // first. The label carries the meaning for a reader who cannot see the dash.
-    expect(screen.getByLabelText(a.noModel)).toBeTruthy();
     expect(screen.getByLabelText(a.noTokens)).toBeTruthy();
     // Its credits ARE real and are in the same column every other row sums into.
     expect(screen.getByText('4')).toBeTruthy();
