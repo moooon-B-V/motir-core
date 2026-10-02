@@ -1,0 +1,3105 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Pages — the page at its own address (MOTIR-7271)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE PAGE AT ITS OWN ADDRESS, /pages/{id}.
+      Story MOTIR-5752, design subtask MOTIR-7271. Gates MOTIR-7275 (the editor,
+      its toolbar and the save indicator) and MOTIR-7280 (the route: title,
+      loading, not-found, read-only). Its sibling pages.mock.html draws the rail
+      row and the index.
+
+      A REDRAW after Yue refused the /items entrance on 2026-10-02: pages have
+      their own section and their own address; nothing here is in /items.
+
+      Composes, does not invent: the toolbar is components/ui/MarkdownEditor.tsx's
+      full set, button for button, plus the two controls the page editor adds
+      (Insert image, Insert table) and the table group; the body is the shipped
+      .motir-prose stylesheet and the code block's language bar
+      (markdownEditorCodeBlock.ts); the frame is PageSkeleton; not-found is the
+      shared (authed) boundary, unchanged. Colour is --el-* only.
+
+      Panels: 6 fresh · 7 being written · 8 the save indicator · 9 too large ·
+      10 read-only · 11 loading · 12 not found. Light and dark each; zh where
+      marked. Spec, copy and keys: design-notes.md.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — values copied from
+         packages/design-system/theme.css (base palette, default style). ───── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        --color-accent: #ff64c8;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --focus-ring-width: 2px;
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      /* The Tier-3 layer is declared on EVERY themed scope, not on :root alone.
+         A custom property's var() is substituted where it is DECLARED, so an
+         --el-* declared only on :root would compute against the light palette
+         and a nested data-theme="dark" board would inherit the light value
+         (tests/design-dark-parity.test.ts, MOTIR-3592). */
+      :root,
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-identifier: var(--color-slate);
+
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-muted: var(--color-muted);
+        --el-card: var(--color-background);
+
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning: var(--color-warning);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success: var(--color-success);
+
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-mint: var(--color-tint-mint);
+
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-text-subtitle: var(--color-slate);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+
+        --focus-ring-color: var(--color-primary);
+      }
+      /* theme.css's dark-only lifts (MOTIR-3745 accent ink; the sidebar hover). */
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+      }
+    </style>
+    <style>
+      /* ── Board chrome (the review sheet, NOT part of the design) ────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        font-family: var(--font-sans);
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .pg-sheet {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 40px;
+      }
+      .pg-sheetHead h1 {
+        font-family: var(--font-serif);
+        font-size: 1.75rem;
+        font-weight: 600;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .pg-sheetHead p {
+        margin: 6px 0 0;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 880px;
+      }
+      .pg-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .pg-panelTitle {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pg-panelNum {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pg-panelNote {
+        margin: 0;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 960px;
+      }
+      .pg-boards {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .pg-board {
+        padding: 16px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        color: var(--el-text);
+      }
+      .pg-boardTag {
+        margin: 0 0 10px;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── The authed shell, cut down to the two things these states touch:
+         the rail (components/ui/Sidebar) and <main>. ───────────────────── */
+      .pg-app {
+        display: grid;
+        grid-template-columns: 224px minmax(0, 1fr);
+        min-height: 360px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      /* Sidebar.tsx — `bg-(--el-sidebar-bg) border-r border-(--el-sidebar-border) px-3 py-3`. */
+      .pg-rail {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 12px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+      }
+      /* SidebarRow, expanded: `h-(--height-control) gap-3 rounded-(--radius-control)
+         px-(--spacing-control-x) text-sm text-(--el-text-secondary)`; the glyph is
+         18px in `--el-icon-muted`. */
+      .pg-railRow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid transparent;
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .pg-railRow svg {
+        flex: none;
+        width: 18px;
+        height: 18px;
+        color: var(--el-icon-muted);
+      }
+      /* The active row: `bg-(--el-sidebar-item-bg-active) font-medium text-(--el-text)
+         shadow-(--shadow-subtle) border border-(--el-sidebar-border)`; the glyph
+         turns `--el-icon-active`. */
+      .pg-railRow[aria-current='page'] {
+        background: var(--el-sidebar-item-bg-active);
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .pg-railRow[aria-current='page'] svg {
+        color: var(--el-icon-active);
+      }
+      .pg-railElided {
+        padding: 6px var(--spacing-control-x);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .pg-main {
+        padding: 24px 32px 32px;
+        background: var(--el-page-bg);
+        min-width: 0;
+      }
+
+      /* ── Button (packages/design-system Button) ──────────────────────────── */
+      .pg-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        border-radius: var(--radius-btn);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+        text-decoration: none;
+      }
+      .pg-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .pg-btnPrimary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+    </style>
+    <style>
+      .pg-btnSecondary {
+        background: transparent;
+        border-color: var(--el-button-border);
+        color: var(--el-text);
+      }
+      .pg-btnSm {
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        font-size: 13px;
+      }
+
+      /* ── The page column: a reading measure, not the full <main> width. ── */
+      .pg-col {
+        max-width: 760px;
+      }
+      /* The way back — a quiet link above the title (Pages’ own crumb until the
+         tree’s breadcrumb, MOTIR-5753, replaces it). */
+      .pg-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .pg-back svg {
+        width: 14px;
+        height: 14px;
+      }
+      /* The title: an unboxed field at the page heading’s exact size
+         (`font-serif text-2xl font-semibold`, a 32px line box), so the editable
+         and the read-only page put the title in the same place. */
+      .pg-title {
+        display: block;
+        width: 100%;
+        margin: 12px 0 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font-family: var(--font-serif);
+        font-size: 1.5rem;
+        line-height: 2rem;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pg-titleWrap {
+        display: flex;
+        align-items: center;
+        margin-top: 12px;
+        height: 2rem;
+      }
+      .pg-titlePlaceholder {
+        font-family: var(--font-serif);
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--el-text-muted);
+      }
+      /* A drawn caret, so a static mock can show where focus is. */
+      .pg-caret {
+        display: inline-block;
+        width: 2px;
+        height: 1.4em;
+        margin-right: 1px;
+        vertical-align: text-bottom;
+        background: var(--el-text);
+      }
+
+      /* ── The toolbar — MarkdownEditor's Toolbar, button for button:
+         `flex flex-wrap items-center gap-0.5 border-b px-1.5 py-1`; each button
+         `rounded-(--radius-control) p-1.5`, a 16px glyph. On a page it is a
+         sticky strip on the canvas instead of the top of a boxed field, and its
+         trailing end carries the save indicator. ─────────────────────────── */
+      .pg-toolbar {
+        position: sticky;
+        top: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        margin-top: 12px;
+        padding: 4px 6px;
+        border-top: 1px solid var(--el-border);
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .pg-tb {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-icon-muted);
+      }
+      .pg-tb svg {
+        width: 16px;
+        height: 16px;
+      }
+      /* The page editor's additions, after the shipped set: Image, Table — and,
+         only while the caret is in a table, the table group. */
+      .pg-tbText {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 8px;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        font: inherit;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .pg-tbSep {
+        width: 1px;
+        height: 18px;
+        margin: 0 4px;
+        background: var(--el-border);
+      }
+
+      /* ── The save indicator ──────────────────────────────────────────── */
+      .pg-save {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .pg-save svg {
+        width: 14px;
+        height: 14px;
+      }
+      .pg-saveOffline {
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+      }
+      .pg-saveRefused {
+        font-weight: 500;
+        color: var(--el-danger-on-surface);
+      }
+      .pg-tip {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 6px;
+      }
+      .pg-tipBody {
+        max-width: 340px;
+        padding: 6px 10px;
+        border-radius: var(--radius-control);
+        background: var(--el-tooltip-bg);
+        color: var(--el-tooltip-text);
+        font-size: 12px;
+        line-height: 1.45;
+        box-shadow: var(--shadow-elevated);
+      }
+      .pg-states {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .pg-stateLabel {
+        margin: 0 0 4px;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── The refusal callout (PAGE_BODY_TOO_LARGE). The hue sits in the
+         border and the glyph; the copy stays on --el-danger-surface-text. ── */
+      .pg-refusal {
+        display: flex;
+        gap: 12px;
+        margin-top: 16px;
+        padding: 14px 16px;
+        border: 1px solid var(--el-danger);
+        border-radius: var(--radius-card);
+        background: var(--el-danger-surface);
+        color: var(--el-danger-surface-text);
+      }
+      .pg-refusal > svg {
+        flex: none;
+        width: 18px;
+        height: 18px;
+        margin-top: 1px;
+        color: var(--el-danger-on-surface);
+      }
+      .pg-refusalTitle {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .pg-refusalBody {
+        margin: 4px 0 0;
+        font-size: 13.5px;
+        line-height: 1.5;
+      }
+      .pg-refusalActions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      /* ── The body. `.motir-prose` is the shipped content stylesheet
+         (components/ui/markdown-editor.css), rule for rule, except where noted. */
+      .pg-body {
+        padding: 16px 0 8px;
+      }
+      .pg-bodyPlaceholder {
+        margin: 0;
+        font-size: 0.875rem;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+      .motir-prose {
+        font-size: 0.875rem;
+        line-height: 1.6;
+        color: var(--el-text);
+      }
+      .motir-prose > * {
+        margin: 0;
+      }
+      .motir-prose > * + * {
+        margin-top: 0.6em;
+      }
+      .motir-prose h2 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        line-height: 1.3;
+      }
+      .motir-prose h3 {
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+      .motir-prose strong {
+        font-weight: 600;
+      }
+      /* ⚠️ DEVIATION: the description editor paints links --el-highlight, the
+         brand pink, which is ~2.6:1 on the white page. A page is mostly reading,
+         so its links take --el-link. */
+      .motir-prose a {
+        color: var(--el-link);
+        text-decoration: underline;
+      }
+      .motir-prose ul,
+      .motir-prose ol {
+        padding-left: 1.5rem;
+      }
+      .motir-prose ul {
+        list-style: disc;
+      }
+      .motir-prose ol {
+        list-style: decimal;
+      }
+      .motir-prose ul[data-type='taskList'] {
+        list-style: none;
+        padding-left: 0.25rem;
+      }
+      .motir-prose ul[data-type='taskList'] li {
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-start;
+      }
+      .motir-prose ul[data-type='taskList'] input {
+        margin-top: 0.3em;
+      }
+      /* ⚠️ DEVIATION: shipped quotes take --el-text-muted, which is AA only on
+         the white page; secondary clears it on every surface a quote can sit. */
+      .motir-prose blockquote {
+        border-left: 3px solid var(--el-border);
+        padding-left: 0.75rem;
+        color: var(--el-text-secondary);
+      }
+      .motir-prose hr {
+        border: 0;
+        border-top: 1px solid var(--el-border);
+      }
+      .motir-prose code {
+        font-family: var(--font-mono);
+        font-size: 0.85em;
+        background: var(--el-surface);
+        padding: 0.1em 0.35em;
+        border-radius: var(--radius-kbd);
+      }
+      .motir-prose pre code {
+        background: transparent;
+        padding: 0;
+      }
+      .motir-prose table {
+        border-collapse: collapse;
+        border-spacing: 0;
+      }
+      .motir-prose th,
+      .motir-prose td {
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-bottom: 1px solid var(--el-border);
+        text-align: left;
+        vertical-align: top;
+      }
+      .motir-prose thead th {
+        border-bottom: 1px solid var(--el-border-strong);
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .motir-prose tbody tr:last-child td {
+        border-bottom: 0;
+      }
+      /* The cell the caret is in — the page editor's selected-cell mark. */
+      .motir-prose td.pg-cellCurrent {
+        box-shadow: inset 0 0 0 2px var(--el-highlight);
+      }
+      /* A block image (never base64 — an upload filed under the page). The mock
+         draws its frame; the bytes are the writer's. */
+      .pg-image {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: 150px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: 12.5px;
+      }
+      .pg-image svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      /* The code block's language field (markdownEditorCodeBlock.ts +
+         markdown-editor.css, MOTIR-5458) — shown while the caret is inside. */
+      .motir-prose .motir-editor-code-block {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface);
+        overflow: hidden;
+      }
+      .motir-prose .motir-editor-code-block[data-focused] {
+        border-color: var(--el-highlight);
+      }
+      .motir-prose .motir-editor-code-block-bar {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-control-x);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .motir-prose .motir-editor-code-block-label {
+        font-size: 11px;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .motir-prose .motir-editor-code-block-language {
+        min-width: 96px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-input-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+      }
+      .motir-prose .motir-editor-code-block pre {
+        margin: 0;
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        color: var(--el-code-text);
+        overflow-x: auto;
+      }
+      /* Read-only: the same block without the field (it shows only on focus,
+         and a read-only document is never focused). */
+      .motir-prose .pg-codeQuiet {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        color: var(--el-code-text);
+        overflow-x: auto;
+      }
+
+      /* ── PageSkeleton's Block ───────────────────────────────────────── */
+      .pg-skel {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        margin-top: 12px;
+      }
+      .pg-skelHeader {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .pg-skelBody {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .pg-block {
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .pg-srOnly {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+
+      /* ── The authed not-found boundary — EmptyState in a 48rem column. ── */
+      .pg-nf {
+        max-width: 48rem;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 40px var(--spacing-card-padding);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+      }
+      .pg-nf > svg {
+        width: 48px;
+        height: 48px;
+        margin-bottom: var(--spacing-md);
+        color: var(--el-icon-muted);
+      }
+      .pg-nfTitle {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 1.25rem;
+        font-weight: 400;
+        color: var(--el-text);
+      }
+      .pg-nfDesc {
+        margin: var(--spacing-sm) 0 0;
+        max-width: 60ch;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-subtitle);
+      }
+      .pg-nfAction {
+        margin-top: var(--spacing-md);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+      <symbol
+        id="i-house"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
+        <path
+          d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+        />
+      </symbol>
+      <symbol
+        id="i-circle-dot"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <circle cx="12" cy="12" r="1" />
+      </symbol>
+      <symbol
+        id="i-notebook"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M2 6h4" />
+        <path d="M2 10h4" />
+        <path d="M2 14h4" />
+        <path d="M2 18h4" />
+        <rect width="16" height="20" x="4" y="2" rx="2" />
+        <path d="M9.5 8h5" />
+        <path d="M9.5 12H16" />
+        <path d="M9.5 16H14" />
+      </symbol>
+      <symbol
+        id="i-circle-play"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"
+        />
+        <circle cx="12" cy="12" r="10" />
+      </symbol>
+      <symbol
+        id="i-waypoints"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m10.586 5.414-5.172 5.172" />
+        <path d="m18.586 13.414-5.172 5.172" />
+        <path d="M6 12h12" />
+        <circle cx="12" cy="20" r="2" />
+        <circle cx="12" cy="4" r="2" />
+        <circle cx="20" cy="12" r="2" />
+        <circle cx="4" cy="12" r="2" />
+      </symbol>
+      <symbol
+        id="i-arrow-left"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m12 19-7-7 7-7" />
+        <path d="M19 12H5" />
+      </symbol>
+      <symbol
+        id="i-bold"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8" />
+      </symbol>
+      <symbol
+        id="i-italic"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="19" x2="10" y1="4" y2="4" />
+        <line x1="14" x2="5" y1="20" y2="20" />
+        <line x1="15" x2="9" y1="4" y2="20" />
+      </symbol>
+      <symbol
+        id="i-strike"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M16 4H9a3 3 0 0 0-2.83 4" />
+        <path d="M14 12a4 4 0 0 1 0 8H6" />
+        <line x1="4" x2="20" y1="12" y2="12" />
+      </symbol>
+      <symbol
+        id="i-heading"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M4 12h8" />
+        <path d="M4 18V6" />
+        <path d="M12 18V6" />
+        <path d="M21 18h-4c0-4 4-3 4-6 0-1.5-2-2.5-4-1" />
+      </symbol>
+      <symbol
+        id="i-quote"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"
+        />
+        <path
+          d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"
+        />
+      </symbol>
+      <symbol
+        id="i-code-block"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m18 16 4-4-4-4" />
+        <path d="m6 8-4 4 4 4" />
+        <path d="m14.5 4-5 16" />
+      </symbol>
+      <symbol
+        id="i-list"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 5h.01" />
+        <path d="M3 12h.01" />
+        <path d="M3 19h.01" />
+        <path d="M8 5h13" />
+        <path d="M8 12h13" />
+        <path d="M8 19h13" />
+      </symbol>
+      <symbol
+        id="i-list-ordered"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M11 5h10" />
+        <path d="M11 12h10" />
+        <path d="M11 19h10" />
+        <path d="M4 4h1v5" />
+        <path d="M4 9h2" />
+        <path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02" />
+      </symbol>
+      <symbol
+        id="i-list-checks"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M13 5h8" />
+        <path d="M13 12h8" />
+        <path d="M13 19h8" />
+        <path d="m3 17 2 2 4-4" />
+        <path d="m3 7 2 2 4-4" />
+      </symbol>
+      <symbol
+        id="i-link"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </symbol>
+      <symbol
+        id="i-image"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+        <circle cx="9" cy="9" r="2" />
+        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+      </symbol>
+      <symbol
+        id="i-table"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 3v18" />
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="M3 9h18" />
+        <path d="M3 15h18" />
+      </symbol>
+      <symbol
+        id="i-check"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M20 6 9 17l-5-5" />
+      </symbol>
+      <symbol
+        id="i-loader"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+      </symbol>
+      <symbol
+        id="i-cloud-off"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M10.94 5.274A7 7 0 0 1 15.71 10h1.79a4.5 4.5 0 0 1 4.222 6.057" />
+        <path d="M18.796 18.81A4.5 4.5 0 0 1 17.5 19H9A7 7 0 0 1 5.79 5.78" />
+        <path d="m2 2 20 20" />
+      </symbol>
+      <symbol
+        id="i-alert"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+        <path d="M12 9v4" />
+        <path d="M12 17h.01" />
+      </symbol>
+      <symbol
+        id="i-file-question"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+        />
+        <path d="M12 17h.01" />
+        <path d="M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3" />
+      </symbol>
+    </svg>
+    <div class="pg-sheet">
+      <div class="pg-sheetHead">
+        <h1>Pages — the page at its own address</h1>
+        <p>
+          MOTIR-7271 for Story MOTIR-5752. Panels continue the numbering of
+          <code>pages.mock.html</code> (1–5). The page is reached from the Pages index or by its
+          address; the rail’s Pages row is active throughout.
+        </p>
+      </div>
+      <section class="pg-panel">
+        <h2 class="pg-panelTitle">
+          <span class="pg-panelNum">6</span>A FRESH PAGE — what New page lands on.
+        </h2>
+        <p class="pg-panelNote">
+          New page creates an empty page and moves to <code>/pages/{id}</code> with focus in the
+          <strong>title</strong>: an unboxed field at the page heading’s exact size, placeholder
+          <em>Untitled</em>. <kbd>Enter</kbd> moves focus to the body. The body shows its
+          placeholder; the toolbar is the description editor’s (panel 7 cites it) and its trailing
+          end already reads <em>Saved</em> — the page exists and is empty.
+        </p>
+        <p class="pg-panelNote">
+          <strong>The way back is a quiet “← Pages” link above the title</strong>, and the rail’s
+          Pages row is active on the whole <code>/pages</code> subtree. The rail alone is not
+          enough: on a phone it is behind the drawer, and when you finish reading your eye is at the
+          top of the page, not at the rail. The link is the tree’s breadcrumb’s placeholder —
+          MOTIR-5753 replaces it with the page’s ancestry.
+        </p>
+        <div class="pg-boards">
+          <div class="pg-board" data-theme="light">
+            <p class="pg-boardTag">Light · en</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-col">
+                  <a class="pg-back" href="/pages" aria-label="Back to Pages"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-left" /></svg
+                    >Pages</a
+                  >
+                  <div class="pg-titleWrap">
+                    <span class="pg-caret" aria-hidden="true"></span
+                    ><span class="pg-titlePlaceholder">Untitled</span>
+                  </div>
+                  <div class="pg-toolbar" role="toolbar" aria-label="Formatting">
+                    <button class="pg-tb" type="button" aria-label="Bold" title="Bold">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-bold" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Italic" title="Italic">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-italic" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Strikethrough"
+                      title="Strikethrough"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-strike" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Heading" title="Heading">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-heading" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Quote" title="Quote">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-quote" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Code block" title="Code block">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-code-block" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Bulleted list"
+                      title="Bulleted list"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Numbered list"
+                      title="Numbered list"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list-ordered" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Task list" title="Task list">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list-checks" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Link" title="Link">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-link" />
+                      </svg></button
+                    ><span class="pg-tbSep" aria-hidden="true"></span
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Insert image"
+                      title="Insert image"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-image" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Insert table"
+                      title="Insert table"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-table" />
+                      </svg></button
+                    ><span class="pg-save" role="status"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg
+                      >Saved</span
+                    >
+                  </div>
+                  <div class="pg-body">
+                    <p class="pg-bodyPlaceholder">
+                      Start writing. Use the toolbar for headings, lists, tables, code and images.
+                    </p>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+          <div class="pg-board" data-theme="dark" lang="zh">
+            <p class="pg-boardTag">Dark · zh</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="项目导航">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >工作台</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >工作项</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >页面</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >就绪</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >运行</a
+                >
+                <p class="pg-railElided">…其余主导航行不变</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-col">
+                  <a class="pg-back" href="/pages" aria-label="返回页面"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-left" /></svg
+                    >页面</a
+                  >
+                  <div class="pg-titleWrap">
+                    <span class="pg-caret" aria-hidden="true"></span
+                    ><span class="pg-titlePlaceholder">无标题</span>
+                  </div>
+                  <div class="pg-toolbar" role="toolbar" aria-label="格式">
+                    <button class="pg-tb" type="button" aria-label="粗体" title="粗体">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-bold" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="斜体" title="斜体">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-italic" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="删除线" title="删除线">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-strike" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="标题" title="标题">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-heading" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="引用" title="引用">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-quote" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="代码块" title="代码块">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-code-block" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="项目符号列表"
+                      title="项目符号列表"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="编号列表" title="编号列表">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list-ordered" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="任务列表" title="任务列表">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list-checks" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="链接" title="链接">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-link" />
+                      </svg></button
+                    ><span class="pg-tbSep" aria-hidden="true"></span
+                    ><button class="pg-tb" type="button" aria-label="插入图片" title="插入图片">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-image" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="插入表格" title="插入表格">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-table" />
+                      </svg></button
+                    ><span class="pg-save" role="status"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg
+                      >已保存</span
+                    >
+                  </div>
+                  <div class="pg-body">
+                    <p class="pg-bodyPlaceholder">
+                      开始写作。使用工具栏添加标题、列表、表格、代码和图片。
+                    </p>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pg-panel">
+        <h2 class="pg-panelTitle">
+          <span class="pg-panelNum">7</span>A PAGE BEING WRITTEN — every node the page schema
+          carries.
+        </h2>
+        <p class="pg-panelNote">
+          The schema is <code>packages/pages/src/document/extensions.ts</code>: StarterKit (headings
+          2–3 in the body, paragraph, bold, italic, strike, inline code, bullet and numbered lists,
+          blockquote, code block, horizontal rule, hard break), Link, Image (block, uploaded),
+          TaskList/TaskItem, and Table. All are drawn below, styled by the shipped
+          <code>.motir-prose</code> rules. The caret is in the code block, so its
+          <strong>Language</strong> field shows — the shipped
+          <code>markdownEditorCodeBlock.ts</code> bar, which appears only on the block holding the
+          caret.
+        </p>
+        <p class="pg-panelNote">
+          <strong>The toolbar</strong> is <code>MarkdownEditor.tsx</code>’s <code>full</code> set in
+          its order — Bold · Italic · Strikethrough · Heading · Quote · Code block · Bulleted list ·
+          Numbered list · Task list · Link — then, after a hairline, what the page editor ADDS:
+          <strong>Insert image</strong> (the description editor’s Attach file becomes an image
+          upload filed under the page) and <strong>Insert table</strong>. The second board puts the
+          caret in a table cell: the table group appears after another hairline and leaves when the
+          caret does.
+        </p>
+        <div class="pg-boards">
+          <div class="pg-board" data-theme="light">
+            <p class="pg-boardTag">Light · en — caret in the code block</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-col">
+                  <a class="pg-back" href="/pages" aria-label="Back to Pages"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-left" /></svg
+                    >Pages</a
+                  ><input
+                    class="pg-title"
+                    type="text"
+                    aria-label="Page title"
+                    placeholder="Untitled"
+                    maxlength="255"
+                    value="Release runbook — v2.4"
+                  />
+                  <div class="pg-toolbar" role="toolbar" aria-label="Formatting">
+                    <button class="pg-tb" type="button" aria-label="Bold" title="Bold">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-bold" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Italic" title="Italic">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-italic" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Strikethrough"
+                      title="Strikethrough"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-strike" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Heading" title="Heading">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-heading" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Quote" title="Quote">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-quote" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Code block" title="Code block">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-code-block" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Bulleted list"
+                      title="Bulleted list"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Numbered list"
+                      title="Numbered list"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list-ordered" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Task list" title="Task list">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list-checks" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Link" title="Link">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-link" />
+                      </svg></button
+                    ><span class="pg-tbSep" aria-hidden="true"></span
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Insert image"
+                      title="Insert image"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-image" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Insert table"
+                      title="Insert table"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-table" />
+                      </svg></button
+                    ><span class="pg-save" role="status"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg
+                      >Saved</span
+                    >
+                  </div>
+                  <div class="pg-body">
+                    <div class="motir-prose">
+                      <h2>Release steps</h2>
+                      <p>
+                        Cut the release from <code>main</code> only after the
+                        <strong>migrations job</strong> is green. The <em>full</em> checklist lives
+                        in the
+                        <a href="https://github.com/moooon-B-V/motir-core/releases">release log</a>;
+                        <s>staging sign-off</s> is no longer required.
+                      </p>
+                      <ul>
+                        <li>Tag the commit and push the tag</li>
+                        <li>Watch the deploy until the health check passes</li>
+                      </ul>
+                      <ol>
+                        <li>Announce in #releases</li>
+                        <li>Close the release card</li>
+                      </ol>
+                      <ul data-type="taskList">
+                        <li>
+                          <input type="checkbox" checked aria-label="Done" /><span
+                            >Rotate the webhook secret</span
+                          >
+                        </li>
+                        <li>
+                          <input type="checkbox" aria-label="Not done" /><span
+                            >Update the status page</span
+                          >
+                        </li>
+                      </ul>
+                      <h3>Run it locally</h3>
+                      <div class="motir-editor-code-block" data-focused="true">
+                        <div class="motir-editor-code-block-bar">
+                          <span class="motir-editor-code-block-label">Language</span
+                          ><input
+                            class="motir-editor-code-block-language"
+                            type="text"
+                            aria-label="Language"
+                            value="bash"
+                          />
+                        </div>
+                        <pre><code>pnpm motir run MOTIR-5752 --repo motir-core<span class="pg-caret" aria-hidden="true"></span></code></pre>
+                      </div>
+                      <blockquote>If a migration fails, stop: do not re-run it by hand.</blockquote>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Environment</th>
+                            <th>Owner</th>
+                            <th>Window</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Staging</td>
+                            <td>Mia Chen</td>
+                            <td>Mon 10:00</td>
+                          </tr>
+                          <tr>
+                            <td>Production</td>
+                            <td>Zhu Yue</td>
+                            <td>Tue 09:00</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div
+                        class="pg-image"
+                        role="img"
+                        aria-label="Architecture sketch — the sync worker (an uploaded image)"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-image" /></svg
+                        >Architecture sketch — the sync worker (an uploaded image)
+                      </div>
+                      <hr />
+                      <p>Last reviewed after incident 2026-09-14.</p>
+                    </div>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+          <div class="pg-board" data-theme="dark" lang="zh">
+            <p class="pg-boardTag">Dark · zh — caret in a table cell (the table group shows)</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="项目导航">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >工作台</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >工作项</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >页面</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >就绪</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >运行</a
+                >
+                <p class="pg-railElided">…其余主导航行不变</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-col">
+                  <a class="pg-back" href="/pages" aria-label="返回页面"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-left" /></svg
+                    >页面</a
+                  ><input
+                    class="pg-title"
+                    type="text"
+                    aria-label="页面标题"
+                    placeholder="无标题"
+                    maxlength="255"
+                    value="Release runbook — v2.4"
+                  />
+                  <div class="pg-toolbar" role="toolbar" aria-label="格式">
+                    <button class="pg-tb" type="button" aria-label="粗体" title="粗体">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-bold" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="斜体" title="斜体">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-italic" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="删除线" title="删除线">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-strike" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="标题" title="标题">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-heading" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="引用" title="引用">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-quote" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="代码块" title="代码块">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-code-block" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="项目符号列表"
+                      title="项目符号列表"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="编号列表" title="编号列表">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list-ordered" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="任务列表" title="任务列表">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list-checks" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="链接" title="链接">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-link" />
+                      </svg></button
+                    ><span class="pg-tbSep" aria-hidden="true"></span
+                    ><button class="pg-tb" type="button" aria-label="插入图片" title="插入图片">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-image" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="插入表格" title="插入表格">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-table" />
+                      </svg></button
+                    ><span class="pg-tbSep" aria-hidden="true"></span
+                    ><button class="pg-tbText" type="button" aria-label="在下方添加行">+ 行</button
+                    ><button class="pg-tbText" type="button" aria-label="在右侧添加列">+ 列</button
+                    ><button class="pg-tbText" type="button" aria-label="删除行">− 行</button
+                    ><button class="pg-tbText" type="button" aria-label="删除列">− 列</button
+                    ><button class="pg-tbText" type="button" aria-label="删除表格">删除表格</button
+                    ><span class="pg-save" role="status"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-loader" /></svg
+                      >正在保存…</span
+                    >
+                  </div>
+                  <div class="pg-body">
+                    <div class="motir-prose">
+                      <h2>Release steps</h2>
+                      <p>
+                        Cut the release from <code>main</code> only after the
+                        <strong>migrations job</strong> is green. The <em>full</em> checklist lives
+                        in the
+                        <a href="https://github.com/moooon-B-V/motir-core/releases">release log</a>;
+                        <s>staging sign-off</s> is no longer required.
+                      </p>
+                      <ul>
+                        <li>Tag the commit and push the tag</li>
+                        <li>Watch the deploy until the health check passes</li>
+                      </ul>
+                      <ol>
+                        <li>Announce in #releases</li>
+                        <li>Close the release card</li>
+                      </ol>
+                      <ul data-type="taskList">
+                        <li>
+                          <input type="checkbox" checked aria-label="Done" /><span
+                            >Rotate the webhook secret</span
+                          >
+                        </li>
+                        <li>
+                          <input type="checkbox" aria-label="Not done" /><span
+                            >Update the status page</span
+                          >
+                        </li>
+                      </ul>
+                      <h3>Run it locally</h3>
+                      <div class="motir-editor-code-block">
+                        <pre><code>pnpm motir run MOTIR-5752 --repo motir-core</code></pre>
+                      </div>
+                      <blockquote>If a migration fails, stop: do not re-run it by hand.</blockquote>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Environment</th>
+                            <th>Owner</th>
+                            <th>Window</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Staging</td>
+                            <td>Mia Chen</td>
+                            <td>Mon 10:00</td>
+                          </tr>
+                          <tr>
+                            <td>Production</td>
+                            <td class="pg-cellCurrent">Zhu Yue</td>
+                            <td>Tue 09:00</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div
+                        class="pg-image"
+                        role="img"
+                        aria-label="架构草图——同步工作进程（已上传的图片）"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-image" /></svg
+                        >架构草图——同步工作进程（已上传的图片）
+                      </div>
+                      <hr />
+                      <p>Last reviewed after incident 2026-09-14.</p>
+                    </div>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pg-panel">
+        <h2 class="pg-panelTitle">
+          <span class="pg-panelNum">8</span>THE SAVE INDICATOR — saved, saving, offline.
+        </h2>
+        <p class="pg-panelNote">
+          <strong>Where:</strong> the trailing end of the toolbar, which is sticky, so the indicator
+          is in view wherever the writer is in a long page and sits where their eyes already are. It
+          is a polite live region (<code>role="status"</code>), so a screen reader hears the change
+          without losing its place. Title edits report through the same indicator.
+        </p>
+        <p class="pg-panelNote">
+          <strong>Saved</strong> — nothing is waiting; a quiet check in secondary ink.
+          <strong>Saving…</strong> — a batch of edits is in flight: the editor sends after 1 s of
+          quiet, or every 5 s while typing continues, one request at a time (MOTIR-7275).
+          <strong>Offline — edits kept</strong> — the last save failed for lack of network; the
+          edits stay buffered in the tab and are resent with backoff (2 s doubling to 30 s) and on
+          the browser’s <code>online</code> event, and the next success reads Saved. It is the only
+          value with a fill (the warning tint), because it is the only one that asks something of
+          the writer: its tooltip says to keep the tab open.
+        </p>
+        <div class="pg-boards">
+          <div class="pg-board" data-theme="light">
+            <p class="pg-boardTag">Light · en</p>
+            <div class="pg-states">
+              <div>
+                <p class="pg-stateLabel">saved</p>
+                <div class="pg-toolbar" role="toolbar" aria-label="Formatting">
+                  <button class="pg-tb" type="button" aria-label="Bold" title="Bold">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-bold" /></svg></button
+                  ><button class="pg-tb" type="button" aria-label="Italic" title="Italic">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-italic" />
+                    </svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Strikethrough"
+                    title="Strikethrough"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-strike" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Heading" title="Heading">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-heading" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Quote" title="Quote">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-quote" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Code block" title="Code block">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-code-block" />
+                    </svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Bulleted list"
+                    title="Bulleted list"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list" /></svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Numbered list"
+                    title="Numbered list"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-list-ordered" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Task list" title="Task list">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-list-checks" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Link" title="Link">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-link" /></svg></button
+                  ><span class="pg-tbSep" aria-hidden="true"></span
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Insert image"
+                    title="Insert image"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-image" />
+                    </svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Insert table"
+                    title="Insert table"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-table" />
+                    </svg></button
+                  ><span class="pg-save" role="status"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg
+                    >Saved</span
+                  >
+                </div>
+              </div>
+              <div>
+                <p class="pg-stateLabel">saving</p>
+                <div class="pg-toolbar" role="toolbar" aria-label="Formatting">
+                  <button class="pg-tb" type="button" aria-label="Bold" title="Bold">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-bold" /></svg></button
+                  ><button class="pg-tb" type="button" aria-label="Italic" title="Italic">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-italic" />
+                    </svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Strikethrough"
+                    title="Strikethrough"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-strike" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Heading" title="Heading">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-heading" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Quote" title="Quote">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-quote" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Code block" title="Code block">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-code-block" />
+                    </svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Bulleted list"
+                    title="Bulleted list"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list" /></svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Numbered list"
+                    title="Numbered list"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-list-ordered" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Task list" title="Task list">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-list-checks" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Link" title="Link">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-link" /></svg></button
+                  ><span class="pg-tbSep" aria-hidden="true"></span
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Insert image"
+                    title="Insert image"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-image" />
+                    </svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Insert table"
+                    title="Insert table"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-table" />
+                    </svg></button
+                  ><span class="pg-save" role="status"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-loader" /></svg
+                    >Saving…</span
+                  >
+                </div>
+              </div>
+              <div>
+                <p class="pg-stateLabel">offline — with its tooltip</p>
+                <div class="pg-toolbar" role="toolbar" aria-label="Formatting">
+                  <button class="pg-tb" type="button" aria-label="Bold" title="Bold">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-bold" /></svg></button
+                  ><button class="pg-tb" type="button" aria-label="Italic" title="Italic">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-italic" />
+                    </svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Strikethrough"
+                    title="Strikethrough"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-strike" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Heading" title="Heading">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-heading" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Quote" title="Quote">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-quote" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Code block" title="Code block">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-code-block" />
+                    </svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Bulleted list"
+                    title="Bulleted list"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list" /></svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Numbered list"
+                    title="Numbered list"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-list-ordered" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Task list" title="Task list">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-list-checks" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="Link" title="Link">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-link" /></svg></button
+                  ><span class="pg-tbSep" aria-hidden="true"></span
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Insert image"
+                    title="Insert image"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-image" />
+                    </svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="Insert table"
+                    title="Insert table"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-table" />
+                    </svg></button
+                  ><span
+                    class="pg-save pg-saveOffline"
+                    role="status"
+                    title="Your last save didn’t reach Motir. Your edits are kept in this tab and are sent as soon as you’re back online — keep the tab open until it says Saved."
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cloud-off" /></svg
+                    >Offline — edits kept</span
+                  >
+                </div>
+                <div class="pg-tip">
+                  <span class="pg-tipBody" role="tooltip"
+                    >Your last save didn’t reach Motir. Your edits are kept in this tab and are sent
+                    as soon as you’re back online — keep the tab open until it says Saved.</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="pg-board" data-theme="dark" lang="zh">
+            <p class="pg-boardTag">Dark · zh</p>
+            <div class="pg-states">
+              <div>
+                <p class="pg-stateLabel">saved</p>
+                <div class="pg-toolbar" role="toolbar" aria-label="格式">
+                  <button class="pg-tb" type="button" aria-label="粗体" title="粗体">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-bold" /></svg></button
+                  ><button class="pg-tb" type="button" aria-label="斜体" title="斜体">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-italic" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="删除线" title="删除线">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-strike" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="标题" title="标题">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-heading" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="引用" title="引用">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-quote" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="代码块" title="代码块">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-code-block" />
+                    </svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="项目符号列表"
+                    title="项目符号列表"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list" /></svg></button
+                  ><button class="pg-tb" type="button" aria-label="编号列表" title="编号列表">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-list-ordered" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="任务列表" title="任务列表">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-list-checks" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="链接" title="链接">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-link" /></svg></button
+                  ><span class="pg-tbSep" aria-hidden="true"></span
+                  ><button class="pg-tb" type="button" aria-label="插入图片" title="插入图片">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-image" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="插入表格" title="插入表格">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-table" />
+                    </svg></button
+                  ><span class="pg-save" role="status"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg
+                    >已保存</span
+                  >
+                </div>
+              </div>
+              <div>
+                <p class="pg-stateLabel">saving</p>
+                <div class="pg-toolbar" role="toolbar" aria-label="格式">
+                  <button class="pg-tb" type="button" aria-label="粗体" title="粗体">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-bold" /></svg></button
+                  ><button class="pg-tb" type="button" aria-label="斜体" title="斜体">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-italic" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="删除线" title="删除线">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-strike" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="标题" title="标题">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-heading" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="引用" title="引用">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-quote" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="代码块" title="代码块">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-code-block" />
+                    </svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="项目符号列表"
+                    title="项目符号列表"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list" /></svg></button
+                  ><button class="pg-tb" type="button" aria-label="编号列表" title="编号列表">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-list-ordered" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="任务列表" title="任务列表">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-list-checks" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="链接" title="链接">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-link" /></svg></button
+                  ><span class="pg-tbSep" aria-hidden="true"></span
+                  ><button class="pg-tb" type="button" aria-label="插入图片" title="插入图片">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-image" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="插入表格" title="插入表格">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-table" />
+                    </svg></button
+                  ><span class="pg-save" role="status"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-loader" /></svg
+                    >正在保存…</span
+                  >
+                </div>
+              </div>
+              <div>
+                <p class="pg-stateLabel">offline</p>
+                <div class="pg-toolbar" role="toolbar" aria-label="格式">
+                  <button class="pg-tb" type="button" aria-label="粗体" title="粗体">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-bold" /></svg></button
+                  ><button class="pg-tb" type="button" aria-label="斜体" title="斜体">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-italic" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="删除线" title="删除线">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-strike" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="标题" title="标题">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-heading" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="引用" title="引用">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-quote" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="代码块" title="代码块">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-code-block" />
+                    </svg></button
+                  ><button
+                    class="pg-tb"
+                    type="button"
+                    aria-label="项目符号列表"
+                    title="项目符号列表"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list" /></svg></button
+                  ><button class="pg-tb" type="button" aria-label="编号列表" title="编号列表">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-list-ordered" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="任务列表" title="任务列表">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-list-checks" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="链接" title="链接">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-link" /></svg></button
+                  ><span class="pg-tbSep" aria-hidden="true"></span
+                  ><button class="pg-tb" type="button" aria-label="插入图片" title="插入图片">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-image" />
+                    </svg></button
+                  ><button class="pg-tb" type="button" aria-label="插入表格" title="插入表格">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-table" />
+                    </svg></button
+                  ><span
+                    class="pg-save pg-saveOffline"
+                    role="status"
+                    title="上次保存未能送达 Motir。你的编辑保留在此标签页中，网络恢复后会立即发送——在显示“已保存”之前请保持此标签页打开。"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cloud-off" /></svg
+                    >离线——编辑已保留</span
+                  >
+                </div>
+                <div class="pg-tip">
+                  <span class="pg-tipBody" role="tooltip"
+                    >上次保存未能送达
+                    Motir。你的编辑保留在此标签页中，网络恢复后会立即发送——在显示“已保存”之前请保持此标签页打开。</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pg-panel">
+        <h2 class="pg-panelTitle">
+          <span class="pg-panelNum">9</span>REFUSED AS TOO LARGE —
+          <code>PAGE_BODY_TOO_LARGE</code> (413).
+        </h2>
+        <p class="pg-panelNote">
+          The save route answers <code>413 { code: 'PAGE_BODY_TOO_LARGE', limit, size }</code> when
+          the merged body would pass 2 MiB (<code>PAGE_BODY_MAX_BYTES</code>) or one request passes
+          1 MiB (<code>PAGE_SAVE_MAX_BYTES</code>); nothing is written either way
+          (<code>lib/pages/routeErrors.ts</code>). The editor then reports
+          <code>too_large</code> and STOPS sending (MOTIR-7275), so the indicator reads
+          <strong>Not saved</strong> in danger ink and a callout opens under the toolbar. It says
+          what happened (the edits since the last save are not saved, and nothing more will be), and
+          what to do: copy out what to keep and reload to the last saved version; make room by
+          moving sections to a new page. The content stays in the editor so it can be selected and
+          copied.
+        </p>
+        <p class="pg-panelNote">
+          Both actions are secondary buttons — neither is the obvious next step for every writer,
+          and Reload discards the unsaved edits, which the body says before the button does.
+          <strong>New page in a new tab</strong> opens the new page beside this one, so the writer
+          can paste a section across without losing this tab’s unsaved text.
+        </p>
+        <div class="pg-boards">
+          <div class="pg-board" data-theme="light">
+            <p class="pg-boardTag">Light · en</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-col">
+                  <a class="pg-back" href="/pages" aria-label="Back to Pages"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-left" /></svg
+                    >Pages</a
+                  ><input
+                    class="pg-title"
+                    type="text"
+                    aria-label="Page title"
+                    placeholder="Untitled"
+                    maxlength="255"
+                    value="Release runbook — v2.4"
+                  />
+                  <div class="pg-toolbar" role="toolbar" aria-label="Formatting">
+                    <button class="pg-tb" type="button" aria-label="Bold" title="Bold">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-bold" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Italic" title="Italic">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-italic" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Strikethrough"
+                      title="Strikethrough"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-strike" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Heading" title="Heading">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-heading" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Quote" title="Quote">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-quote" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Code block" title="Code block">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-code-block" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Bulleted list"
+                      title="Bulleted list"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Numbered list"
+                      title="Numbered list"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list-ordered" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Task list" title="Task list">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list-checks" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="Link" title="Link">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-link" />
+                      </svg></button
+                    ><span class="pg-tbSep" aria-hidden="true"></span
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Insert image"
+                      title="Insert image"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-image" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="Insert table"
+                      title="Insert table"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-table" />
+                      </svg></button
+                    ><span class="pg-save pg-saveRefused" role="status"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>Not
+                      saved</span
+                    >
+                  </div>
+                  <div class="pg-refusal" role="alert">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+                    <div>
+                      <p class="pg-refusalTitle">This page is too large to save</p>
+                      <p class="pg-refusalBody">
+                        Your edits since the last save would take the page past its 2 MB limit, so
+                        they were not saved — and nothing more will be saved from this tab. Copy out
+                        anything you want to keep, then reload to go back to the last saved version.
+                        To make room, move long sections into a new page or remove large tables and
+                        pasted text.
+                      </p>
+                      <div class="pg-refusalActions">
+                        <button class="pg-btn pg-btnSecondary pg-btnSm" type="button">
+                          Reload saved version</button
+                        ><button class="pg-btn pg-btnSecondary pg-btnSm" type="button">
+                          New page in a new tab
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="pg-body">
+                    <div class="motir-prose">
+                      <h2>Release steps</h2>
+                      <p>
+                        Cut the release from <code>main</code> only after the
+                        <strong>migrations job</strong> is green. The <em>full</em> checklist lives
+                        in the
+                        <a href="https://github.com/moooon-B-V/motir-core/releases">release log</a>;
+                        <s>staging sign-off</s> is no longer required.
+                      </p>
+                      <ul>
+                        <li>Tag the commit and push the tag</li>
+                        <li>Watch the deploy until the health check passes</li>
+                      </ul>
+                      <ol>
+                        <li>Announce in #releases</li>
+                        <li>Close the release card</li>
+                      </ol>
+                      <ul data-type="taskList">
+                        <li>
+                          <input type="checkbox" checked aria-label="Done" /><span
+                            >Rotate the webhook secret</span
+                          >
+                        </li>
+                        <li>
+                          <input type="checkbox" aria-label="Not done" /><span
+                            >Update the status page</span
+                          >
+                        </li>
+                      </ul>
+                      <h3>Run it locally</h3>
+                      <div class="motir-editor-code-block">
+                        <pre><code>pnpm motir run MOTIR-5752 --repo motir-core</code></pre>
+                      </div>
+                      <blockquote>If a migration fails, stop: do not re-run it by hand.</blockquote>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Environment</th>
+                            <th>Owner</th>
+                            <th>Window</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Staging</td>
+                            <td>Mia Chen</td>
+                            <td>Mon 10:00</td>
+                          </tr>
+                          <tr>
+                            <td>Production</td>
+                            <td>Zhu Yue</td>
+                            <td>Tue 09:00</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div
+                        class="pg-image"
+                        role="img"
+                        aria-label="Architecture sketch — the sync worker (an uploaded image)"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-image" /></svg
+                        >Architecture sketch — the sync worker (an uploaded image)
+                      </div>
+                      <hr />
+                      <p>Last reviewed after incident 2026-09-14.</p>
+                    </div>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+          <div class="pg-board" data-theme="dark" lang="zh">
+            <p class="pg-boardTag">Dark · zh</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="项目导航">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >工作台</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >工作项</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >页面</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >就绪</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >运行</a
+                >
+                <p class="pg-railElided">…其余主导航行不变</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-col">
+                  <a class="pg-back" href="/pages" aria-label="返回页面"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-left" /></svg
+                    >页面</a
+                  ><input
+                    class="pg-title"
+                    type="text"
+                    aria-label="页面标题"
+                    placeholder="无标题"
+                    maxlength="255"
+                    value="Release runbook — v2.4"
+                  />
+                  <div class="pg-toolbar" role="toolbar" aria-label="格式">
+                    <button class="pg-tb" type="button" aria-label="粗体" title="粗体">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-bold" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="斜体" title="斜体">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-italic" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="删除线" title="删除线">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-strike" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="标题" title="标题">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-heading" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="引用" title="引用">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-quote" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="代码块" title="代码块">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-code-block" />
+                      </svg></button
+                    ><button
+                      class="pg-tb"
+                      type="button"
+                      aria-label="项目符号列表"
+                      title="项目符号列表"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="编号列表" title="编号列表">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list-ordered" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="任务列表" title="任务列表">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-list-checks" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="链接" title="链接">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-link" />
+                      </svg></button
+                    ><span class="pg-tbSep" aria-hidden="true"></span
+                    ><button class="pg-tb" type="button" aria-label="插入图片" title="插入图片">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-image" />
+                      </svg></button
+                    ><button class="pg-tb" type="button" aria-label="插入表格" title="插入表格">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-table" />
+                      </svg></button
+                    ><span class="pg-save pg-saveRefused" role="status"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg
+                      >未保存</span
+                    >
+                  </div>
+                  <div class="pg-refusal" role="alert">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+                    <div>
+                      <p class="pg-refusalTitle">页面过大，无法保存</p>
+                      <p class="pg-refusalBody">
+                        自上次保存以来的编辑会使页面超过 2 MB
+                        的上限，因此未被保存——此标签页之后的编辑也不会再保存。请先复制需要保留的内容，然后重新加载以回到上次保存的版本。如需腾出空间，可将较长的部分移到新页面，或删除大型表格和粘贴的文本。
+                      </p>
+                      <div class="pg-refusalActions">
+                        <button class="pg-btn pg-btnSecondary pg-btnSm" type="button">
+                          重新加载已保存版本</button
+                        ><button class="pg-btn pg-btnSecondary pg-btnSm" type="button">
+                          在新标签页中新建页面
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="pg-body">
+                    <div class="motir-prose">
+                      <h2>Release steps</h2>
+                      <p>
+                        Cut the release from <code>main</code> only after the
+                        <strong>migrations job</strong> is green. The <em>full</em> checklist lives
+                        in the
+                        <a href="https://github.com/moooon-B-V/motir-core/releases">release log</a>;
+                        <s>staging sign-off</s> is no longer required.
+                      </p>
+                      <ul>
+                        <li>Tag the commit and push the tag</li>
+                        <li>Watch the deploy until the health check passes</li>
+                      </ul>
+                      <ol>
+                        <li>Announce in #releases</li>
+                        <li>Close the release card</li>
+                      </ol>
+                      <ul data-type="taskList">
+                        <li>
+                          <input type="checkbox" checked aria-label="Done" /><span
+                            >Rotate the webhook secret</span
+                          >
+                        </li>
+                        <li>
+                          <input type="checkbox" aria-label="Not done" /><span
+                            >Update the status page</span
+                          >
+                        </li>
+                      </ul>
+                      <h3>Run it locally</h3>
+                      <div class="motir-editor-code-block">
+                        <pre><code>pnpm motir run MOTIR-5752 --repo motir-core</code></pre>
+                      </div>
+                      <blockquote>If a migration fails, stop: do not re-run it by hand.</blockquote>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Environment</th>
+                            <th>Owner</th>
+                            <th>Window</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Staging</td>
+                            <td>Mia Chen</td>
+                            <td>Mon 10:00</td>
+                          </tr>
+                          <tr>
+                            <td>Production</td>
+                            <td>Zhu Yue</td>
+                            <td>Tue 09:00</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div
+                        class="pg-image"
+                        role="img"
+                        aria-label="架构草图——同步工作进程（已上传的图片）"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-image" /></svg
+                        >架构草图——同步工作进程（已上传的图片）
+                      </div>
+                      <hr />
+                      <p>Last reviewed after incident 2026-09-14.</p>
+                    </div>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pg-panel">
+        <h2 class="pg-panelTitle">
+          <span class="pg-panelNum">10</span>READ-ONLY — a viewer (holds <code>page:view</code>, not
+          <code>page:edit</code>).
+        </h2>
+        <p class="pg-panelNote">
+          The page’s read returns <code>canEdit: false</code> and the editor mounts with
+          <code>editable: false</code>: no toolbar, no save indicator, no autosave subscription. The
+          title is a plain <code>&lt;h1&gt;</code> at the same size and place as the field, so
+          nothing moves between the two. The body is the same document, not editable; the code block
+          shows no Language field because a read-only document never holds a caret.
+        </p>
+        <div class="pg-boards">
+          <div class="pg-board" data-theme="light">
+            <p class="pg-boardTag">Light · en</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-col">
+                  <a class="pg-back" href="/pages" aria-label="Back to Pages"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-left" /></svg
+                    >Pages</a
+                  >
+                  <h1 class="pg-title">Release runbook — v2.4</h1>
+                  <div class="pg-body">
+                    <div class="motir-prose">
+                      <h2>Release steps</h2>
+                      <p>
+                        Cut the release from <code>main</code> only after the
+                        <strong>migrations job</strong> is green. The <em>full</em> checklist lives
+                        in the
+                        <a href="https://github.com/moooon-B-V/motir-core/releases">release log</a>;
+                        <s>staging sign-off</s> is no longer required.
+                      </p>
+                      <ul>
+                        <li>Tag the commit and push the tag</li>
+                        <li>Watch the deploy until the health check passes</li>
+                      </ul>
+                      <ol>
+                        <li>Announce in #releases</li>
+                        <li>Close the release card</li>
+                      </ol>
+                      <ul data-type="taskList">
+                        <li>
+                          <input type="checkbox" checked aria-label="Done" /><span
+                            >Rotate the webhook secret</span
+                          >
+                        </li>
+                        <li>
+                          <input type="checkbox" aria-label="Not done" /><span
+                            >Update the status page</span
+                          >
+                        </li>
+                      </ul>
+                      <h3>Run it locally</h3>
+                      <pre
+                        class="pg-codeQuiet"
+                      ><code>pnpm motir run MOTIR-5752 --repo motir-core</code></pre>
+                      <blockquote>If a migration fails, stop: do not re-run it by hand.</blockquote>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Environment</th>
+                            <th>Owner</th>
+                            <th>Window</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Staging</td>
+                            <td>Mia Chen</td>
+                            <td>Mon 10:00</td>
+                          </tr>
+                          <tr>
+                            <td>Production</td>
+                            <td>Zhu Yue</td>
+                            <td>Tue 09:00</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div
+                        class="pg-image"
+                        role="img"
+                        aria-label="Architecture sketch — the sync worker (an uploaded image)"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-image" /></svg
+                        >Architecture sketch — the sync worker (an uploaded image)
+                      </div>
+                      <hr />
+                      <p>Last reviewed after incident 2026-09-14.</p>
+                    </div>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+          <div class="pg-board" data-theme="dark">
+            <p class="pg-boardTag">Dark · en</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-col">
+                  <a class="pg-back" href="/pages" aria-label="Back to Pages"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-left" /></svg
+                    >Pages</a
+                  >
+                  <h1 class="pg-title">Release runbook — v2.4</h1>
+                  <div class="pg-body">
+                    <div class="motir-prose">
+                      <h2>Release steps</h2>
+                      <p>
+                        Cut the release from <code>main</code> only after the
+                        <strong>migrations job</strong> is green. The <em>full</em> checklist lives
+                        in the
+                        <a href="https://github.com/moooon-B-V/motir-core/releases">release log</a>;
+                        <s>staging sign-off</s> is no longer required.
+                      </p>
+                      <ul>
+                        <li>Tag the commit and push the tag</li>
+                        <li>Watch the deploy until the health check passes</li>
+                      </ul>
+                      <ol>
+                        <li>Announce in #releases</li>
+                        <li>Close the release card</li>
+                      </ol>
+                      <ul data-type="taskList">
+                        <li>
+                          <input type="checkbox" checked aria-label="Done" /><span
+                            >Rotate the webhook secret</span
+                          >
+                        </li>
+                        <li>
+                          <input type="checkbox" aria-label="Not done" /><span
+                            >Update the status page</span
+                          >
+                        </li>
+                      </ul>
+                      <h3>Run it locally</h3>
+                      <pre
+                        class="pg-codeQuiet"
+                      ><code>pnpm motir run MOTIR-5752 --repo motir-core</code></pre>
+                      <blockquote>If a migration fails, stop: do not re-run it by hand.</blockquote>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Environment</th>
+                            <th>Owner</th>
+                            <th>Window</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Staging</td>
+                            <td>Mia Chen</td>
+                            <td>Mon 10:00</td>
+                          </tr>
+                          <tr>
+                            <td>Production</td>
+                            <td>Zhu Yue</td>
+                            <td>Tue 09:00</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div
+                        class="pg-image"
+                        role="img"
+                        aria-label="Architecture sketch — the sync worker (an uploaded image)"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-image" /></svg
+                        >Architecture sketch — the sync worker (an uploaded image)
+                      </div>
+                      <hr />
+                      <p>Last reviewed after incident 2026-09-14.</p>
+                    </div>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pg-panel">
+        <h2 class="pg-panelTitle">
+          <span class="pg-panelNum">11</span>LOADING — an in-page frame while the page’s server read
+          resolves.
+        </h2>
+        <p class="pg-panelNote">
+          Both routes decide existence (a page can 404), so there is
+          <strong>no <code>loading.tsx</code></strong> above them (<code
+            >design/shell/design-notes.md</code
+          >
+          § The navigation-pending grammar; <code>CLAUDE.md</code>). The page resolves the project
+          and the reader’s access first, then renders an in-page <code>&lt;Suspense&gt;</code> whose
+          fallback is <code>PageSkeleton</code>. The “← Pages” link is static, so it paints above
+          the boundary. The header is the generic pair of bars — the title is not known yet — and
+          the body is paragraph bars. <strong>No toolbar block</strong>: whether there is a toolbar
+          depends on <code>canEdit</code>, which the same read answers, and a frame must not promise
+          a toolbar a viewer will not get. Announced once as “Loading page”.
+        </p>
+        <div class="pg-boards">
+          <div class="pg-board" data-theme="light">
+            <p class="pg-boardTag">Light · en</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-col">
+                  <a class="pg-back" href="/pages" aria-label="Back to Pages"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-left" /></svg
+                    >Pages</a
+                  >
+                  <div class="pg-skel" aria-busy="true">
+                    <span class="pg-srOnly">Loading page</span>
+                    <div class="pg-skelHeader" aria-hidden="true">
+                      <div class="pg-block" style="height: 32px; width: 224px"></div>
+                      <div class="pg-block" style="height: 16px; width: 320px"></div>
+                    </div>
+                    <div class="pg-skelBody" aria-hidden="true">
+                      <div class="pg-block" style="height: 14px; width: 92%"></div>
+                      <div class="pg-block" style="height: 14px; width: 86%"></div>
+                      <div class="pg-block" style="height: 14px; width: 64%"></div>
+                      <div class="pg-block" style="height: 14px; width: 90%"></div>
+                      <div class="pg-block" style="height: 14px; width: 40%"></div>
+                    </div>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+          <div class="pg-board" data-theme="dark">
+            <p class="pg-boardTag">Dark · en</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-col">
+                  <a class="pg-back" href="/pages" aria-label="Back to Pages"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-left" /></svg
+                    >Pages</a
+                  >
+                  <div class="pg-skel" aria-busy="true">
+                    <span class="pg-srOnly">Loading page</span>
+                    <div class="pg-skelHeader" aria-hidden="true">
+                      <div class="pg-block" style="height: 32px; width: 224px"></div>
+                      <div class="pg-block" style="height: 16px; width: 320px"></div>
+                    </div>
+                    <div class="pg-skelBody" aria-hidden="true">
+                      <div class="pg-block" style="height: 14px; width: 92%"></div>
+                      <div class="pg-block" style="height: 14px; width: 86%"></div>
+                      <div class="pg-block" style="height: 14px; width: 64%"></div>
+                      <div class="pg-block" style="height: 14px; width: 90%"></div>
+                      <div class="pg-block" style="height: 14px; width: 40%"></div>
+                    </div>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pg-panel">
+        <h2 class="pg-panelTitle">
+          <span class="pg-panelNum">12</span>NOT FOUND — one state for an unknown id, a page in
+          another project, and a non-member.
+        </h2>
+        <p class="pg-panelNote">
+          The routes already answer all three with the same bytes,
+          <code>404 { code: 'PAGE_NOT_FOUND' }</code> (<code>lib/pages/routeErrors.ts</code>: a
+          browse denial, a foreign page and an unknown id share one body). The page does the same by
+          calling <code>notFound()</code> in every case, which renders the shared
+          <code>app/(authed)/not-found.tsx</code> boundary — the SAME screen any unknown authed
+          address gets, so it does not even confirm that the address was a page. It is drawn here
+          unchanged; no page-specific copy is added, because a page-specific message would be the
+          leak. A reader without <code>page:view</code> gets this too (and has no Pages row).
+        </p>
+        <div class="pg-boards">
+          <div class="pg-board" data-theme="light">
+            <p class="pg-boardTag">Light · en</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="Project navigation">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >Workbench</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >Work Items</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >Pages</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >Ready</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >Runs</a
+                >
+                <p class="pg-railElided">… the other primary rows, unchanged</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-nf">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-file-question" /></svg>
+                  <h2 class="pg-nfTitle">We couldn’t find that page</h2>
+                  <p class="pg-nfDesc">
+                    The address may be mistyped, or whatever it pointed at may have been deleted —
+                    or moved somewhere you can’t reach.
+                  </p>
+                  <div class="pg-nfAction">
+                    <a class="pg-btn pg-btnSecondary" href="/items">Go to work items</a>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+          <div class="pg-board" data-theme="dark" lang="zh">
+            <p class="pg-boardTag">Dark · zh</p>
+            <div class="pg-app">
+              <nav class="pg-rail" aria-label="项目导航">
+                <a class="pg-railRow" href="/workbench"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-house" /></svg
+                  >工作台</a
+                ><a class="pg-railRow" href="/items"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-dot" /></svg
+                  >工作项</a
+                ><a class="pg-railRow" href="/pages" aria-current="page"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-notebook" /></svg
+                  >页面</a
+                ><a class="pg-railRow" href="/ready"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-play" /></svg
+                  >就绪</a
+                ><a class="pg-railRow" href="/runs"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-waypoints" /></svg
+                  >运行</a
+                >
+                <p class="pg-railElided">…其余主导航行不变</p>
+              </nav>
+              <main class="pg-main">
+                <div class="pg-nf">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-file-question" /></svg>
+                  <h2 class="pg-nfTitle">找不到该页面</h2>
+                  <p class="pg-nfDesc">
+                    地址可能有误，或者它指向的内容已被删除——也可能被移到了你无权访问的位置。
+                  </p>
+                  <div class="pg-nfAction">
+                    <a class="pg-btn pg-btnSecondary" href="/items">前往工作项</a>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
