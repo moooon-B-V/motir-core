@@ -8552,6 +8552,7 @@
       "breadcrumb": "平台·监控",
       "title": "系统健康",
       "subtitle": "机器还在转吗？七个只读信号，打开页面时刷新。每张卡片都跳转到对应服务商自己的控制台——Motir 只显示状态，从不重新部署、取消或重放。",
+      "announce": "系统健康已加载。{count, plural, =0 {全部 {total} 个信号正常。} other {{total} 个信号中有 # 个降级或读不到。}}",
       "state": {
         "healthy": "正常",
         "degraded": "降级",
@@ -8572,8 +8573,12 @@
         },
         "hosting": {
           "title": "托管",
-          "value": "由 {region} 响应",
-          "detail": "Fly 应用 {app} · 机器 {machineId}。这是正在为你服务的机器；机器总数请看 Fly 控制台，分服务商看板属于故事 10.2。",
+          "value": "<appGroup>app {appStarted}/{appExpected}</appGroup> · <workerGroup>worker {workerStarted}/{workerExpected}</workerGroup>",
+          "detail": "所有机器均已启动，全部运行版本 {release}。Fly 应用 {app} · {region}。",
+          "degradedDetail": {
+            "shortGroup": "{group} 不足：{expected} 台机器中只有 {started} 台已启动。版本 {release}。",
+            "mixedReleases": "机器正在运行 {count} 个不同的版本——某次部署可能中途停止了。最新版本 {release}。"
+          },
           "unreachable": {
             "notManaged": "非托管环境",
             "noReadCredential": "由 {region} 响应",
