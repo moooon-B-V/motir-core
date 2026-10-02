@@ -2,28 +2,23 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getFormatter, getTranslations } from 'next-intl/server';
-import { Coins, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import type { PlatformOrgOverviewDTO } from '@/lib/dto/platform';
-import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
+import { requirePlatformStaff } from '@/lib/platform/auth';
 import { PlatformOrganizationNotFoundError } from '@/lib/platform/errors';
 import { buildSpendSheet, parseSpendPeriod } from '@/lib/platform/spend';
-import { platformBillingClassificationService } from '@/lib/services/platformBillingClassificationService';
+import { platformOrgBillingService } from '@/lib/services/platformOrgBillingService';
 import { platformOrgIndexCostService } from '@/lib/services/platformOrgIndexCostService';
 import { platformOrgPageService } from '@/lib/services/platformOrgPageService';
 import { formatMicroUsd } from '../../_components/spendFormat';
 import { OrgIndexCostCard } from './_components/OrgIndexCostCard';
+import { BillingTab } from './_components/BillingTab';
 import { OrgPageHeader } from './_components/OrgPageHeader';
 import { UsageTab } from './_components/UsageTab';
-import {
-  orgTabHref,
-  orgUsageHref,
-  parseOrgTab,
-  safeTenantsHref,
-  type OrgTab,
-} from './_components/orgNav';
+import { orgTabHref, orgUsageHref, parseOrgTab, safeTenantsHref } from './_components/orgNav';
 
 /**
  * The operator's ORG PAGE — design `console--estate-usage-drilldown.mock.html`
@@ -98,8 +93,25 @@ export default async function AdminOrganizationPage({
       </div>
     );
   }
-  if (tab !== 'overview') {
-    return <PendingTab principal={principal} orgId={orgId} tab={tab} backHref={backHref} />;
+  if (tab === 'billing') {
+    let billing;
+    try {
+      billing = await platformOrgBillingService.getOrgBilling(principal, orgId);
+    } catch (err) {
+      if (err instanceof PlatformOrganizationNotFoundError) notFound();
+      throw err;
+    }
+    return (
+      <div className="mx-auto flex max-w-[72rem] flex-col gap-4 px-6 py-6">
+        <OrgPageHeader
+          org={billing.organization}
+          principal={principal}
+          tab="billing"
+          backHref={backHref}
+        />
+        <BillingTab data={billing} />
+      </div>
+    );
   }
 
   // The Older/Newer stack of the jobs region: each cursor the operator stepped
@@ -460,37 +472,5 @@ async function ActionLog({ overview }: { overview: PlatformOrgOverviewDTO }) {
         </ul>
       )}
     </Card>
-  );
-}
-
-/** A tab its own card has not built yet: the frame, and the region naming the card. */
-async function PendingTab({
-  principal,
-  orgId,
-  tab,
-  backHref,
-}: {
-  principal: PlatformPrincipal;
-  orgId: string;
-  tab: Exclude<OrgTab, 'overview' | 'usage'>;
-  backHref: string;
-}) {
-  const t = await getTranslations('platformAdmin');
-  let page;
-  try {
-    page = await platformBillingClassificationService.getOrganizationPage(principal, orgId);
-  } catch (err) {
-    if (err instanceof PlatformOrganizationNotFoundError) notFound();
-    throw err;
-  }
-  return (
-    <div className="mx-auto flex max-w-[72rem] flex-col gap-4 px-6 py-6">
-      <OrgPageHeader org={page.organization} principal={principal} tab={tab} backHref={backHref} />
-      <EmptyState
-        icon={<Coins className="h-10 w-10" aria-hidden />}
-        title={t(`orgPage.tabs.${tab}`)}
-        description={t('orgs.pending.broughtBy', { owner: 'MOTIR-7289' })}
-      />
-    </div>
   );
 }

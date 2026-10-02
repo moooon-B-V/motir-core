@@ -8756,9 +8756,6 @@
         "isMeta": "isMeta",
         "internalBilling": "internalBilling"
       },
-      "pending": {
-        "broughtBy": "This panel is {owner}’s. It is drawn as a reserved region rather than a placeholder figure — a zero here would look like an answer."
-      },
       "action": {
         "classify": "Classify as internal billing",
         "unclassify": "Remove internal classification",
@@ -9045,6 +9042,65 @@
         "older": "Older months",
         "newest": "Newest months",
         "unavailable": "This table can't be shown right now — the AI service did not answer."
+      }
+    },
+    "orgBilling": {
+      "readOnly": "What {name}'s owner sees on their Billing & plans page, read-only: no Change plan, no Manage payment, no Customer Portal. Changing a tenant's plan or credits is Story 10.3.",
+      "disabled": {
+        "title": "Billing is not enabled",
+        "description": "This deployment does not bill — there is no plan, allotment or bill to show."
+      },
+      "unavailable": {
+        "title": "Billing can't be shown right now",
+        "description": "The billing reads did not answer. The organization's own details above are current."
+      },
+      "status": {
+        "active": "Active",
+        "past_due": "Past due",
+        "canceled": "Canceled",
+        "incomplete": "Incomplete",
+        "trialing": "Trialing",
+        "unpaid": "Unpaid",
+        "incomplete_expired": "Expired"
+      },
+      "seats": {
+        "title": "Motir",
+        "scaled": "Billed one seat per member — {members, number} today",
+        "free": "Free — not scaled ({members, number} members)"
+      },
+      "ai": {
+        "title": "Motir AI",
+        "plan": "Plan",
+        "allotment": "Allotment",
+        "balance": "Credits available",
+        "renews": "Renews",
+        "none": "No AI plan",
+        "perMonth": "{credits} credits / month"
+      },
+      "bill": {
+        "title": "This month's bill",
+        "line": "Line",
+        "basis": "Basis",
+        "amount": "Amount",
+        "lines": {
+          "seats": "Motir · seats",
+          "aiPlan": "Motir AI · plan fee",
+          "ci": "CI minutes over allowance",
+          "search": "Web search",
+          "agents": "Agents (machine + storage)"
+        },
+        "seatsBasis": {
+          "monthly": "{seats, number} seats × {unit} / month",
+          "annual": "{seats, number} seats × {unit} / year"
+        },
+        "aiBasis": {
+          "monthly": "{credits} credits / month",
+          "annual": "{credits} credits / month, billed yearly"
+        },
+        "drawnFromPool": "Drawn from the credit pool",
+        "credits": "{credits} credits",
+        "total": "Total",
+        "chargedOn": "charged on {date}"
       }
     }
   },

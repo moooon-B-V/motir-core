@@ -8752,9 +8752,6 @@
         "isMeta": "isMeta",
         "internalBilling": "internalBilling"
       },
-      "pending": {
-        "broughtBy": "该面板属于 {owner}。此处画作预留区域而非占位数字——写个 0 会看起来像一个答案。"
-      },
       "action": {
         "classify": "标记为内部计费",
         "unclassify": "移除内部计费标记",
@@ -9041,6 +9038,65 @@
         "older": "更早的月份",
         "newest": "最新的月份",
         "unavailable": "暂时无法显示此表——AI 服务没有响应。"
+      }
+    },
+    "orgBilling": {
+      "readOnly": "{name} 的所有者在其“账单与套餐”页面看到的内容（只读）：没有更改套餐、管理付款或客户门户。更改租户的套餐或积分属于 Story 10.3。",
+      "disabled": {
+        "title": "未启用计费",
+        "description": "此部署不计费——没有可显示的套餐、额度或账单。"
+      },
+      "unavailable": {
+        "title": "暂时无法显示账单",
+        "description": "账单数据没有响应。上方的组织信息是最新的。"
+      },
+      "status": {
+        "active": "有效",
+        "past_due": "逾期",
+        "canceled": "已取消",
+        "incomplete": "未完成",
+        "trialing": "试用中",
+        "unpaid": "未付款",
+        "incomplete_expired": "已过期"
+      },
+      "seats": {
+        "title": "Motir",
+        "scaled": "按成员计席位——当前 {members, number} 人",
+        "free": "免费——未扩展（{members, number} 名成员）"
+      },
+      "ai": {
+        "title": "Motir AI",
+        "plan": "套餐",
+        "allotment": "额度",
+        "balance": "可用积分",
+        "renews": "续订",
+        "none": "无 AI 套餐",
+        "perMonth": "每月 {credits} 积分"
+      },
+      "bill": {
+        "title": "本月账单",
+        "line": "项目",
+        "basis": "计费依据",
+        "amount": "金额",
+        "lines": {
+          "seats": "Motir · 席位",
+          "aiPlan": "Motir AI · 套餐费",
+          "ci": "超出额度的 CI 分钟",
+          "search": "网页搜索",
+          "agents": "智能体（机器 + 存储）"
+        },
+        "seatsBasis": {
+          "monthly": "{seats, number} 个席位 × {unit} / 月",
+          "annual": "{seats, number} 个席位 × {unit} / 年"
+        },
+        "aiBasis": {
+          "monthly": "每月 {credits} 积分",
+          "annual": "每月 {credits} 积分，按年计费"
+        },
+        "drawnFromPool": "从积分池扣除",
+        "credits": "{credits} 积分",
+        "total": "合计",
+        "chargedOn": "于 {date} 扣款"
       }
     }
   },
