@@ -328,8 +328,12 @@ describe('3 · the edges', () => {
   });
 
   it('delete refuses a state it cannot leave, and settleDelete of an unknown id is a no-op', async () => {
-    fleet.setBootBehaviour('never_start');
+    // A boot that has not settled IS deletable since AMENDMENT 4 (MOTIR-7341);
+    // an agent already `deleting` is not — its delete is under way.
     const dto = await create();
+    fleet.failNextDestroy();
+    await lifecycle.delete(KEY(), dto.id, fx.ctx);
+    expect((await row(dto.id)).state).toBe('deleting');
     await expect(lifecycle.delete(KEY(), dto.id, fx.ctx)).rejects.toThrow(
       AgentInstanceStateConflictError,
     );

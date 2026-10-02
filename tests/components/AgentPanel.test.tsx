@@ -676,20 +676,22 @@ describe('every lifecycle value (panel 4) and wake-then-connect', () => {
     expect(connWord()).toContain('Closed');
   });
 
+  // Delete… is offered mid-boot and mid-stop since AMENDMENT 4 (MOTIR-7341): a
+  // boot or a stop can fail to settle. A delete already under way offers none.
   it.each([
-    ['starting', 'Booting — cloning the project’s repositories into the home', 'Waiting'],
-    ['hibernating', 'Stopping the machine — your home stays', 'Closed'],
-    ['deleting', 'Destroying the machine and its home', 'Closed'],
+    ['starting', 'Booting — cloning the project’s repositories into the home', 'Waiting', false],
+    ['hibernating', 'Stopping the machine — your home stays', 'Closed', false],
+    ['deleting', 'Destroying the machine and its home', 'Closed', true],
   ] as const)(
-    '%s: the list’s own words, Delete disabled, no Hibernate',
-    async (state, words, conn) => {
+    '%s: the list’s own words, Delete per §4, no Hibernate',
+    async (state, words, conn, deleteDisabled) => {
       routes.list = () => page([agent({ state })]);
       await mount(undefined, { openAgentId: 'a1' });
       expect(panel().textContent).toContain(words);
       expect(connWord()).toContain(conn);
       expect(
         (within(panel()).getByRole('button', { name: /Delete…/ }) as HTMLButtonElement).disabled,
-      ).toBe(true);
+      ).toBe(deleteDisabled);
       expect(within(panel()).queryByRole('button', { name: /Hibernate/ })).toBeNull();
       expect(ticketCalls()).toBe(0);
     },
