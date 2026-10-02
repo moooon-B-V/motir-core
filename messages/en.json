@@ -8981,6 +8981,42 @@
         "newer": "Newer",
         "older": "Older"
       }
+    },
+    "orgUsage": {
+      "scope": "Scope",
+      "wholeOrg": "{name} (whole organization)",
+      "showing": "Showing {scope} · {period}",
+      "figures": {
+        "charged": "Credits charged",
+        "cost": "Motir cost (incl. indexing)",
+        "machine": "Machine minutes",
+        "balance": "Credit balance now",
+        "split": {
+          "agentRun": "agent runs {minutes}",
+          "instances": "instances {minutes}",
+          "ci": "CI {minutes}",
+          "indexing": "indexing {minutes}"
+        }
+      },
+      "sheet": {
+        "title": "By category and model",
+        "category": "Category",
+        "usage": "Usage",
+        "credits": "Credits",
+        "cost": "Motir cost",
+        "notCharged": "not charged",
+        "models": "{count, plural, one {# model} other {# models}}",
+        "chargedTotal": "Charged total",
+        "totalInclIndexing": "Total incl. indexing",
+        "orgLevel": {
+          "workspace": "Org-level — not split by workspace",
+          "project": "Org-level — not split by project"
+        }
+      },
+      "unavailable": {
+        "title": "Usage can't be shown right now",
+        "description": "The AI service that keeps the usage rollup did not answer. The organization's own details above are current."
+      }
     }
   },
   "legal": {

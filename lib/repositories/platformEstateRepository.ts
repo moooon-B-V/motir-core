@@ -115,6 +115,23 @@ export const platformEstateRepository = {
     });
   },
 
+  /**
+   * An organization's projects, for the org page's scope picker (MOTIR-7288) —
+   * id, name and workspace, ordered for display, capped.
+   */
+  async listProjectsForOrganization(
+    organizationId: string,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ) {
+    return tx.project.findMany({
+      where: { workspace: { organizationId } },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      take,
+      select: { id: true, name: true, workspaceId: true },
+    });
+  },
+
   /** How many accounts hold a membership of one organization. */
   async countOrganizationMembers(
     organizationId: string,

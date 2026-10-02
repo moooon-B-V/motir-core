@@ -9,13 +9,14 @@ import { Pill } from '@/components/ui/Pill';
 import type { PlatformOrgOverviewDTO } from '@/lib/dto/platform';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { PlatformOrganizationNotFoundError } from '@/lib/platform/errors';
-import { buildSpendSheet } from '@/lib/platform/spend';
+import { buildSpendSheet, parseSpendPeriod } from '@/lib/platform/spend';
 import { platformBillingClassificationService } from '@/lib/services/platformBillingClassificationService';
 import { platformOrgIndexCostService } from '@/lib/services/platformOrgIndexCostService';
 import { platformOrgPageService } from '@/lib/services/platformOrgPageService';
 import { formatMicroUsd } from '../../_components/spendFormat';
 import { OrgIndexCostCard } from './_components/OrgIndexCostCard';
 import { OrgPageHeader } from './_components/OrgPageHeader';
+import { UsageTab } from './_components/UsageTab';
 import { orgTabHref, parseOrgTab, safeTenantsHref, type OrgTab } from './_components/orgNav';
 
 /**
@@ -45,7 +46,14 @@ export default async function AdminOrganizationPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ tab?: string; from?: string; members?: string; jobs?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    from?: string;
+    members?: string;
+    jobs?: string;
+    period?: string;
+    scope?: string;
+  }>;
 }) {
   const principal = await requirePlatformStaff('support');
   const { orgId } = await params;
@@ -53,6 +61,29 @@ export default async function AdminOrganizationPage({
   const tab = parseOrgTab(query.tab);
   const backHref = safeTenantsHref(query.from);
 
+  if (tab === 'usage') {
+    let usage;
+    try {
+      usage = await platformOrgPageService.getUsageTab(principal, orgId, {
+        period: parseSpendPeriod(query.period),
+        scope: query.scope ?? null,
+      });
+    } catch (err) {
+      if (err instanceof PlatformOrganizationNotFoundError) notFound();
+      throw err;
+    }
+    return (
+      <div className="mx-auto flex max-w-[72rem] flex-col gap-4 px-6 py-6">
+        <OrgPageHeader
+          org={usage.organization}
+          principal={principal}
+          tab="usage"
+          backHref={backHref}
+        />
+        <UsageTab data={usage} />
+      </div>
+    );
+  }
   if (tab !== 'overview') {
     return <PendingTab principal={principal} orgId={orgId} tab={tab} backHref={backHref} />;
   }
@@ -427,7 +458,7 @@ async function PendingTab({
 }: {
   principal: PlatformPrincipal;
   orgId: string;
-  tab: Exclude<OrgTab, 'overview'>;
+  tab: Exclude<OrgTab, 'overview' | 'usage'>;
   backHref: string;
 }) {
   const t = await getTranslations('platformAdmin');
@@ -444,9 +475,7 @@ async function PendingTab({
       <EmptyState
         icon={<Coins className="h-10 w-10" aria-hidden />}
         title={t(`orgPage.tabs.${tab}`)}
-        description={t('orgs.pending.broughtBy', {
-          owner: tab === 'usage' ? 'MOTIR-7288' : 'MOTIR-7289',
-        })}
+        description={t('orgs.pending.broughtBy', { owner: 'MOTIR-7289' })}
       />
     </div>
   );

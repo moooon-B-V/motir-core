@@ -8977,6 +8977,42 @@
         "newer": "更新",
         "older": "更早"
       }
+    },
+    "orgUsage": {
+      "scope": "范围",
+      "wholeOrg": "{name}（整个组织）",
+      "showing": "显示 {scope} · {period}",
+      "figures": {
+        "charged": "已收积分",
+        "cost": "Motir 成本（含索引）",
+        "machine": "机器分钟",
+        "balance": "当前积分余额",
+        "split": {
+          "agentRun": "智能体运行 {minutes}",
+          "instances": "实例 {minutes}",
+          "ci": "CI {minutes}",
+          "indexing": "索引 {minutes}"
+        }
+      },
+      "sheet": {
+        "title": "按类别和模型",
+        "category": "类别",
+        "usage": "用量",
+        "credits": "积分",
+        "cost": "Motir 成本",
+        "notCharged": "不收费",
+        "models": "{count, plural, other {# 个模型}}",
+        "chargedTotal": "收费合计",
+        "totalInclIndexing": "含索引总计",
+        "orgLevel": {
+          "workspace": "组织级——不按工作区拆分",
+          "project": "组织级——不按项目拆分"
+        }
+      },
+      "unavailable": {
+        "title": "暂时无法显示用量",
+        "description": "保存用量汇总的 AI 服务没有响应。上方的组织信息是最新的。"
+      }
     }
   },
   "legal": {

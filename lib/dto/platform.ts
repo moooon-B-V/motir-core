@@ -1,4 +1,5 @@
 import type { CategoryFigures } from '@/lib/platform/spend';
+import type { RawPlatformUsage as RawPlatformUsageForDto } from '@/lib/ai/motirAiClient';
 import type { PlatformAuditTargetKind, PlatformRole } from '@/generated/prisma/client';
 
 /**
@@ -308,4 +309,23 @@ export interface PlatformOrgOverviewDTO {
   /** This month's per-workspace credits could not be read. */
   workspaceSpendUnavailable: boolean;
   jobs: { items: PlatformActivityItemDTO[]; nextCursor: string | null; unavailable: boolean };
+}
+
+/** A scope on the org page's Usage & cost tab (MOTIR-7288): the org, a workspace or a project. */
+export type PlatformOrgUsageScope =
+  | { level: 'organization' }
+  | { level: 'workspace'; id: string; name: string }
+  | { level: 'project'; id: string; name: string; workspace: { id: string; name: string } };
+
+/** The org page's Usage & cost tab (MOTIR-7288, design D8/D11) — one audited read. */
+export interface PlatformOrgUsageTabDTO {
+  organization: PlatformOrganizationDetailDTO;
+  period: string;
+  scope: PlatformOrgUsageScope;
+  /** The scope picker's choices: the org's workspaces, each with its projects. */
+  scopes: { id: string; name: string; projects: { id: string; name: string }[] }[];
+  /** The scope's spend; null when motir-ai could not be read. */
+  usage: RawPlatformUsageForDto | null;
+  /** The org's credit balance now; null when it could not be read. */
+  balance: number | null;
 }

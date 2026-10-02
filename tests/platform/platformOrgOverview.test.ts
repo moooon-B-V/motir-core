@@ -19,6 +19,7 @@ let currentPrincipal: PlatformPrincipal | null = null;
 const usageMock = vi.fn<(q: unknown) => Promise<RawPlatformUsage>>();
 const childrenMock = vi.fn<(q: unknown) => Promise<RawPlatformUsageChildren>>();
 const runsMock = vi.fn<(q: unknown) => Promise<RawPlatformRunsPage>>();
+const orgUsageMock = vi.fn<(q: unknown) => Promise<{ balance: number }>>();
 
 vi.mock('@/lib/platform/auth', async () => {
   const actual = await vi.importActual<typeof import('@/lib/platform/auth')>('@/lib/platform/auth');
@@ -43,6 +44,7 @@ vi.mock('@/lib/ai/motirAiClient', async () => {
     getPlatformUsage: (q: unknown) => usageMock(q),
     getPlatformUsageChildren: (q: unknown) => childrenMock(q),
     getPlatformRuns: (q: unknown) => runsMock(q),
+    getOrgUsage: (q: unknown) => orgUsageMock(q),
   };
 });
 
@@ -51,6 +53,7 @@ const { platformOrgPageService, ORG_MEMBERS_PAGE } =
   await import('@/lib/services/platformOrgPageService');
 const { createTestUser } = await import('../fixtures/userFixtures');
 const { createTestWorkspace } = await import('../fixtures/workspaceFixtures');
+const { createTestProject } = await import('../fixtures/projectFixtures');
 const { adminDb } = await import('../helpers/adminDb');
 const { truncateAuthTables } = await import('../helpers/db');
 
@@ -85,6 +88,7 @@ beforeEach(async () => {
   usageMock.mockReset();
   childrenMock.mockReset();
   runsMock.mockReset();
+  orgUsageMock.mockReset();
 });
 
 afterAll(async () => {
@@ -257,5 +261,119 @@ describe('platformOrgPageService.getOverview', () => {
       NotPlatformStaffError,
     );
     expect(usageMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('platformOrgPageService.getUsageTab', () => {
+  const usage: RawPlatformUsage = {
+    period: 'all',
+    level: 'organization',
+    entityId: 'x',
+    categories: [],
+    models: { planning_tokens: [], agent_tokens: [] },
+    spend: {
+      chargedCredits: 0,
+      chargedCostMicroUsd: 0,
+      costMicroUsdInclIndexing: 0,
+      machineSeconds: 0,
+    },
+    orgsWithSpend: null,
+  };
+
+  it('reads the chosen scope — org, workspace or project — each under ONE audit row naming it', async () => {
+    const { workspace, owner } = await createTestWorkspace({ name: 'Eng' });
+    const orgId = workspace.organizationId;
+    const project = await createTestProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Mobile',
+      identifier: 'MOB',
+    });
+    usageMock.mockResolvedValue(usage);
+    orgUsageMock.mockResolvedValue({ balance: 1234 });
+
+    const org = await platformOrgPageService.getUsageTab(currentPrincipal!, orgId, {
+      period: 'all',
+    });
+    expect(org.scope).toEqual({ level: 'organization' });
+    expect(usageMock).toHaveBeenLastCalledWith({
+      period: 'all',
+      level: 'organization',
+      entityId: orgId,
+    });
+    expect(org.balance).toBe(1234);
+    expect(org.scopes).toEqual([
+      { id: workspace.id, name: 'Eng', projects: [{ id: project.id, name: 'Mobile' }] },
+    ]);
+
+    const ws = await platformOrgPageService.getUsageTab(currentPrincipal!, orgId, {
+      period: '2026-09',
+      scope: `workspace:${workspace.id}`,
+    });
+    expect(ws.scope).toEqual({ level: 'workspace', id: workspace.id, name: 'Eng' });
+    expect(usageMock).toHaveBeenLastCalledWith({
+      period: '2026-09',
+      level: 'workspace',
+      entityId: workspace.id,
+    });
+
+    const pj = await platformOrgPageService.getUsageTab(currentPrincipal!, orgId, {
+      period: '2026-09',
+      scope: `project:${project.id}`,
+    });
+    expect(pj.scope).toMatchObject({
+      level: 'project',
+      id: project.id,
+      workspace: { id: workspace.id },
+    });
+
+    const audit = await adminDb.platformAuditLog.findMany({ orderBy: { createdAt: 'asc' } });
+    expect(audit.map((a) => a.targetLabel)).toEqual([
+      'usage organization all',
+      `usage workspace:${workspace.id} 2026-09`,
+      `usage project:${project.id} 2026-09`,
+    ]);
+    expect(audit.every((a) => a.targetId === orgId && a.action === 'estate.read')).toBe(true);
+  });
+
+  it('a workspace of ANOTHER org is never read under this org — it falls back to the org scope', async () => {
+    const mine = await createTestWorkspace({ name: 'Mine' });
+    const theirs = await createTestWorkspace({ name: 'Theirs' });
+    usageMock.mockResolvedValue(usage);
+    orgUsageMock.mockResolvedValue({ balance: 0 });
+    const tab = await platformOrgPageService.getUsageTab(
+      currentPrincipal!,
+      mine.workspace.organizationId,
+      {
+        period: 'all',
+        scope: `workspace:${theirs.workspace.id}`,
+      },
+    );
+    expect(tab.scope).toEqual({ level: 'organization' });
+    for (const call of usageMock.mock.calls) {
+      expect((call[0] as { entityId: string }).entityId).not.toBe(theirs.workspace.id);
+    }
+  });
+
+  it('motir-ai unreachable: usage and balance are null, the org still renders, one audit row', async () => {
+    const { workspace } = await createTestWorkspace({ name: 'Solo' });
+    usageMock.mockRejectedValue(new Error('down'));
+    orgUsageMock.mockRejectedValue(new Error('down'));
+    const tab = await platformOrgPageService.getUsageTab(
+      currentPrincipal!,
+      workspace.organizationId,
+      { period: 'all' },
+    );
+    expect(tab).toMatchObject({ usage: null, balance: null });
+    expect(tab.organization.id).toBe(workspace.organizationId);
+    expect(await adminDb.platformAuditLog.count()).toBe(1);
+  });
+
+  it('an unknown org throws inside the read — no audit row, no motir-ai call', async () => {
+    await expect(
+      platformOrgPageService.getUsageTab(currentPrincipal!, 'org_nope', { period: 'all' }),
+    ).rejects.toBeInstanceOf(PlatformOrganizationNotFoundError);
+    expect(usageMock).not.toHaveBeenCalled();
+    expect(await adminDb.platformAuditLog.count()).toBe(0);
   });
 });
