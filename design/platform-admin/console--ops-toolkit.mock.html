@@ -1,0 +1,4992 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Platform admin console — the ops toolkit (MOTIR-746)</title>
+    <!--
+      DELTA MOCK — AMENDS design/platform-admin/console.mock.html (MOTIR-728) and its later
+      deltas: console--estate-usage-drilldown.mock.html (D5 the org page, D9 its Billing tab) and
+      console.mock.html Panels 9 and 12 (the user page's support actions, the org classification
+      control). Card MOTIR-746 (10.3.1), story MOTIR-745. Gates MOTIR-747 to MOTIR-752.
+
+      COMPOSED, NOT REDRAWN. The token block, the primitive CSS and the lucide sprite are spliced
+      VERBATIM from console--ai-planning.mock.html (which splices console.mock.html); the shell is
+      the shipped AdminShell.tsx; the confirm-with-reason is the shipped ClassificationBar /
+      SupportActionsBar grammar (Modal role="alertdialog" + FormField + a primary disabled until a
+      reason is typed); the tabs are the org page's shipped Segmented links; the switch is the
+      design system's Switch. The ADDITIONS block at the end of <style> holds only the Switch, the
+      session bar, the ledger amount cell, the audit row detail and two layout helpers, every one
+      on --el-* and shape tokens. No Tier-0 colour, raw hue or raw radius in any product element.
+
+      Panels: 1 org page · Operations tab (superadmin) · 2 credits & plan dialogs · 3 org
+      lifecycle · 4 impersonation entry · 5 the active staff session · 6 the audit log ·
+      7 the audit log's integrity states and row detail · 8 empty / loading / error / role states.
+      Spec: design-notes.md § AMENDMENT 2026-10-03 — the ops toolkit.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-pressed: #4534b3;
+        --color-primary-foreground: #ffffff;
+        /* Accent FILL behind white text. Equals --color-primary in the light
+           default palette; the dark theme darkens it so white label text clears
+           AA (MOTIR-757). --el-accent aliases THIS, not --color-primary. */
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        /* Darker than the ink value above — white label text on #6c5cdd is
+           4.99:1 (AA), where the brighter ink is only 4.10:1 as a fill. */
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1220px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 900px;
+        line-height: 1.5;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1220px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1220px;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+      @media (max-width: 920px) {
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* ── Admin console SHELL — the persistent LEFT NAV (the hallway) ───────── */
+      .shell {
+        display: flex;
+        min-height: 540px;
+      }
+      .admin-nav {
+        width: 224px;
+        flex: none;
+        border-right: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        display: flex;
+        flex-direction: column;
+        padding: 14px 10px;
+      }
+      .admin-nav .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 4px 8px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .admin-nav .brand .logo {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 12px;
+        flex: none;
+      }
+      .admin-nav .brand .bt {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+      .admin-nav .brand .bs {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .nav-group {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        padding: 14px 8px 4px;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        margin-top: 1px;
+      }
+      .nav-item svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .nav-item .soon {
+        margin-left: auto;
+        font-size: 9.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 1px 6px;
+      }
+      .nav-item.active {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .nav-item.active svg {
+        color: var(--el-info);
+      }
+      .nav-item.muted {
+        color: var(--el-text-secondary);
+        cursor: default;
+      }
+      .admin-nav .spacer {
+        flex: 1;
+      }
+      .navfoot {
+        border-top: 1px solid var(--el-border-soft);
+        margin-top: 12px;
+        padding-top: 10px;
+      }
+      .navfoot .who {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 8px 8px;
+      }
+      .navfoot .who .pava {
+        width: 26px;
+        height: 26px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 600;
+        flex: none;
+      }
+      .navfoot .who .wt {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+      .navfoot .who .ws {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .shell-main {
+        flex: 1;
+        min-width: 0;
+      }
+
+      /* ── Console TOP BAR — operator marker + GLOBAL SEARCH + operator menu ── */
+      /* The persistent operator header on every console screen. --el-tint-sky
+         keeps the "this is staff, not a tenant" cue (hue in the bar, finding #35);
+         the search box is the entry to find any org / workspace / project / user. */
+      .adminbar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 9px 16px;
+        background: var(--el-tint-sky);
+        border-bottom: 1px solid var(--el-border-soft);
+        box-shadow: inset 3px 0 0 var(--el-info);
+        position: relative;
+        z-index: 5;
+      }
+      .staff-mark {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+      }
+      .staff-mark .sm-ico {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        color: var(--el-info);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .staff-mark .sm-ico svg {
+        width: 15px;
+        height: 15px;
+      }
+      .staff-mark .sm-t {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+        line-height: 1.2;
+      }
+      .staff-mark .sm-s {
+        font-size: 10.5px;
+        color: var(--el-text-secondary);
+        font-weight: 500;
+      }
+      .searchbar {
+        flex: 1;
+        max-width: 480px;
+        height: var(--height-btn-md);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        color: var(--el-text-muted);
+        font-size: 13px;
+        cursor: text;
+      }
+      .searchbar.focused {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 18%, transparent);
+        color: var(--el-text);
+      }
+      .searchbar svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .searchbar .kbd {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-kbd);
+        padding: 1px 6px;
+        background: var(--el-surface);
+      }
+      .adminbar .op {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+        cursor: pointer;
+      }
+      .adminbar .op .op-ava {
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .adminbar .op svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-secondary);
+      }
+
+      /* the SEARCH RESULTS popover (CommandPalette grammar) */
+      .search-pop {
+        position: absolute;
+        top: 52px;
+        left: 224px;
+        width: 480px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 6px;
+        z-index: 8;
+      }
+      .sr-group {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        padding: 10px 10px 4px;
+      }
+      .sr-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 10px;
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .sr-item.active {
+        background: var(--el-surface);
+      }
+      .sr-item .sr-path {
+        color: var(--el-text-muted);
+        font-weight: 400;
+      }
+      .sr-item .sr-meta {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .sr-item .drill-chev svg {
+        width: 15px;
+        height: 15px;
+      }
+      .sr-hint {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 10px 4px;
+        margin-top: 4px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Page shell — mirrors app/(authed)/settings/* (org-admin grammar) ──── */
+      .page {
+        padding: 22px 26px 30px;
+      }
+      .crumb {
+        display: block;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-bottom: 10px;
+      }
+      .crumb b {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+      .page > h2 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 21px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .page > .sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin-top: 4px;
+        max-width: 70ch;
+        line-height: 1.5;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        margin-top: 20px;
+      }
+      .row-between {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .reach-note {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+        margin-top: 14px;
+        line-height: 1.45;
+      }
+      .reach-note svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-info);
+      }
+
+      /* ── Segmented control (components/ui/Segmented) — the view switcher ──── */
+      .seg-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+      }
+      .segmented {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        border-radius: var(--radius-btn);
+        padding: 2px;
+      }
+      .seg-opt {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: calc(var(--radius-btn) - 2px);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        border: 0;
+        background: transparent;
+      }
+      .seg-opt svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-faint);
+      }
+      .seg-opt.active {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+        font-weight: 600;
+      }
+      .seg-opt.active svg {
+        color: var(--el-accent-on-surface);
+      }
+      /* MOTIR-4594 rev 2 - a segment carries its row COUNT, and a reason that is not
+         active yet is drawn disabled rather than omitted. The disabled state is carried
+         by its WORDS and the cursor, not by a fainter ink: faint and muted inks fail AA
+         on the segmented surface (tests/design-ink-contrast.test.ts). */
+      .seg-count {
+        margin-left: 6px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .seg-opt.is-disabled {
+        cursor: not-allowed;
+      }
+      .seg-opt.is-disabled .seg-count {
+        font-weight: 500;
+        font-style: italic;
+      }
+      .stopped-tools {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .stopped-tools .stopped-search {
+        max-width: 260px;
+      }
+      .tbl th.sorted {
+        color: var(--el-text-strong);
+      }
+      .tbl th.sorted svg {
+        width: 12px;
+        height: 12px;
+        margin-left: 4px;
+        vertical-align: -2px;
+      }
+
+      /* ── Card primitive (components/ui/Card) ─────────────────────────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head .ttl {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .card-head h3 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .card-head .hsub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+      .card-body {
+        padding: 14px var(--spacing-card-padding) 16px;
+      }
+      .card-body.flush {
+        padding: 0 var(--spacing-card-padding);
+      }
+      .card-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .card-foot .fnote {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .card-foot .fnote svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-faint);
+      }
+
+      .hero-fig {
+        text-align: right;
+        flex: none;
+      }
+      .hero-fig .big {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 30px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.05;
+        letter-spacing: -0.01em;
+      }
+      .hero-fig .unit {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-muted);
+        font-family: var(--font-sans);
+      }
+      .hero-fig .cap {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+
+      /* ── Estate stat-card grid (Cards) — per-entity tint (finding #54) ─────── */
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+      }
+      @media (max-width: 920px) {
+        .stat-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      .stat {
+        padding: 16px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .stat .ico {
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .stat .ico svg {
+        width: 17px;
+        height: 17px;
+      }
+      .ico.ent-org {
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+      }
+      .ico.ent-ws {
+        background: var(--el-tint-sky);
+        color: var(--el-info);
+      }
+      .ico.ent-proj {
+        background: var(--el-tint-mint);
+        color: var(--el-success);
+      }
+      .ico.ent-user {
+        background: var(--el-tint-rose);
+        color: var(--el-highlight);
+      }
+      .stat .big {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1;
+        letter-spacing: -0.01em;
+      }
+      .stat .lbl {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-muted);
+      }
+      .stat .delta {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-success);
+      }
+      .stat .delta svg {
+        width: 12px;
+        height: 12px;
+      }
+
+      /* ── Tables (the at-scale list pattern — shared across panels) ─────────── */
+      .tbl {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .tbl th {
+        text-align: left;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+        padding: 12px 12px 10px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        white-space: nowrap;
+      }
+      .tbl th.num,
+      .tbl td.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .tbl td {
+        padding: 11px 12px 11px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text);
+        vertical-align: middle;
+      }
+      .tbl tr:last-child td {
+        border-bottom: 0;
+      }
+      .tbl td.num.credits {
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .tbl td .muted {
+        color: var(--el-text-secondary);
+      }
+      .tbl tr.drillable {
+        cursor: pointer;
+      }
+      .tbl td .when {
+        color: var(--el-text-secondary);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .seatcell {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-variant-numeric: tabular-nums;
+        color: var(--el-text-secondary);
+      }
+      .seatcell svg {
+        width: 13px;
+        height: 13px;
+        color: var(--el-text-faint);
+        flex: none;
+      }
+      .tenant {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+      }
+      .tenant .ava {
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 700;
+        flex: none;
+      }
+      .ava.ent-org {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .ava.ent-ws {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .ava.ent-proj {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .ava.ent-user {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .tenant .nm {
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tenant .path {
+        color: var(--el-text-muted);
+        font-weight: 400;
+      }
+
+      /* ── Rollup tree (project -> workspace -> org -> platform) ─────────────── */
+      .tree td.name {
+        padding-right: 16px;
+      }
+      .tree .indent {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tree .lvl-1 {
+        padding-left: 26px;
+      }
+      .tree .lvl-2 {
+        padding-left: 52px;
+      }
+      .tree .exp {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .tree .exp svg {
+        width: 14px;
+        height: 14px;
+      }
+      .tree .exp.leaf {
+        visibility: hidden;
+      }
+      .tree tr.r-org td {
+        background: color-mix(in srgb, var(--el-surface) 55%, transparent);
+      }
+
+      /* pills */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        line-height: 1.1;
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill-neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill-platform,
+      .pill-org,
+      .pill-tier {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-ws {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill-proj {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-neworg {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-newws {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill-plan {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-code {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .pill-active {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-readonly {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+
+      /* share-of-spend usage bar — per-entity / per-model tint */
+      .usebar {
+        height: 8px;
+        width: 100%;
+        min-width: 84px;
+        border-radius: var(--radius-badge);
+        background: var(--el-surface);
+        overflow: hidden;
+      }
+      .usebar > span {
+        display: block;
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+      }
+      .usebar > span.org {
+        background: var(--el-accent);
+      }
+      .usebar > span.ws {
+        background: var(--el-info);
+      }
+      .usebar > span.proj {
+        background: var(--el-success);
+      }
+      .model {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 9999px;
+        flex: none;
+      }
+      .dot.opus {
+        background: var(--el-accent);
+      }
+      .dot.sonnet {
+        background: var(--el-info);
+      }
+      .dot.haiku {
+        background: var(--el-success);
+      }
+      .dot.deepseek {
+        background: var(--el-type-subtask, var(--color-accent-teal));
+      }
+      .usebar > span.opus {
+        background: var(--el-accent);
+      }
+      .usebar > span.sonnet {
+        background: var(--el-info);
+      }
+      .usebar > span.haiku {
+        background: var(--el-success);
+      }
+      .usebar > span.deepseek {
+        background: var(--color-accent-teal);
+      }
+      .usd {
+        color: var(--el-text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .rank {
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        flex: none;
+        font-variant-numeric: tabular-nums;
+      }
+      .rank.top {
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+      }
+      .drill-chev {
+        color: var(--el-text-faint);
+      }
+      .drill-chev svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ── Audited cross-tenant read affordance + read-only session banner ──── */
+      .audit-banner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: 12.5px;
+        line-height: 1.4;
+      }
+      .audit-banner svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-info);
+      }
+      .audit-banner strong {
+        font-weight: 700;
+      }
+      /* the read-only impersonation/inspect SESSION banner (point #3) */
+      .ro-session {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+        font-size: 12.5px;
+        line-height: 1.4;
+        border: 1px dashed var(--el-border-strong);
+      }
+      .ro-session svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-warning);
+      }
+      .ro-session .ro-exit {
+        margin-left: auto;
+        flex: none;
+      }
+
+      /* ── Scope breadcrumb (Combobox/breadcrumb grammar) ──────────────────── */
+      .scope {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .scope .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        border-radius: var(--radius-input);
+        padding: 0 var(--spacing-control-x);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .scope .seg.active {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .scope .seg svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-secondary);
+      }
+      .scope .sep {
+        color: var(--el-text-secondary);
+        font-size: 15px;
+      }
+
+      /* ── Mini token-only trend sparkline (tenant usage over time) ─────────── */
+      .trend {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        height: 92px;
+        padding: 6px 2px 0;
+      }
+      .trend .col {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        height: 100%;
+        justify-content: flex-end;
+      }
+      .trend .bar {
+        width: 100%;
+        max-width: 30px;
+        border-radius: var(--radius-control) var(--radius-control) 0 0;
+        background: var(--el-tint-lavender);
+      }
+      .trend .col.cur .bar {
+        background: var(--el-accent);
+      }
+      .trend .mo {
+        font-size: 10px;
+        color: var(--el-text-muted);
+      }
+      .mini-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .mini-stat {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+      }
+      .mini-stat .mv {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .mini-stat .ml {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+      /* seats meter (org seats used / tier limit) */
+      .seatmeter {
+        height: 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-surface);
+        overflow: hidden;
+        margin-top: 10px;
+      }
+      .seatmeter > span {
+        display: block;
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+      }
+      .member {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .member .pava {
+        width: 24px;
+        height: 24px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 600;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        flex: none;
+      }
+
+      /* ── Buttons (components/ui/Button) ──────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        font-size: 12px;
+        padding: 0 var(--spacing-btn-x-sm);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+
+      /* ── Pagination bar (the at-scale list control — NOT load-all) ────────── */
+      .pager {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .pager .pbtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border-strong);
+        color: var(--el-text);
+        background: transparent;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .pager .pbtn.is-disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .pager .pbtn svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* ── Notes ───────────────────────────────────────────────────────────── */
+      .note {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        border: 1px dashed var(--el-border-strong);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .note svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-text-faint);
+      }
+
+      /* ── Access-path: the normal-app TopNav + account menu ───────────────── */
+      .topnav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        height: 56px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .topnav .left,
+      .topnav .right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        background: var(--el-surface);
+        border: 1px solid transparent;
+        color: var(--el-text);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .trigger .org-ava {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .trigger svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-secondary);
+        flex: none;
+      }
+      .mini-search {
+        height: var(--height-btn-md);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        color: var(--el-text-muted);
+        font-size: 12px;
+      }
+      .mini-search svg {
+        width: 14px;
+        height: 14px;
+      }
+      .user-ava {
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        cursor: pointer;
+      }
+      .menu {
+        width: 280px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu-head {
+        padding: 8px 10px 4px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+      }
+      .menu-id {
+        padding: 2px 10px 8px;
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .menu-sep {
+        height: 1px;
+        background: var(--el-border);
+        margin: 4px 2px;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .opt.active {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .opt .ot {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.25;
+        min-width: 0;
+        flex: 1;
+      }
+      .opt .ot .od {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        font-weight: 400;
+      }
+      .opt svg.li {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .opt.active svg.li {
+        color: var(--el-info);
+      }
+      .opt .staff-tag {
+        margin-left: auto;
+        font-size: 9.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-info);
+        background: var(--el-tint-sky);
+        border-radius: var(--radius-badge);
+        padding: 1px 7px;
+      }
+      .entry-call {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 10px;
+        max-width: 60ch;
+        line-height: 1.45;
+      }
+      .entry-call svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-info);
+        flex: none;
+        margin-top: 1px;
+      }
+      .access-wrap {
+        display: flex;
+        gap: 28px;
+        padding: 22px 24px 26px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+      .access-wrap .menu-col {
+        flex: none;
+      }
+      .access-wrap .note-col {
+        flex: 1;
+        min-width: 260px;
+      }
+      .access-wrap .note-col p {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+        margin: 0 0 10px;
+      }
+      .access-wrap .note-col strong {
+        color: var(--el-text-strong);
+      }
+
+      /* ── EmptyState / ErrorState / 404 family ────────────────────────────── */
+      .state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 40px 28px;
+        height: 100%;
+      }
+      .state .ico {
+        width: 44px;
+        height: 44px;
+        margin-bottom: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+      }
+      .state.err .ico {
+        background: var(--el-tint-rose);
+        color: var(--el-danger);
+      }
+      .state.notfound .ico {
+        background: var(--el-surface);
+        color: var(--el-text-faint);
+      }
+      .state .ico svg {
+        width: 22px;
+        height: 22px;
+      }
+      .state h4 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 17px;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .state .four04 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 40px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        line-height: 1;
+        margin-bottom: 6px;
+        letter-spacing: 0.02em;
+      }
+      .state p {
+        margin-top: 8px;
+        max-width: 46ch;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        line-height: 1.5;
+      }
+      .state .actions {
+        margin-top: 18px;
+        display: flex;
+        gap: 10px;
+      }
+      .state .reviewer-note {
+        margin-top: 16px;
+        padding: 10px 14px;
+        border-radius: var(--radius-card);
+        border: 1px dashed var(--el-border-strong);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+        font-size: 11.5px;
+        max-width: 52ch;
+        line-height: 1.45;
+        text-align: left;
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .state .reviewer-note svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-text-faint);
+      }
+
+      /* ── Skeleton ────────────────────────────────────────────────────────── */
+      .sk {
+        background: linear-gradient(
+          90deg,
+          var(--el-surface) 0%,
+          var(--el-muted) 50%,
+          var(--el-surface) 100%
+        );
+        border-radius: var(--radius-control);
+      }
+      .sk-line {
+        height: 10px;
+      }
+      .sk-stat {
+        padding: 18px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .states-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      @media (max-width: 920px) {
+        .states-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* ══ Day-1 operator panels (8.5.10 · MOTIR-1166) ══════════════════════
+         Two panels the 10.1.1 console deferred: the read-only health glance
+         and the minimal audited support action. Everything below composes the
+         primitives already defined above; these rules add only the three
+         health TONES, the link-out, the destructive button and the confirm
+         dialog. Colour is --el-*; shape is the element-semantic tokens. */
+      .ico.sig-ok {
+        background: var(--el-tint-mint);
+        color: var(--el-success);
+      }
+      .ico.sig-warn {
+        background: var(--el-tint-yellow);
+        color: var(--el-warning);
+      }
+      .ico.sig-down {
+        background: var(--el-tint-rose);
+        color: var(--el-danger);
+      }
+      .pill-warn {
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+      }
+      .pill-down {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .dot.ok {
+        background: var(--el-success);
+      }
+      .dot.warn {
+        background: var(--el-warning);
+      }
+      .dot.down {
+        background: var(--el-danger);
+      }
+      .health-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .hcard .card-body {
+        padding: 14px var(--spacing-card-padding) 16px;
+      }
+      .hcard .hval {
+        font-size: 14px;
+        color: var(--el-text);
+        line-height: 1.45;
+      }
+      .hcard .hmeta {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 4px;
+        line-height: 1.45;
+      }
+      .linkout {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 12px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-link);
+      }
+      .linkout svg {
+        width: 13px;
+        height: 13px;
+      }
+      .btn-danger {
+        background: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .confirm {
+        width: 460px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .confirm h4 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 17px;
+        color: var(--el-text);
+        margin: 0 0 8px;
+      }
+      .confirm p {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+        margin: 0;
+      }
+      .field {
+        margin-top: 14px;
+      }
+      .field label {
+        display: block;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text);
+        margin-bottom: 6px;
+      }
+      .field .req {
+        color: var(--el-text-secondary);
+        font-weight: 400;
+      }
+      .field .input {
+        min-height: var(--height-input);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        color: var(--el-text);
+        line-height: 1.45;
+      }
+      .field .hint {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        margin-top: 6px;
+      }
+      .confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      .act-col {
+        display: flex;
+        gap: 8px;
+      }
+
+      /* ── MOTIR-4564: org lookup · org page · the classification control ──── */
+      .pill-internal {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .lookup-form {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      .lookup-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+        min-width: 0;
+      }
+      .lf-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .lf-input {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+      }
+      .lf-input svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .lf-value {
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .card.reserved {
+        background: var(--el-surface-soft);
+      }
+      .card.reserved .hsub {
+        color: var(--el-text-secondary);
+      }
+      .card.reserved .reserved-note {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .btn.is-disabled {
+        opacity: 0.45;
+      }
+      .field .input.is-empty {
+        color: var(--el-text-secondary);
+      }
+      .ctrl-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .ctrl-cell {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .ctrl-cell.wide {
+        grid-column: span 2;
+      }
+      .ctrl-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .ctrl-key {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .ctrl-body {
+        padding: 14px;
+      }
+      .ctrl-note {
+        margin: 10px 0 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .toast {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-strong);
+      }
+      .toast svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .toast-warn {
+        background: var(--el-tint-yellow);
+      }
+      .toast-warn svg {
+        color: var(--el-warning);
+      }
+      .toast-err {
+        background: var(--el-tint-rose);
+      }
+      .toast-err svg {
+        color: var(--el-danger);
+      }
+      /* ══ MOTIR-7222 — the AI PLANNING page ════════════════════════════════
+         Additions only. Everything else this page paints is the rule set above,
+         spliced verbatim from console.mock.html. Five Tier-3 tokens this
+         point-in-time block predates, each spelled exactly as
+         packages/design-system/theme.css defines it, so the shipped Combobox
+         and the danger-on-surface ink can be drawn as they ship. */
+      :root {
+        --el-text-identifier: var(--color-slate);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+      }
+
+      /* A card holding an OPEN Combobox: the listbox floats over the card's edge, as
+         the shipped Popover does (it portals out of the card), so the card does not
+         clip it here either. */
+      .card.has-open-popover {
+        overflow: visible;
+      }
+      /* ── Combobox (components/ui/Combobox) — trigger + panel + grouped listbox ── */
+      .cb {
+        position: relative;
+        width: 260px;
+        max-width: 100%;
+      }
+      .cb-trigger {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .cb-trigger .cb-label {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+      }
+      .cb-sec {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .cb-trigger svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+      .cb-panel {
+        position: absolute;
+        top: calc(var(--height-control) + 4px);
+        left: 0;
+        z-index: 5;
+        min-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .cb-group {
+        padding: 8px var(--spacing-control-x) 4px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      .cb-opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        color: var(--el-text);
+      }
+      .cb-opt.is-active {
+        background: var(--el-option-active-bg);
+      }
+      .cb-opt svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-left: auto;
+        color: var(--el-accent-on-surface);
+      }
+      .cb-foot {
+        margin: 4px 0 0;
+        padding: 8px var(--spacing-control-x) 4px;
+        border-top: 1px solid var(--el-border-soft);
+        max-width: 18rem;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── the audience table's cells ─────────────────────────────────────── */
+      .aud-name {
+        display: block;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .aud-desc {
+        display: block;
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .aud-desc code,
+      .changed code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-identifier);
+      }
+      .mdl {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .mdl-id {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        color: var(--el-text);
+      }
+      .mdl-prov {
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .changed {
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .changed strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .cell-stack {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+      }
+      .row-err {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+        max-width: 46ch;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-danger-on-surface);
+      }
+      .row-err svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .row-err code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+      }
+      .chip-note {
+        display: block;
+        max-width: 46ch;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .page-lines {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 14px;
+      }
+      .page-line {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .page-line svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-info);
+      }
+      .page-line strong {
+        color: var(--el-text-strong);
+      }
+      .toast-ok {
+        background: var(--el-tint-mint);
+      }
+      .toast-ok svg {
+        color: var(--el-success);
+      }
+      .split-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      /* ══ MOTIR-746 — the OPS TOOLKIT ══════════════════════════════════════
+         Additions only; everything else is the rule set above, verbatim. Five
+         Tier-3 tokens the point-in-time block predates, spelled exactly as
+         packages/design-system/theme.css defines them, so the shipped Switch
+         draws as it ships. */
+      :root {
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob: var(--color-primary-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+      }
+      /* Switch (components/ui/Switch — role="switch") */
+      .sw {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        width: 36px;
+        height: 20px;
+        flex: none;
+        border-radius: 999px;
+        border: 1px solid var(--el-switch-off-border);
+        background: var(--el-muted);
+      }
+      .sw::after {
+        content: '';
+        position: absolute;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        background: var(--el-switch-knob-off);
+        box-shadow: var(--shadow-subtle);
+      }
+      .sw.on {
+        border-color: var(--el-switch-on-border);
+        background: var(--el-switch-on);
+      }
+      .sw.on::after {
+        left: 18px;
+        background: var(--el-switch-knob);
+      }
+      .sw-cell {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+      /* the flag's key + the ledger kind's source key, monospace */
+      .key {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-identifier);
+      }
+      .cell-main {
+        display: block;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .cell-sub {
+        display: block;
+        margin-top: 2px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      /* an OFF kill-switch: the danger hue in the pill tint and the glyph; the
+         label stays on --el-text-strong (finding #35). */
+      .off-glyph {
+        color: var(--el-danger);
+      }
+      /* a ledger amount: sign is TEXT (+ / −), never colour alone */
+      .amt {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        font-variant-numeric: tabular-nums;
+      }
+      .act-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      .status-line {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .status-line .cell-sub {
+        margin: 0;
+      }
+      /* the consequence list inside a confirm */
+      .conseq {
+        margin: 10px 0 0;
+        padding-left: 18px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .conseq li + li {
+        margin-top: 4px;
+      }
+      .conseq strong {
+        color: var(--el-text);
+      }
+      .confirm .toast {
+        margin-top: 12px;
+      }
+      .confirm .segmented {
+        margin-top: 2px;
+      }
+      .preview {
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .preview strong {
+        color: var(--el-text);
+      }
+      /* the persistent STAFF SESSION bar — rides above the tenant's own TopNav on
+         every page while a session is live. Full width, never dismissible. */
+      .imp-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 20px;
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+        border-bottom: 1px solid var(--el-border-strong);
+        font-size: 12.5px;
+        line-height: 1.4;
+      }
+      .imp-bar svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-warning);
+      }
+      .imp-bar.full {
+        background: var(--el-tint-rose);
+      }
+      .imp-bar.full svg {
+        color: var(--el-danger);
+      }
+      .imp-bar .imp-exit {
+        margin-left: auto;
+        flex: none;
+      }
+      .tenant-body {
+        padding: 20px 24px 26px;
+        background: var(--el-page-bg);
+      }
+      .tenant-body h3 {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .tip {
+        display: inline-block;
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        border-radius: var(--radius-control);
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 11.5px;
+        box-shadow: var(--shadow-elevated);
+      }
+      /* the audit log: filters, the integrity line, and a row's detail */
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 10px;
+        margin-top: 16px;
+      }
+      .filters .lookup-field {
+        flex: 0 1 190px;
+      }
+      .filters .lookup-field.grow {
+        flex: 1 1 260px;
+      }
+      .chain {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+      }
+      .tbl tr.is-open td {
+        border-bottom: 0;
+      }
+      .tbl tr.detail td {
+        padding: 0 0 14px;
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: 150px 1fr;
+        gap: 8px 16px;
+        padding: 14px 16px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        font-size: 12.5px;
+      }
+      .kv dt {
+        color: var(--el-text-secondary);
+        font-weight: 500;
+      }
+      .kv dd {
+        margin: 0;
+        color: var(--el-text);
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .tbl td .btn {
+        white-space: nowrap;
+      }
+      .code {
+        margin: 0;
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        border-radius: var(--radius-control);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border-soft);
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--el-text);
+        white-space: pre;
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Platform admin console — the ops toolkit</h1>
+        <p>
+          MOTIR-746 · story MOTIR-745. The governance WRITES the console has so far left out: credit
+          grants and adjustments, plan assignment, suspending an organization, per-org
+          kill-switches, viewing the app as a user, and the hash-chained audit log that records all
+          of it. Every write takes a reason, the heavy ones a typed confirm, and the record is
+          rendered back on the surface that made it. Composes the shipped console; tiers, names and
+          figures are examples. Gates MOTIR-747 · 748 · 749 · 750 · 751 · 752.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+    <div class="panel-label">
+      1 · Org page · the new <strong>Operations</strong> tab — a <strong>superadmin</strong>. THE
+      DOOR: Tenants → an org → a FOURTH tab beside Overview, Usage &amp; cost and Billing &amp;
+      plans (<code>?tab=operations</code>). Every write in Story 10.3 that targets an ORGANIZATION
+      lives here: status (MOTIR-748), credits &amp; plan (MOTIR-747), kill-switches (MOTIR-750), and
+      the org’s own slice of the audit log rendered back underneath (MOTIR-751). The rail’s reserved
+      <em>Governance · 10.3</em> row becomes the live <strong>Audit log</strong> row (Panel 6).
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>AI planning
+            </div>
+            <!-- THE DOOR to Panel 6: the reserved "Governance · 10.3" row goes LIVE as "Audit log" (superadmin only; absent for every other role). -->
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-scroll" /></svg>Audit log
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">SA</span>
+                <div>
+                  <div class="wt">Platform staff · superadmin</div>
+                  <div class="ws">yue@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">SA</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <div>
+                <span class="btn btn-secondary btn-sm"
+                  ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Tenants</span
+                >
+              </div>
+              <div class="audit-banner">
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+                ><span
+                  >You are viewing <strong>Acme Corp</strong> as platform staff. This cross-tenant
+                  read is recorded in the audit log (operator <strong>SA · yue@moooon.net</strong>,
+                  just now).</span
+                >
+              </div>
+              <div class="row-between" style="margin-top: 16px">
+                <div class="tenant" style="gap: 12px">
+                  <span class="ava ent-org" style="width: 36px; height: 36px; font-size: 14px"
+                    >A</span
+                  >
+                  <div>
+                    <h2 style="margin: 0; font-size: 19px">Acme Corp</h2>
+                    <div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap">
+                      <span class="pill pill-active">● Active</span
+                      ><span class="pill pill-code">acme</span
+                      ><span class="pill pill-tier">Team</span>
+                      <span class="pill pill-neutral"
+                        ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>12,400 credits</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="seg-row" style="margin-top: 16px">
+                <div class="segmented" role="group" aria-label="Tenant view">
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-grid" /></svg>Overview
+                  </button>
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+                  </button>
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-card" /></svg>Billing &amp; plans
+                  </button>
+                  <button class="seg-opt active" aria-pressed="true">
+                    <svg viewBox="0 0 24 24"><use href="#i-settings" /></svg>Operations
+                  </button>
+                </div>
+              </div>
+              <div class="stack">
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-power" /></svg
+                      ></span>
+                      <div>
+                        <h3>Organization status</h3>
+                        <p class="hsub">
+                          Suspending an organization refuses every member of every workspace under
+                          it.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-body">
+                    <div class="row-between" style="align-items: center">
+                      <div class="status-line">
+                        <span class="pill pill-active">● Active</span>
+                        <span class="cell-sub"
+                          >14 members across 4 workspaces can sign in and work.</span
+                        >
+                      </div>
+                      <span class="btn btn-danger"
+                        ><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg>Suspend
+                        organization</span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                      ></span>
+                      <div>
+                        <h3>Credits &amp; plan</h3>
+                        <p class="hsub">
+                          Credits are Motir’s internal unit, never a currency. Read from the credit
+                          service; every write is recorded.
+                        </p>
+                      </div>
+                    </div>
+                    <span class="pill pill-neutral">Ledger · newest first</span>
+                  </div>
+                  <div class="card-body flush">
+                    <div class="row-between" style="align-items: center; padding: 14px 0">
+                      <div class="status-line">
+                        <div>
+                          <span class="cell-sub" style="margin: 0">Balance</span>
+                          <span class="cell-main" style="font-size: 22px">12,400 credits</span>
+                        </div>
+                        <div>
+                          <span class="cell-sub" style="margin: 0">AI plan</span>
+                          <span class="cell-main"
+                            ><span class="pill pill-tier">Team</span> 20,000 credits a month</span
+                          >
+                        </div>
+                      </div>
+                      <div class="act-row">
+                        <span class="btn btn-primary"
+                          ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Grant credits</span
+                        >
+                        <span class="btn btn-secondary"
+                          ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Adjust
+                          balance</span
+                        >
+                        <span class="btn btn-secondary"
+                          ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg>Change plan</span
+                        >
+                      </div>
+                    </div>
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>When</th>
+                          <th>Kind</th>
+                          <th class="num">Credits</th>
+                          <th class="num">Balance after</th>
+                          <th>By</th>
+                          <th>Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td class="muted">2 Oct 2026, 14:20</td>
+                          <td><span class="pill pill-plan">Grant</span></td>
+                          <td class="num"><span class="amt">+500</span></td>
+                          <td class="num">12,400</td>
+                          <td>SA · yue@moooon.net</td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Goodwill credit — planning jobs failed during the 1 Oct gateway
+                              outage (ticket #4512).</span
+                            >
+                          </td>
+                        </tr>
+                        <tr>
+                          <td class="muted">1 Oct 2026, 09:02</td>
+                          <td><span class="pill pill-neutral">Debit · planning</span></td>
+                          <td class="num"><span class="amt">−42</span></td>
+                          <td class="num">11,900</td>
+                          <td>—</td>
+                          <td><span class="cell-sub" style="margin: 0">—</span></td>
+                        </tr>
+                        <tr>
+                          <td class="muted">30 Sep 2026, 17:44</td>
+                          <td><span class="pill pill-warn">Adjustment</span></td>
+                          <td class="num"><span class="amt">−100</span></td>
+                          <td class="num">11,942</td>
+                          <td>SA · yue@moooon.net</td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Correction: a CI overage was charged twice for run 88213.</span
+                            >
+                          </td>
+                        </tr>
+                        <tr>
+                          <td class="muted">30 Sep 2026, 11:10</td>
+                          <td><span class="pill pill-readonly">Top-up</span></td>
+                          <td class="num"><span class="amt">+10,000</span></td>
+                          <td class="num">12,042</td>
+                          <td>Stripe</td>
+                          <td><span class="cell-sub" style="margin: 0">—</span></td>
+                        </tr>
+                        <tr>
+                          <td class="muted">29 Sep 2026, 16:31</td>
+                          <td><span class="pill pill-neutral">Debit · agent run</span></td>
+                          <td class="num"><span class="amt">−318</span></td>
+                          <td class="num">2,042</td>
+                          <td>—</td>
+                          <td><span class="cell-sub" style="margin: 0">—</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card-foot">
+                    <span class="fnote">Showing 1–5 of 2,318 transactions</span
+                    ><span class="pager"
+                      ><span class="pbtn is-disabled"
+                        ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Newer</span
+                      ><span class="pbtn"
+                        >Older<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
+                    ></span>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-ws" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-power" /></svg
+                      ></span>
+                      <div>
+                        <h3>Kill-switches</h3>
+                        <p class="hsub">
+                          Durable per-organization switches, ON by default. A change takes effect on
+                          the org’s next request — no deploy.
+                        </p>
+                      </div>
+                    </div>
+                    <span class="pill pill-down"
+                      ><svg viewBox="0 0 24 24" class="off-glyph"><use href="#i-ban" /></svg>1
+                      off</span
+                    >
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>Switch</th>
+                          <th>When OFF</th>
+                          <th>State</th>
+                          <th>Last changed</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>
+                            <span class="sw-cell"
+                              ><span
+                                class="sw on"
+                                role="switch"
+                                aria-checked="true"
+                                aria-label="AI planning"
+                              ></span
+                              ><span
+                                ><span class="cell-main">AI planning</span
+                                ><span class="key">ai_planning</span></span
+                              ></span
+                            >
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >New planning jobs are refused with “planning is paused for your
+                              organization”. Jobs already running finish.</span
+                            >
+                          </td>
+                          <td><span class="pill pill-active">On</span></td>
+                          <td><span class="cell-sub" style="margin: 0">Never changed</span></td>
+                          <td class="num">
+                            <span class="btn btn-secondary btn-sm"
+                              ><svg viewBox="0 0 24 24"><use href="#i-power" /></svg>Turn off</span
+                            >
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="sw-cell"
+                              ><span
+                                class="sw"
+                                role="switch"
+                                aria-checked="false"
+                                aria-label="Hosted agent runs"
+                              ></span
+                              ><span
+                                ><span class="cell-main">Hosted agent runs</span
+                                ><span class="key">hosted_runs</span></span
+                              ></span
+                            >
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >New agent runs and agent instances are refused. Running containers
+                              are stopped.</span
+                            >
+                          </td>
+                          <td>
+                            <span class="pill pill-down"
+                              ><svg viewBox="0 0 24 24" class="off-glyph"><use href="#i-ban" /></svg
+                              >Off — disabled</span
+                            >
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >2 Oct 2026 · SA · “Fleet spend 6× normal overnight, paused while we
+                              look (ticket #4519).”</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="btn btn-secondary btn-sm"
+                              ><svg viewBox="0 0 24 24"><use href="#i-power" /></svg>Turn on</span
+                            >
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="sw-cell"
+                              ><span
+                                class="sw on"
+                                role="switch"
+                                aria-checked="true"
+                                aria-label="Web search"
+                              ></span
+                              ><span
+                                ><span class="cell-main">Web search</span
+                                ><span class="key">web_search</span></span
+                              ></span
+                            >
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Planning and agents run without web search; a search call returns
+                              “not available”.</span
+                            >
+                          </td>
+                          <td><span class="pill pill-active">On</span></td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >18 Sep 2026 · SA · “Turned back on — provider incident
+                              resolved.”</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="btn btn-secondary btn-sm"
+                              ><svg viewBox="0 0 24 24"><use href="#i-power" /></svg>Turn off</span
+                            >
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-user" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-scroll" /></svg
+                      ></span>
+                      <div>
+                        <h3>Platform actions on this organization</h3>
+                        <p class="hsub">
+                          Every operator write on this org, newest first. Append-only.
+                        </p>
+                      </div>
+                    </div>
+                    <span class="pill pill-neutral">This organization</span>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>When</th>
+                          <th>Operator</th>
+                          <th>Action</th>
+                          <th>Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td class="muted">2 Oct 2026, 14:20</td>
+                          <td>SA · yue@moooon.net</td>
+                          <td>
+                            <span class="key">org.credit_grant</span
+                            ><span class="cell-sub">+500 credits</span>
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Goodwill credit — planning jobs failed during the 1 Oct gateway
+                              outage (ticket #4512).</span
+                            >
+                          </td>
+                        </tr>
+                        <tr>
+                          <td class="muted">2 Oct 2026, 08:57</td>
+                          <td>SA · yue@moooon.net</td>
+                          <td>
+                            <span class="key">org.kill_switch_off</span
+                            ><span class="cell-sub">hosted_runs</span>
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Fleet spend 6× normal overnight, paused while we look (ticket
+                              #4519).</span
+                            >
+                          </td>
+                        </tr>
+                        <tr>
+                          <td class="muted">30 Sep 2026, 17:44</td>
+                          <td>SA · yue@moooon.net</td>
+                          <td>
+                            <span class="key">org.credit_adjust</span
+                            ><span class="cell-sub">−100 credits</span>
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Correction: a CI overage was charged twice for run 88213.</span
+                            >
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card-foot">
+                    <span class="fnote">Showing 3 of 41 actions</span
+                    ><span class="linkout" style="margin: 0"
+                      >Open in the audit log<svg viewBox="0 0 24 24">
+                        <use href="#i-chevright" /></svg
+                    ></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      2 · Credits &amp; plan — the four dialogs and their outcomes (MOTIR-747). Every write is the
+      shipped confirm-with-reason grammar: the primary stays <strong>disabled</strong> until a
+      reason is typed. A grant of <strong>10,000 credits or more</strong> adds a typed-slug confirm.
+      Credits are labelled credits, never a currency.
+    </div>
+    <div class="panel">
+      <div class="stage" style="padding: 20px">
+        <div class="ctrl-grid">
+          <div class="ctrl-cell">
+            <div class="ctrl-head"><span class="ctrl-key">a</span>Grant credits</div>
+            <div class="ctrl-body">
+              <div class="confirm" role="alertdialog" style="width: 100%">
+                <h4>Grant credits to Acme Corp</h4>
+                <p>
+                  Adds credits to the org’s balance as a <strong>grant</strong> row in its ledger.
+                  It changes no plan and touches no Stripe object.
+                </p>
+                <div class="field">
+                  <label>Credits to grant</label>
+                  <div class="input">500</div>
+                </div>
+                <div class="field">
+                  <label
+                    >Reason <span class="req">— required, written to the audit log</span></label
+                  >
+                  <div class="input">
+                    Goodwill credit — planning jobs failed during the 1 Oct gateway outage (ticket
+                    #4512).
+                  </div>
+                  <div class="hint">
+                    Shown to any operator reading this organization later. “Support” on its own
+                    answers nothing.
+                  </div>
+                </div>
+                <p class="preview">Balance after: <strong>12,900 credits</strong> (now 12,400)</p>
+                <div class="confirm-actions">
+                  <span class="btn btn-secondary">Cancel</span>
+                  <span class="btn btn-primary">Grant 500 credits</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ctrl-cell">
+            <div class="ctrl-head">
+              <span class="ctrl-key">b</span>Grant credits — a LARGE grant (slug not typed yet)
+            </div>
+            <div class="ctrl-body">
+              <div class="confirm" role="alertdialog" style="width: 100%">
+                <h4>Grant credits to Acme Corp</h4>
+                <p>
+                  Adds credits to the org’s balance as a <strong>grant</strong> row in its ledger.
+                </p>
+                <div class="field">
+                  <label>Credits to grant</label>
+                  <div class="input">25,000</div>
+                </div>
+                <div class="toast toast-warn">
+                  <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+                  ><span
+                    ><strong>This is a large grant</strong> — 10,000 credits or more, more than this
+                    org’s whole monthly allotment. Type the org’s slug to confirm.</span
+                  >
+                </div>
+                <div class="field">
+                  <label>Type <span class="key">acme</span> to confirm</label>
+                  <div class="input is-empty">acme</div>
+                </div>
+                <div class="field">
+                  <label
+                    >Reason <span class="req">— required, written to the audit log</span></label
+                  >
+                  <div class="input">
+                    Contract credit for the Q4 pilot, approved by Yue (ticket #4520).
+                  </div>
+                  <div class="hint">
+                    Shown to any operator reading this organization later. “Support” on its own
+                    answers nothing.
+                  </div>
+                </div>
+                <div class="confirm-actions">
+                  <span class="btn btn-secondary">Cancel</span>
+                  <span class="btn btn-primary is-disabled" aria-disabled="true"
+                    >Grant 25,000 credits</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ctrl-cell">
+            <div class="ctrl-head"><span class="ctrl-key">c</span>Adjust balance</div>
+            <div class="ctrl-body">
+              <div class="confirm" role="alertdialog" style="width: 100%">
+                <h4>Adjust Acme Corp’s balance</h4>
+                <p>
+                  Corrects the balance with an <strong>adjustment</strong> row — for a billing
+                  mistake. A goodwill credit is a grant, not an adjustment.
+                </p>
+                <div class="field">
+                  <label>Change in credits</label>
+                  <div class="input">−100</div>
+                  <div class="hint">
+                    Use − to remove credits. The balance may not go below zero.
+                  </div>
+                </div>
+                <div class="field">
+                  <label
+                    >Reason <span class="req">— required, written to the audit log</span></label
+                  >
+                  <div class="input">Correction: a CI overage was charged twice for run 88213.</div>
+                  <div class="hint">
+                    Shown to any operator reading this organization later. “Support” on its own
+                    answers nothing.
+                  </div>
+                </div>
+                <p class="preview">Balance after: <strong>12,300 credits</strong> (now 12,400)</p>
+                <div class="confirm-actions">
+                  <span class="btn btn-secondary">Cancel</span>
+                  <span class="btn btn-primary">Adjust by −100 credits</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ctrl-cell">
+            <div class="ctrl-head"><span class="ctrl-key">d</span>Change plan</div>
+            <div class="ctrl-body">
+              <div class="confirm has-open-popover" role="alertdialog" style="width: 100%">
+                <h4>Change Acme Corp’s AI plan</h4>
+                <p>
+                  Sets the tier the org’s monthly credit allotment is read from. The tiers are read
+                  from the credit service.
+                </p>
+                <div class="field">
+                  <label>AI plan</label>
+                  <div class="cb" style="width: 100%">
+                    <div
+                      class="cb-trigger"
+                      role="combobox"
+                      aria-expanded="false"
+                      aria-label="AI plan"
+                    >
+                      <span>Business</span><span class="cb-sec">60,000 credits a month</span
+                      ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                    </div>
+                  </div>
+                  <div class="hint">Currently <strong>Team</strong> · 20,000 credits a month.</div>
+                </div>
+                <div class="toast toast-warn">
+                  <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+                  ><span
+                    >Acme Corp pays for its plan through Stripe. This changes the tier Motir reads;
+                    it does not change or cancel the Stripe subscription.</span
+                  >
+                </div>
+                <div class="field">
+                  <label
+                    >Reason <span class="req">— required, written to the audit log</span></label
+                  >
+                  <div class="input">
+                    Moving the pilot to Business for October, agreed with their owner (ticket
+                    #4520).
+                  </div>
+                  <div class="hint">
+                    Shown to any operator reading this organization later. “Support” on its own
+                    answers nothing.
+                  </div>
+                </div>
+                <div class="confirm-actions">
+                  <span class="btn btn-secondary">Cancel</span>
+                  <span class="btn btn-primary">Change plan to Business</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ctrl-cell">
+            <div class="ctrl-head">
+              <span class="ctrl-key">e</span>Reason missing — the gate, not a post-submit error
+            </div>
+            <div class="ctrl-body">
+              <div class="confirm" role="alertdialog" style="width: 100%">
+                <h4>Grant credits to Acme Corp</h4>
+                <div class="field">
+                  <label>Credits to grant</label>
+                  <div class="input">500</div>
+                </div>
+                <div class="field">
+                  <label
+                    >Reason <span class="req">— required, written to the audit log</span></label
+                  >
+                  <div class="input is-empty">
+                    Why are you doing this? Name the ticket if there is one.
+                  </div>
+                  <div class="hint">
+                    Shown to any operator reading this organization later. “Support” on its own
+                    answers nothing.
+                  </div>
+                </div>
+                <div class="confirm-actions">
+                  <span class="btn btn-secondary">Cancel</span>
+                  <span class="btn btn-primary is-disabled" aria-disabled="true"
+                    >Grant 500 credits</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ctrl-cell">
+            <div class="ctrl-head"><span class="ctrl-key">f</span>Outcomes</div>
+            <div class="ctrl-body">
+              <div class="toast" style="background: var(--el-tint-mint)">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+                ><span
+                  ><strong>Granted 500 credits to Acme Corp.</strong> The ledger and the audit log
+                  both carry it.</span
+                >
+              </div>
+              <div style="height: 10px"></div>
+              <div class="toast toast-err">
+                <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+                ><span
+                  ><strong>Couldn’t reach the credit service.</strong> Nothing was granted and
+                  nothing was recorded. Try again in a moment.</span
+                >
+              </div>
+              <p class="ctrl-note">
+                The ledger write and its audit row share one outcome: if the credit service refuses
+                or does not answer, the audit log records nothing either.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      3 · Org lifecycle (MOTIR-748). (a) the SUSPEND confirm — consequence first, typed slug,
+      reason, <code>--el-danger</code> fill on the one destructive button. (b) the Operations tab’s
+      status card once suspended, with the header pill flipped to <strong>Suspended</strong>. (c)
+      the symmetric REACTIVATE. (d) what a MEMBER of Acme Corp sees on any page — a calm, non-500
+      refusal.
+    </div>
+    <div class="panel">
+      <div class="stage" style="padding: 20px">
+        <div class="ctrl-grid">
+          <div class="ctrl-cell">
+            <div class="ctrl-head"><span class="ctrl-key">a</span>Suspend — confirm</div>
+            <div class="ctrl-body">
+              <div class="confirm" role="alertdialog" style="width: 100%">
+                <h4>Suspend Acme Corp?</h4>
+                <p>
+                  Suspension is the lever for non-payment or abuse. From the moment you confirm:
+                </p>
+                <ul class="conseq">
+                  <li>
+                    <strong>All 14 members</strong> of <strong>all 4 workspaces</strong> are refused
+                    at their next request and see that the organization is suspended.
+                  </li>
+                  <li>New planning jobs and agent runs are refused; running ones are stopped.</li>
+                  <li>
+                    <strong>Nothing is deleted.</strong> Work items, repositories and the ledger
+                    stay exactly as they are, and another superadmin can reactivate it.
+                  </li>
+                </ul>
+                <div class="field">
+                  <label>Type <span class="key">acme</span> to confirm</label>
+                  <div class="input">acme</div>
+                </div>
+                <div class="field">
+                  <label
+                    >Reason <span class="req">— required, written to the audit log</span></label
+                  >
+                  <div class="input">
+                    Three failed invoices since August, owner unreachable (ticket #4490).
+                  </div>
+                  <div class="hint">
+                    Shown to any operator reading this organization later. “Support” on its own
+                    answers nothing.
+                  </div>
+                </div>
+                <div class="confirm-actions">
+                  <span class="btn btn-secondary">Cancel</span>
+                  <span class="btn btn-danger"
+                    ><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg>Suspend Acme Corp</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ctrl-cell">
+            <div class="ctrl-head"><span class="ctrl-key">c</span>Reactivate — confirm</div>
+            <div class="ctrl-body">
+              <div class="confirm" role="alertdialog" style="width: 100%">
+                <h4>Reactivate Acme Corp?</h4>
+                <p>
+                  All 14 members can sign in and work again from their next request. Kill-switches
+                  keep their own state — a switch you turned off stays off.
+                </p>
+                <div class="field">
+                  <label
+                    >Reason <span class="req">— required, written to the audit log</span></label
+                  >
+                  <div class="input">
+                    Invoices settled on 4 Oct; owner confirmed the new card (ticket #4490).
+                  </div>
+                  <div class="hint">
+                    Shown to any operator reading this organization later. “Support” on its own
+                    answers nothing.
+                  </div>
+                </div>
+                <div class="confirm-actions">
+                  <span class="btn btn-secondary">Cancel</span>
+                  <span class="btn btn-primary">Reactivate Acme Corp</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ctrl-cell wide">
+            <div class="ctrl-head">
+              <span class="ctrl-key">b</span>The Operations tab, suspended
+            </div>
+            <div class="ctrl-body">
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="ico ent-org" style="width: 30px; height: 30px"
+                      ><svg viewBox="0 0 24 24"><use href="#i-power" /></svg
+                    ></span>
+                    <div>
+                      <h3>Organization status</h3>
+                      <p class="hsub">
+                        Suspending an organization refuses every member of every workspace under it.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="row-between" style="align-items: center">
+                    <div class="status-line">
+                      <span class="pill pill-down"
+                        ><svg viewBox="0 0 24 24" class="off-glyph"><use href="#i-ban" /></svg
+                        >Suspended</span
+                      >
+                      <span class="cell-sub"
+                        >Since 2 Oct 2026, 15:10 · by SA · yue@moooon.net · “Three failed invoices
+                        since August, owner unreachable (ticket #4490).”</span
+                      >
+                    </div>
+                    <span class="btn btn-secondary"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg>Reactivate
+                      organization</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <p class="ctrl-note">
+                The org header carries the same
+                <span class="pill pill-down"
+                  ><svg viewBox="0 0 24 24" class="off-glyph"><use href="#i-ban" /></svg
+                  >Suspended</span
+                >
+                pill on every tab, and the Tenants list shows it on the org’s row.
+              </p>
+            </div>
+          </div>
+          <div class="ctrl-cell wide">
+            <div class="ctrl-head">
+              <span class="ctrl-key">d</span>A member of Acme Corp, any page
+            </div>
+            <div class="ctrl-body">
+              <div class="stage">
+                <div class="topnav">
+                  <div class="left">
+                    <button class="trigger" aria-label="Organization menu">
+                      <span class="org-ava">A</span><span>Acme Corp</span
+                      ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+                    </button>
+                  </div>
+                  <div class="right"><span class="user-ava">DW</span></div>
+                </div>
+                <div class="tenant-body">
+                  <div class="state" style="box-shadow: none">
+                    <span class="ico"
+                      ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                    ></span>
+                    <h4>Acme Corp is suspended</h4>
+                    <p>
+                      Your organization’s access to Motir is paused. Nothing has been deleted.
+                      Contact your organization’s owner, or write to support@motir.co.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      4 · Impersonation — the ENTRY (MOTIR-749). THE DOOR: the user page (Users → a person) gains
+      <strong>View as {first name}</strong> beside the two day-1 writes. The dialog is reason-gated
+      and time-boxed; <strong>Read-only</strong> is the default. (b) read-only, (c) full access —
+      the warning and the primary turn to the danger treatment.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>AI planning
+            </div>
+            <!-- THE DOOR to Panel 6: the reserved "Governance · 10.3" row goes LIVE as "Audit log" (superadmin only; absent for every other role). -->
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-scroll" /></svg>Audit log
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">SA</span>
+                <div>
+                  <div class="wt">Platform staff · superadmin</div>
+                  <div class="ws">yue@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">SA</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <div class="scope">
+                <span class="seg">Platform</span><span class="sep" aria-hidden="true">›</span>
+                <span class="seg">Users</span><span class="sep" aria-hidden="true">›</span>
+                <span class="seg active"
+                  ><span class="tenant"><span class="ava ent-user">D</span>Dana Whitfield</span
+                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                ></span>
+              </div>
+              <div class="audit-banner">
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+                ><span
+                  >You are viewing <strong>Dana Whitfield</strong>’s account as platform staff. This
+                  cross-tenant read is recorded in the audit log (operator
+                  <strong>SA · yue@moooon.net</strong>, just now).</span
+                >
+              </div>
+              <div class="row-between" style="margin-top: 16px">
+                <div class="tenant" style="gap: 12px">
+                  <span class="ava ent-user" style="width: 36px; height: 36px; font-size: 14px"
+                    >D</span
+                  >
+                  <div>
+                    <h2 style="margin: 0; font-size: 19px">Dana Whitfield</h2>
+                    <div style="display: flex; gap: 6px; margin-top: 6px">
+                      <span class="pill pill-active">● Active</span>
+                      <span class="pill pill-neutral">dana@acme.com</span>
+                      <span class="pill pill-tier">Acme Corp</span>
+                    </div>
+                  </div>
+                </div>
+                <!-- THE DOOR (MOTIR-749): one new action, beside the two day-1 writes. -->
+                <div class="act-col">
+                  <span class="btn btn-secondary"
+                    ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>View as Dana</span
+                  >
+                  <span class="btn btn-secondary"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg>Send password reset</span
+                  >
+                  <span class="btn btn-danger"
+                    ><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg>Suspend account</span
+                  >
+                </div>
+              </div>
+              <div class="stack">
+                <div class="grid-2">
+                  <div class="confirm" role="alertdialog" style="width: 100%">
+                    <h4>View Motir as Dana Whitfield</h4>
+                    <p>
+                      Opens Acme Corp’s app as <strong>dana@acme.com</strong> in a staff session. A
+                      banner stays on every page until you exit or the session expires.
+                    </p>
+                    <div class="field">
+                      <label>Access</label>
+                      <div class="segmented" role="group" aria-label="Access">
+                        <button class="seg-opt active" aria-pressed="true">
+                          <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>Read-only
+                        </button>
+                        <button class="seg-opt" aria-pressed="false">
+                          <svg viewBox="0 0 24 24"><use href="#i-key" /></svg>Full access
+                        </button>
+                      </div>
+                    </div>
+                    <div class="field">
+                      <label>Ends after</label>
+                      <div class="segmented" role="group" aria-label="Session length">
+                        <button class="seg-opt" aria-pressed="false">15 min</button>
+                        <button class="seg-opt active" aria-pressed="true">30 min</button>
+                        <button class="seg-opt" aria-pressed="false">60 min</button>
+                      </div>
+                      <div class="hint">At most 60 minutes. A new session needs a new reason.</div>
+                    </div>
+                    <div class="toast toast-warn">
+                      <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+                      ><span
+                        >Read-only: you see exactly what Dana sees, and every control that would
+                        change something is disabled.</span
+                      >
+                    </div>
+                    <div class="field">
+                      <label
+                        >Reason <span class="req">— required, written to the audit log</span></label
+                      >
+                      <div class="input">
+                        Dana reports her board shows no columns (ticket #4507).
+                      </div>
+                      <div class="hint">
+                        Recorded on the session and on every action taken in it.
+                      </div>
+                    </div>
+                    <div class="confirm-actions">
+                      <span class="btn btn-secondary">Cancel</span>
+                      <span class="btn btn-primary">Start read-only session</span>
+                    </div>
+                  </div>
+                  <div class="confirm" role="alertdialog" style="width: 100%">
+                    <h4>View Motir as Dana Whitfield</h4>
+                    <p>
+                      Opens Acme Corp’s app as <strong>dana@acme.com</strong> in a staff session. A
+                      banner stays on every page until you exit or the session expires.
+                    </p>
+                    <div class="field">
+                      <label>Access</label>
+                      <div class="segmented" role="group" aria-label="Access">
+                        <button class="seg-opt" aria-pressed="false">
+                          <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>Read-only
+                        </button>
+                        <button class="seg-opt active" aria-pressed="true">
+                          <svg viewBox="0 0 24 24"><use href="#i-key" /></svg>Full access
+                        </button>
+                      </div>
+                    </div>
+                    <div class="field">
+                      <label>Ends after</label>
+                      <div class="segmented" role="group" aria-label="Session length">
+                        <button class="seg-opt" aria-pressed="false">15 min</button>
+                        <button class="seg-opt active" aria-pressed="true">30 min</button>
+                        <button class="seg-opt" aria-pressed="false">60 min</button>
+                      </div>
+                      <div class="hint">At most 60 minutes. A new session needs a new reason.</div>
+                    </div>
+                    <div class="toast toast-err">
+                      <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+                      ><span
+                        ><strong>Full access acts as Dana.</strong> Anything you change is real and
+                        lands in Acme Corp’s data, recorded as made by you on Dana’s behalf.</span
+                      >
+                    </div>
+                    <div class="field">
+                      <label
+                        >Reason <span class="req">— required, written to the audit log</span></label
+                      >
+                      <div class="input">
+                        Reproduce the board-move bug Dana reported; needs a real drag (ticket
+                        #4507).
+                      </div>
+                      <div class="hint">
+                        Recorded on the session and on every action taken in it.
+                      </div>
+                    </div>
+                    <div class="confirm-actions">
+                      <span class="btn btn-secondary">Cancel</span>
+                      <span class="btn btn-danger">Start full-access session</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      5 · Impersonation — the ACTIVE SESSION (MOTIR-749). The bar rides ABOVE the tenant’s own
+      TopNav on every page and cannot be dismissed. Read-only (a): yellow tint, every write control
+      disabled with a tooltip. Full access (b): rose tint, “every change is yours”. (c) when the
+      time-box runs out the next request lands here; a fresh start needs a fresh reason.
+    </div>
+    <div class="panel">
+      <div class="stack" style="margin-top: 0">
+        <div class="stage">
+          <div class="imp-bar" role="status">
+            <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+            ><span
+              ><strong>Viewing as Dana Whitfield</strong> (dana@acme.com) · Acme Corp — staff
+              session, <strong>read-only</strong>, ends at 14:32</span
+            ><span class="btn btn-secondary btn-sm imp-exit">Exit session</span>
+          </div>
+          <div class="topnav">
+            <div class="left">
+              <button class="trigger" aria-label="Organization menu">
+                <span class="org-ava">A</span><span>Acme Corp</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+              </button>
+            </div>
+            <div class="right">
+              <span class="mini-search"
+                ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search</span
+              ><span class="user-ava">DW</span>
+            </div>
+          </div>
+          <div class="tenant-body">
+            <div class="row-between" style="align-items: center">
+              <div>
+                <span class="key">ACME-212</span>
+                <h3>Board shows no columns after the workflow change</h3>
+              </div>
+              <div class="act-row" style="flex-direction: column; align-items: flex-end">
+                <span class="btn btn-primary is-disabled" aria-disabled="true">Edit</span>
+                <span class="tip">Read-only staff session</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="imp-bar full" role="status">
+            <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+            ><span
+              ><strong>Acting as Dana Whitfield</strong> (dana@acme.com) · Acme Corp — staff
+              session, <strong>full access</strong>, every change is yours, ends at 14:32</span
+            ><span class="btn btn-secondary btn-sm imp-exit">Exit session</span>
+          </div>
+          <div class="topnav">
+            <div class="left">
+              <button class="trigger" aria-label="Organization menu">
+                <span class="org-ava">A</span><span>Acme Corp</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+              </button>
+            </div>
+            <div class="right">
+              <span class="mini-search"
+                ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search</span
+              ><span class="user-ava">DW</span>
+            </div>
+          </div>
+          <div class="tenant-body">
+            <div class="row-between" style="align-items: center">
+              <div>
+                <span class="key">ACME-212</span>
+                <h3>Board shows no columns after the workflow change</h3>
+              </div>
+              <div class="act-row" style="flex-direction: column; align-items: flex-end">
+                <span class="btn btn-primary">Edit</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="tenant-body">
+            <div class="state" style="box-shadow: none">
+              <span class="ico"
+                ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg
+              ></span>
+              <h4>Your staff session ended at 14:32</h4>
+              <p>
+                You are no longer viewing Motir as Dana Whitfield. The session and everything you
+                opened in it are in the audit log.
+              </p>
+              <div class="actions">
+                <span class="btn btn-primary">Back to the console</span
+                ><span class="btn btn-secondary">Start a new session</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      6 · The admin AUDIT LOG (MOTIR-751) — <code>/admin/audit-log</code>, the rail’s new
+      <strong>Audit log</strong> row (superadmin only). Filter by free text, operator, tenant,
+      action and date; <strong>Writes</strong> is the default so the thousands of audited reads do
+      not bury the actions. Keyset-paged, 50 a page — never load-all. The integrity line says
+      whether the hash chain is intact. One row is open to show its detail.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>AI planning
+            </div>
+            <!-- THE DOOR to Panel 6: the reserved "Governance · 10.3" row goes LIVE as "Audit log" (superadmin only; absent for every other role). -->
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-scroll" /></svg>Audit log
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">SA</span>
+                <div>
+                  <div class="wt">Platform staff · superadmin</div>
+                  <div class="ws">yue@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">SA</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <span class="crumb"><b>Platform</b> · Audit log</span>
+              <h2>Audit log</h2>
+              <p class="sub">
+                Every platform-staff action, newest first. Append-only and hash-chained: an entry
+                changed after it was written breaks the chain from that entry on.
+              </p>
+              <div class="chain">
+                <div class="status-line">
+                  <span class="pill pill-active"
+                    ><svg viewBox="0 0 24 24"><use href="#i-link" /></svg>Chain verified</span
+                  >
+                  <span class="cell-sub" style="margin: 0"
+                    >All 48,213 entries hash-chain intact, checked through #48,213 at 15:12.</span
+                  >
+                </div>
+                <span class="btn btn-secondary btn-sm"
+                  ><svg viewBox="0 0 24 24"><use href="#i-retry" /></svg>Verify again</span
+                >
+              </div>
+              <div class="filters">
+                <div class="lookup-field grow">
+                  <span class="lf-label">Search reasons and targets</span>
+                  <div class="lf-input">
+                    <svg viewBox="0 0 24 24"><use href="#i-search" /></svg
+                    ><span class="lf-value">ticket #45</span>
+                  </div>
+                </div>
+                <div class="lookup-field">
+                  <span class="lf-label">Operator</span>
+                  <div class="cb-trigger">
+                    <span>Anyone</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                  </div>
+                </div>
+                <div class="lookup-field">
+                  <span class="lf-label">Tenant</span>
+                  <div class="cb-trigger">
+                    <span>Any organization</span
+                    ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                  </div>
+                </div>
+                <div class="lookup-field">
+                  <span class="lf-label">Action</span>
+                  <div class="cb-trigger">
+                    <span>Any write</span><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+                  </div>
+                </div>
+                <div class="lookup-field">
+                  <span class="lf-label">When</span>
+                  <div class="cb-trigger">
+                    <svg viewBox="0 0 24 24"><use href="#i-calendar" /></svg
+                    ><span>Last 30 days</span>
+                  </div>
+                </div>
+                <div class="segmented" role="group" aria-label="Entries">
+                  <button class="seg-opt active" aria-pressed="true">Writes</button>
+                  <button class="seg-opt" aria-pressed="false">Writes &amp; reads</button>
+                </div>
+              </div>
+              <div class="stack">
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-user" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-scroll" /></svg
+                      ></span>
+                      <div>
+                        <h3>Entries</h3>
+                        <p class="hsub">Writes · last 30 days · matching “ticket #45”.</p>
+                      </div>
+                    </div>
+                    <span class="pill pill-neutral">50 per page</span>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>When (UTC)</th>
+                          <th>Operator</th>
+                          <th>Action</th>
+                          <th>Target</th>
+                          <th>Reason</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td class="muted">2 Oct 2026, 15:10:04</td>
+                          <td>
+                            <span class="cell-main" style="font-weight: 500">yue@moooon.net</span
+                            ><span class="cell-sub">superadmin</span>
+                          </td>
+                          <td><span class="key">org.suspend</span></td>
+                          <td>
+                            <span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span>
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Three failed invoices since August, owner unreachable (ticket
+                              #4490).</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                        <tr class="is-open">
+                          <td class="muted">2 Oct 2026, 14:20:51</td>
+                          <td>
+                            <span class="cell-main" style="font-weight: 500">yue@moooon.net</span
+                            ><span class="cell-sub">superadmin</span>
+                          </td>
+                          <td><span class="key">org.credit_grant</span></td>
+                          <td>
+                            <span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span>
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Goodwill credit — planning jobs failed during the 1 Oct gateway
+                              outage (ticket #4512).</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                        <tr class="detail">
+                          <td colspan="6">
+                            <dl class="kv">
+                              <dt>Entry</dt>
+                              <dd>#48,207 · 2 Oct 2026, 14:20:51.312 UTC</dd>
+                              <dt>Actor</dt>
+                              <dd>Zhu Yue · yue@moooon.net · superadmin at the time</dd>
+                              <dt>Action</dt>
+                              <dd><span class="key">org.credit_grant</span> — Grant credits</dd>
+                              <dt>Target</dt>
+                              <dd>
+                                organization · Acme Corp · <span class="key">org_01HZX4…7Q</span>
+                              </dd>
+                              <dt>Reason</dt>
+                              <dd>
+                                Goodwill credit — planning jobs failed during the 1 Oct gateway
+                                outage (ticket #4512).
+                              </dd>
+                              <dt>Payload</dt>
+                              <dd>
+                                <pre class="code">
+{
+  "amount": 500,
+  "balanceBefore": 11900,
+  "balanceAfter": 12400,
+  "ledgerTransactionId": "ctx_01J9…K2"
+}</pre
+                                >
+                              </dd>
+                              <dt>Hash</dt>
+                              <dd>
+                                <span class="key">9f3c…a41e</span> · chained to #48,206
+                                <span class="key">27be…0c95</span>
+                              </dd>
+                            </dl>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td class="muted">2 Oct 2026, 14:02:17</td>
+                          <td>
+                            <span class="cell-main" style="font-weight: 500">yue@moooon.net</span
+                            ><span class="cell-sub">superadmin</span>
+                          </td>
+                          <td><span class="key">user.impersonation_start</span></td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-user">D</span>Dana Whitfield · Acme Corp</span
+                            >
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Dana reports her board shows no columns (ticket #4507).</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td class="muted">2 Oct 2026, 11:45:09</td>
+                          <td>
+                            <span class="cell-main" style="font-weight: 500">ops@moooon.net</span
+                            ><span class="cell-sub">operator</span>
+                          </td>
+                          <td><span class="key">user.password_reset_sent</span></td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-user">J</span>Jess Whitfield · Northwind
+                              Labs</span
+                            >
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Locked out after an SSO change, asked by email.</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td class="muted">2 Oct 2026, 08:57:33</td>
+                          <td>
+                            <span class="cell-main" style="font-weight: 500">yue@moooon.net</span
+                            ><span class="cell-sub">superadmin</span>
+                          </td>
+                          <td><span class="key">org.kill_switch_off</span></td>
+                          <td>
+                            <span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span>
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Fleet spend 6× normal overnight, paused while we look (ticket
+                              #4519).</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td class="muted">1 Oct 2026, 18:12:40</td>
+                          <td>
+                            <span class="cell-main" style="font-weight: 500">yue@moooon.net</span
+                            ><span class="cell-sub">superadmin</span>
+                          </td>
+                          <td><span class="key">ai.planner_model.set</span></td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-ws">C</span>Customer organisations</span
+                            >
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Move customers to the new default after the eval.</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card-foot">
+                    <span class="fnote">Newest first · page 1</span
+                    ><span class="pager"
+                      ><span class="pbtn is-disabled"
+                        ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Newer</span
+                      ><span class="pbtn"
+                        >Older<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
+                    ></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      7 · The audit log when the chain does NOT verify (MOTIR-751’s tamper check). The integrity
+      line turns into a danger toast naming the FIRST bad entry; that entry reads
+      <strong>Hash mismatch</strong> and every NEWER one (above it, newest first)
+      <strong>Unverified</strong>; older entries stay verified. Nothing is hidden or repaired by the
+      view.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>AI planning
+            </div>
+            <!-- THE DOOR to Panel 6: the reserved "Governance · 10.3" row goes LIVE as "Audit log" (superadmin only; absent for every other role). -->
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-scroll" /></svg>Audit log
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">SA</span>
+                <div>
+                  <div class="wt">Platform staff · superadmin</div>
+                  <div class="ws">yue@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">SA</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <span class="crumb"><b>Platform</b> · Audit log</span>
+              <h2>Audit log</h2>
+              <p class="sub">
+                Every platform-staff action, newest first. Append-only and hash-chained: an entry
+                changed after it was written breaks the chain from that entry on.
+              </p>
+              <div class="toast toast-err" style="margin-top: 14px">
+                <svg viewBox="0 0 24 24"><use href="#i-unlink" /></svg
+                ><span
+                  ><strong>The chain is broken at entry #31,207</strong> (2 Sep 2026, 09:14:02).
+                  That entry no longer matches the hash recorded for it, so it and the 17,006
+                  entries after it can’t be trusted as written. This check changed nothing; the
+                  entries are shown as stored.</span
+                ><span class="btn btn-secondary btn-sm" style="margin-left: auto; flex: none"
+                  >Show #31,207</span
+                >
+              </div>
+              <div class="stack">
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-user" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-scroll" /></svg
+                      ></span>
+                      <div>
+                        <h3>Entries</h3>
+                        <p class="hsub">Writes · around entry #31,207.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>When (UTC)</th>
+                          <th>Operator</th>
+                          <th>Action</th>
+                          <th>Target</th>
+                          <th>Reason</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td class="muted">2 Sep 2026, 16:40:12</td>
+                          <td>
+                            <span class="cell-main" style="font-weight: 500">yue@moooon.net</span
+                            ><span class="cell-sub">superadmin</span>
+                          </td>
+                          <td>
+                            <span class="key">org.suspend</span>
+                            <span class="pill pill-down"
+                              ><svg viewBox="0 0 24 24" class="off-glyph">
+                                <use href="#i-unlink" /></svg
+                              >Unverified</span
+                            >
+                          </td>
+                          <td>
+                            <span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span>
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Three failed invoices since August, owner unreachable (ticket
+                              #4490).</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td class="muted">2 Sep 2026, 13:05:51</td>
+                          <td>
+                            <span class="cell-main" style="font-weight: 500">yue@moooon.net</span
+                            ><span class="cell-sub">superadmin</span>
+                          </td>
+                          <td>
+                            <span class="key">org.credit_grant</span>
+                            <span class="pill pill-down"
+                              ><svg viewBox="0 0 24 24" class="off-glyph">
+                                <use href="#i-unlink" /></svg
+                              >Unverified</span
+                            >
+                          </td>
+                          <td>
+                            <span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span>
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Goodwill credit — planning jobs failed during the 1 Oct gateway
+                              outage (ticket #4512).</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td class="muted">2 Sep 2026, 11:21:37</td>
+                          <td>
+                            <span class="cell-main" style="font-weight: 500">yue@moooon.net</span
+                            ><span class="cell-sub">superadmin</span>
+                          </td>
+                          <td>
+                            <span class="key">user.impersonation_start</span>
+                            <span class="pill pill-down"
+                              ><svg viewBox="0 0 24 24" class="off-glyph">
+                                <use href="#i-unlink" /></svg
+                              >Unverified</span
+                            >
+                          </td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-user">D</span>Dana Whitfield · Acme Corp</span
+                            >
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Dana reports her board shows no columns (ticket #4507).</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td class="muted">2 Sep 2026, 09:14:02</td>
+                          <td>
+                            <span class="cell-main" style="font-weight: 500">ops@moooon.net</span
+                            ><span class="cell-sub">operator</span>
+                          </td>
+                          <td>
+                            <span class="key">user.password_reset_sent</span>
+                            <span class="pill pill-down"
+                              ><svg viewBox="0 0 24 24" class="off-glyph">
+                                <use href="#i-unlink" /></svg
+                              >Hash mismatch</span
+                            >
+                          </td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-user">J</span>Jess Whitfield · Northwind
+                              Labs</span
+                            >
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Locked out after an SSO change, asked by email.</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td class="muted">1 Sep 2026, 17:48:09</td>
+                          <td>
+                            <span class="cell-main" style="font-weight: 500">yue@moooon.net</span
+                            ><span class="cell-sub">superadmin</span>
+                          </td>
+                          <td><span class="key">org.kill_switch_off</span></td>
+                          <td>
+                            <span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span>
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Fleet spend 6× normal overnight, paused while we look (ticket
+                              #4519).</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td class="muted">1 Sep 2026, 10:02:44</td>
+                          <td>
+                            <span class="cell-main" style="font-weight: 500">yue@moooon.net</span
+                            ><span class="cell-sub">superadmin</span>
+                          </td>
+                          <td><span class="key">ai.planner_model.set</span></td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-ws">C</span>Customer organisations</span
+                            >
+                          </td>
+                          <td>
+                            <span class="cell-sub" style="margin: 0"
+                              >Move customers to the new default after the eval.</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card-foot">
+                    <span class="fnote">Around #31,207</span
+                    ><span class="pager"
+                      ><span class="pbtn"
+                        ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Newer</span
+                      ><span class="pbtn"
+                        >Older<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
+                    ></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      8 · States. (a) the Operations tab loading — one skeleton per card. (b) the credit service
+      unreachable — the Credits &amp; plan card only; status and switches render. (c) an
+      <strong>operator</strong> or <strong>support</strong> role: the Operations tab is visible and
+      read-only, every action absent. (d) a ledger with no rows. (e) an audit-log filter with no
+      matches. (f) not allowed — the console’s 404.
+    </div>
+    <div class="panel">
+      <div class="stage" style="padding: 20px">
+        <div class="ctrl-grid">
+          <div class="ctrl-cell">
+            <div class="ctrl-head"><span class="ctrl-key">a</span>Loading</div>
+            <div class="ctrl-body">
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <div class="sk" style="width: 30px; height: 30px"></div>
+                    <div class="sk sk-line" style="width: 160px"></div>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="sk sk-line" style="width: 70%"></div>
+                  <div style="height: 10px"></div>
+                  <div class="sk sk-line" style="width: 90%"></div>
+                  <div style="height: 10px"></div>
+                  <div class="sk sk-line" style="width: 55%"></div>
+                </div>
+              </div>
+              <div style="height: 12px"></div>
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <div class="sk" style="width: 30px; height: 30px"></div>
+                    <div class="sk sk-line" style="width: 160px"></div>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="sk sk-line" style="width: 70%"></div>
+                  <div style="height: 10px"></div>
+                  <div class="sk sk-line" style="width: 90%"></div>
+                  <div style="height: 10px"></div>
+                  <div class="sk sk-line" style="width: 55%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ctrl-cell">
+            <div class="ctrl-head"><span class="ctrl-key">b</span>Credit service unreachable</div>
+            <div class="ctrl-body">
+              <div class="state err">
+                <span class="ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+                ></span>
+                <h4>Couldn’t load credits</h4>
+                <p>
+                  The credit service didn’t answer, so the balance, plan and ledger aren’t shown.
+                  Nothing is zero — the figures simply aren’t loaded. Status and kill-switches above
+                  still work.
+                </p>
+                <div class="actions">
+                  <span class="btn btn-secondary"
+                    ><svg viewBox="0 0 24 24"><use href="#i-retry" /></svg>Try again</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ctrl-cell wide">
+            <div class="ctrl-head">
+              <span class="ctrl-key">c</span>Operator / support — read-only
+            </div>
+            <div class="ctrl-body">
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="ico ent-ws" style="width: 30px; height: 30px"
+                      ><svg viewBox="0 0 24 24"><use href="#i-power" /></svg
+                    ></span>
+                    <div>
+                      <h3>Kill-switches</h3>
+                      <p class="hsub">Durable per-organization switches, ON by default.</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-body flush">
+                  <table class="tbl">
+                    <thead>
+                      <tr>
+                        <th>Switch</th>
+                        <th>When OFF</th>
+                        <th>State</th>
+                        <th>Last changed</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <span class="sw-cell"
+                            ><span
+                              class="sw on"
+                              role="switch"
+                              aria-checked="true"
+                              aria-label="AI planning"
+                            ></span
+                            ><span
+                              ><span class="cell-main">AI planning</span
+                              ><span class="key">ai_planning</span></span
+                            ></span
+                          >
+                        </td>
+                        <td>
+                          <span class="cell-sub" style="margin: 0"
+                            >New planning jobs are refused with “planning is paused for your
+                            organization”. Jobs already running finish.</span
+                          >
+                        </td>
+                        <td><span class="pill pill-active">On</span></td>
+                        <td><span class="cell-sub" style="margin: 0">Never changed</span></td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="sw-cell"
+                            ><span
+                              class="sw"
+                              role="switch"
+                              aria-checked="false"
+                              aria-label="Hosted agent runs"
+                            ></span
+                            ><span
+                              ><span class="cell-main">Hosted agent runs</span
+                              ><span class="key">hosted_runs</span></span
+                            ></span
+                          >
+                        </td>
+                        <td>
+                          <span class="cell-sub" style="margin: 0"
+                            >New agent runs and agent instances are refused. Running containers are
+                            stopped.</span
+                          >
+                        </td>
+                        <td>
+                          <span class="pill pill-down"
+                            ><svg viewBox="0 0 24 24" class="off-glyph"><use href="#i-ban" /></svg
+                            >Off — disabled</span
+                          >
+                        </td>
+                        <td>
+                          <span class="cell-sub" style="margin: 0"
+                            >2 Oct 2026 · SA · “Fleet spend 6× normal overnight, paused while we
+                            look (ticket #4519).”</span
+                          >
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="card-foot">
+                  <span class="fnote"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Only a superadmin can
+                    change these. You can see them as an operator.</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ctrl-cell">
+            <div class="ctrl-head"><span class="ctrl-key">d</span>Ledger empty</div>
+            <div class="ctrl-body">
+              <div class="state">
+                <span class="ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                ></span>
+                <h4>No credit transactions yet</h4>
+                <p>
+                  Northwind Labs has not been charged, topped up or granted anything. Its balance is
+                  0 credits.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="ctrl-cell">
+            <div class="ctrl-head"><span class="ctrl-key">e</span>Audit log — no matches</div>
+            <div class="ctrl-body">
+              <div class="state">
+                <span class="ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg
+                ></span>
+                <h4>No entries match these filters</h4>
+                <p>
+                  Nothing was recorded for “ticket #9999” by anyone in the last 30 days. Widen the
+                  dates, or switch to Writes &amp; reads.
+                </p>
+                <div class="actions"><span class="btn btn-secondary">Clear filters</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="ctrl-cell wide">
+            <div class="ctrl-head"><span class="ctrl-key">f</span>Not superadmin / not staff</div>
+            <div class="ctrl-body">
+              <div class="state notfound">
+                <div class="four04">404</div>
+                <h4>This page could not be found</h4>
+                <p>
+                  What a person who is not platform staff sees at <code>/admin/…</code> — and what
+                  <strong>support</strong> and <strong>operator</strong> staff see at
+                  <code>/admin/audit-log</code>. The console’s standing 404 (Panel 7a), unchanged.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- ── lucide symbol sprite (viewBox 0 0 24 24; stroke currentColor) ─────── -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+        <g
+          id="i-coins"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="8" cy="8" r="6" />
+          <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+          <path d="M7 6h1v4" />
+          <path d="m16.71 13.88.7.71-2.82 2.82" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-updown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m7 15 5 5 5-5" />
+          <path d="m7 9 5-5 5 5" />
+        </g>
+        <g
+          id="i-chevleft"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m15 18-6-6 6-6" />
+        </g>
+        <g
+          id="i-chevright"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+        <g
+          id="i-chevdown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-retry"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+        </g>
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-sparkle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+          />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </g>
+        <g
+          id="i-settings"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-logout"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" x2="9" y1="12" y2="12" />
+        </g>
+        <g
+          id="i-shield"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+        </g>
+        <g
+          id="i-building"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+          <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+          <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+          <path d="M10 6h4" />
+          <path d="M10 10h4" />
+          <path d="M10 14h4" />
+          <path d="M10 18h4" />
+        </g>
+        <g
+          id="i-grid"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="7" height="7" x="3" y="3" rx="1" />
+          <rect width="7" height="7" x="14" y="3" rx="1" />
+          <rect width="7" height="7" x="14" y="14" rx="1" />
+          <rect width="7" height="7" x="3" y="14" rx="1" />
+        </g>
+        <g
+          id="i-folder"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+          />
+        </g>
+        <g
+          id="i-layers"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"
+          />
+          <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
+          <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
+        </g>
+        <g
+          id="i-flame"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"
+          />
+        </g>
+        <g
+          id="i-server"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+          <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+          <line x1="6" x2="6.01" y1="6" y2="6" />
+          <line x1="6" x2="6.01" y1="18" y2="18" />
+        </g>
+        <g
+          id="i-activity"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+          />
+        </g>
+        <g
+          id="i-ban"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="m4.9 4.9 14.2 14.2" />
+        </g>
+        <g
+          id="i-external"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" key="1q9fwt" />
+          <path d="M10 14 21 3" key="gplh6r" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" key="a6xqqp" />
+        </g>
+        <g
+          id="i-key"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+            key="1s6t7t"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" key="w0ekpg" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" key="1mglay" />
+          <path d="m9 12 2 2 4-4" key="dzmm74" />
+        </g>
+        <g
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" key="1mglay" />
+          <path d="M12 6v6l4 2" key="mmk7yg" />
+        </g>
+        <g
+          id="i-card"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="14" x="2" y="5" rx="2" />
+          <path d="M2 10h20" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-power"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 2v10" />
+          <path d="M18.4 6.6a9 9 0 1 1-12.77.04" />
+        </g>
+        <g
+          id="i-scroll"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 12h-5" />
+          <path d="M15 8h-5" />
+          <path d="M19 17V5a2 2 0 0 0-2-2H4" />
+          <path
+            d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"
+          />
+        </g>
+        <g
+          id="i-link"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </g>
+        <g
+          id="i-unlink"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="m18.84 12.25 1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71"
+          />
+          <path
+            d="m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71"
+          />
+          <path d="M8 2v3" />
+          <path d="M2 8h3" />
+          <path d="M16 19v3" />
+          <path d="M19 16h3" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-calendar"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 2v4" />
+          <path d="M16 2v4" />
+          <rect width="18" height="18" x="3" y="4" rx="2" />
+          <path d="M3 10h18" />
+        </g>
+      </defs>
+    </svg>
+  </body>
+</html>
