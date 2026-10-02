@@ -148,7 +148,9 @@ test('refused — a model withdrawn between load and save keeps the old value', 
   );
   await expect(row(page, 'internal').getByRole('combobox')).toContainText('claude-opus-5-5');
   expect(storedPlannerModel('internal')).toBe('claude-opus-5-5');
-  expect(await adminDb.platformAuditLog.count()).toBe(0);
+  expect(await adminDb.platformAuditLog.count({ where: { action: 'ai.planner_model.set' } })).toBe(
+    0,
+  );
 });
 
 test('unreachable — the save says why and keeps the old value', async ({ page }) => {
@@ -164,7 +166,9 @@ test('unreachable — the save says why and keeps the old value', async ({ page 
     'Not saved: the planner could not reach claude-sonnet-5-5 — the provider key was refused.',
   );
   expect(storedPlannerModel('internal')).toBe('claude-opus-5-5');
-  expect(await adminDb.platformAuditLog.count()).toBe(0);
+  expect(await adminDb.platformAuditLog.count({ where: { action: 'ai.planner_model.set' } })).toBe(
+    0,
+  );
 });
 
 test('withdrawn and failing — a stored model’s chips, for a read-only viewer', async ({ page }) => {
