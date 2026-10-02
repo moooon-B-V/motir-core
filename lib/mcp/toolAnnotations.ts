@@ -300,6 +300,20 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: true,
     openWorldHint: false,
   },
+  // W: workItemTodos.ts → workItemTodosService.updateTodo — overwrites the step's fields; every non-empty patch records a revision
+  update_work_item_todo: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  // W: workItemTodos.ts → workItemTodosService.deleteTodo — deletes; a repeat finds nothing
+  delete_work_item_todo: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   // W: addLesson.ts → projectLessonsService.addLesson → motir-ai POST /v1/lessons — additive; a near-duplicate is refused
   add_lesson: {
     readOnlyHint: false,

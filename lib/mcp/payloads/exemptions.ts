@@ -137,6 +137,13 @@ export const EXEMPT_TOOLS = {
     'Returns the ticked (or unticked) step and the list’s progress — `{ workItemKey, todo, ' +
     'progress }`. Same boundary as its two siblings. `progress` is read inside the tick’s own ' +
     'transaction, so it describes the list the tick produced (MOTIR-6725).',
+  update_work_item_todo:
+    'Returns the edited step and the list’s progress — `{ workItemKey, todo, progress }`. Same ' +
+    'boundary as its siblings: no `/api/v1` operation writes a committed card’s to-do (MOTIR-7306).',
+  delete_work_item_todo:
+    'Returns WHAT WAS REMOVED and the list’s new progress — `{ workItemKey, removed: { id, text ' +
+    '}, progress }`. Same boundary as its siblings. `progress` is load-bearing: removing a step ' +
+    'moves the denominator a caller renders (MOTIR-7306).',
   touch_work_item_repair:
     'Returns a REPAIR RUN’s liveness — `{ key, runId, open, status, stopReason, startedAt, ' +
     'endedAt, lastHeartbeatAt }` — the answer an agent holding a repair acts on (stop when ' +

@@ -996,6 +996,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Tick or untick one step of a work item’s to-do list. Ticking the last step does not change the work item’s status.',
     descriptionFingerprint: 'c69111aa37be',
   },
+  update_work_item_todo: {
+    summary:
+      'Edit one step of a work item’s to-do list. Only the fields you send change; null clears an optional one.',
+    descriptionFingerprint: '81aace704cbf',
+  },
+  delete_work_item_todo: {
+    summary: 'Permanently delete one step of a work item’s to-do list.',
+    descriptionFingerprint: '9857d5a3fee8',
+  },
   add_lesson: {
     summary:
       'Record a lesson for this project, so later plans for it are given the lesson. This project only.',

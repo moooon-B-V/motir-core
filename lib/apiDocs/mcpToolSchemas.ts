@@ -1113,6 +1113,26 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  delete_work_item_todo: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      todoId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The step’s id, as `list_work_item_todos` or `add_work_item_todo` returned it. A step on another work item is refused as not found.',
+      },
+    },
+    required: ['key', 'todoId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   dispatch_prompt: {
     type: 'object',
     properties: {
@@ -3092,6 +3112,47 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  update_work_item_todo: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      todoId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The step’s id, as `list_work_item_todos` or `add_work_item_todo` returned it. A step on another work item is refused as not found.',
+      },
+      text: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The step’s new text — ONE operation, in plain text, at most 200 characters. Omitted ⇒ unchanged.',
+      },
+      notesMd: {
+        type: ['string', 'null'],
+        description:
+          'New instructions for the step, in Markdown, at most 2000 characters. Omitted ⇒ unchanged; null clears them.',
+      },
+      commandText: {
+        type: ['string', 'null'],
+        description:
+          'New command for the step, at most 500 characters. Omitted ⇒ unchanged; null clears it.',
+      },
+      executor: {
+        anyOf: [{ type: 'string', enum: ['coding_agent', 'human'] }, { type: 'null' }],
+        description:
+          'Who the step is for: "human" or "coding_agent". Omitted ⇒ unchanged; null clears it.',
+      },
+    },
+    required: ['key', 'todoId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   validate_plan: {
     type: 'object',
     properties: {
@@ -3222,6 +3283,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   delete_folder: 'Delete folder',
   delete_sprint: 'Delete sprint',
   delete_work_item: 'Delete work item',
+  delete_work_item_todo: 'Delete a to-do step',
   dispatch_prompt: 'Dispatch prompt',
   edit_comment: 'Edit comment',
   expand_item: 'Expand work item',
@@ -3272,6 +3334,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   update_plan_proposal: 'Correct a proposal, including its structure',
   update_sprint: 'Update sprint',
   update_work_item: 'Update work item',
+  update_work_item_todo: 'Edit a to-do step',
   validate_plan: 'Validate a plan before anybody reviews it',
   validate_sprint: 'Validate sprint finishability',
   validate_work_item: 'Validate work-item finishability',
@@ -3450,6 +3513,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   },
   delete_work_item: {
     title: 'Delete work item',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  delete_work_item_todo: {
+    title: 'Delete a to-do step',
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: true,
@@ -3707,6 +3777,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: true,
+    openWorldHint: false,
+  },
+  update_work_item_todo: {
+    title: 'Edit a to-do step',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
     openWorldHint: false,
   },
   validate_plan: {
