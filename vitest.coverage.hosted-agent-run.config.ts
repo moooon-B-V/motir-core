@@ -48,6 +48,11 @@ export default defineConfig({
       'tests/components/ContinueHostedDoor.test.tsx',
       'tests/components/continue-part.test.tsx',
       'tests/components/RunHostedDoor.test.tsx',
+      // Story MOTIR-7261 · MOTIR-7262 / MOTIR-7264 — the continue claim's MCP door
+      // grew this service (the agent claim's beat, touch, close and the own-run
+      // read); its own suites measure what it added.
+      'tests/mcp/workItemContinueTool.test.ts',
+      'tests/mcp/workItemContinue-transport.test.ts',
       // Story MOTIR-6590 · MOTIR-6879 — Continue hosted lifted into a control any
       // surface can place; the door's floor follows the code it moved.
       'tests/components/continue-hosted-control.test.tsx',

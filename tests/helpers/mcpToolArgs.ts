@@ -126,11 +126,18 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     list_work_item_todos: { key: t.item1 },
     add_work_item_todo: { key: t.item1, text: 'leak?' },
     set_work_item_todo_done: { key: t.item1, todoId: 'tdo_whatever', done: true },
+    // MOTIR-7306 — edit and delete are item-keyed too: no edited or removed step.
+    update_work_item_todo: { key: t.item1, todoId: 'tdo_whatever', text: 'leak?' },
+    delete_work_item_todo: { key: t.item1, todoId: 'tdo_whatever' },
     // MOTIR-6807 — the repair tools are item-keyed too: a non-member reads
     // A's card as not-found, so no run opens, beats or closes.
     claim_work_item_repair: { key: t.item1 },
     touch_work_item_repair: { key: t.item1, runId: 'run_whatever' },
     close_work_item_repair: { key: t.item1, runId: 'run_whatever', outcome: 'gave_up' },
+    // MOTIR-7262 — the continue tools, item-keyed the same way.
+    claim_work_item_continue: { key: t.item1 },
+    touch_work_item_continue: { key: t.item1, runId: 'run_whatever' },
+    close_work_item_continue: { key: t.item1, runId: 'run_whatever', outcome: 'completed' },
     // MOTIR-3361 — aimed at tenant A's PROJECT: a non-member must read the
     // key as not-found rather than write a standing planner instruction
     // into somebody else's project.

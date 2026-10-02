@@ -643,11 +643,18 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         list_work_item_todos: { key: item1 },
         add_work_item_todo: { key: item1, text: 'scoped step' },
         set_work_item_todo_done: { key: item1, todoId: 'tdo_scoped', done: true },
+        // MOTIR-7306 — edit and delete are `work_item:edit` too: REFUSED at the gate.
+        update_work_item_todo: { key: item1, todoId: 'tdo_scoped', text: 'scoped edit' },
+        delete_work_item_todo: { key: item1, todoId: 'tdo_scoped' },
         // MOTIR-6807 — the caller's OWN card; all three are `work_item:edit`, so
         // the read-only-token loop asserts each is REFUSED at the gate.
         claim_work_item_repair: { key: item1 },
         touch_work_item_repair: { key: item1, runId: 'run_scoped' },
         close_work_item_repair: { key: item1, runId: 'run_scoped', outcome: 'gave_up' },
+        // MOTIR-7262 — the continue tools, the same three `work_item:edit` writes.
+        claim_work_item_continue: { key: item1 },
+        touch_work_item_continue: { key: item1, runId: 'run_scoped' },
+        close_work_item_continue: { key: item1, runId: 'run_scoped', outcome: 'completed' },
         // MOTIR-3361 — the caller's OWN project. A write-scoped tool, so the
         // read-only-token loop asserts it is REFUSED at the scope gate rather
         // than reaching motir-ai.

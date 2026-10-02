@@ -606,14 +606,30 @@ export function renderAcceptanceRerunPrompt(input: AcceptanceRerunInput): string
 }
 
 /**
+ * The checkout read that decides WHO publishes an acceptance receipt (MOTIR-7254) —
+ * byte-identical to motir-core's dispatch prompt (`ACCEPTANCE_LANE_PUBLISHES_CHECK` in
+ * `lib/dispatch/promptTemplate.ts`). This package cannot import the server's module, so
+ * the string is repeated here and pinned by `acceptanceRerunPrompt.test.ts`. A file
+ * printed ⇒ the repository's acceptance lane carries the uploader and publishes from a
+ * green pull-request run (motir-core, starter-generated projects); nothing ⇒ no lane
+ * publishes, and the agent does.
+ */
+export const ACCEPTANCE_LANE_PUBLISHES_CHECK =
+  "grep -rlE 'uses:\\s*\\./\\.github/actions/upload-acceptance-video' .github/workflows/";
+
+/**
  * THE CLOSING TURN of an acceptance Re-run (MOTIR-6502) — sent once CI is green on the
- * fixed work: re-record the story's acceptance video and PUBLISH it, so a fresh
+ * fixed work: get a fresh receipt for the fixed work onto the story, so a fresh
  * acceptance question is asked, with the merge beside it
  * (`acceptance-refusal-verdict.md` §3's release).
  *
- * ⚠️ THE PUBLISH IS THE DELIVERABLE, AND NOTHING ELSE MAKES IT. No CI lane uploads a
- * recording; an agent that records and does not publish leaves the story with no new
- * question and its merge held for ever. The confirmation is the receipt id.
+ * WHO PUBLISHES IS A READ OF THE CHECKOUT (MOTIR-7254). Since MOTIR-7253 a repository
+ * whose acceptance lane carries the `upload-acceptance-video` action publishes the
+ * receipt from the green pull-request run itself — the run that made this turn possible
+ * — so the agent there makes NO MCP publish: it confirms the spec is green and reports
+ * that the lane published. Anywhere else nothing but this turn publishes: an agent that
+ * records and does not publish leaves the story with no new question and its merge held
+ * for ever, and the confirmation is the receipt id.
  */
 export function renderAcceptanceRecordPrompt(input: AcceptanceRerunInput): string {
   const lines: string[] = [];
@@ -629,17 +645,37 @@ export function renderAcceptanceRecordPrompt(input: AcceptanceRerunInput): strin
   lines.push('');
   lines.push('## What to do');
   lines.push('');
-  lines.push("1. **Run the story's acceptance spec** (`tests/e2e/acceptance*.spec.ts`, the one");
+  lines.push('1. **Find out who publishes the receipt.** In the checkout that holds the');
+  lines.push('   acceptance spec, run:');
+  lines.push('');
+  lines.push(`       ${ACCEPTANCE_LANE_PUBLISHES_CHECK}`);
+  lines.push('');
+  lines.push('   **If it prints a file**, that repository\u2019s acceptance lane publishes the');
+  lines.push('   receipt itself, from the green pull-request run on the commit you pushed. Make');
+  lines.push(
+    '   NO MCP publish. Run the story\u2019s acceptance spec only to confirm it is green,',
+  );
+  lines.push(
+    '   then report: \u201cthe repository\u2019s acceptance lane published the receipt on',
+  );
+  lines.push('   CI\u2019s green run; no MCP publish made\u201d, naming that run (its');
+  lines.push(
+    '   `Publish the acceptance receipt` step logs the receipt id). Steps 2\u20134 do not',
+  );
+  lines.push('   apply.');
+  lines.push('');
+  lines.push('   **If it prints nothing**, no lane publishes there, and steps 2\u20134 are yours.');
+  lines.push("2. **Run the story's acceptance spec** (`tests/e2e/acceptance*.spec.ts`, the one");
   lines.push(`   that declares \`acceptanceStory('${input.key}')\`) on the acceptance lane, with`);
   lines.push('   recording on, so the clip shows the fixed work.');
-  lines.push('2. **Publish it — two calls.** `create_acceptance_upload` with the card key mints a');
+  lines.push('3. **Publish it — two calls.** `create_acceptance_upload` with the card key mints a');
   lines.push(
     '   presigned PUT; PUT the clip\u2019s bytes to it (`Content-Type: video/webm`); then',
   );
   lines.push('   `publish_acceptance_result` with the pathname it returned, the chapters, the');
   lines.push('   commit sha you pushed, and the card key.');
   lines.push(
-    '3. **Report the receipt id the publish returned.** Without it nothing was published,',
+    '4. **Report the receipt id the publish returned.** Without it nothing was published,',
   );
   lines.push('   and the reviewer has nothing new to watch.');
   lines.push('');

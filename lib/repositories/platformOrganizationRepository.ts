@@ -58,6 +58,18 @@ export const platformOrganizationRepository = {
     });
   },
 
+  /**
+   * The organizations behind ids a remote spend list returned (MOTIR-7287), so the
+   * Tenants page can name its rows — one `IN` read, never a scan.
+   */
+  async findOrganizationsByIds(
+    ids: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Organization[]> {
+    if (ids.length === 0) return [];
+    return tx.organization.findMany({ where: { id: { in: ids } } });
+  },
+
   /** One organization by id, or null. */
   async findOrganizationById(
     organizationId: string,

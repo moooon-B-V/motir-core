@@ -955,6 +955,21 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'End your repair of a work item with how it went, so the page shows it and a new repair may start.',
     descriptionFingerprint: '1b8e5165724b',
   },
+  claim_work_item_continue: {
+    summary:
+      'Take over a work item whose last run died, as `motir continue` does: its branch and pull requests, not a fresh start.',
+    descriptionFingerprint: 'f825bce8044b',
+  },
+  touch_work_item_continue: {
+    summary:
+      'Keep your continue of a work item alive. A continue silent for five minutes is closed and its lock released.',
+    descriptionFingerprint: 'e752b186c478',
+  },
+  close_work_item_continue: {
+    summary:
+      'End your continue of a work item with how it went, so the page shows it and the card can be continued again.',
+    descriptionFingerprint: '5065a62ce4e3',
+  },
   add_comment: {
     summary: 'Post a Markdown comment as the token owner. Mentions notify the member named.',
     descriptionFingerprint: '81d096a6d087',
@@ -980,6 +995,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     summary:
       'Tick or untick one step of a work item’s to-do list. Ticking the last step does not change the work item’s status.',
     descriptionFingerprint: 'c69111aa37be',
+  },
+  update_work_item_todo: {
+    summary:
+      'Edit one step of a work item’s to-do list. Only the fields you send change; null clears an optional one.',
+    descriptionFingerprint: '81aace704cbf',
+  },
+  delete_work_item_todo: {
+    summary: 'Permanently delete one step of a work item’s to-do list.',
+    descriptionFingerprint: '9857d5a3fee8',
   },
   add_lesson: {
     summary:

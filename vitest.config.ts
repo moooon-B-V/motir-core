@@ -197,6 +197,12 @@ export default defineConfig({
         // branch against the story's own specs (`workItemTodosTool.test.ts` +
         // `workItemTodos-transport.test.ts`): 100 / 100 / 100 / 100.
         'lib/mcp/tools/workItemTodos.ts',
+        // Story MOTIR-7261 · MOTIR-7264 — the continue tools' MCP adapter. Pinned at
+        // the project floor in `thresholds` below after being MEASURED on this
+        // branch against the story's own specs (`workItemContinueTool.test.ts` +
+        // `workItemContinue-transport.test.ts`): 100 / 90.62 / 100 / 100. Its
+        // service, `workItemContinueService.ts`, is already gated.
+        'lib/mcp/tools/workItemContinue.ts',
         // Story MOTIR-6574 · MOTIR-6584 — the OBSOLESCENCE story's two NEW modules
         // (the scale's one list, and the MCP write fields + text-block lines) and
         // the relationship model it widened with the `supersedes` pair, which had
@@ -3082,6 +3088,12 @@ export default defineConfig({
         // Pinned at the floor, not at what was measured, so the gate stays about
         // regressions rather than ratcheting on the next unrelated line.
         'lib/mcp/tools/workItemTodos.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mcp/tools/workItemContinue.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

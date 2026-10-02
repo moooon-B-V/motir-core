@@ -34,15 +34,18 @@ import {
 // `acceptance*.spec.ts` pattern so acceptance specs never run in the bulk
 // shards (video:'retain-on-failure' + no upload step).
 //
-// ⚠️ WHO PUBLISHES — CHANGED 2026-09-01 (MOTIR-4096). This lane's `outputDir`
-// used to be read by a CI uploader (`scripts/upload-acceptance-video.mjs`),
-// which POSTed the video + trace + chapters to the publish endpoint
-// (MOTIR-1631). That uploader is RETIRED: the receipt is published by the AGENT
-// that recorded it, and the lane's job now ends at the Playwright report
-// artifact the clips and sidecars land in.
+// ⚠️ WHO PUBLISHES — THE LANE AGAIN, SINCE 2026-10-01 (MOTIR-7253). This lane's
+// `outputDir` is read by the CI uploader (`scripts/upload-acceptance-video.mjs`,
+// through `.github/actions/upload-acceptance-video`), which POSTs the video +
+// trace + chapters of each spec the PR changed to the publish endpoint
+// (MOTIR-1631) from a green pull-request run, over keyless OIDC. From 2026-09-01
+// (MOTIR-4096) until then that uploader was retired and the AGENT published;
+// the dispatch prompt now reads the checkout and stands the agent down here
+// (MOTIR-7254), while an agent in a repository with no such lane still
+// publishes over MCP.
 //
-// ⚠️ AND THE DOOR IT PUBLISHES THROUGH DID NOT EXIST UNTIL MOTIR-4704. This
-// paragraph said "through the Motir MCP surface" for four days while the MCP
+// ⚠️ THE MCP DOOR DID NOT EXIST UNTIL MOTIR-4704 — kept as the history of why it
+// is there. This paragraph said "through the Motir MCP surface" for four days while the MCP
 // surface had no acceptance publisher on it at all — so an agent that read this
 // file, searched its tool palette and found nothing had been told, accurately,
 // to use a door that was not there. The door is now `create_acceptance_upload`
@@ -132,6 +135,11 @@ const MOTIR_AI_JOBS_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-ai-jobs-f
 process.env['MOTIR_AI_JOBS_FIXTURE_PATH'] ??= MOTIR_AI_JOBS_FIXTURE_PATH;
 process.env['MOTIR_CLOUD'] ??= 'true';
 process.env['MOTIR_AI_BILLING_FIXTURE_PATH'] ??= MOTIR_AI_BILLING_FIXTURE_PATH;
+// The operator console's platform usage reads (Story MOTIR-727 · MOTIR-735,
+// `lib/test-platform-usage-mock.ts`): a spec writes the estate it walks here, and
+// the webServer's mock answers from it — the same two-sided path as the billing file.
+const MOTIR_AI_PLATFORM_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-platform-fixture.json');
+process.env['MOTIR_AI_PLATFORM_FIXTURE_PATH'] ??= MOTIR_AI_PLATFORM_FIXTURE_PATH;
 
 // ── The GitHub repo-provisioning seam (MOTIR-1785) ───────────────────────────
 //
@@ -472,6 +480,8 @@ export default defineConfig({
         // lives with the helper that signs with it.
         MOTIR_AI_TO_CORE_SERVICE_TOKEN: E2E_AI_TO_CORE_SERVICE_TOKEN,
         MOTIR_AI_BILLING_FIXTURE_PATH,
+        E2E_TEST_PLATFORM_USAGE: '1',
+        MOTIR_AI_PLATFORM_FIXTURE_PATH,
         // The GitHub repo-provisioning + collaborator boundary (MOTIR-1785).
         E2E_TEST_GITHUB_REPOS: '1',
         MOTIR_GITHUB_CONTROL_PATH,

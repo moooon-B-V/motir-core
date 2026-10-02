@@ -117,6 +117,30 @@ describe('the repository SET on the detail rail', () => {
   });
 });
 
+describe('a state this bundle does not know (MOTIR-7298)', () => {
+  // The quick view reads the set over HTTP, so a tab built before a state was
+  // added can be sent it — `delivered_without_change_request` reached a
+  // pre-MOTIR-7180 client on /roadmap and `DELIVERY_META[state].icon` threw.
+  const fromNewerServer = 'shipped_some_new_way' as RepoDelivery['state'];
+
+  it('renders the row as Unknown instead of throwing', () => {
+    renderField({ delivery: [d('motir-core', 'delivered', true), d('motir-ai', fromNewerServer)] });
+
+    const rows = screen.getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(within(rows[1]!).getByText('motir-ai')).toBeTruthy();
+    expect(within(rows[1]!).getAllByText(t.repositoryDelivery.unknown).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText('motir-ai merged, but Motir has no record of which branch.'),
+    ).toBeTruthy();
+  });
+
+  it('survives the quick-view compression too', () => {
+    renderField({ delivery: [d('motir-core', fromNewerServer, true)], compact: true });
+    expect(screen.getByText('motir-core')).toBeTruthy();
+  });
+});
+
 describe('the EMPTY set — a deliberate state, not a hole', () => {
   it('reads the shipped word for nothing, plus one line saying it was allowed', () => {
     renderField({ delivery: [] });

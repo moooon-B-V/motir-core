@@ -3668,7 +3668,6 @@
         "modelDefault": "Default",
         "modelDefaultSecondary": "recommended",
         "modelThorough": "Thorough",
-        "modelFast": "Fast",
         "dataPracticeCommitment": "Neither Motir nor its gateway trains on this project's content.",
         "dataPracticeReport": "What a provider does with a request once it reaches them is that provider's own published position.",
         "dataPracticeLink": "What each provider states"
@@ -8410,7 +8409,6 @@
       "users": "Users",
       "monitoring": "Monitoring",
       "governance": "Governance",
-      "soonUsage": "10.1",
       "soonGovernance": "10.3"
     },
     "topBar": {
@@ -8419,11 +8417,43 @@
       "searchPlaceholder": "Search organizations, workspaces, projects, users…"
     },
     "overview": {
-      "breadcrumb": "Platform · Overview",
       "title": "Platform overview",
-      "subtitle": "The whole estate at a glance — how many organizations, workspaces, projects and users Motir hosts, and what's happened recently across every tenant. Read-only; tenant governance lives in the Governance toolkit.",
-      "pendingTitle": "The estate is not wired up yet",
-      "pendingDescription": "The counts and the activity feed read across every tenant, which is the audited cross-tenant read layer — a separate work item. This console's gate, its audit trail and this shell are in place; the numbers arrive with them."
+      "subtitle": "The whole estate at a glance — how many organizations, workspaces, projects and users Motir hosts, and what has happened recently across every tenant. Read-only.",
+      "periodLabel": "Period",
+      "period": {
+        "7d": "7 days",
+        "30d": "30 days",
+        "month": "this month"
+      },
+      "counts": {
+        "organizations": "Organizations",
+        "workspaces": "Workspaces",
+        "projects": "Projects",
+        "users": "Users"
+      },
+      "delta": "+{count, number} in the last {period}",
+      "feed": {
+        "title": "Recent activity",
+        "when": "When",
+        "event": "Event",
+        "where": "Where",
+        "detail": "Detail",
+        "kind": {
+          "new_organization": "New organization",
+          "new_workspace": "New workspace",
+          "new_project": "New project",
+          "planning_run": "Planning run",
+          "coding_run": "Agent run"
+        },
+        "unattributed": "(unattributed)",
+        "runDetail": "{model} · {credits} credits",
+        "runsUnavailable": "Runs can't be shown right now — the AI service did not answer. Tenant events and counts below are current.",
+        "emptyTitle": "Nothing has happened yet on this page",
+        "emptyDescription": "No tenant was created and no run was recorded before this point.",
+        "emptyEstateTitle": "The estate is empty",
+        "emptyEstateDescription": "No organization exists yet. New organizations, workspaces, projects and runs will appear here.",
+        "older": "Show older activity"
+      }
     },
     "users": {
       "breadcrumb": "Platform · Users",
@@ -8725,23 +8755,8 @@
       }
     },
     "orgs": {
-      "breadcrumb": "Platform · Tenants",
-      "breadcrumbAria": "Breadcrumb",
-      "crumbPlatform": "Platform",
-      "crumbTenants": "Tenants",
       "title": "Organizations",
       "subtitle": "Find an organization by name or slug. Opening one is an audited cross-tenant read.",
-      "searchLabel": "Name or slug",
-      "searchPlaceholder": "moooon, acme, northwind…",
-      "searchSubmit": "Search",
-      "tooShort": "Enter at least {n} characters.",
-      "idleTitle": "Search for an organization",
-      "idleDescription": "Type a name or slug above. Results are limited to {n}; every match you open is recorded in the audit log.",
-      "noneTitle": "No organizations match “{query}”",
-      "noneDescription": "Check the spelling, or search by slug. An organization that exists but is not shown is a bug — this lookup reads every tenant, not only the ones you belong to.",
-      "resultsTitle": "Results",
-      "resultsCount": "{n, plural, one {# organization} other {# organizations}}",
-      "capped": "Showing the first {n} matches. Narrow the query to see the rest.",
       "auditBanner": "You are viewing {name} as platform staff. This cross-tenant read is recorded in the audit log (operator {operator}).",
       "createdAt": "Created {at}",
       "paidAiPlan": "Paid AI plan",
@@ -8750,15 +8765,6 @@
       "chip": {
         "isMeta": "isMeta",
         "internalBilling": "internalBilling"
-      },
-      "pending": {
-        "usageTitle": "Usage & cost",
-        "usageEmptyTitle": "Not built yet",
-        "membersTitle": "Members",
-        "membersEmptyTitle": "Not built yet",
-        "jobsTitle": "Recent jobs",
-        "jobsEmptyTitle": "Not built yet",
-        "broughtBy": "This panel is {owner}’s. It is drawn as a reserved region rather than a placeholder figure — a zero here would look like an answer."
       },
       "action": {
         "classify": "Classify as internal billing",
@@ -8844,6 +8850,307 @@
           "cogs": "Internal COGS"
         },
         "absentLine": "absent — no {workload} container ran this period (not a zero)"
+      }
+    },
+    "usage": {
+      "title": "Usage & cost",
+      "subtitle": "What the whole estate used, what it was charged and what it cost Motir — by spending category and by model, for any month or all time. Each organization's figures are on Tenants.",
+      "showing": "Showing {period}",
+      "period": {
+        "label": "Period",
+        "month": "Month",
+        "allTime": "All time"
+      },
+      "units": {
+        "tokens": "tokens",
+        "minutes": "min",
+        "gbDays": "GB-days",
+        "searches": "searches",
+        "credits": "credits"
+      },
+      "figures": {
+        "charged": "Credits charged",
+        "cost": "Motir cost",
+        "machine": "Machine minutes",
+        "orgs": "Organizations with spend"
+      },
+      "categories": {
+        "title": "The estate by category",
+        "category": "Category",
+        "usage": "Usage",
+        "credits": "Credits",
+        "cost": "Motir cost",
+        "notCharged": "not charged",
+        "chargedTotal": "Charged total",
+        "totalInclIndexing": "Total incl. indexing"
+      },
+      "category": {
+        "planning_tokens": "Planning tokens",
+        "agent_tokens": "Agent-run tokens",
+        "agent_machine": "Agent-run machine",
+        "agent_instance": "Agent instances",
+        "agent_storage": "Agent storage",
+        "ci": "CI",
+        "search": "Web search",
+        "indexing": "Indexing"
+      },
+      "models": {
+        "title": {
+          "planning_tokens": "Planning tokens by model",
+          "agent_tokens": "Agent-run tokens by model"
+        },
+        "model": "Model",
+        "input": "Input",
+        "output": "Output",
+        "cacheRead": "Cache read",
+        "cacheWrite": "Cache write",
+        "orgs": "Orgs using it",
+        "credits": "Credits",
+        "cost": "Motir cost",
+        "empty": "No model was used in this period."
+      },
+      "unavailable": {
+        "title": "Usage can't be shown right now",
+        "description": "The AI service that keeps the usage rollup did not answer. Nothing is wrong with the figures — try again in a moment."
+      }
+    },
+    "tenants": {
+      "title": "Tenants",
+      "subtitle": "Every organization's spend for the period — credits per category, indexing minutes, the charged total and what it cost Motir. Open an organization for its workspaces, projects and billing.",
+      "filterLabel": "Filter organizations",
+      "filterPlaceholder": "Filter by name or slug",
+      "listTitle": "Organizations",
+      "estateRow": "Estate total (all organizations)",
+      "columns": {
+        "organization": "Organization",
+        "charged": "Charged",
+        "cost": "Motir cost",
+        "minutes": "min"
+      },
+      "none": "No organization has spend in this period.",
+      "noneFiltered": "No organization matching “{filter}” has spend in this period.",
+      "filterCapped": "The filter matches more organizations than one list shows — narrow it to see the rest.",
+      "showMore": "Show more",
+      "loading": "Loading…",
+      "moreFailed": "More organizations can't be loaded right now — try again in a moment.",
+      "unavailable": {
+        "title": "The list can't be shown right now",
+        "description": "The AI service that keeps the usage rollup did not answer. Try again in a moment."
+      }
+    },
+    "orgPage": {
+      "back": "Tenants",
+      "tabsLabel": "Organization sections",
+      "tabs": {
+        "overview": "Overview",
+        "usage": "Usage & cost",
+        "billing": "Billing & plans"
+      },
+      "month": {
+        "title": "Usage & cost · {month}",
+        "open": "Open Usage & cost",
+        "category": "Category",
+        "credits": "Credits",
+        "cost": "Motir cost",
+        "notCharged": "not charged",
+        "total": "Total",
+        "unavailable": "This month's usage can't be shown right now — the AI service did not answer."
+      },
+      "members": {
+        "title": "Members",
+        "empty": "This organization has no members.",
+        "next": "Next members",
+        "first": "First members",
+        "role": {
+          "owner": "Owner",
+          "admin": "Admin",
+          "member": "Member"
+        }
+      },
+      "workspaces": {
+        "title": "Workspaces",
+        "empty": "This organization has no workspaces.",
+        "name": "Workspace",
+        "projects": "Projects",
+        "members": "Members",
+        "credits": "Credits this month",
+        "spendUnavailable": "This month's credits can't be shown right now — the AI service did not answer.",
+        "more": "More workspaces exist than this list shows."
+      },
+      "jobs": {
+        "title": "Recent jobs",
+        "empty": "No planning or agent run was recorded for this organization.",
+        "unavailable": "Recent jobs can't be shown right now — the AI service did not answer.",
+        "newer": "Newer",
+        "older": "Older"
+      }
+    },
+    "orgUsage": {
+      "scope": "Scope",
+      "wholeOrg": "{name} (whole organization)",
+      "showing": "Showing {scope} · {period}",
+      "figures": {
+        "charged": "Credits charged",
+        "cost": "Motir cost (incl. indexing)",
+        "machine": "Machine minutes",
+        "balance": "Credit balance now",
+        "split": {
+          "agentRun": "agent runs {minutes}",
+          "instances": "instances {minutes}",
+          "ci": "CI {minutes}",
+          "indexing": "indexing {minutes}"
+        }
+      },
+      "sheet": {
+        "title": "By category and model",
+        "category": "Category",
+        "usage": "Usage",
+        "credits": "Credits",
+        "cost": "Motir cost",
+        "notCharged": "not charged",
+        "models": "{count, plural, one {# model} other {# models}}",
+        "chargedTotal": "Charged total",
+        "totalInclIndexing": "Total incl. indexing",
+        "orgLevel": {
+          "workspace": "Org-level — not split by workspace",
+          "project": "Org-level — not split by project"
+        }
+      },
+      "unavailable": {
+        "title": "Usage can't be shown right now",
+        "description": "The AI service that keeps the usage rollup did not answer. The organization's own details above are current."
+      },
+      "children": {
+        "title": "By workspace and project",
+        "workspace": "Workspace",
+        "project": "Project",
+        "indexingMinutes": "Indexing (min)",
+        "charged": "Charged",
+        "cost": "Motir cost",
+        "empty": "Nothing beneath this scope spent in the period.",
+        "loading": "Loading projects…",
+        "projectsUnavailable": "This workspace's projects can't be shown right now.",
+        "noProjects": "No project in this workspace spent in the period.",
+        "noProject": "Agent runs with no project",
+        "orgLevel": "Org-level (not by project)",
+        "truncated": "Showing the 100 highest by Motir cost.",
+        "projectScope": "A project has no workspaces or projects beneath it.",
+        "unavailable": "This table can't be shown right now — the AI service did not answer."
+      },
+      "months": {
+        "title": "Month by month",
+        "month": "Month",
+        "indexingMinutes": "Indexing (min)",
+        "charged": "Charged",
+        "cost": "Motir cost",
+        "allTime": "All time",
+        "empty": "No month has spend yet.",
+        "older": "Older months",
+        "newest": "Newest months",
+        "unavailable": "This table can't be shown right now — the AI service did not answer."
+      }
+    },
+    "orgBilling": {
+      "readOnly": "What {name}'s owner sees on their Billing & plans page, read-only: no Change plan, no Manage payment, no Customer Portal. Changing a tenant's plan or credits is Story 10.3.",
+      "disabled": {
+        "title": "Billing is not enabled",
+        "description": "This deployment does not bill — there is no plan, allotment or bill to show."
+      },
+      "unavailable": {
+        "title": "Billing can't be shown right now",
+        "description": "The billing reads did not answer. The organization's own details above are current."
+      },
+      "status": {
+        "active": "Active",
+        "past_due": "Past due",
+        "canceled": "Canceled",
+        "incomplete": "Incomplete",
+        "trialing": "Trialing",
+        "unpaid": "Unpaid",
+        "incomplete_expired": "Expired"
+      },
+      "seats": {
+        "title": "Motir",
+        "scaled": "Billed one seat per member — {members, number} today",
+        "free": "Free — not scaled ({members, number} members)"
+      },
+      "ai": {
+        "title": "Motir AI",
+        "plan": "Plan",
+        "allotment": "Allotment",
+        "balance": "Credits available",
+        "renews": "Renews",
+        "none": "No AI plan",
+        "perMonth": "{credits} credits / month"
+      },
+      "bill": {
+        "title": "This month's bill",
+        "line": "Line",
+        "basis": "Basis",
+        "amount": "Amount",
+        "lines": {
+          "seats": "Motir · seats",
+          "aiPlan": "Motir AI · plan fee",
+          "ci": "CI minutes over allowance",
+          "search": "Web search",
+          "agents": "Agents (machine + storage)"
+        },
+        "seatsBasis": {
+          "monthly": "{seats, number} seats × {unit} / month",
+          "annual": "{seats, number} seats × {unit} / year"
+        },
+        "aiBasis": {
+          "monthly": "{credits} credits / month",
+          "annual": "{credits} credits / month, billed yearly"
+        },
+        "drawnFromPool": "Drawn from the credit pool",
+        "credits": "{credits} credits",
+        "total": "Total",
+        "chargedOn": "charged on {date}"
+      },
+      "payment": {
+        "title": "Payment & invoices",
+        "notConnected": "The payment method and invoices aren't connected to the console yet.",
+        "unavailable": "The payment method and invoices can't be shown right now.",
+        "none": "No invoices yet.",
+        "noMethod": "No payment method on file",
+        "expires": "expires {month} / {year}",
+        "paidUp": "Paid up",
+        "invoice": "Invoice",
+        "status": "Status",
+        "amount": "Amount",
+        "invoiceStatus": {
+          "paid": "Paid",
+          "open": "Open",
+          "draft": "Draft",
+          "void": "Void",
+          "uncollectible": "Uncollectible"
+        }
+      }
+    },
+    "workspacePage": {
+      "auditBanner": "You are viewing {org} › {name} as platform staff ({operator}). This cross-tenant read is recorded in the audit log.",
+      "tabsLabel": "Workspace sections",
+      "projects": {
+        "title": "Projects · {month}",
+        "empty": "This workspace has no projects.",
+        "name": "Project",
+        "key": "Key",
+        "planning": "Planning",
+        "runsAndCi": "Agent runs + CI",
+        "charged": "Charged",
+        "spendUnavailable": "This month's spend can't be shown right now — the AI service did not answer."
+      },
+      "members": {
+        "empty": "This workspace has no members.",
+        "role": {
+          "manager": "Manager",
+          "member": "Member",
+          "viewer": "Viewer"
+        }
+      },
+      "jobs": {
+        "empty": "No attributed planning or agent run was recorded for this workspace."
       }
     }
   },

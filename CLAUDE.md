@@ -1059,26 +1059,31 @@ of a story working, which a human then approves. The full rule is
   watchable (the ≤ ~60s scope, the chaptering, the pacing). A clip under the 15s
   floor is reported as _unpublishable_, which is a different verdict from a
   failure.
-- **⚠️ YOU PUBLISH THE RECEIPT, and until MOTIR-4704 this section did not say so
-  — which is the whole of why that bug exists.** No CI lane uploads the
-  recording; MOTIR-4096 retired the one that did, because a publisher that must
-  be PRESENT in a repository is one no customer repository can meet. Two calls,
-  because a video is far larger than a tool argument can carry:
-  **`create_acceptance_upload`** with the card's key mints a short-lived
-  presigned PUT; **PUT the clip's bytes to that URL** with
-  `Content-Type: video/webm`; then **`publish_acceptance_result`** with the
-  `pathname` it returned, the chapters from `chapters.json`, the `commitSha` and
-  the card's key as `producedByKey`. Pass the E2E card's own key to both — a
-  receipt belongs to the STORY, and the server resolves up to it.
-- **⚠️ NOTHING ELSE MAKES THAT CALL, AND A MISSING PUBLISH LOOKS EXACTLY LIKE A
-  SUCCESSFUL RUN.** This is the design-result warning above, transposed, and it
-  is if anything sharper here: the acceptance GATE rests entirely on the receipt
-  existing, so a spec that goes green, a check that passes and a pull request
-  that merges leave behind a story nobody can watch working — and nothing
-  anywhere goes red. **The confirmation is the receipt `id` the call returns**,
-  and its `status` is `pending`: publishing is not accepting, a person still
-  watches it. A RED run publishes nothing, and that is correct — the receipt
-  records a green run or it records nothing.
+- **⚠️ IN THIS REPOSITORY THE LANE PUBLISHES THE RECEIPT — YOU DO NOT
+  (MOTIR-7253 / MOTIR-7254, 2026-10-01).** The `Acceptance tests` lane uploads
+  the recording from a GREEN pull-request run, over keyless GitHub OIDC, through
+  `.github/actions/upload-acceptance-video` — for every spec the PR changed, to
+  the story its `acceptanceStory()` declares. So an agent here pushes a spec that
+  declares `acceptanceStory('MOTIR-<n>')` and does **NOT** call
+  `create_acceptance_upload` / `publish_acceptance_result`. The receipt id to
+  report is in the lane run's `Publish the acceptance receipt` step log, and its
+  `status` is `pending`: publishing is not accepting, a person still watches it.
+  The dispatch prompt decides this per checkout with
+  `grep -rlE 'uses:\s*\./\.github/actions/upload-acceptance-video' .github/workflows/`
+  — a file printed means the lane publishes — which is how the same prompt stays
+  right in a repository with no such lane, where the agent still publishes over
+  MCP (two calls: mint a presigned PUT, PUT the `video/webm` bytes, register the
+  pathname with the chapters, the `commitSha` and the card's key as
+  `producedByKey`). From 2026-09-01 (MOTIR-4096) until then the agent published
+  here too; MOTIR-4704 is why the MCP door exists at all.
+- **⚠️ A MISSING RECEIPT STILL LOOKS EXACTLY LIKE A SUCCESSFUL RUN.** The
+  acceptance GATE rests entirely on the receipt existing, so a spec that goes
+  green, a check that passes and a pull request that merges can still leave a
+  story nobody can watch working. Here, that means a spec that does not declare
+  its story (the lane cannot attribute the clip), or a publish step that went red
+  — read the lane's publish step, not just its overall check. Where no lane
+  publishes, nothing but the agent makes the call. A RED run publishes nothing,
+  and that is correct — the receipt records a green run or it records nothing.
 
 ---
 

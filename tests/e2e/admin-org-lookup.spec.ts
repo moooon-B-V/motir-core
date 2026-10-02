@@ -30,7 +30,7 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-test('@smoke platform staff reach the org lookup and an org page; a tenant user gets a 404', async ({
+test('@smoke platform staff reach the Tenants list and an org page; a tenant user gets a 404', async ({
   page,
 }) => {
   // A tenant user, signed up through the real UI — this also mints their own
@@ -59,33 +59,34 @@ test('@smoke platform staff reach the org lookup and an org page; a tenant user 
 
   const lookup = await page.goto('/admin/tenants');
   expect(lookup?.status()).toBe(200);
+  // LIST-FIRST since MOTIR-7287 (design D10): no idle state — the Organizations
+  // card renders on arrival, as the spend table or, when the E2E stack runs no
+  // motir-ai, as the list's error state. Either way the page itself rendered.
+  await expect(page.getByRole('heading', { name: 'Tenants', level: 1 })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Organizations' })).toBeVisible();
-  // The idle state — the lookup answers a question and shows nothing until asked.
-  // BY ROLE (MOTIR-5115) — `EmptyState` renders its title as an `<h2>`, and the
-  // accessibility tree excludes the hidden streamed copy a page-rooted `getByText`
-  // would also match (MOTIR-4822's pattern). The `(admin)` layout renders no
-  // `<main>`, so the role is the only remedy here — and it is the better one.
-  await expect(page.getByRole('heading', { name: 'Search for an organization' })).toBeVisible();
 
-  // ── The GET form puts the query in the URL, which is the whole argument for
-  //    a form over a type-ahead: the result set is linkable and survives a
-  //    reload. Assert the URL, not just the rows.
-  // Scoped to the lookup's own `role="search"` form: the admin shell carries a
-  // (disabled) global search button whose accessible name also starts with
-  // "Search", and an unscoped match takes both.
-  const searchForm = page.getByRole('search');
-  await searchForm.getByRole('searchbox').fill(org.slug);
-  await searchForm.getByRole('button', { name: 'Search', exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/admin/tenants\\?q=${org.slug}`));
-  const row = page.getByRole('link', { name: new RegExp(org.slug) });
-  await expect(row).toBeVisible();
+  // ── The filter puts its query in the URL: a filtered list is linkable and
+  //    survives a reload. Scoped to the page's own `role="search"` form — the
+  //    admin shell carries a (disabled) global search button too.
+  const filter = page.getByRole('search').getByRole('searchbox');
+  await filter.fill(org.slug);
+  await filter.press('Enter');
+  await expect(page).toHaveURL(new RegExp(`/admin/tenants\\?.*q=${org.slug}`));
 
-  // ── The org page renders, and renders the RESERVED regions as empty states
-  //    naming the work item that brings them rather than as a placeholder figure.
-  await row.click();
+  // ── The org page renders. A row needs spend in motir-ai's rollup to appear,
+  //    which this fixture has none of, so it is opened by its id.
+  await page.goto(`/admin/tenants/${org.id}`);
   await expect(page).toHaveURL(new RegExp(`/admin/tenants/${org.id}`));
   await expect(page.getByRole('heading', { name: org.name })).toBeVisible();
-  await expect(page.getByText('MOTIR-733').first()).toBeVisible();
+  // The org page's frame (MOTIR-733, design D5): ← Tenants and the three tabs.
+  await expect(page.getByRole('link', { name: 'Tenants' }).first()).toBeVisible();
+  const tabs = page.getByRole('navigation', { name: 'Organization sections' });
+  await expect(tabs.getByRole('link', { name: 'Overview' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(tabs.getByRole('link', { name: 'Usage & cost' })).toBeVisible();
+  await expect(tabs.getByRole('link', { name: 'Billing & plans' })).toBeVisible();
 
   // ── And the read wrote its audit row. The banner on screen claims it; this is
   //    the claim checked against the table, because a banner beside a read that

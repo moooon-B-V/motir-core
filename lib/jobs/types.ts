@@ -316,6 +316,17 @@ export interface BillingSeatSyncData {
 }
 
 /**
+ * The `system.platform-meter-report` event payload (Story MOTIR-727 · MOTIR-5286) —
+ * ONE settled fleet container to report to motir-ai's platform usage rollup, named
+ * by the key the settle path holds. The job re-reads the row, so a retry always
+ * sends the row's own id as the receiver's idempotency key.
+ */
+export type PlatformMeterReportData =
+  | { containerProvider: string; handleId: string }
+  /** One CHARGED agent-storage day (MOTIR-7294), by its charge row. */
+  | { storageChargeId: string };
+
+/**
  * The `system.code-graph-index` event payload (Story 7.5 · MOTIR-1500) — one per
  * NEWLY-ADDED GitHub repo, enqueued best-effort AFTER the installation's repos
  * persist (`enqueueCodeGraphIndex`, from the webhook reconcile + the fresh-install
@@ -587,6 +598,8 @@ export interface JobEventDataMap {
   'system.ci-runner-boot': CiRunnerBootData;
   'system.fleet-attribution': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
+  /** A settled fleet container's usage-and-cost report to motir-ai (MOTIR-5286). */
+  'system.platform-meter-report': PlatformMeterReportData;
   'system.code-graph-index': CodeGraphIndexData;
   'system.code-graph-refresh': CodeGraphRefreshData;
   'filter-subscription/deliver': FilterSubscriptionDeliverData;

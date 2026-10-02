@@ -115,6 +115,46 @@
     dispatched agent in a repository Motir does not own has neither of. That is
     the same requirement the retired script could not meet, one layer up. MCP is
     the door that travels, on a credential the runner already holds.
+- **Amendment (2026-10-01, decided by Yue; applied by MOTIR-7253) — CI PUBLISHES
+  AGAIN WHERE THE REPOSITORY'S LANE CARRIES THE UPLOADER.** For the repositories
+  Motir writes itself — motir-core, and every project generated from
+  `nextjs-prisma-vercel-starter` (which is what a Motir-hosted repository is seeded
+  from, `lib/github/repoProvisioning.ts`) — CI is the more reliable publisher of
+  the receipt, so the uploader returns. The 2026-09-01 amendment made the receipt
+  exist only if the agent remembered two calls and could reach MCP from its
+  sandbox, and a missing receipt looks exactly like a successful run; MOTIR-4704
+  was that failure happening. The retirement's reason still holds for every
+  OTHER repository — a publisher that must be present in a repository is one a
+  customer's repository cannot be relied on to carry — so this is a reversal for
+  the two repositories Motir controls end to end, not a revocation.
+  - **What is restored:** `scripts/upload-acceptance-video.mjs`, its composite
+    `.github/actions/upload-acceptance-video/` and
+    `tests/acceptance-video-uploader.test.ts`, from `76add02b1b^`; the lane's
+    owned-specs step (the MOTIR-1937 ownership filter); and a publish step on the
+    shard job, `if: success() && github.event_name == 'pull_request'`. A `push:
+main` baseline, a `merge_group` run, a red run and a PR that owns no spec
+    publish nothing. The lane keeps its name, `Acceptance tests`.
+  - **OIDC ONLY.** The shard job alone holds `id-token: write`; no workflow
+    references a Motir token. The script keeps a PAT path (`MOTIR_PUBLISH_TOKEN`,
+    the action's optional `token` input) for an external repository with no App
+    connection — §4's fallback — and Motir's own lanes never pass it. A run
+    without an OIDC token (a fork PR) logs why and exits 0.
+  - **`producedByKey` is the PR's own card key** (its head ref, then its title),
+    falling back to the recording's story key, never a constant — the old lane
+    sent `MOTIR-1638`. The service returns the existing receipt for the same
+    `commitSha` + `producedByKey` (`recordFromPathnames`), and an agent publishing
+    over MCP sends its card key, so a CI publish and an agent publish of the same
+    commit collapse to ONE receipt instead of superseding each other.
+  - **The closed-story skip keys on `ACCEPTANCE_EVIDENCE_STORY_CLOSED`.** MOTIR-5872
+    replaced the approved-receipt refusal the old client skipped on; a verbatim
+    restore would have turned every skip into a red lane.
+  - **What stays:** the 2026-09-01 and 2026-09-06 amendments above stand as the
+    record of their moment, and the MCP door (`create_acceptance_upload` +
+    `publish_acceptance_result`) stays open for every other repository and custom
+    process. The server side — routes, eligibility gate, receipt lifecycle,
+    acceptance panel — is unchanged. Projects ALREADY generated from the starter
+    are not back-ported: a template generate is a copy, so their lane stays
+    record-only and their agents keep publishing over MCP, which still works.
 - **Story / Subtask:** MOTIR-1627 (Story acceptance gate — E2E acceptance video,
   review & approve, BYOK, motir-ai-plan-gated) · Subtask MOTIR-1628.
 - **Consumed by:** MOTIR-1629 (data model + video allowlist), MOTIR-1630
@@ -428,10 +468,17 @@ policy beside this switch, never as this switch moving back.
 > `.github/actions/upload-acceptance-video/` Action MOTIR-1651 shipped for BYOK
 > consumers) is retired. Motir's own receipt is published by the AGENT, through
 > `create_acceptance_upload` + `publish_acceptance_result` on the MCP surface
-> (MOTIR-4704 — those tools did not exist when this banner was written). Read this section as the contract an external CI may still
-> implement against; do NOT read it as a description of what this repository's
-> workflows do, because they no longer do any of it. `docs/e2e/acceptance-video-byok.md`
-> carries the same banner._
+> (MOTIR-4704 — those tools did not exist when this banner was written)._
+>
+> ⚠️ _Amended 2026-10-01 (MOTIR-7253): **motir-core's own CI uses the OIDC half of
+> this section again**, and so does every project generated from the starter. The
+> shard job of `.github/workflows/acceptance-tests.yml` holds `id-token: write` and
+> publishes through the restored `.github/actions/upload-acceptance-video/` from a
+> green `pull_request` run. The PAT half stays what it always was — the fallback for
+> a repository with no App connection — and no Motir workflow passes one. This
+> section is the contract the restored client implements, and the one an external
+> CI may implement against too. `docs/e2e/acceptance-video-byok.md` carries the
+> same note._
 
 No artifact-upload endpoint exists. The BYOK model is: **the user's own CI** runs
 the acceptance E2E and POSTs the video to a new motir-core publish endpoint.

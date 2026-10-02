@@ -325,7 +325,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **78 tools**.
+`initialize` handshake and registers **83 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -983,10 +983,11 @@ A pure **read**: it does NOT claim the item and does NOT change its status
 (`claim_next_ready` is the tool that does both), and it works on ANY work item,
 not only a ready one — so re-printing an in-progress item's prompt is safe.
 
-| Input           | Type   | Required | Notes                                                                                                              |
-| --------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------ |
-| `key`           | string | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                             |
-| `sessionBranch` | string | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`). |
+| Input           | Type   | Required | Notes                                                                                                                  |
+| --------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `key`           | string | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                                 |
+| `sessionBranch` | string | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`).     |
+| `continueFrom`  | string | no       | A DEAD run's id (`deadRun.id` from `claim_work_item_continue`): the prompt continues it. Else `CONTINUE_FROM_INVALID`. |
 
 **Output** — `structuredContent`:
 `{ key, prompt, targetRepo, targetRepoCloneUrl, targetRepoDefaultBranch, workflowMode, sessionBranch, advisories }`.
@@ -1582,42 +1583,46 @@ cannot be undone. Author only, for the reason `edit_comment` gives; gated on
 replyCount }` — `replyCount` is how many replies went with a deleted root (always
 `0` for a reply).
 
-#### To-do lists — `list_work_item_todos` · `add_work_item_todo` · `set_work_item_todo_done`
+#### To-do lists — `list_work_item_todos` · `add_work_item_todo` · `set_work_item_todo_done` · `update_work_item_todo` · `delete_work_item_todo`
 
 A work item's **to-do list** is the ordered steps of its own work — each step
 ONE operation, with who it is for (`executor`), optional Markdown instructions
 (`notesMd`) and an optional command to copy (`commandText`), ticked off as it is
 done ([`docs/decisions/work-item-todo-list.md`](decisions/work-item-todo-list.md)).
-These three tools read a card's list, append a step, and tick or untick one,
-over the same service the **To-do list** section of the item page uses — so a
-step an agent appends or ticks appears there exactly as a person's would, and
-every rule the page enforces applies here unchanged.
+These five tools read a card's list, append a step, tick or untick one, edit
+one and delete one, over the same service the **To-do list** section of the item
+page uses — so a step an agent writes appears there exactly as a person's would,
+and every rule the page enforces applies here unchanged.
 
 | Tool                      | Permission       | What it does                                            |
 | ------------------------- | ---------------- | ------------------------------------------------------- |
 | `list_work_item_todos`    | `project:browse` | The card's steps in list order, with its progress.      |
 | `add_work_item_todo`      | `work_item:edit` | Append ONE step at the END of the list.                 |
 | `set_work_item_todo_done` | `work_item:edit` | Tick (`done: true`) or untick (`done: false`) one step. |
+| `update_work_item_todo`   | `work_item:edit` | Edit one step — only the fields sent change.            |
+| `delete_work_item_todo`   | `work_item:edit` | Delete one step.                                        |
 
-Both writes need permission to **edit the card** — the same key the item page's
-to-do controls need. A token whose grant omits `work_item:edit` is refused both
-writes before anything runs (`PERMISSION_NOT_GRANTED`); a token whose owner can
-only browse the card reads its list and is refused both writes by the role
+Every write needs permission to **edit the card** — the same key the item page's
+to-do controls need. A token whose grant omits `work_item:edit` is refused every
+write before anything runs (`PERMISSION_NOT_GRANTED`); a token whose owner can
+only browse the card reads its list and is refused every write by the role
 (`PROJECT_ACCESS_DENIED`). A card the token cannot see at
 all, including one in another workspace, is `WORK_ITEM_NOT_FOUND` on every tool.
-Both write keys are in the CLI grant, so a dispatched agent can tick the steps of
-the card it was handed.
+The write key is in the CLI grant, so a dispatched agent can append, tick, edit
+and delete the steps of the card it was handed.
 
 **Ticking the LAST step does not move the card.** The to-do list never writes
 the card's status (ADR §3): a card whose every step is ticked stays where it is
 until its own workflow moves it. **A tick is not a revision** either — it stamps
 the step with who ticked it and when (`doneAt`, `doneBy`) and writes nothing to
-the card's history, while an append records one (ADR §4). **Ticking is
+the card's history, while an append, an edit and a delete each record one (ADR §4). **Ticking is
 idempotent:** ticking a step that is already ticked changes nothing and keeps the
 original `doneAt` / `doneBy`, so a retried call never re-attributes a step.
 
-**Deliberately absent:** editing, reordering and deleting a step. They stay on
-the item page.
+**Deliberately absent:** reordering a step. It stays on the item page. Editing
+and deleting were absent too until a re-planned card needed its list brought in
+line with its new steps (MOTIR-7306): without them an agent could only leave a
+step the card can never close on, or tick one nobody performed.
 
 ##### `list_work_item_todos`
 
@@ -1668,6 +1673,39 @@ steps:
 it now stands and the list's progress, read in the same transaction as the tick.
 A `todoId` that is not a step of **that** card — another card's step, or no step
 at all — is `WORK_ITEM_TODO_NOT_FOUND`, and nothing changes.
+
+##### `update_work_item_todo`
+
+| Input         | Type           | Required | Notes                                                                 |
+| ------------- | -------------- | -------- | --------------------------------------------------------------------- |
+| `key`         | string         | yes      | Work item identifier.                                                 |
+| `todoId`      | string         | yes      | The step's `id`, from `list_work_item_todos` or `add_work_item_todo`. |
+| `text`        | string         | no       | The new step text, plain text, at most 200 characters.                |
+| `notesMd`     | string \| null | no       | New instructions (Markdown), at most 2000 characters. `null` clears.  |
+| `commandText` | string \| null | no       | New command, at most 500 characters. `null` clears.                   |
+| `executor`    | enum \| null   | no       | `human` or `coding_agent`. `null` clears.                             |
+
+**SPARSE:** a field you omit is left exactly as it was, so sending only `text`
+never blanks the step's notes or command. **Output** — `structuredContent`:
+`{ workItemKey, todo, progress }` — the step as it now stands. An edit records a
+revision naming each field's before and after, as the item page's edit does; a
+call that sends no field changes nothing and records nothing. The caps and their
+codes are `add_work_item_todo`'s. A `todoId` that is not a step of **that** card
+is `WORK_ITEM_TODO_NOT_FOUND`, and nothing changes.
+
+##### `delete_work_item_todo`
+
+| Input    | Type   | Required | Notes                                                                 |
+| -------- | ------ | -------- | --------------------------------------------------------------------- |
+| `key`    | string | yes      | Work item identifier.                                                 |
+| `todoId` | string | yes      | The step's `id`, from `list_work_item_todos` or `add_work_item_todo`. |
+
+**Output** — `structuredContent`: `{ workItemKey, removed: { id, text },
+progress }` — what was removed, and the list's progress after it, whose
+`total` has gone down by one. The delete is permanent and records a revision
+naming the removed step, as the item page's delete does. Deleting the same step
+again is `WORK_ITEM_TODO_NOT_FOUND` and changes nothing; so is a `todoId` that
+is not a step of **that** card.
 
 #### Repairing a red card — `claim_work_item_repair` · `touch_work_item_repair` · `close_work_item_repair`
 
@@ -1771,6 +1809,96 @@ Touch and close accept only **your own** repair run of **that** card:
 | ---------------------- | ------------------------------------------------------------------------------ |
 | `REPAIR_RUN_NOT_FOUND` | `runId` is not a repair run of this card (or not in your workspace). Claim it. |
 | `REPAIR_RUN_NOT_YOURS` | The card's repair run, opened by somebody else. Nothing was written.           |
+
+#### Continuing a dead run — `claim_work_item_continue` · `touch_work_item_continue` · `close_work_item_continue`
+
+A card whose run **died** — its agent stopped hearing back, crashed, or was
+killed — keeps its status (In Progress) and its branch. `motir continue <key>`
+hands that branch to ONE continuing agent through the **continue claim**
+(`POST /api/v1/work-items/{key}/continue`, Story MOTIR-6526). These three tools
+are the same claim for an agent working from its own chat (Story MOTIR-7261):
+it takes the card over, keeps it while it works, and hands it back with how the
+continue ended. The shape is the repair tools' above, for a different lock.
+
+**The REST route and `motir continue` share ONE lock with these tools.** The lock
+is an open dispatch run of command `continue` on the card; whichever door claims
+first holds it, and a claim through the other door is answered `taken`, naming
+the holder. The claim re-assigns the card to the token's owner — its one card
+write — and never writes its status.
+
+| Tool                       | Permission       | What it does                                                      |
+| -------------------------- | ---------------- | ----------------------------------------------------------------- |
+| `claim_work_item_continue` | `work_item:edit` | Take over a dead run's card, and be handed where its work stands. |
+| `touch_work_item_continue` | `work_item:edit` | Keep your continue alive; learn if it was closed under you.       |
+| `close_work_item_continue` | `work_item:edit` | End your continue with how it went, releasing the lock.           |
+
+**The order is claim → `dispatch_prompt` → touch → close.** Pass the dead run's
+id (`deadRun.id` from the claim) to `dispatch_prompt` as **`continueFrom`**, and
+the prompt says how that run ended and where its branch and pull requests stand
+— the same text the REST route answers for `?continueFrom=`. A run that is
+unknown, still running or succeeded is refused with `CONTINUE_FROM_INVALID`, not
+ignored. Then call `touch_work_item_continue` **at least every two minutes**
+while you work: the run-liveness rule applies to a continue exactly as to the
+CLI's (`lib/runs/runLiveness.ts`) — **a run silent for five minutes is dead**,
+and the liveness sweep closes it (`stopReason: abandoned`), which leaves the card
+continuable again by somebody else. The claim itself counts as the first beat.
+When a touch answers **`open: false`**, the lock is gone, so **stop pushing**.
+
+All three need permission to **edit the card**, the key the REST continue route
+asserts. A card the token cannot see, including one in another workspace, is
+`WORK_ITEM_NOT_FOUND`.
+
+##### `claim_work_item_continue`
+
+| Input | Type   | Required | Notes                 |
+| ----- | ------ | -------- | --------------------- |
+| `key` | string | yes      | Work item identifier. |
+
+**Output** — `structuredContent`: **exactly** what the REST route answers — the
+`WorkItemContinueClaim` resource, through the same presenter. `outcome` is
+`claimed` (the card is yours: `runId` is your run), `mine` (you already hold it —
+a resume), `taken` (somebody else is continuing it; do not push) or
+`not_continuable`, with `reason` one of `run_alive`, `use_fix`,
+`not_in_progress`, `continue_the_parent`, `no_dead_run`, `no_branch` — the REST
+route's refusals, in its order. **A refusal is a result, not an error**, and
+changes nothing on the card. With `use_fix`, the card's pull request is open:
+`claim_work_item_repair` is the door. With `continue_the_parent`, continue
+`parentKey` as a whole.
+
+##### `touch_work_item_continue`
+
+| Input   | Type   | Required | Notes                                            |
+| ------- | ------ | -------- | ------------------------------------------------ |
+| `key`   | string | yes      | Work item identifier.                            |
+| `runId` | string | yes      | The `runId` `claim_work_item_continue` answered. |
+
+**Output** — `structuredContent`: `{ key, runId, open, status, stopReason,
+startedAt, endedAt, lastHeartbeatAt }`. `open: true` means the run is alive and
+`lastHeartbeatAt` has moved to now; `open: false` carries how it ended. A touch
+never re-opens a run, and writes no status and no event.
+
+##### `close_work_item_continue`
+
+| Input     | Type   | Required | Notes                                            |
+| --------- | ------ | -------- | ------------------------------------------------ |
+| `key`     | string | yes      | Work item identifier.                            |
+| `runId`   | string | yes      | The `runId` `claim_work_item_continue` answered. |
+| `outcome` | enum   | yes      | The stop reason the REST close body accepts.     |
+
+`outcome` is the run's stop reason, the same set `POST
+/api/v1/dispatch-runs/{id}/close` takes as `stopReason`: `completed` (the work is
+done), `halted` (you gave up), `interrupted` (cancelled), and the rest of that
+enum. **Output** — the same shape as the touch, now `open: false`.
+**Idempotent:** closing a run that is already closed returns it as it stands and
+changes nothing, so a retry after a timeout is safe.
+
+Touch and close accept only **your own** continue run of **that** card (the card
+itself, or the parent whose continue it is a leg of):
+
+| Code                     | Meaning                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| `CONTINUE_RUN_NOT_FOUND` | `runId` is not a continue run of this card (or not in your workspace). Claim it. |
+| `CONTINUE_RUN_NOT_YOURS` | The card's continue run, opened by somebody else. Nothing was written.           |
 
 #### `add_lesson`
 
@@ -2340,21 +2468,33 @@ routes for — expressed as two tools.
 3. **`publish_acceptance_result`** `{ key, videoPathname, tracePathname?,
 chapters?, commitSha?, producedByKey? }` → the receipt.
 
-⚠️ **Nothing else publishes it**, exactly as with the design result. A story whose
-receipt never arrives looks identical to one that succeeded — spec green, checks
-green, pull request merged, and nobody able to watch the story work. **The
-confirmation is the `id` this call returns**, and its `status` is `pending`: the
-publish is not the acceptance, a person is.
+⚠️ **WHO publishes depends on the repository, and the agent reads its checkout to
+find out (MOTIR-7254).** In a repository whose acceptance lane carries the
+`upload-acceptance-video` action — motir-core, and every project generated from
+`nextjs-prisma-vercel-starter` since MOTIR-7255 — **CI publishes the receipt**, from
+a green pull-request run over keyless GitHub OIDC, and the agent makes no call. The
+dispatch prompt spells the check out:
+`grep -rlE 'uses:\s*\./\.github/actions/upload-acceptance-video' .github/workflows/`
+— a file printed means the lane publishes. **These two tools are the door for every
+other repository**, and there nothing else publishes the receipt, exactly as with
+the design result: a story whose receipt never arrives looks identical to one that
+succeeded — spec green, checks green, pull request merged, and nobody able to
+watch the story work. **The confirmation is the `id` this call returns**, and its
+`status` is `pending`: the publish is not the acceptance, a person is.
 
-⚠️ **It replaced a CI publisher, and for the reason that generalises the design
-one.** MOTIR-4096 retired `scripts/upload-acceptance-video.mjs` and the Action
-beside it. A CI publisher can guarantee THIS repository's receipts and no
-customer's: it has to be present in whatever repository the work lands in, which
-is a requirement no repository Motir does not own can meet. What replaces it is
-the planner/runner pair — the planner writes the acceptance E2E subtask onto every
-user-facing story, and the runner's dispatch prompt tells it to publish what it
-recorded — and that pair needs a door that travels. This is that door. (Between
-4096 and MOTIR-4704 there was none, and three documents said there was.)
+⚠️ **Why both doors exist.** MOTIR-4096 retired the CI uploader on 2026-09-01: a CI
+publisher has to be present in whatever repository the work lands in, which is a
+requirement a customer's repository cannot be relied on to meet. That still holds
+for a customer's repository, and this door is what travels there — the planner
+writes the acceptance E2E subtask onto every user-facing story, and the runner's
+dispatch prompt tells it to publish what it recorded. (Between MOTIR-4096 and
+MOTIR-4704 there was no such door, and three documents said there was.) But Motir
+DOES write the repository in two places — its own, and the starter every hosted
+project is generated from — so on 2026-10-01 MOTIR-7253 restored the CI publisher
+there, where it is the more reliable link
+(`docs/decisions/acceptance-video.md`, the 2026-10-01 amendment). An agent and CI
+publishing the same commit send the same `producedByKey` (the card key) and so
+collapse to ONE receipt rather than superseding each other.
 
 | Input           | Type    | Required | Notes                                                                                                    |
 | --------------- | ------- | -------- | -------------------------------------------------------------------------------------------------------- |

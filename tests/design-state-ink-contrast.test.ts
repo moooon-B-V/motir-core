@@ -18,7 +18,6 @@ import {
   scanMockStateInk,
   stampSourceLines,
 } from './theme/mockStateInkScan';
-import { STATE_INK_LEDGER, type StateInkLedgerEntry } from './theme/stateInkLedger';
 
 // MOTIR-4255 — the STATE arm of the design-asset ink guard.
 //
@@ -84,6 +83,12 @@ import { STATE_INK_LEDGER, type StateInkLedgerEntry } from './theme/stateInkLedg
 // with the new `@scope` filter switched off, so that filter changes no verdict
 // in today's tree; it stops a scoped rule being measured where it cannot paint.
 //
+// ⚠️ MOTIR-7185 swept those 138 findings out of the 8 compiled assets — a token
+// swap on 104 elements (`--el-text-secondary`, or `--el-text-identifier` on a
+// monospace item key, the token the shipped list row already uses) — and then
+// DELETED `STATE_INK_LEDGER` with the assertions that kept it shrink-only, since
+// its subject was gone. The zero assertions below rule on the whole tree again.
+//
 // ── This spec belongs to the `design/*` lane ────────────────────────────────
 // It reads `design/**` and nothing else, so a `design/*` branch — where the
 // root Vitest job is deliberately skipped — is exactly the branch that must run
@@ -105,31 +110,10 @@ function mockSources(dir: string = DESIGN_ROOT, out: string[] = []): string[] {
 
 const MOCKS = mockSources();
 const SCANS = MOCKS.map((file) => scanMockStateInk(file, readFileSync(join(ROOT, file), 'utf8')));
-const ALL_FINDINGS = SCANS.flatMap((scan) => scan.findings);
-const ALL_ABSTENTIONS = SCANS.flatMap((scan) => scan.abstentions);
+const FINDINGS = SCANS.flatMap((scan) => scan.findings);
+const ABSTENTIONS = SCANS.flatMap((scan) => scan.abstentions);
 const sum = (pick: (scan: (typeof SCANS)[number]) => number) =>
   SCANS.reduce((total, scan) => total + pick(scan), 0);
-
-// MOTIR-7179 — the sites the lane could not see until its CSS reader learned
-// `@layer` and nesting are NAMED in `STATE_INK_LEDGER` (its header says why, and
-// which two cards empty it). The zero assertions below rule on everything ELSE;
-// `the ledger is exact` holds every entry to the count the scan produces, so the
-// ledger can shrink and never quietly absorb a new site.
-const ledgerKey = (e: Pick<StateInkLedgerEntry, 'file' | 'stateSelector' | 'kind' | 'reason'>) =>
-  [e.file, e.stateSelector, e.kind, e.reason].join('\u0000');
-const findingReason = (f: (typeof ALL_FINDINGS)[number]) =>
-  `${f.ink} on ${f.surface} at ${f.ratio}:1`;
-const SCANNED_COUNTS = new Map<string, number>();
-const tally = (key: string) => SCANNED_COUNTS.set(key, (SCANNED_COUNTS.get(key) ?? 0) + 1);
-for (const f of ALL_FINDINGS) tally(ledgerKey({ ...f, kind: 'finding', reason: findingReason(f) }));
-for (const a of ALL_ABSTENTIONS) tally(ledgerKey({ ...a, kind: 'abstention' }));
-const LEDGERED = new Set(STATE_INK_LEDGER.map(ledgerKey));
-const FINDINGS = ALL_FINDINGS.filter(
-  (f) => !LEDGERED.has(ledgerKey({ ...f, kind: 'finding', reason: findingReason(f) })),
-);
-const ABSTENTIONS = ALL_ABSTENTIONS.filter(
-  (a) => !LEDGERED.has(ledgerKey({ ...a, kind: 'abstention' })),
-);
 
 describe('design state-ink — the scanned set is the set that was searched', () => {
   // The check every guard in this family opens with: a walk that silently found
@@ -834,29 +818,6 @@ describe('design state-ink — every asset is ruled on or NAMED', () => {
       'the state-ink arm could not resolve these sites. Each is UNMEASURED, not clean — ' +
         'either make the site resolvable or record it here as a decision with its reason.',
     ).toEqual([]);
-  });
-});
-
-describe('design state-ink — the ledger is exact, so it can only shrink (MOTIR-7179)', () => {
-  it('names every entry at the count the scan produces', () => {
-    // Fewer sites ⇒ a fix landed: shrink the entry (delete it at zero). More ⇒ a
-    // regression on a ledgered asset, which the ledger may not absorb.
-    const stale = STATE_INK_LEDGER.filter(
-      (e) => (SCANNED_COUNTS.get(ledgerKey(e)) ?? 0) !== e.count,
-    ).map(
-      (e) =>
-        `${e.file} — ${e.stateSelector} [${e.kind}]: ledger says ${e.count}, ` +
-        `the scan finds ${SCANNED_COUNTS.get(ledgerKey(e)) ?? 0}`,
-    );
-    expect(
-      stale,
-      'a STATE_INK_LEDGER entry no longer matches the scan — update tests/theme/stateInkLedger.ts ' +
-        'to the measured count, or delete the entry when it reaches zero. Never raise a count.',
-    ).toEqual([]);
-  });
-
-  it('holds no duplicate key', () => {
-    expect(new Set(STATE_INK_LEDGER.map(ledgerKey)).size).toBe(STATE_INK_LEDGER.length);
   });
 });
 

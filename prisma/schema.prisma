@@ -10033,7 +10033,11 @@ model CiContainerUsage {
   /// not erase the record that Motir paid for this container.
   dispatchRunId String? @map("dispatch_run_id")
 
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  /// When motir-ai's platform usage rollup accepted this container's report
+  /// (Story MOTIR-727 · MOTIR-7294) — NULL until then. The backfill sends only
+  /// settled rows still NULL here, so a second run sends nothing new.
+  platformMeterReportedAt DateTime? @map("platform_meter_reported_at")
 
   workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -12432,11 +12436,14 @@ model AgentInstanceStorageCharge {
 
   /// The debit's idempotency key: `agent-storage:<instance id>:<YYYY-MM-DD>`.
   /// Unique, so one instance is charged at most once per day.
-  chargeReference String                     @unique @map("charge_reference")
-  chargeOutcome   AgentInstanceChargeOutcome @default(pending) @map("charge_outcome")
-  chargeDetail    String?                    @map("charge_detail")
-  chargeAttempts  Int                        @default(0) @map("charge_attempts")
-  chargedAt       DateTime?                  @map("charged_at")
+  chargeReference         String                     @unique @map("charge_reference")
+  chargeOutcome           AgentInstanceChargeOutcome @default(pending) @map("charge_outcome")
+  chargeDetail            String?                    @map("charge_detail")
+  chargeAttempts          Int                        @default(0) @map("charge_attempts")
+  chargedAt               DateTime?                  @map("charged_at")
+  /// When motir-ai's platform usage rollup accepted this day's storage report
+  /// (Story MOTIR-727 · MOTIR-7294) — NULL until then.
+  platformMeterReportedAt DateTime?                  @map("platform_meter_reported_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

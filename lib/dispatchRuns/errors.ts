@@ -329,6 +329,41 @@ export class ContinueFromInvalidError extends Error {
 }
 
 /**
+ * The CONTINUE RUN an MCP caller named is not one it may keep alive or close
+ * (Story MOTIR-7261 · MOTIR-7262): `touch_work_item_continue` and
+ * `close_work_item_continue` act only on an open-or-closed `continue` run of THAT
+ * card, opened by the CALLER. {@link RepairRunRefusedError}, one lifecycle over —
+ * MCP only, so it has no row in `DOMAIN_ERROR_STATUS` either.
+ *
+ * - `not_found` — no such run, a run in another workspace, or a run that is not
+ *   a `continue` run of this card. Nothing to act on: claim the continue first.
+ * - `not_yours` — the card's continue run, opened by somebody else. The claim is
+ *   what names them; this refusal writes nothing and keeps nothing alive.
+ *
+ * Naming the second is no existence leak: a caller who can reach these tools
+ * holds `work_item:edit` on the project, and `claim_work_item_continue` already
+ * answers `taken` with the holder and the run id.
+ */
+export class ContinueRunRefusedError extends Error {
+  readonly code: 'CONTINUE_RUN_NOT_FOUND' | 'CONTINUE_RUN_NOT_YOURS';
+  constructor(
+    runId: string,
+    workItemKey: string,
+    readonly why: 'not_found' | 'not_yours',
+  ) {
+    super(
+      why === 'not_yours'
+        ? `Run ${runId} is the continue of ${workItemKey}, but somebody else opened it. Only the ` +
+            'person who claimed a continue may keep it alive or close it; nothing was written.'
+        : `Run ${runId} is not a continue run of ${workItemKey}. Claim the continue with ` +
+            '`claim_work_item_continue` and use the `runId` it answers; nothing was written.',
+    );
+    this.code = why === 'not_yours' ? 'CONTINUE_RUN_NOT_YOURS' : 'CONTINUE_RUN_NOT_FOUND';
+    this.name = 'ContinueRunRefusedError';
+  }
+}
+
+/**
  * The REPAIR RUN an MCP caller named is not one it may keep alive or close
  * (Story MOTIR-6804 · MOTIR-6807): `touch_work_item_repair` and
  * `close_work_item_repair` act only on an open-or-closed `fix` run of THAT card,

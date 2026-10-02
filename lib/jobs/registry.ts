@@ -30,6 +30,7 @@ import {
   automationRetentionSweep,
 } from './definitions/automationEngine';
 import { billingSeatSync } from './definitions/billingSeatSync';
+import { platformMeterReport } from './definitions/platformMeterReport';
 import { codeGraphIndex } from './definitions/codeGraphIndex';
 import { codeGraphRefresh } from './definitions/codeGraphRefresh';
 import { outwardBugTelemetryOnCreated } from './definitions/outwardBugTelemetry';
@@ -126,6 +127,7 @@ export const jobDefinitions = [
   automationEngineOnCommented,
   automationRetentionSweep,
   billingSeatSync,
+  platformMeterReport,
   codeGraphIndex,
   codeGraphRefresh,
   outwardBugTelemetryOnCreated,

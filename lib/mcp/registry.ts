@@ -56,6 +56,8 @@ import {
   ADD_WORK_ITEM_TODO_TOOL_NAME,
   LIST_WORK_ITEM_TODOS_TOOL_NAME,
   SET_WORK_ITEM_TODO_DONE_TOOL_NAME,
+  UPDATE_WORK_ITEM_TODO_TOOL_NAME,
+  DELETE_WORK_ITEM_TODO_TOOL_NAME,
   registerWorkItemTodos,
 } from './tools/workItemTodos';
 import {
@@ -64,6 +66,12 @@ import {
   TOUCH_WORK_ITEM_REPAIR_TOOL_NAME,
   registerWorkItemRepair,
 } from './tools/workItemRepair';
+import {
+  CLAIM_WORK_ITEM_CONTINUE_TOOL_NAME,
+  CLOSE_WORK_ITEM_CONTINUE_TOOL_NAME,
+  TOUCH_WORK_ITEM_CONTINUE_TOOL_NAME,
+  registerWorkItemContinue,
+} from './tools/workItemContinue';
 import { ADD_LESSON_TOOL_NAME, registerAddLesson } from './tools/addLesson';
 import { SEARCH_LESSONS_TOOL_NAME, registerSearchLessons } from './tools/searchLessons';
 import { REINFORCE_LESSON_TOOL_NAME, registerReinforceLesson } from './tools/reinforceLesson';
@@ -160,6 +168,9 @@ export const MCP_TOOL_NAMES = [
   CLAIM_WORK_ITEM_REPAIR_TOOL_NAME,
   TOUCH_WORK_ITEM_REPAIR_TOOL_NAME,
   CLOSE_WORK_ITEM_REPAIR_TOOL_NAME,
+  CLAIM_WORK_ITEM_CONTINUE_TOOL_NAME,
+  TOUCH_WORK_ITEM_CONTINUE_TOOL_NAME,
+  CLOSE_WORK_ITEM_CONTINUE_TOOL_NAME,
   DISPATCH_PROMPT_TOOL_NAME,
   EXPAND_ITEM_TOOL_NAME,
   GET_PLAN_STATUS_TOOL_NAME,
@@ -184,6 +195,8 @@ export const MCP_TOOL_NAMES = [
   LIST_WORK_ITEM_TODOS_TOOL_NAME,
   ADD_WORK_ITEM_TODO_TOOL_NAME,
   SET_WORK_ITEM_TODO_DONE_TOOL_NAME,
+  UPDATE_WORK_ITEM_TODO_TOOL_NAME,
+  DELETE_WORK_ITEM_TODO_TOOL_NAME,
   ADD_LESSON_TOOL_NAME,
   SEARCH_LESSONS_TOOL_NAME,
   REINFORCE_LESSON_TOOL_NAME,
@@ -356,6 +369,11 @@ export function registerMcpTools(
   // alive, close it with its outcome, over the shipped `workItemRepairService`
   // and dispatch-run heartbeat/close. The same lock `motir fix` takes over v1.
   registerWorkItemRepair(target, resolveContext);
+  // The CONTINUE claim's door (MOTIR-7262) — take over a card whose run died, keep
+  // it alive, close it with how it ended, over the shipped
+  // `workItemContinueService` and dispatch-run heartbeat/close. The same lock
+  // `motir continue` takes over v1.
+  registerWorkItemContinue(target, resolveContext);
   registerAddLesson(target, resolveContext);
   registerSearchLessons(target, resolveContext);
   registerReinforceLesson(target, resolveContext);
