@@ -1,13 +1,18 @@
 import 'server-only';
 
 import { deploymentIdentity } from '@/lib/deployment/identity';
+import { deploymentStatusProvider } from '@/lib/deployment/providers';
 import type {
   PlatformHealthDTO,
   PlatformOverdueScheduleDTO,
   PlatformQueueHealthDTO,
   PlatformSignalDTO,
 } from '@/lib/dto/platformHealth';
+import { GATEWAY_STATUS_TIMEOUT_MS } from '@/lib/gateway/statusClient';
+import { gatewayStatusReader } from '@/lib/gateway/statusProvider';
 import { serverSentryDsn } from '@/lib/monitoring/config';
+import { errorCountReader } from '@/lib/monitoring/errorCountProvider';
+import { SENTRY_ERROR_COUNT_WINDOW_HOURS } from '@/lib/monitoring/sentryErrorCount';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { databaseHealthRepository } from '@/lib/repositories/databaseHealthRepository';
 import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
@@ -35,7 +40,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
  * ⚠️ AND ONE FAILING PROBE MUST NOT TAKE THE BOARD DOWN. The design's argument
  * for putting all three tones on ONE board is that *"an operator's real screen is
  * mixed"* — which is only true if the mixed screen renders. Each probe absorbs
- * its own failure through `probe()` below, so the six run concurrently and none
+ * its own failure through `probe()` below, so the seven run concurrently and none
  * of them can reject; that is why the gather is a plain `Promise.all` and why
  * `probe()` is the ONE place a throw becomes `unreachable`.
  *
@@ -45,8 +50,8 @@ import { withSystemContext } from '@/lib/workspaces/context';
  * The ADR's §3a contract — *"the audit row is INSERTed as the first statement
  * inside the same transaction as the read"* — binds a CROSS-TENANT read to its
  * trail, so that a read cannot commit without one. This service reads no tenant
- * row at all: the six signals come from the job ledger, the dead-letter set and
- * the deployment's own environment, which is exactly why `health.read` is its
+ * row at all: the signals come from the job ledger, the dead-letter set, the
+ * gateway's status endpoint and the deployment's own environment, which is exactly why `health.read` is its
  * own action rather than an `estate.read`. The row is still written FIRST and
  * unconditionally, so the trail cannot be missing; what it is not is transacted
  * with reads that are not tenant reads and do not share its client.
@@ -113,6 +118,34 @@ const DLQ_BACKLOG_THRESHOLD = 1;
 const DB_SLOW_MS = 500;
 
 /**
+ * Above this, the gateway's status read reads as `degraded` rather than
+ * `healthy` (MOTIR-742).
+ *
+ * 1000ms, twice the database's bar, because this read crosses a network hop to
+ * another app rather than pinging a pooled connection — and, like `DB_SLOW_MS`,
+ * it is not an SLO. `/api/status` does no work beyond serialising a config map,
+ * so a second spent on it says the gateway's process or its network is struggling,
+ * which is when every coding run's model calls start to suffer too. The real
+ * latency is rendered beside the verdict, and the threshold rides in `values` so
+ * the card's detail can name it.
+ */
+const GATEWAY_SLOW_MS = 1000;
+
+/**
+ * At or above this many errors in 24 hours, the Errors card reads `degraded`
+ * rather than `healthy` (MOTIR-740). Inclusive, so the threshold itself is
+ * already worth a look.
+ *
+ * 100 is not an SLO and is not presented as one — like `DB_SLOW_MS`, it is the
+ * point past which an operator glancing at this board should open Sentry. A
+ * quiet day for a deployment this size is a handful of errors; a hundred in a
+ * day is a spike or a new crash loop, and the issues link-out beside the number
+ * is where an operator learns which. The real count is always rendered beside the
+ * verdict, and the threshold rides in `values` so the card's detail can name it.
+ */
+const ERRORS_24H_DEGRADED = 100;
+
+/**
  * How long the OLDEST claimable run may wait before the queue reads `stalled`.
  *
  * ⚠️ AGE IS THE SIGNAL AND DEPTH IS THE CONTEXT, which is the whole shape of
@@ -152,13 +185,14 @@ export const platformHealthService = {
     });
 
     const schedules = probe(() => jobScheduleHealthService.check(now));
-    const [database, hosting, scheduleSignal, failedJobs, errors, lastHealthCheck] =
+    const [database, hosting, gateway, scheduleSignal, failedJobs, errors, lastHealthCheck] =
       await Promise.all([
         databaseSignal(),
-        Promise.resolve(hostingSignal()),
+        hostingSignal(),
+        gatewaySignal(),
         scheduleSignalFrom(schedules),
         failedJobsSignal(now),
-        Promise.resolve(errorsSignal()),
+        errorsSignal(),
         lastHealthCheckSignal(now),
       ]);
 
@@ -172,7 +206,9 @@ export const platformHealthService = {
 
     return {
       checkedAt: now.toISOString(),
-      signals: [database, hosting, scheduleSignal, failedJobs, errors, lastHealthCheck],
+      // Gateway third, after Hosting, so the three infrastructure cards read as one
+      // row at three columns (design-notes § Panel 8 — Story 10.2 delta).
+      signals: [database, hosting, gateway, scheduleSignal, failedJobs, errors, lastHealthCheck],
       overdue: overdue.slice(0, OVERDUE_PAGE_SIZE),
       overdueTotal: overdue.length,
       schedulesChecked: report?.entries.length ?? 0,
@@ -277,33 +313,136 @@ async function databaseSignal(): Promise<PlatformSignalDTO> {
 }
 
 /**
- * Where the app is running.
+ * Where the app is running, and whether all of it is (MOTIR-1167, MOTIR-7332).
  *
  * ⚠️ THE PROVIDER KNOWLEDGE IS NOT HERE, AND MUST NOT COME BACK.
  * `docs/decisions/ci-runner-fleet.md` §4 rule 1 keeps `lib/` provider-agnostic,
  * and `tests/ciFleet/orchestratorPortBoundary.test.ts` enforces it by scanning
- * SOURCE — so this service reads a neutral `DeploymentIdentity` and names no
- * platform, no environment variable and no dashboard host. The one file allowed
- * to know is `lib/deployment/identity.ts`, which carries the whole argument
- * including why a machine COUNT is not among the things it answers.
+ * SOURCE — so this service reads a neutral `DeploymentIdentity` (where THIS
+ * process is) and a neutral `DeploymentStatus` (how many of its siblings run,
+ * through the port in `lib/deployment/deploymentStatus.ts`), and names no
+ * platform, no environment variable and no dashboard host.
  *
  * (This service failed that guard on its first push, with three raw `FLY_*`
  * reads inline. The guard was right and the fix is the accessor, not an
  * exemption for a service.)
+ *
+ * The verdict, in order:
+ * - not on a managed host → `unreachable` / `notManaged`, unchanged;
+ * - no read credential → `unreachable` / `noReadCredential`, still carrying the
+ *   process's own identity (app, region, machine), which is a reading taken from
+ *   inside and counts nothing;
+ * - the read throws → `unreachable` / `readFailed`, never an empty fleet;
+ * - a group short of its expectation → `degraded` / `shortGroup`;
+ * - running machines on more than one release → `degraded` / `mixedReleases`;
+ * - otherwise `healthy`.
  */
-function hostingSignal(): PlatformSignalDTO {
+async function hostingSignal(): Promise<PlatformSignalDTO> {
   const deployment = deploymentIdentity();
   if (!deployment.app) return unreachable('hosting', 'notManaged', null);
 
+  const identity = {
+    app: deployment.app,
+    region: deployment.region ?? '—',
+    machineId: deployment.instanceId ?? '—',
+  };
+  const provider = await deploymentStatusProvider();
+  if (!provider || !provider.configured()) {
+    return {
+      id: 'hosting',
+      state: 'unreachable',
+      values: { reason: 'noReadCredential', ...identity },
+      linkOut: deployment.dashboardUrl,
+    };
+  }
+
+  const status = await probe(() => provider.read());
+  if (!status) return unreachable('hosting', 'readFailed', deployment.dashboardUrl);
+
+  const counts: Record<string, number> = {};
+  for (const group of status.groups) {
+    counts[`${group.name}Started`] = group.started;
+    counts[`${group.name}Expected`] = group.expected;
+  }
+  const release = status.releases[0] ?? '—';
+  const values: Record<string, string | number> = { ...identity, ...counts, release };
+
+  const short = status.groups.find((group) => group.started < group.expected);
+  if (short) {
+    return {
+      id: 'hosting',
+      state: 'degraded',
+      values: {
+        ...values,
+        reason: 'shortGroup',
+        group: short.name,
+        started: short.started,
+        expected: short.expected,
+      },
+      linkOut: deployment.dashboardUrl,
+    };
+  }
+  if (status.releases.length > 1) {
+    return {
+      id: 'hosting',
+      state: 'degraded',
+      values: { ...values, reason: 'mixedReleases', count: status.releases.length },
+      linkOut: deployment.dashboardUrl,
+    };
+  }
+  return { id: 'hosting', state: 'healthy', values, linkOut: deployment.dashboardUrl };
+}
+
+/**
+ * Is motir-gateway answering, how fast, and which build (MOTIR-742).
+ *
+ * Every coding run's model calls go through the gateway, and before this card
+ * the console asked it nothing: an outage showed up only as runs failing one by
+ * one, each looking like its own problem, under an all-green board.
+ *
+ * ⚠️ TWO UNREACHABLE REASONS, AND THEY ARE NOT THE SAME SENTENCE. A deployment
+ * with no `MOTIR_GATEWAY_URL` runs no gateway — a self-hosted instance, a dev box
+ * — and that is `notConfigured`, an expected state. A configured gateway that
+ * does not answer cleanly is `noAnswer`, which is an incident. Neither carries a
+ * latency or a version: `values` holds the reason and, for `noAnswer`, the
+ * deadline the copy names ("no answer within {timeout} s") — a setting of this
+ * probe, never a measurement of the gateway.
+ *
+ * ⚠️ THE LINK-OUT IS THE STATUS ENDPOINT ITSELF, not a hosting dashboard. Naming
+ * the gateway's hosting provider here would leak it into `lib/`, which
+ * `tests/ciFleet/orchestratorPortBoundary.test.ts` forbids; the endpoint the probe
+ * read is provider-neutral and shows an operator exactly what the card measured.
+ */
+async function gatewaySignal(): Promise<PlatformSignalDTO> {
+  const reader = gatewayStatusReader();
+  if (!reader.configured()) return unreachable('gateway', 'notConfigured', null);
+
+  // A configured-but-malformed URL (e.g. one ending in `/v1`) throws here; the
+  // read below fails on the same URL, so the card is `noAnswer` with no link
+  // rather than a link to an address that cannot be right.
+  const linkOut = await probe(async () => reader.statusUrl());
+  const status = await probe(() => reader.read());
+  if (status === null) {
+    return {
+      id: 'gateway',
+      state: 'unreachable',
+      // The deadline crosses as TEXT: it is a setting, not a reading, and the
+      // board's rule is that no unreachable card carries a number (MOTIR-744).
+      values: { reason: 'noAnswer', timeout: String(GATEWAY_STATUS_TIMEOUT_MS / 1000) },
+      linkOut,
+    };
+  }
+
   return {
-    id: 'hosting',
-    state: 'healthy',
+    id: 'gateway',
+    state: status.latencyMs > GATEWAY_SLOW_MS ? 'degraded' : 'healthy',
     values: {
-      app: deployment.app,
-      region: deployment.region ?? '—',
-      machineId: deployment.instanceId ?? '—',
+      ms: status.latencyMs,
+      version: status.version,
+      since: status.startTime,
+      threshold: GATEWAY_SLOW_MS,
     },
-    linkOut: deployment.dashboardUrl,
+    linkOut,
   };
 }
 
@@ -349,25 +488,44 @@ async function failedJobsSignal(now: Date): Promise<PlatformSignalDTO> {
 }
 
 /**
- * The error-monitoring signal.
+ * The error-monitoring signal — how many errors Motir's own Sentry project
+ * accepted in the last 24 hours (MOTIR-740).
  *
- * ⚠️ ALWAYS `unreachable`, AND THAT IS THE HONEST ANSWER RATHER THAN A STUB.
- * The design asset (merged 2026-08-10) drew this card unreachable because Sentry
- * was not wired at all — *"`grep sentry package.json` returns nothing today"*.
- * That fact has since changed: MOTIR-1162 merged on 2026-08-26 and Sentry now
- * reports from the server, the edge and the browser. What has NOT changed is
- * that reading an error COUNT back needs a Sentry API token, which no card has
- * provisioned and which Story 10.2 owns along with every other read-only
- * provider integration.
+ * It reads through a PLATFORM credential (`SENTRY_READ_TOKEN`, provisioned by
+ * MOTIR-739: an internal integration with read scopes only), never through a
+ * tenant's Sentry App grant, so one workspace disconnecting its integration
+ * cannot blind the operator console. See `lib/monitoring/sentryErrorCount.ts`.
  *
- * So the two states below are both `unreachable` and they say DIFFERENT things,
- * because an operator needs to tell "this deployment does not report errors at
- * all" from "it reports them and this console cannot read the count yet". What
- * neither of them does is render a zero.
+ * ⚠️ THREE UNREACHABLE REASONS, AND NONE OF THEM IS A ZERO.
+ * - `notConfigured` — no DSN and no read credential: this deployment reports no
+ *   errors anywhere (a self-hosted instance).
+ * - `noReadCredential` — errors ARE reported (a DSN is set), but this console
+ *   holds no read token to count them.
+ * - `readFailed` — the credential is set and Sentry did not answer cleanly (a
+ *   401, a 5xx, a malformed body, a timeout).
+ * Each carries only its `reason`; a measured zero is `healthy` with `count: 0`,
+ * and only a clean read can produce one.
  */
-function errorsSignal(): PlatformSignalDTO {
-  const reason = serverSentryDsn() ? 'noReadCredential' : 'notConfigured';
-  return unreachable('errors', reason, SENTRY_ISSUES_URL);
+async function errorsSignal(): Promise<PlatformSignalDTO> {
+  const reader = errorCountReader();
+  if (!reader.configured()) {
+    const reason = serverSentryDsn() ? 'noReadCredential' : 'notConfigured';
+    return unreachable('errors', reason, SENTRY_ISSUES_URL);
+  }
+
+  const reading = await probe(() => reader.read());
+  if (reading === null) return unreachable('errors', 'readFailed', SENTRY_ISSUES_URL);
+
+  return {
+    id: 'errors',
+    state: reading.count >= ERRORS_24H_DEGRADED ? 'degraded' : 'healthy',
+    values: {
+      count: reading.count,
+      windowHours: SENTRY_ERROR_COUNT_WINDOW_HOURS,
+      threshold: ERRORS_24H_DEGRADED,
+    },
+    linkOut: reader.issuesUrl(reading),
+  };
 }
 
 /**

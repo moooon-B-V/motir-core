@@ -51,7 +51,9 @@
     "packages",
     ".tsout",
     "tests/e2e/**/*.spec.ts",
-    "tests/components/**"
+    "tests/components/**",
+    "tests/integration/**/*.test.ts",
+    "tests/integration/**/*.test.tsx"
   ],
   // BOTH, because a test importing `@/scripts/plan-seed/…` (the seed fixtures) or
   // `../../scripts/deployFreshness.mjs` must redirect into the scripts project
