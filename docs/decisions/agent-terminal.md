@@ -479,3 +479,24 @@ The same four apply to every offered profile (`agent-instances.md` §9's rule).
   keeps `agent-instances.md` §8's owner-only rule and adds no exception.
 - **Recording terminal sessions** for audit or playback. That is refused by Q8 and Q9, and nothing
   here builds it.
+
+## AMENDMENT 1 — with the terminal OFF, the machine idles (MOTIR-7336, 2026-10-02)
+
+The record said that without `MOTIR_TERMINAL_MASTER_KEY` machines _"boot as before the terminal"_,
+assuming such a machine stays up. It did not: with no main-process override the machine ran the
+sandbox image's own `CMD ["bash", "-l"]`, which exits 0 at once with no TTY, and Fly's `on-failure`
+policy does not restart a clean exit. Production had no key, so every agent created there stopped two
+seconds after it started (machine `80e9030c0e67e8`: `start` 12:57:08 → `exit`, `exit_code=0` 12:57:10).
+
+**The choice: give the machine a main process that stays up, not refuse create and wake.** Q4 already
+idles an image with no server (`exec sleep infinity`) so that a machine _"boots and stays up"_; a
+deployment with no terminal gets the same idle. `PersistentContainerSpec.idleCommand` carries it
+(`AGENT_IDLE_COMMAND = ['sleep', 'infinity']`, `lib/agentInstances/terminal.ts`), under the image's
+unchanged `ENTRYPOINT`, with no service. When the terminal is on, its command is the main process and
+`idleCommand` is ignored. Refusing would have made the terminal key a precondition for agents at all,
+which the record never said.
+
+**Not covered:** an agent CREATED terminal-off before this change keeps a machine config with no main
+process, because a wake rewrites the config only to install the terminal (Q8). Its wake now ENDS
+`failed` in words (`agent-instances.md` AMENDMENT 4) instead of hanging; setting the master key and
+waking brings it up on Q8's terminal config, or the owner deletes it.

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
+  exitCodeOf,
   flyErrorDetail,
   flyRequest,
   isFlyImagePullRefusal,
@@ -432,14 +433,19 @@ const flyInstancesClient = {
           mounts: [{ volume: volumeId, path: spec.mountPath }],
           // agent-terminal.md Q4 + Q2: the terminal server is the MAIN process
           // (the argv replaces the image's CMD under its unchanged ENTRYPOINT),
-          // behind the one public service the relay dials. Absent without a
-          // terminal config, so such a machine boots exactly as before.
+          // behind the one public service the relay dials. Without a terminal
+          // config there is no service, and the main process is the spec's idle
+          // command (MOTIR-7336): the image's own CMD is an interactive shell
+          // that exits 0 at once with no TTY, which Fly's `on-failure` policy
+          // does not restart, so the machine would stop seconds after it starts.
           ...(spec.terminal
             ? {
                 init: { cmd: [...spec.terminal.command] },
                 services: [toFlyService(spec.terminal.service)],
               }
-            : {}),
+            : spec.idleCommand
+              ? { init: { cmd: [...spec.idleCommand] } }
+              : {}),
           // §1: the machine OUTLIVES its process. A crashed main process is
           // restarted by Fly; an explicit stop through the API is not a failure,
           // so a hibernated instance stays stopped.
@@ -708,6 +714,8 @@ export const flyPersistentOrchestrator: PersistentContainerOrchestrator = {
       providerState: machine.state,
       startedAt: instants.startedAt,
       stoppedAt: instants.stoppedAt,
+      // Only an exit of the CURRENT run says anything about it (MOTIR-7336).
+      exitCode: instants.stoppedAt ? exitCodeOf(machine) : null,
       image: machine.image ?? null,
     };
   },

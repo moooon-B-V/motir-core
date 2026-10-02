@@ -430,6 +430,43 @@ describe('describePersistent', () => {
     expect(stopped.stoppedAt?.toISOString()).toBe('2026-09-28T12:45:00.000Z');
   });
 
+  it('reports the exit code of the CURRENT run’s exit — never a code from an earlier run (MOTIR-7336)', async () => {
+    const exit = (at: string, code: number) => ({
+      type: 'exit',
+      status: 'stopped',
+      timestamp: Date.parse(at),
+      request: { exit_event: { exit_code: code, oom_killed: false, requested_stop: false } },
+    });
+    const earlier = [
+      { type: 'start', status: 'started', timestamp: Date.parse('2026-10-02T09:00:00Z') },
+      exit('2026-10-02T09:30:00Z', 137),
+    ];
+    // Running again after an earlier exit: no code for the run in progress.
+    handler = () =>
+      json(
+        200,
+        flyMachine('started', [
+          ...earlier,
+          { type: 'start', status: 'started', timestamp: Date.parse('2026-10-02T12:57:08Z') },
+        ]),
+      );
+    expect((await flyPersistentOrchestrator.describePersistent(HANDLE)).exitCode).toBeNull();
+
+    // The production machine: started, then the shell exited 0 two seconds later.
+    handler = () =>
+      json(
+        200,
+        flyMachine('stopped', [
+          ...earlier,
+          { type: 'start', status: 'started', timestamp: Date.parse('2026-10-02T12:57:08Z') },
+          exit('2026-10-02T12:57:10Z', 0),
+        ]),
+      );
+    const exited = await flyPersistentOrchestrator.describePersistent(HANDLE);
+    expect(exited).toMatchObject({ state: 'stopped', providerState: 'stopped', exitCode: 0 });
+    expect(exited.stoppedAt?.toISOString()).toBe('2026-10-02T12:57:10.000Z');
+  });
+
   it('reports a machine Fly no longer has as `gone`, and throws on a failed read', async () => {
     handler = () => json(404, {});
     expect(await flyPersistentOrchestrator.describePersistent(HANDLE)).toEqual({
@@ -687,6 +724,31 @@ describe('the terminal machine config (agent-terminal.md Q2–Q4 · MOTIR-6939)'
     expect(config['mounts']).toEqual([{ volume: 'vol_1', path: '/home/node' }]);
     expect(config['restart']).toEqual({ policy: 'on-failure' });
     expect(config['auto_destroy']).toBe(false);
+  });
+
+  it('with the terminal OFF, the idle command is the main process and there is no service — and the terminal’s command wins over it (MOTIR-7336)', async () => {
+    const IDLE = ['sleep', 'infinity'];
+    handler = provisionHandler([]);
+    await flyPersistentOrchestrator.provisionPersistent({ ...SPEC, idleCommand: IDLE });
+    const off = calls.at(-1)!.body!['config'] as Record<string, unknown>;
+    expect(off['init']).toEqual({ cmd: IDLE });
+    expect(off['services']).toBeUndefined();
+    expect(off['restart']).toEqual({ policy: 'on-failure' });
+
+    calls = [];
+    handler = provisionHandler([]);
+    await flyPersistentOrchestrator.provisionPersistent({
+      ...SPEC,
+      terminal: TERMINAL,
+      idleCommand: IDLE,
+    });
+    const on = calls.at(-1)!.body!['config'] as Record<string, unknown>;
+    expect(on['init']).toEqual({ cmd: TERMINAL.command });
+
+    calls = [];
+    handler = provisionHandler([]);
+    await flyPersistentOrchestrator.provisionPersistent(SPEC);
+    expect((calls.at(-1)!.body!['config'] as Record<string, unknown>)['init']).toBeUndefined();
   });
 
   it('allocates the app’s addresses ONCE — a second ensure, on an app that has them, allocates nothing', async () => {
