@@ -855,6 +855,176 @@ describe('the machine’s main process (MOTIR-7336, agent-terminal.md Q4)', () =
   });
 });
 
+// MOTIR-7341 (AMENDMENT 4): a boot or a stop that never settles must still be
+// deletable. Each case leaves the agent stuck the way production did, deletes it,
+// and holds the delete to the ordinary one's outcome: machine and volume gone,
+// the interval closed `deleted`, the slot free, the row gone from the list.
+describe('delete from a boot or a stop that has not settled (AMENDMENT 4)', () => {
+  async function expectFullyDeleted(id: string): Promise<void> {
+    const row = (await instances()).find((r) => r.id === id)!;
+    expect(row.deletedAt).not.toBeNull();
+    expect(fleet.liveMachineIds()).toEqual([]);
+    expect(fleet.liveVolumeIds()).toEqual([]);
+    expect(await slots()).toEqual([]);
+    const open = (await intervals()).filter((i) => i.endedAt === null);
+    expect(open).toEqual([]);
+    expect((await intervals()).at(-1)).toMatchObject({ endReason: 'deleted' });
+    expect((await lifecycle.list(KEY(), { take: 10, skip: 0 }, fx.ctx)).total).toBe(0);
+  }
+
+  it('an agent stuck `starting` is deleted', async () => {
+    fleet.setBootBehaviour('never_start');
+    const dto = await create();
+    expect(dto.state).toBe('starting');
+    expect(await slots()).toHaveLength(1);
+    await lifecycle.delete(KEY(), dto.id, fx.ctx);
+    await expectFullyDeleted(dto.id);
+  });
+
+  it('an agent stuck `starting` on a machine that already STOPPED is deleted (MOTIR-7336’s shape)', async () => {
+    fleet.setBootBehaviour('never_start');
+    const dto = await create();
+    const row = (await instances())[0]!;
+    fleet.stopOutside(row.machineId!);
+    // The boot settle reads a stopped machine as still booting — the stuck agent.
+    expect(await lifecycle.settleBoot(dto.id)).toBe('pending');
+    await lifecycle.delete(KEY(), dto.id, fx.ctx);
+    await expectFullyDeleted(dto.id);
+  });
+
+  it('an agent stuck `waking` is deleted', async () => {
+    const dto = await create();
+    await lifecycle.hibernate(KEY(), dto.id, fx.ctx);
+    fleet.setBootBehaviour('never_start');
+    const woken = await lifecycle.wake(KEY(), dto.id, fx.ctx);
+    expect(woken.state).toBe('waking');
+    await lifecycle.delete(KEY(), dto.id, fx.ctx);
+    await expectFullyDeleted(dto.id);
+  });
+
+  it('an agent stuck `hibernating` is deleted', async () => {
+    const dto = await create();
+    fleet.failNextStop();
+    await lifecycle.hibernate(KEY(), dto.id, fx.ctx);
+    expect((await instances())[0]!.state).toBe('hibernating');
+    await lifecycle.delete(KEY(), dto.id, fx.ctx);
+    await expectFullyDeleted(dto.id);
+  });
+
+  it('the sweep’s plan-lapse delete no longer skips a mid-boot agent', async () => {
+    fleet.setBootBehaviour('never_start');
+    const dto = await create();
+    expect(await lifecycle.beginDelete(dto.id)).toBe(true);
+    await expectFullyDeleted(dto.id);
+  });
+
+  it('an `updating` agent is still refused (agent-image-update.md Q6), and nothing moves', async () => {
+    const dto = await create();
+    await adminDb.agentInstance.update({ where: { id: dto.id }, data: { state: 'updating' } });
+    await expect(lifecycle.delete(KEY(), dto.id, fx.ctx)).rejects.toThrow(
+      AgentInstanceStateConflictError,
+    );
+    expect((await instances())[0]).toMatchObject({ state: 'updating', deletedAt: null });
+    expect(fleet.liveMachineIds()).toHaveLength(1);
+    expect(await slots()).toHaveLength(1);
+  });
+});
+
+// One winner (AMENDMENT 4 §2), against the real database: a settle that runs
+// after the delete's guarded move loses its own compare-and-set and changes
+// nothing. The delete's destroy is made to fail so the row stays `deleting` and
+// the late settle has a live machine to read.
+describe('a settle after a delete has begun changes nothing', () => {
+  async function stuckBootThenDeleting(): Promise<{ id: string; machineId: string }> {
+    fleet.setBootBehaviour('never_start');
+    const dto = await create();
+    const machineId = (await instances())[0]!.machineId!;
+    fleet.failNextDestroy();
+    await lifecycle.delete(KEY(), dto.id, fx.ctx);
+    expect((await instances())[0]).toMatchObject({ state: 'deleting', deletedAt: null });
+    return { id: dto.id, machineId };
+  }
+
+  it('a boot that finishes after the delete began does not move the agent to running', async () => {
+    const { id, machineId } = await stuckBootThenDeleting();
+    fleet.completeBoot(machineId);
+    expect(await lifecycle.settleBoot(id)).toBe('noop');
+    expect((await instances())[0]!.state).toBe('deleting');
+    expect(await lifecycle.settleDelete(id)).toBe('deleted');
+    expect((await intervals())[0]).toMatchObject({ endReason: 'deleted' });
+  });
+
+  it('a boot settle already IN FLIGHT when the delete lands loses its move', async () => {
+    fleet.setBootBehaviour('never_start');
+    const dto = await create();
+    const machineId = (await instances())[0]!.machineId!;
+    fleet.completeBoot(machineId);
+    // The settle reads `starting`, then the owner's delete commits before it moves.
+    const real = fleet.describePersistent.bind(fleet);
+    vi.spyOn(fleet, 'describePersistent').mockImplementationOnce(async (handle) => {
+      fleet.failNextDestroy();
+      await lifecycle.delete(KEY(), dto.id, fx.ctx);
+      return real(handle);
+    });
+    expect(await lifecycle.settleBoot(dto.id)).toBe('noop');
+    expect((await instances())[0]!.state).toBe('deleting');
+    expect(await lifecycle.settleDelete(dto.id)).toBe('deleted');
+    expect(await intervals()).toHaveLength(1);
+    expect((await intervals())[0]).toMatchObject({ endReason: 'deleted' });
+  });
+
+  it('a boot settle in flight that finds the machine gone loses its fail move and closes nothing', async () => {
+    fleet.setBootBehaviour('never_start');
+    const dto = await create();
+    const real = fleet.describePersistent.bind(fleet);
+    vi.spyOn(fleet, 'describePersistent').mockImplementationOnce(async (handle) => {
+      fleet.failNextDestroy();
+      await lifecycle.delete(KEY(), dto.id, fx.ctx);
+      return { ...(await real(handle)), state: 'gone' };
+    });
+    expect(await lifecycle.settleBoot(dto.id)).toBe('failed');
+    expect((await instances())[0]).toMatchObject({ state: 'deleting', failureReason: null });
+    expect((await intervals()).filter((i) => i.endedAt === null)).toHaveLength(1);
+    expect(await lifecycle.settleDelete(dto.id)).toBe('deleted');
+    expect((await intervals())[0]).toMatchObject({ endReason: 'deleted' });
+    expect(await slots()).toEqual([]);
+  });
+
+  it('a stop that lands after the delete began does not move the agent to hibernated or close the interval', async () => {
+    const dto = await create();
+    fleet.failNextStop();
+    await lifecycle.hibernate(KEY(), dto.id, fx.ctx);
+    const machineId = (await instances())[0]!.machineId!;
+    fleet.failNextDestroy();
+    await lifecycle.delete(KEY(), dto.id, fx.ctx);
+    fleet.stopOutside(machineId);
+    expect(await lifecycle.settleStop(dto.id)).toBe('noop');
+    expect((await instances())[0]!.state).toBe('deleting');
+    expect((await intervals()).filter((i) => i.endedAt === null)).toHaveLength(1);
+    expect(await lifecycle.settleDelete(dto.id)).toBe('deleted');
+    expect((await intervals())[0]).toMatchObject({ endReason: 'deleted' });
+  });
+
+  it('a stop settle in flight when the delete lands loses its move and closes nothing', async () => {
+    const dto = await create();
+    fleet.failNextStop();
+    await lifecycle.hibernate(KEY(), dto.id, fx.ctx);
+    const machineId = (await instances())[0]!.machineId!;
+    fleet.stopOutside(machineId);
+    const real = fleet.describePersistent.bind(fleet);
+    vi.spyOn(fleet, 'describePersistent').mockImplementationOnce(async (handle) => {
+      fleet.failNextDestroy();
+      await lifecycle.delete(KEY(), dto.id, fx.ctx);
+      return real(handle);
+    });
+    expect(await lifecycle.settleStop(dto.id)).toBe('noop');
+    expect((await instances())[0]!.state).toBe('deleting');
+    expect((await intervals()).filter((i) => i.endedAt === null)).toHaveLength(1);
+    expect(await lifecycle.settleDelete(dto.id)).toBe('deleted');
+    expect((await intervals())[0]).toMatchObject({ endReason: 'deleted' });
+  });
+});
+
 describe('owner isolation (§8)', () => {
   it('another member cannot list, wake, hibernate or delete my instance — even on the same project', async () => {
     const dto = await create();

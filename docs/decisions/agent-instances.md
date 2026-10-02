@@ -183,6 +183,8 @@ history. Every list excludes it, and the page row disappears.
 | `running` · `hibernating` · `waking` | `failed`          | the reconcile finds the machine or volume `gone`; any open interval closes with `endReason: lost` |
 | `failed`                             | `waking`          | Wake, when the machine and volume still exist                                                     |
 | `running` · `hibernated` · `failed`  | `deleting`        | Delete                                                                                            |
+| `starting` · `waking`                | `deleting`        | Delete — AMENDMENT 4                                                                              |
+| `hibernating`                        | `deleting`        | Delete — AMENDMENT 4                                                                              |
 | `deleting`                           | (row `deletedAt`) | the machine and volume are destroyed; any open interval closes with `endReason: deleted`          |
 
 Every other pair is illegal. **Every transition is a guarded compare-and-set**: one conditional
@@ -534,7 +536,49 @@ per-person cap for every other organisation are unchanged.
 | Your limit                | 10 per person                     | 10 per person, except in Motir's own organisations     |
 | Out of credits            | at create / wake and in the sweep | the same, except in Motir's own organisations          |
 
-## AMENDMENT 4 — every boot ends (MOTIR-7336, 2026-10-02)
+## AMENDMENT 4 — Delete from a boot or a stop that has not settled (MOTIR-7341, 2026-10-02)
+
+§4 let Delete leave only `running`, `hibernated` and `failed`, because it assumed every transitional
+state settles on its own within minutes. **It does not always.** A machine that exits during boot
+leaves the agent `starting` (or `waking`) with nothing to move it on
+([MOTIR-7336](motir:cmuqzyp9u001chzshpjp1shvh)), and a stop that Fly never carries out leaves it
+`hibernating` the same way. Found on production on 2026-10-02: the owner's Delete was disabled, the
+service refused it, and the sweep's own plan-lapse deletion skipped it. The agent still held its fleet
+slot, a place under the owner's agent cap, its machine and its volume, and nobody could remove it
+without editing infrastructure by hand.
+
+### 1 · The new edges
+
+| from          | to         | by     |
+| ------------- | ---------- | ------ |
+| `starting`    | `deleting` | Delete |
+| `waking`      | `deleting` | Delete |
+| `hibernating` | `deleting` | Delete |
+
+`deleting` then settles exactly as before: the machine is destroyed **whatever state it is in**, then
+the volume, the open interval closes `deleted`, its slot is released, and the row takes `deletedAt`.
+The sweep's plan-lapse deletion (`beginDelete`) uses the same guard, so it no longer skips an agent
+that is mid-boot or mid-stop.
+
+**`updating` keeps no Delete edge.** `agent-image-update.md` Q6 refuses Hibernate and Delete there on
+purpose, and an update cannot stall: its settle's own deadlines end it in `running` or `failed`, and
+`failed` is deletable.
+
+### 2 · What does not change
+
+- **Never under a running run** (`agent-instance-run.md`): Delete is still refused, in words, while a
+  run works in the agent. The person cancels it first.
+- **One winner.** The move to `deleting` is the same guarded compare-and-set. A boot, stop or fail
+  settle that runs after it — the boot that finishes while the delete runs — loses its own
+  compare-and-set and changes nothing: it never moves the agent to `running`, `hibernated` or
+  `failed`, and it closes no interval, so the interval's end reason is the delete's.
+
+### 3 · What a person sees
+
+The My agents row menu and the agent panel offer Delete… for a `starting`, `waking` or `hibernating`
+agent, with the same confirmation. It stays disabled for `deleting` and `updating`.
+
+## AMENDMENT 5 — every boot ends (MOTIR-7336, 2026-10-02)
 
 §4's table says `starting` and `waking` move to `running` or `failed`, and the settle failed a boot
 only on `gone` or `failed`. A machine that EXITED during a boot reads `stopped`, which §1 rightly calls

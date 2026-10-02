@@ -100,6 +100,8 @@ export const SIGNED_IN_SEGMENTS = [
   // The no-project landing (MOTIR-6548).
   'no-project',
   'onboarding',
+  // MOTIR-7280 — the pages of a project, each at its own address.
+  'pages',
   'planning',
   'plans',
   'ready',

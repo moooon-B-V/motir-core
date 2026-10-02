@@ -21,3 +21,9 @@ export const PAGE_LEVEL_PAGE_SIZE = 50;
 
 /** §4 — pages per tree level read, at most. */
 export const PAGE_LEVEL_PAGE_SIZE_MAX = 100;
+
+/**
+ * The longest page title, in characters. Confluence's page-title limit: a page
+ * title is a document heading, where a folder name (120) is a label.
+ */
+export const PAGE_TITLE_MAX_LENGTH = 255;

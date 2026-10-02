@@ -478,6 +478,8 @@ const RUN_BOOT_FAILED = 'the agent stopped before the run could start';
 /**
  * Move an instance to `failed` with its reason, closing its interval (`lost`) and
  * releasing its slot — and, first, closing the run running in it `failed` (§6).
+ * A move that LOSES (a Delete got there first, AMENDMENT 4) closes nothing: the
+ * winner owns the interval, and `settleDelete` closes it `deleted`.
  */
 async function failInstance(
   row: AgentInstance,
@@ -485,7 +487,7 @@ async function failInstance(
   runDetail: string = RUN_MACHINE_LOST,
 ): Promise<void> {
   await endRunIn(row, 'failed', runDetail);
-  await systemTransition(
+  const moved = await systemTransition(
     row,
     ['starting', 'waking', 'running', 'hibernating', 'updating'],
     'failed',
@@ -496,7 +498,7 @@ async function failInstance(
       targetImageVersion: null,
     },
   );
-  await closeOpenInterval(row, agentInstanceClock.now(), 'lost');
+  if (moved) await closeOpenInterval(row, agentInstanceClock.now(), 'lost');
 }
 
 /**
@@ -1256,7 +1258,7 @@ export const agentInstanceLifecycleService = {
    * `agent-instance-storage.md` §4): the same guarded move and the same settle as
    * the owner's delete, so the machine, the volume and the final interval's charge
    * are handled exactly as there. Returns false when the instance could not enter
-   * `deleting` (it is mid-boot or already going) — the next pass tries again.
+   * `deleting` (it is updating or already going) — the next pass tries again.
    */
   async beginDelete(instanceId: string): Promise<boolean> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
@@ -1266,7 +1268,12 @@ export const agentInstanceLifecycleService = {
     return true;
   },
 
-  /** Delete an instance and its home (§1, §4): guarded, then machine then volume. */
+  /**
+   * Delete an instance and its home (§1, §4): guarded, then machine then volume.
+   * Legal mid-boot and mid-stop too (AMENDMENT 4): the destroy takes the machine in
+   * whatever state it is, and a boot or stop settle that runs after the guarded
+   * move loses its own compare-and-set and changes nothing.
+   */
   async delete(projectKey: string, instanceId: string, ctx: ServiceContext): Promise<void> {
     const project = await resolveProject(projectKey, ctx);
     requireLane();
@@ -1419,6 +1426,10 @@ export const agentInstanceLifecycleService = {
 
     // Running: the guarded move and the run check in ONE transaction, so a run
     // opened before the move commits is seen here and the move is undone (Q8).
+    // The move is guarded on the digest read above as well as the state: an
+    // earlier press can update the agent and settle it back to `running` between
+    // that read and this move, and the state alone would let this press run the
+    // same update a second time (MOTIR-7340).
     const moved = await inProject(project, ctx, async (tx) => {
       const n = await agentInstanceRepository.transition(
         row.id,
@@ -1427,6 +1438,7 @@ export const agentInstanceLifecycleService = {
         agentInstanceClock.now(),
         pin,
         tx,
+        { imageDigest: row.imageDigest },
       );
       if (n !== 1) return 0;
       const running = await dispatchRunRepository.findRunningByAgentInstance(row.id, tx);
@@ -1443,7 +1455,11 @@ export const agentInstanceLifecycleService = {
       return n;
     });
     if (moved !== 1) {
-      throw new AgentInstanceStateConflictError(row.id, (await reload(row)).state, 'updated');
+      const now = await reload(row);
+      if (now.state === 'running' && now.imageDigest === newest.digest) {
+        throw new AgentInstanceUpToDateError(row.id, now.imageVersion ?? newest.version);
+      }
+      throw new AgentInstanceStateConflictError(row.id, now.state, 'updated');
     }
 
     const fresh = await reload(row);
@@ -1631,8 +1647,11 @@ export const agentInstanceLifecycleService = {
       return 'failed';
     }
     if (status.state !== 'stopped') return 'pending';
+    // Move first: a Delete that took the agent out of `hibernating` meanwhile wins,
+    // and its settle closes the interval `deleted` (AMENDMENT 4).
+    if (!(await systemTransition(row, ['hibernating'], 'hibernated'))) return 'noop';
     await closeOpenInterval(row, status.stoppedAt ?? agentInstanceClock.now(), endReason);
-    return (await systemTransition(row, ['hibernating'], 'hibernated')) ? 'hibernated' : 'noop';
+    return 'hibernated';
   },
 
   /**

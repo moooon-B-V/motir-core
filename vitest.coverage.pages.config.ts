@@ -1,0 +1,107 @@
+import { defineConfig } from 'vitest/config';
+import baseConfig from './vitest.config';
+
+// STORY MOTIR-5752's `motir-core` COVERAGE FLOOR (write a page; MOTIR-7281).
+//
+// ⚠️ WHAT A FLOOR IS FOR HERE, AND WHAT IT IS NOT. It does not decide whether the
+// assembled pages layer is correct — `tests/integration/pagesStoryGate.test.ts`
+// holds what a percentage cannot see (an editor-shaped update through the save
+// door and back out of `getPage`, two stale saves in parallel both surviving,
+// the derived formats agreeing with the stored state after every save, a page
+// image outliving the orphan sweep, create → rename → list, the tenant and
+// project ceilings, and every page door per built-in role). What a floor catches
+// is what those cannot: a LATER change that deletes a branch's only test and
+// leaves the branch.
+//
+// ⚠️ PER-FILE, NEVER GLOBAL, and over the files this story CREATED. The package
+// half of the story (`packages/pages/src/**`) carries its own per-file floor in
+// `packages/pages/vitest.config.ts`, run by the `pages` job.
+//
+// ⚠️ THE TWO SHARED FILES THE STORY CHANGED ARE REPORTED, NOT GATED.
+// `attachmentsService.ts` and `attachmentRepository.ts` belong to the attachments
+// surface (Subtask 2.3.7 onward), and this lane runs only the suites that reach
+// the PAGE path, so a whole-file floor would measure other stories' lines — the
+// hosted-agent-run and review-agent lanes' reason for the same choice. The
+// story's own lines in them — the page arm of `getContentRedirect`,
+// `uploadPageImage`, `linkToPage` and the orphan predicate's `pageId: null` — are
+// covered by this lane's suites (measured on this branch, 2026-10-02): every line
+// and every branch arm of them but ONE, `if (!page) throw` in the page arm of
+// `getContentRedirect`. That arm is defensive: `attachment.page_id` is
+// `ON DELETE SET NULL`, so a row naming a page that does not exist cannot be
+// read, only raced (a page deleted between the two reads of one transaction).
+// The report's other uncovered ranges in both files fall outside the story's
+// lines.
+//
+// ⚠️ IT RUNS THE SUITES THAT REACH THE SURFACE, NOT THE WHOLE TREE. Measured with:
+//   pnpm coverage:pages
+// It needs Postgres and the built `@motir/pages` (`pnpm --filter @motir/pages
+// build`), which the app resolves from the package's `dist/`.
+//
+// ⚠️ ROUTE GROUPS AND DYNAMIC SEGMENTS ARE MATCHED WITH `**` / `*`, NEVER THE
+// LITERAL `(authed)` or `[pageId]` (MOTIR-2449: both are glob syntax to the
+// matcher the coverage provider uses, so a literal path matches no file and its
+// threshold passes vacuously).
+//
+// ⚠️ IT DOES NOT OVERRIDE `resolve` — spread the base config and change only what
+// this lane is about (the onboarding-routing lane's comment says why).
+const FLOOR = { statements: 90, functions: 90, branches: 90, lines: 90 } as const;
+
+const STORY_FILES = [
+  'lib/services/pagesService.ts',
+  'lib/repositories/pageRepository.ts',
+  'lib/mappers/pageMappers.ts',
+  'lib/pages/index.ts',
+  'lib/pages/pageStoreAdapter.ts',
+  'lib/pages/routeErrors.ts',
+  // `/api/pages`, `/api/pages/[pageId]`, `…/updates`, `…/images`.
+  'app/api/pages/route.ts',
+  'app/api/pages/*/route.ts',
+  'app/api/pages/*/*/route.ts',
+  // The editor host.
+  'components/pages/*.tsx',
+  // `app/(authed)/pages/**` — the index, New page and the page at its address.
+  'app/**/pages/page.tsx',
+  'app/**/pages/*/page.tsx',
+  'app/**/pages/_components/*.tsx',
+  'app/**/pages/*/_components/*.tsx',
+] as const;
+
+const SHARED_FILES = [
+  'lib/services/attachmentsService.ts',
+  'lib/repositories/attachmentRepository.ts',
+] as const;
+
+export default defineConfig({
+  ...baseConfig,
+  test: {
+    ...baseConfig.test,
+    include: [
+      // The story gate — the assembly, on the real doors.
+      'tests/integration/pagesStoryGate.test.ts',
+      // The per-card server suites (MOTIR-7276 · 7277 · 7278 · 7279 · 7300).
+      'tests/page-schema-rls.test.ts',
+      'tests/pages/*.test.ts',
+      'tests/pages/*.test.tsx',
+      'tests/services/pagesService.*.test.ts',
+      'tests/services/attachmentsService.pageImage.integration.test.ts',
+      'tests/jobs/attachment-gc.test.ts',
+      'tests/api/pages-routes.test.ts',
+      'tests/api/pages-routes-refusals.test.ts',
+      // The client surfaces (MOTIR-7280 · 7300).
+      'tests/components/new-page-button.test.tsx',
+      'tests/components/page-view.test.tsx',
+      'tests/components/page-view-edges.test.tsx',
+      'tests/components/pages-index.test.tsx',
+    ],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary'],
+      all: true,
+      include: [...STORY_FILES, ...SHARED_FILES],
+      thresholds: {
+        perFile: true,
+        ...Object.fromEntries(STORY_FILES.map((file) => [file, FLOOR])),
+      },
+    },
+  },
+});

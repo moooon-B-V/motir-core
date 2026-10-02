@@ -498,5 +498,5 @@ which the record never said.
 
 **Not covered:** an agent CREATED terminal-off before this change keeps a machine config with no main
 process, because a wake rewrites the config only to install the terminal (Q8). Its wake now ENDS
-`failed` in words (`agent-instances.md` AMENDMENT 4) instead of hanging; setting the master key and
+`failed` in words (`agent-instances.md` AMENDMENT 5) instead of hanging; setting the master key and
 waking brings it up on Q8's terminal config, or the owner deletes it.

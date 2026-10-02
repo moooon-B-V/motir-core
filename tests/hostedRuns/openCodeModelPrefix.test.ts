@@ -12,13 +12,13 @@ import { describe, expect, it } from 'vitest';
 // `toOpenCodeModel` in `lib/services/hostedRunModelService.ts` is the only
 // module allowed to write the prefix — and since MOTIR-7208 it writes it from the
 // offered entry's `provider`, so NO module, the home included, carries a literal
-// `anthropic/` or `deepseek/` prefix.
+// `anthropic/`, `deepseek/`, `z-ai/` or `qwen/` prefix (the last two since MOTIR-7244).
 //
 // SCOPE: the shipped source trees — `lib/`, `app/`, `components/` and every
 // `packages/*` source file (the CLI and the hosted-agent image included) —
 // skipping `node_modules`, build output and tests (a test asserts the prefixed
 // value, which is not adding it). The tell is a STRING LITERAL that starts with
-// `anthropic/` or `deepseek/` and goes on to BUILD a value — an interpolation, a concatenation
+// a provider prefix and goes on to BUILD a value — an interpolation, a concatenation
 // or a literal model id. Comment lines are dropped first, and a placeholder such
 // as `anthropic/<model id>` in an error message documents the expected shape
 // rather than writing it, so neither counts.
@@ -36,7 +36,7 @@ const SKIP_DIRS = new Set([
 ]);
 const SOURCE = /\.(ts|tsx|js|mjs|cjs|sh)$/;
 const THE_ONE_HOME = 'lib/services/hostedRunModelService.ts';
-const PREFIX_LITERAL = /['"`](?:anthropic|deepseek)\/(?:\$\{|['"`]|[A-Za-z0-9])/;
+const PREFIX_LITERAL = /['"`](?:anthropic|deepseek|z-ai|qwen)\/(?:\$\{|['"`]|[A-Za-z0-9])/;
 /** The one way the home builds it: the offered entry's provider, a slash, its bare id. */
 const PROVIDER_TEMPLATE = /`\$\{model\.provider\}\/\$\{model\.id\}`/;
 const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*)/;
@@ -66,7 +66,7 @@ function* walk(dir: string): Generator<string> {
 }
 
 describe('the OpenCode model prefix', () => {
-  it('is written as a literal (anthropic/, deepseek/) by no module at all', () => {
+  it('is written as a literal (anthropic/, deepseek/, z-ai/, qwen/) by no module at all', () => {
     const offenders: string[] = [];
     for (const tree of TREES) {
       for (const file of walk(join(ROOT, tree))) {

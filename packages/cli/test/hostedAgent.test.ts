@@ -24,13 +24,16 @@ import {
  * (The hosted image carried its own copy until MOTIR-6560; the CLI now owns the
  * only one, and this literal is what holds it to the contract.)
  *
- * Pinned to §2 as amended by MOTIR-7207 (story MOTIR-7205) — motir-gateway commit
- * `7d96eda` on `parent/MOTIR-7205-hosted-deepseek`: `anthropic` AND `deepseek`, both
- * at the gateway on the run key.
+ * Pinned to §2 as amended by MOTIR-7243 (story MOTIR-4332) — motir-gateway commit
+ * `2a901eb` on `parent/MOTIR-4332-glm-qwen`: `anthropic`, `deepseek`, `z-ai` and
+ * `qwen`, all at the gateway on the run key. The two custom providers name their
+ * package (`@ai-sdk/openai-compatible`, bundled in the binary) and carry no
+ * `models`: the CLI writes the run's one model there at launch (§2's template note).
+ * (Previously pinned to MOTIR-7207's amendment, `7d96eda`, with the first two only.)
  */
 const EGRESS_CONTRACT_SECTION_2 = {
   $schema: 'https://opencode.ai/config.json',
-  enabled_providers: ['anthropic', 'deepseek'],
+  enabled_providers: ['anthropic', 'deepseek', 'z-ai', 'qwen'],
   provider: {
     anthropic: {
       options: {
@@ -39,6 +42,20 @@ const EGRESS_CONTRACT_SECTION_2 = {
       },
     },
     deepseek: {
+      options: {
+        baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
+        apiKey: '{env:MOTIR_RUN_KEY}',
+      },
+    },
+    'z-ai': {
+      npm: '@ai-sdk/openai-compatible',
+      options: {
+        baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
+        apiKey: '{env:MOTIR_RUN_KEY}',
+      },
+    },
+    qwen: {
+      npm: '@ai-sdk/openai-compatible',
       options: {
         baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
         apiKey: '{env:MOTIR_RUN_KEY}',
@@ -121,7 +138,7 @@ describe('hostedOpenCodeAgent (AC3)', () => {
     expect(() => hostedOpenCodeAgent(env)).toThrow(/missing MOTIR_RUN_KEY/);
     for (const model of ['gpt-5', 'openai/gpt-5', 'deepseek/', '/deepseek-v4-pro']) {
       expect(() => hostedOpenCodeAgent({ ...containerEnv(), MOTIR_MODEL: model })).toThrow(
-        /must be "<provider>\/<model id>" with provider one of anthropic, deepseek/,
+        /must be "<provider>\/<model id>" with provider one of anthropic, deepseek, z-ai, qwen/,
       );
     }
   });
@@ -133,8 +150,51 @@ describe('hostedOpenCodeAgent (AC3)', () => {
     });
     expect(agent.args).toEqual(['run', '--model', 'deepseek/deepseek-v4-pro', '--auto']);
     const config = JSON.parse(agent.env!['OPENCODE_CONFIG_CONTENT']!);
-    expect(config.enabled_providers).toEqual(['anthropic', 'deepseek']);
-    expect(Object.keys(config.provider)).toEqual(['anthropic', 'deepseek']);
+    expect(config).toEqual(EGRESS_CONTRACT_SECTION_2);
+  });
+
+  it('launches a GLM or Qwen model with all four providers, its ONE model declared under its provider (MOTIR-7244)', () => {
+    for (const [model, provider, id] of [
+      ['z-ai/glm-4.6', 'z-ai', 'glm-4.6'],
+      ['qwen/qwen-plus', 'qwen', 'qwen-plus'],
+    ] as const) {
+      const agent = hostedOpenCodeAgent({ ...containerEnv(), MOTIR_MODEL: model });
+      expect(agent.args).toEqual(['run', '--model', model, '--auto']);
+      const config = JSON.parse(agent.env!['OPENCODE_CONFIG_CONTENT']!);
+      expect(config.enabled_providers).toEqual(['anthropic', 'deepseek', 'z-ai', 'qwen']);
+      expect(Object.keys(config.provider)).toEqual(['anthropic', 'deepseek', 'z-ai', 'qwen']);
+      // Exactly the run's model, under exactly its provider — and nothing else moved.
+      expect(config.provider[provider].models).toEqual({ [id]: {} });
+      const { models: _models, ...rest } = config.provider[provider];
+      expect(rest).toEqual(EGRESS_CONTRACT_SECTION_2.provider[provider]);
+      const others = Object.keys(config.provider).filter((p) => p !== provider);
+      for (const other of others) {
+        expect(config.provider[other]).toEqual(
+          EGRESS_CONTRACT_SECTION_2.provider[
+            other as keyof typeof EGRESS_CONTRACT_SECTION_2.provider
+          ],
+        );
+      }
+    }
+    // The exported document stays the contract's static template.
+    expect(EGRESS_DOCUMENT).toEqual(EGRESS_CONTRACT_SECTION_2);
+  });
+
+  it("refuses OpenCode's own bundled provider ids before launching, naming the four (MOTIR-7244)", () => {
+    for (const model of ['zhipuai/glm-4.6', 'zai/glm-4.6', 'alibaba/qwen-plus']) {
+      expect(() => hostedOpenCodeAgent({ ...containerEnv(), MOTIR_MODEL: model })).toThrow(
+        /provider one of anthropic, deepseek, z-ai, qwen, got "/,
+      );
+    }
+  });
+
+  it('writes no model for a catalog provider, or with no model at all (MOTIR-7244)', () => {
+    expect(JSON.parse(egressConfig('anthropic/claude-sonnet-5'))).toEqual(
+      EGRESS_CONTRACT_SECTION_2,
+    );
+    expect(JSON.parse(egressConfig('deepseek/deepseek-v4-pro'))).toEqual(EGRESS_CONTRACT_SECTION_2);
+    expect(JSON.parse(egressConfig())).toEqual(EGRESS_CONTRACT_SECTION_2);
+    expect(JSON.parse(egressConfig('z-ai/'))).toEqual(EGRESS_CONTRACT_SECTION_2);
   });
 
   it('leaves an Anthropic model exactly as it was (MOTIR-7208)', () => {

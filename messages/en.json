@@ -357,6 +357,7 @@
       "plan": "Plans",
       "run": "Agent runs",
       "instance": "Personal agents",
+      "page": "Pages",
       "public_request": "Public requests",
       "member": "Members & access",
       "board": "Boards",
@@ -433,6 +434,14 @@
     "instance_use": {
       "label": "Use your own agents",
       "description": "Create, wake, hibernate and delete your own agents on this project — machines charged per running minute. It never opens anyone else's."
+    },
+    "page_view": {
+      "label": "Read pages",
+      "description": "Open and read the project's pages."
+    },
+    "page_edit": {
+      "label": "Edit pages",
+      "description": "Create pages, rename them and change what they say."
     },
     "public_request_comment": {
       "label": "Comment on requests",
@@ -1106,6 +1115,7 @@
       "workbench": "Workbench",
       "dashboard": "Dashboard",
       "issues": "Work Items",
+      "pages": "Pages",
       "ready": "Ready",
       "runs": "Runs",
       "myAgents": "My agents",
@@ -1227,6 +1237,7 @@
       "accountHeading": "Account",
       "goToDashboard": "Go to Dashboard",
       "goToIssues": "Go to Work Items",
+      "goToPages": "Go to Pages",
       "goToBoards": "Go to Boards",
       "goToReports": "Go to Reports",
       "goToApprovalRecords": "Go to Approval records",
@@ -11496,6 +11507,76 @@
       "carriedValueVerified": "<b>{host}</b>, an app calling itself “{app}” — you’ll pick a workspace and approve next.",
       "carriedValueUnverified": "An app calling itself “{app}”, which Motir hasn’t verified — you’ll pick a workspace and approve next.",
       "foot": "Only the account you sign in as can approve this — and only its workspaces can be picked."
+    }
+  },
+  "pages": {
+    "untitled": "Untitled",
+    "index": {
+      "title": "Pages",
+      "subtitle": "Specs, runbooks and notes for this project — most recently edited first.",
+      "newPage": "New page",
+      "creating": "Creating page…",
+      "createFailed": "Couldn’t create the page. Try again.",
+      "listLabel": "Pages in this project",
+      "edited": "Edited {time} by {name}",
+      "editedByYou": "Edited {time} by you",
+      "empty": {
+        "title": "No pages yet",
+        "member": "Write down a spec, a runbook or the notes from a meeting — it stays here, beside the project’s work.",
+        "viewer": "When someone in this project writes a page, it appears here."
+      }
+    },
+    "page": {
+      "back": "Pages",
+      "backLabel": "Back to Pages",
+      "titleLabel": "Page title",
+      "titleTooLong": "The title is too long — keep it to {limit} characters.",
+      "renameFailed": "Couldn’t save the title. Check your connection and try again."
+    },
+    "editor": {
+      "bodyLabel": "Page body",
+      "bodyPlaceholder": "Start writing. Use the toolbar for headings, lists, tables, code and images.",
+      "imageUploadFailed": "Couldn’t upload the image. Try again.",
+      "toolbar": {
+        "label": "Formatting",
+        "bold": "Bold",
+        "italic": "Italic",
+        "strike": "Strikethrough",
+        "heading": "Heading",
+        "quote": "Quote",
+        "codeBlock": "Code block",
+        "bulletList": "Bulleted list",
+        "orderedList": "Numbered list",
+        "taskList": "Task list",
+        "link": "Link",
+        "linkPrompt": "Link URL",
+        "image": "Insert image",
+        "table": "Insert table"
+      },
+      "table": {
+        "addRow": "+ Row",
+        "addRowLabel": "Add row below",
+        "addColumn": "+ Column",
+        "addColumnLabel": "Add column to the right",
+        "deleteRow": "− Row",
+        "deleteRowLabel": "Delete row",
+        "deleteColumn": "− Column",
+        "deleteColumnLabel": "Delete column",
+        "deleteTable": "Delete table"
+      },
+      "status": {
+        "saved": "Saved",
+        "saving": "Saving…",
+        "offline": "Offline — edits kept",
+        "offlineDetail": "Your last save didn’t reach Motir. Your edits are kept in this tab and are sent as soon as you’re back online — keep the tab open until it says Saved.",
+        "tooLarge": "Not saved"
+      },
+      "tooLarge": {
+        "title": "This page is too large to save",
+        "body": "Your edits since the last save would take the page past its 2 MB limit, so they were not saved — and nothing more will be saved from this tab. Copy out anything you want to keep, then reload to go back to the last saved version. To make room, move long sections into a new page or remove large tables and pasted text.",
+        "reload": "Reload saved version",
+        "newPageNewTab": "New page in a new tab"
+      }
     }
   }
 }
