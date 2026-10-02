@@ -8624,15 +8624,18 @@
         },
         "errors": {
           "title": "错误",
-          "value": "无读数",
-          "detail": "—",
+          "value": "24 小时内 {count} 个错误",
+          "detail": "过去 24 小时内 Motir 的 Sentry 项目中的事件。低于 {threshold} 个错误的阈值。",
+          "degradedDetail": "过去 24 小时内超过 {threshold} 个错误的阈值。打开 Sentry 查看哪些问题在激增。",
           "unreachable": {
             "noReadCredential": "读不到 Sentry",
-            "notConfigured": "错误上报未开启"
+            "notConfigured": "错误上报未开启",
+            "readFailed": "Sentry 没有响应"
           },
           "unreachableDetail": {
-            "noReadCredential": "错误确实在上报，但本控制台没有可用于读回计数的 Sentry API 凭据。这不是错误数为零。凭据和分服务商看板随故事 10.2 一起交付。",
-            "notConfigured": "此构建没有配置 Sentry DSN，因此不会向任何地方上报。这不是错误数为零——自托管实例出现这种情况是正常的。"
+            "noReadCredential": "Sentry 正在接收错误，但本控制台还读不到计数：它没有 Sentry 读取凭据。这不是错误数为零。",
+            "notConfigured": "此构建没有配置 Sentry DSN，因此不会向任何地方上报。这不是错误数为零——自托管实例出现这种情况是正常的。",
+            "readFailed": "刚才没能读到计数。这不是错误数为零。"
           },
           "linkOut": "Sentry 问题"
         },

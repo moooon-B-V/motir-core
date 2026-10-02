@@ -8628,15 +8628,18 @@
         },
         "errors": {
           "title": "Errors",
-          "value": "No reading",
-          "detail": "—",
+          "value": "{count} errors · 24h",
+          "detail": "Events in Motir's Sentry project over the last 24 hours. Under the {threshold}-error threshold.",
+          "degradedDetail": "Over the {threshold}-error threshold for the last 24 hours. Open Sentry to see which issues are spiking.",
           "unreachable": {
             "noReadCredential": "No reading from Sentry",
-            "notConfigured": "Error reporting is off"
+            "notConfigured": "Error reporting is off",
+            "readFailed": "No response from Sentry"
           },
           "unreachableDetail": {
-            "noReadCredential": "Errors ARE being reported, but this console holds no Sentry API credential to read the count back. This is not an error count of zero. The credential and the per-provider board arrive with Story 10.2.",
-            "notConfigured": "This build has no Sentry DSN, so nothing is reported anywhere. This is not an error count of zero — expected on a self-hosted instance."
+            "noReadCredential": "Sentry is receiving errors, but this console can't read the count yet: it holds no Sentry read credential. This is not an error count of zero.",
+            "notConfigured": "This build has no Sentry DSN, so nothing is reported anywhere. This is not an error count of zero — expected on a self-hosted instance.",
+            "readFailed": "The count could not be read just now. This is not an error count of zero."
           },
           "linkOut": "Sentry issues"
         },

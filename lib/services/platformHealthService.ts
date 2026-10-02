@@ -10,6 +10,8 @@ import type {
 import { GATEWAY_STATUS_TIMEOUT_MS } from '@/lib/gateway/statusClient';
 import { gatewayStatusReader } from '@/lib/gateway/statusProvider';
 import { serverSentryDsn } from '@/lib/monitoring/config';
+import { errorCountReader } from '@/lib/monitoring/errorCountProvider';
+import { SENTRY_ERROR_COUNT_WINDOW_HOURS } from '@/lib/monitoring/sentryErrorCount';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { databaseHealthRepository } from '@/lib/repositories/databaseHealthRepository';
 import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
@@ -129,6 +131,20 @@ const DB_SLOW_MS = 500;
 const GATEWAY_SLOW_MS = 1000;
 
 /**
+ * At or above this many errors in 24 hours, the Errors card reads `degraded`
+ * rather than `healthy` (MOTIR-740). Inclusive, so the threshold itself is
+ * already worth a look.
+ *
+ * 100 is not an SLO and is not presented as one — like `DB_SLOW_MS`, it is the
+ * point past which an operator glancing at this board should open Sentry. A
+ * quiet day for a deployment this size is a handful of errors; a hundred in a
+ * day is a spike or a new crash loop, and the issues link-out beside the number
+ * is where an operator learns which. The real count is always rendered beside the
+ * verdict, and the threshold rides in `values` so the card's detail can name it.
+ */
+const ERRORS_24H_DEGRADED = 100;
+
+/**
  * How long the OLDEST claimable run may wait before the queue reads `stalled`.
  *
  * ⚠️ AGE IS THE SIGNAL AND DEPTH IS THE CONTEXT, which is the whole shape of
@@ -175,7 +191,7 @@ export const platformHealthService = {
         gatewaySignal(),
         scheduleSignalFrom(schedules),
         failedJobsSignal(now),
-        Promise.resolve(errorsSignal()),
+        errorsSignal(),
         lastHealthCheckSignal(now),
       ]);
 
@@ -419,25 +435,44 @@ async function failedJobsSignal(now: Date): Promise<PlatformSignalDTO> {
 }
 
 /**
- * The error-monitoring signal.
+ * The error-monitoring signal — how many errors Motir's own Sentry project
+ * accepted in the last 24 hours (MOTIR-740).
  *
- * ⚠️ ALWAYS `unreachable`, AND THAT IS THE HONEST ANSWER RATHER THAN A STUB.
- * The design asset (merged 2026-08-10) drew this card unreachable because Sentry
- * was not wired at all — *"`grep sentry package.json` returns nothing today"*.
- * That fact has since changed: MOTIR-1162 merged on 2026-08-26 and Sentry now
- * reports from the server, the edge and the browser. What has NOT changed is
- * that reading an error COUNT back needs a Sentry API token, which no card has
- * provisioned and which Story 10.2 owns along with every other read-only
- * provider integration.
+ * It reads through a PLATFORM credential (`SENTRY_READ_TOKEN`, provisioned by
+ * MOTIR-739: an internal integration with read scopes only), never through a
+ * tenant's Sentry App grant, so one workspace disconnecting its integration
+ * cannot blind the operator console. See `lib/monitoring/sentryErrorCount.ts`.
  *
- * So the two states below are both `unreachable` and they say DIFFERENT things,
- * because an operator needs to tell "this deployment does not report errors at
- * all" from "it reports them and this console cannot read the count yet". What
- * neither of them does is render a zero.
+ * ⚠️ THREE UNREACHABLE REASONS, AND NONE OF THEM IS A ZERO.
+ * - `notConfigured` — no DSN and no read credential: this deployment reports no
+ *   errors anywhere (a self-hosted instance).
+ * - `noReadCredential` — errors ARE reported (a DSN is set), but this console
+ *   holds no read token to count them.
+ * - `readFailed` — the credential is set and Sentry did not answer cleanly (a
+ *   401, a 5xx, a malformed body, a timeout).
+ * Each carries only its `reason`; a measured zero is `healthy` with `count: 0`,
+ * and only a clean read can produce one.
  */
-function errorsSignal(): PlatformSignalDTO {
-  const reason = serverSentryDsn() ? 'noReadCredential' : 'notConfigured';
-  return unreachable('errors', reason, SENTRY_ISSUES_URL);
+async function errorsSignal(): Promise<PlatformSignalDTO> {
+  const reader = errorCountReader();
+  if (!reader.configured()) {
+    const reason = serverSentryDsn() ? 'noReadCredential' : 'notConfigured';
+    return unreachable('errors', reason, SENTRY_ISSUES_URL);
+  }
+
+  const reading = await probe(() => reader.read());
+  if (reading === null) return unreachable('errors', 'readFailed', SENTRY_ISSUES_URL);
+
+  return {
+    id: 'errors',
+    state: reading.count >= ERRORS_24H_DEGRADED ? 'degraded' : 'healthy',
+    values: {
+      count: reading.count,
+      windowHours: SENTRY_ERROR_COUNT_WINDOW_HOURS,
+      threshold: ERRORS_24H_DEGRADED,
+    },
+    linkOut: reader.issuesUrl(reading),
+  };
 }
 
 /**

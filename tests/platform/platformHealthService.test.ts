@@ -8,6 +8,7 @@ import { databaseHealthRepository } from '@/lib/repositories/databaseHealthRepos
 import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { httpGatewayStatusReader } from '@/lib/gateway/statusClient';
+import { httpErrorCountReader } from '@/lib/monitoring/sentryErrorCount';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -560,6 +561,88 @@ describe('the gateway signal (MOTIR-742)', () => {
     });
     // Nothing to ask, so nothing is asked.
     expect(read).not.toHaveBeenCalled();
+  });
+});
+
+describe('the errors signal (MOTIR-740)', () => {
+  // Driven through the real binding's `read` — the seam is the reader, never the
+  // service. `fetch` itself is covered by `tests/monitoring/sentryErrorCount.test.ts`.
+  const counting = (count: number) =>
+    vi.spyOn(httpErrorCountReader, 'read').mockResolvedValue({
+      count,
+      projectId: '42',
+      org: 'motir',
+    });
+
+  beforeEach(() => {
+    vi.stubEnv('MOTIR_E2E_FAKE_ERROR_COUNT', '');
+    vi.stubEnv('SENTRY_READ_TOKEN', 'read-token');
+    vi.stubEnv('SENTRY_ORG', 'motir');
+    vi.stubEnv('SENTRY_PROJECT', 'motir-core');
+  });
+
+  it('12 errors in 24h is healthy, with the count, the window and the threshold', async () => {
+    counting(12);
+    const errors = signal((await platformHealthService.read(currentPrincipal)).signals, 'errors');
+    expect(errors).toEqual({
+      id: 'errors',
+      state: 'healthy',
+      values: { count: 12, windowHours: 24, threshold: 100 },
+      linkOut: 'https://motir.sentry.io/issues/?project=42&statsPeriod=24h',
+    });
+  });
+
+  it('a measured ZERO is healthy with count 0 — the one honest zero', async () => {
+    counting(0);
+    const errors = signal((await platformHealthService.read(currentPrincipal)).signals, 'errors');
+    expect(errors.state).toBe('healthy');
+    expect(errors.values['count']).toBe(0);
+  });
+
+  it('is healthy one under the threshold and DEGRADED at it — the boundary is inclusive', async () => {
+    counting(99);
+    let errors = signal((await platformHealthService.read(currentPrincipal)).signals, 'errors');
+    expect(errors.state).toBe('healthy');
+
+    vi.restoreAllMocks();
+    counting(100);
+    errors = signal((await platformHealthService.read(currentPrincipal)).signals, 'errors');
+    expect(errors.state).toBe('degraded');
+    expect(errors.values['count']).toBe(100);
+  });
+
+  it('a failed Sentry read is unreachable readFailed with NO count, and the board still renders', async () => {
+    vi.spyOn(httpErrorCountReader, 'read').mockRejectedValue(new Error('Sentry answered 401'));
+    const health = await platformHealthService.read(currentPrincipal);
+    const errors = signal(health.signals, 'errors');
+    expect(errors).toEqual({
+      id: 'errors',
+      state: 'unreachable',
+      values: { reason: 'readFailed' },
+      linkOut: 'https://sentry.io/issues/',
+    });
+    expect(errors.values).not.toHaveProperty('count');
+    expect(health.signals).toHaveLength(7);
+    expect(signal(health.signals, 'database').state).toBe('healthy');
+  });
+
+  it('a DSN without a read token is noReadCredential, and nothing is asked of Sentry', async () => {
+    vi.stubEnv('SENTRY_READ_TOKEN', '');
+    vi.stubEnv('SENTRY_DSN', 'https://public@o1.ingest.sentry.io/1');
+    const read = vi.spyOn(httpErrorCountReader, 'read');
+    const errors = signal((await platformHealthService.read(currentPrincipal)).signals, 'errors');
+    expect(errors).toMatchObject({
+      state: 'unreachable',
+      values: { reason: 'noReadCredential' },
+    });
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('no DSN and no read token is notConfigured', async () => {
+    vi.stubEnv('SENTRY_READ_TOKEN', '');
+    vi.stubEnv('SENTRY_DSN', '');
+    const errors = signal((await platformHealthService.read(currentPrincipal)).signals, 'errors');
+    expect(errors).toMatchObject({ state: 'unreachable', values: { reason: 'notConfigured' } });
   });
 });
 

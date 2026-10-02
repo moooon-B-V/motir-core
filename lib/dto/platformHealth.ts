@@ -37,6 +37,12 @@ export type PlatformSignalId =
   | 'gateway'
   | 'schedules'
   | 'failedJobs'
+  /**
+   * Motir's own Sentry project (MOTIR-740). `values` on a read: `count` (errors
+   * accepted over the window), `windowHours` (24) and `threshold` (the degraded
+   * bar, inclusive). Unreachable: `reason` — `notConfigured`, `noReadCredential`
+   * or `readFailed` — and no count.
+   */
   | 'errors'
   | 'lastHealthCheck';
 
