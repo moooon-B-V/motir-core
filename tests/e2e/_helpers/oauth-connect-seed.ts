@@ -368,11 +368,14 @@ export async function openConsent(page: Page, pending: PendingAuthorize): Promis
 
 /** Pick a workspace in the consent screen's picker. */
 export async function pickWorkspace(page: Page, label: string): Promise<void> {
-  await page.getByRole('combobox', { name: `Workspace ${APP_NAME} can act in` }).click();
+  const picker = page.getByRole('combobox', { name: `Workspace ${APP_NAME} can act in` });
+  await picker.click();
+  // The trigger toggles, so a click on a menu that was already open closes it.
+  // Assert it OPENED, so that case fails here, by name, instead of waiting out
+  // the test timeout for an option that will never render (MOTIR-7345).
+  await expect(picker).toHaveAttribute('aria-expanded', 'true');
   await page.getByRole('option', { name: label }).click();
-  await expect(
-    page.getByRole('combobox', { name: `Workspace ${APP_NAME} can act in` }),
-  ).toContainText(label.split(' · ').pop()!);
+  await expect(picker).toContainText(label.split(' · ').pop()!);
 }
 
 /**
