@@ -11524,7 +11524,8 @@
     },
     "summary": {
       "all": "{app} gets <b>{count} of {total}</b> permissions, in every project of <b>{workspace}</b> you can open.",
-      "one": "{app} gets <b>{count}</b> permissions, in <b>{project}</b> only."
+      "one": "{app} gets <b>{count}</b> permissions, in <b>{project}</b> only.",
+      "pickProject": "Pick a project to see what {app} gets."
     },
     "actions": {
       "group": "Approve or deny {app}",

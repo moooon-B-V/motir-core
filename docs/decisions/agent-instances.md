@@ -578,12 +578,34 @@ purpose, and an update cannot stall: its settle's own deadlines end it in `runni
 The My agents row menu and the agent panel offer Delete… for a `starting`, `waking` or `hibernating`
 agent, with the same confirmation. It stays disabled for `deleting` and `updating`.
 
+## AMENDMENT 5 — every boot ends (MOTIR-7336, 2026-10-02)
+
+§4's table says `starting` and `waking` move to `running` or `failed`, and the settle failed a boot
+only on `gone` or `failed`. A machine that EXITED during a boot reads `stopped`, which §1 rightly calls
+not terminal — so the boot read as still in motion, the sweep asked again every pass with no deadline,
+and the agent sat in `starting` for as long as nobody looked, with no reason and no log line.
+
+`settleBoot` now ends every boot (`lib/services/agentInstanceLifecycleService.ts`):
+
+- **A machine that started during THIS boot and then stopped** — its stop instant is at or after the
+  boot's `stateChangedAt` — **is failed with its exit code.** A clean exit (code 0) fails at once:
+  `on-failure` never restarts it. Any other exit, or one with no code, fails once it has stayed stopped
+  for `INSTANCE_BOOT_EXIT_GRACE_MS` (2 minutes), which leaves room for Fly's restart. A stop from
+  BEFORE the boot — the hibernate a wake's `start` has not replaced yet — is not an exit during it.
+- **A boot not `running` within `INSTANCE_BOOT_DEADLINE_MS` (10 minutes) of its start is failed**,
+  whatever the machine says. The sweep settles every boot each 5-minute pass, so no boot outlives the
+  deadline by more than one pass.
+- Each such failure is `failInstance`'s: `failed` with a `failureReason` in words, the interval closed
+  `lost`, the slot released. It also logs ONE lifecycle line — the instance id, its state, the
+  provider's state and the exit code, never a credential.
+- `PersistentContainerStatus.exitCode` carries the exit code of the CURRENT run's exit (Fly: the
+  latest `exit` event's `exit_code`, only when the current run has stopped).
+- A create now stamps `stateChangedAt` from the lifecycle clock, the one the deadline is read against.
+
 ## AMENDMENT 6 — a boot is driven by its own job and read out step by step (MOTIR-7394, 2026-10-02)
 
 **Story:** MOTIR-7393 (_Watch your agent boot_). **Builds on** AMENDMENT 5
-([MOTIR-7336](motir:cmuqzyp9u001chzshpjp1shvh), PR #3355). When this was written that amendment was
-not yet on `main`; it lives on `subtask/MOTIR-7336-an-agent-whose-machine-exits-during-boot`, and this
-amendment's number assumes it merges first.
+([MOTIR-7336](motir:cmuqzyp9u001chzshpjp1shvh), PR #3355).
 
 ### The problem
 

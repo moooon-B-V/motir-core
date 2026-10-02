@@ -13,9 +13,15 @@ import {
   AgentInstanceStateConflictError,
   AgentProfileNotOfferedError,
 } from '@/lib/agentInstances/errors';
-import { INSTANCE_WORKSPACE_PATH } from '@/lib/agentInstances/config';
+import {
+  INSTANCE_BOOT_DEADLINE_MS,
+  INSTANCE_BOOT_EXIT_GRACE_MS,
+  INSTANCE_WORKSPACE_PATH,
+} from '@/lib/agentInstances/config';
+import { AGENT_IDLE_COMMAND } from '@/lib/agentInstances/terminal';
 import { OFFERED_AGENT_PROFILES } from '@/lib/agentInstances/profiles';
 import { imageDigestResolver } from '@/lib/agentInstances/imageDigest';
+import { agentInstanceSweepService } from '@/lib/services/agentInstanceSweepService';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import {
@@ -708,6 +714,144 @@ describe('hibernate, wake and delete', () => {
     expect((await instances())[0]).toMatchObject({ state: 'deleting', deletedAt: null });
     expect(await lifecycle.settleDelete(dto.id)).toBe('deleted');
     expect(await lifecycle.settleDelete(dto.id)).toBe('noop');
+  });
+});
+
+function handleFor(a: {
+  flyApp: string | null;
+  machineId: string | null;
+  volumeId: string | null;
+}) {
+  return {
+    provider: 'fake' as const,
+    app: a.flyApp!,
+    machineId: a.machineId!,
+    volumeId: a.volumeId!,
+    region: 'iad',
+    createdAt: new Date(),
+  };
+}
+
+describe('a boot that ends in a stopped machine always ends (MOTIR-7336)', () => {
+  /** The interval a failed boot closed, and the slot it released. */
+  async function expectFailedBoot(reason: RegExp): Promise<void> {
+    const row = (await instances())[0]!;
+    expect(row.state).toBe('failed');
+    expect(row.failureReason).toMatch(reason);
+    expect((await intervals()).filter((i) => i.endedAt === null)).toEqual([]);
+    expect((await intervals()).at(-1)).toMatchObject({ endReason: 'lost' });
+    expect(await slots()).toEqual([]);
+  }
+
+  it('a CREATE whose machine exits cleanly (code 0) while starting ends failed, naming the exit code', async () => {
+    fleet.setBootBehaviour('never_start');
+    const dto = await create();
+    expect(dto.state).toBe('starting');
+    const row = (await instances())[0]!;
+    virtualNow += 30_000;
+    fleet.exitOutside(row.machineId!, 0);
+    expect(await lifecycle.settleBoot(row.id)).toBe('failed');
+    await expectFailedBoot(
+      /exited during boot \(exit code 0\)\. Wake to try again, or delete it\./,
+    );
+    expect(await lifecycle.settleBoot(row.id)).toBe('noop');
+  });
+
+  it('a WAKE whose machine exits cleanly while waking ends failed the same way', async () => {
+    const dto = await create();
+    await lifecycle.hibernate(KEY(), dto.id, fx.ctx);
+    fleet.setBootBehaviour('never_start');
+    virtualNow += 60_000;
+    const woken = await lifecycle.wake(KEY(), dto.id, fx.ctx);
+    expect(woken.state).toBe('waking');
+    fleet.exitOutside((await instances())[0]!.machineId!, 0);
+    expect(await lifecycle.settleBoot(dto.id)).toBe('failed');
+    await expectFailedBoot(/exited during boot \(exit code 0\)/);
+    // The owner can act on it: a failed agent wakes again.
+    fleet.setBootBehaviour('start');
+    expect((await lifecycle.wake(KEY(), dto.id, fx.ctx)).state).toBe('running');
+  });
+
+  it('a non-zero exit waits out the restart grace — a restart that comes in time boots normally', async () => {
+    fleet.setBootBehaviour('never_start');
+    await create();
+    const row = (await instances())[0]!;
+    fleet.exitOutside(row.machineId!, 1);
+    expect(await lifecycle.settleBoot(row.id)).toBe('pending');
+    virtualNow += INSTANCE_BOOT_EXIT_GRACE_MS - 1_000;
+    expect(await lifecycle.settleBoot(row.id)).toBe('pending');
+    // Fly's on-failure restart brings it up.
+    await fleet.start(handleFor(row));
+    fleet.completeBoot(row.machineId!);
+    expect(await lifecycle.settleBoot(row.id)).toBe('running');
+  });
+
+  it('a non-zero exit nobody restarts ends failed once the grace has passed', async () => {
+    fleet.setBootBehaviour('never_start');
+    await create();
+    const row = (await instances())[0]!;
+    fleet.exitOutside(row.machineId!, 137);
+    virtualNow += INSTANCE_BOOT_EXIT_GRACE_MS;
+    expect(await lifecycle.settleBoot(row.id)).toBe('failed');
+    await expectFailedBoot(/exited during boot \(exit code 137\)/);
+  });
+
+  it('a wake that still reads the HIBERNATION stop is not failed for it — the start has not taken yet', async () => {
+    const dto = await create();
+    await lifecycle.hibernate(KEY(), dto.id, fx.ctx);
+    virtualNow += 3_600_000;
+    // The state a wake leaves before Fly has acted on its start: waking, the
+    // machine still stopped since the hibernate an hour ago.
+    await adminDb.agentInstance.update({
+      where: { id: dto.id },
+      data: { state: 'waking', stateChangedAt: new Date(virtualNow) },
+    });
+    expect(await lifecycle.settleBoot(dto.id)).toBe('pending');
+    expect((await instances())[0]!.state).toBe('waking');
+  });
+
+  it('a boot that never reaches running ends failed at the deadline — no agent sits starting forever', async () => {
+    fleet.setBootBehaviour('never_start');
+    await create();
+    const row = (await instances())[0]!;
+    const began = row.stateChangedAt.getTime();
+    virtualNow = began + INSTANCE_BOOT_DEADLINE_MS - 1_000;
+    expect(await lifecycle.settleBoot(row.id)).toBe('pending');
+    virtualNow = began + INSTANCE_BOOT_DEADLINE_MS;
+    expect(await lifecycle.settleBoot(row.id)).toBe('failed');
+    await expectFailedBoot(/did not finish starting within 10 minutes/);
+  });
+
+  it('the SWEEP fails such a boot and logs one lifecycle line: the instance, the provider state and the exit code — no credential', async () => {
+    fleet.setBootBehaviour('never_start');
+    await create();
+    const row = (await instances())[0]!;
+    fleet.exitOutside(row.machineId!, 0);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const summary = await agentInstanceSweepService.sweep();
+    expect(summary.settled).toBeGreaterThanOrEqual(1);
+    await expectFailedBoot(/exit code 0/);
+    const lines = warn.mock.calls.filter((c) => String(c[0]).includes('boot failed'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]![1]).toEqual({
+      instanceId: row.id,
+      state: 'starting',
+      providerState: 'stopped',
+      exitCode: 0,
+      reason: expect.stringMatching(/exit code 0/),
+    });
+    expect(JSON.stringify(lines[0])).not.toMatch(/ghs_|token|key/i);
+  });
+});
+
+describe('the machine’s main process (MOTIR-7336, agent-terminal.md Q4)', () => {
+  it('with the terminal OFF (no MOTIR_TERMINAL_MASTER_KEY) the machine idles instead of exiting', async () => {
+    vi.stubEnv('MOTIR_TERMINAL_MASTER_KEY', '');
+    await create();
+    const spec = fleet.persistentSpecs[0]!;
+    expect(spec.terminal).toBeNull();
+    expect(spec.idleCommand).toEqual(['sleep', 'infinity']);
+    expect(AGENT_IDLE_COMMAND).toEqual(['sleep', 'infinity']);
   });
 });
 
