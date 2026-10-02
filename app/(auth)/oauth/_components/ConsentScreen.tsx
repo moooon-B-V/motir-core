@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -371,13 +371,63 @@ export function ConsentScreen({
   // ── Panels 1–3, 8 — consent ────────────────────────────────────────────────
   const busy = submitting !== null;
   const multiWorkspace = workspaces.length > 1;
+  const noProject = reach === 'one' && project === null;
   const emptyGrant = reach === 'one' && effectiveGrant.length === 0;
   const canApprove = Boolean(workspaceId) && !emptyGrant && (reach === 'all' || project !== null);
 
+  // What the bar says beside the buttons (MOTIR-7379 § What moves): the reason
+  // Approve is off when it is off — no project yet, then an empty grant — and
+  // otherwise the whole decision, restated where the eye goes to press.
+  let decision: ReactNode;
+  if (noProject) {
+    decision = (
+      <p
+        role="status"
+        className="flex min-w-0 items-start gap-2 font-sans text-sm leading-relaxed text-(--el-text-secondary)"
+      >
+        <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>{t('summary.pickProject', { app })}</span>
+      </p>
+    );
+  } else if (emptyGrant) {
+    decision = (
+      <p
+        role="alert"
+        className="flex min-w-0 items-start gap-2 font-sans text-sm leading-relaxed text-(--el-danger-on-surface)"
+      >
+        <TriangleAlert aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>{t('grant.empty')}</span>
+      </p>
+    );
+  } else {
+    decision = (
+      <p className="flex min-w-0 items-start gap-2 font-sans text-sm leading-relaxed text-(--el-text-secondary)">
+        <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>
+          {reach === 'all'
+            ? t.rich('summary.all', {
+                app,
+                count: DEFAULT_TOKEN_GRANT.length,
+                total: GRANTABLE_PERMISSIONS.length,
+                workspace: workspace?.label ?? '',
+                b: (c) => <strong className="font-semibold text-(--el-text)">{c}</strong>,
+              })
+            : t.rich('summary.one', {
+                app,
+                count: effectiveGrant.length,
+                project: project?.key ?? '',
+                b: (c) => <strong className="font-semibold text-(--el-text)">{c}</strong>,
+              })}
+        </span>
+      </p>
+    );
+  }
+
   return (
-    // `data-auth-wide` widens the (auth) column to 40rem and suppresses the
-    // lockup — the /device confirm step's frame (design § The frame).
-    <div data-auth-wide>
+    // `data-auth-wide="consent"` widens the (auth) card to 64rem at `lg` (40rem
+    // below it), suppresses the lockup and hands the card's bottom padding to
+    // the action bar — `design/auth/oauth-consent--sticky-actions.mock.html`.
+    <div data-auth-wide="consent" className="flex flex-col gap-4">
       <AuthShell
         headline={
           verification.kind === 'domain'
@@ -390,246 +440,281 @@ export function ConsentScreen({
         <div className="flex flex-col gap-4">
           {banner}
 
-          <div className="grid rounded-(--radius-card) border border-(--el-border) sm:grid-cols-2">
-            <DetailColumn>
-              <DetailBlock label={t('detail.app')}>
-                <span className="flex min-w-0 items-center gap-2.5">
-                  {/* Decision 1: never a client logo — a borrowed one is the more
-                      convincing lie. The tile is the name's first letter. */}
-                  <span
-                    aria-hidden
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-card-icon-bg) font-sans text-sm font-semibold text-(--el-card-icon-fg)"
-                  >
-                    {app.trim().charAt(0).toUpperCase() || '?'}
-                  </span>
-                  <span className="flex min-w-0 flex-wrap items-center gap-1.5 font-sans text-sm font-medium text-(--el-text)">
-                    {verification.kind === 'domain' ? (
-                      // The verified host is never truncated: it is the fact.
-                      <span className="font-mono font-semibold break-all">{app}</span>
-                    ) : (
-                      <span className="truncate">{app}</span>
-                    )}
-                    <VerificationPill verification={verification} />
-                  </span>
-                </span>
-                <DetailSub>{appLine(verification, claimedName, t)}</DetailSub>
-              </DetailBlock>
-
-              {/* Decision 3: the return host is always on screen — the code goes
-                  there, so it is part of what is being approved. */}
-              <DetailBlock label={t('detail.returnsTo')}>
-                <span className="flex min-w-0 items-center gap-2 font-sans text-sm font-medium text-(--el-text)">
-                  {request.loopback ? (
-                    <Laptop className="text-(--el-text-muted) h-4 w-4 shrink-0" aria-hidden />
-                  ) : (
-                    <Globe className="text-(--el-text-muted) h-4 w-4 shrink-0" aria-hidden />
-                  )}
-                  <span className="truncate">
-                    {request.loopback ? 'localhost' : request.redirectHost}
-                  </span>
-                </span>
-                <DetailSub>
-                  {request.loopback
-                    ? t('detail.returnsLoopback', { app })
-                    : t('detail.returnsHttps', { uri: request.redirectUri })}
-                </DetailSub>
-              </DetailBlock>
-            </DetailColumn>
-
-            <DetailColumn divided>
-              <DetailBlock label={t('detail.you')}>
-                <span className="flex items-center gap-2.5">
-                  <span
-                    aria-hidden
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-(--el-text) font-sans text-sm font-semibold text-(--el-text-inverted)"
-                  >
-                    {(user.name || user.email).trim().charAt(0).toUpperCase() || '?'}
-                  </span>
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate font-sans text-sm font-medium text-(--el-text)">
-                      {user.name || user.email}
-                    </span>
-                    <span className="text-(--el-text-muted) truncate font-sans text-xs">
-                      {user.email}
-                    </span>
-                  </span>
-                </span>
-                <DetailSub>
-                  {t.rich('detail.notYou', {
-                    link: (chunks) => (
-                      <button
-                        type="button"
-                        onClick={() => void signOutAndSwitch()}
-                        disabled={busy}
-                        className="rounded-(--radius-control) underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) disabled:opacity-50"
+          {/* Two panes at `lg`: who and where (22rem) beside what (the grant at
+              the 36rem its two columns were measured at). One column below. */}
+          <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start lg:gap-x-8">
+            <div className="flex min-w-0 flex-col gap-4">
+              <div className="grid rounded-(--radius-card) border border-(--el-border) sm:grid-cols-2 lg:grid-cols-1">
+                <DetailColumn>
+                  <DetailBlock label={t('detail.app')}>
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      {/* Decision 1: never a client logo — a borrowed one is the
+                          more convincing lie. The tile is the name's first letter. */}
+                      <span
+                        aria-hidden
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-card-icon-bg) font-sans text-sm font-semibold text-(--el-card-icon-fg)"
                       >
-                        {chunks}
-                      </button>
-                    ),
-                  })}
-                </DetailSub>
-              </DetailBlock>
+                        {app.trim().charAt(0).toUpperCase() || '?'}
+                      </span>
+                      <span className="flex min-w-0 flex-wrap items-center gap-1.5 font-sans text-sm font-medium text-(--el-text)">
+                        {verification.kind === 'domain' ? (
+                          // The verified host is never truncated: it is the fact.
+                          <span className="font-mono font-semibold break-all">{app}</span>
+                        ) : (
+                          <span className="truncate">{app}</span>
+                        )}
+                        <VerificationPill verification={verification} />
+                      </span>
+                    </span>
+                    <DetailSub>{appLine(verification, claimedName, t)}</DetailSub>
+                  </DetailBlock>
 
-              <DetailBlock label={t('detail.workspace')}>
-                {multiWorkspace ? (
+                  {/* Decision 3: the return host is always on screen — the code
+                      goes there, so it is part of what is being approved. */}
+                  <DetailBlock label={t('detail.returnsTo')}>
+                    <span className="flex min-w-0 items-center gap-2 font-sans text-sm font-medium text-(--el-text)">
+                      {request.loopback ? (
+                        <Laptop className="text-(--el-text-muted) h-4 w-4 shrink-0" aria-hidden />
+                      ) : (
+                        <Globe className="text-(--el-text-muted) h-4 w-4 shrink-0" aria-hidden />
+                      )}
+                      <span className="truncate">
+                        {request.loopback ? 'localhost' : request.redirectHost}
+                      </span>
+                    </span>
+                    <DetailSub>
+                      {request.loopback
+                        ? t('detail.returnsLoopback', { app })
+                        : t('detail.returnsHttps', { uri: request.redirectUri })}
+                    </DetailSub>
+                  </DetailBlock>
+                </DetailColumn>
+
+                <DetailColumn divided>
+                  <DetailBlock label={t('detail.you')}>
+                    <span className="flex items-center gap-2.5">
+                      <span
+                        aria-hidden
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-(--el-text) font-sans text-sm font-semibold text-(--el-text-inverted)"
+                      >
+                        {(user.name || user.email).trim().charAt(0).toUpperCase() || '?'}
+                      </span>
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate font-sans text-sm font-medium text-(--el-text)">
+                          {user.name || user.email}
+                        </span>
+                        <span className="text-(--el-text-muted) truncate font-sans text-xs">
+                          {user.email}
+                        </span>
+                      </span>
+                    </span>
+                    <DetailSub>
+                      {t.rich('detail.notYou', {
+                        link: (chunks) => (
+                          <button
+                            type="button"
+                            onClick={() => void signOutAndSwitch()}
+                            disabled={busy}
+                            className="rounded-(--radius-control) underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) disabled:opacity-50"
+                          >
+                            {chunks}
+                          </button>
+                        ),
+                      })}
+                    </DetailSub>
+                  </DetailBlock>
+
+                  <DetailBlock label={t('detail.workspace')}>
+                    {multiWorkspace ? (
+                      <Combobox
+                        id="oauth-consent-workspace"
+                        label={t('detail.workspacePicker', { app })}
+                        options={workspaces.map((w) => ({ value: w.id, label: w.label }))}
+                        value={workspaceId}
+                        onChange={chooseWorkspace}
+                        disabled={busy}
+                      />
+                    ) : (
+                      <span className="line-clamp-2 font-sans text-sm font-medium text-(--el-text)">
+                        {workspaces[0]?.label}
+                      </span>
+                    )}
+                    <DetailSub>
+                      {multiWorkspace
+                        ? t('detail.workspaceHelp', { count: workspaces.length })
+                        : t('detail.workspaceOnly')}
+                    </DetailSub>
+                  </DetailBlock>
+                </DetailColumn>
+              </div>
+
+              {/* WHERE — all projects (the fixed default grant) or one (a chosen
+                  grant). The one-arm rule (MOTIR-6983): no project ⇒ no choice. */}
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-0.5">
+                  <span
+                    id={reachLabelId}
+                    className="font-sans text-sm font-medium text-(--el-text)"
+                  >
+                    {t('reach.label')}
+                  </span>
+                  <span className="text-(--el-text-muted) font-sans text-xs">
+                    {reach === 'all'
+                      ? t('reach.helpAll', { workspace: workspace?.label ?? '' })
+                      : t('reach.helpOne')}
+                  </span>
+                </div>
+                <Segmented<Reach>
+                  label={t('reach.label')}
+                  value={reach}
+                  onChange={setReach}
+                  disabled={busy}
+                  options={[
+                    { value: 'all', label: t('reach.all') },
+                    { value: 'one', label: t('reach.one') },
+                  ]}
+                />
+              </div>
+
+              {reach === 'one' ? (
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor={projectFieldId}
+                    className="font-sans text-sm font-medium text-(--el-text)"
+                  >
+                    {t('reach.project')}
+                  </label>
                   <Combobox
-                    id="oauth-consent-workspace"
-                    label={t('detail.workspacePicker', { app })}
-                    options={workspaces.map((w) => ({ value: w.id, label: w.label }))}
-                    value={workspaceId}
-                    onChange={chooseWorkspace}
+                    id={projectFieldId}
+                    label={t('reach.project')}
+                    options={(workspace?.projects ?? []).map((p) => ({
+                      value: p.id,
+                      label: `${p.key} — ${p.name}`,
+                    }))}
+                    value={project?.id ?? null}
+                    onChange={chooseProject}
                     disabled={busy}
                   />
-                ) : (
-                  <span className="line-clamp-2 font-sans text-sm font-medium text-(--el-text)">
-                    {workspaces[0]?.label}
+                  <span className="text-(--el-text-muted) font-sans text-xs">
+                    {t('reach.projectHelp', { app })}
                   </span>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex min-w-0 flex-col gap-4">
+              {/* WHAT — the token picker's own columns and words. */}
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-0.5">
+                  <span
+                    id={grantLabelId}
+                    className="font-sans text-sm font-medium text-(--el-text)"
+                  >
+                    {t('grant.label')}
+                  </span>
+                  <span className="text-(--el-text-muted) font-sans text-xs">
+                    {reach === 'all' ? t('grant.helpAll') : t('grant.helpOne', { app })}
+                  </span>
+                </div>
+                {reach === 'all' ? (
+                  <FixedGrant labelledBy={grantLabelId} />
+                ) : (
+                  <PermissionPicker
+                    labelledBy={grantLabelId}
+                    conferrable={conferrable}
+                    granted={granted}
+                    onToggle={toggle}
+                    lockedWhy={t('grant.locked')}
+                    dangerTag={t('grant.dangerTag')}
+                    disabled={busy}
+                  />
                 )}
-                <DetailSub>
-                  {multiWorkspace
-                    ? t('detail.workspaceHelp', { count: workspaces.length })
-                    : t('detail.workspaceOnly')}
-                </DetailSub>
-              </DetailBlock>
-            </DetailColumn>
-          </div>
+              </div>
 
-          {/* WHERE — all projects (the fixed default grant) or one (a chosen
-              grant). The one-arm rule (MOTIR-6983): no project ⇒ no choice. */}
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-0.5">
-              <span id={reachLabelId} className="font-sans text-sm font-medium text-(--el-text)">
-                {t('reach.label')}
-              </span>
-              <span className="text-(--el-text-muted) font-sans text-xs">
-                {reach === 'all'
-                  ? t('reach.helpAll', { workspace: workspace?.label ?? '' })
-                  : t('reach.helpOne')}
-              </span>
-            </div>
-            <Segmented<Reach>
-              label={t('reach.label')}
-              value={reach}
-              onChange={setReach}
-              disabled={busy}
-              options={[
-                { value: 'all', label: t('reach.all') },
-                { value: 'one', label: t('reach.one') },
-              ]}
-            />
-          </div>
-
-          {reach === 'one' ? (
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor={projectFieldId}
-                className="font-sans text-sm font-medium text-(--el-text)"
-              >
-                {t('reach.project')}
-              </label>
-              <Combobox
-                id={projectFieldId}
-                label={t('reach.project')}
-                options={(workspace?.projects ?? []).map((p) => ({
-                  value: p.id,
-                  label: `${p.key} — ${p.name}`,
-                }))}
-                value={project?.id ?? null}
-                onChange={chooseProject}
-                disabled={busy}
-              />
-              <span className="text-(--el-text-muted) font-sans text-xs">
-                {t('reach.projectHelp', { app })}
-              </span>
-            </div>
-          ) : null}
-
-          {/* WHAT — the token picker's own columns and words. */}
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-0.5">
-              <span id={grantLabelId} className="font-sans text-sm font-medium text-(--el-text)">
-                {t('grant.label')}
-              </span>
-              <span className="text-(--el-text-muted) font-sans text-xs">
-                {reach === 'all' ? t('grant.helpAll') : t('grant.helpOne', { app })}
-              </span>
-            </div>
-            {reach === 'all' ? (
-              <FixedGrant labelledBy={grantLabelId} />
-            ) : (
-              <PermissionPicker
-                labelledBy={grantLabelId}
-                conferrable={conferrable}
-                granted={granted}
-                onToggle={toggle}
-                lockedWhy={t('grant.locked')}
-                dangerTag={t('grant.dangerTag')}
-                disabled={busy}
-              />
-            )}
-            {emptyGrant ? (
-              <p
-                role="alert"
-                className="mt-1 flex items-center gap-1.5 font-sans text-xs text-(--el-danger-on-surface)"
-              >
-                <TriangleAlert aria-hidden className="size-3.5 shrink-0" />
-                {t('grant.empty')}
+              {/* The end of the scrolling content, so it reads over the card
+                  whether or not the bar is stuck: secondary, not muted. */}
+              <p className="font-sans text-xs leading-relaxed text-(--el-text-secondary)">
+                {t('foot.disconnect')}
               </p>
-            ) : null}
+            </div>
           </div>
-
-          {/* The summary restates the whole decision directly above the buttons,
-              so a reader who scrolls straight to Approve still reads it. */}
-          <p className="flex items-start gap-2 border-t border-(--el-border-soft) pt-3 font-sans text-sm leading-relaxed text-(--el-text-secondary)">
-            <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
-              {reach === 'all'
-                ? t.rich('summary.all', {
-                    app,
-                    count: DEFAULT_TOKEN_GRANT.length,
-                    total: GRANTABLE_PERMISSIONS.length,
-                    workspace: workspace?.label ?? '',
-                    b: (c) => <strong className="font-semibold text-(--el-text)">{c}</strong>,
-                  })
-                : t.rich('summary.one', {
-                    app,
-                    count: effectiveGrant.length,
-                    project: project?.key ?? '',
-                    b: (c) => <strong className="font-semibold text-(--el-text)">{c}</strong>,
-                  })}
-            </span>
-          </p>
-
-          {/* Deny FIRST in the DOM and equal weight, the /device composition: the
-              danger hue lives in the BORDER + glyph, never the label. */}
-          <div role="group" aria-label={t('actions.group', { app })} className="flex gap-3">
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => void submit('deny')}
-              disabled={busy}
-              loading={submitting === 'deny'}
-              leftIcon={<CircleX className="h-4 w-4 text-(--el-danger)" />}
-              className="w-full border-(--el-danger)"
-            >
-              {t('actions.deny')}
-            </Button>
-            <Button
-              size="lg"
-              onClick={() => void submit('approve')}
-              loading={submitting === 'approve'}
-              disabled={!canApprove || busy}
-              className="w-full"
-            >
-              {submitting === 'approve' ? t('actions.connecting') : t('actions.approve')}
-            </Button>
-          </div>
-
-          <p className="text-(--el-text-muted) font-sans text-xs leading-relaxed">
-            {t('foot.disconnect')}
-          </p>
         </div>
       </AuthShell>
+
+      <ConsentActionBar decision={decision}>
+        {/* Deny FIRST in the DOM and equal weight, the /device composition: the
+            danger hue lives in the BORDER + glyph, never the label. */}
+        <div
+          role="group"
+          aria-label={t('actions.group', { app })}
+          className="grid gap-2 sm:grid-cols-2 sm:gap-3 lg:flex-none"
+        >
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={() => void submit('deny')}
+            disabled={busy}
+            loading={submitting === 'deny'}
+            leftIcon={<CircleX className="h-4 w-4 text-(--el-danger)" />}
+            className="w-full border-(--el-danger) lg:min-w-44"
+          >
+            {t('actions.deny')}
+          </Button>
+          <Button
+            size="lg"
+            onClick={() => void submit('approve')}
+            loading={submitting === 'approve'}
+            disabled={!canApprove || busy}
+            className="w-full lg:min-w-44"
+          >
+            {submitting === 'approve' ? t('actions.connecting') : t('actions.approve')}
+          </Button>
+        </div>
+      </ConsentActionBar>
+    </div>
+  );
+}
+
+/**
+ * THE PINNED ACTION BAR (MOTIR-7379 § The action bar): the decision and its two
+ * buttons, `sticky bottom-0` as the card's LAST child. It is IN FLOW, never
+ * `fixed`: while the card is taller than the viewport it rides the viewport's
+ * bottom edge, and at the end of the scroll it comes to rest at the card's foot
+ * — so the last permission always ends above it and no spacer is needed.
+ *
+ * The other half of the scroll rule is FOCUS: a Switch reached with Tab while the
+ * bar is stuck must scroll into view above it, not under it. The (auth) page
+ * scrolls the document, so the bar measures itself and writes its height as the
+ * root's `scroll-padding-bottom` — a wrapping summary or a longer locale moves
+ * the number with it — and takes it back when the bar leaves (a terminal state).
+ */
+function ConsentActionBar({ decision, children }: { decision: ReactNode; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const bar = ref.current;
+    if (!bar) return;
+    const root = document.documentElement;
+    const write = () => {
+      root.style.scrollPaddingBottom = `${Math.ceil(bar.getBoundingClientRect().height)}px`;
+    };
+    write();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(write);
+    observer?.observe(bar);
+    return () => {
+      observer?.disconnect();
+      root.style.scrollPaddingBottom = '';
+    };
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      data-consent-bar
+      className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2.5 rounded-b-(--radius-card) border-t border-(--el-border) bg-(--el-page-bg) px-4 pt-3 pb-4 sm:-mx-8 sm:px-8 sm:pb-5 lg:flex-row lg:items-center lg:gap-5"
+    >
+      <div className="min-w-0 lg:flex-1">{decision}</div>
+      {children}
     </div>
   );
 }

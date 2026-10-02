@@ -31,6 +31,18 @@ export const AGENT_TERMINAL_COMMAND: readonly string[] = [
   'motir agent-terminal --help >/dev/null 2>&1 && exec motir agent-terminal serve; exec sleep infinity',
 ];
 
+/**
+ * The main process of a machine booted with the terminal OFF (MOTIR-7336). The
+ * image's own `CMD` is `bash -l`, which exits 0 at once with no TTY — and Fly's
+ * `on-failure` policy does not restart a clean exit — so a machine left on it
+ * stopped two seconds after it started and its boot never ended. Q4's terminal
+ * command already idles on an image with no server ("boots and stays up"), and
+ * this is that same idle for a deployment with no terminal at all: the machine
+ * stays up, reachable through `exec`, exactly as "boot as before the terminal"
+ * assumed it would.
+ */
+export const AGENT_IDLE_COMMAND: readonly string[] = ['sleep', 'infinity'];
+
 /** Q8: the probe run once per image digest on a booted machine — exit 0 means the server is there. */
 export const AGENT_TERMINAL_PROBE_COMMAND: readonly string[] = [
   'motir',
@@ -44,8 +56,9 @@ export const TERMINAL_MASTER_KEY_MIN_LENGTH = 32;
 /**
  * `MOTIR_TERMINAL_MASTER_KEY`, read at CALL time (the instance lane's rule), or
  * null when the deployment has not set it — the terminal is then OFF: machines
- * boot as before the terminal and nothing is probed. A key that is set but too
- * short is a misconfiguration and FAILS LOUDLY rather than deriving weak keys.
+ * boot with no service, idling on {@link AGENT_IDLE_COMMAND}, and nothing is
+ * probed. A key that is set but too short is a misconfiguration and FAILS LOUDLY
+ * rather than deriving weak keys.
  */
 export function terminalMasterKey(): string | null {
   const raw = process.env['MOTIR_TERMINAL_MASTER_KEY']?.trim();

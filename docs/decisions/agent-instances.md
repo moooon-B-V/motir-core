@@ -577,3 +577,226 @@ purpose, and an update cannot stall: its settle's own deadlines end it in `runni
 
 The My agents row menu and the agent panel offer Delete… for a `starting`, `waking` or `hibernating`
 agent, with the same confirmation. It stays disabled for `deleting` and `updating`.
+
+## AMENDMENT 5 — every boot ends (MOTIR-7336, 2026-10-02)
+
+§4's table says `starting` and `waking` move to `running` or `failed`, and the settle failed a boot
+only on `gone` or `failed`. A machine that EXITED during a boot reads `stopped`, which §1 rightly calls
+not terminal — so the boot read as still in motion, the sweep asked again every pass with no deadline,
+and the agent sat in `starting` for as long as nobody looked, with no reason and no log line.
+
+`settleBoot` now ends every boot (`lib/services/agentInstanceLifecycleService.ts`):
+
+- **A machine that started during THIS boot and then stopped** — its stop instant is at or after the
+  boot's `stateChangedAt` — **is failed with its exit code.** A clean exit (code 0) fails at once:
+  `on-failure` never restarts it. Any other exit, or one with no code, fails once it has stayed stopped
+  for `INSTANCE_BOOT_EXIT_GRACE_MS` (2 minutes), which leaves room for Fly's restart. A stop from
+  BEFORE the boot — the hibernate a wake's `start` has not replaced yet — is not an exit during it.
+- **A boot not `running` within `INSTANCE_BOOT_DEADLINE_MS` (10 minutes) of its start is failed**,
+  whatever the machine says. The sweep settles every boot each 5-minute pass, so no boot outlives the
+  deadline by more than one pass.
+- Each such failure is `failInstance`'s: `failed` with a `failureReason` in words, the interval closed
+  `lost`, the slot released. It also logs ONE lifecycle line — the instance id, its state, the
+  provider's state and the exit code, never a credential.
+- `PersistentContainerStatus.exitCode` carries the exit code of the CURRENT run's exit (Fly: the
+  latest `exit` event's `exit_code`, only when the current run has stopped).
+- A create now stamps `stateChangedAt` from the lifecycle clock, the one the deadline is read against.
+
+## AMENDMENT 6 — a boot is driven by its own job and read out step by step (MOTIR-7394, 2026-10-02)
+
+**Story:** MOTIR-7393 (_Watch your agent boot_). **Builds on** AMENDMENT 5
+([MOTIR-7336](motir:cmuqzyp9u001chzshpjp1shvh), PR #3355).
+
+### The problem
+
+A boot today has no owner and no record:
+
+- `create` provisions the machine, then blocks in `waitFor(INSTANCE_INLINE_BOOT_WAIT_MS, settleBoot)`.
+  `wake` does the same after `start`. So the dialog stays open while the server waits.
+- Whatever the inline wait does not finish waits for `system.agent-instance-sweep`
+  (`AGENT_INSTANCE_SWEEP_CRON`, every 5 minutes), whose step 1 calls `settleBoot`.
+- The run launcher's `awaitAgent` also calls `settleBoot`.
+- **Three parties may therefore clone, probe and settle the same boot at once, with no lock between
+  them.** Only the final compare-and-set to `running` is guarded. The clone itself is not.
+- Nothing is recorded between `starting` and `running`, so there is nothing for a person to watch, and
+  a failed boot leaves only its `failureReason`.
+
+### Options
+
+- **A — keep the sweep and shorten its cron. Rejected.** Every boot still waits up to one sweep
+  interval. A short cron runs the whole sweep (idle, charging, reconcile) far too often. Nothing is
+  recorded per step, so a read-out has nothing to read.
+- **B — finish the boot inline in the create request. Rejected.** The request blocks for the clone (up
+  to 10 minutes per exec), so the dialog cannot close at once, and wake has the same problem. A dropped
+  connection orphans the boot.
+- **C — a per-agent event-triggered boot job that defers itself, steps recorded in their own table,
+  and a server-sent stream over them. Chosen.** It costs a new table, a new job id and a new stream
+  route. It forecloses nothing: the sweep keeps its other duties and becomes a backstop for boots.
+
+### 1 · The steps
+
+A boot is five steps, in this order:
+
+| step             | covers                                                                                                                                                    |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `provision`      | create: the volume and machine created (`provisionPersistent`). Wake: the machine config brought up to date and the `start` request accepted              |
+| `machine_start`  | the image pulled and the machine started, until `describePersistent` reports `running`. Pull and start are ONE step, because Fly reports no pull progress |
+| `clone`          | ONE row per project repository, carrying its `owner/name`, in the order the project lists them                                                            |
+| `terminal_check` | the terminal-server and run-capability probes (`probeTerminalServer`, `probeRunCapabilities`)                                                             |
+| `ready`          | the move to `running`                                                                                                                                     |
+
+**Each step is in exactly one of five states:** `waiting` · `in_progress` · `done` · `failed` ·
+`skipped`.
+
+Each step records `startedAt`, `endedAt` and a `detail`: the failure's words, the machine's exit code,
+or the terminal probe's answer.
+
+- **A wake writes its `clone` rows `skipped`.** The home survives a wake (§1), and `settleBoot` clones
+  only on a first boot today.
+- **`terminal_check` is `skipped`** where the deployment's terminal is off, as the probes are today.
+  The probes never fail a boot, so this step ends `done` or `skipped` unless the boot ends while it is
+  in progress.
+- **The steps after a failed one stay `waiting`.** The read-out ends on the row that failed.
+- **A boot that ends by deletion** records the step in progress as `failed` with detail `deleted`
+  (section 4).
+- **Cloning is one exec per repository**, not one per credential as `cloneRepositories` does today, so
+  that each repository's row starts, ends and fails on its own. The credentials are still minted once
+  per installation and revoked after that installation's last repository.
+
+### 2 · The boot attempt
+
+Steps belong to a **boot attempt**, numbered per agent from 1. Each create and each wake opens attempt
+n+1 with every step written `waiting` (or `skipped`), so a read shows the current attempt and an earlier
+attempt's history is never overwritten.
+
+The attempt records:
+
+- `kind`: `create` or `wake`;
+- the lease, `leaseHolder` and `leaseExpiresAt` (section 4);
+- its `outcome` once closed: `running`, `failed` or `deleted`, with `endedAt`.
+
+**Every step write stamps a `seq`**, monotonic per AGENT (not per attempt). The stream's cursor reads it
+(section 7). Per agent is what lets a cursor taken during one attempt resume into the next one without
+a gap.
+
+A wake that enters `updating` (a pinned image update, `agent-image-update.md` Q5) opens no boot attempt.
+Its progress is that flow's.
+
+### 3 · The driver — `agent-instance/boot`
+
+**A boot is advanced by one event job, `agent-instance/boot`, with payload `{ instanceId, attempt }`.**
+It has the shape of `agent-instance-run/launch` (`lib/jobs/definitions/agentInstanceRunLaunch.ts`):
+each pass reads the agent and its attempt from the top, does what is possible now, and defers with
+`deferRun` when it must wait. The attempt's step rows are its durable state, as `deferRun` requires.
+
+- **While the machine is not started**, a pass reads `describePersistent` and defers
+  `AGENT_BOOT_POLL_MS` (2 seconds, named in code). The machine's own launch, start and exit instants,
+  where `describePersistent` reports them (MOTIR-7396), stamp the `machine_start` row. Otherwise the
+  driver's observed instants do.
+- **Once the machine is started**, the driver clones repository by repository, one exec each,
+  recording each row as it starts and ends. Then it probes, then transitions the agent to `running` and
+  arms the idle timer exactly as `settleBoot` does today.
+- **Any failure** transitions the agent to `failed` through the existing `failInstance`, with the
+  failing step recorded `failed` and its detail. That covers a machine reporting `gone` or `failed`, a
+  clone that fails, and AMENDMENT 5's two rules.
+- **The deadline is AMENDMENT 5's**, read, not redefined: `INSTANCE_BOOT_DEADLINE_MS` and
+  `INSTANCE_BOOT_EXIT_GRACE_MS`, measured from the same `stateChangedAt`. A boot past the deadline fails
+  on the step that is in progress. A machine that exited during the boot fails on `machine_start`, with
+  its exit code as the detail.
+- **`settleBoot` survives only as the driver's step function.** No other caller remains.
+
+### 4 · One party advances a boot — the lease
+
+**The attempt row carries a lease: `leaseHolder` (the job run that holds it) and `leaseExpiresAt`.**
+
+- **The driver takes the lease with a guarded compare-and-set** that applies only when the lease is
+  absent, expired, or already its own, and renews it at every pass and before every step.
+- **Only the lease holder may write steps or transition the agent out of `starting` / `waking`.** A
+  driver that loses the compare-and-set exits, writing nothing.
+- **The lease outlasts the longest step taken without a renewal**, one clone exec (600 seconds). It is
+  `AGENT_BOOT_LEASE_MS`, 11 minutes, named in code. A deferred pass keeps its lease, because a defer
+  keeps the same job run.
+
+**§2's sweep no longer finishes a boot whose lease is alive.** For a `starting` or `waking` agent, its
+step 1 now does one thing: when the current attempt's lease is absent or expired, it sends
+`agent-instance/boot` again for that attempt. The event's idempotency key carries the expired
+`leaseExpiresAt`, so a resend is never swallowed as a duplicate of the first. A lost send (the event
+never enqueued) is recovered the same way. A resent driver **resumes from the last recorded step,
+never from the top**: a `done` row is not redone. The `in_progress` row it finds is redone, because its
+holder died mid-step. Two drivers sent for one attempt are harmless: only one wins the lease.
+
+**The run launcher's `awaitAgent` no longer calls `settleBoot`.** It reads the agent's state and defers
+until the driver has finished: `ready` at `running`, `failed` at `failed`, and its own
+`AGENT_RUN_BOOT_WAIT_MS` bound unchanged. A second caller cloning a boot that the driver is cloning
+writes into the same `$HOME/workspace`, races the driver's compare-and-set, and holds a 10-minute exec
+inside the launch job. The launch job needs only the outcome, and the driver owns the outcome.
+
+**Deletion closes the attempt.** AMENDMENT 4's move to `deleting` (Delete, or the sweep's plan-lapse
+`beginDelete`) closes the current attempt in the same transaction: the step in progress becomes `failed`
+with detail `deleted`, the outcome becomes `deleted`, and the lease is cleared. A driver pass after it
+finds the attempt closed and the agent out of a boot state, and exits writing nothing. This is the
+one-winner rule of AMENDMENT 4, applied to the attempt.
+
+### 5 · Create and wake answer before the boot
+
+**§4's create and wake now answer at `starting` / `waking`, without waiting for the boot.**
+
+- **Create** keeps every synchronous refusal (name, profile, plan, cap, credits, running limit) and the
+  provisioning call. It opens attempt 1 with `provision` recorded, sends `agent-instance/boot`, and
+  answers `201 { instance }` at `starting`.
+- **Wake** does the same at `waking`: it opens attempt n+1 with `provision` recorded and its `clone`
+  rows `skipped`, sends the event, and answers.
+- **The inline `waitFor` and `INSTANCE_INLINE_BOOT_WAIT_MS` are removed** from create and wake.
+- **A provisioning error is recorded as `provision` `failed`**, and the agent is `failed` through
+  `failInstance` as today. The agent row exists, so it is shown with its read-out, not lost.
+- **Opening an attempt is the opener's write**, the one write to the attempt before any lease exists:
+  create or wake writes the attempt and its `provision` row, then the driver writes everything after.
+
+### 6 · The read
+
+`GET /api/projects/[key]/instances/[id]/boot` answers the CURRENT attempt:
+
+```
+{ attempt, kind: 'create' | 'wake', outcome, seq,
+  steps: [{ step, repository, state, startedAt, endedAt, detail, seq }] }
+```
+
+`repository` is `owner/name` on a `clone` row and null elsewhere. `seq` at the top is the attempt's
+highest. The read is owner-only, with the same gate as the instance read: another member's agent
+answers 404.
+
+### 7 · The stream
+
+`GET /api/projects/[key]/instances/[id]/boot/stream?since=<seq>` is a server-sent event stream that
+mirrors `app/api/dispatch-runs/[id]/stream/route.ts`, and has the same gate as the read:
+
+- The route polls the read every second (`AGENT_BOOT_STREAM_POLL_MS`) and sends a **`step` frame** for
+  each step written since its cursor, the step's row plus its `attempt` and its monotonic `seq`.
+- A **`:` heartbeat** comment every 15 seconds (`AGENT_BOOT_STREAM_HEARTBEAT_MS`) keeps the connection
+  open.
+- Once the attempt is closed, it sends one terminal **`done` frame** `{ state: 'running' | 'failed' |
+'deleted' }`, the attempt's outcome, then closes.
+- **Reconnecting with `since` resumes without gaps.** Every step write carries a new `seq` and the
+  stream sends every row whose `seq` exceeds the cursor, so a reload, a second tab or a dropped
+  connection sees the same rows in the same states.
+
+### What a person sees
+
+Pressing **Create** closes the dialog as soon as the server answers, and the new agent's panel reads
+out its boot live, row by row, until it is running or has failed on a named step with its reason. A
+wake reads out the same way with its clone rows skipped. The panel, its states and its copy are
+MOTIR-7395's design and MOTIR-7400's build.
+
+### What this amendment does NOT decide
+
+- **The boot deadline's values.** `INSTANCE_BOOT_DEADLINE_MS` and `INSTANCE_BOOT_EXIT_GRACE_MS` stay
+  AMENDMENT 5's.
+- **What a boot DOES.** The same clone command, the same probes and the same `running` transition. Only
+  who calls them, and what is recorded, changes.
+- **The sweep's other duties**: the idle check, the charge, the reconcile, the backstop, the credit
+  stop and the plan-lapse deletion (§2, §5, AMENDMENT 1).
+- **The `updating` and `hibernating` progress.** An update keeps its own settle
+  (`agent-image-update.md`), and a hibernate keeps `settleStop`.
+- **The table's name, columns, indexes and RLS**, which are MOTIR-7397's, within sections 1, 2 and 4.
+- **The panel's layout, copy and states**, which are MOTIR-7395's design.
+- **The run launcher's own wait bound**, `AGENT_RUN_BOOT_WAIT_MS`, which is unchanged.

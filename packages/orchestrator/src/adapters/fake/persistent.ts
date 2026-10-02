@@ -40,6 +40,8 @@ interface FakePersistentMachine {
   state: PersistentContainerState;
   startedAt: string | null;
   stoppedAt: string | null;
+  /** The main process's exit code when it exited on its own (MOTIR-7336); null otherwise. */
+  exitCode?: number | null;
   starts: number;
   /** The terminal machine-config version the machine was last written with; 0 = none (Q8). */
   configVersion: number;
@@ -93,6 +95,12 @@ export interface FakePersistentControls {
   destroyOutside(machineId: string): void;
   /** The machine stopped behind Motir's back (a crash with no restart, an operator). */
   stopOutside(machineId: string): void;
+  /**
+   * The machine's main process EXITED on its own with `exitCode` (MOTIR-7336: the
+   * image's shell exiting at once with no TTY) — the machine is `stopped`, its run
+   * started and stopped now unless it had already started.
+   */
+  exitOutside(machineId: string, exitCode: number): void;
   /** Move the current run's start earlier, so a charge covers measurable seconds. */
   backdateRun(machineId: string, startedAt: Date): void;
   /** The clock every instant is read from. */
@@ -323,6 +331,15 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       machine.stoppedAt = now().toISOString();
       save();
     },
+    exitOutside(machineId, exitCode) {
+      const machine = machineOrThrow(machineId);
+      const at = now().toISOString();
+      machine.state = 'stopped';
+      machine.startedAt ??= at;
+      machine.stoppedAt = at;
+      machine.exitCode = exitCode;
+      save();
+    },
     backdateRun(machineId, startedAt) {
       const machine = machineOrThrow(machineId);
       machine.startedAt = startedAt.toISOString();
@@ -468,6 +485,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       machine.state = bootBehaviour === 'start' ? 'running' : 'starting';
       machine.startedAt = bootBehaviour === 'start' ? now().toISOString() : null;
       machine.stoppedAt = null;
+      machine.exitCode = null;
       machine.starts += 1;
       save();
     },
@@ -492,6 +510,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
         providerState: machine.state,
         startedAt: machine.startedAt ? new Date(machine.startedAt) : null,
         stoppedAt: machine.stoppedAt ? new Date(machine.stoppedAt) : null,
+        exitCode: machine.state === 'stopped' ? (machine.exitCode ?? null) : null,
         image: machine.spec.image,
       };
     },

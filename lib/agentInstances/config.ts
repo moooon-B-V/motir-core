@@ -67,6 +67,22 @@ export function instanceMaxRunning(): number {
  *  before leaving the rest to the sweep (the boot settle is idempotent). */
 export const INSTANCE_INLINE_BOOT_WAIT_MS = 20_000;
 
+/**
+ * THE BOOT DEADLINE (MOTIR-7336): a create or wake that has not reported running
+ * this long after it began ends `failed` with its reason. The sweep settles every
+ * boot on each 5-minute pass, so no agent stays `starting` or `waking` longer
+ * than this plus one pass — the boot is bounded, never left to the owner to notice.
+ */
+export const INSTANCE_BOOT_DEADLINE_MS = 10 * 60_000;
+
+/**
+ * How long a machine that EXITED with a non-zero (or unknown) code during a boot
+ * may stay stopped before the boot is failed (MOTIR-7336). Fly's `on-failure`
+ * policy restarts such an exit, so the first sighting of `stopped` may be the gap
+ * before that restart. A clean exit (code 0) is never restarted and fails at once.
+ */
+export const INSTANCE_BOOT_EXIT_GRACE_MS = 2 * 60_000;
+
 /** How long a hibernate waits in the request for the machine to report stopped. */
 export const INSTANCE_INLINE_STOP_WAIT_MS = 15_000;
 

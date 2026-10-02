@@ -31,7 +31,9 @@ export function TerminalState({
   );
 }
 
-/** One COLUMN of the detail box (`.dcol`); `divided` draws the column hairline. */
+/** One COLUMN of the detail box (`.dcol`); `divided` draws the column hairline —
+ *  on top when the box is one column (a phone, and the consent card's 22rem pane
+ *  at `lg`, MOTIR-7379), on the left when it is two (`sm` to `lg`). */
 export function DetailColumn({
   divided = false,
   children,
@@ -43,7 +45,8 @@ export function DetailColumn({
     <div
       className={cn(
         'flex min-w-0 flex-col divide-y divide-(--el-border-soft) px-4',
-        divided && 'border-t border-(--el-border-soft) sm:border-t-0 sm:border-l',
+        divided &&
+          'border-t border-(--el-border-soft) sm:border-t-0 sm:border-l lg:border-t lg:border-l-0',
       )}
     >
       {children}
