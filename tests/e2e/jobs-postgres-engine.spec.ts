@@ -210,8 +210,17 @@ test('@smoke a failing pilot run retries on the engine’s own backoff, then dea
     .toEqual({ failed: 1, dlq: 1 });
 
   // The queue row is terminal too, and carries the reason an operator needs.
+  // The worker writes the ledger and dead-letter rows FIRST and marks the queue
+  // row failed in a later transaction (lib/jobs/engine/worker.ts), so seeing the
+  // two rows above does not mean the queue row has settled yet: wait for it.
+  await expect
+    .poll(
+      async () =>
+        (await adminDb.jobQueueRun.findFirst({ where: { jobId: PILOT_JOB } }))?.state ?? 'missing',
+      { timeout: 10_000, intervals: [250] },
+    )
+    .toBe('failed');
   const queued = await adminDb.jobQueueRun.findFirstOrThrow({ where: { jobId: PILOT_JOB } });
-  expect(queued.state).toBe('failed');
   expect(queued.attempts).toBe(3); // `transient` = 3 total attempts, preserved
   expect(queued.lastError).not.toBeNull();
 
