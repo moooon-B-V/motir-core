@@ -9180,7 +9180,6 @@
       },
       "payment": {
         "title": "付款与发票",
-        "notConnected": "付款方式和发票尚未接入控制台。",
         "unavailable": "暂时无法显示付款方式和发票。",
         "none": "暂无发票。",
         "noMethod": "未登记付款方式",

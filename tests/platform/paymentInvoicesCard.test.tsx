@@ -8,7 +8,7 @@ import { PaymentInvoicesCard } from '@/app/(admin)/admin/tenants/[orgId]/_compon
 
 /**
  * The Billing tab's PAYMENT & INVOICES card (Story MOTIR-727 · MOTIR-7292, design D9):
- * the connected layout over a recorded fixture, the three other states, and no
+ * the connected layout over a recorded fixture, the two other states, and no
  * mutation control in any of them.
  */
 
@@ -62,7 +62,6 @@ describe('PaymentInvoicesCard', () => {
   });
 
   it.each([
-    ['not_connected', "The payment method and invoices aren't connected to the console yet."],
     ['none', 'No invoices yet.'],
     ['unavailable', "The payment method and invoices can't be shown right now."],
   ] as const)('%s renders its own line and names no figure', (state, line) => {
@@ -78,7 +77,6 @@ describe('PaymentInvoicesCard', () => {
       RECORDED,
       { state: 'none' },
       { state: 'unavailable' },
-      { state: 'not_connected' },
     ] as BillingHistorySlot[]) {
       const { container } = renderCard(slot);
       expect(container.querySelectorAll('a, button')).toHaveLength(0);
