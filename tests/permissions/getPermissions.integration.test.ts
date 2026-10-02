@@ -195,12 +195,16 @@ function MEMBER_SET(): PermissionKey[] {
     ...ROOM_VIEW_KEYS(),
     // MOTIR-6872 — a member runs their own agent instances.
     'instance:use',
+    // MOTIR-7277 — a member reads and writes the project's pages.
+    'page:view',
+    'page:edit',
   ];
 }
 
 /** The Viewer set, written out. */
 function VIEWER_SET(): PermissionKey[] {
-  return ['project:browse', 'report:view', ...ROOM_VIEW_KEYS()];
+  // MOTIR-7277 — a viewer reads pages and writes none.
+  return ['project:browse', 'report:view', ...ROOM_VIEW_KEYS(), 'page:view'];
 }
 
 /**
@@ -423,7 +427,7 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     // MOTIR-6328 adds the three rooms' view-any keys to both (AMENDMENT 1), each
     // drawn once its read enforces it.
     expect([...(catalog.roles.find((r) => r.key === 'viewer')?.permissions ?? [])].sort()).toEqual(
-      drawn(['project:browse', 'report:view', ...ROOM_VIEW_KEYS()]).sort(),
+      drawn(['project:browse', 'report:view', ...ROOM_VIEW_KEYS(), 'page:view']).sort(),
     );
     expect([...(catalog.roles.find((r) => r.key === 'member')?.permissions ?? [])].sort()).toEqual(
       [
@@ -436,6 +440,8 @@ describe('the DTO boundary is serialisable and deterministic', () => {
         'ai:decide_plan',
         ...drawn(ROOM_VIEW_KEYS()),
         'instance:use',
+        'page:view',
+        'page:edit',
       ].sort(),
     );
     // Compare as a SET: the DTO emits catalog order, which MOTIR-2277 changed

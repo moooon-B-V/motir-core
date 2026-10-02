@@ -70,6 +70,23 @@ export function canEdit(i: ProjectAccessInputs): boolean {
 }
 
 /**
+ * Whether the actor may READ the project's pages (Story MOTIR-5752 · MOTIR-7277,
+ * `docs/decisions/pages.md` §5). Every built-in role holds `page:view`, the
+ * Viewer included, and so does a public-project visitor through the Viewer set.
+ */
+export function canViewPages(i: ProjectAccessInputs): boolean {
+  return hasPermission(i, 'page:view');
+}
+
+/**
+ * Whether the actor may CREATE, RENAME and SAVE the project's pages. Held by
+ * Manager and Member; a Viewer reads pages and writes none.
+ */
+export function canEditPages(i: ProjectAccessInputs): boolean {
+  return hasPermission(i, 'page:edit');
+}
+
+/**
  * Whether the actor may COMMENT on the project's issues (Story 5.1 — Jira's
  * "Add comments" permission). Held by an entrant whose workspace role carries
  * `comment:add`; the read-only Viewer role never comments.

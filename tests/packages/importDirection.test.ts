@@ -210,32 +210,37 @@ describe('the app imports packages by name, and no package imports the app (MOTI
   });
 });
 
-// ── `@motir/pages` has no app consumer yet, and CI relies on that (MOTIR-5758) ──
+// ── `@motir/pages` enters the app through `lib/pages/` and `components/pages/` ──
 //
-// `ci.yml`'s `changes` job lets a `packages/pages/*`-only change skip the `app`
-// lanes — the one package exempted from "a package-only change still sets
-// `app=true`". That is sound only while nothing the app lanes run can reach the
-// package. This file runs in the structural-guard lane, which has no `if:`, so
-// the pull request that adds the first app import goes red HERE, and the fix is
-// to delete the `packages/pages/*) ;;` arm from the classifier (and this block)
-// in the same change. The schema story, MOTIR-5752, is that pull request.
-describe('no app file imports @motir/pages while CI skips the app lanes for it (MOTIR-5758)', () => {
+// MOTIR-5758 held this block at ZERO app imports, because `ci.yml` let a
+// pages-only change skip the app lanes. MOTIR-7276 added the first consumer —
+// `lib/pages/index.ts`, the composition root — and removed that exemption in
+// the same change, so the guard's successor is the ADR §2 boundary: the app
+// reaches the package through its composition root (and the editor host under
+// `components/pages/`), and everything else imports `@/lib/pages`.
+describe('@motir/pages is imported only from lib/pages/ and components/pages/ (MOTIR-7276)', () => {
   const PAGES_IMPORT = /\bfrom\s+['"]@motir\/pages(?:\/[^'"]*)?['"]|\bimport\(\s*['"]@motir\/pages/;
+  const SANCTIONED = [join('lib', 'pages') + '/', join('components', 'pages') + '/'];
 
-  it('the classifier still carries the exception this guard exists for', () => {
-    // When the arm is removed, this block has nothing left to protect: delete
-    // both together rather than leaving a guard that forbids a legal import.
+  it('the classifier no longer exempts packages/pages from the app lanes', () => {
     const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
-    expect(ci).toMatch(/^\s*packages\/pages\/\*\) ;;$/m);
+    expect(ci).not.toMatch(/^\s*packages\/pages\/\*\) ;;$/m);
   });
 
-  it('finds no `@motir/pages` import under lib/, app/, components/ or tests/', () => {
+  it('finds `@motir/pages` imported nowhere else under lib/, app/, components/ or tests/', () => {
     const found = violations(
       [...APP_ROOTS, 'tests'],
       PAGES_IMPORT,
-      'the app imports `@motir/pages` — remove the `packages/pages/*` app exemption in ci.yml first',
-    ).filter((v) => !v.file.startsWith(relative(root, __filename))); // this file's own samples
+      'imports `@motir/pages` outside its composition root — import `@/lib/pages` instead',
+    )
+      .filter((v) => !v.file.startsWith(relative(root, __filename))) // this file's own samples
+      .filter((v) => !SANCTIONED.some((dir) => v.file.startsWith(dir)));
     expect(found, message(found)).toEqual([]);
+  });
+
+  it('the composition root does import it — the boundary has a door', () => {
+    const source = readFileSync(join(root, 'lib', 'pages', 'index.ts'), 'utf8');
+    expect(PAGES_IMPORT.test(source)).toBe(true);
   });
 
   it('detects the import shapes it forbids, and not a sibling package', () => {

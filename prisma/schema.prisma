@@ -409,6 +409,8 @@ model User {
   // Folders this person created (Story MOTIR-5308 · MOTIR-5312). Restrict,
   // matching `WorkItem.reporter`: the creator is durable attribution.
   createdFolders                   Folder[]                      @relation("FolderCreator")
+  createdPages                     Page[]                        @relation("PageCreator")
+  updatedPages                     Page[]                        @relation("PageUpdater")
   // Monitor connections this person BOUND (Story MOTIR-4926 · MOTIR-4929 ·
   // MOTIR-5576) — whose identity the reconciler files each monitor bug as.
   // SetNull, NOT Cascade: removing the person must not remove the binding; the
@@ -1569,6 +1571,7 @@ model Workspace {
   dispatchRunGitCredentials   DispatchRunGitCredential[]
   /// Folders in this workspace's projects (Story MOTIR-5308). Cascade.
   folders                     Folder[]
+  pages                       Page[]
   /// Users' agent instances in this workspace's projects (MOTIR-6870). Cascade.
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]
@@ -2059,6 +2062,7 @@ model Project {
   /// The project's folders (Story MOTIR-5308) — named, nestable places in its
   /// tree that carry no workflow. Cascade.
   folders                       Folder[]
+  pages                         Page[]
   /// The folder this project's filed bugs land in (Story MOTIR-4927 · MOTIR-4934).
   /// NULL MEANS THE PROJECT ROOT, CHOSEN — nullable with no default, and never to
   /// be made required. `NoAction`, the `Folder.parentFolder` idiom: a folder this
@@ -4723,6 +4727,12 @@ model Attachment {
   // so the orphan-GC (5.2.7) can also remove the BLOB; a cascade would
   // vaporise the rows and strand their blobs invisibly.
   workItemId       String?          @map("work_item_id")
+  // The PAGE this file belongs to (Story MOTIR-5752 · MOTIR-7279) — an image
+  // pasted into a page, owned from upload so the orphan-GC never takes it. At
+  // most one of `workItemId` / `pageId` is set (CHECK
+  // `attachment_owner_at_most_one`, in the migration SQL). `SetNull` for the
+  // `workItemId` reason above: a deleted page's rows stay for the GC to reclaim.
+  pageId           String?          @map("page_id")
   // Default `editor`: every pre-5.2 row came through the editor upload path,
   // so the migration's ADD COLUMN backfills existing rows correctly.
   source           AttachmentSource @default(editor)
@@ -4735,6 +4745,7 @@ model Attachment {
   workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   uploader           User                @relation(fields: [uploaderUserId], references: [id], onDelete: Cascade)
   workItem           WorkItem?           @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  page               Page?               @relation(fields: [pageId], references: [id], onDelete: SetNull)
   // Back-relations for AcceptanceEvidence: an `acceptance_video` Attachment is
   // the video of one evidence row (MOTIR-1629); an `acceptance_trace` Attachment
   // is its trace (MOTIR-1674). Both FKs SetNull, so the orphan-GC deleting a blob
@@ -4750,6 +4761,8 @@ model Attachment {
   @@index([workspaceId, createdAt(sort: Desc)])
   // The paged panel read (5.2.2): an issue's attachments, newest first.
   @@index([workItemId, createdAt(sort: Desc)])
+  // A page's images, newest first (MOTIR-7279).
+  @@index([pageId, createdAt(sort: Desc)])
   @@map("attachment")
 }
 
@@ -11668,6 +11681,7 @@ model Folder {
   childFolders            Folder[]   @relation("FolderParent")
   createdBy               User       @relation("FolderCreator", fields: [createdById], references: [id], onDelete: Restrict)
   workItems               WorkItem[] @relation("WorkItemFolder")
+  pages                   Page[]     @relation("PageFolder")
   /// The project whose bug destination this folder is, if any (MOTIR-4934) —
   /// at most its own project, by `trg_project_bug_destination_folder_tenancy`.
   bugDestinationOf        Project[]  @relation("ProjectBugDestinationFolder")
@@ -11693,6 +11707,56 @@ model Folder {
 /// ⚠️ THE CREDENTIAL LIVES HERE AND NOWHERE ELSE. Storing a copy per bound
 /// project would mean N copies of one secret, N things to rotate, and N chances
 /// for one of them to be the stale one.
+// PAGES — a project's documents (Epic MOTIR-5746 · Story MOTIR-5752 · MOTIR-7273).
+//
+// `docs/decisions/pages.md` §3–§4. `bodyState` is the CANONICAL body — the
+// encoding of a Yjs document (`Y.encodeStateAsUpdate`), the schema's first
+// `bytea` — and `bodyJson` / `bodyMarkdown` / `bodyText` are DERIVED from it in
+// the same transaction as every save; nothing reads a derived column to produce
+// the canonical one. `revision` counts saves, 1 at creation.
+//
+// The tree: a page sits under a page (`parentPageId`) OR in a folder
+// (`folderId`), never both (CHECK `page_parent_xor_folder`); both null is the
+// project root. `ancestorPageIds` holds the page ids root-first, excluding the
+// page itself, and the CHECK `page_depth_limit` caps it below 10 —
+// `PAGE_DEPTH_LIMIT` levels. Tenancy of the parent page and the folder, and the
+// no-cycle rule, are SECURITY DEFINER triggers in the migration; RLS is the
+// `folder` pair. Prisma does not model CHECK constraints or triggers.
+model Page {
+  id              String   @id @default(cuid())
+  workspaceId     String   @map("workspace_id")
+  projectId       String   @map("project_id")
+  title           String   @default("") @db.Text
+  parentPageId    String?  @map("parent_page_id")
+  folderId        String?  @map("folder_id")
+  position        String   @db.Text
+  ancestorPageIds String[] @default([]) @map("ancestor_page_ids")
+  bodyState       Bytes    @map("body_state")
+  bodyJson        Json     @map("body_json")
+  bodyMarkdown    String   @default("") @map("body_markdown") @db.Text
+  bodyText        String   @default("") @map("body_text") @db.Text
+  revision        Int      @default(1)
+  createdById     String   @map("created_by_id")
+  updatedById     String   @map("updated_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentPage  Page?        @relation("PageParent", fields: [parentPageId], references: [id], onDelete: NoAction)
+  childPages  Page[]       @relation("PageParent")
+  // The page's images (MOTIR-7279) — attachments it owns from upload.
+  attachments Attachment[]
+  folder      Folder?      @relation("PageFolder", fields: [folderId], references: [id], onDelete: NoAction)
+  createdBy   User         @relation("PageCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy   User         @relation("PageUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@index([projectId, parentPageId, position, id])
+  @@index([projectId, folderId, position, id])
+  @@index([workspaceId])
+  @@map("page")
+}
+
 model MonitorInstallation {
   id String @id @default(cuid())
 

@@ -62,6 +62,8 @@ const ALL_PRIMARY_KEYS: PermissionKey[] = [
   'work_item:triage',
   'report:view',
   'ai:configure',
+  // MOTIR-7300: the Pages row opens on `page:view`.
+  'page:view',
 ];
 
 // The order as MOTIR-4799 leaves it. `Dashboard` sits between `Backlog` and
@@ -70,6 +72,10 @@ const ALL_PRIMARY_KEYS: PermissionKey[] = [
 const EXPECTED_PRIMARY_ORDER = [
   AUTHED_LANDING_PATH,
   '/items',
+  // Pages (MOTIR-7300) — directly after Work Items, above the Ready → Runs → My
+  // agents flow, per `design/pages/design-notes.md` § Position: work items are the
+  // work and pages are what is written about it.
+  '/pages',
   '/ready',
   '/runs',
   '/boards',
@@ -116,6 +122,30 @@ describe('SidebarNav — the primary section renders in the decided order', () =
     const links = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
     expect(links.indexOf('/dashboard')).toBe(links.indexOf('/backlog') + 1);
     expect(links.indexOf('/triage')).toBe(links.indexOf('/dashboard') + 1);
+  });
+
+  it('puts Pages directly after Work Items and directly before Ready (MOTIR-7300)', () => {
+    renderWithIntl(
+      <SidebarNav activeProject={PROJECT} user={USER} settingsPermissions={ALL_PRIMARY_KEYS} />,
+    );
+    const links = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
+    expect(links.indexOf('/pages')).toBe(links.indexOf('/items') + 1);
+    expect(links.indexOf('/ready')).toBe(links.indexOf('/pages') + 1);
+  });
+
+  it('drops Pages — and only Pages — for a reader without `page:view`', () => {
+    renderWithIntl(
+      <SidebarNav
+        activeProject={PROJECT}
+        user={USER}
+        settingsPermissions={ALL_PRIMARY_KEYS.filter((k) => k !== 'page:view')}
+      />,
+    );
+    const links = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
+    expect(links).not.toContain('/pages');
+    expect(links.slice(0, EXPECTED_PRIMARY_ORDER.length - 1)).toEqual(
+      EXPECTED_PRIMARY_ORDER.filter((href) => href !== '/pages'),
+    );
   });
 
   it('leaves Home leading the rail — the demotion moved Dashboard, nothing else', () => {
