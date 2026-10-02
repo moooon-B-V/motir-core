@@ -73,6 +73,27 @@ describe('isRunAlive — the table', () => {
     expect(isRunAlive(legacy(13), NOW)).toBe(false);
   });
 
+  // MOTIR-7328: a current CLI beats the moment it holds a run, so a run killed in
+  // its first seconds carries `lastHeartbeatAt` ≈ `startedAt` and is dead at
+  // `startedAt + RUN_HEARTBEAT_LAPSE_MS`, not at the legacy 12 hours.
+  it('a current CLI’s run killed seconds after its open beat is dead once the lapse passes', () => {
+    const startedAt = minutesAgo(13);
+    const killedEarly = {
+      status: 'running',
+      origin: 'local' as const,
+      startedAt,
+      lastHeartbeatAt: new Date(startedAt.getTime() + 200),
+    };
+    const lapse = startedAt.getTime() + 200 + RUN_HEARTBEAT_LAPSE_MS;
+    expect(isRunAlive(killedEarly, new Date(lapse - 1))).toBe(true);
+    expect(isRunAlive(killedEarly, new Date(lapse))).toBe(false);
+    // 13 minutes after the kill — the reporter's two refused continues — it is dead.
+    expect(isRunAlive(killedEarly, NOW)).toBe(false);
+    // The same run with no beat at all is still the LEGACY population, and keeps
+    // the age reap's 12-hour rule.
+    expect(isRunAlive({ ...killedEarly, lastHeartbeatAt: null }, NOW)).toBe(true);
+  });
+
   it('reads ISO strings exactly as it reads Dates, so a DTO and a row agree', () => {
     expect(
       isRunAlive(

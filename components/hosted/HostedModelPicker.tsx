@@ -8,9 +8,11 @@ import type { HostedModelsState, HostedResolvedModel } from './hostedModels';
 // THE MODEL PICKER at the Run hosted door (Story MOTIR-683 · MOTIR-691;
 // `design/runs/design-notes.md` § The model picker).
 //
-// ⚠️ THE PLANNING PICKER'S PRIMITIVE, NOT A SECOND ONE: the shipped `Combobox`,
-// composed exactly as `PlannerModelField` composes it — `searchable={false}`, each
-// option's label the model and its `secondary` text on the right. It is never a
+// ⚠️ THE SHIPPED PRIMITIVE, NOT A SECOND ONE: the `Combobox`, composed as
+// `design/runs/design-notes.md` § The model picker draws it (and as the Hosted
+// agent settings room's per-difficulty pickers compose it, `design/settings/
+// hosted-agent.mock.html`) — `searchable={false}`, each option's label the model
+// and its `secondary` text on the right. It is never a
 // free-text field: what the route answers is what it offers, and it keeps no list
 // of its own.
 //

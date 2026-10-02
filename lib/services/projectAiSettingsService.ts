@@ -6,8 +6,6 @@ import { InvalidAiSettingsError, ProjectNotFoundError } from '@/lib/projects/err
 import {
   AI_AUTO_PLAN_THRESHOLD_MAX,
   AI_AUTO_PLAN_THRESHOLD_MIN,
-  AI_PLANNER_MODEL_MAX_LENGTH,
-  AI_PLANNER_MODEL_PATTERN,
   AI_SPRINT_LENGTH_DAYS_MAX,
   AI_SPRINT_LENGTH_DAYS_MIN,
 } from '@/lib/projectAiSettings/limits';
@@ -20,17 +18,16 @@ import type {
 // Project AI-planning settings service (Story 7.13 · Subtask MOTIR-915) — the
 // business logic over the AI configuration COLUMNS on `project`
 // (`aiAutoPlanEnabled` / `aiAutoPlanThreshold` / `aiSprintPlanningEnabled` /
-// `aiSprintLengthDays` / `aiPlannerModel`, plus the Story-7.4
+// `aiSprintLengthDays`, plus the Story-7.4
 // `aiGenerateExplanations` and the MOTIR-3331 `aiRecordPlanningMistakes` the
 // same panel surfaces).
 //
 // Open-core by construction: these are ordinary project-settings columns the PM
 // core owns and reads (the cadence engine MOTIR-916, the sprint-packing persist
 // MOTIR-918, the settings panel MOTIR-919) — NOT an AI-only table, and nothing
-// here calls motir-ai. The per-project `aiPlannerModel` is an OVERRIDE only: when
-// it is null the platform default applies, and that default lives in motir-ai
-// (`plannerModel()` → `PLANNER_MODEL` env → `PLANNER_MODELS.default`, 7.2.2), so
-// core never hardcodes or resolves a model id.
+// here calls motir-ai. There is no planner model here (MOTIR-7228): the model that
+// plans is a platform setting per audience, held in motir-ai and changed only by a
+// platform superadmin, never by a project.
 //
 // 4-layer (CLAUDE.md): repositories do the single Prisma ops, this service owns
 // the transaction + the gate + ALL validation, mappers produce the DTO. Reads are
@@ -42,8 +39,8 @@ import type {
 //
 // ⚠️ `ai:configure` IS NOT `ai:plan`, and the distance between them is the whole
 // point of having two keys. This key answers "who may change the auto-plan
-// cadence, the AI sprint-planning switch, the planner model and the
-// drafted-explanation setting" — a settings decision with a spend consequence.
+// cadence, the AI sprint-planning switch and the drafted-explanation setting" —
+// a settings decision with a spend consequence.
 // "Who may RUN the planner" is `ai:plan`, roughly 26 routes governed by nothing
 // today, and moving those takes capability away from ordinary members — a
 // different kind of change, argued on its own in MOTIR-2291. A diff here that
@@ -90,8 +87,6 @@ export const projectAiSettingsService = {
    *     `AI_AUTO_PLAN_THRESHOLD_MIN..MAX` (≥ 1: a 0 threshold could never fire —
    *     switching the feature off is `aiAutoPlanEnabled`).
    *   - `aiSprintLengthDays` — an integer in `AI_SPRINT_LENGTH_DAYS_MIN..MAX`.
-   *   - `aiPlannerModel` — trimmed; `null` / empty CLEARS the override back to
-   *     the platform default; otherwise a bounded model-id-shaped token.
    *
    * Returns the updated settings (the inline save reads the success response as
    * its confirmation — no whole-tree refresh; CLAUDE.md § page state).
@@ -146,7 +141,6 @@ function validateAiSettingsPatch(patch: UpdateProjectAiSettingsInput): {
   aiAutoPlanThreshold?: number;
   aiSprintPlanningEnabled?: boolean;
   aiSprintLengthDays?: number;
-  aiPlannerModel?: string | null;
   aiGenerateExplanations?: boolean;
   aiRecordPlanningMistakes?: boolean;
 } {
@@ -155,7 +149,6 @@ function validateAiSettingsPatch(patch: UpdateProjectAiSettingsInput): {
     aiAutoPlanThreshold?: number;
     aiSprintPlanningEnabled?: boolean;
     aiSprintLengthDays?: number;
-    aiPlannerModel?: string | null;
     aiGenerateExplanations?: boolean;
     aiRecordPlanningMistakes?: boolean;
   } = {};
@@ -197,10 +190,6 @@ function validateAiSettingsPatch(patch: UpdateProjectAiSettingsInput): {
     );
   }
 
-  if (patch.aiPlannerModel !== undefined) {
-    data.aiPlannerModel = validatePlannerModel(patch.aiPlannerModel);
-  }
-
   return data;
 }
 
@@ -223,34 +212,4 @@ function validateBoundedInteger(
     throw new InvalidAiSettingsError(field, `${label} must be between ${min} and ${max}.`);
   }
   return value;
-}
-
-/**
- * A planner-model override: trimmed; `null` / empty / whitespace-only clears it
- * (back to the platform default), otherwise a bounded model-id-shaped token. Only
- * the SHAPE is checked — the model vocabulary belongs to the gateway + motir-ai
- * (7.2.2), so core validating against a fixed list would drift from the real
- * registry; a well-formed but unknown id fails at the gateway with its own typed
- * error.
- */
-function validatePlannerModel(value: string | null): string | null {
-  if (value === null) return null;
-  if (typeof value !== 'string') {
-    throw new InvalidAiSettingsError('aiPlannerModel', 'The planner model must be a string.');
-  }
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return null;
-  if (trimmed.length > AI_PLANNER_MODEL_MAX_LENGTH) {
-    throw new InvalidAiSettingsError(
-      'aiPlannerModel',
-      `The planner model must be at most ${AI_PLANNER_MODEL_MAX_LENGTH} characters.`,
-    );
-  }
-  if (!AI_PLANNER_MODEL_PATTERN.test(trimmed)) {
-    throw new InvalidAiSettingsError(
-      'aiPlannerModel',
-      `"${trimmed}" is not a valid model id (use letters, digits and . _ : / -).`,
-    );
-  }
-  return trimmed;
 }

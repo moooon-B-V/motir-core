@@ -212,8 +212,8 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
 
   /**
    * THE HEARTBEAT (Story MOTIR-6526 · MOTIR-6530) — while this reporter holds an
-   * open run, tell the server every {@link RUN_HEARTBEAT_INTERVAL_MS} that the run
-   * is alive. The reporter owns the run's lifetime, so it owns the heartbeat: no
+   * open run, tell the server at once, and then every {@link RUN_HEARTBEAT_INTERVAL_MS},
+   * that the run is alive. The reporter owns the run's lifetime, so it owns the heartbeat: no
    * command has to remember to send one.
    *
    * ⚠️ A FAILED BEAT DOES NOT TAKE THE REPORTER OFFLINE, and that is a deliberate
@@ -223,6 +223,15 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
    * working as DEAD and offer it to somebody else to continue — the one outcome
    * this timer exists to prevent. So a failure is swallowed and the next tick
    * tries again. Only `closed` (the server has already closed the run) stops it.
+   *
+   * ⚠️ THE FIRST BEAT GOES AT ONCE, NOT ONE INTERVAL LATER (MOTIR-7328). The
+   * server reads a run with no heartbeat at all as a LEGACY run — a CLI too old to
+   * heartbeat — and keeps it alive for 12 hours (`lib/runs/runLiveness.ts`). A run
+   * killed inside its first interval used to have sent nothing, so it fell into
+   * that population and `motir continue` refused it as `run_alive` for half a day,
+   * in exactly the minute runs most often die. Beating at open means every run
+   * this CLI holds carries a `lastHeartbeatAt` from its first second, and the
+   * five-minute lapse governs it however early it dies.
    *
    * ⚠️ EACH BEAT ALSO FLUSHES THE QUEUE (MOTIR-7329). A run killed hard runs no
    * handler, so whatever is still queued when it dies is lost; flushing on the
@@ -234,7 +243,7 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
   function startHeartbeat(id: string): void {
     const client = deps.client;
     if (client.heartbeatDispatchRun === undefined || heartbeat !== null) return;
-    heartbeat = setInterval(() => {
+    const beat = (): void => {
       void flushQueue();
       // Called directly (not through a hoisted, pre-bound local): the run-token
       // route table's CLI scan (`tests/hostedRuns/runTokenRouteTable.test.ts`)
@@ -250,8 +259,12 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
         },
         () => undefined,
       );
-    }, RUN_HEARTBEAT_INTERVAL_MS);
+    };
+    // The timer is armed BEFORE the first beat, so a `closed` answer to that beat
+    // finds it and stops it.
+    heartbeat = setInterval(beat, RUN_HEARTBEAT_INTERVAL_MS);
     heartbeat.unref?.();
+    beat();
   }
 
   /** Take the reporter down for the rest of the session, once, with one line. */

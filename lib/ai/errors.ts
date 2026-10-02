@@ -117,6 +117,36 @@ export class CodeGraphRunCredentialTooShortError extends MotirAiError {
   }
 }
 
+// A planner-model write named a model motir-ai does not OFFER for planning
+// (`PUT /v1/planner-model-settings` → `validation_error`; MOTIR-7227). Offered
+// means a servable catalogue row plus a `planning`-lane rate in force, read by
+// motir-ai at request time — so a model that was offered when the console page
+// loaded can stop being offered before its save lands.
+export class PlannerModelNotOfferedError extends MotirAiError {
+  readonly code = 'PLANNER_MODEL_NOT_OFFERED' as const;
+  constructor(
+    readonly model: string,
+    detail?: string,
+  ) {
+    super(`"${model}" is not offered for planning${detail ? `: ${detail}` : ''}`);
+    this.name = 'PlannerModelNotOfferedError';
+  }
+}
+
+// A planner-model write whose one-token PROBE failed (`model_unreachable`, 422;
+// motir-ai MOTIR-7236). Nothing was written. `reason` is the probe's own words
+// (the provider key was refused, no enabled channel serves the model, a timeout).
+export class PlannerModelUnreachableError extends MotirAiError {
+  readonly code = 'PLANNER_MODEL_UNREACHABLE' as const;
+  constructor(
+    readonly model: string,
+    readonly reason: string,
+  ) {
+    super(`"${model}" is not reachable for the planner: ${reason}`);
+    this.name = 'PlannerModelUnreachableError';
+  }
+}
+
 // The GET /v1/jobs/:id result as the client returns it: status + result, with a
 // failed job's `error` already mapped to a motir-core typed error.
 export interface JobView {
@@ -138,6 +168,11 @@ export function errorFromProblem(p: Problem): MotirAiError {
       return new MotirAiUnauthorizedError(p.detail ?? p.title);
     case 'validation_error':
     case 'unsupported_version':
+    // `model_unreachable` (422; motir-ai MOTIR-7236) — a planner-model save whose
+    // probe failed. Named so a reader sees it is NOT retryable: the remedy is a
+    // different model or a gateway fix. `setPlannerModel` maps it to its own
+    // typed error before this generic switch is reached.
+    case 'model_unreachable':
       return new MotirAiBadRequestError(p.detail ?? p.title);
     case 'not_found':
       return new MotirAiJobNotFoundError(p.jobId ?? '(unknown)');

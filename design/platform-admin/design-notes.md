@@ -1057,6 +1057,252 @@ by-workspace and by-model usage rollup; MOTIR-732 keeps the Usage & cost page.
   referenced only as the thing this must never resemble or feed.
 - **Hard gate B's live list or figures** — MOTIR-5280.
 
+---
+
+# AMENDMENT 2026-10 — AI planning (MOTIR-7222 · story MOTIR-7220)
+
+**Design system check (first, per the design-system rule).** Read `package.json` (depends on
+`@motir/design-system` `workspace:*`) and `app/globals.css` (`@import '@motir/design-system/theme.css'`).
+**Verdict: the project is on Motir Design** (package `0.8.0`, `packages/design-system/package.json`),
+so the page is drawn from that system's `--el-*` / shape tokens and the shipped primitives. The root
+layout applies the signed-in person's own `data-style` / `data-palette` / `data-type`, so there are
+no fixed project axes; the mock draws the base values, and every element routes through a token so
+any applied axis re-skins it. **Nothing the package lacks is needed** — no proposed addition, no
+product-local component.
+
+**Mock (a DELTA):** [`console--ai-planning.mock.html`](console--ai-planning.mock.html), ten panels.
+**Amends:** `console.mock.html` Panel 2 / Panel 13 (the shell — one rail row is added), Panel 7a
+(the 404, referenced and not redrawn) and Panels 11–12 (the confirm-with-reason grammar, reused for
+a second write). The older mock is a record and is not edited.
+**Gates:** **MOTIR-7231** (the page, `/admin/ai-planning`, its nav row, every state below, en + zh).
+It builds on **MOTIR-7227** (the console seam: `motirAiClient` get/put,
+`platformPlannerModelService`, the `ai.planner_model.set` audit action) and on motir-ai's
+`GET` / `PUT /v1/planner-model-settings` (MOTIR-7221) and reachability probe (MOTIR-7236).
+
+**Composed, not redrawn.** The mock's token block, primitive CSS and lucide sprite are spliced
+verbatim from `console.mock.html`; the shell is the shipped `AdminShell.tsx`; the confirm is the
+shipped `ClassificationBar` (`Modal role="alertdialog"` + `Input` + a primary disabled until a reason
+is typed); the picker is the shipped `Combobox` with `group` options. The additions block at the end
+of the mock's `<style>` holds only that Combobox's markup, the table's cell styles and five Tier-3
+tokens the point-in-time block predates (`--el-text-identifier`, `--el-text-eyebrow`,
+`--el-option-active-bg`, `--el-icon-muted`, `--el-danger-on-surface`), each spelled exactly as
+`theme.css` defines it.
+
+## What this page is
+
+The place where Motir platform staff see — and a **superadmin** changes — **which model plans** for
+each of three audiences. Motir, not the tenant, chooses the planning model (story MOTIR-7220): the
+model is a cost input, so it lives in the operator console beside the other cross-tenant knobs, and
+no tenant surface names it. **Staff-facing only.** For a non-staff user `/admin/*` is a 404 (the
+area's standing rule, Panel 7a).
+
+| Audience (row)             | Who is in it                                         | Resolved when                 |
+| -------------------------- | ---------------------------------------------------- | ----------------------------- |
+| **Customer organisations** | Every organisation that is neither meta nor internal | `!isMeta && !internalBilling` |
+| **Motir meta org**         | moooon B.V., `isMeta`                                | `isMeta` (wins over internal) |
+| **Internal organisations** | Orgs classified `internalBilling`                    | `internalBilling && !isMeta`  |
+
+All three are seeded `claude-opus-5-5`. A change applies from the **next** planning job: a job
+resolves its model once, when it starts.
+
+## The access path — a new rail row, drawn (Panels 1 · 2)
+
+**Operations → AI planning**, after **Monitoring** and before the reserved **Governance (10.3)**
+row, icon `Sparkles` (lucide), route **`/admin/ai-planning`**, active when
+`pathname === '/admin/ai-planning'`. It is a LIVE row (no version badge) and it is **visible to every
+staff role** — `support`, `operator` and `superadmin` all read the page; only the controls differ.
+Added to `AdminShell.tsx`'s `operations` section as one more `SidebarSection` item, with a new
+`navAiPlanning` label beside `navMonitoring`. It sits in Operations, not Platform, because it is a
+knob on how the platform RUNS, the same family as Monitoring; the Platform group is the estate's
+read views.
+
+## The roles
+
+| Staff role                                 | Sees                                | Can change                                                              |
+| ------------------------------------------ | ----------------------------------- | ----------------------------------------------------------------------- |
+| `support`                                  | the three rows, read-only (Panel 2) | nothing — no picker, no Save, no action column                          |
+| `operator`                                 | the three rows, read-only (Panel 2) | nothing — no picker, no Save, no action column                          |
+| `superadmin`                               | the three rows, editable (Panel 1)  | any row, to any OFFERED model, with a required reason and one audit row |
+| not platform staff (an org owner included) | the app 404 (Panel 10 → Panel 7a)   | —                                                                       |
+
+The read is `requirePlatformStaff('support')`; the write is `superadmin` and is re-gated in
+`platformPlannerModelService` (MOTIR-7227) — the missing control is presentation, the service is the
+rule. Changing what every customer's planning costs is a spend decision, which is why the write sits
+at the top rung (`platform-staff-auth.md` §7 gains the row in MOTIR-7227).
+
+## The panels (review EACH — mistake #31)
+
+1. **Populated, editable (superadmin)** — inside the shell, with the rail row active. One card,
+   **Planning model by audience**, holding a three-row table: **Audience** (name + who is in it) ·
+   **Model** (a `Combobox` per row) · **Last changed** · an action column with a **Save** per row.
+   The Internal row's picker is drawn OPEN: only offered models, **grouped by provider** (the
+   Combobox's `group` header), the stored one checked, a one-line footer. **Save is disabled until
+   the row's selection differs from its stored model** (Internal has been changed, so its Save is
+   the primary; the other two are disabled secondaries). Save is per row because the confirm names
+   ONE audience and the audit row records one from → to. **The open listbox floats OVER the card's
+   bottom edge** (it is the last row's picker): the shipped `Combobox` panel is a `Popover` that
+   portals out of the card, so the card never clips it. _(Revised after review: the first version
+   drew it clipped by the card.)_
+2. **Populated, read-only (operator · support)** — the same three rows with each model as plain text
+   (id in mono + provider as secondary), no picker, no Save, no action column, and one quiet line
+   under the card: _Only a superadmin can change these._ Nothing on the panel is interactive.
+3. **Loading** — the card with its header, and the three rows as skeletons (name, a trigger-sized
+   block, a last-changed line). The page header and the two page lines are static copy and paint at
+   once. No model id is guessed while it loads.
+4. **Confirm** — Panel 11/12's grammar, unchanged: `Modal role="alertdialog"`, size `md`. It names
+   the **audience** in the title and **old → new** in the body, and warns that the change applies to
+   the next planning job for every organisation in the audience. The **reason is required**: (a)
+   reason typed, primary enabled; (b) reason missing — the primary is DISABLED, not a post-submit
+   error. The server re-asserts the reason (`PLATFORM_AUDIT_ACTIONS` reason policy, `required`).
+5. **Saved** — the row shows the new model and _Changed just now by you_; its Save is disabled
+   again; a success `Toast`. The `ai.planner_model.set` audit row (operator, audience, from, to,
+   reason) is written by the same request. **No audit browser is drawn** (Story 10.3, MOTIR-745):
+   the change is visible as the row's last-changed line.
+6. **Refused** — the PUT came back `validation_error` because the chosen model stopped being offered
+   between load and save. The row KEEPS the old value (its trigger reads the stored model again),
+   shows an inline error naming the model, and the picker re-reads the offered list. Nothing was
+   written and there is no audit row.
+7. **Withdrawn model** — a stored model the offered list no longer carries (`offered: false` on the
+   setting) gets a **warning chip** under the trigger, _No longer offered_, with the fallback line
+   beside it. The trigger still shows the stored id because that is what is stored; the picker's
+   list does not contain it. Drawn for both faces (superadmin, read-only).
+8. **Unreachable** — LEFT: a save whose one-token test call through the planner's own gateway token
+   failed (`model_unreachable`, MOTIR-7236). The row keeps the old value and says why inline; the
+   three reasons are drawn one per row. RIGHT: a **stored** model whose last boot test failed gets a
+   **red chip**, _Planning is failing_, with the reason line and the time of that test.
+9. **Unavailable** — motir-ai could not be reached: the console's error card (Panel 7's) with
+   **Retry**, and **no rows**, so staff never see a guessed value.
+10. **Not staff** — the app 404, drawn BY REFERENCE (Panel 7a). Not redrawn.
+
+## Copy (en — the `platformAdmin` namespace MOTIR-7231 adds, with a `zh` twin each)
+
+Model ids in the mock (`claude-opus-5-5`, `claude-sonnet-5-5`, `glm-5.2`, `claude-sonnet-4-6`) are
+**examples only**: the offered list is read at runtime and **no model id is ever a string in the
+catalogue**. Interpolated values are in `{braces}`.
+
+| key                                        | string                                                                                                                                                          |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shell.navAiPlanning`                      | AI planning                                                                                                                                                     |
+| `aiPlanning.breadcrumb`                    | Platform · AI planning                                                                                                                                          |
+| `aiPlanning.title`                         | AI planning                                                                                                                                                     |
+| `aiPlanning.subtitle`                      | Which model Motir plans with, for each of three audiences. A change applies from the next planning job for every organisation in that audience.                 |
+| `aiPlanning.precedence`                    | An organisation that is both meta and internal follows the meta row.                                                                                            |
+| `aiPlanning.tenantSecretLead`              | Tenants never see this choice.                                                                                                                                  |
+| `aiPlanning.tenantSecretBody`              | No tenant page, usage view or plan names the model that planned.                                                                                                |
+| `aiPlanning.card.title`                    | Planning model by audience                                                                                                                                      |
+| `aiPlanning.card.subtitle`                 | Every planning job resolves its model from the organisation it runs for: meta, then internal, then customer.                                                    |
+| `aiPlanning.card.count`                    | 3 audiences                                                                                                                                                     |
+| `aiPlanning.col.audience`                  | Audience                                                                                                                                                        |
+| `aiPlanning.col.model`                     | Model                                                                                                                                                           |
+| `aiPlanning.col.lastChanged`               | Last changed                                                                                                                                                    |
+| `aiPlanning.audience.customer.name`        | Customer organisations                                                                                                                                          |
+| `aiPlanning.audience.customer.desc`        | Every organisation that is neither meta nor internal                                                                                                            |
+| `aiPlanning.audience.meta.name`            | Motir meta org                                                                                                                                                  |
+| `aiPlanning.audience.meta.desc`            | moooon B.V., `isMeta`                                                                                                                                           |
+| `aiPlanning.audience.internal.name`        | Internal organisations                                                                                                                                          |
+| `aiPlanning.audience.internal.desc`        | Orgs classified `internalBilling`                                                                                                                               |
+| `aiPlanning.pickerLabel`                   | Planning model                                                                                                                                                  |
+| `aiPlanning.pickerFoot`                    | Only models motir-ai offers for planning. Every provider the gateway serves is listed.                                                                          |
+| `aiPlanning.save`                          | Save                                                                                                                                                            |
+| `aiPlanning.readOnly`                      | Only a superadmin can change these.                                                                                                                             |
+| `aiPlanning.changed.seeded`                | Seeded default · never changed                                                                                                                                  |
+| `aiPlanning.changed.by`                    | Changed {when} by {who}                                                                                                                                         |
+| `aiPlanning.changed.justNowByYou`          | Changed just now by you                                                                                                                                         |
+| `aiPlanning.confirm.title`                 | Change the planning model for {audience}?                                                                                                                       |
+| `aiPlanning.confirm.body`                  | {from} → {to}. The change applies to the next planning job for every organisation in this audience. Jobs already running finish on the model they started with. |
+| `aiPlanning.confirm.reasonLabel`           | Reason — required, written to the audit log                                                                                                                     |
+| `aiPlanning.confirm.reasonPlaceholder`     | Why are you changing the model?                                                                                                                                 |
+| `aiPlanning.confirm.reasonHint`            | Shown to any operator reading this change later. “Testing” on its own answers nothing.                                                                          |
+| `aiPlanning.confirm.cancel`                | Cancel                                                                                                                                                          |
+| `aiPlanning.confirm.confirm`               | Change model                                                                                                                                                    |
+| `aiPlanning.saved.title`                   | Planning model changed                                                                                                                                          |
+| `aiPlanning.saved.body`                    | {audience} now plan on {model} from their next job.                                                                                                             |
+| `aiPlanning.refused`                       | {model} is no longer offered for planning, so it was not saved. The list has been refreshed — choose another model.                                             |
+| `aiPlanning.withdrawn.chip`                | No longer offered                                                                                                                                               |
+| `aiPlanning.withdrawn.body`                | Planning for this audience falls back to Claude Opus 5.5 until you choose another.                                                                              |
+| `aiPlanning.withdrawn.bodyReadOnly`        | Planning for this audience falls back to Claude Opus 5.5 until a superadmin chooses another.                                                                    |
+| `aiPlanning.unreachable.save`              | Not saved: the planner could not reach {model} — {reason}.                                                                                                      |
+| `aiPlanning.unreachable.reason.keyRefused` | the provider key was refused                                                                                                                                    |
+| `aiPlanning.unreachable.reason.noChannel`  | no enabled channel serves this model for the planner                                                                                                            |
+| `aiPlanning.unreachable.reason.timeout`    | timed out                                                                                                                                                       |
+| `aiPlanning.failing.chip`                  | Planning is failing                                                                                                                                             |
+| `aiPlanning.failing.body`                  | Planning for this audience is failing: the planner cannot reach this model. Last tested {when}.                                                                 |
+| `aiPlanning.unavailable.title`             | Couldn’t load the planning models                                                                                                                               |
+| `aiPlanning.unavailable.body`              | The planning service (motir-ai) didn’t respond, so no setting is shown. This is a fetch error — nothing has changed, and no value is guessed.                   |
+| `aiPlanning.unavailable.retry`             | Retry                                                                                                                                                           |
+
+**Copy rule kept:** no customer-facing wording and no pricing anywhere on the page. The card's own
+spelling (_organisation_) is kept verbatim, as the story writes it.
+
+**⚠️ Two places the card's copy and the shipped contract do not line up, recorded rather than
+papered over.**
+
+- **There is no human model label.** The card asks for "human label + id as secondary text", but
+  motir-ai's offered list is `[{ id, provider }]` (MOTIR-7221's contract) — there is no label to
+  show. The page therefore uses the shipped `HostedModelPicker` grammar one console over: **the id
+  leads (mono) and the provider is the secondary text**, and the Combobox groups by provider. A
+  label invented in motir-core would be a second model list to keep current.
+- **The withdrawn chip names "Claude Opus 5.5" in words**, verbatim from the card. That is the
+  resolver's `PLANNER_MODEL_FALLBACK` (`claude-opus-5-5`). If the fallback ever changes, the string
+  must change with it — MOTIR-7231 should interpolate the fallback id from the settings read rather
+  than hard-code the words, and the zh twin follows.
+
+## Data — what each element reads
+
+| element                  | source                                                                                                                                    |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| the three rows, in order | `settings[]` of `GET /v1/planner-model-settings` (always three, `customer · meta · internal`)                                             |
+| a row's model            | `settings[i].model`                                                                                                                       |
+| the withdrawn chip       | `settings[i].offered === false`                                                                                                           |
+| last changed             | `settings[i].updatedAt` + `updatedByCoreUserId` resolved to the operator's email in motir-core; `null` → _Seeded default · never changed_ |
+| the picker's options     | `offered[]` (`{ id, provider }`), grouped by `provider`, ordered by `id` within a group                                                   |
+| refused                  | the PUT's `validation_error`                                                                                                              |
+| unreachable (save)       | the PUT's `model_unreachable` and its reason (MOTIR-7236)                                                                                 |
+| failing chip             | the setting's recorded boot-test result and time (MOTIR-7236)                                                                             |
+| unavailable              | any failure of the GET — never rendered as rows                                                                                           |
+
+## Colour and shape roles (`--el-*` only)
+
+| element                                           | token                                                                                                                                                       |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| card, table, rows                                 | the console's `Card` + `.tbl` roles, unchanged                                                                                                              |
+| card glyph tile                                   | `--el-tint-lavender` + `--el-text-strong` (the `ent-org` tile, reused)                                                                                      |
+| audience name · description                       | `--el-text` · `--el-text-secondary`                                                                                                                         |
+| model id · provider                               | `--el-text` (mono) · `--el-text-identifier`                                                                                                                 |
+| last changed                                      | `--el-text-secondary`, the operator in `--el-text-strong`                                                                                                   |
+| Combobox trigger                                  | `--el-page-bg`, `--el-border`, `--radius-input`, `--height-control`; chevron `--el-icon-muted`                                                              |
+| listbox panel · group header · active row · check | `--el-page-bg` + `--shadow-elevated` + `--radius-card` · `--el-text-eyebrow` (on the white panel only) · `--el-option-active-bg` · `--el-accent-on-surface` |
+| page lines (precedence, tenant)                   | `--el-text-secondary`; glyph `--el-info`                                                                                                                    |
+| refused / unreachable inline error                | **`--el-danger-on-surface`** (never `--el-danger-text`, never raw `--el-danger` as ink)                                                                     |
+| withdrawn chip                                    | `Pill` warning: `--el-tint-yellow` + `--el-text-strong`; reason line `--el-text-secondary`                                                                  |
+| failing chip                                      | `Pill` danger: `--el-tint-rose` + `--el-text-strong`; reason line `--el-text-secondary`                                                                     |
+| success toast                                     | `--el-tint-mint` + `--el-text-strong`, glyph `--el-success`                                                                                                 |
+| Save                                              | `Button` sm: primary when dirty, secondary + disabled when not; `--radius-btn`, `--height-btn-sm`                                                           |
+
+## A11y
+
+- The table is a real `<table>` with header cells; each Combobox carries the accessible name
+  _Planning model_ plus the row's audience (`aria-label="Planning model — {audience}"`).
+- The refused and unreachable lines are `role="alert"` on the row; the toast is `role="status"`.
+- The confirm is `role="alertdialog"`, focus lands in the reason field, and the primary carries
+  `disabled` (not only a style) until the reason is non-blank.
+- The read-only panel renders no disabled controls — plain text, so a screen reader is not offered a
+  control it cannot use.
+
+## What this amendment does NOT draw
+
+- **An audit browser.** The change shows as the row's last-changed line; the full browser is Story
+  10.3's (MOTIR-745).
+- **Per-org overrides** beyond the three audiences — a fourth audience is a new story.
+- **The hosted-agent run model** (MOTIR-6989's per-difficulty defaults) — the tenant chooses and pays
+  for that one; it is not a secret and is not on this page.
+- **The tenant surfaces that stop naming the model** — `design/ai-settings/` (MOTIR-7223) and
+  `design/ai-usage/` (MOTIR-7224) carry those deltas.
+- **A `.png` export.** The card asks for one; `docs/decisions/design-result.md` AMENDMENT 4 retired
+  exports (the mock renders on the card), so none is produced.
+
+---
+
 # AMENDMENT 2026-10-01 — the estate overview, Usage & cost and the drill-down, redrawn and published (MOTIR-7237)
 
 **Mock:** `design/platform-admin/console--estate-usage-drilldown.mock.html` — a DELTA (panels D1–D11). It

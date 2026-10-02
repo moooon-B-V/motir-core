@@ -11,6 +11,7 @@ import {
   Search,
   Server,
   Shield,
+  Sparkles,
   UserSearch,
 } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
@@ -49,6 +50,8 @@ export interface AdminShellLabels {
   navTenants: string;
   navUsers: string;
   navMonitoring: string;
+  /** Operations → AI planning (MOTIR-7231), visible to every staff role. */
+  navAiPlanning: string;
   navGovernance: string;
   staffMarkTitle: string;
   staffMarkSubtitle: string;
@@ -153,6 +156,12 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           label: labels.navMonitoring,
           href: '/admin/monitoring',
           active: pathname === '/admin/monitoring',
+        },
+        {
+          icon: <Sparkles />,
+          label: labels.navAiPlanning,
+          href: '/admin/ai-planning',
+          active: pathname === '/admin/ai-planning',
         },
         {
           icon: <Shield />,

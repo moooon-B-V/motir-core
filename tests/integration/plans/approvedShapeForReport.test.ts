@@ -192,11 +192,14 @@ describe("the approving plan's SERVER-WRITTEN author", () => {
       title: 'A native plan',
       authorSource: 'native',
       authorHarness: 'Motir',
-      authorModel: 'motir-planner',
+      // Motir never names its own model on a tenant read (MOTIR-7225)…
+      authorModel: null,
     });
     // The row itself says so — the read did not invent it.
     const row = await adminDb.plan.findUniqueOrThrow({ where: { id: born.planId } });
     expect(row.authorSource).toBe('native');
+    // …and the row still records it: the redaction is at the read, not the write.
+    expect(row.authorModel).toBe('motir-planner');
   });
 });
 
