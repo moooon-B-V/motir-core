@@ -98,6 +98,8 @@ describe('platformOrgBillingService.getOrgBilling', () => {
     expect(billing.memberCount).toBe(1);
     expect(billing.status!.motirAi.balance).toBe(900);
     expect('access' in billing.status!).toBe(false);
+    // The Payment & invoices slot: not connected yet, and no read of its own (MOTIR-7292).
+    expect(billing.billingHistory).toEqual({ state: 'not_connected' });
     expect(billing.bill!.money).toEqual([
       expect.objectContaining({ key: 'aiPlan', amountCents: 7_500 }),
     ]);

@@ -28,6 +28,30 @@ import { assembleBillingStatus } from '@/lib/services/billingService';
  * it, outside the transaction.
  */
 
+/**
+ * The PAYMENT & INVOICES slot (MOTIR-7292, design D9). Story 10.1 builds the card
+ * and fills the slot with `not_connected` — motir-core holds no Stripe client by
+ * design, and the read that fills it from Stripe through motir-ai is the follow-up
+ * story's. Every amount is integer CENTS, so no float reaches a money figure.
+ */
+export type BillingHistorySlot =
+  | {
+      state: 'connected';
+      paymentMethod: { brand: string; last4: string; expMonth: number; expYear: number } | null;
+      invoices: {
+        id: string;
+        month: string;
+        status: string;
+        amountCents: number;
+        currency: string;
+      }[];
+    }
+  /** The org has no Stripe customer. */
+  | { state: 'none' }
+  | { state: 'unavailable' }
+  /** No source is connected yet — the only state this story produces. */
+  | { state: 'not_connected' };
+
 export type PlatformOrgBillingDTO =
   | { enabled: false; organization: PlatformOrganizationDetailDTO }
   | {
@@ -37,6 +61,7 @@ export type PlatformOrgBillingDTO =
       /** The tenant status without its `access` (the operator holds no org role); null = could not be read. */
       status: Omit<BillingStatusDTO, 'access'> | null;
       bill: OrgBill | null;
+      billingHistory: BillingHistorySlot;
     };
 
 export const platformOrgBillingService = {
@@ -86,6 +111,8 @@ export const platformOrgBillingService = {
       memberCount: local.memberCount,
       status,
       bill: status ? buildOrgBill(status, local.memberCount) : null,
+      // Not connected yet: the Stripe read is the follow-up story's (MOTIR-7292).
+      billingHistory: { state: 'not_connected' },
     };
   },
 };

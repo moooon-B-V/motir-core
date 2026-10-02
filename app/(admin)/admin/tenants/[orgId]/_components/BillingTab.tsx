@@ -5,6 +5,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Pill } from '@/components/ui/Pill';
 import type { PlatformOrgBillingDTO } from '@/lib/services/platformOrgBillingService';
+import { PaymentInvoicesCard } from './PaymentInvoicesCard';
 
 /**
  * The org page's BILLING & PLANS tab (MOTIR-7289, design D9): the seat line, the AI
@@ -169,6 +170,8 @@ export async function BillingTab({
           </Card>
         </>
       )}
+      {/* Rendered whatever the bill's reads answered: its slot is its own. */}
+      <PaymentInvoicesCard slot={data.billingHistory} />
       {children}
     </>
   );

@@ -9101,6 +9101,25 @@
         "credits": "{credits} credits",
         "total": "Total",
         "chargedOn": "charged on {date}"
+      },
+      "payment": {
+        "title": "Payment & invoices",
+        "notConnected": "The payment method and invoices aren't connected to the console yet.",
+        "unavailable": "The payment method and invoices can't be shown right now.",
+        "none": "No invoices yet.",
+        "noMethod": "No payment method on file",
+        "expires": "expires {month} / {year}",
+        "paidUp": "Paid up",
+        "invoice": "Invoice",
+        "status": "Status",
+        "amount": "Amount",
+        "invoiceStatus": {
+          "paid": "Paid",
+          "open": "Open",
+          "draft": "Draft",
+          "void": "Void",
+          "uncollectible": "Uncollectible"
+        }
       }
     },
     "workspacePage": {
