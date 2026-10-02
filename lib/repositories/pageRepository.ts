@@ -155,6 +155,23 @@ export const pageRepository = {
   },
 
   /**
+   * The id, title and folder of each page in `ids` — a page's breadcrumb
+   * (`pagesService.getPageTrail`, MOTIR-7370), read in ONE query whatever the
+   * depth. Unordered: the caller orders by the chain it already holds. An id
+   * that does not exist, or is invisible under RLS, simply does not come back.
+   */
+  async findTrailByIds(
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<Page, 'id' | 'title' | 'folderId'>>> {
+    if (ids.length === 0) return [];
+    return tx.page.findMany({
+      where: { id: { in: [...ids] } },
+      select: { id: true, title: true, folderId: true },
+    });
+  },
+
+  /**
    * Serialise every PLACEMENT write in one project — a create, a move, a subtree
    * rewrite — for the length of the caller's transaction (MOTIR-7369).
    *

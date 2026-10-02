@@ -1,5 +1,13 @@
 import type { Page } from '@/generated/prisma/client';
-import type { PageDto, PageListItemDto } from '@/lib/dto/pages';
+import type {
+  PageDto,
+  PageListItemDto,
+  PageMoveResultDto,
+  PageParentDto,
+  PageTrailDto,
+  PageTreeRowDto,
+} from '@/lib/dto/pages';
+import type { FolderTreeRow } from '@/lib/mappers/folderMappers';
 import type { LockedPageRow, PageRow } from '@/lib/pages';
 
 // Page rows ↔ `@motir/pages`' port rows (Story MOTIR-5752 · MOTIR-7276).
@@ -135,5 +143,46 @@ export function toPageListItemDto(
     title: record.title,
     updatedAt: record.updatedAt.toISOString(),
     updatedBy: { id: record.updatedById, name: editorName ?? '' },
+  };
+}
+
+// ── The page tree (Story MOTIR-5753 · MOTIR-7370) ──────────────────────────
+
+/** A folder of a `/pages` tree level (`folderRepository.findLevelForPages`) → wire row. */
+export function toPageTreeFolderRowDto(row: FolderTreeRow): PageTreeRowDto {
+  return { kind: 'folder', id: row.id, name: row.name, hasChildren: Boolean(row.hasChildren) };
+}
+
+/** A page of a `/pages` tree level → wire row. */
+export function toPageTreePageRowDto(row: PageLevelRow): PageTreeRowDto {
+  return { kind: 'page', id: row.id, title: row.title, hasChildren: row.hasChildren };
+}
+
+/** A page's parent from its two placement columns (`page_parent_xor_folder`: at most one is set). */
+export function toPageParentDto(row: Pick<PageRow, 'parentPageId' | 'folderId'>): PageParentDto {
+  if (row.parentPageId !== null) return { kind: 'page', id: row.parentPageId };
+  if (row.folderId !== null) return { kind: 'folder', id: row.folderId };
+  return { kind: 'root' };
+}
+
+/** Where a move left the page. */
+export function toPageMoveResultDto(row: PageRow, moved: boolean): PageMoveResultDto {
+  return {
+    id: row.id,
+    parent: toPageParentDto(row),
+    position: row.position,
+    ancestorPageIds: [...row.ancestorPageIds],
+    moved,
+  };
+}
+
+/** A page's breadcrumb: its folder chain and its ancestor pages, each root-first. */
+export function toPageTrailDto(
+  folders: ReadonlyArray<{ id: string; name: string }>,
+  pages: ReadonlyArray<{ id: string; title: string }>,
+): PageTrailDto {
+  return {
+    folders: folders.map((f) => ({ id: f.id, name: f.name })),
+    pages: pages.map((p) => ({ id: p.id, title: p.title })),
   };
 }

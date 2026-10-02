@@ -4,7 +4,9 @@ import { db } from '@/lib/db';
 import {
   PAGE_SAVE_MAX_BYTES,
   PageBodyTooLargeError,
+  PageFolderNotFoundError,
   PageNotFoundError,
+  PageParentNotAllowedError,
   PageTitleTooLongError,
   emptyState,
   markdownToUpdate,
@@ -252,6 +254,89 @@ describe('pagesService — access', () => {
     expect(after.revision).toBe(before.revision);
     expect(Buffer.compare(Buffer.from(after.bodyState), Buffer.from(before.bodyState))).toBe(0);
     expect(after.bodyMarkdown).toBe('Kept');
+  });
+});
+
+describe('pagesService.createPage — under a parent (MOTIR-7370)', () => {
+  it('places a page at the root by default, in a folder, and under a page', async () => {
+    const f = await makeFixture();
+    const folder = await adminDb.folder.create({
+      data: {
+        workspaceId: f.workspaceId,
+        projectId: f.projectId,
+        name: 'Specs',
+        position: 'a0',
+        createdById: f.manager.userId,
+      },
+    });
+
+    const atRoot = await pagesService.createPage(f.manager, { projectId: f.projectId });
+    const explicitRoot = await pagesService.createPage(f.manager, {
+      projectId: f.projectId,
+      parent: { kind: 'root' },
+    });
+    const filed = await pagesService.createPage(f.manager, {
+      projectId: f.projectId,
+      title: 'Filed',
+      parent: { kind: 'folder', id: folder.id },
+    });
+    const sub = await pagesService.createPage(f.manager, {
+      projectId: f.projectId,
+      parent: { kind: 'page', id: filed.id },
+    });
+
+    const row = (id: string) =>
+      adminDb.page.findUniqueOrThrow({
+        where: { id },
+        select: { parentPageId: true, folderId: true, ancestorPageIds: true },
+      });
+    const root = { parentPageId: null, folderId: null, ancestorPageIds: [] };
+    expect(await row(atRoot.id)).toEqual(root);
+    expect(await row(explicitRoot.id)).toEqual(root);
+    expect(atRoot.position < explicitRoot.position).toBe(true);
+    expect(await row(filed.id)).toEqual({
+      parentPageId: null,
+      folderId: folder.id,
+      ancestorPageIds: [],
+    });
+    expect(await row(sub.id)).toEqual({
+      parentPageId: filed.id,
+      folderId: null,
+      ancestorPageIds: [filed.id],
+    });
+  });
+
+  it('refuses a work item as the parent with PAGE_PARENT_NOT_ALLOWED, writing nothing', async () => {
+    const f = await makeFixture();
+    const err = await pagesService
+      .createPage(f.manager, {
+        projectId: f.projectId,
+        parent: { kind: 'work_item', id: 'some-work-item' },
+      })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(err).toBeInstanceOf(PageParentNotAllowedError);
+    expect(err).toMatchObject({ code: 'PAGE_PARENT_NOT_ALLOWED', status: 422 });
+    expect(await adminDb.page.count({ where: { projectId: f.projectId } })).toBe(0);
+  });
+
+  it('refuses a missing parent page or folder as not found', async () => {
+    const f = await makeFixture();
+    await expect(
+      pagesService.createPage(f.manager, {
+        projectId: f.projectId,
+        parent: { kind: 'page', id: 'no-such-page' },
+      }),
+    ).rejects.toBeInstanceOf(PageNotFoundError);
+    await expect(
+      pagesService.createPage(f.manager, {
+        projectId: f.projectId,
+        parent: { kind: 'folder', id: 'no-such-folder' },
+      }),
+    ).rejects.toBeInstanceOf(PageFolderNotFoundError);
+    expect(await adminDb.page.count({ where: { projectId: f.projectId } })).toBe(0);
   });
 });
 

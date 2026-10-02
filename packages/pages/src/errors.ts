@@ -159,3 +159,17 @@ export class PageFolderNotFoundError extends PageError {
     this.name = 'PageFolderNotFoundError';
   }
 }
+
+/**
+ * A tree-level read's cursor that is not one this service issued — not decodable,
+ * or naming a band the level does not have. Cursors are opaque: a client passes
+ * back the `nextCursor` it was handed, verbatim.
+ */
+export class PageLevelCursorInvalidError extends PageError {
+  readonly code = 'PAGE_CURSOR_INVALID' as const;
+  readonly status = 400 as const;
+  constructor() {
+    super('The tree-level cursor is not valid. Pass back the nextCursor you were given.');
+    this.name = 'PageLevelCursorInvalidError';
+  }
+}
