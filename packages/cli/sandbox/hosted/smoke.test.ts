@@ -727,8 +727,13 @@ async function startStub(): Promise<Stub> {
         body = raw;
       }
       stub.requests.push({ method, path, auth: req.headers.authorization, body });
+      // `connection: close` — one request per socket (MOTIR-7311). With keep-alive
+      // the CLI's fetch reuses an idle socket, and Node's server closes an idle
+      // socket after 5 s. Under CPU load the two land together: the request dies
+      // with `UND_ERR_SOCKET: other side closed`, the run reporter goes offline
+      // as it is built to, and every later report, the close included, is skipped.
       const json = (status: number, payload: unknown) => {
-        res.writeHead(status, { 'content-type': 'application/json' });
+        res.writeHead(status, { 'content-type': 'application/json', connection: 'close' });
         res.end(JSON.stringify(payload));
       };
       // The gateway: the fake agent's one model call, keyed on the run key.
