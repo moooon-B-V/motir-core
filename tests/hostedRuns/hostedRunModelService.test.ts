@@ -282,4 +282,8 @@ describe('toOpenCodeModel', () => {
       hostedRunModelService.toOpenCodeModel({ id: 'claude-opus-5-5', provider: 'anthropic' }),
     ).toBe('anthropic/claude-opus-5-5');
   });
+  it("prefixes GLM and Qwen entries with the CATALOG provider, never OpenCode's own ids (MOTIR-7244)", () => {
+    expect(toOpenCodeModel({ id: 'glm-4.6', provider: 'z-ai' })).toBe('z-ai/glm-4.6');
+    expect(toOpenCodeModel({ id: 'qwen-plus', provider: 'qwen' })).toBe('qwen/qwen-plus');
+  });
 });
