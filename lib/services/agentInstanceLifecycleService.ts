@@ -12,6 +12,7 @@ import {
   type PersistentContainerStatus,
 } from '@motir/orchestrator';
 import {
+  CLONE_EXEC_TIMEOUT_SECONDS,
   INSTANCE_BOOT_DEADLINE_MS,
   INSTANCE_BOOT_EXIT_GRACE_MS,
   INSTANCE_HOME_PATH,
@@ -36,7 +37,7 @@ import {
   AgentImageCatalogUnavailableError,
   AgentProfileNotOfferedError,
 } from '@/lib/agentInstances/errors';
-import { buildCloneCommand } from '@/lib/agentInstances/cloneCommand';
+import { buildCloneCommand, installationBasicAuth } from '@/lib/agentInstances/cloneCommand';
 import {
   AGENT_IDLE_COMMAND,
   AGENT_RUN_LAUNCHER_PROBE_COMMAND,
@@ -96,6 +97,7 @@ import {
   agentInstanceClock,
   armIdleTimer,
 } from '@/lib/services/agentInstanceActivityService';
+import { agentInstanceBootService } from '@/lib/services/agentInstanceBootService';
 import { agentInstanceChargeService } from '@/lib/services/agentInstanceChargeService';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { aiPlanGateService } from '@/lib/services/aiPlanGateService';
@@ -548,7 +550,38 @@ async function failBoot(
   await failInstance(row, reason, RUN_BOOT_FAILED);
 }
 
-/** Clone the project's repositories into a freshly booted instance (§1). */
+/** What a clone exec said on failure: git's words, trimmed, with no credential in them. */
+function cloneFailureDetail(result: { exitCode: number; stderr: string }, token: string): string {
+  const words = result.stderr
+    .split(token)
+    .join('***')
+    .split(installationBasicAuth(token))
+    .join('***')
+    .trim()
+    .slice(0, 200);
+  return words || `exit ${result.exitCode}`;
+}
+
+/**
+ * Clone ONE repository (`owner/name`) into a booted instance — one exec per
+ * repository (AMENDMENT 6 §1), so each repository starts, ends and fails on its
+ * own. The clone SCRIPT is unchanged: a repository whose `.git` exists is skipped.
+ * Returns null on success, else the failure's words with the token scrubbed.
+ */
+async function cloneRepository(
+  handle: PersistentContainerHandle,
+  repository: string,
+  token: string,
+): Promise<string | null> {
+  const result = await getPersistentOrchestrator().exec(
+    handle,
+    buildCloneCommand([repository], token),
+    { timeoutSeconds: CLONE_EXEC_TIMEOUT_SECONDS },
+  );
+  return result.exitCode === 0 ? null : cloneFailureDetail(result, token);
+}
+
+/** Clone the project's repositories into a freshly booted instance (§1), one exec each. */
 async function cloneRepositories(
   row: AgentInstance,
   handle: PersistentContainerHandle,
@@ -556,15 +589,9 @@ async function cloneRepositories(
   const credentials = await mintProjectReadCredentials(row.projectId, row.workspaceId);
   for (const credential of credentials) {
     try {
-      const result = await getPersistentOrchestrator().exec(
-        handle,
-        buildCloneCommand(credential.repositories, credential.token),
-        { timeoutSeconds: 600 },
-      );
-      if (result.exitCode !== 0) {
-        throw new Error(
-          `cloning ${credential.repositories.join(', ')} failed: ${result.stderr.trim().slice(0, 200) || `exit ${result.exitCode}`}`,
-        );
+      for (const repository of credential.repositories) {
+        const failed = await cloneRepository(handle, repository, credential.token);
+        if (failed) throw new Error(`cloning ${repository} failed: ${failed}`);
       }
     } finally {
       await revokeInstanceCloneCredential(credential.token);
@@ -873,6 +900,24 @@ async function beginRollback(row: AgentInstance, detail: string): Promise<void> 
     );
   }
 }
+
+/**
+ * The boot's step functions, for the boot driver (`agentInstanceBootService`,
+ * `agent-instances.md` AMENDMENT 6 §3) — the same clone, probes and failure path
+ * `settleBoot` uses, so the driver changes who calls them, never what they do.
+ */
+export const agentInstanceBootSteps = {
+  handleOf,
+  reload,
+  failInstance,
+  bootFailureReason,
+  cloneRepository,
+  probeTerminalServer,
+  probeRunCapabilities,
+  isTerminalOnQuietly,
+  describeError,
+  RUN_BOOT_FAILED,
+};
 
 export const agentInstanceLifecycleService = {
   /** The caller's own live instances on the project, newest first, one page (§4, §8). */
@@ -1263,7 +1308,20 @@ export const agentInstanceLifecycleService = {
   async beginDelete(instanceId: string): Promise<boolean> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
     if (!row || row.deletedAt) return false;
-    if (!(await systemTransition(row, statesThatMayEnter('deleting'), 'deleting'))) return false;
+    const moved = await withWorkspaceServiceContext(row.workspaceId, async (tx) => {
+      const n = await agentInstanceRepository.transition(
+        row.id,
+        statesThatMayEnter('deleting'),
+        'deleting',
+        agentInstanceClock.now(),
+        {},
+        tx,
+      );
+      // AMENDMENT 6 §4: the move to `deleting` closes the boot attempt, in its transaction.
+      if (n === 1) await agentInstanceBootService.closeForDeletion(row.id, tx);
+      return n;
+    });
+    if (moved !== 1) return false;
     await this.settleDelete(row.id);
     return true;
   },
@@ -1280,16 +1338,19 @@ export const agentInstanceLifecycleService = {
     const row = await ownInstance(project, instanceId, ctx);
     // §6: never under a running run — the person cancels it first.
     await assertNoRunningRun(row, 'deleted');
-    const moved = await inProject(project, ctx, (tx) =>
-      agentInstanceRepository.transition(
+    const moved = await inProject(project, ctx, async (tx) => {
+      const n = await agentInstanceRepository.transition(
         row.id,
         statesThatMayEnter('deleting'),
         'deleting',
         agentInstanceClock.now(),
         {},
         tx,
-      ),
-    );
+      );
+      // AMENDMENT 6 §4: the move to `deleting` closes the boot attempt, in its transaction.
+      if (n === 1) await agentInstanceBootService.closeForDeletion(row.id, tx);
+      return n;
+    });
     if (moved !== 1) throw new AgentInstanceStateConflictError(row.id, row.state, 'deleted');
     await this.settleDelete(row.id);
   },

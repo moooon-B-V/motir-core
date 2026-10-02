@@ -245,10 +245,11 @@ describe('create', () => {
     expect(interval).toMatchObject({ agentInstanceId: row.id, endedAt: null });
     expect((await slots())[0]!.ownerRef).toBe(interval!.id);
 
-    // One clone exec over BOTH repositories (one installation → one token).
-    expect(fleet.execs).toHaveLength(1);
-    const command = fleet.execs[0]!.command;
-    expect(command.slice(-2)).toEqual(['acme/web', 'acme/api']);
+    // One clone exec PER repository (AMENDMENT 6 §1), in the project's order, on
+    // ONE token (one installation → one mint).
+    expect(fleet.execs.map((e) => e.command.at(-1))).toEqual(['acme/web', 'acme/api']);
+    expect(new Set(fleet.execs.map((e) => e.command.at(-2))).size).toBe(1);
+    expect(calls.filter((c) => c.url.endsWith('/access_tokens'))).toHaveLength(1);
   });
 
   it('the clone token is READ-scoped and revoked; it is absent from the env, and every remote URL is token-free', async () => {
