@@ -3,15 +3,20 @@
 // pulling in the service layer (and `db`), exactly like
 // `lib/projectAiSettings/limits.ts`.
 //
-// ⚠️ These ids MIRROR the shipped motir-ai set (`src/llm/gatewayClient.ts`
-// `PLANNER_MODELS = { default: 'deepseek-v4-pro', flash: 'deepseek-v4-flash' }`,
-// selected today by the `PLANNER_MODEL` env). They are NOT invented, and core
-// deliberately does NOT validate an override against them — the vocabulary is
-// owned by the 9.0 metering gateway + motir-ai (7.2.2), so
-// `projectAiSettingsService` validates only the model-id SHAPE
-// (`AI_PLANNER_MODEL_PATTERN`). This list is a PICKER convenience: the three
-// choices a project owner should have, no more. Adding a model later is one more
-// entry here — no layout change.
+// ⚠️ These ids were copied from motir-ai's planner set (`src/llm/gatewayClient.ts`
+// `PLANNER_MODELS`). They are NOT invented, and core deliberately does NOT
+// validate an override against them — the vocabulary is owned by the 9.0
+// metering gateway + motir-ai (7.2.2), so `projectAiSettingsService` validates
+// only the model-id SHAPE (`AI_PLANNER_MODEL_PATTERN`). This list is a PICKER
+// convenience. Adding a model later is one more entry here — no layout change.
+//
+// The copy has drifted and is not re-synced here: motir-ai's planner default is
+// now `claude-opus-4-8`, and this whole setting is retired by MOTIR-7228. The
+// "Fast" row (`deepseek-v4-flash`) was removed on 2026-10-02 (MOTIR-6257):
+// DeepSeek retired the model — absent from its own /models since the gateway's
+// 2026-09-25 catalog refresh — and the gateway no longer prices or routes it.
+// Nothing seeds or migrates a value into `ai_planner_model`, so the removal
+// needs no data change.
 //
 // The open-core boundary holds: motir-core cannot import from motir-ai, so the
 // ids are duplicated by necessity, not by preference. A project that pins a
@@ -29,8 +34,8 @@ export const PLANNER_MODEL_DEFAULT = 'default';
 /** A planner-model picker option value: the sentinel, or a real model id. */
 export type PlannerModelChoice = typeof PLANNER_MODEL_DEFAULT | (typeof PLANNER_MODEL_IDS)[number];
 
-/** The pinnable model ids, in picker order (Thorough → Fast). */
-export const PLANNER_MODEL_IDS = ['deepseek-v4-pro', 'deepseek-v4-flash'] as const;
+/** The pinnable model ids, in picker order. */
+export const PLANNER_MODEL_IDS = ['deepseek-v4-pro'] as const;
 
 /**
  * The picker rows, in order. `labelKey` resolves under
@@ -41,13 +46,12 @@ export const PLANNER_MODEL_IDS = ['deepseek-v4-pro', 'deepseek-v4-flash'] as con
  */
 export const PLANNER_MODEL_OPTIONS: {
   value: PlannerModelChoice;
-  labelKey: 'modelDefault' | 'modelThorough' | 'modelFast';
+  labelKey: 'modelDefault' | 'modelThorough';
   /** The model id shown as secondary text; null for the Default row. */
   modelId: string | null;
 }[] = [
   { value: PLANNER_MODEL_DEFAULT, labelKey: 'modelDefault', modelId: null },
   { value: 'deepseek-v4-pro', labelKey: 'modelThorough', modelId: 'deepseek-v4-pro' },
-  { value: 'deepseek-v4-flash', labelKey: 'modelFast', modelId: 'deepseek-v4-flash' },
 ];
 
 /** The stored override (`null` = follow the deployment) → the picker's value. */
