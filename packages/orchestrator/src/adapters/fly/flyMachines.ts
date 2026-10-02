@@ -400,13 +400,19 @@ export function stoppedAtOf(machine: FlyMachine): Date | null {
  * Exported for the PERSISTENT adapter (`./persistent.ts`, MOTIR-6869), which
  * talks to the instance apps with a different token: the one bounded `fetch`
  * stays the only one, and the token is an argument rather than a config read.
+ *
+ * `timeoutMs` overrides the deadline for ONE call, and only exec passes it: the
+ * Machines API's exec answers when its command exits, so its request is open for
+ * as long as the command may run (MOTIR-7405). Every other call keeps the 30 s
+ * default, and the timeout error names whichever deadline applied.
  */
 export async function flyRequest(
   path: string,
-  init: { method: string; token: string; body?: string },
+  init: { method: string; token: string; body?: string; timeoutMs?: number },
 ): Promise<Response> {
+  const timeoutMs = init.timeoutMs ?? ORCHESTRATOR_REQUEST_TIMEOUT_MS;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ORCHESTRATOR_REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(`${FLY_MACHINES_API}${path}`, {
       method: init.method,
@@ -421,7 +427,7 @@ export async function flyRequest(
     });
   } catch (err) {
     if (controller.signal.aborted) {
-      throw new OrchestratorTimeoutError('fly', ORCHESTRATOR_REQUEST_TIMEOUT_MS);
+      throw new OrchestratorTimeoutError('fly', timeoutMs);
     }
     throw new OrchestratorApiError('fly', null, err instanceof Error ? err.message : 'unknown');
   } finally {
