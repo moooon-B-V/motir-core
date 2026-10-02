@@ -675,4 +675,99 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
     expect(error?.message).not.toContain(SECRET);
     expect(error?.message).not.toContain(String(SECRET.length));
   });
+
+  // ── The SEVENTH probe: credential expiry (MOTIR-1933) ──────────────────────
+  //
+  // The only probe here whose subject is a DECLARED date
+  // (`lib/health/credentialRegistry.ts`), so its fixture is the clock and one
+  // env var. The clock is set BEFORE the schedules are seeded, so the
+  // schedule-health probe judges them against the same `now`.
+
+  describe('credential expiry', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    async function greenAt(now: string, billingToken: string) {
+      vi.setSystemTime(new Date(now));
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+      vi.stubEnv('GITHUB_BILLING_TOKEN', billingToken);
+    }
+
+    it('PASSES months ahead of the declared expiry, and records the entry', async () => {
+      await greenAt('2026-10-02T09:00:00.000Z', 'ghp_billing');
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result } = await engine.execute();
+
+      expect(result).toMatchObject({
+        ok: true,
+        credentialExpiry: {
+          verdict: 'ok',
+          entries: [{ envVar: 'GITHUB_BILLING_TOKEN', state: 'healthy' }],
+        },
+      });
+    });
+
+    it('FAILS inside the lead time, naming the variable, the date and the renewal', async () => {
+      await greenAt('2027-07-05T09:00:00.000Z', 'ghp_billing');
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result, error } = await engine.execute();
+
+      expect(result).toBeUndefined();
+      expect(error?.name).toBe('CredentialExpiringError');
+      expect(error?.message).toContain('GITHUB_BILLING_TOKEN');
+      expect(error?.message).toContain('2027-07-31');
+      expect(error?.message).toContain('in 25 day(s)');
+      expect(error?.message).toContain('fly secrets set GITHUB_BILLING_TOKEN');
+      expect(error?.message).toContain('credentialRegistry.ts');
+      expect(error?.message).not.toContain('ghp_billing');
+    });
+
+    it('FAILS as EXPIRED once the date has passed and the variable is still set', async () => {
+      await greenAt('2027-08-03T09:00:00.000Z', 'ghp_billing');
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { error } = await engine.execute();
+
+      expect(error?.name).toBe('CredentialExpiredError');
+      expect(error?.message).toContain('PAST their declared expiry');
+      expect(error?.message).toContain('3 day(s) ago');
+    });
+
+    it('SKIPS an unset token — a deployment without the audit is not a fault', async () => {
+      await greenAt('2027-08-03T09:00:00.000Z', '');
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result } = await engine.execute();
+
+      expect(result).toMatchObject({
+        ok: true,
+        credentialExpiry: { verdict: 'ok', entries: [], skipped: ['GITHUB_BILLING_TOKEN'] },
+      });
+    });
+
+    it('a credential failure still records every other probe first', async () => {
+      await greenAt('2027-07-05T09:00:00.000Z', 'ghp_billing');
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { error, ctx } = await engine.execute();
+
+      expect(error?.name).toBe('CredentialExpiringError');
+      const stepIds = ctx.step.run.mock.calls.map((call) => call[0] as string);
+      for (const id of [
+        'schedule-health',
+        'fleet-boot-preflight',
+        'index-fleet-boot-preflight',
+        'index-container-ai-address',
+        'index-rebuild-streak',
+        'monitor-config-preflight',
+        'credential-expiry',
+      ]) {
+        expect(stepIds).toContain(id);
+      }
+    });
+  });
 });

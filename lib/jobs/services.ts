@@ -42,6 +42,7 @@ import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthServic
 import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
 import { indexRebuildStreakService } from '@/lib/services/indexRebuildStreakService';
 import { monitorConfigPreflightService } from '@/lib/services/monitorConfigPreflightService';
+import { credentialExpiryService } from '@/lib/services/credentialExpiryService';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
 import { planDriftService } from '@/lib/services/planDriftService';
@@ -121,6 +122,9 @@ export const jobServices = {
   // the only one that asserts something about this process's OWN ENVIRONMENT
   // rather than about a registry, an address or the ledger.
   monitorConfigPreflight: monitorConfigPreflightService,
+  // The credential-expiry probe (MOTIR-1933) — the daily check's seventh, and the
+  // only one that reads a DECLARED date rather than a live system.
+  credentialExpiry: credentialExpiryService,
   parentStatusRollup: parentStatusRollupService,
   childStatusCascade: childStatusCascadeService,
   planDrift: planDriftService,

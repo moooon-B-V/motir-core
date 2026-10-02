@@ -328,6 +328,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ blindSpot: string; detail: string; offenders: Array<{ missing: Array<string>; providerId: string; required: Array<string> }>; providers: Array<{ missing: Array<string>; providerId: string; required: Array<string> }>; verdict: "incomplete" } | { blindSpot: string; detail: string; providers: Array<{ missing: Array<string>; providerId: string; required: Array<string> }>; verdict: "complete" } | { blindSpot: string; detail: string; providers: Array<{ missing: Array<string>; providerId: string; required: Array<string> }>; verdict: "not_applicable" }',
   },
+  'credential-expiry': {
+    file: 'lib/jobs/definitions/dailyHealthCheck.ts',
+    shape:
+      '{ checkedAt: string; entries: Array<{ daysRemaining: number; envVar: string; expiresAt: string; name: string; renewal: string; source: string; state: "expired" | "expiring" | "healthy" }>; expiring: Array<{ daysRemaining: number; envVar: string; expiresAt: string; name: string; renewal: string; source: string; state: "expired" | "expiring" | "healthy" }>; offenders: Array<{ daysRemaining: number; envVar: string; expiresAt: string; name: string; renewal: string; source: string; state: "expired" | "expiring" | "healthy" }>; skipped: Array<string>; verdict: "expired" } | { checkedAt: string; entries: Array<{ daysRemaining: number; envVar: string; expiresAt: string; name: string; renewal: string; source: string; state: "expired" | "expiring" | "healthy" }>; offenders: Array<{ daysRemaining: number; envVar: string; expiresAt: string; name: string; renewal: string; source: string; state: "expired" | "expiring" | "healthy" }>; skipped: Array<string>; verdict: "expiring" } | { checkedAt: string; entries: Array<{ daysRemaining: number; envVar: string; expiresAt: string; name: string; renewal: string; source: string; state: "expired" | "expiring" | "healthy" }>; skipped: Array<string>; verdict: "ok" }',
+  },
   'notification-fan-in': {
     file: 'lib/jobs/definitions/notificationFanIn.ts',
     shape: '{ writtenUserIds: Array<string> }',
