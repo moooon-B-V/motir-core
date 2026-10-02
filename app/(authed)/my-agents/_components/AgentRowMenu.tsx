@@ -10,7 +10,8 @@ import { allowedAgentMoves, type AgentMove } from '@/lib/agentInstances/presenta
 
 // THE ROW MENU (MOTIR-6868 revision 3, panel 3): exactly the moves §4 allows from
 // the row's state — Wake from hibernated or failed, Hibernate from running,
-// Delete… from running, hibernated or failed. A move the state does not allow is
+// Delete… from every state §4 lets enter `deleting` — since AMENDMENT 4 that
+// includes starting, waking and hibernating. A move the state does not allow is
 // DISABLED, not hidden, so the menu keeps one shape.
 //
 // MOTIR-6916's delta (panel E, built by MOTIR-6921): once the org's AI plan has
