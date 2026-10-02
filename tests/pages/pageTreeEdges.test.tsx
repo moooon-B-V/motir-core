@@ -9,6 +9,7 @@ import type { FolderDto } from '@/lib/dto/folders';
 import { ToastProvider } from '@/components/ui/Toast';
 import { FolderCommandsProvider } from '@/components/folders/FolderCommands';
 import { enMessages, renderWithIntl } from '../helpers/renderWithIntl';
+import { clearToastTimersAfterEach } from '../helpers/toastTimers';
 
 // THE PAGE TREE'S EDGES (Story MOTIR-5753 · MOTIR-7377, the story's Vitest gate).
 //
@@ -240,6 +241,8 @@ beforeEach(() => {
   actions = makeActions();
   vi.stubGlobal('fetch', fetchMock);
 });
+
+clearToastTimersAfterEach();
 
 afterEach(() => {
   cleanup();

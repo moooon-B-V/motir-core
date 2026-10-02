@@ -7,6 +7,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import type { PageTreeLevelDto, PageTreeRowDto } from '@/lib/dto/pages';
 import { ToastProvider } from '@/components/ui/Toast';
 import { enMessages, renderWithIntl } from '../helpers/renderWithIntl';
+import { clearToastTimersAfterEach } from '../helpers/toastTimers';
 
 // THE PAGE'S PLACE (Story MOTIR-5753 · MOTIR-7375) —
 // `design/pages/page--tree-sidebar.mock.html` panels 1, 3, 4 and 5:
@@ -109,6 +110,8 @@ beforeEach(() => {
   window.localStorage.clear();
   resetPageSidebarPreferenceForTests();
 });
+
+clearToastTimersAfterEach();
 
 afterEach(() => {
   cleanup();

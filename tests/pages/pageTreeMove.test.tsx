@@ -10,6 +10,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { FolderCommandsProvider, NewRootFolderButton } from '@/components/folders/FolderCommands';
 import zhMessages from '@/messages/zh.json';
 import { enMessages, renderWithIntl } from '../helpers/renderWithIntl';
+import { clearToastTimersAfterEach } from '../helpers/toastTimers';
 
 // MOVING IN THE PAGE TREE (Story MOTIR-5753 · MOTIR-7374) — `PageTree`'s page
 // row menu (`PageRowMenu`), the Move to… picker (`PagePlacementPicker`), the
@@ -204,6 +205,8 @@ beforeEach(() => {
   actions = makeActions();
   vi.stubGlobal('fetch', fetchMock);
 });
+
+clearToastTimersAfterEach();
 
 afterEach(() => {
   cleanup();

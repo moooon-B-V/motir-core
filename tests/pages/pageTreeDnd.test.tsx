@@ -5,6 +5,7 @@ import type { PageTreeLevelDto, PageTreeRowDto } from '@/lib/dto/pages';
 import { ToastProvider } from '@/components/ui/Toast';
 import zhMessages from '@/messages/zh.json';
 import { renderWithIntl } from '../helpers/renderWithIntl';
+import { clearToastTimersAfterEach } from '../helpers/toastTimers';
 
 // DRAG-AND-DROP IN THE PAGE TREE (Story MOTIR-5753 · MOTIR-7376) — `PageTreeDnd`
 // against `design/pages/pages--tree.mock.html` panel 11 and `design-notes.md`
@@ -322,6 +323,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
   stubLayout();
 });
+
+clearToastTimersAfterEach();
 
 afterEach(() => {
   cleanup();

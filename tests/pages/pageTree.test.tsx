@@ -6,6 +6,7 @@ import type { PageTreeLevelDto, PageTreeRowDto } from '@/lib/dto/pages';
 import { ToastProvider } from '@/components/ui/Toast';
 import zhMessages from '@/messages/zh.json';
 import { renderWithIntl } from '../helpers/renderWithIntl';
+import { clearToastTimersAfterEach } from '../helpers/toastTimers';
 
 // THE PAGE TREE (Story MOTIR-5753 · MOTIR-7373) — `components/pages/tree/PageTree.tsx`
 // against `design/pages/pages--tree.mock.html` panels 1–8 and `design-notes.md`
@@ -117,6 +118,8 @@ beforeEach(() => {
   posts.length = 0;
   vi.stubGlobal('fetch', fetchMock);
 });
+
+clearToastTimersAfterEach();
 
 afterEach(() => {
   cleanup();
