@@ -84,8 +84,10 @@ export interface PageVersionWithBody extends PageVersionRow {
   readonly bodyMarkdown: string;
 }
 
-/** A new version, as `insertVersion` writes it. */
+/** A new version, as `insertVersion` writes it — its page's tenancy stamped on it. */
 export interface PageVersionInsert {
+  readonly workspaceId: string;
+  readonly projectId: string;
   readonly pageId: string;
   readonly number: number;
   readonly authorId: string;

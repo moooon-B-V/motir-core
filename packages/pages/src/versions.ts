@@ -1,7 +1,7 @@
 import { PAGE_BODY_MAX_BYTES, PAGE_VERSION_CAP, PAGE_VERSION_WINDOW_MS } from './constants';
 import { applyUpdate, deriveFormats, stateToUpdate } from './document/convert';
 import { PageBodyTooLargeError, PageNotFoundError, PageVersionNotFoundError } from './errors';
-import type { Clock, PageStore, PageVersionRow } from './store';
+import type { Clock, PageRow, PageStore, PageVersionRow } from './store';
 
 // A page's VERSIONS (Story MOTIR-5754 · MOTIR-7383), `docs/decisions/pages.md`
 // §6, decided here and persisted through the `PageStore`:
@@ -48,7 +48,8 @@ async function applyCap(store: PageStore, pageId: string): Promise<void> {
 }
 
 export interface RecordVersionInput {
-  pageId: string;
+  /** The page as read under its lock — its id and tenancy. */
+  page: Pick<PageRow, 'id' | 'workspaceId' | 'projectId'>;
   actorId: string;
   /** The page's state as just written. */
   state: Uint8Array;
@@ -63,7 +64,8 @@ export interface RecordVersionInput {
  * new one, then hold the cap. Every call writes exactly one version row.
  */
 export async function recordVersion(store: PageStore, input: RecordVersionInput): Promise<void> {
-  const latest = await store.latestVersion(input.pageId);
+  const { page } = input;
+  const latest = await store.latestVersion(page.id);
   const write = decideVersionWrite(latest, input.actorId, input.now);
   if (write.kind === 'extend') {
     await store.updateVersion(write.versionId, {
@@ -74,7 +76,9 @@ export async function recordVersion(store: PageStore, input: RecordVersionInput)
     return;
   }
   await store.insertVersion({
-    pageId: input.pageId,
+    workspaceId: page.workspaceId,
+    projectId: page.projectId,
+    pageId: page.id,
     number: write.number,
     authorId: input.actorId,
     bodyState: input.state,
@@ -84,7 +88,7 @@ export async function recordVersion(store: PageStore, input: RecordVersionInput)
     restoredFromVersionId: null,
     restoredFromNumber: null,
   });
-  await applyCap(store, input.pageId);
+  await applyCap(store, page.id);
 }
 
 export interface RestorePageVersionInput {
@@ -135,6 +139,8 @@ export async function restorePageVersion(
 
   const latest = await store.latestVersion(input.pageId);
   const version = await store.insertVersion({
+    workspaceId: page.workspaceId,
+    projectId: page.projectId,
     pageId: input.pageId,
     number: (latest?.number ?? 0) + 1,
     authorId: input.actorId,

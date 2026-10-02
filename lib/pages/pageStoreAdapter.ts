@@ -1,7 +1,13 @@
 import type { Prisma } from '@/generated/prisma/client';
 import type { PagePlacement, PageStore } from '@motir/pages';
-import { toLockedPageRow, toPageRow } from '@/lib/mappers/pageMappers';
+import {
+  toLockedPageRow,
+  toPageRow,
+  toPageVersionRow,
+  toPageVersionWithBody,
+} from '@/lib/mappers/pageMappers';
 import { pageRepository } from '@/lib/repositories/pageRepository';
+import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
 
 // The `PageStore` ADAPTER (Story MOTIR-5752 · MOTIR-7276), `docs/decisions/pages.md`
 // §2: the package's port bound to ONE open transaction over `pageRepository`.
@@ -84,6 +90,58 @@ export function createPageStore(tx: Prisma.TransactionClient): PageStore {
     async updateTitle(pageId, title, updatedById) {
       const record = await pageRepository.updateTitle(pageId, title, updatedById, tx);
       return record ? toPageRow(record) : null;
+    },
+
+    // ── Versions (Story MOTIR-5754 · MOTIR-7384) — `page_version`, same `tx`. ──
+
+    async latestVersion(pageId) {
+      const record = await pageVersionRepository.findLatest(pageId, tx);
+      return record ? toPageVersionRow(record) : null;
+    },
+
+    async insertVersion(row) {
+      const record = await pageVersionRepository.insert(
+        {
+          workspaceId: row.workspaceId,
+          projectId: row.projectId,
+          pageId: row.pageId,
+          number: row.number,
+          authorId: row.authorId,
+          bodyState: new Uint8Array(row.bodyState),
+          bodyMarkdown: row.bodyMarkdown,
+          startedAt: row.startedAt,
+          savedAt: row.savedAt,
+          restoredFromVersionId: row.restoredFromVersionId,
+          restoredFromNumber: row.restoredFromNumber,
+        },
+        tx,
+      );
+      return toPageVersionRow(record);
+    },
+
+    async updateVersion(versionId, row) {
+      await pageVersionRepository.update(
+        versionId,
+        {
+          bodyState: new Uint8Array(row.bodyState),
+          bodyMarkdown: row.bodyMarkdown,
+          savedAt: row.savedAt,
+        },
+        tx,
+      );
+    },
+
+    async findVersion(pageId, number) {
+      const record = await pageVersionRepository.findByPageAndNumber(pageId, number, tx);
+      return record ? toPageVersionWithBody(record) : null;
+    },
+
+    async countVersions(pageId) {
+      return pageVersionRepository.countByPage(pageId, tx);
+    },
+
+    async deleteOldestVersions(pageId, keep) {
+      await pageVersionRepository.deleteOldest(pageId, keep, tx);
     },
 
     // ADR §2: "a no-op adapter until then" — the derived link rows are the

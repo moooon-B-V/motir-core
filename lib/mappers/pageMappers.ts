@@ -1,6 +1,6 @@
-import type { Page } from '@/generated/prisma/client';
+import type { Page, PageVersion } from '@/generated/prisma/client';
 import type { PageDto, PageListItemDto } from '@/lib/dto/pages';
-import type { LockedPageRow, PageRow } from '@/lib/pages';
+import type { LockedPageRow, PageRow, PageVersionRow, PageVersionWithBody } from '@/lib/pages';
 
 // Page rows ↔ `@motir/pages`' port rows (Story MOTIR-5752 · MOTIR-7276).
 //
@@ -57,10 +57,58 @@ export function toPageRow(record: PageRecord): PageRow {
 
 /** The locked row, its `bytea` body as a plain `Uint8Array` (pg hands back a `Buffer`). */
 export function toLockedPageRow(record: PageLockedRecord): LockedPageRow {
-  const body = record.bodyState;
+  return { ...toPageRow(record), bodyState: toBytes(record.bodyState) };
+}
+
+/** A `bytea` column as a plain `Uint8Array` (pg hands back a `Buffer`). */
+function toBytes(body: Uint8Array): Uint8Array {
+  return new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+}
+
+// ── Versions (Story MOTIR-5754 · MOTIR-7384) ─────────────────────────────────
+
+/** A version read without its snapshot — every column `PageVersionRow` carries. */
+export type PageVersionRecord = Omit<
+  PageVersion,
+  'workspaceId' | 'projectId' | 'bodyState' | 'bodyMarkdown'
+>;
+
+/** A version read with its snapshot, as a restore reads it. */
+export interface PageVersionBodyRecord extends PageVersionRecord {
+  bodyState: Uint8Array;
+  bodyMarkdown: string;
+}
+
+/** The columns a version read selects — everything but the 2 MiB snapshot. */
+export const PAGE_VERSION_RECORD_SELECT = {
+  id: true,
+  pageId: true,
+  number: true,
+  authorId: true,
+  startedAt: true,
+  savedAt: true,
+  restoredFromVersionId: true,
+  restoredFromNumber: true,
+} as const;
+
+export function toPageVersionRow(record: PageVersionRecord): PageVersionRow {
   return {
-    ...toPageRow(record),
-    bodyState: new Uint8Array(body.buffer, body.byteOffset, body.byteLength),
+    id: record.id,
+    pageId: record.pageId,
+    number: record.number,
+    authorId: record.authorId,
+    startedAt: record.startedAt,
+    savedAt: record.savedAt,
+    restoredFromVersionId: record.restoredFromVersionId,
+    restoredFromNumber: record.restoredFromNumber,
+  };
+}
+
+export function toPageVersionWithBody(record: PageVersionBodyRecord): PageVersionWithBody {
+  return {
+    ...toPageVersionRow(record),
+    bodyState: toBytes(record.bodyState),
+    bodyMarkdown: record.bodyMarkdown,
   };
 }
 

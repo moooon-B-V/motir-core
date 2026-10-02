@@ -76,6 +76,8 @@ export async function createPage(
   });
   // A page's history starts with its creation (§6): version 1, the empty body.
   await store.insertVersion({
+    workspaceId: page.workspaceId,
+    projectId: page.projectId,
     pageId: page.id,
     number: 1,
     authorId: input.actorId,
@@ -147,7 +149,7 @@ export async function savePageUpdate(
   // Every save leaves a version (§6) — extended or new, under the same lock and
   // the same instant as the body write.
   await recordVersion(store, {
-    pageId: input.pageId,
+    page,
     actorId: input.actorId,
     state,
     markdown: formats.markdown,

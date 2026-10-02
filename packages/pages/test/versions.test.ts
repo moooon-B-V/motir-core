@@ -147,6 +147,8 @@ describe('the cap', () => {
     // Seed versions 2..CAP directly, so the page holds exactly the cap.
     for (let n = 2; n <= PAGE_VERSION_CAP; n += 1) {
       await store.insertVersion({
+        workspaceId: 'w1',
+        projectId: 'p1',
         pageId: page.id,
         number: n,
         authorId: 'seed',
@@ -272,6 +274,8 @@ describe('restorePageVersion', () => {
     const bigState = applyUpdate(emptyState(), markdownToUpdate(emptyState(), big));
     expect(bigState.byteLength).toBeGreaterThan(PAGE_BODY_MAX_BYTES);
     await store.insertVersion({
+      workspaceId: 'w1',
+      projectId: 'p1',
       pageId: page.id,
       number: 2,
       authorId: 'A',
@@ -297,6 +301,8 @@ describe('restorePageVersion', () => {
     const page = await createPage(store, clock, scope);
     for (let n = 2; n <= PAGE_VERSION_CAP; n += 1) {
       await store.insertVersion({
+        workspaceId: 'w1',
+        projectId: 'p1',
         pageId: page.id,
         number: n,
         authorId: 'seed',
