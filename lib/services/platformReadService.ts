@@ -7,7 +7,13 @@ import type {
   PlatformOverviewDTO,
   PlatformOverviewPeriod,
 } from '@/lib/dto/platform';
-import { getPlatformRuns, platformRunsCursorAt, type RawPlatformRun } from '@/lib/ai/motirAiClient';
+import {
+  getPlatformRuns,
+  getPlatformUsage,
+  platformRunsCursorAt,
+  type RawPlatformRun,
+  type RawPlatformUsage,
+} from '@/lib/ai/motirAiClient';
 import { toPlatformRunActivityDTO, toPlatformTenantEventDTO } from '@/lib/mappers/platformMappers';
 import {
   toPlatformOrganizationSummaryDTO,
@@ -159,6 +165,35 @@ export const platformReadService = {
           },
         };
       },
+    );
+  },
+
+  /**
+   * The estate's spend for one period (MOTIR-732, design D3/D4) — all eight
+   * categories, the token categories' models and the totals, from motir-ai's
+   * platform rollup alone; motir-core stores no metering.
+   *
+   * ONE audited `estate.read` per view, written whether or not motir-ai answered:
+   * the operator looked at the estate's spend either way. motir-ai unreachable is
+   * `usage: null` — the page's error state — never a throw.
+   */
+  async getEstateUsage(
+    principal: PlatformPrincipal,
+    period: string,
+  ): Promise<{ period: string; usage: RawPlatformUsage | null }> {
+    await requirePlatformStaff('support');
+
+    let usage: RawPlatformUsage | null = null;
+    try {
+      usage = await getPlatformUsage({ period, level: 'platform' });
+    } catch {
+      usage = null;
+    }
+
+    return withPlatformRead(
+      principal,
+      { action: 'estate.read', targetKind: 'platform', targetLabel: `estate usage ${period}` },
+      async () => ({ period, usage }),
     );
   },
 

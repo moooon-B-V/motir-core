@@ -8399,7 +8399,6 @@
       "users": "Users",
       "monitoring": "Monitoring",
       "governance": "Governance",
-      "soonUsage": "10.1",
       "soonGovernance": "10.3"
     },
     "topBar": {
@@ -8865,6 +8864,68 @@
           "cogs": "Internal COGS"
         },
         "absentLine": "absent — no {workload} container ran this period (not a zero)"
+      }
+    },
+    "usage": {
+      "title": "Usage & cost",
+      "subtitle": "What the whole estate used, what it was charged and what it cost Motir — by spending category and by model, for any month or all time. Each organization's figures are on Tenants.",
+      "showing": "Showing {period}",
+      "period": {
+        "label": "Period",
+        "month": "Month",
+        "allTime": "All time"
+      },
+      "units": {
+        "tokens": "tokens",
+        "minutes": "min",
+        "gbDays": "GB-days",
+        "searches": "searches",
+        "credits": "credits"
+      },
+      "figures": {
+        "charged": "Credits charged",
+        "cost": "Motir cost",
+        "machine": "Machine minutes",
+        "orgs": "Organizations with spend"
+      },
+      "categories": {
+        "title": "The estate by category",
+        "category": "Category",
+        "usage": "Usage",
+        "credits": "Credits",
+        "cost": "Motir cost",
+        "notCharged": "not charged",
+        "chargedTotal": "Charged total",
+        "totalInclIndexing": "Total incl. indexing"
+      },
+      "category": {
+        "planning_tokens": "Planning tokens",
+        "agent_tokens": "Agent-run tokens",
+        "agent_machine": "Agent-run machine",
+        "agent_instance": "Agent instances",
+        "agent_storage": "Agent storage",
+        "ci": "CI",
+        "search": "Web search",
+        "indexing": "Indexing"
+      },
+      "models": {
+        "title": {
+          "planning_tokens": "Planning tokens by model",
+          "agent_tokens": "Agent-run tokens by model"
+        },
+        "model": "Model",
+        "input": "Input",
+        "output": "Output",
+        "cacheRead": "Cache read",
+        "cacheWrite": "Cache write",
+        "orgs": "Orgs using it",
+        "credits": "Credits",
+        "cost": "Motir cost",
+        "empty": "No model was used in this period."
+      },
+      "unavailable": {
+        "title": "Usage can't be shown right now",
+        "description": "The AI service that keeps the usage rollup did not answer. Nothing is wrong with the figures — try again in a moment."
       }
     }
   },

@@ -47,6 +47,7 @@ import type {
   Tenant,
   UsageQuery,
 } from './types';
+import type { CategoryFigures } from '@/lib/platform/spend';
 
 // The actor a job runs on behalf of — the read-back token is minted for them, so
 // motir-ai reads/proposes only what this user could (contract §4b).
@@ -2378,4 +2379,59 @@ export async function reportPlatformMeter(
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as { sourceId: string; idempotent: boolean };
+}
+
+// ── The PLATFORM SPEND READ (Story MOTIR-727 · MOTIR-732 · motir-ai MOTIR-7284) ──
+
+export type PlatformUsageLevel = 'platform' | 'organization' | 'workspace' | 'project';
+
+export interface RawPlatformModelFigures {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheMissTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  credits: number;
+  costMicroUsd: number;
+  /** At platform level, how many organizations used the model; null below it. */
+  orgs: number | null;
+}
+
+/** `GET /v1/platform/usage` — one entity's spend for a period. */
+export interface RawPlatformUsage {
+  period: string;
+  level: PlatformUsageLevel;
+  entityId: string;
+  categories: CategoryFigures[];
+  models: { planning_tokens: RawPlatformModelFigures[]; agent_tokens: RawPlatformModelFigures[] };
+  spend: {
+    chargedCredits: number;
+    chargedCostMicroUsd: number;
+    costMicroUsdInclIndexing: number;
+    machineSeconds: number;
+  };
+  orgsWithSpend: number | null;
+}
+
+/**
+ * GET /v1/platform/usage — one entity's spend for `period` (`YYYY-MM` or `all`),
+ * all eight categories, the token categories' models and the totals, read from
+ * motir-ai's pre-aggregated rollup. Read-through: the caller is a
+ * `platform*Service` method that has already passed the platform-staff gate.
+ */
+export async function getPlatformUsage(query: {
+  period: string;
+  level?: PlatformUsageLevel;
+  entityId?: string | null;
+}): Promise<RawPlatformUsage> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ period: query.period, level: query.level ?? 'platform' });
+  if (query.entityId) params.set('entityId', query.entityId);
+  const res = await aiFetch(`${url}/v1/platform/usage?${params.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawPlatformUsage;
 }

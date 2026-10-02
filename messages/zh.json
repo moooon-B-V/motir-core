@@ -8395,7 +8395,6 @@
       "users": "用户",
       "monitoring": "监控",
       "governance": "治理",
-      "soonUsage": "10.1",
       "soonGovernance": "10.3"
     },
     "topBar": {
@@ -8861,6 +8860,68 @@
           "cogs": "内部 COGS"
         },
         "absentLine": "缺失——本周期没有运行 {workload} 容器（不是零）"
+      }
+    },
+    "usage": {
+      "title": "用量与成本",
+      "subtitle": "整个平台用了多少、收取了多少积分、Motir 付出了多少成本——按消费类别和模型划分，可查看任意月份或全部时间。各组织的数据在“租户”页。",
+      "showing": "显示 {period}",
+      "period": {
+        "label": "时间段",
+        "month": "月份",
+        "allTime": "全部时间"
+      },
+      "units": {
+        "tokens": "token",
+        "minutes": "分钟",
+        "gbDays": "GB·天",
+        "searches": "次搜索",
+        "credits": "积分"
+      },
+      "figures": {
+        "charged": "已收积分",
+        "cost": "Motir 成本",
+        "machine": "机器分钟",
+        "orgs": "有消费的组织"
+      },
+      "categories": {
+        "title": "按类别的平台消费",
+        "category": "类别",
+        "usage": "用量",
+        "credits": "积分",
+        "cost": "Motir 成本",
+        "notCharged": "不收费",
+        "chargedTotal": "收费合计",
+        "totalInclIndexing": "含索引总计"
+      },
+      "category": {
+        "planning_tokens": "规划 token",
+        "agent_tokens": "智能体运行 token",
+        "agent_machine": "智能体运行机器",
+        "agent_instance": "智能体实例",
+        "agent_storage": "智能体存储",
+        "ci": "CI",
+        "search": "网页搜索",
+        "indexing": "索引"
+      },
+      "models": {
+        "title": {
+          "planning_tokens": "按模型的规划 token",
+          "agent_tokens": "按模型的智能体运行 token"
+        },
+        "model": "模型",
+        "input": "输入",
+        "output": "输出",
+        "cacheRead": "缓存读取",
+        "cacheWrite": "缓存写入",
+        "orgs": "使用的组织",
+        "credits": "积分",
+        "cost": "Motir 成本",
+        "empty": "此时间段没有使用任何模型。"
+      },
+      "unavailable": {
+        "title": "暂时无法显示用量",
+        "description": "保存用量汇总的 AI 服务没有响应。数据本身没有问题——请稍后再试。"
       }
     }
   },
