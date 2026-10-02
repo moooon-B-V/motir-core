@@ -87,6 +87,7 @@ export default defineConfig({
       'tests/jobs/attachment-gc.test.ts',
       'tests/api/pages-routes.test.ts',
       'tests/api/pages-routes-refusals.test.ts',
+      'tests/api/pages-routes-tree.test.ts',
       // The client surfaces (MOTIR-7280 · 7300).
       'tests/components/new-page-button.test.tsx',
       'tests/components/page-view.test.tsx',
