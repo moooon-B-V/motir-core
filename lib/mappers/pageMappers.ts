@@ -1,5 +1,10 @@
 import type { Page, PageVersion } from '@/generated/prisma/client';
-import type { PageDto, PageListItemDto } from '@/lib/dto/pages';
+import type {
+  PageDto,
+  PageListItemDto,
+  PageVersionDto,
+  PageVersionListItemDto,
+} from '@/lib/dto/pages';
 import type { LockedPageRow, PageRow, PageVersionRow, PageVersionWithBody } from '@/lib/pages';
 
 // Page rows ↔ `@motir/pages`' port rows (Story MOTIR-5752 · MOTIR-7276).
@@ -112,6 +117,45 @@ export function toPageVersionWithBody(record: PageVersionBodyRecord): PageVersio
   };
 }
 
+/** A state as base64 — the wire shape every `bodyState` DTO field uses. */
+export function toBase64(state: Uint8Array): string {
+  return Buffer.from(state.buffer, state.byteOffset, state.byteLength).toString('base64');
+}
+
+/**
+ * One history row (MOTIR-7385). `isCurrent` is the caller's: whether this is the
+ * page's newest number. `restoredFromKept` reads the FK, which the cap's prune
+ * sets to NULL while `restoredFromNumber` stays.
+ */
+export function toPageVersionListItemDto(
+  row: PageVersionRow,
+  authorName: string | undefined,
+  isCurrent: boolean,
+): PageVersionListItemDto {
+  return {
+    number: row.number,
+    authorId: row.authorId,
+    authorName: authorName ?? '',
+    startedAt: row.startedAt.toISOString(),
+    savedAt: row.savedAt.toISOString(),
+    restoredFromNumber: row.restoredFromNumber,
+    restoredFromKept: row.restoredFromVersionId !== null,
+    isCurrent,
+  };
+}
+
+/** One version with its snapshot (MOTIR-7385). */
+export function toPageVersionDto(
+  row: PageVersionWithBody,
+  authorName: string | undefined,
+  isCurrent: boolean,
+): PageVersionDto {
+  return {
+    ...toPageVersionListItemDto(row, authorName, isCurrent),
+    bodyState: toBase64(row.bodyState),
+  };
+}
+
 /**
  * The page as the read model returns it (MOTIR-7277): the canonical state as
  * base64 — the editor's seed, from which it derives everything else — and
@@ -123,11 +167,7 @@ export function toPageDto(row: LockedPageRow, canEdit: boolean): PageDto {
     projectId: row.projectId,
     title: row.title,
     revision: row.revision,
-    bodyState: Buffer.from(
-      row.bodyState.buffer,
-      row.bodyState.byteOffset,
-      row.bodyState.byteLength,
-    ).toString('base64'),
+    bodyState: toBase64(row.bodyState),
     updatedAt: row.updatedAt.toISOString(),
     canEdit,
   };
