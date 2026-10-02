@@ -2431,21 +2431,33 @@ routes for — expressed as two tools.
 3. **`publish_acceptance_result`** `{ key, videoPathname, tracePathname?,
 chapters?, commitSha?, producedByKey? }` → the receipt.
 
-⚠️ **Nothing else publishes it**, exactly as with the design result. A story whose
-receipt never arrives looks identical to one that succeeded — spec green, checks
-green, pull request merged, and nobody able to watch the story work. **The
-confirmation is the `id` this call returns**, and its `status` is `pending`: the
-publish is not the acceptance, a person is.
+⚠️ **WHO publishes depends on the repository, and the agent reads its checkout to
+find out (MOTIR-7254).** In a repository whose acceptance lane carries the
+`upload-acceptance-video` action — motir-core, and every project generated from
+`nextjs-prisma-vercel-starter` since MOTIR-7255 — **CI publishes the receipt**, from
+a green pull-request run over keyless GitHub OIDC, and the agent makes no call. The
+dispatch prompt spells the check out:
+`grep -rlE 'uses:\s*\./\.github/actions/upload-acceptance-video' .github/workflows/`
+— a file printed means the lane publishes. **These two tools are the door for every
+other repository**, and there nothing else publishes the receipt, exactly as with
+the design result: a story whose receipt never arrives looks identical to one that
+succeeded — spec green, checks green, pull request merged, and nobody able to
+watch the story work. **The confirmation is the `id` this call returns**, and its
+`status` is `pending`: the publish is not the acceptance, a person is.
 
-⚠️ **It replaced a CI publisher, and for the reason that generalises the design
-one.** MOTIR-4096 retired `scripts/upload-acceptance-video.mjs` and the Action
-beside it. A CI publisher can guarantee THIS repository's receipts and no
-customer's: it has to be present in whatever repository the work lands in, which
-is a requirement no repository Motir does not own can meet. What replaces it is
-the planner/runner pair — the planner writes the acceptance E2E subtask onto every
-user-facing story, and the runner's dispatch prompt tells it to publish what it
-recorded — and that pair needs a door that travels. This is that door. (Between
-4096 and MOTIR-4704 there was none, and three documents said there was.)
+⚠️ **Why both doors exist.** MOTIR-4096 retired the CI uploader on 2026-09-01: a CI
+publisher has to be present in whatever repository the work lands in, which is a
+requirement a customer's repository cannot be relied on to meet. That still holds
+for a customer's repository, and this door is what travels there — the planner
+writes the acceptance E2E subtask onto every user-facing story, and the runner's
+dispatch prompt tells it to publish what it recorded. (Between MOTIR-4096 and
+MOTIR-4704 there was no such door, and three documents said there was.) But Motir
+DOES write the repository in two places — its own, and the starter every hosted
+project is generated from — so on 2026-10-01 MOTIR-7253 restored the CI publisher
+there, where it is the more reliable link
+(`docs/decisions/acceptance-video.md`, the 2026-10-01 amendment). An agent and CI
+publishing the same commit send the same `producedByKey` (the card key) and so
+collapse to ONE receipt rather than superseding each other.
 
 | Input           | Type    | Required | Notes                                                                                                    |
 | --------------- | ------- | -------- | -------------------------------------------------------------------------------------------------------- |

@@ -316,27 +316,27 @@ describe('the acceptance lane is story-scoped (MOTIR-1949)', () => {
   });
 });
 
-// ── MOTIR-4096 ───────────────────────────────────────────────────────────────
+// ── MOTIR-7253 (reversing MOTIR-4096's publisher retirement) ──────────────────
 //
-// The lane RECORDS and no longer PUBLISHES. CI stopped uploading the acceptance
-// recording on 2026-09-01 (Yue's decision); the receipt is published by the AGENT
-// over the Motir MCP surface, and the whole CI publishing apparatus — the publish
-// step, `scripts/upload-acceptance-video.mjs`, `.github/actions/upload-acceptance-video/`,
-// the `ACCEPTANCE_*` env names and the owned-specs step that fed them — is gone.
+// From 2026-09-01 (MOTIR-4096) the lane RECORDED and the AGENT published the
+// receipt over MCP. On 2026-10-01 (Yue) CI became the publisher again for the
+// repositories Motir writes, because a receipt that exists only if an agent
+// remembered two calls and could reach MCP is the least reliable link in the
+// acceptance gate. These guards pin the shape of that reversal, and they keep
+// the two properties the retirement was protecting:
 //
-// These are RETIREMENT guards, and they are the reason this describe block exists
-// rather than the deletions simply being made. A deleted mechanism leaves no error
-// message behind: nothing about a workflow is type-checked or linted, so a publish
-// step reintroduced by a copy-paste from the starter, or a `MOTIR_UPLOAD_TOKEN`
-// wired back into a job "while we are in here", would ship silently. The card's
-// acceptance criteria were greps run once; these are the same predicates, run on
-// every PR.
+//   · NO MOTIR TOKEN in any job. The lane authenticates by keyless GitHub OIDC
+//     (`id-token: write` on the shard job alone); the action's PAT input exists
+//     for repositories with no App connection and no workflow here passes it.
+//   · PUBLISHING ONLY FROM A GREEN PR RUN. Publishing SUPERSEDES a story's
+//     receipt (MOTIR-1937), so a push, a merge-queue run or a red run must not.
 //
-// ⚠️ THE PREDICATE IS SCOPED TO WORKFLOWS AND ACTIONS, NOT TO THE REPOSITORY.
-// `tests/e2e/_helpers/acceptance-video.ts` (the recording harness) legitimately
-// keeps those names. What must not come back is a CI JOB that publishes, or one
-// that is handed a Motir credential.
-describe('the lane records and does not publish (MOTIR-4096)', () => {
+// Workflow files are not type-checked or linted, so these predicates are what
+// keeps a copy-paste or a "while we are in here" edit from loosening either.
+//
+// ⚠️ The `MOTIR_GUARD_*` half of the credential assertion is NOT this lane's: it
+// is MOTIR-5874's, and it stays exactly as it was.
+describe('the lane publishes on a green PR run, over OIDC only (MOTIR-7253)', () => {
   const workflowsDir = join(process.cwd(), '.github/workflows');
   const actionsDir = join(process.cwd(), '.github/actions');
 
@@ -355,63 +355,81 @@ describe('the lane records and does not publish (MOTIR-4096)', () => {
     );
   };
 
-  it('no workflow or action runs the retired uploader', () => {
-    // Both the script and the composite action that wrapped it. The action was
-    // never `uses:`d by motir-core itself — it existed for BYOK consumers and for
-    // the vendored copy in `nextjs-prisma-vercel-starter` (MOTIR-4097 retires
-    // that one) — so its absence here is asserted rather than assumed.
-    const offenders = ciYaml()
-      .filter(([, text]) => /upload-acceptance-video/.test(codeOf(text)))
-      .map(([f]) => f);
-    expect(offenders).toEqual([]);
-    expect(existsSync(join(process.cwd(), 'scripts/upload-acceptance-video.mjs'))).toBe(false);
-    expect(existsSync(join(actionsDir, 'upload-acceptance-video'))).toBe(false);
+  /** The shard job's steps, each as its own text. */
+  const steps = (): string[] => acceptanceJob!.split(/^ {6}- /m).slice(1);
+  const publishStep = (): string | undefined =>
+    steps().find((s) => /name:\s*Publish the acceptance receipt/.test(s));
+
+  it('the uploader and its composite action are back in the repository', () => {
+    expect(existsSync(join(process.cwd(), 'scripts/upload-acceptance-video.mjs'))).toBe(true);
+    expect(existsSync(join(actionsDir, 'upload-acceptance-video/action.yml'))).toBe(true);
   });
 
-  it('no job anywhere is handed a Motir credential', () => {
-    // The security half of the card: the publish step shipped an `integration`
-    // PAT into a job that had nothing left to do with it, and a credential with
-    // no consumer is one nobody thinks about when deciding whether to rotate it.
-    //
-    // ⚠️ AND THE SAME FOR THE LANE GUARD'S CREDENTIAL (MOTIR-5874). MOTIR-4093
-    // wired the guard's token — a production PAT — plus its origin and a binding
-    // declaration into the Vitest job, so every file in the suite could read it.
-    // MOTIR-5872 removed the one read that needed it, and MOTIR-5874 removed the
-    // wiring. Nothing in the repository reads any of the guard's env names now,
-    // so a job that sets one is handing a credential to nobody.
+  it('the shard job publishes through the action, gated on success() AND pull_request', () => {
+    const step = publishStep();
+    expect(step).toBeDefined();
+    const code = codeOf(step!);
+    expect(code).toMatch(/uses:\s*\.\/\.github\/actions\/upload-acceptance-video\s*$/m);
+    // Both halves of the gate: a red run records nothing worth a receipt, and a
+    // push / merge_group run must never supersede a story's evidence.
+    expect(code).toMatch(/^\s*if:\s*success\(\) && github\.event_name == 'pull_request'\s*$/m);
+    // It is the ONLY publisher in the workflow.
+    const publishers = steps().filter((s) => /upload-acceptance-video/.test(codeOf(s)));
+    expect(publishers).toHaveLength(1);
+  });
+
+  it('feeds the uploader the specs THIS PR owns, and nothing on a push', () => {
+    // The ownership filter (MOTIR-1937) is restored with the publisher. On a
+    // `push` or `merge_group` run there is no PR base, the list is EMPTY, and the
+    // uploader fails closed on an empty list — the second of the two mechanisms.
+    const code = codeOf(acceptanceJob!);
+    expect(code).toContain('id: owned-specs');
+    expect(code).toContain(`git diff --name-only "\${BASE_SHA}" HEAD -- ${ACCEPTANCE_SPEC_GLOB}`);
+    expect(code).toMatch(/BASE_SHA:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha\s*\}\}/);
+    expect(code).toMatch(
+      /if \[ -z "\$\{BASE_SHA\}" \]; then[\s\S]*?echo "specs=" >> "\$GITHUB_OUTPUT"[\s\S]*?exit 0/,
+    );
+    expect(codeOf(publishStep()!)).toMatch(
+      /changed-specs:\s*\$\{\{\s*steps\.owned-specs\.outputs\.specs\s*\}\}/,
+    );
+  });
+
+  it('no workflow passes a token to the action, and no job is handed a Motir credential', () => {
+    // OIDC only. The action's `token` input is the PAT path for a repository
+    // with NO Motir GitHub App connection; motir-core is App-connected.
+    expect(codeOf(publishStep()!)).not.toMatch(/^\s*token:/m);
     const offenders = ciYaml()
       .filter(([, text]) => /MOTIR_UPLOAD_TOKEN|MOTIR_GUARD_[A-Z_]+/.test(codeOf(text)))
       .map(([f]) => f);
     expect(offenders).toEqual([]);
+    const workflowsPassingToken = ciYaml()
+      .filter(([f]) => f.startsWith(workflowsDir))
+      .filter(([, text]) => /upload-acceptance-video[\s\S]*?^\s*token:/m.test(codeOf(text)))
+      .map(([f]) => f);
+    expect(workflowsPassingToken).toEqual([]);
   });
 
-  it('the acceptance lane keeps no publish scaffolding of its own', () => {
-    // The env names and the owned-specs step existed ONLY to feed the uploader:
-    // `ACCEPTANCE_CHANGED_SPECS` was the ownership filter (MOTIR-1937), and the
-    // step that computed it diffed the PR's base for changed specs. With nothing
-    // reading them they are dead weight that reads like live machinery.
-    const code = codeOf(acceptanceWorkflow);
-    expect(code).not.toMatch(/ACCEPTANCE_[A-Z_]+:/);
-    expect(code).not.toContain('owned-specs');
-    expect(code).not.toContain(
-      `git diff --name-only "\${BASE_SHA}" HEAD -- ${ACCEPTANCE_SPEC_GLOB}`,
-    );
-  });
-
-  it('mints no OIDC token in either Playwright lane', () => {
-    // Keyless publish (MOTIR-1650) is what `id-token: write` was for. Nothing in
-    // either lane publishes now, so neither asks for one. (`lib/github/oidcAuth.ts`
-    // and `lib/publishAuth/ciPublishAuth.ts` are untouched — they are the SERVER
-    // side of that door, still open to any external CI using the HTTP route.)
-    expect(acceptanceJob).not.toMatch(/^\s*id-token:\s*write/m);
+  it('grants `id-token: write` on the shard job and on no other job in this workflow', () => {
+    const jobs = jobsOf(acceptanceWorkflow);
+    const granted = [...jobs.entries()]
+      .filter(([, body]) => /^\s*id-token:\s*write/m.test(codeOf(body)))
+      .map(([id]) => id);
+    expect(granted).toEqual(['acceptance']);
+    // Never at workflow level, where every job would inherit it.
+    expect(acceptanceHeader).not.toMatch(/id-token/);
+    // And not in the e2e lane next door, which publishes nothing.
     expect(e2eBody).not.toMatch(/^\s*id-token:\s*write/m);
   });
 
+  it('keeps the lane name and the shard job display name', () => {
+    // The required context and every branch-protection entry hang off these.
+    expect(acceptanceWorkflow).toMatch(/^name: Acceptance tests$/m);
+    expect(acceptanceJob).toMatch(
+      /^ {4}name: Playwright E2E \(acceptance\) \$\{\{ matrix\.shard \}\}\/\$\{\{ needs\.membership\.outputs\.legs \}\}$/m,
+    );
+  });
+
   it('still RECORDS, and still keeps the report a reviewer reads it from', () => {
-    // The negative controls for the four assertions above. Retiring the uploader
-    // must not retire the recording: the clips, traces and `chapters.json` are
-    // what the agent publishes FROM, so a run that stopped emitting them would
-    // pass every "no publisher" check while destroying the deliverable.
     expect(readFileSync(join(process.cwd(), ACCEPTANCE_CONFIG), 'utf8')).toMatch(/video:\s*'on'/);
     expect(acceptanceJob).toContain('path: out/playwright-report-acceptance');
     expect(acceptanceJob).toMatch(/if:\s*always\(\)/);
@@ -480,13 +498,10 @@ describe('the acceptance lane is SHARDED (MOTIR-2600)', () => {
   });
 
   it('every leg emits a report, and no leg is gated on being a particular shard', () => {
-    // ⚠️ THIS REPLACES the owned-specs assertion that stood here (MOTIR-4096).
-    // It used to assert that every leg received `ACCEPTANCE_CHANGED_SPECS`,
-    // because each leg published the recordings IT produced and a leg without the
-    // owned list would silently rehearse its share. There is no publish step now,
-    // so what the fan-out has to preserve is one step earlier: each leg's REPORT
-    // is the only place its recordings survive, so a leg that uploads
-    // conditionally loses its share of the lane's whole output.
+    // Each leg publishes the recordings IT produced (MOTIR-7253 restored the
+    // per-leg publish), so a leg gated on being a particular shard would
+    // silently drop its share of the receipts — and its REPORT is the only other
+    // place those recordings survive, so neither step may be shard-gated.
     const steps = acceptanceJob!.split(/^ {6}- /m).slice(1);
     const report = steps.find((s) => s.includes('name: playwright-report-acceptance-shard-'));
     expect(report).toBeDefined();
@@ -496,6 +511,9 @@ describe('the acceptance lane is SHARDED (MOTIR-2600)', () => {
     // and `matrix.shard` is EXPLAINED in that prose. A guard a correct
     // explanation can fail is a guard that pushes the next reader to delete it.
     expect(codeOf(report!)).not.toMatch(/if:.*matrix\.shard/);
+    const publish = steps.find((s) => /upload-acceptance-video/.test(codeOf(s)));
+    expect(publish).toBeDefined();
+    expect(codeOf(publish!)).not.toMatch(/if:.*matrix\.shard/);
   });
 });
 
@@ -571,22 +589,30 @@ describe('the MAIN BASELINE runs the lane on `main` (MOTIR-2760)', () => {
     expect(membershipJob).toMatch(/RUN=true/);
   });
 
-  it('TESTS on main and cannot publish, because nothing here publishes at all', () => {
-    // ⚠️ RE-FOUNDED, NOT DELETED (MOTIR-4096). This used to assert the TWO
-    // mechanisms that kept the baseline from publishing — the publish step's
-    // `if: github.event_name == 'pull_request'`, and the empty owned-spec list a
-    // `push` emits, which the uploader failed closed on. Both are gone with the
-    // uploader, and the PROPERTY they protected is what matters: publishing
-    // SUPERSEDES a story's evidence (MOTIR-1937), and a merge is not a new moment
-    // to record. It now holds structurally rather than by two guards — there is
-    // no publisher in this workflow on any event — which is what is asserted.
-    // The retirement guards live in the MOTIR-4096 block above; this is the
-    // BASELINE's own stake in them, kept here so a reader of the MOTIR-2760
-    // section is not left thinking the never-publish property was dropped.
-    const code = codeOf(acceptanceWorkflow);
-    expect(code).not.toMatch(/acceptance-evidence/);
-    expect(code).not.toMatch(/upload-acceptance-video/);
-    expect(code).not.toMatch(/MOTIR_BASE_URL/);
+  it('TESTS on main and never publishes there', () => {
+    // Publishing SUPERSEDES a story's evidence (MOTIR-1937), and a merge is not
+    // a new moment to record. Since MOTIR-7253 the lane publishes again, so the
+    // property is held by TWO mechanisms, and both are asserted: EVERY step that
+    // runs the uploader is `if:`-gated to `pull_request`, and the owned-spec list
+    // a `push` emits is EMPTY, which the uploader fails closed on. (Between
+    // MOTIR-4096 and MOTIR-7253 it held structurally — there was no publisher.)
+    const job = codeOf(acceptanceJob!);
+    const publishers = job
+      .split(/^ {6}- /m)
+      .slice(1)
+      .filter((s) => /upload-acceptance-video|upload-acceptance-video\.mjs/.test(s));
+    expect(publishers.length).toBeGreaterThan(0);
+    for (const step of publishers) {
+      expect(step).toMatch(/^\s*if:.*github\.event_name == 'pull_request'/m);
+    }
+    expect(job).toMatch(
+      /if \[ -z "\$\{BASE_SHA\}" \]; then[\s\S]*?echo "specs=" >> "\$GITHUB_OUTPUT"/,
+    );
+    // No other job in the workflow touches the publish routes.
+    for (const [id, body] of jobsOf(acceptanceWorkflow)) {
+      if (id === 'acceptance') continue;
+      expect(codeOf(body)).not.toMatch(/upload-acceptance-video|acceptance-evidence/);
+    }
     // The baseline still RUNS the specs — that is the whole point of MOTIR-2760,
     // and a workflow that published nothing because it did nothing would pass
     // every line above.

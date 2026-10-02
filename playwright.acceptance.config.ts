@@ -34,15 +34,18 @@ import {
 // `acceptance*.spec.ts` pattern so acceptance specs never run in the bulk
 // shards (video:'retain-on-failure' + no upload step).
 //
-// ⚠️ WHO PUBLISHES — CHANGED 2026-09-01 (MOTIR-4096). This lane's `outputDir`
-// used to be read by a CI uploader (`scripts/upload-acceptance-video.mjs`),
-// which POSTed the video + trace + chapters to the publish endpoint
-// (MOTIR-1631). That uploader is RETIRED: the receipt is published by the AGENT
-// that recorded it, and the lane's job now ends at the Playwright report
-// artifact the clips and sidecars land in.
+// ⚠️ WHO PUBLISHES — THE LANE AGAIN, SINCE 2026-10-01 (MOTIR-7253). This lane's
+// `outputDir` is read by the CI uploader (`scripts/upload-acceptance-video.mjs`,
+// through `.github/actions/upload-acceptance-video`), which POSTs the video +
+// trace + chapters of each spec the PR changed to the publish endpoint
+// (MOTIR-1631) from a green pull-request run, over keyless OIDC. From 2026-09-01
+// (MOTIR-4096) until then that uploader was retired and the AGENT published;
+// the dispatch prompt now reads the checkout and stands the agent down here
+// (MOTIR-7254), while an agent in a repository with no such lane still
+// publishes over MCP.
 //
-// ⚠️ AND THE DOOR IT PUBLISHES THROUGH DID NOT EXIST UNTIL MOTIR-4704. This
-// paragraph said "through the Motir MCP surface" for four days while the MCP
+// ⚠️ THE MCP DOOR DID NOT EXIST UNTIL MOTIR-4704 — kept as the history of why it
+// is there. This paragraph said "through the Motir MCP surface" for four days while the MCP
 // surface had no acceptance publisher on it at all — so an agent that read this
 // file, searched its tool palette and found nothing had been told, accurately,
 // to use a door that was not there. The door is now `create_acceptance_upload`

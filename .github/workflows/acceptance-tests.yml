@@ -10,14 +10,22 @@ name: Acceptance tests
 # the story-specific specs (planner rule MOTIR-1644); the main Playwright config
 # testIgnore's the same pattern.
 #
-# ⚠️ THIS LANE RECORDS; IT DOES NOT PUBLISH (MOTIR-4096, 2026-09-01).
-# The recording is unchanged — Playwright still runs with `video: 'on'` and the
-# clips, traces and `chapters.json` sidecars still land in this lane's Playwright
-# report artifact. What LEFT is the CI uploader: the receipt is published by the
-# AGENT, through the Motir MCP surface, and no job here holds a Motir credential
-# any more. The lane's name says what it does — it runs the acceptance tests.
-# `docs/decisions/acceptance-video.md` AMENDMENT 2026-09-02 records the handover;
-# the receipt concept, its lifecycle and the review flow are untouched.
+# ⚠️ THIS LANE PUBLISHES THE RECEIPT AGAIN — ON A GREEN PR RUN, OVER OIDC ONLY
+# (MOTIR-7253, 2026-10-01). From 2026-09-01 (MOTIR-4096) it only recorded, and
+# the AGENT published the receipt over the Motir MCP surface. That made the
+# receipt exist only if the agent remembered two calls and could reach MCP from
+# its sandbox, and a missing receipt looks exactly like a successful run. For the
+# repositories Motir writes itself — this one, and every project generated from
+# the starter — CI is the more reliable publisher, so the uploader is back:
+# each shard leg of a GREEN `pull_request` run publishes the recordings of the
+# specs THIS PR changed to their own story, authenticated by keyless GitHub OIDC
+# (`id-token: write`, on the shard job only). No job here holds a Motir token.
+# A `push: main` baseline, a `merge_group` run, a red run and a PR that owns no
+# spec publish nothing. The recording itself is unchanged — `video: 'on'`, the
+# `chapters.json` sidecars, the shard-scoped report artifact. The agent stands
+# down wherever its checkout carries this action; the MCP door stays open for
+# every other repository. `docs/decisions/acceptance-video.md` AMENDMENT
+# 2026-10-01 records the reversal; the 2026-09-02 handover stands as history.
 #
 # ⚠️ WHY ITS OWN WORKFLOW, AND NOT A JOB IN ci.yml.
 # The requirement is that a PR which does not own an acceptance spec shows NO
@@ -611,15 +619,18 @@ jobs:
         # triaged the lane empty; four legs over ≤2 specs is not parallelism, it
         # is four copies of the setup. The cap is 6 since MOTIR-7054.
         shard: ${{ fromJSON(needs.membership.outputs.shards) }}
-    # ⚠️ NO `id-token: write` — RETIRED WITH THE PUBLISHER (MOTIR-4096). This job
-    # carried it for the keyless-OIDC acceptance publish (MOTIR-1650); nothing in
-    # this workflow mints a token any more, so the grant has no consumer and is
-    # dropped rather than left standing. `contents: read` is what checkout needs.
-    # (`lib/github/oidcAuth.ts` and `lib/publishAuth/ciPublishAuth.ts` are
-    # UNTOUCHED — they are the SERVER side of that door, and it stays open for any
-    # external CI that publishes evidence over the HTTP route.)
+    # `id-token: write` is BACK, and on THIS job only (MOTIR-7253). The publish
+    # step requests a GitHub OIDC token (audience `motir-acceptance-video`), which
+    # the server resolves through the App-connected `repository` claim
+    # (`lib/github/oidcAuth.ts`, `lib/publishAuth/ciPublishAuth.ts`) — so no
+    # secret is needed and none is referenced. It was retired with the publisher
+    # on 2026-09-01 (MOTIR-4096). No other job in this workflow gets it: `build`
+    # and `membership` publish nothing. GitHub mints no OIDC token for a fork PR,
+    # and the uploader then logs why and exits 0. `contents: read` is what
+    # checkout needs.
     permissions:
       contents: read
+      id-token: write
     # Postgres is started by ./.github/actions/postgres (first step below), NOT
     # by a `services:` block — see that action's header for why (MOTIR-1742).
     #
@@ -664,8 +675,42 @@ jobs:
         with:
           next-build: download
 
+      # WHICH specs this PR owns (restored by MOTIR-7253 from MOTIR-1937). The
+      # uploader publishes a recording only when its OWN spec is in this list:
+      # publishing SUPERSEDES a story's current receipt, and each recording
+      # targets its own declared story, so a run that published everything it
+      # recorded would replace the receipt of every story in the lane (measured
+      # once: one PR republished seven). Computed per LEG — the diff is the same
+      # on every shard, and each leg publishes the intersection of "specs this PR
+      # changed" with "recordings this leg produced", which are disjoint across
+      # legs and together cover the set, so every receipt publishes exactly once.
+      # A `push` or `merge_group` run has no PR base, so the list is EMPTY and the
+      # uploader — which fails closed on an empty list — publishes nothing. The
+      # publish step is ALSO `if:`-gated to `pull_request`: two mechanisms,
+      # because a wrong answer here supersedes a story's evidence.
+      - name: Which acceptance specs does this run own?
+        id: owned-specs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BASE_SHA}" ]; then
+            echo "no base ref (event: ${GITHUB_EVENT_NAME}) — this run owns no specs and publishes nothing"
+            echo "specs=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # A pull_request checkout is the MERGE commit at depth 1, which carries
+          # both parents — so the base is normally already present. Fetch it if it
+          # is not, rather than paying `fetch-depth: 0` on every run.
+          git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null ||
+            git fetch --depth=1 origin "${BASE_SHA}"
+          SPECS=$(git diff --name-only "${BASE_SHA}" HEAD -- 'tests/e2e/acceptance*.spec.ts' | tr '\n' ' ')
+          echo "owned acceptance specs: ${SPECS:-<none>}"
+          echo "specs=${SPECS}" >> "$GITHUB_OUTPUT"
+
       # `--shard=i/N` (MOTIR-2600). Playwright partitions the suite across the
-      # legs, so every spec is run by exactly one of them.
+      # legs, so every spec is run by exactly one of them — which is what makes
+      # the per-leg publish step below publish each receipt once.
       # N is `needs.membership.outputs.legs` rather than a matrix key
       # (MOTIR-2908): the denominator has to be the SAME number the matrix was
       # built from, and reading both from the one output is what guarantees that.
@@ -678,11 +723,42 @@ jobs:
       - name: Run E2E (acceptance)
         run: pnpm test:e2e --config playwright.acceptance.config.ts --pass-with-no-tests --shard=${{ matrix.shard }}/${{ needs.membership.outputs.legs }}
 
-      # Always upload the report. Since MOTIR-4096 this is the ONLY thing the
-      # lane emits: a green run's report is where the recorded video, trace and
-      # `chapters.json` survive — for a reviewer to watch by hand, and for the
-      # AGENT to publish the receipt from over the Motir MCP surface — and a red
-      # one is how the lane is debugged at all (MOTIR-1706: the old hardcoded
+      # On a GREEN `pull_request` run, publish the recordings this PR owns to
+      # their OWN story's acceptance panel (MOTIR-7253). Each recording resolves
+      # its story from its `acceptance-story.json` sidecar (`acceptanceStory()`),
+      # then the PR's card key. `producedByKey` is the PR's own card key (ref,
+      # then title), so an agent that still publishes the same commit over MCP
+      # collapses into the same receipt instead of superseding it.
+      #
+      # Auth is keyless GitHub OIDC — the job's `id-token: write` above. The
+      # action's `token` input is deliberately NOT passed: it is the PAT path for
+      # a repository with no Motir GitHub App connection, which this is not.
+      #
+      # ⚠️ NO `continue-on-error` (MOTIR-2499). It once rewrote this step's
+      # conclusion to `success` while every publish failed, and two stories lost
+      # their receipt with nothing saying so. The cases that must not fail the
+      # lane are handled INSIDE the uploader, which exits 0 for each: no OIDC
+      # token (a fork PR), a story that is closed (`ACCEPTANCE_EVIDENCE_STORY_CLOSED`),
+      # and a defect in a recording this PR does not own. What does fail it is a
+      # story this PR owns ending the run without a receipt.
+      #
+      # ⚠️ `pull_request` ONLY (MOTIR-2760). The main baseline and the merge
+      # queue run the specs and publish nothing: the receipt belongs to the
+      # moment the story was in review.
+      - name: Publish the acceptance receipt
+        if: success() && github.event_name == 'pull_request'
+        uses: ./.github/actions/upload-acceptance-video
+        with:
+          base-url: ${{ vars.MOTIR_BASE_URL || 'https://app.motir.co' }}
+          pr-ref: ${{ github.head_ref }}
+          pr-title: ${{ github.event.pull_request.title }}
+          fallback-story-key: MOTIR-1627
+          changed-specs: ${{ steps.owned-specs.outputs.specs }}
+
+      # Always upload the report. A green run's report is where the recorded
+      # video, trace and `chapters.json` survive for a reviewer to watch by hand,
+      # beside the receipt the step above published — and a red one is how the
+      # lane is debugged at all (MOTIR-1706: the old hardcoded
       # `out/playwright-report` path matched nothing here, so a red acceptance leg
       # left no trace, screenshot or report behind).
       # ⚠️ The name is SHARD-SCOPED (MOTIR-2600). upload-artifact v4+ rejects a
