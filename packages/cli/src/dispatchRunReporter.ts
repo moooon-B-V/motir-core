@@ -52,6 +52,27 @@ export const REPORTER_QUEUE_LIMIT = 500;
 /** How many events one flush sends. Matches the ingest's own batch ceiling. */
 export const REPORTER_BATCH_LIMIT = 200;
 
+/**
+ * The events that are SENT THE MOMENT THEY ARE QUEUED rather than at the next
+ * flush (Bug MOTIR-7329).
+ *
+ * ⚠️ THEY ARE THE EVENTS A DEAD RUN IS READ BY. `motir continue` finds a dead
+ * run's branch on its newest `checkout_ready` (`dispatchRunEventRepository`), and
+ * every leg queues that event and then awaits its agent for the whole run. A
+ * SIGKILL, a lost sandbox or a dead laptop runs no handler — `close()` never
+ * flushes — so an event that waits for a flush is exactly the event a hard death
+ * loses, and the commits the checkpoint pushes are stranded on a branch Motir
+ * cannot name. `run_opened` is here for the same reason: it is what says the
+ * run started at all.
+ *
+ * Kept SHORT on purpose: an ordinary event (a log line above all) still waits for
+ * a flush, so a chatty agent is never one request per line.
+ */
+export const FLUSH_ON_ENQUEUE: ReadonlySet<DispatchRunEventInput['kind']> = new Set([
+  'run_opened',
+  'checkout_ready',
+]);
+
 /** The one warning, printed once per session on the first failure. */
 export const REPORTER_OFFLINE_WARNING =
   'motir: run reporting is unavailable — this run will not appear in Motir. ' +
@@ -212,6 +233,10 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
    * this CLI holds carries a `lastHeartbeatAt` from its first second, and the
    * five-minute lapse governs it however early it dies.
    *
+   * ⚠️ EACH BEAT ALSO FLUSHES THE QUEUE (MOTIR-7329). A run killed hard runs no
+   * handler, so whatever is still queued when it dies is lost; flushing on the
+   * beat bounds that loss to one interval instead of the whole run.
+   *
    * `unref`: the timer must never be the thing that keeps a finished process
    * alive.
    */
@@ -219,6 +244,7 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
     const client = deps.client;
     if (client.heartbeatDispatchRun === undefined || heartbeat !== null) return;
     const beat = (): void => {
+      void flushQueue();
       // Called directly (not through a hoisted, pre-bound local): the run-token
       // route table's CLI scan (`tests/hostedRuns/runTokenRouteTable.test.ts`)
       // finds a call by the literal text `client.<operation>(`, on any run path
@@ -263,6 +289,31 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
     } catch {
       goOffline();
     }
+  }
+
+  /**
+   * Send whatever is queued, behind any send already in flight.
+   *
+   * ⚠️ NO EARLY RETURN ON AN EMPTY QUEUE. Since MOTIR-7329 a send can start in
+   * the background (an event in {@link FLUSH_ON_ENQUEUE}, a heartbeat), so an
+   * empty queue no longer means nothing is on its way — the batch may already
+   * have been spliced off and be awaiting the network. Chaining onto `inFlight`
+   * regardless is what stops `close()` from reaching the server ahead of the
+   * events it is closing over.
+   */
+  function flushQueue(): Promise<void> {
+    const id = runId;
+    if (offline || id === null) return Promise.resolve();
+    const send = inFlight.then(async () => {
+      while (!offline && queue.length > 0) {
+        const batch = queue.splice(0, REPORTER_BATCH_LIMIT);
+        await attempt(() =>
+          deps.client.appendDispatchRunEvents({ runId: id, events: batch }).then(() => undefined),
+        );
+      }
+    });
+    inFlight = send;
+    return send;
   }
 
   return {
@@ -344,21 +395,13 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
       // Drop the OLDEST, so the tail survives — the half an operator opens a run
       // page for.
       while (queue.length > REPORTER_QUEUE_LIMIT) queue.shift();
+      // Sent now, not awaited: `event` never waits on the network, and the send
+      // completes while the caller's agent works (MOTIR-7329).
+      if (FLUSH_ON_ENQUEUE.has(event.kind)) void flushQueue();
     },
 
     async flush() {
-      const id = runId;
-      if (offline || id === null || queue.length === 0) return;
-      const send = inFlight.then(async () => {
-        while (!offline && queue.length > 0) {
-          const batch = queue.splice(0, REPORTER_BATCH_LIMIT);
-          await attempt(() =>
-            deps.client.appendDispatchRunEvents({ runId: id, events: batch }).then(() => undefined),
-          );
-        }
-      });
-      inFlight = send;
-      await send;
+      await flushQueue();
     },
 
     async close(stopReason) {
