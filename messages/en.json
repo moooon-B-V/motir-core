@@ -11684,7 +11684,8 @@
       "restored": "Restored v{from} as v{number}.",
       "refusal": {
         "tooLarge": "v{number} can’t be restored: the page would pass its 2 MB limit. Nothing was changed.",
-        "gone": "v{number} is no longer kept — a page keeps its latest 100 versions. Nothing was changed, and the list has been refreshed."
+        "gone": "v{number} is no longer kept — a page keeps its latest 100 versions. Nothing was changed, and the list has been refreshed.",
+        "failed": "v{number} couldn’t be restored. Nothing was changed — try again."
       },
       "unsavedHold": "Restore is held until your edits are saved. It becomes available as soon as the page says Saved."
     }

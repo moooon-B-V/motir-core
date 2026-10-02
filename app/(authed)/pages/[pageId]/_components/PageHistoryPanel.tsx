@@ -95,6 +95,8 @@ export interface PageHistoryPanelProps {
   notice?: React.ReactNode;
   /** The rows to look busy for: while a restore is in flight nothing can be pressed. */
   busy?: boolean;
+  /** The row a restore just added, tinted `--el-tint-mint` (state 10). */
+  freshNumber?: number | null;
   /** Where focus lands on open. */
   initialFocusRef?: RefObject<HTMLButtonElement | null>;
 }
@@ -132,6 +134,7 @@ export function PageHistoryPanel({
   refreshKey,
   notice,
   busy = false,
+  freshNumber = null,
   initialFocusRef,
 }: PageHistoryPanelProps) {
   const t = useTranslations('pages.history');
@@ -267,6 +270,7 @@ export function PageHistoryPanel({
                       viewerId={viewerId}
                       now={state.now}
                       selected={selected === version.number}
+                      fresh={freshNumber === version.number}
                       onPress={() =>
                         onSelect(
                           version.isCurrent || selected === version.number ? null : version.number,
@@ -330,12 +334,14 @@ function VersionRow({
   viewerId,
   now,
   selected,
+  fresh,
   onPress,
 }: {
   version: PageVersionListItemDto;
   viewerId: string;
   now: Date;
   selected: boolean;
+  fresh: boolean;
   onPress: () => void;
 }) {
   const t = useTranslations('pages.history');
@@ -351,7 +357,9 @@ function VersionRow({
         'flex w-full items-start gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
         selected
           ? 'border border-(--el-border) bg-(--el-surface)'
-          : 'border border-transparent hover:bg-(--el-surface-soft)',
+          : fresh
+            ? 'border border-transparent bg-(--el-tint-mint) motion-reduce:bg-transparent'
+            : 'border border-transparent hover:bg-(--el-surface-soft)',
       )}
     >
       <VersionAvatar id={version.authorId} name={version.authorName} />

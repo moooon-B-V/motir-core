@@ -2,11 +2,17 @@
 
 import { lazy, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { History } from 'lucide-react';
+import { History, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
+import type { PageSaveStatus } from '@/components/pages/PageEditorHost';
+import type { RestorePageVersionResultDto } from '@/lib/dto/pages';
 import { cn } from '@/lib/utils/cn';
 import { HistoryNotice, PageHistoryPanel } from './PageHistoryPanel';
+import { PageVersionRestore, type RestoreRefusal } from './PageVersionRestore';
 import { PageVersionView } from './PageVersionView';
+
+const RESTORE_NOTE_ID = 'page-restore-note';
 
 // The page at its own address (Story MOTIR-5752 · MOTIR-7280), drawn by
 // `design/pages/page.mock.html` states 6–10: the title, then the editor. The
@@ -61,10 +67,29 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
   const [goneNumber, setGoneNumber] = useState<number | null>(null);
   const [listKey, setListKey] = useState(0);
 
+  // ── Restore (MOTIR-7388) ─────────────────────────────────────────────────
+  // The live editor's state and its GENERATION, the host's `key`: a restore
+  // adopts the server's resulting state and bumps the generation, so the editor
+  // REMOUNTS on the restored document instead of carrying on with a stale one.
+  // The save status is what holds Restore while edits are unsaved.
+  const { toast } = useToast();
+  const [bodyState, setBodyState] = useState(page.bodyState);
+  const [generation, setGeneration] = useState(0);
+  const [saveStatus, setSaveStatus] = useState<PageSaveStatus>('saved');
+  const [restoring, setRestoring] = useState(false);
+  const [refusal, setRefusal] = useState<{
+    kind: Exclude<RestoreRefusal, 'gone'>;
+    number: number;
+  } | null>(null);
+  /** The row a restore just added, tinted until the next press. */
+  const [freshNumber, setFreshNumber] = useState<number | null>(null);
+
   const closeHistory = useCallback(() => {
     setHistoryOpen(false);
     setSelected(null);
     setGoneNumber(null);
+    setRefusal(null);
+    setFreshNumber(null);
     historyButtonRef.current?.focus();
   }, []);
 
@@ -75,6 +100,8 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
 
   const select = useCallback((number: number | null) => {
     setGoneNumber(null);
+    setRefusal(null);
+    setFreshNumber(null);
     setSelected(number);
   }, []);
 
@@ -85,12 +112,40 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
     setListKey((k) => k + 1);
   }, []);
 
-  // Esc closes the innermost layer first: compare, then the panel. A layer that
-  // handles Esc itself (a confirm dialog) marks the event handled.
+  const onRestored = useCallback(
+    (result: RestorePageVersionResultDto, from: number) => {
+      setBodyState(result.bodyState);
+      setGeneration((g) => g + 1);
+      setSaveStatus('saved');
+      setSelected(null);
+      setRefusal(null);
+      setFreshNumber(result.version.number);
+      setListKey((k) => k + 1);
+      toast({
+        variant: 'success',
+        title: t('history.restored', { from, number: result.version.number }),
+      });
+    },
+    [t, toast],
+  );
+
+  const onRefused = useCallback(
+    (kind: RestoreRefusal, number: number) => {
+      if (kind === 'gone') onGone(number);
+      else setRefusal({ kind, number });
+    },
+    [onGone],
+  );
+
+  // Esc closes the innermost layer first: compare, then the panel. A dialog
+  // (the restore confirm) handles its own Esc, so a key pressed inside one is
+  // left to it.
   useEffect(() => {
     if (!historyOpen) return;
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('[role="dialog"], [role="alertdialog"]')) return;
       if (selected !== null) setSelected(null);
       else closeHistory();
     };
@@ -151,7 +206,13 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
                 {t('history.compare.current')}
               </span>
             ) : null}
-            <PageEditorHost pageId={page.id} bodyState={page.bodyState} canEdit={page.canEdit} />
+            <PageEditorHost
+              key={generation}
+              pageId={page.id}
+              bodyState={bodyState}
+              canEdit={page.canEdit}
+              onSaveStatusChange={setSaveStatus}
+            />
           </div>
           {comparing ? (
             <PageVersionView
@@ -159,8 +220,46 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
               pageId={page.id}
               number={selected}
               viewerId={viewerId}
-              onClose={() => setSelected(null)}
+              onClose={() => select(null)}
               onGone={onGone}
+              restoreSlot={
+                page.canEdit
+                  ? (version) =>
+                      version.isCurrent ? null : (
+                        <PageVersionRestore
+                          pageId={page.id}
+                          version={version}
+                          held={saveStatus !== 'saved'}
+                          refused={
+                            refusal?.kind === 'tooLarge' && refusal.number === version.number
+                          }
+                          describedBy={RESTORE_NOTE_ID}
+                          onBusyChange={setRestoring}
+                          onRestored={onRestored}
+                          onRefused={onRefused}
+                        />
+                      )
+                  : undefined
+              }
+              notice={
+                refusal !== null ? (
+                  <div id={RESTORE_NOTE_ID} className="px-(--spacing-card-padding) pt-3">
+                    <HistoryNotice>
+                      {refusal.kind === 'tooLarge'
+                        ? t('history.refusal.tooLarge', { number: refusal.number })
+                        : t('history.refusal.failed', { number: refusal.number })}
+                    </HistoryNotice>
+                  </div>
+                ) : page.canEdit && saveStatus !== 'saved' ? (
+                  <p
+                    id={RESTORE_NOTE_ID}
+                    className="flex items-start gap-1.5 px-(--spacing-card-padding) pt-3 text-[12.5px] text-(--el-text-secondary)"
+                  >
+                    <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                    {t('history.unsavedHold')}
+                  </p>
+                ) : null
+              }
             />
           ) : null}
         </div>
@@ -173,6 +272,8 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
           onSelect={select}
           onClose={closeHistory}
           refreshKey={listKey}
+          busy={restoring}
+          freshNumber={freshNumber}
           notice={
             goneNumber !== null ? (
               <HistoryNotice>{t('history.refusal.gone', { number: goneNumber })}</HistoryNotice>
