@@ -955,6 +955,21 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'End your repair of a work item with how it went, so the page shows it and a new repair may start.',
     descriptionFingerprint: '1b8e5165724b',
   },
+  claim_work_item_continue: {
+    summary:
+      'Take over a work item whose last run died, as `motir continue` does: its branch and pull requests, not a fresh start.',
+    descriptionFingerprint: 'f825bce8044b',
+  },
+  touch_work_item_continue: {
+    summary:
+      'Keep your continue of a work item alive. A continue silent for five minutes is closed and its lock released.',
+    descriptionFingerprint: 'e752b186c478',
+  },
+  close_work_item_continue: {
+    summary:
+      'End your continue of a work item with how it went, so the page shows it and the card can be continued again.',
+    descriptionFingerprint: '5065a62ce4e3',
+  },
   add_comment: {
     summary: 'Post a Markdown comment as the token owner. Mentions notify the member named.',
     descriptionFingerprint: '81d096a6d087',

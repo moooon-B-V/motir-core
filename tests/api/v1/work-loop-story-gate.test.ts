@@ -122,6 +122,11 @@ const WORK_LOOP_MIRRORS = {
   claimWorkItemRepair: 'claim_work_item_repair',
   heartbeatDispatchRun: 'touch_work_item_repair',
   closeDispatchRun: 'close_work_item_repair',
+  // MOTIR-7262 — the CONTINUE claim, given the same agent door the repair claim
+  // has. `claimContinue` is the one method the route and the tool both call. Its
+  // touch and close are the same `heartbeat` / `close` operations already paired
+  // above, so they add no row: one operation, one mirror.
+  claimWorkItemContinue: 'claim_work_item_continue',
 } as const;
 
 /**
@@ -210,12 +215,6 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     'MOTIR-5358 — the HOW TO TEST read serves the CLI’s close-out summary. The agent WRITES the ' +
     'record through `publish_test_instructions` and gets its receipt back from that tool; it has ' +
     'no use for reading it again. `project:browse`, the key `howToTestService` asserts.',
-  claimWorkItemContinue:
-    'MOTIR-6532 — the CONTINUE claim serves `motir continue <key>`, a CLI command; a mirrored ' +
-    'tool would be a second implementation with no caller, and the card adds no MCP tool (the ' +
-    'repair claim got its agent door from MOTIR-6807, for a published skill; nothing asks that ' +
-    'of a continue). `work_item:edit` — it opens a dispatch run and ' +
-    're-assigns the card, a write — and it writes no status.',
   getWorkItemReviewPrompt:
     'MOTIR-6821 — the REVIEW brief a hosted review run is handed. Its ONLY caller is the ' +
     '`motir review` command inside a hosted review container, on that run’s own token — which ' +
@@ -278,8 +277,9 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // is the subject of a run rather than its reporter. Each still argues its
     // case in `WORK_LOOP_UNMIRRORED` and each still mirrors a real permission.
     // 14 since MOTIR-6807 paired the repair claim, the heartbeat and the close
-    // with the agent-facing repair tools.
-    expect(Object.keys(MIRRORS)).toHaveLength(14);
+    // with the agent-facing repair tools. 15 since MOTIR-7262 paired the
+    // continue claim with `claim_work_item_continue`.
+    expect(Object.keys(MIRRORS)).toHaveLength(15);
     // 18 since MOTIR-4085 added the plan READ beside the approval — the SEVENTH
     // operation with no MCP counterpart, and the first whose reason is that an
     // agent has no USE for it rather than that it must be kept away from one.

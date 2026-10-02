@@ -188,3 +188,29 @@ export type WorkItemContinueViewDto =
       /** Whose run the continue took over, when the claim recorded it. */
       tookOverFrom: { runId: string; dispatcher: ClaimActorDto | null } | null;
     };
+
+/**
+ * A CONTINUE run's LIVENESS as the agent holding it reads it — what
+ * `touch_work_item_continue` and `close_work_item_continue` answer (Story
+ * MOTIR-7261 · MOTIR-7262). The repair tools' `WorkItemRepairRunDto`, one
+ * lifecycle over.
+ *
+ * `open: false` is the signal to STOP: the run was closed — by the agent itself,
+ * by the lapsed-heartbeat reap, or by anyone else — and the card no longer reads
+ * *being continued*, so a second agent may already be on its branch.
+ */
+export interface WorkItemContinueRunDto {
+  key: string;
+  runId: string;
+  open: boolean;
+  /** The run's status — `running` while open. */
+  status: DispatchRunStatus;
+  /** Why it ended; null while open. `abandoned` is the reap's. */
+  stopReason: DispatchStopReason | null;
+  /** ISO-8601. */
+  startedAt: string;
+  /** ISO-8601; null while open. */
+  endedAt: string | null;
+  /** ISO-8601; the last `touch_work_item_continue` (or the claim's own first beat). */
+  lastHeartbeatAt: string | null;
+}

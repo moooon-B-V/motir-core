@@ -1,4 +1,4 @@
-import type { Prisma } from '@/generated/prisma/client';
+import type { DispatchRun, DispatchStopReason, Prisma } from '@/generated/prisma/client';
 import type { ClaimActorDto } from '@/lib/dto/claim';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
@@ -8,6 +8,7 @@ import type {
   RunDiedReason,
   WorkItemContinueClaimDto,
   WorkItemContinueRefusal,
+  WorkItemContinueRunDto,
   WorkItemContinueViewDto,
 } from '@/lib/dto/workItemContinue';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
@@ -23,7 +24,11 @@ import { isRunAlive, lastHeardFrom } from '@/lib/runs/runLiveness';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { DuplicateDispatchRunError } from '@/lib/dispatchRuns/errors';
+import {
+  ContinueRunRefusedError,
+  DispatchRunTerminalError,
+  DuplicateDispatchRunError,
+} from '@/lib/dispatchRuns/errors';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { IN_PROGRESS_STATUS_KEY } from '@/lib/workItems/claimOutcome';
@@ -904,6 +909,91 @@ export const workItemContinueService = {
   },
 
   /**
+   * The continue claim as an AGENT makes it over the MCP (Story MOTIR-7261 ·
+   * MOTIR-7262): {@link claimContinue} unchanged, then — on `claimed` and `mine`
+   * only — ONE heartbeat on the run it answers. `claimRepairAsAgent`, one
+   * lifecycle over, and for its reason: a run with no heartbeat at all is on the
+   * 12-hour AGE reap, not the five-minute lapse (`isRunAlive`,
+   * `lib/runs/runLiveness.ts`), so an agent that claims and dies before its first
+   * `touch_work_item_continue` would hold the card *being continued* for half a
+   * day. The claim's rules, its DTO and its refusals are untouched.
+   */
+  async claimContinueAsAgent(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemContinueClaimDto> {
+    const claim = await workItemContinueService.claimContinue(projectId, identifier, ctx);
+    if ((claim.outcome === 'claimed' || claim.outcome === 'mine') && claim.runId !== null) {
+      try {
+        await dispatchRunService.heartbeat(claim.runId, ctx);
+      } catch (err) {
+        // A `mine` run the reap closed between the claim's read and this beat.
+        // The claim's answer stands; the agent's first touch reads `open: false`.
+        /* v8 ignore next -- only a reap landing inside that window reaches here */
+        if (!(err instanceof DispatchRunTerminalError)) throw err;
+      }
+    }
+    return claim;
+  },
+
+  /**
+   * KEEP a claimed continue ALIVE (MOTIR-7262) — `touch_work_item_continue`.
+   *
+   * Only the caller's own `continue` run on THIS card is touched
+   * ({@link ContinueRunRefusedError} otherwise, before anything is written). An
+   * open run is beaten through `dispatchRunService.heartbeat` — the one heartbeat
+   * there is, under the lock it shares with the reap — and a closed one is
+   * ANSWERED rather than refused, `open: false` with how it ended, because the
+   * agent's next move is to stop, and an error would read as something to retry.
+   */
+  async touchContinue(
+    projectId: string,
+    identifier: string,
+    runId: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemContinueRunDto> {
+    const { key, run } = await readOwnContinueRun(projectId, identifier, runId, ctx);
+    if (run.status !== 'running') return toContinueRunDto(key, run);
+    try {
+      await dispatchRunService.heartbeat(runId, ctx);
+    } catch (err) {
+      // Closed between the read above and the heartbeat's lock — by the reap,
+      // usually. The same answer as a run that was already closed.
+      if (!(err instanceof DispatchRunTerminalError)) throw err;
+    }
+    return toContinueRunDto(key, (await readOwnContinueRun(projectId, identifier, runId, ctx)).run);
+  },
+
+  /**
+   * CLOSE a claimed continue with how it ended (MOTIR-7262) —
+   * `close_work_item_continue`. `stopReason` is the set the v1 close body accepts
+   * (`dispatchRunCloseBodySchema`), which is the set `motir continue` closes with,
+   * and the run's status is derived from it by `dispatchRunService.close` exactly
+   * as for that route.
+   *
+   * IDEMPOTENT: a run that is already closed — by this caller's own earlier close,
+   * or by the reap — is answered as it stands and changed by nothing, because an
+   * agent that retries after a timeout must not be told it failed.
+   */
+  async closeContinue(
+    projectId: string,
+    identifier: string,
+    runId: string,
+    stopReason: DispatchStopReason,
+    ctx: ServiceContext,
+  ): Promise<WorkItemContinueRunDto> {
+    const { key, run } = await readOwnContinueRun(projectId, identifier, runId, ctx);
+    if (run.status !== 'running') return toContinueRunDto(key, run);
+    try {
+      await dispatchRunService.close(runId, { stopReason }, ctx);
+    } catch (err) {
+      if (!(err instanceof DispatchRunTerminalError)) throw err;
+    }
+    return toContinueRunDto(key, (await readOwnContinueRun(projectId, identifier, runId, ctx)).run);
+  },
+
+  /**
    * What the item page draws about a run that died (MOTIR-6534) — the claim's own
    * evaluation, WITHOUT a lock and without closing or opening anything. A read a
    * browse-only viewer may make.
@@ -974,3 +1064,50 @@ export const workItemContinueService = {
     );
   },
 };
+
+function toContinueRunDto(key: string, run: DispatchRun): WorkItemContinueRunDto {
+  return {
+    key,
+    runId: run.id,
+    open: run.status === 'running',
+    status: run.status,
+    stopReason: run.stopReason,
+    startedAt: run.startedAt.toISOString(),
+    endedAt: run.endedAt?.toISOString() ?? null,
+    lastHeartbeatAt: run.lastHeartbeatAt?.toISOString() ?? null,
+  };
+}
+
+/**
+ * Resolve the card and read the named run, refusing anything that is not the
+ * CALLER's `continue` run on that card (MOTIR-7262) — `readOwnRepairRun`, one
+ * lifecycle over. The card read carries the tenancy + browse gate (a foreign key
+ * is not found), and the edit gate is the one `claimContinue` asserts.
+ *
+ * A continue of a CARD holds it as its one leg; a continue of a PARENT (MOTIR-6535)
+ * is SCOPED to it and holds its children as legs — so a run holds the card when
+ * it is the run's scope or one of its legs.
+ */
+async function readOwnContinueRun(
+  projectId: string,
+  identifier: string,
+  runId: string,
+  ctx: ServiceContext,
+): Promise<{ key: string; run: DispatchRun }> {
+  const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
+  await projectAccessService.assertCanEdit(projectId, ctx);
+  const run = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+    (tx) => dispatchRunRepository.findByIdWithCards(runId, tx),
+  );
+  const holdsCard =
+    run !== null &&
+    run.projectId === projectId &&
+    run.command === 'continue' &&
+    (run.scopeWorkItemId === item.id || run.cards.some((leg) => leg.workItemId === item.id));
+  if (!run || !holdsCard) throw new ContinueRunRefusedError(runId, item.identifier, 'not_found');
+  if (run.createdById !== ctx.userId) {
+    throw new ContinueRunRefusedError(runId, item.identifier, 'not_yours');
+  }
+  return { key: item.identifier, run };
+}

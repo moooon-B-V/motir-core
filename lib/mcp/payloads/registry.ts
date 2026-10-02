@@ -30,6 +30,7 @@ import {
 } from './planning';
 import {
   activityPagePayload,
+  claimWorkItemContinuePayload,
   claimWorkItemRepairPayload,
   dispatchPromptPayload,
   markIntegratedPayload,
@@ -89,6 +90,9 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // MOTIR-6807 — the repair claim, deriving WHOLE from `WorkItemRepairClaim`: the
   // REST route and the tool answer through one presenter.
   claim_work_item_repair: claimWorkItemRepairPayload as unknown as PayloadDefinition<never>,
+  // MOTIR-7262 — the continue claim, deriving WHOLE from `WorkItemContinueClaim`
+  // the same way: the REST route and the tool answer through one presenter.
+  claim_work_item_continue: claimWorkItemContinuePayload as unknown as PayloadDefinition<never>,
   // MOTIR-5413 — the two PLACING writes report where the item now sits.
   create_work_item: workItemPlacementWritePayload as unknown as PayloadDefinition<never>,
   update_work_item: workItemWritePayload as unknown as PayloadDefinition<never>,
