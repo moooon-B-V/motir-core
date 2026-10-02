@@ -325,7 +325,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **78 tools**.
+`initialize` handshake and registers **81 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -983,10 +983,11 @@ A pure **read**: it does NOT claim the item and does NOT change its status
 (`claim_next_ready` is the tool that does both), and it works on ANY work item,
 not only a ready one — so re-printing an in-progress item's prompt is safe.
 
-| Input           | Type   | Required | Notes                                                                                                              |
-| --------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------ |
-| `key`           | string | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                             |
-| `sessionBranch` | string | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`). |
+| Input           | Type   | Required | Notes                                                                                                                  |
+| --------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `key`           | string | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                                 |
+| `sessionBranch` | string | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`).     |
+| `continueFrom`  | string | no       | A DEAD run's id (`deadRun.id` from `claim_work_item_continue`): the prompt continues it. Else `CONTINUE_FROM_INVALID`. |
 
 **Output** — `structuredContent`:
 `{ key, prompt, targetRepo, targetRepoCloneUrl, targetRepoDefaultBranch, workflowMode, sessionBranch, advisories }`.
@@ -1772,6 +1773,96 @@ Touch and close accept only **your own** repair run of **that** card:
 | `REPAIR_RUN_NOT_FOUND` | `runId` is not a repair run of this card (or not in your workspace). Claim it. |
 | `REPAIR_RUN_NOT_YOURS` | The card's repair run, opened by somebody else. Nothing was written.           |
 
+#### Continuing a dead run — `claim_work_item_continue` · `touch_work_item_continue` · `close_work_item_continue`
+
+A card whose run **died** — its agent stopped hearing back, crashed, or was
+killed — keeps its status (In Progress) and its branch. `motir continue <key>`
+hands that branch to ONE continuing agent through the **continue claim**
+(`POST /api/v1/work-items/{key}/continue`, Story MOTIR-6526). These three tools
+are the same claim for an agent working from its own chat (Story MOTIR-7261):
+it takes the card over, keeps it while it works, and hands it back with how the
+continue ended. The shape is the repair tools' above, for a different lock.
+
+**The REST route and `motir continue` share ONE lock with these tools.** The lock
+is an open dispatch run of command `continue` on the card; whichever door claims
+first holds it, and a claim through the other door is answered `taken`, naming
+the holder. The claim re-assigns the card to the token's owner — its one card
+write — and never writes its status.
+
+| Tool                       | Permission       | What it does                                                      |
+| -------------------------- | ---------------- | ----------------------------------------------------------------- |
+| `claim_work_item_continue` | `work_item:edit` | Take over a dead run's card, and be handed where its work stands. |
+| `touch_work_item_continue` | `work_item:edit` | Keep your continue alive; learn if it was closed under you.       |
+| `close_work_item_continue` | `work_item:edit` | End your continue with how it went, releasing the lock.           |
+
+**The order is claim → `dispatch_prompt` → touch → close.** Pass the dead run's
+id (`deadRun.id` from the claim) to `dispatch_prompt` as **`continueFrom`**, and
+the prompt says how that run ended and where its branch and pull requests stand
+— the same text the REST route answers for `?continueFrom=`. A run that is
+unknown, still running or succeeded is refused with `CONTINUE_FROM_INVALID`, not
+ignored. Then call `touch_work_item_continue` **at least every two minutes**
+while you work: the run-liveness rule applies to a continue exactly as to the
+CLI's (`lib/runs/runLiveness.ts`) — **a run silent for five minutes is dead**,
+and the liveness sweep closes it (`stopReason: abandoned`), which leaves the card
+continuable again by somebody else. The claim itself counts as the first beat.
+When a touch answers **`open: false`**, the lock is gone, so **stop pushing**.
+
+All three need permission to **edit the card**, the key the REST continue route
+asserts. A card the token cannot see, including one in another workspace, is
+`WORK_ITEM_NOT_FOUND`.
+
+##### `claim_work_item_continue`
+
+| Input | Type   | Required | Notes                 |
+| ----- | ------ | -------- | --------------------- |
+| `key` | string | yes      | Work item identifier. |
+
+**Output** — `structuredContent`: **exactly** what the REST route answers — the
+`WorkItemContinueClaim` resource, through the same presenter. `outcome` is
+`claimed` (the card is yours: `runId` is your run), `mine` (you already hold it —
+a resume), `taken` (somebody else is continuing it; do not push) or
+`not_continuable`, with `reason` one of `run_alive`, `use_fix`,
+`not_in_progress`, `continue_the_parent`, `no_dead_run`, `no_branch` — the REST
+route's refusals, in its order. **A refusal is a result, not an error**, and
+changes nothing on the card. With `use_fix`, the card's pull request is open:
+`claim_work_item_repair` is the door. With `continue_the_parent`, continue
+`parentKey` as a whole.
+
+##### `touch_work_item_continue`
+
+| Input   | Type   | Required | Notes                                            |
+| ------- | ------ | -------- | ------------------------------------------------ |
+| `key`   | string | yes      | Work item identifier.                            |
+| `runId` | string | yes      | The `runId` `claim_work_item_continue` answered. |
+
+**Output** — `structuredContent`: `{ key, runId, open, status, stopReason,
+startedAt, endedAt, lastHeartbeatAt }`. `open: true` means the run is alive and
+`lastHeartbeatAt` has moved to now; `open: false` carries how it ended. A touch
+never re-opens a run, and writes no status and no event.
+
+##### `close_work_item_continue`
+
+| Input     | Type   | Required | Notes                                            |
+| --------- | ------ | -------- | ------------------------------------------------ |
+| `key`     | string | yes      | Work item identifier.                            |
+| `runId`   | string | yes      | The `runId` `claim_work_item_continue` answered. |
+| `outcome` | enum   | yes      | The stop reason the REST close body accepts.     |
+
+`outcome` is the run's stop reason, the same set `POST
+/api/v1/dispatch-runs/{id}/close` takes as `stopReason`: `completed` (the work is
+done), `halted` (you gave up), `interrupted` (cancelled), and the rest of that
+enum. **Output** — the same shape as the touch, now `open: false`.
+**Idempotent:** closing a run that is already closed returns it as it stands and
+changes nothing, so a retry after a timeout is safe.
+
+Touch and close accept only **your own** continue run of **that** card (the card
+itself, or the parent whose continue it is a leg of):
+
+| Code                     | Meaning                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| `CONTINUE_RUN_NOT_FOUND` | `runId` is not a continue run of this card (or not in your workspace). Claim it. |
+| `CONTINUE_RUN_NOT_YOURS` | The card's continue run, opened by somebody else. Nothing was written.           |
+
 #### `add_lesson`
 
 Record a **lesson** for a project — something that went wrong when planning it
@@ -2340,21 +2431,33 @@ routes for — expressed as two tools.
 3. **`publish_acceptance_result`** `{ key, videoPathname, tracePathname?,
 chapters?, commitSha?, producedByKey? }` → the receipt.
 
-⚠️ **Nothing else publishes it**, exactly as with the design result. A story whose
-receipt never arrives looks identical to one that succeeded — spec green, checks
-green, pull request merged, and nobody able to watch the story work. **The
-confirmation is the `id` this call returns**, and its `status` is `pending`: the
-publish is not the acceptance, a person is.
+⚠️ **WHO publishes depends on the repository, and the agent reads its checkout to
+find out (MOTIR-7254).** In a repository whose acceptance lane carries the
+`upload-acceptance-video` action — motir-core, and every project generated from
+`nextjs-prisma-vercel-starter` since MOTIR-7255 — **CI publishes the receipt**, from
+a green pull-request run over keyless GitHub OIDC, and the agent makes no call. The
+dispatch prompt spells the check out:
+`grep -rlE 'uses:\s*\./\.github/actions/upload-acceptance-video' .github/workflows/`
+— a file printed means the lane publishes. **These two tools are the door for every
+other repository**, and there nothing else publishes the receipt, exactly as with
+the design result: a story whose receipt never arrives looks identical to one that
+succeeded — spec green, checks green, pull request merged, and nobody able to
+watch the story work. **The confirmation is the `id` this call returns**, and its
+`status` is `pending`: the publish is not the acceptance, a person is.
 
-⚠️ **It replaced a CI publisher, and for the reason that generalises the design
-one.** MOTIR-4096 retired `scripts/upload-acceptance-video.mjs` and the Action
-beside it. A CI publisher can guarantee THIS repository's receipts and no
-customer's: it has to be present in whatever repository the work lands in, which
-is a requirement no repository Motir does not own can meet. What replaces it is
-the planner/runner pair — the planner writes the acceptance E2E subtask onto every
-user-facing story, and the runner's dispatch prompt tells it to publish what it
-recorded — and that pair needs a door that travels. This is that door. (Between
-4096 and MOTIR-4704 there was none, and three documents said there was.)
+⚠️ **Why both doors exist.** MOTIR-4096 retired the CI uploader on 2026-09-01: a CI
+publisher has to be present in whatever repository the work lands in, which is a
+requirement a customer's repository cannot be relied on to meet. That still holds
+for a customer's repository, and this door is what travels there — the planner
+writes the acceptance E2E subtask onto every user-facing story, and the runner's
+dispatch prompt tells it to publish what it recorded. (Between MOTIR-4096 and
+MOTIR-4704 there was no such door, and three documents said there was.) But Motir
+DOES write the repository in two places — its own, and the starter every hosted
+project is generated from — so on 2026-10-01 MOTIR-7253 restored the CI publisher
+there, where it is the more reliable link
+(`docs/decisions/acceptance-video.md`, the 2026-10-01 amendment). An agent and CI
+publishing the same commit send the same `producedByKey` (the card key) and so
+collapse to ONE receipt rather than superseding each other.
 
 | Input           | Type    | Required | Notes                                                                                                    |
 | --------------- | ------- | -------- | -------------------------------------------------------------------------------------------------------- |

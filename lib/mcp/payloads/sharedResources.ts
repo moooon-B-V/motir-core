@@ -61,7 +61,8 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     '(MOTIR-6807’s repair tools keep it: `touch_work_item_repair` / `close_work_item_repair` ' +
     'let an agent that CLAIMED a repair keep its lock and say how it ended — a lock the agent ' +
     'holds, not an account of what it did — and answer a narrow liveness shape, never this ' +
-    'resource; see their `EXEMPT_TOOLS` entries.)',
+    'resource; see their `EXEMPT_TOOLS` entries. MOTIR-7262’s continue tools keep it the same ' +
+    'way: `touch_work_item_continue` / `close_work_item_continue`.)',
   DispatchRunCloseOutPrompt:
     'The CLOSE-OUT prompt (Story MOTIR-4906 · MOTIR-5357) is assembled for the process AROUND ' +
     'the agent: the CLI fetches it over `/api/v1` and hands it to one agent before the run marks ' +
@@ -143,14 +144,6 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     '`WorkItemClaim` whole — so the shape family IS checked here, on the tool that has an ' +
     'agent-facing reason to exist. ⚠️ If an agent surface is ever added for a scoped run, ' +
     'this entry closes and `claim_scope` probes this resource; it is not a permanent divergence.',
-  WorkItemContinueClaim:
-    'MOTIR-6532’s CONTINUE claim ships on `/api/v1` ONLY: its caller is `motir continue <key>` ' +
-    'in `packages/cli`, which speaks /api/v1 only, and the card that specifies it adds no MCP ' +
-    'tool. A dispatched agent has no use for it: the command hands it the branch through the ' +
-    'CONTINUE prompt. (Its sibling the REPAIR claim WAS given an agent door by MOTIR-6807, ' +
-    'because a published skill repairs a red card without the CLI; `claim_work_item_repair` ' +
-    'probes `WorkItemRepairClaim` whole.) ⚠️ If an agent surface ever claims a continue, this ' +
-    'entry closes and that tool probes this resource.',
   ProjectRepository:
     'MOTIR-3586 publishes the project\u2019s repository SET on `/api/v1` ONLY, and the absence is ' +
     'argued rather than incidental: its caller is `motir link` in `packages/cli`, which retired ' +

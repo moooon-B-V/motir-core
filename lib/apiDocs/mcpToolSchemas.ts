@@ -633,6 +633,20 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  claim_work_item_continue: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+    },
+    required: ['key'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   claim_work_item_repair: {
     type: 'object',
     properties: {
@@ -644,6 +658,41 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['key'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  close_work_item_continue: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      runId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The continue run’s id — the `runId` `claim_work_item_continue` answered. Only your own run on this work item is accepted.',
+      },
+      outcome: {
+        type: 'string',
+        enum: [
+          'drained',
+          'completed',
+          'max',
+          'halted',
+          'interrupted',
+          'replanned',
+          'gated',
+          'abandoned',
+        ],
+        description:
+          'How the continue ended — the stop reasons the REST close accepts, and the ones `motir continue` closes with: "completed" (the work is delivered), "drained" (a parent continue ran out of ready cards), "max" (it stopped at its card limit), "halted" (you stopped on something you could not get past), "interrupted" (the person stopped you), "replanned" (the card went to Planning), "gated" (it stopped at an approval gate) or "abandoned".',
+      },
+    },
+    required: ['key', 'runId', 'outcome'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -1085,6 +1134,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         description:
           'Optional comma-separated list of the capabilities this run switches OFF for the agent — one or more of: log-bug, replan. Omitted renders the COMPLETE outcome protocol, which is what every caller wanting to read the real contract should do. An unrecognised capability is refused, never ignored.',
+      },
+      continueFrom: {
+        type: 'string',
+        description:
+          'Optional id of a DEAD dispatch run this prompt continues — the `deadRun.id` `claim_work_item_continue` returned. The prompt then says how that run ended and where its work stands. A run that is unknown, still running or succeeded is refused with CONTINUE_FROM_INVALID, never ignored.',
       },
     },
     required: ['key'],
@@ -2254,6 +2308,26 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  touch_work_item_continue: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      runId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The continue run’s id — the `runId` `claim_work_item_continue` answered. Only your own run on this work item is accepted.',
+      },
+    },
+    required: ['key', 'runId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   touch_work_item_repair: {
     type: 'object',
     properties: {
@@ -3132,7 +3206,9 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   change_kind: 'Change work item kind',
   claim_next_ready: 'Claim next ready work item',
   claim_work_item: 'Claim a work item',
+  claim_work_item_continue: 'Continue a dead run’s work item',
   claim_work_item_repair: 'Claim a red work item’s repair',
+  close_work_item_continue: 'Close a continue',
   close_work_item_repair: 'Close a repair',
   complete_session: 'Complete session',
   complete_sprint: 'Complete sprint',
@@ -3184,6 +3260,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   skeleton: 'Project skeleton',
   start_sprint: 'Start sprint',
   submit_plan_session: 'Submit plan conversation',
+  touch_work_item_continue: 'Keep a continue alive',
   touch_work_item_repair: 'Keep a repair alive',
   transition_status: 'Transition status',
   unarchive_work_item: 'Unarchive work item',
@@ -3274,11 +3351,25 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     idempotentHint: true,
     openWorldHint: false,
   },
+  claim_work_item_continue: {
+    title: 'Continue a dead run’s work item',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   claim_work_item_repair: {
     title: 'Claim a red work item’s repair',
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: false,
+    openWorldHint: false,
+  },
+  close_work_item_continue: {
+    title: 'Close a continue',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
     openWorldHint: false,
   },
   close_work_item_repair: {
@@ -3529,6 +3620,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   },
   submit_plan_session: {
     title: 'Submit plan conversation',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  touch_work_item_continue: {
+    title: 'Keep a continue alive',
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: false,

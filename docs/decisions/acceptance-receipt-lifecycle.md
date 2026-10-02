@@ -315,8 +315,9 @@ trigger.
    Below `implemented` the work is being redone, which is exactly when a new
    recording is right. **A person pulling the story back (to `in_progress`) is the
    deliberate re-open**, and the pulled-back move already withdraws every awaiting
-   question. It REPLACES `AcceptanceEvidenceAlreadyApprovedError` /
-   `ACCEPTANCE_EVIDENCE_ALREADY_APPROVED`.
+   question. Its code is `ACCEPTANCE_EVIDENCE_STORY_CLOSED`
+   (`AcceptanceEvidenceStoryClosedError`), and it REPLACES the approved-receipt
+   refusal MOTIR-2764 introduced, which froze the story for ever.
 
 3. **The lane guard no longer reads receipt status**
    (`tests/e2e-acceptance-lane-membership.test.ts`). It keeps the half that is true

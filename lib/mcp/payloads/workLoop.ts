@@ -10,14 +10,17 @@ import {
   presentPlanOutcome,
   presentPlanSession,
   presentSessionCloseOut,
+  presentWorkItemContinueClaim,
   presentWorkItemRepairClaim,
   planJobHandleSchema,
   sessionCloseOutSchema,
+  workItemContinueClaimSchema,
   workItemRepairClaimSchema,
 } from '@/lib/api/v1/workLoop/schema';
 import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
 import { PLAN_DECISION_REASONS } from '@/lib/dto/plans';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
+import type { WorkItemContinueClaimDto } from '@/lib/dto/workItemContinue';
 import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
 import type { PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 import { definePayload } from './define';
@@ -376,4 +379,24 @@ export function presentMcpWorkItemRepairClaim(
   dto: WorkItemRepairClaimDto,
 ): z.infer<typeof workItemRepairClaimSchema> {
   return presentWorkItemRepairClaim(dto);
+}
+
+/**
+ * The CONTINUE claim (Story MOTIR-7261 · MOTIR-7262). `claim_work_item_continue`
+ * answers exactly what `POST /api/v1/work-items/{key}/continue` answers, through
+ * v1's own presenter — so the whole payload IS the `WorkItemContinueClaim`
+ * resource and the probe selects the payload itself, as the repair claim's does.
+ */
+export const claimWorkItemContinuePayload = definePayload({
+  schema: workItemContinueClaimSchema as unknown as z.ZodType<
+    z.infer<typeof workItemContinueClaimSchema>
+  >,
+  probes: [{ resource: 'WorkItemContinueClaim', select: (p) => [p] }],
+});
+
+/** Map a continue claim — v1's own presenter, unchanged. */
+export function presentMcpWorkItemContinueClaim(
+  dto: WorkItemContinueClaimDto,
+): z.infer<typeof workItemContinueClaimSchema> {
+  return presentWorkItemContinueClaim(dto);
 }
