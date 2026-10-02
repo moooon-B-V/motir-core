@@ -24,6 +24,7 @@ import {
   type RegistryCredentialResolver,
 } from '@motir/orchestrator';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
+import { withPlatformMeterReport } from '@/lib/services/platformMeterReportEnqueue';
 
 // ⚠️ THIS FILE IS THE PACKAGE'S COMPOSITION ROOT (MOTIR-4299), and it is the ONE
 // app file that names `@motir/orchestrator`'s implementation choices.
@@ -493,7 +494,9 @@ export async function verifyIndexFleetBootable(): Promise<FleetBootableVerdict> 
 // caller's world least: `recordContainerUsage` / `recordContainerAccrual` are
 // still free functions on `@/lib/orchestrator`, with the same signatures and the
 // same never-throw contract, at the same two call sites.
-const usageSink = createUsageSink(ciFleetCostMeterService);
+// The settle's platform meter report (Story MOTIR-727 · MOTIR-5286) rides on the
+// same binding: a committed settle enqueues its report here, outside the meter.
+const usageSink = createUsageSink(withPlatformMeterReport(ciFleetCostMeterService));
 
 /** Emit one container's cost record. NEVER THROWS — see the package's sink. */
 export const recordContainerUsage = usageSink.recordContainerUsage;

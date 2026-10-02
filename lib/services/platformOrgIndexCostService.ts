@@ -78,13 +78,19 @@ export const platformOrgIndexCostService = {
     principal: PlatformPrincipal,
     organizationId: string,
     now: Date = new Date(),
+    opts: { audited?: boolean } = {},
   ): Promise<PlatformOrgIndexCostDTO> {
     await requirePlatformStaff('support');
-    await platformAuditService.record(principal, {
-      action: 'estate.read',
-      targetKind: 'organization',
-      targetId: organizationId,
-    });
+    // `audited: true` — the caller's own audited read of this organization already
+    // recorded the view (the org page's Overview, MOTIR-733), and one page view is
+    // ONE `estate.read` row, not one per card on it.
+    if (!opts.audited) {
+      await platformAuditService.record(principal, {
+        action: 'estate.read',
+        targetKind: 'organization',
+        targetId: organizationId,
+      });
+    }
 
     // Off-cloud there is no fleet and no allowance: the card says so and reads nothing.
     if (!isCloudBilling()) return { meter: 'disabled' };

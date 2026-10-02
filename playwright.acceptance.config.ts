@@ -135,6 +135,11 @@ const MOTIR_AI_JOBS_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-ai-jobs-f
 process.env['MOTIR_AI_JOBS_FIXTURE_PATH'] ??= MOTIR_AI_JOBS_FIXTURE_PATH;
 process.env['MOTIR_CLOUD'] ??= 'true';
 process.env['MOTIR_AI_BILLING_FIXTURE_PATH'] ??= MOTIR_AI_BILLING_FIXTURE_PATH;
+// The operator console's platform usage reads (Story MOTIR-727 · MOTIR-735,
+// `lib/test-platform-usage-mock.ts`): a spec writes the estate it walks here, and
+// the webServer's mock answers from it — the same two-sided path as the billing file.
+const MOTIR_AI_PLATFORM_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-platform-fixture.json');
+process.env['MOTIR_AI_PLATFORM_FIXTURE_PATH'] ??= MOTIR_AI_PLATFORM_FIXTURE_PATH;
 
 // ── The GitHub repo-provisioning seam (MOTIR-1785) ───────────────────────────
 //
@@ -484,6 +489,8 @@ export default defineConfig({
         // lives with the helper that signs with it.
         MOTIR_AI_TO_CORE_SERVICE_TOKEN: E2E_AI_TO_CORE_SERVICE_TOKEN,
         MOTIR_AI_BILLING_FIXTURE_PATH,
+        E2E_TEST_PLATFORM_USAGE: '1',
+        MOTIR_AI_PLATFORM_FIXTURE_PATH,
         // The GitHub repo-provisioning + collaborator boundary (MOTIR-1785).
         E2E_TEST_GITHUB_REPOS: '1',
         MOTIR_GITHUB_CONTROL_PATH,

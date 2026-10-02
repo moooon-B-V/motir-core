@@ -77,6 +77,7 @@ const low = enMessages.aiUsage.lowBalance;
 const outOf = enMessages.aiUsage.outOfCredits;
 const bill = enMessages.billing;
 const admin = enMessages.platformAdmin.orgs;
+const tenants = enMessages.platformAdmin.tenants;
 
 // ── ⚠️ AND THE CLIP RUNS IN ONE SESSION, ON PURPOSE (measured, not preferred) ─
 //
@@ -150,21 +151,19 @@ test('an internal org is classified by staff, and then bills like a customer', a
   const org = await db.organization.findUniqueOrThrow({ where: { id: seed.organizationId } });
 
   await chapter('An operator finds the organization', async () => {
+    // Tenants is LIST-FIRST since MOTIR-7287 (design D10): every org's spend on
+    // arrival, a name/slug filter in the toolbar. The filter narrows the list in
+    // the URL, so a filtered list is linkable and survives a reload.
     await page.goto('/admin/tenants');
-    await expect(page.getByRole('heading', { name: admin.title })).toBeVisible();
-    // The lookup answers a question and shows nothing until asked.
-    await expect(page.getByText(admin.idleTitle)).toBeVisible();
-
-    // Scoped to the lookup's own `role="search"` form: the admin shell carries a
-    // (disabled) global search button whose accessible name also starts with
-    // "Search", and an unscoped match takes both.
-    const lookup = page.getByRole('search');
-    await lookup.getByRole('searchbox').fill(org.slug);
-    await lookup.getByRole('button', { name: admin.searchSubmit, exact: true }).click();
-    // Authoritative: the URL carries the query, so the result set is linkable
-    // and survives a reload — the whole argument for a form over a type-ahead.
-    await expect(page).toHaveURL(new RegExp(`/admin/tenants\\?q=${org.slug}`));
-    await page.getByRole('link', { name: new RegExp(org.slug) }).click();
+    await expect(page.getByRole('heading', { name: tenants.title })).toBeVisible();
+    const filter = page.getByRole('search').getByRole('searchbox');
+    await filter.fill(org.slug);
+    await filter.press('Enter');
+    await expect(page).toHaveURL(new RegExp(`/admin/tenants\\?.*q=${org.slug}`));
+    // A row needs spend in motir-ai's rollup to appear, which this story's fixture
+    // does not produce — the list's own walk is MOTIR-735's. The org page is the
+    // subject here, so open it by its id.
+    await page.goto(`/admin/tenants/${seed.organizationId}`);
 
     await expect(page).toHaveURL(new RegExp(`/admin/tenants/${seed.organizationId}`));
     await expect(page.getByRole('heading', { name: org.name })).toBeVisible();

@@ -122,6 +122,10 @@ export default defineConfig({
       'tests/components/useAgentTerminal.test.tsx',
       // The image update (Story MOTIR-6862 · MOTIR-6954).
       'tests/components/MyAgentsUpdate.test.tsx',
+      // Story MOTIR-727 (MOTIR-7294) — the storage day's platform meter report and the
+      // backfill reach three `agentInstanceStorageChargeRepository` reads this lane
+      // measures; their suite is the one that drives them.
+      'tests/ciFleet/platformMeterReport.test.ts',
     ],
     coverage: {
       provider: 'v8',

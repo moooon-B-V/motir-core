@@ -52,6 +52,7 @@ import type {
   Tenant,
   UsageQuery,
 } from './types';
+import type { CategoryFigures, SpendCategory } from '@/lib/platform/spend';
 
 // The actor a job runs on behalf of — the read-back token is minted for them, so
 // motir-ai reads/proposes only what this user could (contract §4b).
@@ -395,6 +396,16 @@ export interface AgentMachineDebitInput {
    *  `agent-instance-interval:<id>` (one charge per interval). */
   externalRef: string;
   reason?: string;
+  /**
+   * WHERE THE RUN RAN (Story MOTIR-727 · MOTIR-7240 · motir-ai MOTIR-7238) — the run's
+   * core workspace and project, sent together on the `coreRunId` path only. motir-ai
+   * writes them onto the run's usage row ONCE, which is what lets the platform usage
+   * rollup place the run's coding spend below its org; a run charged without them is
+   * reported in the org's unattributed bucket. Never sent with `instanceIntervalId`:
+   * an agent instance is not scoped to a project, and motir-ai refuses the pair.
+   */
+  coreWorkspaceId?: string;
+  coreProjectId?: string;
 }
 
 /** The same body `ci-overage` answers, `idempotent` included. */
@@ -414,10 +425,14 @@ export async function debitAgentMachine(
   input: AgentMachineDebitInput,
 ): Promise<RawAgentMachineDebitResponse> {
   const { url, serviceToken } = config();
+  // The address travels whole or not at all — motir-ai refuses half of one.
+  const { coreWorkspaceId, coreProjectId, ...charge } = input;
+  const body =
+    coreWorkspaceId && coreProjectId ? { ...charge, coreWorkspaceId, coreProjectId } : charge;
   const res = await aiFetch(`${url}/v1/credits/agent-machine`, {
     method: 'POST',
     headers: authHeaders(serviceToken),
-    body: JSON.stringify(input),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawAgentMachineDebitResponse;
@@ -2328,4 +2343,332 @@ export async function purgeOrgRetained(
   );
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as OrgPurgeRetainedResult;
+}
+
+// ── The PLATFORM RUNS SLICE (Story MOTIR-727 · MOTIR-731 · motir-ai MOTIR-7239) ──
+
+/** One planning run or hosted agent run, as `GET /v1/platform/runs` returns it. */
+export interface RawPlatformRun {
+  kind: 'planning' | 'coding';
+  id: string;
+  /** The planning run's job id, or the hosted run's `DispatchRun.id`. */
+  ref: string;
+  coreOrganizationId: string;
+  coreWorkspaceId: string | null;
+  coreProjectId: string | null;
+  model: string | null;
+  status: string | null;
+  startedAt: string;
+  lastActivityAt: string;
+  inputTokens: number;
+  outputTokens: number;
+  credits: number;
+}
+
+export interface RawPlatformRunsPage {
+  items: RawPlatformRun[];
+  nextCursor: string | null;
+  codingRunsUnattributedExcluded: boolean;
+}
+
+export interface PlatformRunsQuery {
+  coreOrganizationId?: string | null;
+  coreWorkspaceId?: string | null;
+  coreProjectId?: string | null;
+  kind?: 'planning' | 'coding' | null;
+  limit?: number | null;
+  /** A cursor the route issued, or one {@link platformRunsCursorAt} built. */
+  cursor?: string | null;
+}
+
+/**
+ * The runs slice's cursor for "everything strictly older than (startedAt, id)".
+ *
+ * ⚠️ BUILT HERE ON PURPOSE. motir-ai's keyset is `(startedAt DESC, id DESC)` and its
+ * cursor is exactly that position (`docs/contract.md` § `GET /v1/platform/runs`), so
+ * a page merged from TWO sources — the overview feed, which interleaves motir-core's
+ * own tenant events with these runs — can resume the run half from the last run it
+ * actually SHOWED, rather than from the end of a page it only partly used.
+ */
+export function platformRunsCursorAt(startedAt: Date, id: string): string {
+  return Buffer.from(JSON.stringify({ t: startedAt.toISOString(), i: id })).toString('base64url');
+}
+
+/**
+ * GET /v1/platform/runs — the estate's recent planning and hosted runs, newest
+ * first, keyset-paged, optionally scoped. Read-through: the caller is a
+ * `platform*Service` method that has already passed the platform-staff gate.
+ */
+export async function getPlatformRuns(query: PlatformRunsQuery): Promise<RawPlatformRunsPage> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams();
+  for (const key of [
+    'coreOrganizationId',
+    'coreWorkspaceId',
+    'coreProjectId',
+    'kind',
+    'cursor',
+  ] as const) {
+    const value = query[key];
+    if (value) params.set(key, value);
+  }
+  if (query.limit) params.set('limit', String(query.limit));
+  const res = await aiFetch(`${url}/v1/platform/runs?${params.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawPlatformRunsPage;
+}
+
+// ── The PLATFORM METER REPORT (Story MOTIR-727 · MOTIR-5286 · motir-ai MOTIR-7290) ──
+
+/** The fleet workloads motir-ai's rollup takes, one category each. */
+export type PlatformMeterWorkload = 'agent' | 'agent_instance' | 'ci' | 'index';
+
+/**
+ * One meter owner's report (`POST /v1/platform/meter`). motir-core owns the fleet
+ * meter, so it reports a settled container's seconds and cost; motir-ai records
+ * them and never prices them. NOT a charge — credits move on the debit routes.
+ */
+export type PlatformMeterReport =
+  | {
+      kind: 'container';
+      /** `CiContainerUsage.id` — the idempotency key at the receiver. */
+      containerUsageId: string;
+      coreOrganizationId: string;
+      coreWorkspaceId: string | null;
+      coreProjectId: string | null;
+      workload: PlatformMeterWorkload;
+      billableSeconds: number;
+      /** A DECIMAL STRING, exactly as the meter stored it — never a float. */
+      costUsd: string;
+      settledAt: string;
+    }
+  | {
+      kind: 'storage';
+      instanceId: string;
+      coreOrganizationId: string;
+      /** `YYYY-MM-DD`, UTC. */
+      day: string;
+      gbSeconds: number;
+      costUsd: string;
+    };
+
+/**
+ * POST /v1/platform/meter — idempotent on the report's source id: a replay answers
+ * `idempotent: true` and adds nothing, so a job may retry it freely. Every failure
+ * throws (transport as {@link MotirAiUnavailableError}, a non-2xx as its §5 typed
+ * error), which is what lets the job's retry policy own the outage.
+ */
+export async function reportPlatformMeter(
+  report: PlatformMeterReport,
+): Promise<{ sourceId: string; idempotent: boolean }> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/platform/meter`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(report),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as { sourceId: string; idempotent: boolean };
+}
+
+// ── The PLATFORM SPEND READ (Story MOTIR-727 · MOTIR-732 · motir-ai MOTIR-7284) ──
+
+export type PlatformUsageLevel = 'platform' | 'organization' | 'workspace' | 'project';
+
+export interface RawPlatformModelFigures {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheMissTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  credits: number;
+  costMicroUsd: number;
+  /** At platform level, how many organizations used the model; null below it. */
+  orgs: number | null;
+}
+
+/** `GET /v1/platform/usage` — one entity's spend for a period. */
+export interface RawPlatformUsage {
+  period: string;
+  level: PlatformUsageLevel;
+  entityId: string;
+  categories: CategoryFigures[];
+  models: { planning_tokens: RawPlatformModelFigures[]; agent_tokens: RawPlatformModelFigures[] };
+  spend: {
+    chargedCredits: number;
+    chargedCostMicroUsd: number;
+    costMicroUsdInclIndexing: number;
+    machineSeconds: number;
+  };
+  orgsWithSpend: number | null;
+}
+
+/**
+ * GET /v1/platform/usage — one entity's spend for `period` (`YYYY-MM` or `all`),
+ * all eight categories, the token categories' models and the totals, read from
+ * motir-ai's pre-aggregated rollup. Read-through: the caller is a
+ * `platform*Service` method that has already passed the platform-staff gate.
+ */
+export async function getPlatformUsage(query: {
+  period: string;
+  level?: PlatformUsageLevel;
+  entityId?: string | null;
+}): Promise<RawPlatformUsage> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ period: query.period, level: query.level ?? 'platform' });
+  if (query.entityId) params.set('entityId', query.entityId);
+  const res = await aiFetch(`${url}/v1/platform/usage?${params.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawPlatformUsage;
+}
+
+/** One entity's row in a spend LIST (`/v1/platform/usage/orgs`, `/children`). */
+export interface RawSpendRow {
+  entityId: string;
+  /** Credits per CHARGED category — indexing is never charged, so never here. */
+  credits: Record<Exclude<SpendCategory, 'indexing'>, number>;
+  /** Indexing's column is its seconds. */
+  indexingSeconds: number;
+  chargedCredits: number;
+  /** What it cost Motir, indexing included, micro-dollars. */
+  costMicroUsd: number;
+  cost: Record<SpendCategory, number>;
+}
+
+/** The sorts a spend list takes: Motir cost (default), charged total, or a category. */
+export type SpendListSort = 'cost' | 'charged' | SpendCategory;
+
+export interface RawPlatformUsageOrgs {
+  period: string;
+  sort: SpendListSort;
+  items: RawSpendRow[];
+  nextCursor: string | null;
+  /** The whole estate for the period — every organization, not this page or filter. */
+  estate: RawSpendRow;
+}
+
+/**
+ * GET /v1/platform/usage/orgs — the Tenants list: every organization's spend for
+ * `period`, keyset-paged by `sort`, optionally narrowed to `coreOrganizationIds`
+ * (an EMPTY list narrows to nothing and still answers the estate total).
+ */
+export async function getPlatformUsageOrgs(query: {
+  period: string;
+  sort?: SpendListSort | null;
+  limit?: number | null;
+  cursor?: string | null;
+  coreOrganizationIds?: string[] | null;
+}): Promise<RawPlatformUsageOrgs> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ period: query.period });
+  if (query.sort) params.set('sort', query.sort);
+  if (query.limit) params.set('limit', String(query.limit));
+  if (query.cursor) params.set('cursor', query.cursor);
+  if (query.coreOrganizationIds)
+    params.set('coreOrganizationIds', query.coreOrganizationIds.join(','));
+  const res = await aiFetch(`${url}/v1/platform/usage/orgs?${params.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawPlatformUsageOrgs;
+}
+
+/** `GET /v1/platform/usage/children` — an entity's children's spend, one keyset page. */
+export interface RawPlatformUsageChildren {
+  period: string;
+  sort: SpendListSort;
+  level: PlatformUsageLevel;
+  entityId: string;
+  childLevel: PlatformUsageLevel;
+  items: RawSpendRow[];
+  nextCursor: string | null;
+  /** At organization scope: what no workspace holds (no project; org-level by nature). */
+  remainder: { noProject: RawSpendRow; orgLevel: RawSpendRow } | null;
+}
+
+/**
+ * GET /v1/platform/usage/children — the spend of an organization's workspaces (or
+ * a workspace's projects) for `period`, keyset-paged by `sort`; at organization
+ * scope it also carries the `remainder` rows no workspace holds.
+ */
+export async function getPlatformUsageChildren(query: {
+  period: string;
+  level: Exclude<PlatformUsageLevel, 'platform' | 'project'>;
+  entityId: string;
+  sort?: SpendListSort | null;
+  limit?: number | null;
+  cursor?: string | null;
+}): Promise<RawPlatformUsageChildren> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({
+    period: query.period,
+    level: query.level,
+    entityId: query.entityId,
+  });
+  if (query.sort) params.set('sort', query.sort);
+  if (query.limit) params.set('limit', String(query.limit));
+  if (query.cursor) params.set('cursor', query.cursor);
+  const res = await aiFetch(`${url}/v1/platform/usage/children?${params.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawPlatformUsageChildren;
+}
+
+/** One period's figures in the month series (`/v1/platform/usage/months`). */
+export interface RawMonthFigures {
+  /** `YYYY-MM`, or `all` for the all-time row. */
+  period: string;
+  categories: Record<
+    SpendCategory,
+    { credits: number; usageQuantity: number; costMicroUsd: number }
+  >;
+  spend: {
+    chargedCredits: number;
+    chargedCostMicroUsd: number;
+    costMicroUsdInclIndexing: number;
+    machineSeconds: number;
+  };
+}
+
+export interface RawPlatformUsageMonths {
+  level: PlatformUsageLevel;
+  entityId: string;
+  /** Newest first. */
+  items: RawMonthFigures[];
+  /** A `YYYY-MM` to pass back for the older months. */
+  nextCursor: string | null;
+  allTime: RawMonthFigures;
+}
+
+/**
+ * GET /v1/platform/usage/months — one entity's spend month by month, newest first,
+ * keyset on the month, with its all-time row.
+ */
+export async function getPlatformUsageMonths(query: {
+  level: PlatformUsageLevel;
+  entityId?: string | null;
+  limit?: number | null;
+  cursor?: string | null;
+}): Promise<RawPlatformUsageMonths> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ level: query.level });
+  if (query.entityId) params.set('entityId', query.entityId);
+  if (query.limit) params.set('limit', String(query.limit));
+  if (query.cursor) params.set('cursor', query.cursor);
+  const res = await aiFetch(`${url}/v1/platform/usage/months?${params.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawPlatformUsageMonths;
 }

@@ -25,6 +25,7 @@ import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubsc
 import { publicFollowDigestService } from '@/lib/services/publicFollowDigestService';
 import { automationEngineService } from '@/lib/services/automationEngineService';
 import { billingService } from '@/lib/services/billingService';
+import { platformMeterReportService } from '@/lib/services/platformMeterReportService';
 import { aiBugTelemetryService } from '@/lib/services/aiBugTelemetryService';
 import { monitorBugEnrichmentService } from '@/lib/services/monitorBugEnrichmentService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
@@ -92,6 +93,8 @@ export const jobServices = {
   publicFollowDigest: publicFollowDigestService,
   automationEngine: automationEngineService,
   billing: billingService,
+  // The platform meter report (MOTIR-5286) — a settled container to motir-ai's rollup.
+  platformMeterReport: platformMeterReportService,
   aiBugTelemetry: aiBugTelemetryService,
   // The bug ENRICHMENT dispatch (MOTIR-5849) — a monitor-filed bug is planned by
   // motir-ai's `author_bug` job, dispatched post-commit.

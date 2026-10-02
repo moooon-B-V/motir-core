@@ -113,6 +113,15 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     },
   },
   {
+    // Story MOTIR-727 (MOTIR-735) — the operator console's platform usage reads.
+    flag: 'E2E_TEST_PLATFORM_USAGE',
+    message: 'motir-ai platform usage seam mocked.',
+    install: async (agent) => {
+      const { installPlatformUsageBoundaryMock } = await import('@/lib/test-platform-usage-mock');
+      installPlatformUsageBoundaryMock(agent);
+    },
+  },
+  {
     flag: 'E2E_TEST_LESSONS',
     message: 'motir-ai lesson-library seam mocked.',
     install: async (agent) => {

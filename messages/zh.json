@@ -8376,7 +8376,6 @@
       "users": "用户",
       "monitoring": "监控",
       "governance": "治理",
-      "soonUsage": "10.1",
       "soonGovernance": "10.3"
     },
     "topBar": {
@@ -8385,11 +8384,43 @@
       "searchPlaceholder": "搜索组织、工作区、项目、用户…"
     },
     "overview": {
-      "breadcrumb": "平台·总览",
-      "title": "平台总览",
-      "subtitle": "一眼看清全部租户——Motir托管了多少组织、工作区、项目和用户，以及各租户最近发生了什么。只读；租户治理在治理工具中。",
-      "pendingTitle": "租户数据尚未接入",
-      "pendingDescription": "这些统计和动态需要跨租户读取，属于带审计的跨租户读取层，由另一个工作项交付。控制台的准入、审计记录和外壳已就绪，数据会随之而来。"
+      "title": "平台概览",
+      "subtitle": "一眼看清整个平台——Motir 托管了多少组织、工作区、项目和用户，以及所有租户最近发生了什么。只读。",
+      "periodLabel": "时间段",
+      "period": {
+        "7d": "7 天",
+        "30d": "30 天",
+        "month": "本月"
+      },
+      "counts": {
+        "organizations": "组织",
+        "workspaces": "工作区",
+        "projects": "项目",
+        "users": "用户"
+      },
+      "delta": "最近 {period} +{count, number}",
+      "feed": {
+        "title": "最近活动",
+        "when": "时间",
+        "event": "事件",
+        "where": "位置",
+        "detail": "详情",
+        "kind": {
+          "new_organization": "新组织",
+          "new_workspace": "新工作区",
+          "new_project": "新项目",
+          "planning_run": "规划运行",
+          "coding_run": "智能体运行"
+        },
+        "unattributed": "（未归属）",
+        "runDetail": "{model} · {credits} 积分",
+        "runsUnavailable": "暂时无法显示运行记录——AI 服务没有响应。下方的租户事件和计数是最新的。",
+        "emptyTitle": "此处还没有活动",
+        "emptyDescription": "在此之前没有创建租户，也没有记录运行。",
+        "emptyEstateTitle": "平台还是空的",
+        "emptyEstateDescription": "还没有任何组织。新的组织、工作区、项目和运行会显示在这里。",
+        "older": "显示更早的活动"
+      }
     },
     "users": {
       "breadcrumb": "平台·用户",
@@ -8696,23 +8727,8 @@
       }
     },
     "orgs": {
-      "breadcrumb": "平台 · 租户",
-      "breadcrumbAria": "面包屑导航",
-      "crumbPlatform": "平台",
-      "crumbTenants": "租户",
       "title": "组织",
       "subtitle": "按名称或标识查找组织。打开任一组织都会记录一次跨租户读取。",
-      "searchLabel": "名称或标识",
-      "searchPlaceholder": "moooon、acme、northwind…",
-      "searchSubmit": "搜索",
-      "tooShort": "请至少输入 {n} 个字符。",
-      "idleTitle": "搜索组织",
-      "idleDescription": "在上方输入名称或标识。最多显示 {n} 条；你打开的每一条都会记入审计日志。",
-      "noneTitle": "没有匹配“{query}”的组织",
-      "noneDescription": "请检查拼写，或改用标识搜索。若某个组织确实存在却未显示，那是缺陷——此查找会读取全部租户，而不只是你所属的那些。",
-      "resultsTitle": "结果",
-      "resultsCount": "{n} 个组织",
-      "capped": "仅显示前 {n} 条匹配。请缩小查询范围以查看其余结果。",
       "auditBanner": "你正以平台staff身份查看 {name}。此次跨租户读取已记入审计日志（操作者 {operator}）。",
       "createdAt": "创建于 {at}",
       "paidAiPlan": "付费 AI 套餐",
@@ -8721,15 +8737,6 @@
       "chip": {
         "isMeta": "isMeta",
         "internalBilling": "internalBilling"
-      },
-      "pending": {
-        "usageTitle": "用量与成本",
-        "usageEmptyTitle": "尚未构建",
-        "membersTitle": "成员",
-        "membersEmptyTitle": "尚未构建",
-        "jobsTitle": "最近作业",
-        "jobsEmptyTitle": "尚未构建",
-        "broughtBy": "该面板属于 {owner}。此处画作预留区域而非占位数字——写个 0 会看起来像一个答案。"
       },
       "action": {
         "classify": "标记为内部计费",
@@ -8902,6 +8909,307 @@
         "notPermitted": "只有超级管理员可以更改规划模型。",
         "reasonRequired": "必须填写原因。",
         "failed": "无法保存更改。未做任何更改。"
+      }
+    },
+    "usage": {
+      "title": "用量与成本",
+      "subtitle": "整个平台用了多少、收取了多少积分、Motir 付出了多少成本——按消费类别和模型划分，可查看任意月份或全部时间。各组织的数据在“租户”页。",
+      "showing": "显示 {period}",
+      "period": {
+        "label": "时间段",
+        "month": "月份",
+        "allTime": "全部时间"
+      },
+      "units": {
+        "tokens": "token",
+        "minutes": "分钟",
+        "gbDays": "GB·天",
+        "searches": "次搜索",
+        "credits": "积分"
+      },
+      "figures": {
+        "charged": "已收积分",
+        "cost": "Motir 成本",
+        "machine": "机器分钟",
+        "orgs": "有消费的组织"
+      },
+      "categories": {
+        "title": "按类别的平台消费",
+        "category": "类别",
+        "usage": "用量",
+        "credits": "积分",
+        "cost": "Motir 成本",
+        "notCharged": "不收费",
+        "chargedTotal": "收费合计",
+        "totalInclIndexing": "含索引总计"
+      },
+      "category": {
+        "planning_tokens": "规划 token",
+        "agent_tokens": "智能体运行 token",
+        "agent_machine": "智能体运行机器",
+        "agent_instance": "智能体实例",
+        "agent_storage": "智能体存储",
+        "ci": "CI",
+        "search": "网页搜索",
+        "indexing": "索引"
+      },
+      "models": {
+        "title": {
+          "planning_tokens": "按模型的规划 token",
+          "agent_tokens": "按模型的智能体运行 token"
+        },
+        "model": "模型",
+        "input": "输入",
+        "output": "输出",
+        "cacheRead": "缓存读取",
+        "cacheWrite": "缓存写入",
+        "orgs": "使用的组织",
+        "credits": "积分",
+        "cost": "Motir 成本",
+        "empty": "此时间段没有使用任何模型。"
+      },
+      "unavailable": {
+        "title": "暂时无法显示用量",
+        "description": "保存用量汇总的 AI 服务没有响应。数据本身没有问题——请稍后再试。"
+      }
+    },
+    "tenants": {
+      "title": "租户",
+      "subtitle": "每个组织在该时间段的消费——各类别积分、索引分钟、收费合计以及 Motir 成本。打开一个组织可查看其工作区、项目和账单。",
+      "filterLabel": "筛选组织",
+      "filterPlaceholder": "按名称或标识筛选",
+      "listTitle": "组织",
+      "estateRow": "平台合计（所有组织）",
+      "columns": {
+        "organization": "组织",
+        "charged": "收费",
+        "cost": "Motir 成本",
+        "minutes": "分钟"
+      },
+      "none": "此时间段没有组织产生消费。",
+      "noneFiltered": "此时间段没有匹配“{filter}”的组织产生消费。",
+      "filterCapped": "匹配的组织超过一个列表能显示的数量——请缩小筛选范围。",
+      "showMore": "显示更多",
+      "loading": "加载中…",
+      "moreFailed": "暂时无法加载更多组织——请稍后再试。",
+      "unavailable": {
+        "title": "暂时无法显示列表",
+        "description": "保存用量汇总的 AI 服务没有响应。请稍后再试。"
+      }
+    },
+    "orgPage": {
+      "back": "租户",
+      "tabsLabel": "组织分区",
+      "tabs": {
+        "overview": "概览",
+        "usage": "用量与成本",
+        "billing": "账单与套餐"
+      },
+      "month": {
+        "title": "用量与成本 · {month}",
+        "open": "打开用量与成本",
+        "category": "类别",
+        "credits": "积分",
+        "cost": "Motir 成本",
+        "notCharged": "不收费",
+        "total": "合计",
+        "unavailable": "暂时无法显示本月用量——AI 服务没有响应。"
+      },
+      "members": {
+        "title": "成员",
+        "empty": "该组织没有成员。",
+        "next": "下一批成员",
+        "first": "第一批成员",
+        "role": {
+          "owner": "所有者",
+          "admin": "管理员",
+          "member": "成员"
+        }
+      },
+      "workspaces": {
+        "title": "工作区",
+        "empty": "该组织没有工作区。",
+        "name": "工作区",
+        "projects": "项目",
+        "members": "成员",
+        "credits": "本月积分",
+        "spendUnavailable": "暂时无法显示本月积分——AI 服务没有响应。",
+        "more": "工作区数量超过此列表显示的数量。"
+      },
+      "jobs": {
+        "title": "最近的任务",
+        "empty": "该组织没有记录任何规划或智能体运行。",
+        "unavailable": "暂时无法显示最近的任务——AI 服务没有响应。",
+        "newer": "更新",
+        "older": "更早"
+      }
+    },
+    "orgUsage": {
+      "scope": "范围",
+      "wholeOrg": "{name}（整个组织）",
+      "showing": "显示 {scope} · {period}",
+      "figures": {
+        "charged": "已收积分",
+        "cost": "Motir 成本（含索引）",
+        "machine": "机器分钟",
+        "balance": "当前积分余额",
+        "split": {
+          "agentRun": "智能体运行 {minutes}",
+          "instances": "实例 {minutes}",
+          "ci": "CI {minutes}",
+          "indexing": "索引 {minutes}"
+        }
+      },
+      "sheet": {
+        "title": "按类别和模型",
+        "category": "类别",
+        "usage": "用量",
+        "credits": "积分",
+        "cost": "Motir 成本",
+        "notCharged": "不收费",
+        "models": "{count, plural, other {# 个模型}}",
+        "chargedTotal": "收费合计",
+        "totalInclIndexing": "含索引总计",
+        "orgLevel": {
+          "workspace": "组织级——不按工作区拆分",
+          "project": "组织级——不按项目拆分"
+        }
+      },
+      "unavailable": {
+        "title": "暂时无法显示用量",
+        "description": "保存用量汇总的 AI 服务没有响应。上方的组织信息是最新的。"
+      },
+      "children": {
+        "title": "按工作区和项目",
+        "workspace": "工作区",
+        "project": "项目",
+        "indexingMinutes": "索引（分钟）",
+        "charged": "收费",
+        "cost": "Motir 成本",
+        "empty": "此范围下在该时间段没有消费。",
+        "loading": "正在加载项目…",
+        "projectsUnavailable": "暂时无法显示该工作区的项目。",
+        "noProjects": "该工作区在此时间段没有项目产生消费。",
+        "noProject": "未关联项目的智能体运行",
+        "orgLevel": "组织级（不按项目）",
+        "truncated": "仅显示 Motir 成本最高的 100 项。",
+        "projectScope": "项目下没有工作区或项目。",
+        "unavailable": "暂时无法显示此表——AI 服务没有响应。"
+      },
+      "months": {
+        "title": "按月",
+        "month": "月份",
+        "indexingMinutes": "索引（分钟）",
+        "charged": "收费",
+        "cost": "Motir 成本",
+        "allTime": "全部时间",
+        "empty": "还没有任何月份产生消费。",
+        "older": "更早的月份",
+        "newest": "最新的月份",
+        "unavailable": "暂时无法显示此表——AI 服务没有响应。"
+      }
+    },
+    "orgBilling": {
+      "readOnly": "{name} 的所有者在其“账单与套餐”页面看到的内容（只读）：没有更改套餐、管理付款或客户门户。更改租户的套餐或积分属于 Story 10.3。",
+      "disabled": {
+        "title": "未启用计费",
+        "description": "此部署不计费——没有可显示的套餐、额度或账单。"
+      },
+      "unavailable": {
+        "title": "暂时无法显示账单",
+        "description": "账单数据没有响应。上方的组织信息是最新的。"
+      },
+      "status": {
+        "active": "有效",
+        "past_due": "逾期",
+        "canceled": "已取消",
+        "incomplete": "未完成",
+        "trialing": "试用中",
+        "unpaid": "未付款",
+        "incomplete_expired": "已过期"
+      },
+      "seats": {
+        "title": "Motir",
+        "scaled": "按成员计席位——当前 {members, number} 人",
+        "free": "免费——未扩展（{members, number} 名成员）"
+      },
+      "ai": {
+        "title": "Motir AI",
+        "plan": "套餐",
+        "allotment": "额度",
+        "balance": "可用积分",
+        "renews": "续订",
+        "none": "无 AI 套餐",
+        "perMonth": "每月 {credits} 积分"
+      },
+      "bill": {
+        "title": "本月账单",
+        "line": "项目",
+        "basis": "计费依据",
+        "amount": "金额",
+        "lines": {
+          "seats": "Motir · 席位",
+          "aiPlan": "Motir AI · 套餐费",
+          "ci": "超出额度的 CI 分钟",
+          "search": "网页搜索",
+          "agents": "智能体（机器 + 存储）"
+        },
+        "seatsBasis": {
+          "monthly": "{seats, number} 个席位 × {unit} / 月",
+          "annual": "{seats, number} 个席位 × {unit} / 年"
+        },
+        "aiBasis": {
+          "monthly": "每月 {credits} 积分",
+          "annual": "每月 {credits} 积分，按年计费"
+        },
+        "drawnFromPool": "从积分池扣除",
+        "credits": "{credits} 积分",
+        "total": "合计",
+        "chargedOn": "于 {date} 扣款"
+      },
+      "payment": {
+        "title": "付款与发票",
+        "notConnected": "付款方式和发票尚未接入控制台。",
+        "unavailable": "暂时无法显示付款方式和发票。",
+        "none": "暂无发票。",
+        "noMethod": "未登记付款方式",
+        "expires": "{month} / {year} 到期",
+        "paidUp": "已结清",
+        "invoice": "发票",
+        "status": "状态",
+        "amount": "金额",
+        "invoiceStatus": {
+          "paid": "已支付",
+          "open": "待支付",
+          "draft": "草稿",
+          "void": "已作废",
+          "uncollectible": "无法收取"
+        }
+      }
+    },
+    "workspacePage": {
+      "auditBanner": "你正以平台人员身份（{operator}）查看 {org} › {name}。此跨租户读取已记录在审计日志中。",
+      "tabsLabel": "工作区分区",
+      "projects": {
+        "title": "项目 · {month}",
+        "empty": "该工作区没有项目。",
+        "name": "项目",
+        "key": "标识",
+        "planning": "规划",
+        "runsAndCi": "智能体运行 + CI",
+        "charged": "收费",
+        "spendUnavailable": "暂时无法显示本月消费——AI 服务没有响应。"
+      },
+      "members": {
+        "empty": "该工作区没有成员。",
+        "role": {
+          "manager": "经理",
+          "member": "成员",
+          "viewer": "查看者"
+        }
+      },
+      "jobs": {
+        "empty": "该工作区没有记录任何已归属的规划或智能体运行。"
       }
     }
   },

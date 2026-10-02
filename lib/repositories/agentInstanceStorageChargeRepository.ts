@@ -84,4 +84,45 @@ export const agentInstanceStorageChargeRepository = {
     });
     return result.count;
   },
+
+  /** One charged day as the platform meter report needs it (MOTIR-7294). */
+  async findForMeterReport(id: string, tx: Prisma.TransactionClient) {
+    return tx.agentInstanceStorageCharge.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        organizationId: true,
+        agentInstanceId: true,
+        day: true,
+        chargeOutcome: true,
+      },
+    });
+  },
+
+  /**
+   * The next CHARGED days motir-ai's rollup has not accepted yet, in id order after
+   * `afterId` — one bounded batch of the backfill (MOTIR-7294).
+   */
+  async listUnreportedCharged(afterId: string | null, take: number, tx: Prisma.TransactionClient) {
+    return tx.agentInstanceStorageCharge.findMany({
+      where: {
+        chargeOutcome: 'charged',
+        platformMeterReportedAt: null,
+        ...(afterId ? { id: { gt: afterId } } : {}),
+      },
+      orderBy: { id: 'asc' },
+      take,
+      select: { id: true, workspaceId: true },
+    });
+  },
+
+  /** Stamp a day's report as accepted. Only the first stamp lands. */
+  async markMeterReported(id: string, at: Date, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.agentInstanceStorageCharge.updateMany({
+      where: { id, platformMeterReportedAt: null },
+      data: { platformMeterReportedAt: at },
+    });
+    return result.count;
+  },
 };

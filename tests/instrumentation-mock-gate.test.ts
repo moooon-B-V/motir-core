@@ -57,6 +57,7 @@ const githubMerge = vi.hoisted(() => ({ installGithubMergeMock: vi.fn() }));
 const codeHealth = vi.hoisted(() => ({ installCodeHealthBoundaryMock: vi.fn() }));
 const aiJobs = vi.hoisted(() => ({ installAiJobsBoundaryMock: vi.fn() }));
 const lessons = vi.hoisted(() => ({ installLessonsBoundaryMock: vi.fn() }));
+const platformUsage = vi.hoisted(() => ({ installPlatformUsageBoundaryMock: vi.fn() }));
 const codeGraph = vi.hoisted(() => ({ installCodeGraphBoundaryMock: vi.fn() }));
 const hostedRun = vi.hoisted(() => ({ installHostedRunMock: vi.fn() }));
 const cimd = vi.hoisted(() => ({ installClientMetadataDocumentMock: vi.fn() }));
@@ -71,6 +72,7 @@ vi.mock('@/lib/test-github-merge-mock', () => githubMerge);
 vi.mock('@/lib/test-code-health-mock', () => codeHealth);
 vi.mock('@/lib/test-ai-jobs-mock', () => aiJobs);
 vi.mock('@/lib/test-lessons-mock', () => lessons);
+vi.mock('@/lib/test-platform-usage-mock', () => platformUsage);
 vi.mock('@/lib/test-code-graph-mock', () => codeGraph);
 vi.mock('@/lib/test-hosted-run-mock', () => hostedRun);
 vi.mock('@/lib/test-cimd-mock', () => cimd);
@@ -95,6 +97,8 @@ const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
   // that adds it to the shipped table, which is the whole point of the equality
   // assertion below: this file went red the moment the seam landed without it.
   E2E_TEST_LESSONS: [lessons.installLessonsBoundaryMock],
+  // MOTIR-735 — the operator console's platform usage seam (Story MOTIR-727).
+  E2E_TEST_PLATFORM_USAGE: [platformUsage.installPlatformUsageBoundaryMock],
   // MOTIR-3564 — the index-WRITER seam (the run-credential mint + the tarball
   // redirect). Registered HERE in the same change that adds it to the shipped
   // table, exactly as the note above describes: this file went red the moment the
