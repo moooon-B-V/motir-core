@@ -9098,6 +9098,31 @@
         "total": "合计",
         "chargedOn": "于 {date} 扣款"
       }
+    },
+    "workspacePage": {
+      "auditBanner": "你正以平台人员身份（{operator}）查看 {org} › {name}。此跨租户读取已记录在审计日志中。",
+      "tabsLabel": "工作区分区",
+      "projects": {
+        "title": "项目 · {month}",
+        "empty": "该工作区没有项目。",
+        "name": "项目",
+        "key": "标识",
+        "planning": "规划",
+        "runsAndCi": "智能体运行 + CI",
+        "charged": "收费",
+        "spendUnavailable": "暂时无法显示本月消费——AI 服务没有响应。"
+      },
+      "members": {
+        "empty": "该工作区没有成员。",
+        "role": {
+          "manager": "经理",
+          "member": "成员",
+          "viewer": "查看者"
+        }
+      },
+      "jobs": {
+        "empty": "该工作区没有记录任何已归属的规划或智能体运行。"
+      }
     }
   },
   "legal": {

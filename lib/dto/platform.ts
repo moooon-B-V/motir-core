@@ -347,3 +347,33 @@ export interface PlatformOrgUsageTabDTO {
   /** MONTH BY MONTH (MOTIR-7293), newest first, with the all-time row. */
   months: RawPlatformUsageMonths | null;
 }
+
+/** The workspace page beneath the org (MOTIR-7295, design D6) — one audited read. */
+export interface PlatformWorkspacePageDTO {
+  organization: { id: string; name: string };
+  workspace: { id: string; name: string; slug: string; createdAt: string };
+  month: string;
+  /** The workspace's projects with this month's spend; spend null when motir-ai could not be read. */
+  projects: {
+    id: string;
+    name: string;
+    key: string;
+    planningCredits: number | null;
+    runsAndCiCredits: number | null;
+    chargedCredits: number | null;
+  }[];
+  projectSpendUnavailable: boolean;
+  members: {
+    items: {
+      id: string;
+      userId: string;
+      name: string | null;
+      email: string;
+      role: 'manager' | 'member' | 'viewer';
+      joinedAt: string;
+    }[];
+    nextCursor: string | null;
+    total: number;
+  };
+  jobs: { items: PlatformActivityItemDTO[]; nextCursor: string | null; unavailable: boolean };
+}

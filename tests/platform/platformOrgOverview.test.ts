@@ -1,6 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
-import { NotPlatformStaffError, PlatformOrganizationNotFoundError } from '@/lib/platform/errors';
+import {
+  NotPlatformStaffError,
+  PlatformOrganizationNotFoundError,
+  PlatformWorkspaceNotFoundError,
+} from '@/lib/platform/errors';
 import type {
   RawPlatformRunsPage,
   RawPlatformUsage,
@@ -539,5 +543,117 @@ describe('the Usage tab’s two lists (MOTIR-7293)', () => {
         'all',
       ),
     ).toBeNull();
+  });
+});
+
+describe('platformOrgPageService.getWorkspacePage (MOTIR-7295)', () => {
+  it('reads the workspace, its projects’ spend, members and attributed jobs under ONE estate.read naming it', async () => {
+    const { workspace, owner } = await createTestWorkspace({ name: 'Eng' });
+    const orgId = workspace.organizationId;
+    const project = await createTestProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Mobile',
+      identifier: 'MOB',
+    });
+    const quiet = await createTestProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Quiet',
+      identifier: 'QUI',
+    });
+    const spent = row(project.id, 30);
+    spent.credits = {
+      ...spent.credits,
+      planning_tokens: 10,
+      agent_tokens: 8,
+      agent_machine: 7,
+      ci: 5,
+    };
+    childrenMock.mockResolvedValue({
+      period: '2026-10',
+      sort: 'cost',
+      level: 'workspace',
+      entityId: workspace.id,
+      childLevel: 'project',
+      items: [spent],
+      nextCursor: null,
+      remainder: null,
+    });
+    runsMock.mockResolvedValue({
+      items: [],
+      nextCursor: null,
+      codingRunsUnattributedExcluded: true,
+    });
+
+    const page = await platformOrgPageService.getWorkspacePage(
+      currentPrincipal!,
+      orgId,
+      workspace.id,
+      { now: NOW },
+    );
+    expect(childrenMock).toHaveBeenCalledWith(
+      expect.objectContaining({ level: 'workspace', entityId: workspace.id, period: '2026-10' }),
+    );
+    expect(runsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ coreWorkspaceId: workspace.id }),
+    );
+    const byName = Object.fromEntries(page.projects.map((p) => [p.name, p]));
+    expect(byName['Mobile']).toMatchObject({
+      key: 'MOB',
+      planningCredits: 10,
+      runsAndCiCredits: 20,
+      chargedCredits: 30,
+    });
+    expect(byName['Quiet']).toMatchObject({ key: 'QUI', planningCredits: 0, chargedCredits: 0 });
+    expect(quiet.id).toBeTruthy();
+    expect(page.members).toMatchObject({
+      total: 1,
+      items: [{ userId: owner.id, role: 'manager' }],
+    });
+
+    const audit = await adminDb.platformAuditLog.findMany();
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      action: 'estate.read',
+      targetKind: 'workspace',
+      targetId: workspace.id,
+    });
+  });
+
+  it('a workspace of another org is a not-found — no audit row, motir-ai never asked', async () => {
+    const mine = await createTestWorkspace({ name: 'Mine' });
+    const theirs = await createTestWorkspace({ name: 'Theirs' });
+    await expect(
+      platformOrgPageService.getWorkspacePage(
+        currentPrincipal!,
+        mine.workspace.organizationId,
+        theirs.workspace.id,
+      ),
+    ).rejects.toBeInstanceOf(PlatformWorkspaceNotFoundError);
+    expect(childrenMock).not.toHaveBeenCalled();
+    expect(runsMock).not.toHaveBeenCalled();
+    expect(await adminDb.platformAuditLog.count()).toBe(0);
+  });
+
+  it('motir-ai unreachable: spend and jobs say so, members still render', async () => {
+    const { workspace, owner } = await createTestWorkspace({ name: 'Solo' });
+    await createTestProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'P',
+      identifier: 'PPP',
+    });
+    childrenMock.mockRejectedValue(new Error('down'));
+    runsMock.mockRejectedValue(new Error('down'));
+    const page = await platformOrgPageService.getWorkspacePage(
+      currentPrincipal!,
+      workspace.organizationId,
+      workspace.id,
+    );
+    expect(page.projectSpendUnavailable).toBe(true);
+    expect(page.projects[0]).toMatchObject({ chargedCredits: null });
+    expect(page.jobs.unavailable).toBe(true);
+    expect(page.members.total).toBe(1);
   });
 });

@@ -132,6 +132,65 @@ export const platformEstateRepository = {
     });
   },
 
+  /**
+   * One workspace, ONLY when it belongs to `organizationId` — the workspace page's
+   * guard against an org/workspace pair someone typed (MOTIR-7295).
+   */
+  async findWorkspaceInOrganization(
+    organizationId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    return tx.workspace.findFirst({
+      where: { id: workspaceId, organizationId },
+      select: { id: true, name: true, slug: true, createdAt: true },
+    });
+  },
+
+  /** A workspace's projects with their keys, for the workspace page (MOTIR-7295). */
+  async listProjectsForWorkspace(workspaceId: string, take: number, tx: Prisma.TransactionClient) {
+    return tx.project.findMany({
+      where: { workspaceId },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      take,
+      select: { id: true, name: true, identifier: true },
+    });
+  },
+
+  /** One keyset page of a workspace's MEMBERS, oldest first on `(createdAt, id)` (MOTIR-7295). */
+  async listWorkspaceMembers(
+    workspaceId: string,
+    input: { take: number; after: { at: Date; id: string } | null },
+    tx: Prisma.TransactionClient,
+  ) {
+    return tx.workspaceMembership.findMany({
+      where: {
+        workspaceId,
+        ...(input.after
+          ? {
+              OR: [
+                { createdAt: { gt: input.after.at } },
+                { createdAt: input.after.at, id: { gt: input.after.id } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: input.take,
+      select: {
+        id: true,
+        workspaceRole: true,
+        createdAt: true,
+        user: { select: { id: true, name: true, email: true } },
+      },
+    });
+  },
+
+  /** How many accounts hold a membership of one workspace. */
+  async countWorkspaceMembers(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.workspaceMembership.count({ where: { workspaceId } });
+  },
+
   /** How many accounts hold a membership of one organization. */
   async countOrganizationMembers(
     organizationId: string,

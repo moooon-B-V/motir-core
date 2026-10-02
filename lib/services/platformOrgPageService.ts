@@ -15,6 +15,7 @@ import type {
   PlatformOrgOverviewDTO,
   PlatformOrgUsageScope,
   PlatformOrgUsageTabDTO,
+  PlatformWorkspacePageDTO,
 } from '@/lib/dto/platform';
 import {
   toPlatformAuditLogDTO,
@@ -24,7 +25,10 @@ import {
 } from '@/lib/mappers/platformMappers';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { withPlatformRead } from '@/lib/platform/context';
-import { PlatformOrganizationNotFoundError } from '@/lib/platform/errors';
+import {
+  PlatformOrganizationNotFoundError,
+  PlatformWorkspaceNotFoundError,
+} from '@/lib/platform/errors';
 import { currentMonth } from '@/lib/platform/spend';
 import { platformAuditLogRepository } from '@/lib/repositories/platformAuditLogRepository';
 import { platformEstateRepository } from '@/lib/repositories/platformEstateRepository';
@@ -381,6 +385,126 @@ export const platformOrgPageService = {
     return {
       rows: page.items.map((r) => ({ ...r, name: names.get(r.entityId) ?? r.entityId })),
       truncated: page.nextCursor !== null,
+    };
+  },
+
+  /**
+   * The WORKSPACE PAGE beneath the org (MOTIR-7295, design D6): its projects with
+   * this month's spend, its members (keyset) and its attributed recent jobs.
+   *
+   * The pair in the URL is checked FIRST: ONE audited `estate.read` naming the
+   * workspace reads it only if it belongs to the org — anything else throws inside
+   * the read (404, no audit row) and motir-ai is never asked. Then motir-ai's two
+   * reads, each failing to its region's unavailable state.
+   */
+  async getWorkspacePage(
+    principal: PlatformPrincipal,
+    organizationId: string,
+    workspaceId: string,
+    input: { membersCursor?: string | null; jobsCursor?: string | null; now?: Date } = {},
+  ): Promise<PlatformWorkspacePageDTO> {
+    await requirePlatformStaff('support');
+    const month = currentMonth(input.now);
+    const membersAfter = decodeCursor(input.membersCursor);
+
+    const local = await withPlatformRead(
+      principal,
+      { action: 'estate.read', targetKind: 'workspace', targetId: workspaceId, organizationId },
+      async (tx) => {
+        const org = await platformOrganizationRepository.findOrganizationById(organizationId, tx);
+        const workspace = org
+          ? await platformEstateRepository.findWorkspaceInOrganization(
+              organizationId,
+              workspaceId,
+              tx,
+            )
+          : null;
+        if (!org || !workspace) throw new PlatformWorkspaceNotFoundError(workspaceId);
+        const projects = await platformEstateRepository.listProjectsForWorkspace(
+          workspaceId,
+          ORG_SCOPE_PROJECT_LIMIT,
+          tx,
+        );
+        const memberRows = await platformEstateRepository.listWorkspaceMembers(
+          workspaceId,
+          { take: ORG_MEMBERS_PAGE + 1, after: membersAfter },
+          tx,
+        );
+        const memberTotal = await platformEstateRepository.countWorkspaceMembers(workspaceId, tx);
+        return { org, workspace, projects, memberRows, memberTotal };
+      },
+    );
+
+    const [children, runs] = (await Promise.all([
+      settle(
+        getPlatformUsageChildren({
+          period: month,
+          level: 'workspace',
+          entityId: workspaceId,
+          sort: 'cost',
+          limit: ORG_CHILDREN_LIMIT,
+        }),
+      ),
+      settle(
+        getPlatformRuns({
+          coreWorkspaceId: workspaceId,
+          limit: ORG_JOBS_PAGE,
+          cursor: input.jobsCursor ?? null,
+        }),
+      ),
+    ])) as [RawPlatformUsageChildren | null, RawPlatformRunsPage | null];
+
+    const spend = new Map((children?.items ?? []).map((r) => [r.entityId, r]));
+    const names = new Map<string, string>([
+      [local.org.id, local.org.name],
+      [local.workspace.id, local.workspace.name],
+      ...local.projects.map((p) => [p.id, p.name] as const),
+    ]);
+    const members = local.memberRows.slice(0, ORG_MEMBERS_PAGE);
+    const lastMember = members[members.length - 1];
+
+    return {
+      organization: { id: local.org.id, name: local.org.name },
+      workspace: { ...local.workspace, createdAt: local.workspace.createdAt.toISOString() },
+      month,
+      projects: local.projects.map((p) => {
+        const r = spend.get(p.id);
+        // No row = no spend this month — unless the list was cut off or unread.
+        const known = children !== null && (r !== undefined || children.nextCursor === null);
+        return {
+          id: p.id,
+          name: p.name,
+          key: p.identifier,
+          planningCredits: known ? (r?.credits.planning_tokens ?? 0) : null,
+          runsAndCiCredits: known
+            ? r
+              ? r.credits.agent_tokens + r.credits.agent_machine + r.credits.ci
+              : 0
+            : null,
+          chargedCredits: known ? (r?.chargedCredits ?? 0) : null,
+        };
+      }),
+      projectSpendUnavailable: children === null,
+      members: {
+        items: members.map((m) => ({
+          id: m.id,
+          userId: m.user.id,
+          name: m.user.name,
+          email: m.user.email,
+          role: m.workspaceRole,
+          joinedAt: m.createdAt.toISOString(),
+        })),
+        nextCursor:
+          local.memberRows.length > ORG_MEMBERS_PAGE && lastMember
+            ? encodeCursor(lastMember.createdAt, lastMember.id)
+            : null,
+        total: local.memberTotal,
+      },
+      jobs: {
+        items: (runs?.items ?? []).map((r) => toPlatformRunActivityDTO(r, names)),
+        nextCursor: runs?.nextCursor ?? null,
+        unavailable: runs === null,
+      },
     };
   },
 };

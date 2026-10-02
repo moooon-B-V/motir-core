@@ -136,3 +136,17 @@ export class PlatformClassificationStateError extends Error {
     this.name = 'PlatformClassificationStateError';
   }
 }
+
+/**
+ * The workspace page's pair (MOTIR-7295) names no workspace OF THAT ORGANIZATION —
+ * a missing workspace, or one belonging to another org. Thrown inside the audited
+ * read so it leaves no audit row; the page answers 404.
+ */
+export class PlatformWorkspaceNotFoundError extends Error {
+  readonly code = 'PLATFORM_WORKSPACE_NOT_FOUND';
+
+  constructor(readonly workspaceId: string) {
+    super(`No workspace ${workspaceId} in this organization.`);
+    this.name = 'PlatformWorkspaceNotFoundError';
+  }
+}

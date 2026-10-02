@@ -9102,6 +9102,31 @@
         "total": "Total",
         "chargedOn": "charged on {date}"
       }
+    },
+    "workspacePage": {
+      "auditBanner": "You are viewing {org} › {name} as platform staff ({operator}). This cross-tenant read is recorded in the audit log.",
+      "tabsLabel": "Workspace sections",
+      "projects": {
+        "title": "Projects · {month}",
+        "empty": "This workspace has no projects.",
+        "name": "Project",
+        "key": "Key",
+        "planning": "Planning",
+        "runsAndCi": "Agent runs + CI",
+        "charged": "Charged",
+        "spendUnavailable": "This month's spend can't be shown right now — the AI service did not answer."
+      },
+      "members": {
+        "empty": "This workspace has no members.",
+        "role": {
+          "manager": "Manager",
+          "member": "Member",
+          "viewer": "Viewer"
+        }
+      },
+      "jobs": {
+        "empty": "No attributed planning or agent run was recorded for this workspace."
+      }
     }
   },
   "legal": {
