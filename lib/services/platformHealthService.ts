@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { deploymentIdentity } from '@/lib/deployment/identity';
+import { deploymentStatusProvider } from '@/lib/deployment/providers';
 import type {
   PlatformHealthDTO,
   PlatformOverdueScheduleDTO,
@@ -187,7 +188,7 @@ export const platformHealthService = {
     const [database, hosting, gateway, scheduleSignal, failedJobs, errors, lastHealthCheck] =
       await Promise.all([
         databaseSignal(),
-        Promise.resolve(hostingSignal()),
+        hostingSignal(),
         gatewaySignal(),
         scheduleSignalFrom(schedules),
         failedJobsSignal(now),
@@ -312,34 +313,84 @@ async function databaseSignal(): Promise<PlatformSignalDTO> {
 }
 
 /**
- * Where the app is running.
+ * Where the app is running, and whether all of it is (MOTIR-1167, MOTIR-7332).
  *
  * ⚠️ THE PROVIDER KNOWLEDGE IS NOT HERE, AND MUST NOT COME BACK.
  * `docs/decisions/ci-runner-fleet.md` §4 rule 1 keeps `lib/` provider-agnostic,
  * and `tests/ciFleet/orchestratorPortBoundary.test.ts` enforces it by scanning
- * SOURCE — so this service reads a neutral `DeploymentIdentity` and names no
- * platform, no environment variable and no dashboard host. The one file allowed
- * to know is `lib/deployment/identity.ts`, which carries the whole argument
- * including why a machine COUNT is not among the things it answers.
+ * SOURCE — so this service reads a neutral `DeploymentIdentity` (where THIS
+ * process is) and a neutral `DeploymentStatus` (how many of its siblings run,
+ * through the port in `lib/deployment/deploymentStatus.ts`), and names no
+ * platform, no environment variable and no dashboard host.
  *
  * (This service failed that guard on its first push, with three raw `FLY_*`
  * reads inline. The guard was right and the fix is the accessor, not an
  * exemption for a service.)
+ *
+ * The verdict, in order:
+ * - not on a managed host → `unreachable` / `notManaged`, unchanged;
+ * - no read credential → `unreachable` / `noReadCredential`, still carrying the
+ *   process's own identity (app, region, machine), which is a reading taken from
+ *   inside and counts nothing;
+ * - the read throws → `unreachable` / `readFailed`, never an empty fleet;
+ * - a group short of its expectation → `degraded` / `shortGroup`;
+ * - running machines on more than one release → `degraded` / `mixedReleases`;
+ * - otherwise `healthy`.
  */
-function hostingSignal(): PlatformSignalDTO {
+async function hostingSignal(): Promise<PlatformSignalDTO> {
   const deployment = deploymentIdentity();
   if (!deployment.app) return unreachable('hosting', 'notManaged', null);
 
-  return {
-    id: 'hosting',
-    state: 'healthy',
-    values: {
-      app: deployment.app,
-      region: deployment.region ?? '—',
-      machineId: deployment.instanceId ?? '—',
-    },
-    linkOut: deployment.dashboardUrl,
+  const identity = {
+    app: deployment.app,
+    region: deployment.region ?? '—',
+    machineId: deployment.instanceId ?? '—',
   };
+  const provider = await deploymentStatusProvider();
+  if (!provider || !provider.configured()) {
+    return {
+      id: 'hosting',
+      state: 'unreachable',
+      values: { reason: 'noReadCredential', ...identity },
+      linkOut: deployment.dashboardUrl,
+    };
+  }
+
+  const status = await probe(() => provider.read());
+  if (!status) return unreachable('hosting', 'readFailed', deployment.dashboardUrl);
+
+  const counts: Record<string, number> = {};
+  for (const group of status.groups) {
+    counts[`${group.name}Started`] = group.started;
+    counts[`${group.name}Expected`] = group.expected;
+  }
+  const release = status.releases[0] ?? '—';
+  const values: Record<string, string | number> = { ...identity, ...counts, release };
+
+  const short = status.groups.find((group) => group.started < group.expected);
+  if (short) {
+    return {
+      id: 'hosting',
+      state: 'degraded',
+      values: {
+        ...values,
+        reason: 'shortGroup',
+        group: short.name,
+        started: short.started,
+        expected: short.expected,
+      },
+      linkOut: deployment.dashboardUrl,
+    };
+  }
+  if (status.releases.length > 1) {
+    return {
+      id: 'hosting',
+      state: 'degraded',
+      values: { ...values, reason: 'mixedReleases', count: status.releases.length },
+      linkOut: deployment.dashboardUrl,
+    };
+  }
+  return { id: 'hosting', state: 'healthy', values, linkOut: deployment.dashboardUrl };
 }
 
 /**

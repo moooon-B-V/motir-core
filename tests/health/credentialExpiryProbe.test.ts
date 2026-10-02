@@ -141,6 +141,9 @@ describe('CREDENTIAL_REGISTRY', () => {
     const billing = CREDENTIAL_REGISTRY.find((c) => c.envVar === 'GITHUB_BILLING_TOKEN');
 
     expect(billing).toMatchObject({ expiresAt: '2027-07-31' });
+    // MOTIR-7332 registers the Fly read token, at the date MOTIR-7331 recorded.
+    const flyRead = CREDENTIAL_REGISTRY.find((c) => c.envVar === 'FLY_DEPLOYMENT_READ_TOKEN');
+    expect(flyRead).toMatchObject({ expiresAt: '2046-09-27' });
     for (const entry of CREDENTIAL_REGISTRY) {
       expect(Number.isNaN(Date.parse(`${entry.expiresAt}T00:00:00.000Z`))).toBe(false);
       expect(entry.source.length).toBeGreaterThan(0);

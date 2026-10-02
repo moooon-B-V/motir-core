@@ -26,6 +26,17 @@ export type PlatformSignalState = 'healthy' | 'degraded' | 'unreachable';
 /** Which signal a card is — the key the UI resolves its copy and icon from. */
 export type PlatformSignalId =
   | 'database'
+  /**
+   * The web deployment (MOTIR-1167, MOTIR-7332). `values` always carry the
+   * process's own identity — `app`, `region`, `machineId` — once on a managed
+   * host. On a read they add `<group>Started` / `<group>Expected` per process
+   * group (`appStarted`, `appExpected`, `workerStarted`, `workerExpected`) and
+   * `release` (the newest release a running machine carries). Degraded adds
+   * `reason`: `shortGroup` with `group`, `started` and `expected` for the first
+   * group short of its expectation, or `mixedReleases` with `count` (distinct
+   * releases running). Unreachable: `reason` — `notManaged` (no values),
+   * `noReadCredential` (identity only, no counts) or `readFailed` (no values).
+   */
   | 'hosting'
   /**
    * motir-gateway (MOTIR-742). `values` when it answers: `ms` (latency),

@@ -8579,10 +8579,14 @@
           "value": "Answering from {region}",
           "detail": "Fly app {app} · machine {machineId}. This is the machine serving you — the fleet's size lives in the Fly dashboard, and the per-provider board is Story 10.2.",
           "unreachable": {
-            "notManaged": "Not a managed host"
+            "notManaged": "Not a managed host",
+            "noReadCredential": "Answering from {region}",
+            "readFailed": "No answer from Fly"
           },
           "unreachableDetail": {
-            "notManaged": "This build is not running on Fly, so there is no hosting dashboard to point at. Expected on a local or self-hosted instance."
+            "notManaged": "This build is not running on Fly, so there is no hosting dashboard to point at. Expected on a local or self-hosted instance.",
+            "noReadCredential": "Fly app {app} · machine {machineId}. This console holds no Fly read token yet, so it can't count machines or releases. This is not a count of zero.",
+            "readFailed": "The machine list could not be read just now. This is not a count of zero."
           },
           "linkOut": "Fly dashboard"
         },

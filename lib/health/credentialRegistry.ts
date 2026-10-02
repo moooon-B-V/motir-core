@@ -19,8 +19,8 @@
 //
 // ADDING A CREDENTIAL is one entry here and nothing else: the probe
 // (`credentialExpiryProbe.ts`) iterates the registry and knows no names. Each
-// later credential is registered by the card that introduces it — 10.2.4b
-// (MOTIR-7332) does so for `FLY_DEPLOYMENT_READ_TOKEN`. A credential that does
+// later credential is registered by the card that introduces it, as 10.2.4b
+// (MOTIR-7332) did for `FLY_DEPLOYMENT_READ_TOKEN`. A credential that does
 // not expire (`SENTRY_READ_TOKEN`, MOTIR-739) is not registered at all.
 
 /** One credential whose expiry is watched by the daily health check. */
@@ -64,5 +64,17 @@ export const CREDENTIAL_REGISTRY: readonly DeclaredCredential[] = [
       'mint a replacement fine-grained token the way MOTIR-1908 did, then ' +
       "`fly secrets set GITHUB_BILLING_TOKEN=… -a motir-core` and move this entry's expiresAt",
     source: 'MOTIR-1908, the manual card that minted it (expiry as recorded on MOTIR-1933)',
+  },
+  {
+    envVar: 'FLY_DEPLOYMENT_READ_TOKEN',
+    name: "Fly read-only org token (the operator console's Hosting card)",
+    // Fly's default lifetime: it was minted without `--expiry`, by the owner's
+    // decision. Far off, and declared anyway, so a re-mint with a shorter life is
+    // one edit here rather than a credential nobody watches.
+    expiresAt: '2046-09-27',
+    renewal:
+      'mint a replacement with `fly tokens create readonly moooon` the way MOTIR-7331 did, then ' +
+      "`fly secrets set FLY_DEPLOYMENT_READ_TOKEN=… -a motir-core` and move this entry's expiresAt",
+    source: 'MOTIR-7331, the manual card that minted it (expiry read from `fly tokens list`)',
   },
 ];

@@ -7,6 +7,8 @@ import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthServic
 import { databaseHealthRepository } from '@/lib/repositories/databaseHealthRepository';
 import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
+import { flyDeploymentStatusProvider } from '@/lib/deployment/adapters/fly/flyMachinesStatus';
+import type { DeploymentStatus } from '@/lib/deployment/deploymentStatus';
 import { httpGatewayStatusReader } from '@/lib/gateway/statusClient';
 import { httpErrorCountReader } from '@/lib/monitoring/sentryErrorCount';
 import { createTestUser } from '../fixtures/userFixtures';
@@ -397,10 +399,11 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
     vi.stubEnv('FLY_APP_NAME', 'motir-core-test');
     vi.stubEnv('FLY_REGION', '');
     vi.stubEnv('FLY_MACHINE_ID', '');
+    vi.stubEnv('FLY_DEPLOYMENT_READ_TOKEN', '');
+    vi.stubEnv('MOTIR_E2E_FAKE_DEPLOYMENT_STATUS', '');
 
     const hosting = signal((await platformHealthService.read(currentPrincipal)).signals, 'hosting');
     expect(hosting).toMatchObject({
-      state: 'healthy',
       values: { app: 'motir-core-test', region: '—', machineId: '—' },
       linkOut: 'https://fly.io/apps/motir-core-test',
     });
@@ -561,6 +564,114 @@ describe('the gateway signal (MOTIR-742)', () => {
     });
     // Nothing to ask, so nothing is asked.
     expect(read).not.toHaveBeenCalled();
+  });
+});
+
+describe('the hosting signal reads the fleet (MOTIR-7332)', () => {
+  const STATUS: DeploymentStatus = {
+    groups: [
+      { name: 'app', started: 2, total: 2, expected: 2 },
+      { name: 'worker', started: 1, total: 1, expected: 1 },
+    ],
+    releases: ['deployment-01K6HXQ8'],
+  };
+
+  function onFly(token = 'fo1_read') {
+    vi.stubEnv('FLY_APP_NAME', 'motir-core');
+    vi.stubEnv('FLY_REGION', 'iad');
+    vi.stubEnv('FLY_MACHINE_ID', 'web1');
+    vi.stubEnv('FLY_DEPLOYMENT_READ_TOKEN', token);
+    vi.stubEnv('MOTIR_E2E_FAKE_DEPLOYMENT_STATUS', '');
+  }
+
+  async function hosting() {
+    return signal((await platformHealthService.read(currentPrincipal)).signals, 'hosting');
+  }
+
+  it('is healthy with every group at its expectation on one release', async () => {
+    onFly();
+    vi.spyOn(flyDeploymentStatusProvider, 'read').mockResolvedValue(STATUS);
+
+    expect(await hosting()).toEqual({
+      id: 'hosting',
+      state: 'healthy',
+      values: {
+        app: 'motir-core',
+        region: 'iad',
+        machineId: 'web1',
+        appStarted: 2,
+        appExpected: 2,
+        workerStarted: 1,
+        workerExpected: 1,
+        release: 'deployment-01K6HXQ8',
+      },
+      linkOut: 'https://fly.io/apps/motir-core',
+    });
+  });
+
+  it('is degraded with shortGroup naming the group that is short', async () => {
+    onFly();
+    vi.spyOn(flyDeploymentStatusProvider, 'read').mockResolvedValue({
+      ...STATUS,
+      groups: [{ name: 'app', started: 1, total: 2, expected: 2 }, STATUS.groups[1]],
+    });
+
+    const card = await hosting();
+    expect(card.state).toBe('degraded');
+    expect(card.values).toMatchObject({
+      reason: 'shortGroup',
+      group: 'app',
+      started: 1,
+      expected: 2,
+      appStarted: 1,
+      release: 'deployment-01K6HXQ8',
+    });
+  });
+
+  it('is degraded with mixedReleases when running machines carry two releases', async () => {
+    onFly();
+    vi.spyOn(flyDeploymentStatusProvider, 'read').mockResolvedValue({
+      ...STATUS,
+      releases: ['deployment-new', 'deployment-old'],
+    });
+
+    const card = await hosting();
+    expect(card.state).toBe('degraded');
+    expect(card.values).toMatchObject({
+      reason: 'mixedReleases',
+      count: 2,
+      release: 'deployment-new',
+    });
+  });
+
+  it('with no read token says noReadCredential, keeps the identity and counts nothing', async () => {
+    onFly('');
+    const read = vi.spyOn(flyDeploymentStatusProvider, 'read');
+
+    const card = await hosting();
+    expect(card).toMatchObject({
+      state: 'unreachable',
+      values: { reason: 'noReadCredential', app: 'motir-core', region: 'iad', machineId: 'web1' },
+      linkOut: 'https://fly.io/apps/motir-core',
+    });
+    expect(Object.values(card.values).some((v) => typeof v === 'number')).toBe(false);
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('a failed read is unreachable with no number, and the rest of the board still returns', async () => {
+    onFly();
+    vi.spyOn(flyDeploymentStatusProvider, 'read').mockRejectedValue(new Error('Fly answered 401'));
+
+    const health = await platformHealthService.read(currentPrincipal);
+    const card = signal(health.signals, 'hosting');
+    expect(card).toEqual({
+      id: 'hosting',
+      state: 'unreachable',
+      values: { reason: 'readFailed' },
+      linkOut: 'https://fly.io/apps/motir-core',
+    });
+    expect(health.signals).toHaveLength(7);
+    expect(signal(health.signals, 'database').state).toBe('healthy');
   });
 });
 

@@ -8575,10 +8575,14 @@
           "value": "由 {region} 响应",
           "detail": "Fly 应用 {app} · 机器 {machineId}。这是正在为你服务的机器；机器总数请看 Fly 控制台，分服务商看板属于故事 10.2。",
           "unreachable": {
-            "notManaged": "非托管环境"
+            "notManaged": "非托管环境",
+            "noReadCredential": "由 {region} 响应",
+            "readFailed": "Fly 没有响应"
           },
           "unreachableDetail": {
-            "notManaged": "此构建没有运行在 Fly 上，因此没有可跳转的托管控制台。本地或自托管实例出现这种情况是正常的。"
+            "notManaged": "此构建没有运行在 Fly 上，因此没有可跳转的托管控制台。本地或自托管实例出现这种情况是正常的。",
+            "noReadCredential": "Fly 应用 {app} · 机器 {machineId}。本控制台还没有 Fly 读取令牌，因此无法统计机器或版本。这不是数量为零。",
+            "readFailed": "刚才没能读到机器列表。这不是数量为零。"
           },
           "linkOut": "Fly 控制台"
         },
