@@ -10,6 +10,8 @@ import {
   type AutoPlanPauseView,
 } from '@/app/(authed)/settings/project/ai-planning/_components/AiPlanningSettingsEditor';
 import type { ProjectAiSettingsDto } from '@/lib/dto/projectAiSettings';
+import enMessages from '@/messages/en.json';
+import zhMessages from '@/messages/zh.json';
 
 // AiPlanningSettingsEditor (Story 7.13 · Subtask MOTIR-919) — the AI-planning
 // settings panel, per design/ai-settings/. Driven under happy-dom (DB-free): the
@@ -35,7 +37,6 @@ function dto(over: Partial<ProjectAiSettingsDto> = {}): ProjectAiSettingsDto {
     aiAutoPlanThreshold: 5,
     aiSprintPlanningEnabled: false,
     aiSprintLengthDays: 2,
-    aiPlannerModel: null,
     aiGenerateExplanations: false,
     // MOTIR-3349 — ON by default, resolved from a NULL column by the mapper, so
     // the panel receives a real boolean and never re-derives the default.
@@ -129,18 +130,22 @@ describe('AiPlanningSettingsEditor — the four cards', () => {
     expect(screen.getAllByRole('switch')).toHaveLength(4);
     expect(explanationsSwitch().getAttribute('aria-checked')).toBe('false');
 
-    // The planner-model picker offers the SHIPPED model set (no invented names).
-    expect(screen.getByRole('combobox', { name: 'Planner model' })).toBeTruthy();
-    expect(screen.getByText('Default')).toBeTruthy();
+    // NO planner-model control (MOTIR-7228): the model that plans is a platform
+    // setting. The Planner card keeps its title, takes the delta's sub-copy, and
+    // names no model anywhere — not as a control, not read-only, not in a sentence.
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.queryByText('Planner model')).toBeNull();
+    expect(screen.getByText('Planner')).toBeTruthy();
+    expect(screen.getByText('How the planner writes for this project.')).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/\bmodel\b/i);
   });
 
-  it('seeds every control from the persisted settings (incl. a pinned planner model)', () => {
+  it('seeds every control from the persisted settings', () => {
     mount({
       aiAutoPlanEnabled: true,
       aiAutoPlanThreshold: 8,
       aiSprintPlanningEnabled: true,
       aiSprintLengthDays: 4,
-      aiPlannerModel: 'deepseek-v4-pro',
       aiGenerateExplanations: true,
     });
 
@@ -148,7 +153,6 @@ describe('AiPlanningSettingsEditor — the four cards', () => {
     expect(threshold().value).toBe('8');
     expect(sprintLength().value).toBe('4');
     expect(explanationsSwitch().getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByText('Thorough')).toBeTruthy();
   });
 
   it('labels each switch BY REFERENCE to its visible text (the name cannot drift)', () => {
@@ -304,23 +308,21 @@ describe('AiPlanningSettingsEditor — save', () => {
       aiSprintPlanningEnabled: false,
       aiSprintLengthDays: 2,
       aiGenerateExplanations: false,
-      aiPlannerModel: null, // the Default row CLEARS the override
       aiRecordPlanningMistakes: true, // ON, and sent on every save
     });
     // Optimistic + reconciled: the footer settles back to not-dirty.
     await waitFor(() => expect(saveButton().disabled).toBe(true));
   });
 
-  it('sends the pinned model id when one is selected', async () => {
-    mount({ aiPlannerModel: 'deepseek-v4-pro', aiGenerateExplanations: true });
+  it('never sends a planner model — the key is not in the PATCH at all (MOTIR-7228)', async () => {
+    mount({ aiGenerateExplanations: true });
     fireEvent.click(explanationsSwitch());
     fireEvent.click(saveButton());
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)).toMatchObject({
-      aiPlannerModel: 'deepseek-v4-pro',
-      aiGenerateExplanations: false,
-    });
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body).toMatchObject({ aiGenerateExplanations: false });
+    expect(Object.keys(body).some((k) => /model/i.test(k))).toBe(false);
   });
 
   it('REVERTS the optimistic snapshot when the save fails', async () => {
@@ -618,6 +620,49 @@ describe('AiPlanningSettingsEditor — planning mistakes (MOTIR-3352)', () => {
     // that a Save exists somewhere would pass with it still on `Planner`.
     const owningCard = saveButton().closest('section, div[class*="rounded"]');
     expect(owningCard?.textContent).toContain('Planning mistakes');
-    expect(owningCard?.textContent).not.toContain('Planner model');
+    expect(owningCard?.textContent).not.toContain('Draft a why for each item');
+  });
+});
+
+describe('the planner model has left the copy, in both locales (MOTIR-7228)', () => {
+  // Asserted on the CATALOGS, so a zh string that still names a model is caught
+  // without rendering the room in zh. The model is a platform setting now.
+  const catalogs = [
+    ['en', enMessages],
+    ['zh', zhMessages],
+  ] as const;
+
+  it('deletes the six picker keys and rewrites the sub-copy', () => {
+    for (const [lang, messages] of catalogs) {
+      const planner = messages.settings.aiPlanning.planner as Record<string, string>;
+      for (const key of [
+        'modelLabel',
+        'modelHint',
+        'modelDefault',
+        'modelDefaultSecondary',
+        'modelThorough',
+        'modelFast',
+      ]) {
+        expect(planner[key], `${lang}.settings.aiPlanning.planner.${key}`).toBeUndefined();
+      }
+    }
+    expect(enMessages.settings.aiPlanning.planner.subtitle).toBe(
+      'How the planner writes for this project.',
+    );
+    expect(zhMessages.settings.aiPlanning.planner.subtitle).toBe('规划器如何为该项目撰写内容。');
+  });
+
+  it('the page description, the permission and the refusal line name no model', () => {
+    for (const [lang, messages] of catalogs) {
+      const lines = [
+        messages.settings.aiPlanning.pageDescription,
+        messages.settings.aiPlanning.planner.subtitle,
+        messages.permissions.ai_configure.description,
+        messages.settings.noAccess.section['ai-planning'],
+      ];
+      for (const line of lines) {
+        expect(line, `${lang}: "${line}"`).not.toMatch(/model|模型/i);
+      }
+    }
   });
 });

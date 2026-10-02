@@ -13,7 +13,6 @@ import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
 import {
   AI_AUTO_PLAN_THRESHOLD_MAX,
   AI_AUTO_PLAN_THRESHOLD_MIN,
-  AI_PLANNER_MODEL_MAX_LENGTH,
   AI_SPRINT_LENGTH_DAYS_MAX,
   AI_SPRINT_LENGTH_DAYS_MIN,
 } from '@/lib/projectAiSettings/limits';
@@ -31,9 +30,12 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 // What these lock:
 //   * the DEFAULTS every existing project backfills to — the feature is OFF
 //     (`aiAutoPlanEnabled` / `aiSprintPlanningEnabled` false, threshold 5, sprint
-//      length 2 days, no planner-model override);
+//      length 2 days);
 //   * the partial-patch write path (an absent field is untouched) through the
-//     repository, with `aiPlannerModel` clearing back to the default;
+//     repository;
+//   * the RETIRED planner-model column (MOTIR-7228): still in the database, and
+//     nothing in the settings path reads or writes it — a stale patch naming it
+//     is ignored;
 //   * APP-SIDE validation — an out-of-range / fractional value is REJECTED with a
 //     typed error and NOTHING is written, never silently clamped at the DB;
 //   * the tenancy + admin gates (no existence leak on a foreign key; a non-admin
@@ -69,7 +71,6 @@ describe('Project AI-settings columns — defaults (MOTIR-915)', () => {
       aiAutoPlanThreshold: 5,
       aiSprintPlanningEnabled: false,
       aiSprintLengthDays: 2,
-      aiPlannerModel: null,
       aiGenerateExplanations: false,
       // ON, and NOT because a default was written to the row — the column is
       // NULL on a fresh project and the mapper resolves it (MOTIR-3349).
@@ -88,7 +89,6 @@ describe('Project AI-settings columns — defaults (MOTIR-915)', () => {
     expect(row.aiAutoPlanThreshold).toBe(5);
     expect(row.aiSprintPlanningEnabled).toBe(false);
     expect(row.aiSprintLengthDays).toBe(2);
-    expect(row.aiPlannerModel).toBeNull();
     // MOTIR-3349: deliberately NULL on the row. This is the assertion that
     // distinguishes "unset" from "written true" — the migration adds no default,
     // so a project that never touches the setting stores nothing at all.
@@ -118,7 +118,6 @@ describe('projectAiSettingsService.updateAiSettings — the write path', () => {
         aiAutoPlanThreshold: 3,
         aiSprintPlanningEnabled: true,
         aiSprintLengthDays: 7,
-        aiPlannerModel: 'deepseek-v4-flash',
         aiGenerateExplanations: true,
         aiRecordPlanningMistakes: false,
       },
@@ -130,7 +129,6 @@ describe('projectAiSettingsService.updateAiSettings — the write path', () => {
       aiAutoPlanThreshold: 3,
       aiSprintPlanningEnabled: true,
       aiSprintLengthDays: 7,
-      aiPlannerModel: 'deepseek-v4-flash',
       aiGenerateExplanations: true,
       aiRecordPlanningMistakes: false,
     });
@@ -143,7 +141,7 @@ describe('projectAiSettingsService.updateAiSettings — the write path', () => {
     const fx = await makeFixture();
     await projectAiSettingsService.updateAiSettings(
       fx.projectIdentifier,
-      { aiAutoPlanEnabled: true, aiAutoPlanThreshold: 9, aiPlannerModel: 'claude-opus-5' },
+      { aiAutoPlanEnabled: true, aiAutoPlanThreshold: 9, aiGenerateExplanations: true },
       ctxFor(fx),
     );
 
@@ -156,7 +154,7 @@ describe('projectAiSettingsService.updateAiSettings — the write path', () => {
     expect(after.aiSprintPlanningEnabled).toBe(true);
     expect(after.aiAutoPlanEnabled).toBe(true);
     expect(after.aiAutoPlanThreshold).toBe(9);
-    expect(after.aiPlannerModel).toBe('claude-opus-5');
+    expect(after.aiGenerateExplanations).toBe(true);
   });
 
   // ── MOTIR-3349 · the record-planning-mistakes switch ────────────────────────
@@ -239,46 +237,6 @@ describe('projectAiSettingsService.updateAiSettings — the write path', () => {
     expect(after.aiRecordPlanningMistakes).toBe(false);
   });
 
-  it('clears the planner-model override with null or an empty/blank string (→ the platform default)', async () => {
-    const fx = await makeFixture();
-    await projectAiSettingsService.updateAiSettings(
-      fx.projectIdentifier,
-      { aiPlannerModel: 'deepseek-v4-pro' },
-      ctxFor(fx),
-    );
-
-    const cleared = await projectAiSettingsService.updateAiSettings(
-      fx.projectIdentifier,
-      { aiPlannerModel: '   ' },
-      ctxFor(fx),
-    );
-    expect(cleared.aiPlannerModel).toBeNull();
-
-    await projectAiSettingsService.updateAiSettings(
-      fx.projectIdentifier,
-      { aiPlannerModel: 'deepseek-v4-pro' },
-      ctxFor(fx),
-    );
-    const clearedByNull = await projectAiSettingsService.updateAiSettings(
-      fx.projectIdentifier,
-      { aiPlannerModel: null },
-      ctxFor(fx),
-    );
-    expect(clearedByNull.aiPlannerModel).toBeNull();
-  });
-
-  it('trims a planner-model override and accepts real model-id shapes', async () => {
-    const fx = await makeFixture();
-    for (const model of ['deepseek-v4-pro', 'openai/gpt-5.1', 'anthropic:claude-4.5', 'llama_3']) {
-      const updated = await projectAiSettingsService.updateAiSettings(
-        fx.projectIdentifier,
-        { aiPlannerModel: `  ${model}  ` },
-        ctxFor(fx),
-      );
-      expect(updated.aiPlannerModel).toBe(model);
-    }
-  });
-
   it('accepts the bound VALUES themselves (the range is inclusive)', async () => {
     const fx = await makeFixture();
 
@@ -348,24 +306,6 @@ describe('projectAiSettingsService.updateAiSettings — app-side validation (rej
     }
     const after = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
     expect(after.aiSprintLengthDays).toBe(2);
-  });
-
-  it('rejects a malformed / over-long planner-model override', async () => {
-    const fx = await makeFixture();
-    for (const model of [
-      'has spaces',
-      'bad$char',
-      '-leading-dash',
-      'x'.repeat(AI_PLANNER_MODEL_MAX_LENGTH + 1),
-    ]) {
-      const err = await projectAiSettingsService
-        .updateAiSettings(fx.projectIdentifier, { aiPlannerModel: model }, ctxFor(fx))
-        .catch((e: unknown) => e);
-      expect(err).toBeInstanceOf(InvalidAiSettingsError);
-      expect((err as InvalidAiSettingsError).field).toBe('aiPlannerModel');
-    }
-    const after = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
-    expect(after.aiPlannerModel).toBeNull();
   });
 
   it('the route layer maps the typed error to 422 with its field', async () => {
@@ -476,7 +416,7 @@ describe('projectAiSettingsService — tenancy + admin gates', () => {
     const err = await projectAiSettingsService
       .updateAiSettings(
         fx.projectIdentifier,
-        { aiPlannerModel: 'some-model' },
+        { aiGenerateExplanations: true },
         ctxFor(fx, member.id),
       )
       .catch((e: unknown) => e);
@@ -526,5 +466,65 @@ describe('projectAiSettingsService — tenancy + admin gates', () => {
       aiAutoPlanEnabled: false,
       aiSprintLengthDays: 2,
     });
+  });
+});
+
+describe('the retired planner-model column (MOTIR-7228)', () => {
+  // The column stays in the database for the build still serving during this
+  // release's rollout; `@ignore` hides it from the client. These pin both halves:
+  // it exists, and the settings path neither reads it into the DTO nor writes it.
+  async function storedPlannerModel(projectId: string): Promise<string | null> {
+    const rows = await adminDb.$queryRawUnsafe<Array<{ ai_planner_model: string | null }>>(
+      'SELECT ai_planner_model FROM project WHERE id = $1',
+      projectId,
+    );
+    expect(rows).toHaveLength(1);
+    return rows[0]!.ai_planner_model;
+  }
+
+  it('the column is still there, and the DTO carries no planner-model key', async () => {
+    const fx = await makeFixture();
+    expect(await storedPlannerModel(fx.projectId)).toBeNull();
+
+    const settings = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
+    expect(Object.keys(settings).some((k) => /model/i.test(k))).toBe(false);
+  });
+
+  it('a stale patch naming it saves the rest and leaves the column alone', async () => {
+    const fx = await makeFixture();
+    // A client built before this release still sends the key: TypeScript no
+    // longer allows it, so the cast is the shape of that request at runtime.
+    const stale = { aiPlannerModel: 'x', aiSprintLengthDays: 5 } as unknown as Parameters<
+      typeof projectAiSettingsService.updateAiSettings
+    >[1];
+
+    const updated = await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      stale,
+      ctxFor(fx),
+    );
+
+    expect(updated.aiSprintLengthDays).toBe(5);
+    expect(updated).not.toHaveProperty('aiPlannerModel');
+    expect(await storedPlannerModel(fx.projectId)).toBeNull();
+  });
+
+  it('a value an older build wrote is not read back', async () => {
+    const fx = await makeFixture();
+    await adminDb.$executeRawUnsafe(
+      'UPDATE project SET ai_planner_model = $1 WHERE id = $2',
+      'deepseek-v4-pro',
+      fx.projectId,
+    );
+
+    const settings = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
+    expect(JSON.stringify(settings)).not.toContain('deepseek-v4-pro');
+    // And a save does not clear it: the column is the old build's, not ours.
+    await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      { aiSprintLengthDays: 3 },
+      ctxFor(fx),
+    );
+    expect(await storedPlannerModel(fx.projectId)).toBe('deepseek-v4-pro');
   });
 });

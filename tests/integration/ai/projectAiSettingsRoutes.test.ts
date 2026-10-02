@@ -90,7 +90,6 @@ describe('GET /api/projects/[key]/ai-settings', () => {
       aiAutoPlanThreshold: 5,
       aiSprintPlanningEnabled: false,
       aiSprintLengthDays: 2,
-      aiPlannerModel: null,
       aiGenerateExplanations: false,
       // MOTIR-3349 — the one field that is ON by default, resolved from a NULL
       // column rather than written to the row.
@@ -139,7 +138,6 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       aiAutoPlanThreshold: 8,
       aiSprintPlanningEnabled: true,
       aiSprintLengthDays: 3,
-      aiPlannerModel: 'deepseek-v4-flash',
       aiGenerateExplanations: true,
       aiRecordPlanningMistakes: false,
     });
@@ -150,7 +148,6 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       aiAutoPlanThreshold: 8,
       aiSprintPlanningEnabled: true,
       aiSprintLengthDays: 3,
-      aiPlannerModel: 'deepseek-v4-flash',
       aiGenerateExplanations: true,
       aiRecordPlanningMistakes: false,
     });
@@ -161,7 +158,26 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       ctxRef.current!,
     );
     expect(persisted.aiAutoPlanThreshold).toBe(8);
-    expect(persisted.aiPlannerModel).toBe('deepseek-v4-flash');
+  });
+
+  it('IGNORES the retired planner model — a stale client still saves the rest (MOTIR-7228)', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
+    signInAs(fx);
+
+    // A build from before the retirement still sends the key. The route names
+    // only the fields it forwards, so the key is dropped — never a 400 — and the
+    // rest of the patch lands.
+    const res = await patch(fx.projectIdentifier, { aiPlannerModel: 'x', aiSprintLengthDays: 5 });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.aiSprintLengthDays).toBe(5);
+    expect(body).not.toHaveProperty('aiPlannerModel');
+    const persisted = await projectAiSettingsService.getAiSettings(
+      fx.projectIdentifier,
+      ctxRef.current!,
+    );
+    expect(persisted.aiSprintLengthDays).toBe(5);
   });
 
   it('forwards a PRESENT-but-falsy field (`false` / `null`) instead of dropping it', async () => {
@@ -170,15 +186,12 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
     await patch(fx.projectIdentifier, {
       aiAutoPlanEnabled: true,
       aiGenerateExplanations: true,
-      aiPlannerModel: 'deepseek-v4-pro',
     });
 
-    // The panel's "turn it back off / back to the deployment default" save: a
-    // `in`-keyed forward is what makes this reach the service at all.
+    // The panel's "turn it back off" save: a `in`-keyed forward is what makes this reach the service at all.
     const res = await patch(fx.projectIdentifier, {
       aiAutoPlanEnabled: false,
       aiGenerateExplanations: false,
-      aiPlannerModel: null,
       // MOTIR-3349: this field's OFF value is `false`, and its default is `true`
       // — so a route that dropped falsy keys would make switching it off a
       // silent no-op, the one direction that matters here.
@@ -189,7 +202,6 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
     await expect(res.json()).resolves.toMatchObject({
       aiAutoPlanEnabled: false,
       aiGenerateExplanations: false,
-      aiPlannerModel: null,
       aiRecordPlanningMistakes: false,
     });
   });
@@ -223,11 +235,7 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
     expect(tooLong.status).toBe(422);
     await expect(tooLong.json()).resolves.toMatchObject({ field: 'aiSprintLengthDays' });
 
-    const badModel = await patch(fx.projectIdentifier, { aiPlannerModel: 'not a model!' });
-    expect(badModel.status).toBe(422);
-    await expect(badModel.json()).resolves.toMatchObject({ field: 'aiPlannerModel' });
-
-    // Nothing was written by any of the three rejected patches.
+    // Nothing was written by either rejected patch.
     const settings = await projectAiSettingsService.getAiSettings(
       fx.projectIdentifier,
       ctxRef.current!,
@@ -235,7 +243,6 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
     expect(settings).toMatchObject({
       aiAutoPlanThreshold: 5,
       aiSprintLengthDays: 2,
-      aiPlannerModel: null,
     });
   });
 

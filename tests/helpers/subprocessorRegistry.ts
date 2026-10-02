@@ -222,8 +222,9 @@ export const INVISIBLE_TO_THIS_GUARD: Readonly<Record<string, string>> = {
   OpenAI: 'reached THROUGH the gateway; motir-core never names it',
   Brave: 'reached THROUGH the gateway; motir-core never names it',
   DeepSeek:
-    'reached THROUGH the gateway; motir-core names only the model IDS ' +
-    '(lib/projectAiSettings/plannerModels.ts), never a host or an SDK',
+    'reached THROUGH the gateway; motir-core names no DeepSeek model id either: ' +
+    "the planner model is a motir-ai platform setting, and hosted-run ids come from motir-ai's " +
+    'GET /v1/agent-models',
   // The rest of the planner model set, on the same footing: the gateway holds
   // the channels, so motir-core never names a host or installs an SDK for any of
   // them. Pinned here so a provider cannot quietly drop off a published legal
