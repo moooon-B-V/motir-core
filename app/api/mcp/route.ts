@@ -3,6 +3,7 @@ import { MCP_SERVER_INFO, registerMcpTools } from '@/lib/mcp/registry';
 import { contextFromAuthInfo, contextFromExtra, grantFromExtra } from '@/lib/mcp/context';
 import { verifyMcpToken } from '@/lib/mcp/auth';
 import { answerClientAbort } from '@/lib/mcp/clientAbort';
+import { answerMalformedBody } from '@/lib/mcp/malformedBody';
 import { enforceMcpRateLimit } from '@/lib/rateLimit/mcpGuard';
 import { stampRateLimitHeaders } from '@/lib/rateLimit/guard';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
@@ -69,6 +70,13 @@ const baseHandler = createMcpHandler(
   { basePath: '/api', disableSse: true },
 );
 
+// A POST body that is not JSON — empty, truncated, or plain text — answers 400
+// with JSON-RPC -32700, the refusal the MCP SDK's own transport gives, instead of
+// `mcp-handler`'s `req.json()` throwing `SyntaxError` out of the route as a
+// server fault (MOTIR-7299). After the rate limiter, so a malformed request
+// still spends the caller's volume budget.
+const parsedHandler = answerMalformedBody(baseHandler);
+
 /**
  * The transport rate limiter, between the auth gate and the JSON-RPC dispatch.
  *
@@ -84,7 +92,7 @@ const baseHandler = createMcpHandler(
 async function limitedHandler(req: Request): Promise<Response> {
   const { refusal, headers } = await enforceMcpRateLimit(contextFromAuthInfo(req.auth));
   if (refusal) return refusal;
-  return stampRateLimitHeaders(await baseHandler(req), headers);
+  return stampRateLimitHeaders(await parsedHandler(req), headers);
 }
 
 // `answerClientAbort` sits INSIDE the auth gate, around the layer that reads the

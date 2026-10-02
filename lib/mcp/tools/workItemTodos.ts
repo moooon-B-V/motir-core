@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { TodoProgressDto, WorkItemTodoDto } from '@/lib/dto/workItemTodos';
+import { WorkItemTodoNotFoundError } from '@/lib/workItemTodos/errors';
 import {
   TODO_COMMAND_MAX_LENGTH,
   TODO_NOTES_MAX_LENGTH,
@@ -20,15 +21,18 @@ import { resolveWorkItemByKey, workItemKeyField } from './workItemRef';
 // only on plan PROPOSALS (`authorPlan.ts`, `getPlan.ts`), so an agent could not
 // see where a manual card had got to, or record a step as done.
 //
-// Three thin adapters over the shipped `workItemTodosService`: the card is
-// resolved by key the way every key-addressed tool resolves it (the
-// 404-not-403 contract), and every rule — the browse gate on the read, the
-// `work_item:edit` gate on both writes, the caps, the append-at-the-end lock,
-// the no-revision tick — is the service's, unchanged. No business logic here.
+// Thin adapters over the shipped `workItemTodosService`: the card is resolved
+// by key the way every key-addressed tool resolves it (the 404-not-403
+// contract), and every rule — the browse gate on the read, the
+// `work_item:edit` gate on every write, the caps, the append-at-the-end lock,
+// the no-revision tick, the revision an edit or a delete records — is the
+// service's, unchanged. No business logic here.
 //
-// ⚠️ DELIBERATELY NOT exposed: edit, reorder and delete. The guide that
-// consumes these (MOTIR-6708) reads, appends and ticks, and nothing else asks
-// for more; a smaller write surface is a smaller permission question.
+// EDIT and DELETE joined the first three in MOTIR-7306: a card whose steps
+// change after they were written (a re-plan removes one, a step turns out to
+// be wrong) otherwise left an agent two bad choices — leave a step the card can
+// never close on, or tick one nobody performed. REORDER is still not exposed;
+// nothing asks for it.
 //
 // ⚠️ AND TICKING THE LAST STEP DOES NOT MOVE THE CARD (ADR §3). The service
 // never touches `work_item.status`, and neither does this door.
@@ -40,6 +44,8 @@ import { resolveWorkItemByKey, workItemKeyField } from './workItemRef';
 export const LIST_WORK_ITEM_TODOS_TOOL_NAME = 'list_work_item_todos';
 export const ADD_WORK_ITEM_TODO_TOOL_NAME = 'add_work_item_todo';
 export const SET_WORK_ITEM_TODO_DONE_TOOL_NAME = 'set_work_item_todo_done';
+export const UPDATE_WORK_ITEM_TODO_TOOL_NAME = 'update_work_item_todo';
+export const DELETE_WORK_ITEM_TODO_TOOL_NAME = 'delete_work_item_todo';
 
 const executorField = z
   .enum(['coding_agent', 'human'])
@@ -79,16 +85,59 @@ const addInputSchema = {
   executor: executorField,
 };
 
+const todoIdField = z
+  .string()
+  .min(1)
+  .describe(
+    'The step’s id, as `list_work_item_todos` or `add_work_item_todo` returned it. A step on ' +
+      'another work item is refused as not found.',
+  );
+
 const setDoneInputSchema = {
   key: workItemKeyField,
-  todoId: z
+  todoId: todoIdField,
+  done: z.boolean().describe('true ticks the step; false unticks it.'),
+};
+
+const updateInputSchema = {
+  key: workItemKeyField,
+  todoId: todoIdField,
+  text: z
     .string()
     .min(1)
+    .optional()
     .describe(
-      'The step’s id, as `list_work_item_todos` or `add_work_item_todo` returned it. A step on ' +
-        'another work item is refused as not found.',
+      `The step’s new text — ONE operation, in plain text, at most ${TODO_TEXT_MAX_LENGTH} ` +
+        'characters. Omitted ⇒ unchanged.',
     ),
-  done: z.boolean().describe('true ticks the step; false unticks it.'),
+  notesMd: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      `New instructions for the step, in Markdown, at most ${TODO_NOTES_MAX_LENGTH} characters. ` +
+        'Omitted ⇒ unchanged; null clears them.',
+    ),
+  commandText: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      `New command for the step, at most ${TODO_COMMAND_MAX_LENGTH} characters. Omitted ⇒ ` +
+        'unchanged; null clears it.',
+    ),
+  executor: z
+    .enum(['coding_agent', 'human'])
+    .nullable()
+    .optional()
+    .describe(
+      'Who the step is for: "human" or "coding_agent". Omitted ⇒ unchanged; null clears it.',
+    ),
+};
+
+const deleteInputSchema = {
+  key: workItemKeyField,
+  todoId: todoIdField,
 };
 
 /** One step as the tool returns it — the service DTO's fields, named explicitly. */
@@ -201,6 +250,85 @@ export async function runSetWorkItemTodoDone(
   }
 }
 
+/**
+ * The step `todoId` names, read from `workItemId`'s OWN list — so a step of
+ * another card is not found, exactly as `set_work_item_todo_done` refuses it,
+ * and is refused before the edit gate can confirm it exists. A step never moves
+ * between cards (no service write touches `workItemId`), so this read cannot go
+ * stale on the one fact it checks; a step deleted in between is not found by
+ * the write itself.
+ */
+async function findTodoOnWorkItem(
+  workItemId: string,
+  todoId: string,
+  ctx: ServiceContext,
+): Promise<WorkItemTodoDto> {
+  const list = await workItemTodosService.listTodos(workItemId, ctx);
+  const todo = list.items.find((row) => row.id === todoId);
+  if (!todo) throw new WorkItemTodoNotFoundError(todoId);
+  return todo;
+}
+
+/** `update_work_item_todo` — edit one step of THIS card, sparsely. */
+export async function runUpdateWorkItemTodo(
+  args: {
+    key: string;
+    todoId: string;
+    text?: string;
+    notesMd?: string | null;
+    commandText?: string | null;
+    executor?: 'coding_agent' | 'human' | null;
+  },
+  ctx: ServiceContext,
+): Promise<CallToolResult> {
+  try {
+    const item = await resolveWorkItemByKey(args.key, ctx);
+    await findTodoOnWorkItem(item.id, args.todoId, ctx);
+    const { todo, progress } = await workItemTodosService.updateTodo(
+      args.todoId,
+      {
+        text: args.text,
+        notesMd: args.notesMd,
+        commandText: args.commandText,
+        executor: args.executor,
+      },
+      ctx,
+    );
+    return toolOk(
+      `Updated a step on ${item.identifier}: ${todo.text} (${todo.id}) — ${progressLine(progress)}`,
+      exempt(UPDATE_WORK_ITEM_TODO_TOOL_NAME, {
+        workItemKey: item.identifier,
+        todo: presentTodo(todo),
+        progress,
+      }),
+    );
+  } catch (err) {
+    return toToolError(err);
+  }
+}
+
+/** `delete_work_item_todo` — remove one step of THIS card. */
+export async function runDeleteWorkItemTodo(
+  args: { key: string; todoId: string },
+  ctx: ServiceContext,
+): Promise<CallToolResult> {
+  try {
+    const item = await resolveWorkItemByKey(args.key, ctx);
+    const removed = await findTodoOnWorkItem(item.id, args.todoId, ctx);
+    const progress = await workItemTodosService.deleteTodo(args.todoId, ctx);
+    return toolOk(
+      `Deleted a step from ${item.identifier}: ${removed.text} — ${progressLine(progress)}`,
+      exempt(DELETE_WORK_ITEM_TODO_TOOL_NAME, {
+        workItemKey: item.identifier,
+        removed: { id: removed.id, text: removed.text },
+        progress,
+      }),
+    );
+  } catch (err) {
+    return toToolError(err);
+  }
+}
+
 export function registerWorkItemTodos(server: McpServer, resolveContext: McpContextResolver): void {
   server.registerTool(
     LIST_WORK_ITEM_TODOS_TOOL_NAME,
@@ -242,5 +370,34 @@ export function registerWorkItemTodos(server: McpServer, resolveContext: McpCont
       inputSchema: setDoneInputSchema,
     },
     async (args, extra) => runSetWorkItemTodoDone(args, resolveContext(extra)),
+  );
+  server.registerTool(
+    UPDATE_WORK_ITEM_TODO_TOOL_NAME,
+    {
+      title: 'Edit a to-do step',
+      description:
+        'Edit one step of a work item’s to-do list, by the work item’s identifier and the ' +
+        'step’s `todoId`. SPARSE: only the fields you send change — an omitted field is left ' +
+        'alone, and `null` clears `notesMd`, `commandText` or `executor`. A `todoId` that is not ' +
+        'on that work item is refused as not found. Records a revision on the work item. ' +
+        'Returns the step as it now stands and the list’s progress. Needs permission to edit ' +
+        'the work item. Honors the same access checks as the UI.',
+      inputSchema: updateInputSchema,
+    },
+    async (args, extra) => runUpdateWorkItemTodo(args, resolveContext(extra)),
+  );
+  server.registerTool(
+    DELETE_WORK_ITEM_TODO_TOOL_NAME,
+    {
+      title: 'Delete a to-do step',
+      description:
+        'Permanently delete one step of a work item’s to-do list, by the work item’s identifier ' +
+        'and the step’s `todoId`. A `todoId` that is not on that work item is refused as not ' +
+        'found. Records a revision on the work item. Returns what was removed and the list’s ' +
+        'new progress. Needs permission to edit the work item. Honors the same access checks ' +
+        'as the UI.',
+      inputSchema: deleteInputSchema,
+    },
+    async (args, extra) => runDeleteWorkItemTodo(args, resolveContext(extra)),
   );
 }

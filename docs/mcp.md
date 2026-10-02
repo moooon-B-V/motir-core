@@ -325,7 +325,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **81 tools**.
+`initialize` handshake and registers **83 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1583,42 +1583,46 @@ cannot be undone. Author only, for the reason `edit_comment` gives; gated on
 replyCount }` — `replyCount` is how many replies went with a deleted root (always
 `0` for a reply).
 
-#### To-do lists — `list_work_item_todos` · `add_work_item_todo` · `set_work_item_todo_done`
+#### To-do lists — `list_work_item_todos` · `add_work_item_todo` · `set_work_item_todo_done` · `update_work_item_todo` · `delete_work_item_todo`
 
 A work item's **to-do list** is the ordered steps of its own work — each step
 ONE operation, with who it is for (`executor`), optional Markdown instructions
 (`notesMd`) and an optional command to copy (`commandText`), ticked off as it is
 done ([`docs/decisions/work-item-todo-list.md`](decisions/work-item-todo-list.md)).
-These three tools read a card's list, append a step, and tick or untick one,
-over the same service the **To-do list** section of the item page uses — so a
-step an agent appends or ticks appears there exactly as a person's would, and
-every rule the page enforces applies here unchanged.
+These five tools read a card's list, append a step, tick or untick one, edit
+one and delete one, over the same service the **To-do list** section of the item
+page uses — so a step an agent writes appears there exactly as a person's would,
+and every rule the page enforces applies here unchanged.
 
 | Tool                      | Permission       | What it does                                            |
 | ------------------------- | ---------------- | ------------------------------------------------------- |
 | `list_work_item_todos`    | `project:browse` | The card's steps in list order, with its progress.      |
 | `add_work_item_todo`      | `work_item:edit` | Append ONE step at the END of the list.                 |
 | `set_work_item_todo_done` | `work_item:edit` | Tick (`done: true`) or untick (`done: false`) one step. |
+| `update_work_item_todo`   | `work_item:edit` | Edit one step — only the fields sent change.            |
+| `delete_work_item_todo`   | `work_item:edit` | Delete one step.                                        |
 
-Both writes need permission to **edit the card** — the same key the item page's
-to-do controls need. A token whose grant omits `work_item:edit` is refused both
-writes before anything runs (`PERMISSION_NOT_GRANTED`); a token whose owner can
-only browse the card reads its list and is refused both writes by the role
+Every write needs permission to **edit the card** — the same key the item page's
+to-do controls need. A token whose grant omits `work_item:edit` is refused every
+write before anything runs (`PERMISSION_NOT_GRANTED`); a token whose owner can
+only browse the card reads its list and is refused every write by the role
 (`PROJECT_ACCESS_DENIED`). A card the token cannot see at
 all, including one in another workspace, is `WORK_ITEM_NOT_FOUND` on every tool.
-Both write keys are in the CLI grant, so a dispatched agent can tick the steps of
-the card it was handed.
+The write key is in the CLI grant, so a dispatched agent can append, tick, edit
+and delete the steps of the card it was handed.
 
 **Ticking the LAST step does not move the card.** The to-do list never writes
 the card's status (ADR §3): a card whose every step is ticked stays where it is
 until its own workflow moves it. **A tick is not a revision** either — it stamps
 the step with who ticked it and when (`doneAt`, `doneBy`) and writes nothing to
-the card's history, while an append records one (ADR §4). **Ticking is
+the card's history, while an append, an edit and a delete each record one (ADR §4). **Ticking is
 idempotent:** ticking a step that is already ticked changes nothing and keeps the
 original `doneAt` / `doneBy`, so a retried call never re-attributes a step.
 
-**Deliberately absent:** editing, reordering and deleting a step. They stay on
-the item page.
+**Deliberately absent:** reordering a step. It stays on the item page. Editing
+and deleting were absent too until a re-planned card needed its list brought in
+line with its new steps (MOTIR-7306): without them an agent could only leave a
+step the card can never close on, or tick one nobody performed.
 
 ##### `list_work_item_todos`
 
@@ -1669,6 +1673,39 @@ steps:
 it now stands and the list's progress, read in the same transaction as the tick.
 A `todoId` that is not a step of **that** card — another card's step, or no step
 at all — is `WORK_ITEM_TODO_NOT_FOUND`, and nothing changes.
+
+##### `update_work_item_todo`
+
+| Input         | Type           | Required | Notes                                                                 |
+| ------------- | -------------- | -------- | --------------------------------------------------------------------- |
+| `key`         | string         | yes      | Work item identifier.                                                 |
+| `todoId`      | string         | yes      | The step's `id`, from `list_work_item_todos` or `add_work_item_todo`. |
+| `text`        | string         | no       | The new step text, plain text, at most 200 characters.                |
+| `notesMd`     | string \| null | no       | New instructions (Markdown), at most 2000 characters. `null` clears.  |
+| `commandText` | string \| null | no       | New command, at most 500 characters. `null` clears.                   |
+| `executor`    | enum \| null   | no       | `human` or `coding_agent`. `null` clears.                             |
+
+**SPARSE:** a field you omit is left exactly as it was, so sending only `text`
+never blanks the step's notes or command. **Output** — `structuredContent`:
+`{ workItemKey, todo, progress }` — the step as it now stands. An edit records a
+revision naming each field's before and after, as the item page's edit does; a
+call that sends no field changes nothing and records nothing. The caps and their
+codes are `add_work_item_todo`'s. A `todoId` that is not a step of **that** card
+is `WORK_ITEM_TODO_NOT_FOUND`, and nothing changes.
+
+##### `delete_work_item_todo`
+
+| Input    | Type   | Required | Notes                                                                 |
+| -------- | ------ | -------- | --------------------------------------------------------------------- |
+| `key`    | string | yes      | Work item identifier.                                                 |
+| `todoId` | string | yes      | The step's `id`, from `list_work_item_todos` or `add_work_item_todo`. |
+
+**Output** — `structuredContent`: `{ workItemKey, removed: { id, text },
+progress }` — what was removed, and the list's progress after it, whose
+`total` has gone down by one. The delete is permanent and records a revision
+naming the removed step, as the item page's delete does. Deleting the same step
+again is `WORK_ITEM_TODO_NOT_FOUND` and changes nothing; so is a `todoId` that
+is not a step of **that** card.
 
 #### Repairing a red card — `claim_work_item_repair` · `touch_work_item_repair` · `close_work_item_repair`
 
