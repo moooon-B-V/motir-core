@@ -18,7 +18,12 @@ import {
   revokeInstanceCloneCredential,
   type InstanceCloneCredential,
 } from '@/lib/github/runGitCredential';
+import type { AgentInstanceBootDto, AgentInstanceBootStepFrameDto } from '@/lib/dto/agentInstances';
 import type { AgentInstanceBootData } from '@/lib/jobs/types';
+import {
+  toAgentInstanceBootDto,
+  toAgentInstanceBootStepDto,
+} from '@/lib/mappers/agentInstanceMappers';
 import { getPersistentOrchestrator } from '@/lib/orchestrator';
 import {
   agentInstanceBootRepository,
@@ -29,6 +34,7 @@ import { agentInstanceRepository } from '@/lib/repositories/agentInstanceReposit
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { agentInstanceClock, armIdleTimer } from '@/lib/services/agentInstanceActivityService';
 import { agentInstanceBootSteps as steps } from '@/lib/services/agentInstanceLifecycleService';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // THE BOOT DRIVER (Story MOTIR-7393 · MOTIR-7398, `docs/decisions/agent-instances.md`
@@ -426,7 +432,55 @@ async function advanceReady(pass: Pass, step: AgentInstanceBootStep): Promise<vo
   await closeAbandoned(new Pass(fresh, pass.attempt, pass.holder), step);
 }
 
+/** The current attempt of an agent the caller owns, with its steps — or null before any. */
+async function readCurrent(
+  row: AgentInstance,
+): Promise<{ attempt: AgentInstanceBootAttempt; steps: AgentInstanceBootStep[] } | null> {
+  return withWorkspaceServiceContext(row.workspaceId, async (tx) => {
+    const attempt = await agentInstanceBootRepository.findCurrentAttempt(row.id, tx);
+    if (!attempt) return null;
+    return { attempt, steps: await agentInstanceBootRepository.listSteps(attempt.id, tx) };
+  });
+}
+
 export const agentInstanceBootService = {
+  /**
+   * THE BOOT READ (AMENDMENT 6 §6): the caller's agent's CURRENT attempt, steps in
+   * read-out order — `null` for an agent that never booted under the driver.
+   * Owner-only, through the instance read's own gate: another member's agent, an
+   * agent of another project and a missing one are all `AgentInstanceNotFoundError`.
+   */
+  async readBoot(
+    projectKey: string,
+    instanceId: string,
+    ctx: ServiceContext,
+  ): Promise<AgentInstanceBootDto | null> {
+    const row = await steps.ownedInstance(projectKey, instanceId, ctx);
+    const current = await readCurrent(row);
+    return current ? toAgentInstanceBootDto(current.attempt, current.steps) : null;
+  },
+
+  /**
+   * THE STREAM'S POLL (AMENDMENT 6 §7): the current attempt as {@link readBoot}
+   * reads it, plus the steps of that attempt written after `sinceSeq`, in `seq`
+   * order — the `step` frames the stream sends. Same gate as the read.
+   */
+  async readBootSince(
+    projectKey: string,
+    instanceId: string,
+    sinceSeq: number,
+    ctx: ServiceContext,
+  ): Promise<{ boot: AgentInstanceBootDto | null; changed: AgentInstanceBootStepFrameDto[] }> {
+    const row = await steps.ownedInstance(projectKey, instanceId, ctx);
+    const current = await readCurrent(row);
+    if (!current) return { boot: null, changed: [] };
+    const changed = current.steps
+      .filter((s) => s.seq > sinceSeq)
+      .sort((a, b) => a.seq - b.seq)
+      .map((s) => ({ ...toAgentInstanceBootStepDto(s), attempt: current.attempt.attempt }));
+    return { boot: toAgentInstanceBootDto(current.attempt, current.steps), changed };
+  },
+
   /**
    * OPEN A BOOT ATTEMPT (§2, §5) — the opener's write, inside the CALLER'S
    * transaction (the same one as its guarded move into `starting` / `waking`, so

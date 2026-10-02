@@ -88,6 +88,7 @@ export function toAgentInstanceBootDto(
     startedAt: attempt.startedAt.toISOString(),
     endedAt: attempt.endedAt?.toISOString() ?? null,
     outcome: attempt.outcome,
+    seq: steps.reduce((max, s) => Math.max(max, s.seq), 0),
     steps: [...steps].sort((a, b) => a.ordinal - b.ordinal).map(toAgentInstanceBootStepDto),
   };
 }

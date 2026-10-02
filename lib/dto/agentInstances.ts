@@ -120,7 +120,14 @@ export interface AgentInstanceBootDto {
   startedAt: string;
   endedAt: string | null;
   outcome: AgentInstanceBootOutcome | null;
+  /** The attempt's highest step `seq` — the stream cursor this read is current to. */
+  seq: number;
   steps: AgentInstanceBootStepDto[];
+}
+
+/** One `step` frame of the boot stream (AMENDMENT 6 §7): the step and its attempt. */
+export interface AgentInstanceBootStepFrameDto extends AgentInstanceBootStepDto {
+  attempt: number;
 }
 
 /** One row of the My agents page: the instance plus its machine time this month. */

@@ -907,6 +907,14 @@ async function beginRollback(row: AgentInstance, detail: string): Promise<void> 
  * `settleBoot` uses, so the driver changes who calls them, never what they do.
  */
 export const agentInstanceBootSteps = {
+  /** The caller's own agent in the project, or `AgentInstanceNotFoundError` (§8's gate). */
+  async ownedInstance(
+    projectKey: string,
+    instanceId: string,
+    ctx: ServiceContext,
+  ): Promise<AgentInstance> {
+    return ownInstance(await resolveProject(projectKey, ctx), instanceId, ctx);
+  },
   handleOf,
   reload,
   failInstance,
