@@ -9361,6 +9361,88 @@
       "jobs": {
         "empty": "该工作区没有记录任何已归属的规划或智能体运行。"
       }
+    },
+    "tenant": {
+      "fleet": {
+        "title": "集群 · 正在运行",
+        "subtitle": "{org} 此刻在 Motir 集群上运行的内容，以及是否正在为此计费。",
+        "subtitleEmpty": "该组织当前没有在集群上运行任何内容。",
+        "workload": {
+          "ciRunner": "CI 运行器",
+          "hostedAgent": "托管智能体运行",
+          "agentInstance": "智能体实例",
+          "index": "索引容器"
+        },
+        "charge": {
+          "ciRunner": "运行期间计费",
+          "hostedAgent": "运行结束时计费",
+          "agentInstance": "按运行区间计费 · 不计入资源池",
+          "index": "Motir 自行承担——从不计费"
+        },
+        "facts": {
+          "pool": "资源池 <strong>{used} / {pool}</strong>",
+          "poolUnknown": "资源池 <strong>{used} / —</strong>",
+          "accrued": "最近 {minutes} 分钟累计 <strong>{value} 分钟</strong>",
+          "debited": "本月已扣费 <strong>{credits} 积分</strong>",
+          "pending": "待确认 <strong>{credits} 积分</strong>"
+        },
+        "stop": {
+          "button": "停止容器",
+          "explainer": "停止会立即结束该组织<strong>计费中</strong>的工作：CI、托管智能体运行和智能体实例。它不会暂停该组织。",
+          "notPermitted": "只有<strong>超级管理员</strong>可以停止组织的容器。你当前的身份是 <strong>{role}</strong>。",
+          "nothing": "没有可停止的内容。"
+        },
+        "confirm": {
+          "title": "停止 {org} 的容器？",
+          "lead": "这将结束 {org} 此刻在 Motir 集群上运行的内容：",
+          "ci": "个 CI 运行被取消，<strong>{containers}</strong> 个 CI 容器被销毁",
+          "ciUnknown": "CI 运行数未知——无法读取 GitHub，停止操作仍会取消它们——<strong>{containers}</strong> 个 CI 容器被销毁",
+          "hosted": "个托管智能体运行被结束",
+          "instances": "个智能体实例被休眠",
+          "index": "个索引容器保留至完成——索引是 Motir 自身的成本，从不向组织计费",
+          "notSuspension": "<strong>这不是暂停。</strong>不会阻止任何操作：{org} 的下一次 CI 运行、智能体运行或智能体启动都会照常准入。",
+          "asOf": "统计于 {time}。停止操作作用于你确认时正在运行的内容。",
+          "loading": "正在统计运行中的内容…",
+          "previewFailedTitle": "无法统计运行中的内容",
+          "previewFailedBody": "尚未停止任何内容。停止操作需要依据统计结果确认，请重试。",
+          "retry": "重试",
+          "reasonLabel": "原因——必填，将写入审计日志",
+          "reasonPlaceholder": "你为什么要停止该组织的容器？",
+          "reasonHint": "会显示在此卡片和审计日志中。请写下你看到的情况。",
+          "reasonRequired": "请输入原因。尚未停止任何内容。",
+          "cancel": "取消",
+          "submit": "停止容器",
+          "submitting": "正在停止…"
+        },
+        "result": {
+          "doneTitle": "容器已停止",
+          "partialTitle": "已停止，但有失败",
+          "ci": "已取消 {runs} 个 CI 运行 · 已销毁 {stopped} 个 CI 容器",
+          "ciPartial": "CI：已取消 {runs} 个运行 · 已销毁 {stopped} / {total} 个容器",
+          "hosted": "已结束 {ended} 个托管智能体运行",
+          "hostedPartial": "托管智能体运行：已结束 {ended} 个",
+          "instances": "已休眠 {hibernated} 个智能体实例",
+          "instancesPartial": "智能体实例：已休眠 {hibernated} / {total} 个",
+          "failed": "{count} 个未能停止——协调器将重试。"
+        },
+        "error": {
+          "notPermittedTitle": "你无法停止容器",
+          "notPermittedBody": "自页面加载以来你的平台角色已变更。尚未停止任何内容。",
+          "notFoundTitle": "找不到该组织",
+          "notFoundBody": "该组织已不存在。尚未停止任何内容。",
+          "failedTitle": "未能完成停止",
+          "failedBody": "部分容器可能在出错前已停止。此卡片上的数字已重新读取——请核对；再次停止只会作用于仍在运行的内容。"
+        },
+        "last": {
+          "title": "上次停止",
+          "reason": "原因",
+          "stopped": "已停止",
+          "when": "{time} · {actor}",
+          "unknownActor": "一位前任操作者",
+          "noReason": "未记录原因",
+          "counts": "{runs} 个 CI 运行 · {containers} 个 CI 容器 · {hosted} 个托管运行 · {instances} 个智能体实例"
+        }
+      }
     }
   },
   "legal": {

@@ -33,3 +33,21 @@ export interface FleetStopResultDTO {
     instances: number;
   };
 }
+
+/**
+ * The newest `fleet.stop` audit row for an organisation — the tenant page's
+ * Fleet card shows it back in its foot (MOTIR-7320 · design S4 k), so an
+ * operator who just stopped an org sees the record without leaving the card.
+ */
+export interface FleetLastStopDTO {
+  /** ISO-8601. */
+  at: string;
+  /** The actor's email; null when the user row could not be read. */
+  actorEmail: string | null;
+  reason: string | null;
+  /** The counts the stop wrote into the row's metadata; 0 where absent. */
+  runsCancelled: number;
+  ciContainersStopped: number;
+  hostedRunsEnded: number;
+  agentInstancesHibernated: number;
+}

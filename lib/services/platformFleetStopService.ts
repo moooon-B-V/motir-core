@@ -1,7 +1,14 @@
 import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
-import type { FleetStopPreviewDTO, FleetStopResultDTO } from '@/lib/dto/platformFleetStop';
+import type {
+  FleetLastStopDTO,
+  FleetStopPreviewDTO,
+  FleetStopResultDTO,
+} from '@/lib/dto/platformFleetStop';
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { PlatformOrganizationNotFoundError } from '@/lib/platform/errors';
+import { withPlatformRead } from '@/lib/platform/context';
+import { toFleetLastStopDTO } from '@/lib/mappers/platformFleetStopMappers';
+import { platformAuditLogRepository } from '@/lib/repositories/platformAuditLogRepository';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { actionsRunsClient } from '@/lib/github/actionsRuns';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
@@ -129,6 +136,36 @@ export const platformFleetStopService = {
       agentInstances: instances.filter((row) => row.state === 'running').length,
       indexContainers: census.byWorkload.code_graph_index,
     };
+  },
+
+  /**
+   * The newest `fleet.stop` row for the org, or null — the tenant page's Fleet
+   * card shows it back in its foot (MOTIR-7320). A cross-tenant read of the
+   * audit trail, so it runs under `withPlatformRead` and is itself audited
+   * `estate.read` on the org, the way every platform read is.
+   */
+  async lastStop(
+    principal: PlatformPrincipal,
+    organizationId: string,
+  ): Promise<FleetLastStopDTO | null> {
+    await requirePlatformStaff('support');
+    const row = await withPlatformRead(
+      principal,
+      {
+        action: 'estate.read',
+        targetKind: 'organization',
+        targetId: organizationId,
+        organizationId,
+      },
+      (tx) =>
+        platformAuditLogRepository.findLatestByTargetAndAction(
+          'organization',
+          organizationId,
+          'fleet.stop',
+          tx,
+        ),
+    );
+    return row ? toFleetLastStopDTO(row) : null;
   },
 
   /**

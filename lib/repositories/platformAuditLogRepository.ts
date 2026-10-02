@@ -26,6 +26,9 @@ import {
  * — the exact silent-denial shape MOTIR-2880 recorded for `withSystemContext`.
  * Requiring `tx` makes that a compile-time error instead.
  */
+/** One audit row with the acting operator's email — the tenant page's last-stop line. */
+export type PlatformAuditLogWithActor = PlatformAuditLog & { actor: { email: string } };
+
 export const platformAuditLogRepository = {
   /**
    * Append one row. The ONLY write this table has.
@@ -84,6 +87,25 @@ export const platformAuditLogRepository = {
       where: { targetKind, targetId },
       orderBy: { createdAt: 'desc' },
       take: limit,
+    });
+  },
+
+  /**
+   * The NEWEST row of one action on one target, with the actor's email, or null
+   * (MOTIR-7320 — the Fleet card's last `fleet.stop`). Served by the
+   * `(target_kind, target_id, created_at)` index; the action filter runs over
+   * that one target's rows only.
+   */
+  async findLatestByTargetAndAction(
+    targetKind: PlatformAuditTargetKind,
+    targetId: string,
+    action: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlatformAuditLogWithActor | null> {
+    return tx.platformAuditLog.findFirst({
+      where: { targetKind, targetId, action },
+      orderBy: { createdAt: 'desc' },
+      include: { actor: { select: { email: true } } },
     });
   },
 

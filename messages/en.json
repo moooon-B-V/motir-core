@@ -9365,6 +9365,88 @@
       "jobs": {
         "empty": "No attributed planning or agent run was recorded for this workspace."
       }
+    },
+    "tenant": {
+      "fleet": {
+        "title": "Fleet · running now",
+        "subtitle": "What {org} is running on Motir’s fleet right now, and whether it is being charged for it.",
+        "subtitleEmpty": "Nothing is running on the fleet for this organization.",
+        "workload": {
+          "ciRunner": "CI runners",
+          "hostedAgent": "Hosted agent runs",
+          "agentInstance": "Agent instances",
+          "index": "Index containers"
+        },
+        "charge": {
+          "ciRunner": "Charged while it runs",
+          "hostedAgent": "Charged when the run ends",
+          "agentInstance": "Charged per running interval · outside the pool",
+          "index": "Motir’s cost — never charged"
+        },
+        "facts": {
+          "pool": "Pool <strong>{used} of {pool}</strong>",
+          "poolUnknown": "Pool <strong>{used} of —</strong>",
+          "accrued": "Accrued, last {minutes} min <strong>{value} min</strong>",
+          "debited": "Debited this month <strong>{credits} credits</strong>",
+          "pending": "Awaiting confirmation <strong>{credits} credits</strong>"
+        },
+        "stop": {
+          "button": "Stop containers",
+          "explainer": "Stopping ends this organization’s <strong>charged</strong> work now: CI, hosted agent runs and agent instances. It does not suspend the organization.",
+          "notPermitted": "Only a <strong>superadmin</strong> can stop an organization’s containers. You are signed in as <strong>{role}</strong>.",
+          "nothing": "Nothing to stop."
+        },
+        "confirm": {
+          "title": "Stop {org}’s containers?",
+          "lead": "This ends what {org} is running on Motir’s fleet right now:",
+          "ci": "{runs, plural, one {CI run cancelled} other {CI runs cancelled}} and <strong>{containers}</strong> {containers, plural, one {CI container destroyed} other {CI containers destroyed}}",
+          "ciUnknown": "CI runs not counted — GitHub could not be read; the stop still cancels them — and <strong>{containers}</strong> {containers, plural, one {CI container destroyed} other {CI containers destroyed}}",
+          "hosted": "{count, plural, one {hosted agent run ended} other {hosted agent runs ended}}",
+          "instances": "{count, plural, one {agent instance hibernated} other {agent instances hibernated}}",
+          "index": "{count, plural, one {index container} other {index containers}} left to finish — indexing is Motir’s own cost and is never charged to the organization",
+          "notSuspension": "<strong>This is not a suspension.</strong> Nothing is blocked: {org}’s next CI run, agent run or agent start goes through normal admission.",
+          "asOf": "Counted at {time}. The stop acts on whatever is running when you confirm.",
+          "loading": "Counting what is running…",
+          "previewFailedTitle": "Couldn’t count what is running",
+          "previewFailedBody": "Nothing has been stopped. You confirm a stop against its counts, so try again.",
+          "retry": "Try again",
+          "reasonLabel": "Reason — required, written to the audit log",
+          "reasonPlaceholder": "Why are you stopping this organization’s containers?",
+          "reasonHint": "Shown on this card and in the audit log. Say what you saw.",
+          "reasonRequired": "Enter a reason. Nothing was stopped.",
+          "cancel": "Cancel",
+          "submit": "Stop containers",
+          "submitting": "Stopping…"
+        },
+        "result": {
+          "doneTitle": "Containers stopped",
+          "partialTitle": "Stopped, with failures",
+          "ci": "{runs, plural, one {# CI run cancelled} other {# CI runs cancelled}} · {stopped, plural, one {# CI container destroyed} other {# CI containers destroyed}}",
+          "ciPartial": "CI: {runs} runs cancelled · {stopped} of {total} containers destroyed",
+          "hosted": "{ended, plural, one {# hosted agent run ended} other {# hosted agent runs ended}}",
+          "hostedPartial": "Hosted agent runs: {ended} ended",
+          "instances": "{hibernated, plural, one {# agent instance hibernated} other {# agent instances hibernated}}",
+          "instancesPartial": "Agent instances: {hibernated} of {total} hibernated",
+          "failed": "{count} could not be stopped — the reconciler will retry."
+        },
+        "error": {
+          "notPermittedTitle": "You can’t stop containers",
+          "notPermittedBody": "Your platform role changed since this page loaded. Nothing was stopped.",
+          "notFoundTitle": "Organization not found",
+          "notFoundBody": "This organization no longer exists. Nothing was stopped.",
+          "failedTitle": "Couldn’t finish the stop",
+          "failedBody": "Some containers may have stopped before the error. The counts on this card have been read again — check them; a second stop acts only on what is still running."
+        },
+        "last": {
+          "title": "Last stop",
+          "reason": "Reason",
+          "stopped": "Stopped",
+          "when": "{time} · {actor}",
+          "unknownActor": "a former operator",
+          "noReason": "No reason recorded",
+          "counts": "{runs} CI runs · {containers} CI containers · {hosted} hosted runs · {instances} agent instances"
+        }
+      }
     }
   },
   "legal": {
