@@ -14,13 +14,14 @@ import { startProbeGateway } from './providerProbeGateway.mjs';
 //
 // The REAL OpenCode, configured ONLY by what the CLI ships (`hostedAgentEnv` →
 // `OPENCODE_CONFIG_CONTENT` = the egress contract's §2 document), runs one turn
-// on each enabled provider's model — DeepSeek, GLM (`z-ai`), Qwen and Anthropic
-// (MOTIR-7244 added the middle two) — against a stub gateway, and the
+// on each enabled provider's model — DeepSeek, GLM (`z-ai`), Qwen, Kimi
+// (`moonshotai`) and Anthropic (MOTIR-7244 added GLM and Qwen, MOTIR-7361 Kimi)
+// — against a stub gateway, and the
 // stub records what arrived. `smoke.test.ts` drives a FAKE OpenCode, so it cannot
 // see a provider OpenCode fails to load; this is the check that can.
 //
 // What each run must show (motir-gateway `docs/hosted-run-egress.md` §2–§3):
-//   - `deepseek/<id>`, `z-ai/<id>`, `qwen/<id>` → `POST /v1/chat/completions` carrying
+//   - `deepseek/<id>`, `z-ai/<id>`, `qwen/<id>`, `moonshotai/<id>` → `POST /v1/chat/completions` carrying
 //     `Authorization: Bearer <run key>`;
 //   - `anthropic/<id>` → `POST /v1/messages` carrying `x-api-key: <run key>`;
 //   - no request on any other route, and the run exits 0.
@@ -70,6 +71,25 @@ const PROVIDERS = [
   {
     model: 'qwen/qwen-plus',
     bare: 'qwen-plus',
+    route: '/v1/chat/completions',
+    credentialOf: (r: ProbeRequest) => r.authorization,
+    credential: `Bearer ${RUN_KEY}`,
+  },
+  // Kimi (MOTIR-7361): `moonshotai` is a BUNDLED provider the contract's block
+  // overrides (baseURL + apiKey), like `deepseek`. The second case is an id OUTSIDE
+  // the binary's frozen snapshot: it loads only because the CLI writes the run's
+  // model into the block (contract §2), so it is the case that fails if that write
+  // is ever dropped.
+  {
+    model: 'moonshotai/kimi-k2.6',
+    bare: 'kimi-k2.6',
+    route: '/v1/chat/completions',
+    credentialOf: (r: ProbeRequest) => r.authorization,
+    credential: `Bearer ${RUN_KEY}`,
+  },
+  {
+    model: 'moonshotai/kimi-probe-unlisted',
+    bare: 'kimi-probe-unlisted',
     route: '/v1/chat/completions',
     credentialOf: (r: ProbeRequest) => r.authorization,
     credential: `Bearer ${RUN_KEY}`,
@@ -150,7 +170,7 @@ describe.skipIf(!OPENCODE_BIN)('provider probe — PROCESS (OPENCODE_BIN)', () =
           HOME: home,
           MOTIR_GATEWAY_URL: url,
           MOTIR_RUN_KEY: RUN_KEY,
-          // The run's model, which the CLI writes into a custom provider's block.
+          // The run's model, which the CLI writes into a launch-declared provider's block.
           MOTIR_MODEL: provider.model,
         });
         const run = await runAsync(OPENCODE_BIN!, ['run', '--model', provider.model, PROMPT], {

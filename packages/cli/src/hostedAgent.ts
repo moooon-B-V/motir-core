@@ -63,7 +63,7 @@ const MAX_ARGV_PROMPT_BYTES = 100 * 1024;
  */
 export const EGRESS_DOCUMENT = {
   $schema: 'https://opencode.ai/config.json',
-  enabled_providers: ['anthropic', 'deepseek', 'z-ai', 'qwen'],
+  enabled_providers: ['anthropic', 'deepseek', 'z-ai', 'qwen', 'moonshotai'],
   provider: {
     anthropic: {
       options: {
@@ -91,6 +91,12 @@ export const EGRESS_DOCUMENT = {
         apiKey: '{env:MOTIR_RUN_KEY}',
       },
     },
+    moonshotai: {
+      options: {
+        baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
+        apiKey: '{env:MOTIR_RUN_KEY}',
+      },
+    },
   },
   share: 'disabled',
   autoupdate: false,
@@ -104,22 +110,41 @@ export const EGRESS_DOCUMENT = {
 export const HOSTED_MODEL_PROVIDERS: readonly string[] = EGRESS_DOCUMENT.enabled_providers;
 
 /**
+ * The providers whose block the egress contract §2 calls a TEMPLATE: the run's ONE
+ * model must be declared in the block at launch, because at OpenCode `1.18.32` the
+ * model resolves under none of them otherwise. The rule is one sentence of the
+ * contract — *a provider whose model ids the gateway catalog can list before the
+ * binary's frozen snapshot does* — and it covers two cases:
+ *
+ * - `z-ai` and `qwen` are CUSTOM providers (not in OpenCode's bundled catalog), so
+ *   a block with no `models` is dropped altogether (MOTIR-7243).
+ * - `moonshotai` IS a bundled provider, but its snapshot holds only the Kimi ids
+ *   known when `1.18.32` was built, and the gateway catalog refreshes daily: an id
+ *   outside the snapshot fails `ProviderModelNotFoundError` unless declared, and a
+ *   declared one is merged over the snapshot (observed on the released binary,
+ *   MOTIR-7357). So it takes the same write.
+ *
+ * `anthropic` and `deepseek` are not on it: the contract leaves their models to the
+ * bundled catalog. Pinned to the contract by `test/hostedAgent.test.ts`.
+ */
+export const LAUNCH_DECLARED_MODEL_PROVIDERS: readonly string[] = ['z-ai', 'qwen', 'moonshotai'];
+
+/**
  * The egress contract's document, as OpenCode reads it (`OPENCODE_CONFIG_CONTENT`).
  *
- * ⚠️ For a CUSTOM provider (one whose block names its own `npm` package — `z-ai`
- * and `qwen`) the contract's document is a TEMPLATE: at OpenCode `1.18.32` a model
- * under such a provider resolves only when its block declares it, and a block with
- * no `models` is dropped altogether (egress contract §2, MOTIR-7243). So the run's
- * ONE model is written into its provider's `models` here, and nothing else is.
- * `anthropic` and `deepseek` take their models from the catalog bundled in the
- * binary, so for them — and with no model — this is the static document verbatim.
+ * ⚠️ For a provider in `LAUNCH_DECLARED_MODEL_PROVIDERS` the contract's document is a
+ * TEMPLATE (egress contract §2): the run's ONE model is written into that provider's
+ * `models` here, and nothing else is. For `anthropic` and `deepseek` — and with no
+ * model — this is the static document verbatim.
  */
 export function egressConfig(model?: string): string {
   const slash = model ? model.indexOf('/') : -1;
   const provider = slash > 0 ? model!.slice(0, slash) : '';
   const id = slash > 0 ? model!.slice(slash + 1) : '';
   const block = (EGRESS_DOCUMENT.provider as Record<string, object>)[provider];
-  if (!block || !('npm' in block) || !id) return JSON.stringify(EGRESS_DOCUMENT);
+  if (!block || !LAUNCH_DECLARED_MODEL_PROVIDERS.includes(provider) || !id) {
+    return JSON.stringify(EGRESS_DOCUMENT);
+  }
   return JSON.stringify({
     ...EGRESS_DOCUMENT,
     provider: { ...EGRESS_DOCUMENT.provider, [provider]: { ...block, models: { [id]: {} } } },

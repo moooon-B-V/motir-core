@@ -9,6 +9,7 @@ import { resetHostedRun, setActiveHostedRun } from '../src/hostedAttribution.js'
 import {
   EGRESS_DOCUMENT,
   egressConfig,
+  LAUNCH_DECLARED_MODEL_PROVIDERS,
   HOSTED_AGENT_ENV_KEYS,
   hostedAgentEnv,
   hostedOpenCodeAgent,
@@ -24,16 +25,19 @@ import {
  * (The hosted image carried its own copy until MOTIR-6560; the CLI now owns the
  * only one, and this literal is what holds it to the contract.)
  *
- * Pinned to §2 as amended by MOTIR-7243 (story MOTIR-4332) — motir-gateway commit
- * `2a901eb` on `parent/MOTIR-4332-glm-qwen`: `anthropic`, `deepseek`, `z-ai` and
- * `qwen`, all at the gateway on the run key. The two custom providers name their
- * package (`@ai-sdk/openai-compatible`, bundled in the binary) and carry no
- * `models`: the CLI writes the run's one model there at launch (§2's template note).
- * (Previously pinned to MOTIR-7207's amendment, `7d96eda`, with the first two only.)
+ * Pinned to §2 as amended by MOTIR-7357 (story MOTIR-7351) — motir-gateway commit
+ * `aa55517` on `parent/MOTIR-7351-hosted-kimi`: `anthropic`, `deepseek`, `z-ai`,
+ * `qwen` and `moonshotai`, all at the gateway on the run key. The two custom
+ * providers name their package (`@ai-sdk/openai-compatible`, bundled in the binary);
+ * `moonshotai` is a bundled provider whose block only overrides `baseURL` and
+ * `apiKey`, like `deepseek`. None of the three carries `models`: the CLI writes the
+ * run's one model there at launch (§2's template note).
+ * (Previously pinned to MOTIR-7243's amendment, `2a901eb`, with the first four, and
+ * before that to MOTIR-7207's, `7d96eda`, with the first two.)
  */
 const EGRESS_CONTRACT_SECTION_2 = {
   $schema: 'https://opencode.ai/config.json',
-  enabled_providers: ['anthropic', 'deepseek', 'z-ai', 'qwen'],
+  enabled_providers: ['anthropic', 'deepseek', 'z-ai', 'qwen', 'moonshotai'],
   provider: {
     anthropic: {
       options: {
@@ -56,6 +60,12 @@ const EGRESS_CONTRACT_SECTION_2 = {
     },
     qwen: {
       npm: '@ai-sdk/openai-compatible',
+      options: {
+        baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
+        apiKey: '{env:MOTIR_RUN_KEY}',
+      },
+    },
+    moonshotai: {
       options: {
         baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
         apiKey: '{env:MOTIR_RUN_KEY}',
@@ -138,7 +148,7 @@ describe('hostedOpenCodeAgent (AC3)', () => {
     expect(() => hostedOpenCodeAgent(env)).toThrow(/missing MOTIR_RUN_KEY/);
     for (const model of ['gpt-5', 'openai/gpt-5', 'deepseek/', '/deepseek-v4-pro']) {
       expect(() => hostedOpenCodeAgent({ ...containerEnv(), MOTIR_MODEL: model })).toThrow(
-        /must be "<provider>\/<model id>" with provider one of anthropic, deepseek, z-ai, qwen/,
+        /must be "<provider>\/<model id>" with provider one of anthropic, deepseek, z-ai, qwen, moonshotai/,
       );
     }
   });
@@ -153,16 +163,20 @@ describe('hostedOpenCodeAgent (AC3)', () => {
     expect(config).toEqual(EGRESS_CONTRACT_SECTION_2);
   });
 
-  it('launches a GLM or Qwen model with all four providers, its ONE model declared under its provider (MOTIR-7244)', () => {
+  it('launches a GLM, Qwen or Kimi model with all five providers, its ONE model declared under its provider (MOTIR-7244, MOTIR-7361)', () => {
     for (const [model, provider, id] of [
       ['z-ai/glm-4.6', 'z-ai', 'glm-4.6'],
       ['qwen/qwen-plus', 'qwen', 'qwen-plus'],
+      ['moonshotai/kimi-k2.6', 'moonshotai', 'kimi-k2.6'],
+      // An id outside OpenCode 1.18.32's bundled Kimi snapshot (contract §2).
+      ['moonshotai/kimi-probe-unlisted', 'moonshotai', 'kimi-probe-unlisted'],
     ] as const) {
       const agent = hostedOpenCodeAgent({ ...containerEnv(), MOTIR_MODEL: model });
       expect(agent.args).toEqual(['run', '--model', model, '--auto']);
       const config = JSON.parse(agent.env!['OPENCODE_CONFIG_CONTENT']!);
-      expect(config.enabled_providers).toEqual(['anthropic', 'deepseek', 'z-ai', 'qwen']);
-      expect(Object.keys(config.provider)).toEqual(['anthropic', 'deepseek', 'z-ai', 'qwen']);
+      const five = ['anthropic', 'deepseek', 'z-ai', 'qwen', 'moonshotai'];
+      expect(config.enabled_providers).toEqual(five);
+      expect(Object.keys(config.provider)).toEqual(five);
       // Exactly the run's model, under exactly its provider — and nothing else moved.
       expect(config.provider[provider].models).toEqual({ [id]: {} });
       const { models: _models, ...rest } = config.provider[provider];
@@ -180,12 +194,32 @@ describe('hostedOpenCodeAgent (AC3)', () => {
     expect(EGRESS_DOCUMENT).toEqual(EGRESS_CONTRACT_SECTION_2);
   });
 
-  it("refuses OpenCode's own bundled provider ids before launching, naming the four (MOTIR-7244)", () => {
-    for (const model of ['zhipuai/glm-4.6', 'zai/glm-4.6', 'alibaba/qwen-plus']) {
+  it("refuses OpenCode's own bundled provider ids and non-catalog spellings before launching, naming the five (MOTIR-7244, MOTIR-7361)", () => {
+    for (const model of [
+      'zhipuai/glm-4.6',
+      'zai/glm-4.6',
+      'alibaba/qwen-plus',
+      'moonshot/kimi-k2.6',
+      'kimi/kimi-k2.6',
+    ]) {
       expect(() => hostedOpenCodeAgent({ ...containerEnv(), MOTIR_MODEL: model })).toThrow(
-        /provider one of anthropic, deepseek, z-ai, qwen, got "/,
+        /provider one of anthropic, deepseek, z-ai, qwen, moonshotai, got "/,
       );
     }
+  });
+
+  it('declares the run model at launch for exactly the providers the contract calls a template (MOTIR-7361)', () => {
+    expect(LAUNCH_DECLARED_MODEL_PROVIDERS).toEqual(['z-ai', 'qwen', 'moonshotai']);
+    // Every one of them is an enabled provider of the document.
+    for (const p of LAUNCH_DECLARED_MODEL_PROVIDERS) {
+      expect(EGRESS_DOCUMENT.enabled_providers as readonly string[]).toContain(p);
+    }
+    // The serialised Kimi config carries exactly ONE model, under `moonshotai`, and none elsewhere.
+    const config = JSON.parse(egressConfig('moonshotai/kimi-k2.6'));
+    const declared = Object.entries(config.provider as Record<string, { models?: object }>)
+      .filter(([, block]) => block.models !== undefined)
+      .map(([name, block]) => [name, block.models]);
+    expect(declared).toEqual([['moonshotai', { 'kimi-k2.6': {} }]]);
   });
 
   it('writes no model for a catalog provider, or with no model at all (MOTIR-7244)', () => {
@@ -195,6 +229,7 @@ describe('hostedOpenCodeAgent (AC3)', () => {
     expect(JSON.parse(egressConfig('deepseek/deepseek-v4-pro'))).toEqual(EGRESS_CONTRACT_SECTION_2);
     expect(JSON.parse(egressConfig())).toEqual(EGRESS_CONTRACT_SECTION_2);
     expect(JSON.parse(egressConfig('z-ai/'))).toEqual(EGRESS_CONTRACT_SECTION_2);
+    expect(JSON.parse(egressConfig('moonshotai/'))).toEqual(EGRESS_CONTRACT_SECTION_2);
   });
 
   it('leaves an Anthropic model exactly as it was (MOTIR-7208)', () => {
