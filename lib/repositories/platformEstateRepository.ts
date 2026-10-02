@@ -252,9 +252,9 @@ export const platformEstateRepository = {
                 o."id" AS "organizationId", o."name" AS "organizationName",
                 NULL::text AS "workspaceId", NULL::text AS "workspaceName",
                 NULL::text AS "projectName",
-                (SELECT u."email" FROM "organization_membership" m JOIN "user" u ON u."id" = m."userId"
-                  WHERE m."organizationId" = o."id" AND m."role" = 'owner'
-                  ORDER BY m."createdAt" ASC LIMIT 1) AS "detail"
+                (SELECT u."email" FROM "organization_membership" om JOIN "user" u ON u."id" = om."userId"
+                  WHERE om."organizationId" = o."id" AND om.role = 'owner'
+                  ORDER BY om."createdAt" ASC LIMIT 1) AS "detail"
          FROM "organization" o ${older('o')}
          ORDER BY o."createdAt" DESC, o."id" DESC LIMIT ${input.take})
         UNION ALL

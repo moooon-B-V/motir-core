@@ -60,7 +60,7 @@ export function SpendPeriodSwitch({
         onClick={() => go('all')}
         className={`h-(--height-input) rounded-(--radius-input) border px-3 font-sans text-sm ${
           isAll
-            ? 'border-(--el-accent-on-surface) bg-(--el-surface-raised) text-(--el-text)'
+            ? 'border-(--el-accent-on-surface) bg-(--el-page-bg) shadow-(--shadow-subtle) text-(--el-text)'
             : 'border-(--el-border) text-(--el-text-secondary) hover:text-(--el-text)'
         }`}
       >

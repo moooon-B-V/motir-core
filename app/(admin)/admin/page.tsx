@@ -88,7 +88,7 @@ export default async function AdminOverviewPage({
               aria-current={p === period ? 'page' : undefined}
               className={
                 p === period
-                  ? 'rounded-(--radius-input) bg-(--el-surface-raised) px-3 py-1 font-sans text-sm text-(--el-text)'
+                  ? 'rounded-(--radius-input) bg-(--el-page-bg) shadow-(--shadow-subtle) px-3 py-1 font-sans text-sm text-(--el-text)'
                   : 'rounded-(--radius-input) px-3 py-1 font-sans text-sm text-(--el-text-secondary) hover:text-(--el-text)'
               }
             >

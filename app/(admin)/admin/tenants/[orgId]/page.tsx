@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import type { PlatformOrgOverviewDTO } from '@/lib/dto/platform';
-import { requirePlatformStaff } from '@/lib/platform/auth';
+import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { PlatformOrganizationNotFoundError } from '@/lib/platform/errors';
 import { buildSpendSheet, parseSpendPeriod } from '@/lib/platform/spend';
 import { platformOrgBillingService } from '@/lib/services/platformOrgBillingService';
@@ -127,10 +127,6 @@ export default async function AdminOrganizationPage({
     if (err instanceof PlatformOrganizationNotFoundError) notFound();
     throw err;
   }
-  const indexCost = await platformOrgIndexCostService.read(principal, orgId, undefined, {
-    audited: true,
-  });
-
   return (
     <div className="mx-auto flex max-w-[72rem] flex-col gap-4 px-6 py-6">
       <OrgPageHeader
@@ -145,10 +141,28 @@ export default async function AdminOrganizationPage({
         jobsStack={jobsStack}
         membersCursor={query.members ?? null}
       />
-      <OrgIndexCostCard data={indexCost} />
+      <OrgIndexCostSection principal={principal} orgId={orgId} />
       <ActionLog overview={overview} />
     </div>
   );
+}
+
+/**
+ * The index-cost card reads below the page function, after the overview has
+ * proved the org exists — so the page's own serial chain stays within the
+ * ratchet (MOTIR-3449) and the card's read never runs for a missing org.
+ */
+async function OrgIndexCostSection({
+  principal,
+  orgId,
+}: {
+  principal: PlatformPrincipal;
+  orgId: string;
+}) {
+  const data = await platformOrgIndexCostService.read(principal, orgId, undefined, {
+    audited: true,
+  });
+  return <OrgIndexCostCard data={data} />;
 }
 
 async function OverviewTab({
