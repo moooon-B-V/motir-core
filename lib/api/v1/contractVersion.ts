@@ -918,5 +918,15 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.60.0` after MOTIR-6929's
  *   `1.59.0`. If a sibling has taken it since, RENUMBER this entry — it names the ENUM
  *   MEMBER and the FIELD.
+ *
+ * - `1.61.0` — MOTIR-7146 adds `subject_gone` to the approval-gate record's supersede
+ *   cause: a gate whose subject no longer resolves through its kind's handler is
+ *   withdrawn when a read observes it.
+ *
+ *   Additive: a new member of an enum every client must tolerate (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.61.0` after MOTIR-7023's
+ *   `1.60.0`. If a sibling has taken it since, RENUMBER this entry — it names the ENUM
+ *   MEMBER.
  */
-export const V1_CONTRACT_VERSION = '1.60.0';
+export const V1_CONTRACT_VERSION = '1.61.0';

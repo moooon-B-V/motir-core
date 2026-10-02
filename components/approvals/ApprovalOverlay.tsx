@@ -60,6 +60,7 @@ import type {
 } from '@/lib/dto/approvalGate';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import { subjectGoneKey } from './subjectGoneKey';
 
 // THE APPROVAL OVERLAY (Story MOTIR-5214 · Subtask MOTIR-5224) — an approval
 // decided FULL SCREEN over whatever authed page is open, built to
@@ -771,14 +772,37 @@ export function ApprovalOverlay() {
           />
         </Frameless>
       );
+    } else if (subject.state === 'gone' && read.gate?.state === 'superseded') {
+      // A WITHDRAWN QUESTION OVER A GONE SUBJECT IS STATE `G`, NOT PANEL 4b (Bug MOTIR-7146).
+      // The read withdraws an awaiting gate whose subject no longer resolves before it
+      // answers, so this is what opening one now shows. `G`'s port is DEAD by the frame's
+      // own rule — it never renders the subject — so the frame needs no port to be drawn:
+      // the cause sentence says why, nobody is named and nothing can be pressed.
+      body = (
+        <ApprovalGateControl
+          layout="fill"
+          gate={read.gate}
+          canDecide={false}
+          kindLabel={kindLabel}
+          subjectMeta={null}
+          port={null}
+          verbs={[]}
+          consequence={null}
+          confirmConsequences={[]}
+          routedToLabel={read.routedToLabel}
+          onDecide={async () => null}
+        />
+      );
     } else if (subject.state === 'gone') {
-      // Panel 4b — a registered kind whose subject no longer resolves.
+      // Panel 4b — a registered kind whose subject no longer resolves, on a gate that
+      // was DECIDED before it went (an awaiting one is withdrawn by the read, above). It
+      // names its own kind's subject (MOTIR-7146), never *the design* for every kind.
       body = (
         <Frameless>
           <EmptyState
             icon={<FileX2 className="h-12 w-12" aria-hidden />}
-            title={tRow('subjectGone')}
-            description={t('subjectGone.body')}
+            title={tRow(subjectGoneKey(kind!))}
+            description={t(subjectGoneKey(kind!))}
             action={openWorkItem}
           />
         </Frameless>

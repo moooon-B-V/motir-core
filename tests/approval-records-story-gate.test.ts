@@ -10,6 +10,7 @@ import type { HomeActorContext } from '@/lib/services/homeService';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
+import { resolvableGateSubject } from './helpers/resolvableGateSubject';
 import { truncateAuthTables } from './helpers/db';
 import { addToProjectAs, setProjectRoleDefinitionFor } from './helpers/workspaceRoleFixtures';
 
@@ -95,7 +96,9 @@ async function gate(opts: {
       projectId: fx.projectId,
       workItemId: item.id,
       kind: 'design_result',
-      subjectId: `ev-${item.id}`,
+      // A subject that RESOLVES — the room withdraws a pending gate whose subject is
+      // gone on read (MOTIR-7146).
+      subjectId: await resolvableGateSubject(fx, item.id, 'design_result'),
       createdAt: opts.createdAt,
     },
   });

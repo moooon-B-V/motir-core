@@ -215,18 +215,18 @@ test.describe('an approval, decided full screen over the page you are on', () =>
       const before = await listScroll(last);
       expect(before).toBeGreaterThan(0);
 
-      // A filler's subject does not resolve, so this opens § 22's subject-gone
-      // arm — every row has the door, whatever its subject.
+      // A filler is a design gate over a real, empty evidence row (its subject must
+      // RESOLVE — a gone one is withdrawn by the read, MOTIR-7146), so this opens the
+      // design frame. Which frame is not this step's claim; the scroll is.
       await openRow(last);
-      const gone = page.getByRole('dialog', { name: /^Design result for / });
-      await expect(gone).toBeVisible();
-      await expect(gone.getByText(en.approvalOverlay.subjectGone.body)).toBeVisible();
-      await gone
+      const filler = page.getByRole('dialog', { name: /^Design result for / });
+      await expect(filler).toBeVisible();
+      await filler
         .getByRole('button', { name: /^Close/ })
         .first()
         .click();
 
-      await expect(gone).toBeHidden();
+      await expect(filler).toBeHidden();
       await expect(page).toHaveURL(onTheTab);
       const again = queue(page, en.workbench.tabs.toApprove).getByTestId(lastId);
       await expect(again).toBeVisible();

@@ -2700,7 +2700,8 @@ has several open pull requests and therefore several simultaneous awaiting gates
 > `pulled_back` (`member_drafted` added by MOTIR-5699; **`ci_failed` by MOTIR-6271** —
 > a terminal CI failure at the commits the gate asked about, §8's SIXTH AMENDMENT;
 > **`ci_rerunning` by MOTIR-6946** — a check at those commits `pending` again, the set
-> leaving green without going red, §8's SEVENTH AMENDMENT).
+> leaving green without going red, §8's SEVENTH AMENDMENT; **`subject_gone` by MOTIR-7146**
+> — the subject no longer resolves through its kind's handler, see the amendment below).
 > The full table, with which path writes each, is `design-result.md`
 > AMENDMENT 6 Q5. (A seventh, `reopened_by_hand`, was named here when the
 > amendment was written and removed before it shipped — MOTIR-5661 found that a
@@ -2714,6 +2715,44 @@ has several open pull requests and therefore several simultaneous awaiting gates
 > **It is still a product write with NO actor, no authority and no note.** A
 > cause does not make a withdrawn question readable as a human decision, which is
 > what §6b's no-actor rule exists to guarantee.
+
+> ### §6 AMENDMENT — MOTIR-7146, 2026-10-01: a question whose SUBJECT IS GONE is withdrawn when it is SEEN
+>
+> Every writer of `superseded` above reacts to an EVENT on the subject — a republish,
+> a push, a close, a set change, a pull-back. A subject that stops resolving by any
+> other route (a body edited past its parser by a door that skips the gate's service,
+> an evidence row that no longer reads, a delivery set emptied without a set-change
+> event) had no writer at all: its gate stayed `awaiting` for ever, listed and counted
+> on To approve as a _Gone_ row whose overlay offered nothing to press.
+>
+> **The rule: a read that observes an `awaiting` gate whose subject no longer
+> resolves withdraws it, cause `subject_gone`.** To approve, the Approvals room and the
+> approval overlay make that observation already (`summarizeGateSubjects` omits the
+> subject; the overlay's port answers `gone`), so they hand the candidates to
+> `approvalGatesService.withdrawGoneQuestions`.
+>
+> - **ON OBSERVATION, NOT ON A SWEEP.** A reconcile job would read every awaiting gate
+>   in every workspace through every kind's resolver to find the rare gone one, and
+>   would still leave it on screen until its next tick. The read has already done
+>   that work for exactly the gates a person is looking at.
+> - **AFTER THE READ, IN ITS OWN TRANSACTION.** A read never holds a gate's lock and
+>   never writes inside its own snapshot. Each candidate is re-read UNDER ITS LOCK
+>   (its subject's lock first where the kind takes one — a plan) and withdrawn only
+>   if it is still `awaiting` and its KIND'S HANDLER — the registry's `resolveSubject`,
+>   the seam the decide door reads — still answers null. So the rule covers every
+>   registered kind through the registry, never a list here, and a subject that came
+>   back between the read and the write is left alone.
+> - **A FAILED WITHDRAWAL NEVER FAILS THE READ**: the row stays as it was read, and the
+>   next read observes it again.
+> - **A DECIDED gate over a gone subject is untouched** — it is somebody's answer — and
+>   the overlay still draws Panel 4b for it. An awaiting one is withdrawn before the
+>   overlay answers, so opening it draws state `G` with its cause, never Panel 4b.
+> - **A Visitor's read observes and writes nothing.**
+>
+> It is a product write with no actor, like every cause above. No person-pressed
+> withdraw is added: the approved overlay design (§22, Panel 4b) draws one action,
+> _Open work item_, and the observation retires the question before that panel could
+> be reached for an awaiting gate.
 
 > ### §6b — SHIPPED (MOTIR-4913, 2026-09-10): what WRITES `superseded`, and when
 >

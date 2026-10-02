@@ -169,13 +169,18 @@ export async function seedRoomsViewTabs(slug: string): Promise<RoomsViewTabsSeed
 
   // ── Approvals: three records, none of them the Member's ────────────────────
   for (const [i, workItemId] of cardIds.entries()) {
+    // A REAL evidence row: a gate whose subject is gone is withdrawn by the read that
+    // lists it (MOTIR-7146).
+    const evidence = await adminDb.designEvidence.create({
+      data: { workspaceId: workspace.id, workItemId, isCurrent: false },
+    });
     const gate = await adminDb.approvalGate.create({
       data: {
         workspaceId: workspace.id,
         projectId: project.id,
         workItemId,
         kind: 'design_result',
-        subjectId: `rvt-evidence-${workItemId}`,
+        subjectId: evidence.id,
         routedToId: owner.id,
         createdAt: new Date(Date.now() - (3 - i) * 3_600_000),
       },

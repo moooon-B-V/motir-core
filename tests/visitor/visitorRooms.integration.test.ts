@@ -6,6 +6,7 @@ import { planReviewService } from '@/lib/services/planReviewService';
 import { planSessionsService } from '@/lib/services/planSessionsService';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { resolvableGateSubject } from '../helpers/resolvableGateSubject';
 import { consentedVisitor } from './_consentedVisitor';
 import { truncateAuthTables } from '../helpers/db';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
@@ -81,8 +82,17 @@ async function roomsFixture() {
     adminDb.approvalGate.create({
       data: { ...base, workItemId, kind, subjectId, state: 'awaiting' },
     });
-  const gateOnC = await gate(hidden.id, 'design_result', `sub-${hidden.id}`);
-  const gateOnV = await gate(visible.id, 'design_result', `sub-${visible.id}`);
+  // Subjects that RESOLVE — a member's read withdraws a gone one (MOTIR-7146).
+  const gateOnC = await gate(
+    hidden.id,
+    'design_result',
+    await resolvableGateSubject(fx, hidden.id, 'design_result'),
+  );
+  const gateOnV = await gate(
+    visible.id,
+    'design_result',
+    await resolvableGateSubject(fx, visible.id, 'design_result'),
+  );
   const gateOnP1 = await gate(null, 'plan_approval', p1.id);
   const gateOnP2 = await gate(null, 'plan_approval', p2.id);
 

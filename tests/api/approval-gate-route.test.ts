@@ -1052,6 +1052,11 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
       // makes for the item page's Development frame.
       'agentReviewViewService.readForWorkItem',
       'approvalGatesService.getForWorkItem',
+      // NOT A READ, and the one call here that is not (MOTIR-7146): an AWAITING gate whose
+      // port answered `gone` is withdrawn `subject_gone` before the route answers, so the
+      // overlay draws state G rather than a dead Panel 4b. Its own transaction, after the
+      // read, and it never fails the read (ADR `approval-gates.md` §6 amendment).
+      'approvalGatesService.withdrawGoneQuestionsOnWorkItem',
       // The choice port's parsed options (MOTIR-5891) — the same parse the item page reads.
       'choiceGateService.readPort',
       // The confirm port's parsed decision (MOTIR-5954) — the same parse the item page reads.

@@ -58,6 +58,7 @@ const { IssueTreeSection } = await import('@/app/(authed)/items/_components/Issu
 const { makeWorkItemFixture } = await import('../../fixtures');
 const { createTestUser } = await import('../../fixtures/userFixtures');
 const { adminDb } = await import('../../helpers/adminDb');
+const { resolvableGateSubject } = await import('../../helpers/resolvableGateSubject');
 const { shaFor } = await import('../../helpers/commitShaFixtures');
 const { ensureWorkWaitsOn } = await import('../../helpers/designWaits');
 const { truncateAuthTables } = await import('../../helpers/db');
@@ -169,6 +170,8 @@ async function publishDesign(workItemId: string, label: string) {
 /** The insert the decision / merge raise paths make (see the header). */
 async function insertGate(workItemId: string, kind: ApprovalGateKind) {
   const item = await adminDb.workItem.findUniqueOrThrow({ where: { id: workItemId } });
+  // A subject that RESOLVES — the tab withdraws a gate whose subject is gone (MOTIR-7146).
+  const subjectId = await resolvableGateSubject(fx, workItemId, kind);
   await withWorkspaceContext(fx.ctx, (tx) =>
     approvalGateRepository.createAwaitingIfAbsent(
       {
@@ -176,7 +179,7 @@ async function insertGate(workItemId: string, kind: ApprovalGateKind) {
         projectId: fx.projectId,
         workItemId,
         kind,
-        subjectId: `${kind}-${workItemId}`,
+        subjectId,
         routedToId: item.assigneeId ?? item.reporterId,
       },
       tx,

@@ -117,13 +117,18 @@ export async function seedWorkspaceRoles(slug: string): Promise<WorkspaceRolesSe
     },
     mayaCtx,
   );
+  // A REAL evidence row: a gate whose subject is gone is withdrawn by the read that
+  // lists it (MOTIR-7146).
+  const evidence = await adminDb.designEvidence.create({
+    data: { workspaceId: workspace.id, workItemId: paymentsItem.id, isCurrent: false },
+  });
   await adminDb.approvalGate.create({
     data: {
       workspaceId: workspace.id,
       projectId: payments.id,
       workItemId: paymentsItem.id,
       kind: 'design_result',
-      subjectId: `wr-evidence-${paymentsItem.id}`,
+      subjectId: evidence.id,
       routedToId: maya.id,
     },
   });

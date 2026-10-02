@@ -1,0 +1,13 @@
+-- MOTIR-7146 — a gate whose SUBJECT no longer resolves is withdrawn, under a cause of its own.
+--
+-- An `awaiting` gate whose subject stops resolving (its design or acceptance recording gone,
+-- its choice or decision body no longer parsing, its delivery set emptied) used to stay
+-- `awaiting` for ever: listed and counted on To approve as a *Gone* row nobody could answer.
+-- `approvalGatesService.withdrawGoneQuestions` now supersedes such a gate when a read
+-- observes it, and records why. A new member rather than a reused one: the enum keeps ONE
+-- member per writing path, and none of the existing causes says what happened here.
+--
+-- ADDED only. `IF NOT EXISTS` keeps a re-applied migration from failing on a value it
+-- already added. No row is backfilled: a gone subject is found by READING it through its
+-- kind's resolver, which SQL cannot do, so the product withdraws each one on observation.
+ALTER TYPE "approval_gate_supersede_cause" ADD VALUE IF NOT EXISTS 'subject_gone';

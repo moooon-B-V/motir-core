@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { db } from '@/lib/db';
 import { adminDb } from '../../helpers/adminDb';
+import { resolvableGateSubject } from '../../helpers/resolvableGateSubject';
 import { truncateAuthTables } from '../../helpers/db';
 import { renderWithIntl } from '../../helpers/renderWithIntl';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
@@ -122,6 +123,12 @@ async function gate(opts: {
     fx.ctx,
   );
   await adminDb.workItem.update({ where: { id: item.id }, data: { assigneeId: opts.assigneeId } });
+  // A subject that RESOLVES — the queue withdraws a gate whose subject is gone (MOTIR-7146).
+  const subjectId = await resolvableGateSubject(
+    { workspaceId: fx.workspaceId, projectId },
+    item.id,
+    opts.kind,
+  );
   const row = await withWorkspaceContext(fx.ctx, (tx) =>
     approvalGateRepository.create(
       {
@@ -129,7 +136,7 @@ async function gate(opts: {
         projectId,
         workItemId: item.id,
         kind: opts.kind,
-        subjectId: `evidence-${item.id}`,
+        subjectId,
       },
       tx,
     ),

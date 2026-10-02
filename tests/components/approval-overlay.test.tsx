@@ -311,7 +311,7 @@ describe('the overlay is TOTAL over what the read can answer', () => {
     openAt('GATE-1', 'design_result');
     fetchApprovalGateOverlay.mockResolvedValue(readOf({ subject: { state: 'gone' } }));
     await renderOverlay();
-    expect(screen.getByText(en.workbench.approvals.subjectGone)).toBeTruthy();
+    expect(screen.getByText(en.workbench.approvals.subjectGone.design_result)).toBeTruthy();
     // A NEW TAB, not a navigation of this one (MOTIR-6000; design-notes § 28, DECISION 6).
     const [, panelLink] = screen.getAllByRole('link', {
       name: en.approvalOverlay.openWorkItemNewTab,
@@ -321,6 +321,39 @@ describe('the overlay is TOTAL over what the read can answer', () => {
     expect(panelLink!.getAttribute('rel')).toBe('noopener noreferrer');
     fireEvent.click(panelLink!);
     expect(push).not.toHaveBeenCalled();
+  });
+
+  // Bug MOTIR-7146 — the gone copy named "the design" for every kind.
+  it('names its OWN kind’s subject when it is gone, never “the design” for every kind', async () => {
+    openAt('GATE-1', 'decision_choice');
+    fetchApprovalGateOverlay.mockResolvedValue(
+      readOf({
+        gate: { ...GATE, kind: 'decision_choice', state: 'approved' },
+        subject: { state: 'gone' },
+      }),
+    );
+    await renderOverlay();
+    expect(screen.getByText(en.workbench.approvals.subjectGone.decision_choice)).toBeTruthy();
+    expect(screen.getByText(en.approvalOverlay.subjectGone.decision_choice)).toBeTruthy();
+    expect(screen.queryByText(en.workbench.approvals.subjectGone.design_result)).toBeNull();
+  });
+
+  // Bug MOTIR-7146 — the read withdraws an awaiting gate over a gone subject, so what
+  // opening one shows is the WITHDRAWN frame (state `G`), not the dead end of Panel 4b.
+  it('a WITHDRAWN question over a gone subject draws state G — its cause, and no verb', async () => {
+    openAt('GATE-1', 'design_result');
+    fetchApprovalGateOverlay.mockResolvedValue(
+      readOf({
+        gate: { ...GATE, state: 'superseded', supersededCause: 'subject_gone' },
+        subject: { state: 'gone' },
+      }),
+    );
+    await renderOverlay();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(en.approvalGate.withdrawn.cause.subject_gone)).toBeTruthy();
+    expect(within(dialog).getByText(en.approvalGate.withdrawn.portCite)).toBeTruthy();
+    expect(within(dialog).queryByText(en.workbench.approvals.subjectGone.design_result)).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: en.approvalGate.verb.approve })).toBeNull();
   });
 });
 
@@ -1305,7 +1338,9 @@ describe('the ACCEPTANCE port — a story\u2019s recording, in the shared frame'
     await renderOverlay();
 
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText(en.workbench.approvals.subjectGone)).toBeTruthy();
+    expect(
+      within(dialog).getByText(en.workbench.approvals.subjectGone.acceptance_result),
+    ).toBeTruthy();
     expect(within(dialog).queryByRole('button', { name: en.approvalGate.verb.approve })).toBeNull();
   });
 });

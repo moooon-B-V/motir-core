@@ -23,6 +23,7 @@ import { PlanDestinationTag } from '@/components/planning/PlanDestinationTag';
 import { usePeekRowClick } from '@/app/(authed)/items/_components/IssueQuickView';
 import { useDecidedGateState } from '@/lib/approvals/decidedGates';
 import { RefusalReasonCell, showsRefusalReason } from './RefusalReason';
+import { subjectGoneKey } from './subjectGoneKey';
 import type {
   ApprovalGateKindDTO,
   ApprovalGateStateDTO,
@@ -379,11 +380,14 @@ function DecisionSubjectLine({ subject }: { subject: DecisionApprovalSubjectSumm
 
 /** What the row says about the thing being decided, per kind. */
 function SubjectMeta({
+  kind,
   subject,
   decidedVersion,
   chosenOption,
   decided,
 }: {
+  /** The row's gate kind — what a GONE subject's sentence names (MOTIR-7146). */
+  kind: ApprovalGateKindDTO;
   subject: ApprovalGateSubjectSummaryDTO | null;
   /** Set on a DECIDED record: the version the decision was made against. */
   decidedVersion?: string | null;
@@ -411,8 +415,11 @@ function SubjectMeta({
     // The gate's subject no longer resolves — a DIFFERENT fact from not-built-yet
     // (design-notes § 20). The first is a feature that has not shipped; the
     // second is a gate worth withdrawing, and collapsing them would report a
-    // shipped kind as unbuilt.
-    return <span className="truncate text-xs text-(--el-text-secondary)">{t('subjectGone')}</span>;
+    // shipped kind as unbuilt. It names its OWN kind's subject (MOTIR-7146), never
+    // *the design* for every kind.
+    return (
+      <span className="truncate text-xs text-(--el-text-secondary)">{t(subjectGoneKey(kind))}</span>
+    );
   }
   if (subject.kind === 'pull_request_approval') {
     // The SET names the decision for a live question AND for a decided record: its
@@ -741,13 +748,14 @@ export function ApprovalRow({
             />
           ) : record.section === 'decided' ? (
             <SubjectMeta
+              kind={row.kind}
               subject={row.subject}
               decidedVersion={record.row.subjectVersion}
               chosenOption={record.row.chosenOption}
               decided={{ state: record.row.state, confirmedRecord: record.row.confirmedRecord }}
             />
           ) : (
-            <SubjectMeta subject={row.subject} />
+            <SubjectMeta kind={row.kind} subject={row.subject} />
           )}
         </div>
         <div role="cell" className="flex min-w-0 items-center">

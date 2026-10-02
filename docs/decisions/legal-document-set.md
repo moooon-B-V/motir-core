@@ -16,6 +16,7 @@
   assigns the per-vendor transfer basis to MOTIR-1160 rather than to this record.
   `application-hosting.md` — Fly.io, Neon and Tigris are the processors §7's
   document set must name, and its **Amendment 6 (Q10)** fixes the data region.
+- **AMENDED 2026-10-01 by MOTIR-7216:** the commitment that _"only a provider with a recorded transfer basis may serve EU traffic"_, enforced at the gateway, is struck in place in § _AMENDED 2026-08-27_ (twice). It restated D3 of `ai-upstream-transfer-basis.md`, which that record's 2026-10-01 amendment (MOTIR-3687) SUPERSEDES. The commitment that replaces it: each provider's data practices are published; a caller may require `must-not-train` / `zero-retention` per request, and the gateway fails closed rather than routing around it; Motir's own defaults stay off a provider without a processing agreement. Whether this weakens a counsel-reviewed commitment is flagged to MOTIR-3621, not decided here.
 - **Supersedes / superseded by:** nothing. This is the first record in this
   directory that decides anything about the product's published legal position.
 
@@ -315,14 +316,20 @@ incidents this page has already had.**
 **What follows from the split.** The seventh page carries the contractual commitments of
 none of the others: it does not vary the ToS, the Privacy Policy or a signed DPA, and an
 edit to it carries no notice period. It is a factual roster. The commitments about model
-providers — that a provider must carry a recorded transfer basis to serve EU traffic, and
-that this is enforced at the gateway rather than by convention — stay in the documents
-that are versioned.
+providers ~~— that a provider must carry a recorded transfer basis to serve EU traffic, and
+that this is enforced at the gateway rather than by convention —~~ stay in the documents
+that are versioned. _(Struck 2026-10-01, MOTIR-7216: that commitment restated D3 of
+`ai-upstream-transfer-basis.md`, superseded by its 2026-10-01 amendment. The commitment
+now is that each provider's data practices are published, that a caller may require
+`must-not-train` / `zero-retention` per request and the gateway fails closed rather than
+routing around it, and that Motir's own defaults stay off a provider without a processing
+agreement.)_
 
 **Why it still blocks launch.** The subprocessor list is launch-blocking and now
 deliberately incomplete on its own: it keeps the COMMITMENTS — your content goes to the
-provider you selected, we do not train on it, only a provider with a recorded transfer
-basis may serve EU traffic — and defers the roster of who those providers currently are.
+provider you selected, we do not train on it, ~~only a provider with a recorded transfer
+basis may serve EU traffic~~ _(struck 2026-10-01, MOTIR-7216 — see above)_ each provider's
+data practices are published and you may exclude a provider per request — and defers the roster of who those providers currently are.
 Shipping one without the other would disclose less than the single page did before the
 split.
 

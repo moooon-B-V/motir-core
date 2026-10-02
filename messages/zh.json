@@ -8245,7 +8245,16 @@
       "acceptanceMeta": "{chapters, plural, =0 {无章节} other {# 个章节}} · {version}",
       "noVersion": "无版本号",
       "decidedOn": "基于 <mono>{version}</mono>",
-      "subjectGone": "此项针对的设计已不存在",
+      "subjectGone": {
+        "design_result": "此项针对的设计已不存在",
+        "decision_approval": "此项针对的决策文档已不存在",
+        "acceptance_result": "此项针对的验收视频已不存在",
+        "pull_request_approval": "此项针对的已完成工作已不存在",
+        "decision_choice": "此项针对的选项已不存在",
+        "decision_confirmation": "此项针对的决策已不存在",
+        "plan_approval": "此项针对的计划已不存在",
+        "agent_review": "此项审查针对的已完成工作已不存在"
+      },
       "notRenderable": "Motir 暂不支持展示此类型",
       "notBuiltYet": "尚未实现",
       "subjectGonePill": "已移除",
@@ -9801,6 +9810,7 @@
         "plan_stale": "此计划要改动的工作已经完成，计划因此过期，该问题已撤回。",
         "plan_discarded": "计划中的所有建议都已撤回，计划随之结束，该问题也一并撤回。",
         "queue_failed": "合并队列未能合并这些提交，因此该问题已撤回。",
+        "subject_gone": "此问题针对的内容已不存在，因此该问题已撤回。",
         "unknown": "该问题已撤回。原因未被记录。"
       },
       "causeByKind": {
@@ -10581,7 +10591,14 @@
       "body": "这是一项{kind}审批。Motir 支持展示此类型后，它会在这里打开——这不是你造成的。"
     },
     "subjectGone": {
-      "body": "此设计在发起审批后被移除，这里已没有可批准的内容。打开工作项查看它现在的内容。"
+      "design_result": "此设计在发起审批后被移除，这里已没有可批准的内容。打开工作项查看它现在的内容。",
+      "decision_approval": "决策文档已不在任何打开的合并请求上，这里已没有可批准的内容。打开工作项查看它现在的内容。",
+      "acceptance_result": "此验收视频在发起审批后被移除，这里已没有可批准的内容。打开工作项查看它现在的内容。",
+      "pull_request_approval": "这些合并请求在发起审批后已被取消关联，这里已没有可批准或合并的内容。打开工作项查看它现在的内容。",
+      "decision_choice": "工作项中已不再列出可选的选项，这里已没有可选择的内容。打开工作项查看它现在的内容。",
+      "decision_confirmation": "工作项已不再是一项待确认的决策，这里已没有可确认的内容。打开工作项查看它现在的内容。",
+      "plan_approval": "此计划在发起审批后被移除，这里已没有可批准的内容。打开工作项查看它现在的内容。",
+      "agent_review": "这些合并请求在发起审查后已被取消关联，这里已没有可审查的内容。打开工作项查看它现在的内容。"
     },
     "withdrawn": {
       "conflict": "{pr} 现在与 {base} 冲突，因此该问题已撤回。",

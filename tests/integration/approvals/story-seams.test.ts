@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from '../../helpers/adminDb';
+import { resolvableGateSubject } from '../../helpers/resolvableGateSubject';
 import { truncateAuthTables } from '../../helpers/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -97,6 +98,12 @@ async function gate(opts: {
       ...(opts.reporterId ? { reporterId: opts.reporterId } : {}),
     },
   });
+  // A subject that RESOLVES — the queue withdraws a gate whose subject is gone (MOTIR-7146).
+  const subjectId = await resolvableGateSubject(
+    { workspaceId: fx.workspaceId, projectId },
+    item.id,
+    opts.kind ?? 'design_result',
+  );
   const row = await withWorkspaceContext(fx.ctx, (tx) =>
     approvalGateRepository.create(
       {
@@ -104,7 +111,7 @@ async function gate(opts: {
         projectId,
         workItemId: item.id,
         kind: opts.kind ?? 'design_result',
-        subjectId: `evidence-${item.id}`,
+        subjectId,
       },
       tx,
     ),
@@ -375,7 +382,7 @@ describe('THE BOUNDARY · a kind this build registers no handler for', () => {
     // POSITIVE CONTROL: the registered kind's arm is genuinely different, so the
     // assertion above is not just "everything is unregistered".
     const designRow = page.items.find((r) => r.gateId === registered.gate.id)!;
-    expect(designRow.subject).toBeNull(); // no evidence row seeded — a THIRD answer
+    expect(designRow.subject).toMatchObject({ kind: 'design_result' });
     expect(designRow.kind).toBe('design_result');
   });
 });

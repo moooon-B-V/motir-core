@@ -244,13 +244,19 @@ export async function plantFillerGates(
       },
       { userId: seed.reviewerId, workspaceId: seed.workspaceId },
     );
+    // A REAL evidence row, so the filler's subject RESOLVES. A gate whose subject does
+    // not resolve is withdrawn by the first read that observes it (MOTIR-7146), so a
+    // made-up `subjectId` would empty the very list these fillers exist to fill.
+    const evidence = await adminDb.designEvidence.create({
+      data: { workspaceId: seed.workspaceId, workItemId: item.id },
+    });
     await adminDb.approvalGate.create({
       data: {
         workspaceId: seed.workspaceId,
         projectId: seed.projectId,
         workItemId: item.id,
         kind: 'design_result',
-        subjectId: `filler-evidence-${item.id}`,
+        subjectId: evidence.id,
         routedToId: seed.reviewerId,
         // Ordered BEHIND the published gate, so page one's first row is still
         // the one the spec asserts content on.
