@@ -1,6 +1,13 @@
-import type { AgentInstance, AgentInstanceInterval } from '@/generated/prisma/client';
+import type {
+  AgentInstance,
+  AgentInstanceBootAttempt,
+  AgentInstanceBootStep,
+  AgentInstanceInterval,
+} from '@/generated/prisma/client';
 import type {
   AgentInstanceActiveRunDto,
+  AgentInstanceBootDto,
+  AgentInstanceBootStepDto,
   AgentInstanceDto,
   AgentInstanceImageFields,
   AgentInstanceIntervalDto,
@@ -53,6 +60,35 @@ export function toAgentInstanceIntervalDto(row: AgentInstanceInterval): AgentIns
     billableSeconds: row.billableSeconds,
     credits: row.credits,
     chargeOutcome: row.chargeOutcome,
+  };
+}
+
+/** One boot step → its DTO (AMENDMENT 6 §6). The lease and tenancy never leave. */
+export function toAgentInstanceBootStepDto(row: AgentInstanceBootStep): AgentInstanceBootStepDto {
+  return {
+    seq: row.seq,
+    step: row.step,
+    repository: row.repository,
+    ordinal: row.ordinal,
+    state: row.state,
+    startedAt: row.startedAt?.toISOString() ?? null,
+    endedAt: row.endedAt?.toISOString() ?? null,
+    detail: row.detail,
+  };
+}
+
+/** A boot attempt and its steps → the boot read, steps in read-out (`ordinal`) order. */
+export function toAgentInstanceBootDto(
+  attempt: AgentInstanceBootAttempt,
+  steps: readonly AgentInstanceBootStep[],
+): AgentInstanceBootDto {
+  return {
+    attempt: attempt.attempt,
+    kind: attempt.kind,
+    startedAt: attempt.startedAt.toISOString(),
+    endedAt: attempt.endedAt?.toISOString() ?? null,
+    outcome: attempt.outcome,
+    steps: [...steps].sort((a, b) => a.ordinal - b.ordinal).map(toAgentInstanceBootStepDto),
   };
 }
 

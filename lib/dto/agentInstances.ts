@@ -1,4 +1,8 @@
 import type {
+  AgentInstanceBootKind,
+  AgentInstanceBootOutcome,
+  AgentInstanceBootStepKind,
+  AgentInstanceBootStepState,
   AgentInstanceChargeOutcome,
   AgentInstanceIntervalEndReason,
   AgentInstanceState,
@@ -19,6 +23,10 @@ import type { DispatchRunStatus } from '@/lib/dto/dispatchRuns';
 // and publishing them would make them a contract this shape owes stability to.
 
 export type {
+  AgentInstanceBootKind,
+  AgentInstanceBootOutcome,
+  AgentInstanceBootStepKind,
+  AgentInstanceBootStepState,
   AgentInstanceChargeOutcome,
   AgentInstanceIntervalEndReason,
   AgentInstanceState,
@@ -88,6 +96,31 @@ export interface AgentInstanceIntervalDto {
   billableSeconds: number | null;
   credits: number | null;
   chargeOutcome: AgentInstanceChargeOutcome | null;
+}
+
+/**
+ * One step of a boot attempt (`agent-instances.md` AMENDMENT 6 §1, §6). `seq` is
+ * the stream's cursor; `repository` is `owner/name` on a `clone` row.
+ */
+export interface AgentInstanceBootStepDto {
+  seq: number;
+  step: AgentInstanceBootStepKind;
+  repository: string | null;
+  ordinal: number;
+  state: AgentInstanceBootStepState;
+  startedAt: string | null;
+  endedAt: string | null;
+  detail: string | null;
+}
+
+/** An agent's CURRENT boot attempt and its steps in read-out order (AMENDMENT 6 §6). */
+export interface AgentInstanceBootDto {
+  attempt: number;
+  kind: AgentInstanceBootKind;
+  startedAt: string;
+  endedAt: string | null;
+  outcome: AgentInstanceBootOutcome | null;
+  steps: AgentInstanceBootStepDto[];
 }
 
 /** One row of the My agents page: the instance plus its machine time this month. */
