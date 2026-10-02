@@ -28,6 +28,25 @@ export interface PageSummaryDto {
   updatedAt: string;
 }
 
+/**
+ * One row of the `/pages` index (MOTIR-7300) — `pagesService.listPages`. Its own
+ * shape rather than a widened {@link PageSummaryDto}: a row needs who edited the
+ * page last, which no write's reply needs, and no position or revision.
+ */
+export interface PageListItemDto {
+  id: string;
+  /** The page's own title — `''` for an untitled page; the UI supplies the copy. */
+  title: string;
+  /** ISO-8601 — the last edit. */
+  updatedAt: string;
+  /** Who made that edit. `id` lets the row say "by you" to its own author. */
+  updatedBy: { id: string; name: string };
+}
+
+export interface ListPagesInput {
+  projectId: string;
+}
+
 /** What a save returns: the revision the update produced. */
 export interface SavePageResultDto {
   revision: number;

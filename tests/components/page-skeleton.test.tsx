@@ -268,6 +268,8 @@ describe('the primitive is token-only, and ships nothing that consumes it (MOTIR
     });
     expect(consumers.map((f) => relative(ROOT, f).split(sep).join('/'))).toEqual([
       'app/(authed)/pages/[pageId]/page.tsx',
+      // MOTIR-7300: the `/pages` index's in-page frame (`design-notes.md` § State 5).
+      'app/(authed)/pages/_components/PagesIndexFrame.tsx',
     ]);
   });
 });

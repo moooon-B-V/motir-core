@@ -1115,6 +1115,7 @@
       "workbench": "Workbench",
       "dashboard": "Dashboard",
       "issues": "Work Items",
+      "pages": "Pages",
       "ready": "Ready",
       "runs": "Runs",
       "myAgents": "My agents",
@@ -1236,6 +1237,7 @@
       "accountHeading": "Account",
       "goToDashboard": "Go to Dashboard",
       "goToIssues": "Go to Work Items",
+      "goToPages": "Go to Pages",
       "goToBoards": "Go to Boards",
       "goToReports": "Go to Reports",
       "goToApprovalRecords": "Go to Approval records",
@@ -11202,6 +11204,21 @@
   },
   "pages": {
     "untitled": "Untitled",
+    "index": {
+      "title": "Pages",
+      "subtitle": "Specs, runbooks and notes for this project — most recently edited first.",
+      "newPage": "New page",
+      "creating": "Creating page…",
+      "createFailed": "Couldn’t create the page. Try again.",
+      "listLabel": "Pages in this project",
+      "edited": "Edited {time} by {name}",
+      "editedByYou": "Edited {time} by you",
+      "empty": {
+        "title": "No pages yet",
+        "member": "Write down a spec, a runbook or the notes from a meeting — it stays here, beside the project’s work.",
+        "viewer": "When someone in this project writes a page, it appears here."
+      }
+    },
     "page": {
       "back": "Pages",
       "backLabel": "Back to Pages",

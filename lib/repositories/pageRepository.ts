@@ -1,4 +1,4 @@
-import { Prisma } from '@/generated/prisma/client';
+import { Prisma, type Page } from '@/generated/prisma/client';
 import {
   PAGE_RECORD_SELECT,
   type PageLockedRecord,
@@ -29,7 +29,26 @@ export interface PageBodyUpdate {
   updatedAt: Date;
 }
 
+/**
+ * One row of the `/pages` index (MOTIR-7300): the page's identity, title and its
+ * last edit — no body columns, which are up to 2 MiB a row.
+ */
+export type PageListRecord = Pick<Page, 'id' | 'title' | 'updatedAt' | 'updatedById'>;
+
 export const pageRepository = {
+  /**
+   * Every page of one project, most recently edited first — the `/pages` index
+   * (MOTIR-7300). Flat: the tree is MOTIR-5753's. `id` breaks a tie on
+   * `updatedAt`, so two pages saved in one millisecond keep a stable order.
+   */
+  async listByProject(projectId: string, tx: Prisma.TransactionClient): Promise<PageListRecord[]> {
+    return tx.page.findMany({
+      where: { projectId },
+      select: { id: true, title: true, updatedAt: true, updatedById: true },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
   /**
    * Read one page `FOR UPDATE`, body included. `null` when it does not exist or
    * is invisible under RLS.

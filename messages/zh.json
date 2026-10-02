@@ -1115,6 +1115,7 @@
       "workbench": "工作台",
       "dashboard": "仪表盘",
       "issues": "工作项",
+      "pages": "页面",
       "ready": "就绪",
       "runs": "运行",
       "myAgents": "我的智能体",
@@ -1236,6 +1237,7 @@
       "accountHeading": "账户",
       "goToDashboard": "前往仪表盘",
       "goToIssues": "前往工作项",
+      "goToPages": "前往页面",
       "goToBoards": "前往面板",
       "goToReports": "前往报表",
       "goToApprovalRecords": "前往审批记录",
@@ -11198,6 +11200,21 @@
   },
   "pages": {
     "untitled": "无标题",
+    "index": {
+      "title": "页面",
+      "subtitle": "此项目的规格说明、运行手册和笔记——最近编辑的排在最前。",
+      "newPage": "新建页面",
+      "creating": "正在创建页面…",
+      "createFailed": "无法创建页面，请重试。",
+      "listLabel": "此项目中的页面",
+      "edited": "{name}于{time}编辑",
+      "editedByYou": "你于{time}编辑",
+      "empty": {
+        "title": "还没有页面",
+        "member": "写下规格说明、运行手册或会议记录——它们会留在这里，与项目的工作放在一起。",
+        "viewer": "当项目成员写下页面后，它会显示在这里。"
+      }
+    },
     "page": {
       "back": "页面",
       "backLabel": "返回页面",

@@ -1,5 +1,5 @@
 import type { Page } from '@/generated/prisma/client';
-import type { PageDto } from '@/lib/dto/pages';
+import type { PageDto, PageListItemDto } from '@/lib/dto/pages';
 import type { LockedPageRow, PageRow } from '@/lib/pages';
 
 // Page rows ↔ `@motir/pages`' port rows (Story MOTIR-5752 · MOTIR-7276).
@@ -82,5 +82,23 @@ export function toPageDto(row: LockedPageRow, canEdit: boolean): PageDto {
     ).toString('base64'),
     updatedAt: row.updatedAt.toISOString(),
     canEdit,
+  };
+}
+
+/**
+ * One `/pages` index row (MOTIR-7300): the page and the display name of whoever
+ * edited it last, resolved by the service from `updatedById`. `updated_by_id`
+ * is a `Restrict` foreign key, so the editor always exists; `''` only covers a
+ * user row the batch read did not return.
+ */
+export function toPageListItemDto(
+  record: Pick<Page, 'id' | 'title' | 'updatedAt' | 'updatedById'>,
+  editorName: string | undefined,
+): PageListItemDto {
+  return {
+    id: record.id,
+    title: record.title,
+    updatedAt: record.updatedAt.toISOString(),
+    updatedBy: { id: record.updatedById, name: editorName ?? '' },
   };
 }

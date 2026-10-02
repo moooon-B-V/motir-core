@@ -77,6 +77,38 @@ test.describe('@smoke the page at its own address', () => {
     await expect(page).toHaveTitle('Release runbook');
   });
 
+  test('the Pages section: the rail entry, the empty index, New page, then the row (MOTIR-7300)', async ({
+    page,
+  }) => {
+    await signUp(page, USER);
+
+    const res = await page.goto('/pages');
+    expect(res?.status()).toBe(200);
+    await expect(page.getByRole('link', { name: 'Pages', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pages', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No pages yet' })).toBeVisible();
+
+    // A member is offered New page twice on an empty index — the header's and the
+    // empty state's (design-notes § State 3); either creates the page.
+    const created = page.waitForResponse(
+      (r) => r.url().endsWith('/api/pages') && r.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'New page' }).first().click();
+    const response = await created;
+    expect(response.status()).toBe(201);
+    const { id } = (await response.json()) as { id: string };
+    await page.waitForURL(`**/pages/${id}`);
+    await expect(page.getByRole('textbox', { name: 'Page body' })).toBeVisible();
+
+    await page.goto('/pages');
+    const list = page.getByRole('list', { name: 'Pages in this project' });
+    const row = list.getByRole('link');
+    await expect(row).toHaveCount(1);
+    await expect(row).toHaveAttribute('href', `/pages/${id}`);
+    await expect(row).toContainText('Untitled');
+    await expect(row).toContainText('by you');
+  });
+
   test('an address that names no page answers 404', async ({ page }) => {
     await signUp(page, USER);
     const res = await page.goto('/pages/00000000-0000-4000-8000-000000000000');

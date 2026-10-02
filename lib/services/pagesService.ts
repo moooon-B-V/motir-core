@@ -1,7 +1,8 @@
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { pageRepository } from '@/lib/repositories/pageRepository';
-import { toLockedPageRow, toPageDto } from '@/lib/mappers/pageMappers';
+import { userRepository } from '@/lib/repositories/userRepository';
+import { toLockedPageRow, toPageDto, toPageListItemDto } from '@/lib/mappers/pageMappers';
 import {
   PageNotFoundError,
   createPage as createPageProcedure,
@@ -15,7 +16,9 @@ import {
 import type {
   CreatePageInput,
   GetPageInput,
+  ListPagesInput,
   PageDto,
+  PageListItemDto,
   PageSummaryDto,
   RenamePageInput,
   SavePageResultDto,
@@ -108,6 +111,23 @@ export const pagesService = {
         tx,
       );
       return toPageDto(toLockedPageRow(record), canEditPages);
+    });
+  },
+
+  /**
+   * The project's pages, most recently edited first, each with its last editor's
+   * display name — the `/pages` index (MOTIR-7300). `page:view`. Flat: the tree
+   * is MOTIR-5753's. Two reads in the one transaction: the pages (no body
+   * columns), then the editors' names in one batch, never one per row.
+   */
+  async listPages(ctx: ServiceContext, input: ListPagesInput): Promise<PageListItemDto[]> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      const records = await pageRepository.listByProject(input.projectId, tx);
+      const editorIds = [...new Set(records.map((r) => r.updatedById))];
+      const editors = await userRepository.findByIds(editorIds, tx);
+      const nameById = new Map(editors.map((u) => [u.id, u.name]));
+      return records.map((r) => toPageListItemDto(r, nameById.get(r.updatedById)));
     });
   },
 
