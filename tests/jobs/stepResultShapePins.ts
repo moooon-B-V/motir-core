@@ -571,6 +571,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ containerUsageId: string; idempotent: boolean; outcome: "reported" } | { outcome: "missing" } | { outcome: "not_settled" }',
   },
+  'report-storage': {
+    file: 'lib/jobs/definitions/platformMeterReport.ts',
+    shape:
+      '{ idempotent: boolean; outcome: "reported"; storageChargeId: string } | { outcome: "missing" } | { outcome: "not_charged" }',
+  },
   'sync-seat-quantity': {
     file: 'lib/jobs/definitions/billingSeatSync.ts',
     shape:

@@ -410,6 +410,32 @@ export const ciContainerUsageRepository = {
   },
 
   /**
+   * The next SETTLED containers motir-ai's rollup has not accepted yet, in id order
+   * after `afterId` — one bounded batch of the platform meter backfill (MOTIR-7294).
+   */
+  async listUnreportedSettled(afterId: string | null, take: number, tx: Prisma.TransactionClient) {
+    return tx.ciContainerUsage.findMany({
+      where: {
+        containerStoppedAt: { not: null },
+        platformMeterReportedAt: null,
+        ...(afterId ? { id: { gt: afterId } } : {}),
+      },
+      orderBy: { id: 'asc' },
+      take,
+      select: { id: true, containerProvider: true, handleId: true },
+    });
+  },
+
+  /** Stamp a container's report as accepted (MOTIR-7294). Only the first stamp lands. */
+  async markMeterReported(id: string, at: Date, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.ciContainerUsage.updateMany({
+      where: { id, platformMeterReportedAt: null },
+      data: { platformMeterReportedAt: at },
+    });
+    return result.count;
+  },
+
+  /**
    * ONE dispatch run's machine time (MOTIR-6448) — Σ `billable_seconds` and
    * Σ `cost_usd` over every row naming the run, and whether all of them are
    * settled. Live while the container runs (a checkpoint row's figure is its

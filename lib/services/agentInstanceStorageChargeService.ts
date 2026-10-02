@@ -3,6 +3,7 @@ import { INSTANCE_STORAGE_CREDITS_PER_DAY } from '@/lib/agentInstances/config';
 import { debitAgentStorage } from '@/lib/ai/motirAiClient';
 import { MotirAiConfigError, MotirAiError, MotirAiUnavailableError } from '@/lib/ai/errors';
 import { isCloudBilling } from '@/lib/billing/availability';
+import { platformMeterReportService } from '@/lib/services/platformMeterReportService';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import {
   agentInstanceStorageChargeRepository,
@@ -169,7 +170,12 @@ export const agentInstanceStorageChargeService = {
         }
         await record({ outcome: 'refused', detail });
         summary.refused += 1;
+        continue;
       }
+      // CHARGED: the day's usage and Motir cost go to the platform rollup
+      // (MOTIR-7294) — a job, enqueued after the charge is recorded and OUTSIDE the
+      // charge's try, so it can never reclassify, undo or fail the charge.
+      await platformMeterReportService.enqueueStorageReport(row.id);
     }
     return summary;
   },

@@ -27,9 +27,11 @@ const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
 const { projectsService } = await import('@/lib/services/projectsService');
 const { ciFleetCostMeterService } = await import('@/lib/services/ciFleetCostMeterService');
-const { platformMeterReportService, METER_REPORT_WORKLOAD } =
+const { platformMeterReportService, METER_REPORT_WORKLOAD, STORAGE_COST_USD_PER_DAY } =
   await import('@/lib/services/platformMeterReportService');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
+const { agentInstanceStorageChargeService } =
+  await import('@/lib/services/agentInstanceStorageChargeService');
 const { adminDb } = await import('../helpers/adminDb');
 const { truncateAuthTables } = await import('../helpers/db');
 const { randomToken, randomInt } = await import('../helpers/random');
@@ -41,11 +43,12 @@ interface Fixture {
   workspaceId: string;
   organizationId: string;
   projectId: string;
+  ownerId: string;
 }
 
 /** Every request the faked motir-ai received: its path and its RAW body. */
 let posted: { path: string; body: string }[] = [];
-let answer: () => Response = () => Response.json({ sourceId: 'x', idempotent: false });
+let answer: (body: string) => Response = () => Response.json({ sourceId: 'x', idempotent: false });
 
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe(
@@ -58,11 +61,17 @@ beforeEach(async () => {
   enqueued.length = 0;
   posted = [];
   answer = () => Response.json({ sourceId: 'x', idempotent: false });
+  await adminDb.agentInstanceStorageCharge.deleteMany();
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string | URL, init?: RequestInit) => {
-      posted.push({ path: new URL(String(input)).pathname, body: String(init?.body ?? '') });
-      return answer();
+      const path = new URL(String(input)).pathname;
+      // The storage DEBIT is the charge pass's own call, not a report.
+      if (path === '/v1/credits/agent-storage') {
+        return Response.json({ idempotent: false, balanceCredits: 90 });
+      }
+      posted.push({ path, body: String(init?.body ?? '') });
+      return answer(String(init?.body ?? ''));
     }),
   );
 });
@@ -94,6 +103,7 @@ async function seedTenant(): Promise<Fixture> {
     workspaceId: workspace.id,
     organizationId: workspace.organizationId,
     projectId: project.id,
+    ownerId: user.id,
   };
 }
 
@@ -282,5 +292,183 @@ describe('the report never touches the settle, and is exactly-once at the receiv
     vi.stubEnv('MOTIR_CLOUD', 'false');
     await platformMeterReportService.enqueueContainerReport('fake', 'm-1');
     expect(enqueued).toHaveLength(0);
+  });
+});
+
+// ── MOTIR-7294 — the storage feed and the backfill ──────────────────────────────
+
+let agentSeq = 0;
+async function agentFor(fx: Fixture, createdAt: Date) {
+  agentSeq += 1;
+  return adminDb.agentInstance.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      organizationId: fx.organizationId,
+      projectId: fx.projectId,
+      ownerId: fx.ownerId,
+      name: `agent-${agentSeq}`,
+      profileId: 'claude',
+      imageTag: 'ghcr.io/moooon-b-v/motir-sandbox:claude',
+      imageDigest: 'sha256:0',
+      region: 'iad',
+      state: 'running',
+      createdAt,
+    },
+  });
+}
+
+async function storageDay(
+  fx: Fixture,
+  instanceId: string,
+  day: string,
+  outcome: 'charged' | 'pending',
+) {
+  return adminDb.agentInstanceStorageCharge.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      organizationId: fx.organizationId,
+      agentInstanceId: instanceId,
+      day: new Date(`${day}T00:00:00.000Z`),
+      credits: 10,
+      chargeReference: `agent-storage:${instanceId}:${day}`,
+      chargeOutcome: outcome,
+    },
+  });
+}
+
+describe('a charged storage day is reported to the platform rollup (MOTIR-7294)', () => {
+  it('the storage cost is the record’s $2.30 agent-month over 30 days, as a decimal string', () => {
+    expect(STORAGE_COST_USD_PER_DAY).toBe('0.076666667');
+  });
+
+  it('the charge pass enqueues one report per CHARGED day, and the report carries the day’s usage and cost', async () => {
+    const fx = await seedTenant();
+    const agent = await agentFor(fx, new Date('2026-09-01T00:00:00.000Z'));
+    const summary = await agentInstanceStorageChargeService.chargeDays({
+      now: new Date('2026-09-29T10:00:00.000Z'),
+    });
+    expect(summary.charged).toBe(2);
+
+    const days = await adminDb.agentInstanceStorageCharge.findMany({ orderBy: { day: 'asc' } });
+    expect(enqueued).toEqual(
+      days.map((d) => ({ name: 'system.platform-meter-report', data: { storageChargeId: d.id } })),
+    );
+
+    const outcome = await platformMeterReportService.reportStorage(days[0]!.id);
+    expect(outcome).toEqual({
+      outcome: 'reported',
+      storageChargeId: days[0]!.id,
+      idempotent: false,
+    });
+    expect(JSON.parse(posted[0]!.body)).toEqual({
+      kind: 'storage',
+      instanceId: agent.id,
+      coreOrganizationId: fx.organizationId,
+      day: '2026-09-28',
+      gbSeconds: 10 * 86_400,
+      costUsd: '0.076666667',
+    });
+    expect(posted[0]!.body).toContain('"costUsd":"0.076666667"');
+  });
+
+  it('motir-ai down: the storage charge stays committed and the report throws to be retried', async () => {
+    const fx = await seedTenant();
+    const agent = await agentFor(fx, new Date('2026-09-01T00:00:00.000Z'));
+    const day = await storageDay(fx, agent.id, '2026-09-28', 'charged');
+    answer = () => {
+      throw new TypeError('fetch failed');
+    };
+    await expect(platformMeterReportService.reportStorage(day.id)).rejects.toBeInstanceOf(
+      MotirAiUnavailableError,
+    );
+    const after = await adminDb.agentInstanceStorageCharge.findUniqueOrThrow({
+      where: { id: day.id },
+    });
+    expect(after).toMatchObject({ chargeOutcome: 'charged', platformMeterReportedAt: null });
+  });
+
+  it('a day not charged is never reported, and an unknown id reports nothing', async () => {
+    const fx = await seedTenant();
+    const agent = await agentFor(fx, new Date('2026-09-01T00:00:00.000Z'));
+    const day = await storageDay(fx, agent.id, '2026-09-28', 'pending');
+    expect(await platformMeterReportService.reportStorage(day.id)).toEqual({
+      outcome: 'not_charged',
+    });
+    expect(await platformMeterReportService.reportStorage('nope')).toEqual({ outcome: 'missing' });
+    expect(posted).toHaveLength(0);
+  });
+});
+
+describe('the backfill reports history exactly once, in bounded batches (MOTIR-7294)', () => {
+  it('two runs send every settled container and charged storage day once — the second sends nothing', async () => {
+    const fx = await seedTenant();
+    for (let i = 0; i < 5; i += 1) {
+      await ciFleetCostMeterService.recordContainerUsage(
+        usageFor(fx, { workload: FLEET_WORKLOAD_KINDS[i % FLEET_WORKLOAD_KINDS.length] }),
+      );
+    }
+    // A container still running is not history yet.
+    const live = usageFor(fx, { workload: 'code_graph_index' });
+    const { stoppedAt: _s, terminalState: _t, teardownReason: _r, billableSeconds, ...rest } = live;
+    await ciFleetCostMeterService.recordContainerAccrual({
+      ...rest,
+      startedAt: live.startedAt ?? STOPPED_AT,
+      workload: 'code_graph_index',
+      observedAt: STOPPED_AT,
+      accruedSeconds: billableSeconds,
+    });
+    const agent = await agentFor(fx, new Date('2026-09-01T00:00:00.000Z'));
+    for (const d of ['2026-09-26', '2026-09-27', '2026-09-28'])
+      await storageDay(fx, agent.id, d, 'charged');
+    await storageDay(fx, agent.id, '2026-09-29', 'pending');
+
+    const reads: number[] = [];
+    const first = await platformMeterReportService.backfill({ batch: 2 });
+    expect(first).toEqual({
+      containers: { reported: 5, failed: 0 },
+      storageDays: { reported: 3, failed: 0 },
+    });
+    reads.push(posted.length);
+
+    const second = await platformMeterReportService.backfill({ batch: 2 });
+    expect(second).toEqual({
+      containers: { reported: 0, failed: 0 },
+      storageDays: { reported: 0, failed: 0 },
+    });
+    expect(posted).toHaveLength(reads[0]!);
+
+    const keys = posted.map((p) => {
+      const b = JSON.parse(p.body) as {
+        kind: string;
+        containerUsageId?: string;
+        instanceId?: string;
+        day?: string;
+      };
+      return b.kind === 'container' ? b.containerUsageId : `${b.instanceId}:${b.day}`;
+    });
+    expect(keys).toHaveLength(8);
+    expect(new Set(keys).size).toBe(8);
+  });
+
+  it('a row motir-ai refuses is counted, skipped past, and reported by the next run', async () => {
+    const fx = await seedTenant();
+    const usages = [usageFor(fx), usageFor(fx), usageFor(fx)];
+    for (const u of usages) await ciFleetCostMeterService.recordContainerUsage(u);
+    const rows = await adminDb.ciContainerUsage.findMany({ orderBy: { id: 'asc' } });
+    const bad = rows[1]!.id;
+    answer = (body) =>
+      body.includes(bad)
+        ? new Response(JSON.stringify({ code: 'internal_error', status: 500 }), { status: 500 })
+        : Response.json({ sourceId: 'x', idempotent: false });
+
+    expect(await platformMeterReportService.backfill({ batch: 1 })).toEqual({
+      containers: { reported: 2, failed: 1 },
+      storageDays: { reported: 0, failed: 0 },
+    });
+    answer = () => Response.json({ sourceId: bad, idempotent: false });
+    expect(await platformMeterReportService.backfill({ batch: 1 })).toEqual({
+      containers: { reported: 1, failed: 0 },
+      storageDays: { reported: 0, failed: 0 },
+    });
   });
 });

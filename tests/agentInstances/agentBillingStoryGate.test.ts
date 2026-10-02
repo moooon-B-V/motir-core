@@ -23,6 +23,9 @@ const sendEventImpl = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/jobs/sendEvent', () => ({
   sendEvent: (name: string, data: Record<string, unknown>) => sendEventImpl.current(name, data),
+  // A charged storage day enqueues its platform meter report (MOTIR-7294); this
+  // gate is about the charge, so the report's enqueue is inert here.
+  sendSystemEvent: async () => {},
 }));
 
 const { db } = await import('@/lib/db');

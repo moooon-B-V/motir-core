@@ -84,3 +84,15 @@ export const INSTANCE_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
 export function isUnlimitedAgentOrg(org: { isMeta: boolean; internalBilling: boolean }): boolean {
   return org.isMeta || org.internalBilling;
 }
+
+/**
+ * What one agent's storage COSTS MOTIR per month, in USD per GB-month — the two
+ * Fly prices `agent-instance-storage.md` §2 derives the day rate from (volume
+ * $0.15, snapshot $0.08 on one full copy of the volume, UNMEASURED). Decimal
+ * strings: the platform meter report (MOTIR-7294) sends the cost exactly. Moves
+ * with that record, like the credit rate above.
+ */
+export const INSTANCE_VOLUME_USD_PER_GB_MONTH = '0.15';
+export const INSTANCE_SNAPSHOT_USD_PER_GB_MONTH = '0.08';
+/** The record's month: §2 divides a month's cost by 30 to reach a day. */
+export const INSTANCE_STORAGE_DAYS_PER_MONTH = 30;

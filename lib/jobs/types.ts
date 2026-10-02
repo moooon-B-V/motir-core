@@ -321,10 +321,10 @@ export interface BillingSeatSyncData {
  * by the key the settle path holds. The job re-reads the row, so a retry always
  * sends the row's own id as the receiver's idempotency key.
  */
-export interface PlatformMeterReportData {
-  containerProvider: string;
-  handleId: string;
-}
+export type PlatformMeterReportData =
+  | { containerProvider: string; handleId: string }
+  /** One CHARGED agent-storage day (MOTIR-7294), by its charge row. */
+  | { storageChargeId: string };
 
 /**
  * The `system.code-graph-index` event payload (Story 7.5 · MOTIR-1500) — one per

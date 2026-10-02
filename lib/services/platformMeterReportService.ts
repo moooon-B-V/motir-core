@@ -1,3 +1,10 @@
+import { Prisma } from '@/generated/prisma/client';
+import {
+  INSTANCE_SNAPSHOT_USD_PER_GB_MONTH,
+  INSTANCE_STORAGE_DAYS_PER_MONTH,
+  INSTANCE_VOLUME_SIZE_GB,
+  INSTANCE_VOLUME_USD_PER_GB_MONTH,
+} from '@/lib/agentInstances/config';
 import {
   reportPlatformMeter,
   type PlatformMeterReport,
@@ -9,7 +16,8 @@ import {
   ciContainerUsageRepository,
   type CiContainerWorkload,
 } from '@/lib/repositories/ciContainerUsageRepository';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { agentInstanceStorageChargeRepository } from '@/lib/repositories/agentInstanceStorageChargeRepository';
+import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 /**
  * The PLATFORM METER REPORT (Story MOTIR-727 · MOTIR-5286) — every settled fleet
@@ -44,6 +52,34 @@ export type ContainerReportOutcome =
   | { outcome: 'reported'; containerUsageId: string; idempotent: boolean }
   | { outcome: 'not_settled' }
   | { outcome: 'missing' };
+
+export type StorageReportOutcome =
+  | { outcome: 'reported'; storageChargeId: string; idempotent: boolean }
+  | { outcome: 'not_charged' }
+  | { outcome: 'missing' };
+
+/** One UTC day of a 10 GB volume, in GB-seconds — the storage report's usage. */
+export const STORAGE_GB_SECONDS_PER_DAY = INSTANCE_VOLUME_SIZE_GB * 24 * 60 * 60;
+
+/**
+ * What one agent's storage costs Motir for one UTC day, as a decimal string:
+ * (volume + one snapshot copy) × GB × the Fly prices, over the record's 30-day
+ * month (`agent-instance-storage.md` §2 — $2.30 / 30). Nine places, a nano-dollar.
+ */
+export const STORAGE_COST_USD_PER_DAY = new Prisma.Decimal(INSTANCE_VOLUME_USD_PER_GB_MONTH)
+  .add(INSTANCE_SNAPSHOT_USD_PER_GB_MONTH)
+  .mul(INSTANCE_VOLUME_SIZE_GB)
+  .div(INSTANCE_STORAGE_DAYS_PER_MONTH)
+  .toDecimalPlaces(9)
+  .toFixed();
+
+/** How many rows one backfill batch reads and reports. */
+export const METER_BACKFILL_BATCH = 200;
+
+export interface MeterBackfillSummary {
+  containers: { reported: number; failed: number };
+  storageDays: { reported: number; failed: number };
+}
 
 export const platformMeterReportService = {
   /**
@@ -87,6 +123,104 @@ export const platformMeterReportService = {
       settledAt: row.containerStoppedAt.toISOString(),
     };
     const result = await reportPlatformMeter(report);
+    // Accepted — stamped so the backfill never sends it again (MOTIR-7294).
+    await withSystemContext((tx) =>
+      ciContainerUsageRepository.markMeterReported(row.id, new Date(), tx),
+    );
     return { outcome: 'reported', containerUsageId: row.id, idempotent: result.idempotent };
+  },
+
+  /**
+   * Enqueue ONE charged storage day's report (MOTIR-7294). Called by the storage
+   * charge pass after the day is recorded `charged`; best-effort like the container
+   * enqueue, so it can never undo or fail the charge.
+   */
+  async enqueueStorageReport(storageChargeId: string): Promise<void> {
+    if (!isCloudBilling()) return;
+    await sendSystemEvent('system.platform-meter-report', { storageChargeId });
+  },
+
+  /**
+   * The job's body for a storage day: one `kind: storage` report — the instance,
+   * the day, a 10 GB volume's GB-seconds and the day's storage cost. Only a CHARGED
+   * day is reported; every motir-ai failure throws so the job retries, and the
+   * receiver is idempotent on `storage:<instance>:<day>`.
+   */
+  async reportStorage(storageChargeId: string): Promise<StorageReportOutcome> {
+    const row = await withSystemContext((tx) =>
+      agentInstanceStorageChargeRepository.findForMeterReport(storageChargeId, tx),
+    );
+    if (!row) return { outcome: 'missing' };
+    if (row.chargeOutcome !== 'charged') return { outcome: 'not_charged' };
+
+    const result = await reportPlatformMeter({
+      kind: 'storage',
+      instanceId: row.agentInstanceId,
+      coreOrganizationId: row.organizationId,
+      day: row.day.toISOString().slice(0, 10),
+      gbSeconds: STORAGE_GB_SECONDS_PER_DAY,
+      costUsd: STORAGE_COST_USD_PER_DAY,
+    });
+    await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+      agentInstanceStorageChargeRepository.markMeterReported(row.id, new Date(), tx),
+    );
+    return { outcome: 'reported', storageChargeId: row.id, idempotent: result.idempotent };
+  },
+
+  /**
+   * THE BACKFILL (MOTIR-7294): report every settled container and every charged
+   * storage day the rollup has not accepted yet, so its history starts with the
+   * meter's rather than on the day this shipped.
+   *
+   * Bounded: `batch` rows per read, walked in id order, each read fresh — never a
+   * table load. Exactly once across runs: a row is stamped when the receiver
+   * accepts it and the next run reads only unstamped rows. A row motir-ai refuses
+   * or cannot take is counted `failed`, left unstamped, and the walk moves past it,
+   * so one bad row never stalls the rest and the next run tries it again.
+   */
+  async backfill(opts: { batch?: number } = {}): Promise<MeterBackfillSummary> {
+    const batch = opts.batch ?? METER_BACKFILL_BATCH;
+    const summary: MeterBackfillSummary = {
+      containers: { reported: 0, failed: 0 },
+      storageDays: { reported: 0, failed: 0 },
+    };
+
+    let after: string | null = null;
+    for (;;) {
+      const cursor: string | null = after;
+      const rows: { id: string; containerProvider: string; handleId: string }[] =
+        await withSystemContext((tx) =>
+          ciContainerUsageRepository.listUnreportedSettled(cursor, batch, tx),
+        );
+      for (const row of rows) {
+        try {
+          await this.reportContainer(row.containerProvider, row.handleId);
+          summary.containers.reported += 1;
+        } catch {
+          summary.containers.failed += 1;
+        }
+      }
+      if (rows.length < batch) break;
+      after = rows[rows.length - 1]!.id;
+    }
+
+    after = null;
+    for (;;) {
+      const cursor: string | null = after;
+      const rows: { id: string; workspaceId: string }[] = await withSystemContext((tx) =>
+        agentInstanceStorageChargeRepository.listUnreportedCharged(cursor, batch, tx),
+      );
+      for (const row of rows) {
+        try {
+          await this.reportStorage(row.id);
+          summary.storageDays.reported += 1;
+        } catch {
+          summary.storageDays.failed += 1;
+        }
+      }
+      if (rows.length < batch) break;
+      after = rows[rows.length - 1]!.id;
+    }
+    return summary;
   },
 };
