@@ -216,9 +216,13 @@ describe('/pages — the gate first, then the frame', () => {
 
     expect(all.some((e) => e.type === 'h1')).toBe(true);
     // The subtitle is the tree's — position order, not "most recently edited".
-    expect(all.some((e) => e.type === 'p' && e.props.children === 'pages.tree.subtitle')).toBe(
-      true,
-    );
+    expect(
+      all.some(
+        (e) =>
+          e.type === 'p' &&
+          (e.props as { children?: ReactNode }).children === 'pages.tree.subtitle',
+      ),
+    ).toBe(true);
     expect(all.some((e) => e.type === NewPageButton)).toBe(true);
 
     const suspense = all.find((e) => e.type === Suspense) as ReactElement<{
