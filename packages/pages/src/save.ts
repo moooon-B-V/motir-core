@@ -1,6 +1,11 @@
 import { PAGE_BODY_MAX_BYTES, PAGE_SAVE_MAX_BYTES, PAGE_TITLE_MAX_LENGTH } from './constants';
 import { applyUpdate, deriveFormats, emptyState } from './document/convert';
-import { PageBodyTooLargeError, PageNotFoundError, PageTitleTooLongError } from './errors';
+import {
+  PageBodyTooLargeError,
+  PageNotFoundError,
+  PageTitleTooLongError,
+  PageUpdateMalformedError,
+} from './errors';
 import { positionBetween } from './position';
 import type { Clock, PageRow, PageStore } from './store';
 import type { PagePlacement } from './types';
@@ -10,7 +15,9 @@ import type { PagePlacement } from './types';
 // through a `PageStore`. The app's service owns the transaction and the
 // permission gate; these own the ORDER, which is the part that keeps a save
 // from losing an update or storing an oversize body:
-//   * the request cap is checked BEFORE the lock — a refused request costs no lock;
+//   * the request cap and an empty request are checked BEFORE the lock — a refused
+//     request costs no lock; an undecodable one is refused by the merge, before
+//     any write;
 //   * the page is read THROUGH the lock before the merge — two saves in two
 //     transactions serialise in the database and each merges onto the other;
 //   * the body cap is checked AFTER the merge and BEFORE any write.
@@ -100,6 +107,9 @@ export async function savePageUpdate(
   if (input.update.byteLength > PAGE_SAVE_MAX_BYTES) {
     throw new PageBodyTooLargeError(PAGE_SAVE_MAX_BYTES, input.update.byteLength);
   }
+  // An empty request is refused before the lock, as an oversize one is; an
+  // undecodable one is refused by `applyUpdate`, after the lock and before any write.
+  if (input.update.byteLength === 0) throw new PageUpdateMalformedError('empty');
 
   const page = await store.lockPage(input.pageId);
   if (!page) throw new PageNotFoundError(input.pageId);

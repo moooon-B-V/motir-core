@@ -2,6 +2,7 @@ import * as Y from 'yjs';
 import { describe, expect, it } from 'vitest';
 import {
   PAGE_FRAGMENT,
+  PageUpdateMalformedError,
   applyUpdate,
   deriveFormats,
   emptyState,
@@ -77,5 +78,38 @@ describe('the page body conversions', () => {
   it('produces an empty update when the markdown already matches', () => {
     const base = stateOf('Same');
     expect(stateToMarkdown(applyUpdate(base, markdownToUpdate(base, 'Same')))).toBe('Same');
+  });
+});
+
+describe('applyUpdate refuses an update it cannot apply (MOTIR-7281)', () => {
+  it('an empty update is malformed, not a crash', () => {
+    expect(() => applyUpdate(emptyState(), new Uint8Array(0))).toThrow(PageUpdateMalformedError);
+  });
+
+  it('bytes the Yjs decoder refuses are malformed, with the reason', () => {
+    let caught: unknown;
+    try {
+      applyUpdate(stateOf('Kept.'), new Uint8Array([1, 2, 3]));
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(PageUpdateMalformedError);
+    expect(caught).toMatchObject({
+      code: 'PAGE_UPDATE_MALFORMED',
+      status: 400,
+      reason: 'undecodable',
+    });
+  });
+
+  it('a stored state that will not decode is NOT reported as the caller’s malformed update', () => {
+    const update = markdownToUpdate(emptyState(), 'x');
+    let caught: unknown;
+    try {
+      applyUpdate(new Uint8Array([1, 2, 3]), update);
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught).not.toBeInstanceOf(PageUpdateMalformedError);
   });
 });

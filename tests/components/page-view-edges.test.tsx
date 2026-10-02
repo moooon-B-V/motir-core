@@ -5,12 +5,11 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import type { Editor } from '@tiptap/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PageView, type PageViewPage } from '@/app/(authed)/pages/[pageId]/_components/PageView';
+import { sendPageUpdate } from '@/components/pages/PageEditorHost';
 // `PageView` loads the host LAZILY. Importing it here puts the editor's module
 // graph in the cache before the first mount, so `findByRole` waits on the render
 // rather than on a cold transform of Tiptap + Yjs (which can outlast its default
-// 1 s under a loaded runner). The sibling suite gets the same by importing the
-// host's helpers.
-import '@/components/pages/PageEditorHost';
+// 1 s under a loaded runner) — the `sendPageUpdate` import above does it.
 
 // The page at its address — the EDGES `tests/components/page-view.test.tsx` does
 // not reach (Story MOTIR-5752 · MOTIR-7281, the story's coverage gate): the
@@ -258,5 +257,25 @@ describe('the title’s rename refusals', () => {
   it('a page that already has a title does not take focus on arrival', async () => {
     await mount({ title: 'Runbook' });
     expect(document.activeElement).not.toBe(screen.getByRole('textbox', { name: 'Page title' }));
+  });
+});
+
+describe('a 400 PAGE_UPDATE_MALFORMED from the save door (MOTIR-7281)', () => {
+  // DECIDED: the host reads it as it reads every non-413 refusal — a plain
+  // rejection, which the editor treats as `offline` and retries with backoff,
+  // keeping the writer's edits. Our own editor produces its updates from a Yjs
+  // doc and never sends an empty or undecodable one, so a 400 here means a
+  // defect, not a writer's mistake: keeping the edits and saying "Offline —
+  // edits kept" loses nothing, where the one FINAL state the editor has
+  // (`too_large`) would tell the writer the page is too large, which is false.
+  it('rejects without the too-large code, so the editor keeps the edits and retries', async () => {
+    answer(
+      '/api/pages/p/updates',
+      json({ code: 'PAGE_UPDATE_MALFORMED', error: 'The page update is empty.' }, 400),
+    );
+    const refusal = await sendPageUpdate('p', new Uint8Array(0)).catch((e: unknown) => e);
+    expect(refusal).toBeInstanceOf(Error);
+    expect((refusal as { code?: string }).code).toBeUndefined();
+    expect((refusal as Error).message).toContain('400');
   });
 });

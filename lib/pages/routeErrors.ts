@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
-import { PageBodyTooLargeError, PageNotFoundError, PageTitleTooLongError } from '@/lib/pages';
+import {
+  PageBodyTooLargeError,
+  PageNotFoundError,
+  PageTitleTooLongError,
+  PageUpdateMalformedError,
+} from '@/lib/pages';
 
 // The page routes' refusal map (Story MOTIR-5752 · MOTIR-7278) — the same shape
 // as `lib/workItems/gateResponse.ts`: one function every `/api/pages` handler's
@@ -37,6 +42,11 @@ export function pageErrorResponse(err: unknown): NextResponse {
     return pageNotFoundResponse();
   }
   if (err instanceof PageBodyTooLargeError) return pageBodyTooLargeResponse(err.limit, err.size);
+  // An empty or undecodable save body (MOTIR-7281). The editor host reads any
+  // non-413 refusal as `offline` and retries; our own editor never produces one.
+  if (err instanceof PageUpdateMalformedError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+  }
   if (err instanceof PageTitleTooLongError) {
     return NextResponse.json(
       { code: err.code, error: err.message, limit: err.limit },

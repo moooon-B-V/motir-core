@@ -91,3 +91,21 @@ export class PageTitleTooLongError extends PageError {
     this.name = 'PageTitleTooLongError';
   }
 }
+
+/**
+ * A save whose update is not a Yjs update this document can apply — empty, or
+ * bytes the decoder refuses. Our own editor never sends one, so it is a client
+ * defect or a hand-made request; it is refused before anything is written.
+ */
+export class PageUpdateMalformedError extends PageError {
+  readonly code = 'PAGE_UPDATE_MALFORMED' as const;
+  readonly status = 400 as const;
+  constructor(readonly reason: 'empty' | 'undecodable') {
+    super(
+      reason === 'empty'
+        ? 'The page update is empty.'
+        : 'The page update could not be decoded as a Yjs update.',
+    );
+    this.name = 'PageUpdateMalformedError';
+  }
+}

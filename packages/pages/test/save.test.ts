@@ -7,6 +7,7 @@ import {
   PageError,
   PageNotFoundError,
   PageTitleTooLongError,
+  PageUpdateMalformedError,
   applyUpdate,
   createPage,
   emptyState,
@@ -113,6 +114,38 @@ describe('renamePage', () => {
     });
   });
 
+  it('refuses an empty update as malformed before taking the lock', async () => {
+    const page = await createPage(store, clock, scope);
+    const refusal = await savePageUpdate(store, clock, {
+      pageId: page.id,
+      actorId: 'u1',
+      update: new Uint8Array(0),
+    }).catch((err: unknown) => err);
+
+    expect(refusal).toBeInstanceOf(PageUpdateMalformedError);
+    expect(refusal).toBeInstanceOf(PageError);
+    expect(refusal).toMatchObject({ code: 'PAGE_UPDATE_MALFORMED', status: 400, reason: 'empty' });
+    expect(store.called('lockPage')).toBe(0);
+    expect(store.called('updateBody')).toBe(0);
+  });
+
+  it('refuses bytes Yjs cannot decode as malformed, writing nothing', async () => {
+    const seeded = await pageWith('Kept.');
+    const writesBefore = store.called('updateBody');
+    const refusal = await savePageUpdate(store, clock, {
+      pageId: seeded.id,
+      actorId: 'u1',
+      update: new Uint8Array([1, 2, 3]),
+    }).catch((err: unknown) => err);
+
+    expect(refusal).toBeInstanceOf(PageUpdateMalformedError);
+    expect(refusal).toMatchObject({ code: 'PAGE_UPDATE_MALFORMED', reason: 'undecodable' });
+    expect(store.called('updateBody')).toBe(writesBefore);
+    const stored = store.pages.get(seeded.id)!;
+    expect(stored.revision).toBe(2);
+    expect(stateToMarkdown(stored.bodyState)).toBe('Kept.');
+  });
+
   it('refuses an unknown page', async () => {
     await expect(
       renamePage(store, { pageId: 'nope', actorId: 'u1', title: 'x' }),
@@ -215,6 +248,38 @@ describe('savePageUpdate', () => {
     expect(reached).toBeGreaterThan(PAGE_BODY_MAX_BYTES);
     expect(store.called('updateBody')).toBe(writesBefore);
     expect(store.pages.get(page.id)!.revision).toBe(3);
+  });
+
+  it('refuses an empty update as malformed before taking the lock', async () => {
+    const page = await createPage(store, clock, scope);
+    const refusal = await savePageUpdate(store, clock, {
+      pageId: page.id,
+      actorId: 'u1',
+      update: new Uint8Array(0),
+    }).catch((err: unknown) => err);
+
+    expect(refusal).toBeInstanceOf(PageUpdateMalformedError);
+    expect(refusal).toBeInstanceOf(PageError);
+    expect(refusal).toMatchObject({ code: 'PAGE_UPDATE_MALFORMED', status: 400, reason: 'empty' });
+    expect(store.called('lockPage')).toBe(0);
+    expect(store.called('updateBody')).toBe(0);
+  });
+
+  it('refuses bytes Yjs cannot decode as malformed, writing nothing', async () => {
+    const seeded = await pageWith('Kept.');
+    const writesBefore = store.called('updateBody');
+    const refusal = await savePageUpdate(store, clock, {
+      pageId: seeded.id,
+      actorId: 'u1',
+      update: new Uint8Array([1, 2, 3]),
+    }).catch((err: unknown) => err);
+
+    expect(refusal).toBeInstanceOf(PageUpdateMalformedError);
+    expect(refusal).toMatchObject({ code: 'PAGE_UPDATE_MALFORMED', reason: 'undecodable' });
+    expect(store.called('updateBody')).toBe(writesBefore);
+    const stored = store.pages.get(seeded.id)!;
+    expect(stored.revision).toBe(2);
+    expect(stateToMarkdown(stored.bodyState)).toBe('Kept.');
   });
 
   it('refuses an unknown page', async () => {

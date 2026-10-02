@@ -190,6 +190,27 @@ describe('the save door’s stream', () => {
     expect(spy.mock.calls[0]![1].update.byteLength).toBe(0);
   });
 
+  it.each([
+    ['an empty body', undefined],
+    ['bytes Yjs cannot decode', new Uint8Array([1, 2, 3])],
+  ])('%s is refused as 400 PAGE_UPDATE_MALFORMED, and nothing is written', async (_label, body) => {
+    const f = await makeFixture();
+    signIn(f.manager);
+    const res = await SAVE(
+      new Request(`${BASE}/${f.pageId}/updates`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/octet-stream' },
+        body: body as BodyInit | undefined,
+      }),
+      params(f.pageId),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: 'PAGE_UPDATE_MALFORMED' });
+    const row = await adminDb.page.findUniqueOrThrow({ where: { id: f.pageId } });
+    expect(row.revision).toBe(1);
+    expect(row.bodyMarkdown).toBe('');
+  });
+
   it('an over-cap stream whose cancel itself fails is still refused as 413', async () => {
     const f = await makeFixture();
     signIn(f.manager);

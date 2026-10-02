@@ -4,6 +4,7 @@ import { prosemirrorJSONToYXmlFragment, yXmlFragmentToProseMirrorFragment } from
 import * as Y from 'yjs';
 import { parseMarkdown, serializeMarkdown } from './markdown';
 import { PAGE_FRAGMENT, pageSchema } from './schema';
+import { PageUpdateMalformedError } from '../errors';
 
 // The page body's conversions (Story MOTIR-5752 · MOTIR-7272), all pure and
 // headless, over `Uint8Array` states (`docs/decisions/pages.md` §3).
@@ -77,10 +78,23 @@ export function deriveFormats(state: Uint8Array): DerivedFormats {
   };
 }
 
-/** A state with an update applied — Yjs merges, so order never matters. */
+/**
+ * A state with an update applied — Yjs merges, so order never matters.
+ *
+ * Throws `PageUpdateMalformedError` when the UPDATE is empty or the Yjs decoder
+ * refuses it (it throws a bare `Error` such as "Unexpected end of array"), so a
+ * bad request is a typed refusal rather than an unexplained failure. The STATE is
+ * loaded outside that guard: a stored state that will not decode is the server's
+ * defect, not the caller's, and must not be reported as theirs.
+ */
 export function applyUpdate(state: Uint8Array, update: Uint8Array): Uint8Array {
   const doc = load(state);
-  Y.applyUpdate(doc, update);
+  if (update.byteLength === 0) throw new PageUpdateMalformedError('empty');
+  try {
+    Y.applyUpdate(doc, update);
+  } catch {
+    throw new PageUpdateMalformedError('undecodable');
+  }
   return Y.encodeStateAsUpdate(doc);
 }
 
