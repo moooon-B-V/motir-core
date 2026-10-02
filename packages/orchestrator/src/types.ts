@@ -519,6 +519,15 @@ export interface PersistentContainerSpec {
    * `MOTIR_TERMINAL_MASTER_KEY` gets.
    */
   readonly terminal: PersistentTerminalConfig | null;
+  /**
+   * The machine's main process when {@link terminal} is null (MOTIR-7336): the
+   * argv that replaces the image's `CMD` under its unchanged `ENTRYPOINT`. The
+   * sandbox image's own `CMD` is an interactive shell, which exits at once with
+   * no TTY, so a machine booted without a main process stops seconds after it
+   * starts. Ignored when `terminal` is set — the terminal's command is the main
+   * process then. Absent or null keeps the image's `CMD`.
+   */
+  readonly idleCommand?: readonly string[] | null;
 }
 
 /**
@@ -610,6 +619,13 @@ export interface PersistentContainerStatus {
   readonly startedAt: Date | null;
   /** The stop instant of the current run, when it has stopped since `startedAt`. */
   readonly stoppedAt: Date | null;
+  /**
+   * The exit code of the machine's main process when it last EXITED on its own
+   * (MOTIR-7336: a boot that ends in a stopped machine says why), or null when it
+   * never exited, the provider kept no code, or the machine is gone. Absent on an
+   * adapter that cannot read it.
+   */
+  readonly exitCode?: number | null;
   /**
    * The image the machine's config names right now (`agent-image-update.md` Q6:
    * the settle of an interrupted update reads WHERE the machine is). Null when
