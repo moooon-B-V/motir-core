@@ -353,6 +353,54 @@ export const pageRepository = {
     `;
   },
 
+  /**
+   * The pages FILED in one folder — its top-level pages, the set a folder delete
+   * moves up (MOTIR-7371) — in level order, `(position, id) COLLATE "C"`. A
+   * sub-page carries no `folder_id` (`page_parent_xor_folder`), so it is never
+   * here: it follows its parent wherever the parent goes.
+   */
+  async findFiledInFolder(
+    folderId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; position: string }>> {
+    return tx.$queryRaw<Array<{ id: string; position: string }>>`
+      SELECT p."id", p."position" FROM "page" p
+       WHERE p."folder_id" = ${folderId}
+       ORDER BY p."position" COLLATE "C" ASC, p."id" COLLATE "C" ASC
+    `;
+  },
+
+  /** How many pages are filed directly in `folderId` — the set `findFiledInFolder` reads. */
+  async countFiledInFolder(folderId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.page.count({ where: { folderId } });
+  },
+
+  /**
+   * Re-file pages from one folder to another folder, or to the project root
+   * (`toFolderId` null), each at the position the caller minted for it, in ONE
+   * `UPDATE` (MOTIR-7371 — a folder delete's move-up). Only rows still filed in
+   * `fromFolderId` are touched. Their sub-pages are not rows of this write: a
+   * sub-page carries no folder, and its ancestor chain names pages only. Returns
+   * the number of pages moved.
+   */
+  async moveFiledPages(
+    fromFolderId: string,
+    toFolderId: string | null,
+    positions: ReadonlyArray<{ id: string; position: string }>,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (positions.length === 0) return 0;
+    return tx.$executeRaw`
+      UPDATE "page" p
+         SET "folder_id" = ${toFolderId}::text,
+             "position" = v."position"
+        FROM unnest(${positions.map((p) => p.id)}::text[], ${positions.map((p) => p.position)}::text[])
+             AS v("id", "position")
+       WHERE p."id" = v."id"
+         AND p."folder_id" = ${fromFolderId}
+    `;
+  },
+
   async insert(data: PageCreateInput, tx: Prisma.TransactionClient): Promise<PageRecord> {
     return tx.page.create({ data, select: PAGE_RECORD_SELECT });
   },

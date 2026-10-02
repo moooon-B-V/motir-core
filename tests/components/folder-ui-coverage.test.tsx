@@ -58,6 +58,7 @@ describe('FolderDeleteDialog — dismissal', () => {
           name: 'Parked',
           childFolderCount: 0,
           workItemCount: 0,
+          pageCount: 0,
           destination: { folderId: null, name: null },
         }}
         refusal={null}

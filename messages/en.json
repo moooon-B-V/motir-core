@@ -11024,7 +11024,7 @@
     "delete": "Delete…",
     "deleteTitle": "Delete folder “{name}”?",
     "deleteLead": "Only the folder is removed. Everything filed in it stays in the project.",
-    "deleteMoves": "<strong>{kinds, select, both {{folders, plural, one {# folder} other {# folders}} and {items, plural, one {# work item} other {# work items}}} folders {{folders, plural, one {# folder} other {# folders}}} other {{items, plural, one {# work item} other {# work items}}}}</strong> will move to <strong>{destination}</strong>. No work items are deleted.",
+    "deleteMoves": "<strong>{kinds, select, all {{folders, plural, one {# folder} other {# folders}}, {items, plural, one {# work item} other {# work items}} and {pages, plural, one {# page} other {# pages}}} foldersItems {{folders, plural, one {# folder} other {# folders}} and {items, plural, one {# work item} other {# work items}}} foldersPages {{folders, plural, one {# folder} other {# folders}} and {pages, plural, one {# page} other {# pages}}} itemsPages {{items, plural, one {# work item} other {# work items}} and {pages, plural, one {# page} other {# pages}}} folders {{folders, plural, one {# folder} other {# folders}}} pages {{pages, plural, one {# page} other {# pages}}} other {{items, plural, one {# work item} other {# work items}}}}</strong> will move to <strong>{destination}</strong>. No work items or pages are deleted.",
     "deleteEmpty": "“{name}” is empty. Deleting it removes only the folder.",
     "deleteConfirm": "Delete folder",
     "deleteCounting": "Counting what moves…",

@@ -526,6 +526,65 @@ describe('pageStoreFor(tx) — placing pages under a folder or a page', () => {
   });
 });
 
+describe('pageRepository — a folder delete’s page writes (MOTIR-7371)', () => {
+  it('reads, counts and re-files a folder’s filed pages in level order, leaving sub-pages alone', async () => {
+    const t = await makeTenant('refile');
+    const from = await makeFolder(t, 'From');
+    const to = await makeFolder(t, 'To');
+    const a = await createUnder(t, { kind: 'folder', folderId: from.id }, 'A');
+    const b = await createUnder(t, { kind: 'folder', folderId: from.id }, 'B');
+    const sub = await createUnder(t, { kind: 'page', pageId: a.id }, 'A sub');
+
+    const filed = await inTenant(t, (tx) => pageRepository.findFiledInFolder(from.id, tx));
+    expect(filed).toEqual([
+      { id: a.id, position: a.position },
+      { id: b.id, position: b.position },
+    ]);
+    expect(await inTenant(t, (tx) => pageRepository.countFiledInFolder(from.id, tx))).toBe(2);
+    expect(await inTenant(t, (tx) => pageRepository.moveFiledPages(from.id, to.id, [], tx))).toBe(
+      0,
+    );
+
+    // Only rows still filed in `from` move: a stale id is skipped, not re-filed.
+    const moved = await inTenant(t, (tx) =>
+      pageRepository.moveFiledPages(
+        from.id,
+        to.id,
+        [
+          { id: a.id, position: 'b0' },
+          { id: b.id, position: 'b1' },
+          { id: sub.id, position: 'b2' },
+        ],
+        tx,
+      ),
+    );
+    expect(moved).toBe(2);
+    const rows = await adminDb.page.findMany({
+      where: { id: { in: [a.id, b.id, sub.id] } },
+      select: { id: true, folderId: true, parentPageId: true, position: true },
+      orderBy: { title: 'asc' },
+    });
+    expect(rows).toEqual([
+      { id: a.id, folderId: to.id, parentPageId: null, position: 'b0' },
+      { id: sub.id, folderId: null, parentPageId: a.id, position: sub.position },
+      { id: b.id, folderId: to.id, parentPageId: null, position: 'b1' },
+    ]);
+    expect(await inTenant(t, (tx) => pageRepository.countFiledInFolder(from.id, tx))).toBe(0);
+
+    // To the project root.
+    expect(
+      await inTenant(t, (tx) =>
+        pageRepository.moveFiledPages(to.id, null, [{ id: b.id, position: 'c0' }], tx),
+      ),
+    ).toBe(1);
+    expect(await adminDb.page.findUniqueOrThrow({ where: { id: b.id } })).toMatchObject({
+      folderId: null,
+      parentPageId: null,
+      position: 'c0',
+    });
+  });
+});
+
 describe('pageStoreFor(tx) — placement writes serialise (two connections)', () => {
   it('two lockStructure holders on one project serialise', async () => {
     const t = await makeTenant('lock');
