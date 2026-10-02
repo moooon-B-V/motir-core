@@ -53,10 +53,14 @@ const STORY_FILES = [
   'lib/pages/index.ts',
   'lib/pages/pageStoreAdapter.ts',
   'lib/pages/routeErrors.ts',
-  // `/api/pages`, `/api/pages/[pageId]`, `…/updates`, `…/images`.
+  // `/api/pages`, `/api/pages/[pageId]`, `…/updates`, `…/images`, `…/versions`,
+  // and (MOTIR-5754) `…/versions/[number]` and `…/versions/[number]/restore`.
   'app/api/pages/route.ts',
   'app/api/pages/*/route.ts',
   'app/api/pages/*/*/route.ts',
+  'app/api/pages/*/*/*/route.ts',
+  'app/api/pages/*/*/*/*/route.ts',
+  'lib/repositories/pageVersionRepository.ts',
   // The editor host.
   'components/pages/*.tsx',
   // `app/(authed)/pages/**` — the index, New page and the page at its address.
@@ -87,6 +91,8 @@ export default defineConfig({
       'tests/jobs/attachment-gc.test.ts',
       'tests/api/pages-routes.test.ts',
       'tests/api/pages-routes-refusals.test.ts',
+      // A page's history (Story MOTIR-5754 · MOTIR-7385 · 7386).
+      'tests/api/pages-history-routes.test.ts',
       // The client surfaces (MOTIR-7280 · 7300).
       'tests/components/new-page-button.test.tsx',
       'tests/components/page-view.test.tsx',
