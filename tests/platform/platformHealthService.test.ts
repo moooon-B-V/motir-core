@@ -568,11 +568,9 @@ describe('the gateway signal (MOTIR-742)', () => {
 });
 
 describe('the hosting signal reads the fleet (MOTIR-7332)', () => {
+  const WORKER = { name: 'worker', started: 1, total: 1, expected: 1 };
   const STATUS: DeploymentStatus = {
-    groups: [
-      { name: 'app', started: 2, total: 2, expected: 2 },
-      { name: 'worker', started: 1, total: 1, expected: 1 },
-    ],
+    groups: [{ name: 'app', started: 2, total: 2, expected: 2 }, WORKER],
     releases: ['deployment-01K6HXQ8'],
   };
 
@@ -613,7 +611,7 @@ describe('the hosting signal reads the fleet (MOTIR-7332)', () => {
     onFly();
     vi.spyOn(flyDeploymentStatusProvider, 'read').mockResolvedValue({
       ...STATUS,
-      groups: [{ name: 'app', started: 1, total: 2, expected: 2 }, STATUS.groups[1]],
+      groups: [{ name: 'app', started: 1, total: 2, expected: 2 }, WORKER],
     });
 
     const card = await hosting();

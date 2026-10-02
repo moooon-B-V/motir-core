@@ -38,7 +38,13 @@ vi.mock('next-intl/server', () => ({
 
 const { default: AdminMonitoringPage } = await import('@/app/(admin)/admin/monitoring/page');
 
-const UNCHANGED: PlatformSignalDTO[] = [
+const UNCHANGED: [
+  PlatformSignalDTO,
+  PlatformSignalDTO,
+  PlatformSignalDTO,
+  PlatformSignalDTO,
+  PlatformSignalDTO,
+] = [
   { id: 'database', state: 'healthy', values: { ms: 4, region: 'iad' }, linkOut: null },
   {
     id: 'gateway',
