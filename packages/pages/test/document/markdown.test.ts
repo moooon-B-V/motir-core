@@ -79,6 +79,25 @@ describe('markdown ↔ the page document', () => {
     );
   });
 
+  it('escapes a backslash in an image source and title, so the attrs survive a round trip', () => {
+    const attrs = { src: 'a\\(1).png', alt: 'x', title: 'C:\\ "q"' };
+    const md = serializeMarkdown(s.node('doc', null, [s.node('image', attrs)]));
+    const back = parseMarkdown(md).child(0).attrs;
+    // The parser percent-encodes a backslash in a URL; decoded, it is the source.
+    expect(decodeURI(back.src as string)).toBe(attrs.src);
+    expect(back).toMatchObject({ alt: 'x', title: attrs.title });
+  });
+
+  it('keeps a backslash in a table cell a single backslash through a round trip', () => {
+    const cell = (text: string) => s.node('tableCell', null, [p(text)]);
+    const table = s.node('table', null, [
+      s.node('tableRow', null, [cell('h')]),
+      s.node('tableRow', null, [cell('a\\|b')]),
+    ]);
+    const parsed = parseMarkdown(serializeMarkdown(s.node('doc', null, [table])));
+    expect(parsed.child(0).child(1).textContent).toBe('a\\|b');
+  });
+
   it('keeps a link’s title', () => {
     expect(roundTrip('[x](https://e.com "T")')).toBe('[x](https://e.com "T")');
   });

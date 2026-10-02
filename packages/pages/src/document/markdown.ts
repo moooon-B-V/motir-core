@@ -242,12 +242,18 @@ const defaults = defaultMarkdownSerializer.nodes;
 
 /** A cell's content as one line of GFM: blocks joined by `<br>`, pipes escaped. */
 function cellMarkdown(cell: ProseMirrorNode): string {
-  return pageMarkdownSerializer
-    .serialize(pageSchema.topNodeType.create(null, cell.content), SERIALIZE_OPTIONS)
-    .split('\n')
-    .filter((line) => line.length > 0)
-    .join('<br>')
-    .replace(/\|/g, '\\|');
+  return (
+    pageMarkdownSerializer
+      .serialize(pageSchema.topNodeType.create(null, cell.content), SERIALIZE_OPTIONS)
+      .split('\n')
+      .filter((line) => line.length > 0)
+      .join('<br>')
+      // The cell is ALREADY serialized markdown, so its backslashes are escapes
+      // the serializer wrote; escaping them again would double them. Only the
+      // pipe — the one character the table syntax claims — is escaped here.
+      .split('|')
+      .join('\\|')
+  );
 }
 
 function renderTable(state: MarkdownSerializerState, node: ProseMirrorNode): void {
@@ -304,9 +310,9 @@ const pageMarkdownSerializer: MarkdownSerializer = new MarkdownSerializer(
     },
     image: (state, node) => {
       const alt = state.esc((node.attrs.alt as string | null) ?? '');
-      const src = String(node.attrs.src ?? '').replace(/[()]/g, '\\$&');
+      const src = String(node.attrs.src ?? '').replace(/[\\()]/g, '\\$&');
       const title = node.attrs.title as string | null;
-      state.write(`![${alt}](${src}${title ? ` "${title.replace(/"/g, '\\"')}"` : ''})`);
+      state.write(`![${alt}](${src}${title ? ` "${title.replace(/[\\"]/g, '\\$&')}"` : ''})`);
       state.closeBlock(node);
     },
     hardBreak: defaults.hard_break!,
