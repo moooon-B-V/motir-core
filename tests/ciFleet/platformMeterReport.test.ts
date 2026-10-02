@@ -472,3 +472,34 @@ describe('the backfill reports history exactly once, in bounded batches (MOTIR-7
     });
   });
 });
+
+describe('the system.platform-meter-report job routes each event to its step (MOTIR-5286 · MOTIR-7294)', () => {
+  it('a container event runs `report-container`, a storage event `report-storage`, retried as idempotent', async () => {
+    const { platformMeterReport } = await import('@/lib/jobs/definitions/platformMeterReport');
+    expect(platformMeterReport).toMatchObject({
+      id: 'system.platform-meter-report',
+      retryPolicy: 'idempotent',
+    });
+    const steps: string[] = [];
+    const services = {
+      platformMeterReport: {
+        reportContainer: vi.fn(async () => ({ outcome: 'missing' as const })),
+        reportStorage: vi.fn(async () => ({ outcome: 'missing' as const })),
+      },
+    };
+    const ctx = (data: unknown) => ({
+      event: { data },
+      step: { run: async (id: string, fn: () => unknown) => (steps.push(id), fn()) },
+    });
+
+    await platformMeterReport.handler(
+      ctx({ containerProvider: 'fly', handleId: 'm-1' }) as never,
+      services as never,
+    );
+    await platformMeterReport.handler(ctx({ storageChargeId: 'sc_1' }) as never, services as never);
+
+    expect(steps).toEqual(['report-container', 'report-storage']);
+    expect(services.platformMeterReport.reportContainer).toHaveBeenCalledWith('fly', 'm-1');
+    expect(services.platformMeterReport.reportStorage).toHaveBeenCalledWith('sc_1');
+  });
+});
