@@ -19,11 +19,14 @@ export async function OrgPageHeader({
   principal,
   tab,
   backHref,
+  chips,
 }: {
   org: PlatformOrganizationDetailDTO;
   principal: PlatformPrincipal;
   tab: OrgTab;
   backHref: string;
+  /** The two flags' labels, resolved by the page from `platformAdmin.orgs.chip`. */
+  chips: { isMeta: string; internalBilling: string };
 }) {
   const t = await getTranslations('platformAdmin');
   const format = await getFormatter();
@@ -69,10 +72,8 @@ export async function OrgPageHeader({
               {/* ⚠️ TWO CHIPS, TWO LABELS — `isMeta` and `internalBilling` are true
                   together on one org today, and that is a coincidence, not an
                   identity (`internal-billing-classification.md` §1). */}
-              {org.isMeta ? <Pill severity="info">{t('orgs.chip.isMeta')}</Pill> : null}
-              {org.internalBilling ? (
-                <Pill severity="info">{t('orgs.chip.internalBilling')}</Pill>
-              ) : null}
+              {org.isMeta ? <Pill severity="info">{chips.isMeta}</Pill> : null}
+              {org.internalBilling ? <Pill severity="info">{chips.internalBilling}</Pill> : null}
             </span>
           </span>
         </div>

@@ -20,6 +20,7 @@ const MEASURED = [
   'lib/services/platformOrgPageService.ts',
   'lib/services/platformOrgBillingService.ts',
   'lib/services/platformMeterReportService.ts',
+  'lib/services/platformMeterReportEnqueue.ts',
   'lib/platform/spend.ts',
   'lib/platform/orgBill.ts',
   'lib/repositories/platformEstateRepository.ts',
@@ -103,11 +104,20 @@ export default defineConfig({
           functions: 100,
           lines: 100,
         },
+        // The enqueue doors left for platformMeterReportEnqueue.ts (the fleet-cost
+        // read graph must not reach the job registry): the same one uncovered line
+        // over fewer lines is 97.95%, so the line floor is 97.
         'lib/services/platformMeterReportService.ts': {
-          statements: 96,
-          branches: 89,
+          statements: 98,
+          branches: 93,
           functions: 100,
-          lines: 98,
+          lines: 97,
+        },
+        'lib/services/platformMeterReportEnqueue.ts': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
         },
         'lib/services/platformOrgBillingService.ts': {
           statements: 100,

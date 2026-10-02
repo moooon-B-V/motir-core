@@ -332,7 +332,7 @@ const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
       '`org_running_cap` — `lib/agentInstances/errorResponse.ts`), asserted on a constructed ' +
       'error with no request and no store. It started to REACH the resolver when the storage ' +
       'charge began enqueuing its platform meter report (MOTIR-7294: ' +
-      '`agentInstanceStorageChargeService` → `platformMeterReportService` → `sendEvent` → the ' +
+      '`agentInstanceStorageChargeService` → `platformMeterReportEnqueue` → `sendEvent` → the ' +
       'job registry), which spends no budget either.',
   ],
   [

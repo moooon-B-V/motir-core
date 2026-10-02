@@ -8913,10 +8913,6 @@
         "cost": "Motir 成本",
         "minutes": "分钟"
       },
-      "chip": {
-        "isMeta": "Motir 自有",
-        "internalBilling": "内部计费"
-      },
       "none": "此时间段没有组织产生消费。",
       "noneFiltered": "此时间段没有匹配“{filter}”的组织产生消费。",
       "filterCapped": "匹配的组织超过一个列表能显示的数量——请缩小筛选范围。",

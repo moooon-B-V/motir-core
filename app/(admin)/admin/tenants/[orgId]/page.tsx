@@ -62,6 +62,13 @@ export default async function AdminOrganizationPage({
   const query = await searchParams;
   const tab = parseOrgTab(query.tab);
   const backHref = safeTenantsHref(query.from);
+  // TWO chips, TWO labels — the operator's one vocabulary for the two flags
+  // (`internal-billing-classification.md` §1), never one collapsed "Internal".
+  const tp = await getTranslations('platformAdmin');
+  const chips = {
+    isMeta: tp('orgs.chip.isMeta'),
+    internalBilling: tp('orgs.chip.internalBilling'),
+  };
 
   if (tab === 'usage') {
     let usage;
@@ -82,6 +89,7 @@ export default async function AdminOrganizationPage({
           principal={principal}
           tab="usage"
           backHref={backHref}
+          chips={chips}
         />
         <UsageTab
           data={usage}
@@ -108,6 +116,7 @@ export default async function AdminOrganizationPage({
           principal={principal}
           tab="billing"
           backHref={backHref}
+          chips={chips}
         />
         <BillingTab data={billing} />
       </div>
@@ -134,6 +143,7 @@ export default async function AdminOrganizationPage({
         principal={principal}
         tab="overview"
         backHref={backHref}
+        chips={chips}
       />
       <OverviewTab
         overview={overview}

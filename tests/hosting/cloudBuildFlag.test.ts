@@ -57,7 +57,7 @@ const BILLING_SURFACES: ReadonlyArray<readonly [file: string, why: string]> = [
   ['lib/services/billingService.ts', 'checkout, portal, subscriptions'],
   ['lib/services/ciFleetCostMeterService.ts', 'meters CI fleet cost against the plan'],
   [
-    'lib/services/platformMeterReportService.ts',
+    'lib/services/platformMeterReportEnqueue.ts',
     'reports the fleet meter (settled containers, charged storage days) to the platform usage rollup (MOTIR-5286, MOTIR-7294) — only a billing build runs the meter it reports',
   ],
   [

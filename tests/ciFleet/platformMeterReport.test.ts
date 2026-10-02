@@ -29,10 +29,16 @@ const { projectsService } = await import('@/lib/services/projectsService');
 const { ciFleetCostMeterService } = await import('@/lib/services/ciFleetCostMeterService');
 const { platformMeterReportService, METER_REPORT_WORKLOAD, STORAGE_COST_USD_PER_DAY } =
   await import('@/lib/services/platformMeterReportService');
+const { platformMeterReportEnqueue, withPlatformMeterReport } =
+  await import('@/lib/services/platformMeterReportEnqueue');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 const { agentInstanceStorageChargeService } =
   await import('@/lib/services/agentInstanceStorageChargeService');
 const { adminDb } = await import('../helpers/adminDb');
+
+/** The meter as production binds it: the orchestrator's sink settles through this. */
+const settle = (usage: Parameters<typeof ciFleetCostMeterService.recordContainerUsage>[0]) =>
+  withPlatformMeterReport(ciFleetCostMeterService).recordContainerUsage(usage);
 const { truncateAuthTables } = await import('../helpers/db');
 const { randomToken, randomInt } = await import('../helpers/random');
 
@@ -149,7 +155,7 @@ describe('a settled container is reported to the platform rollup', () => {
     async (kind) => {
       const fx = await seedTenant();
       const usage = usageFor(fx, { workload: kind });
-      expect((await ciFleetCostMeterService.recordContainerUsage(usage)).outcome).toBe('recorded');
+      expect((await settle(usage)).outcome).toBe('recorded');
 
       expect(enqueued).toEqual([
         {
@@ -194,7 +200,7 @@ describe('a settled container is reported to the platform rollup', () => {
     const exact = '12345678.123456789012';
     expect(String(Number(exact))).not.toBe(exact);
     const usage = usageFor(fx, { costUsd: exact });
-    await ciFleetCostMeterService.recordContainerUsage(usage);
+    await settle(usage);
     await platformMeterReportService.reportContainer('fake', usage.handleId);
     expect(posted[0]!.body).toContain(`"costUsd":"${exact}"`);
   });
@@ -202,7 +208,7 @@ describe('a settled container is reported to the platform rollup', () => {
   it('a project-less container reports its workspace and org only', async () => {
     const fx = await seedTenant();
     const usage = usageFor(fx, { projectId: undefined, workload: 'code_graph_index' });
-    await ciFleetCostMeterService.recordContainerUsage(usage);
+    await settle(usage);
     await platformMeterReportService.reportContainer('fake', usage.handleId);
     expect(JSON.parse(posted[0]!.body)).toMatchObject({
       coreProjectId: null,
@@ -215,15 +221,15 @@ describe('the report never touches the settle, and is exactly-once at the receiv
   it('a duplicate teardown enqueues nothing more', async () => {
     const fx = await seedTenant();
     const usage = usageFor(fx);
-    await ciFleetCostMeterService.recordContainerUsage(usage);
-    expect((await ciFleetCostMeterService.recordContainerUsage(usage)).outcome).toBe('duplicate');
+    await settle(usage);
+    expect((await settle(usage)).outcome).toBe('duplicate');
     expect(enqueued).toHaveLength(1);
   });
 
   it('motir-ai down: the settle stays committed, the job throws to retry, and the retry carries the same key', async () => {
     const fx = await seedTenant();
     const usage = usageFor(fx);
-    await ciFleetCostMeterService.recordContainerUsage(usage);
+    await settle(usage);
 
     answer = () => {
       throw new TypeError('fetch failed');
@@ -250,7 +256,7 @@ describe('the report never touches the settle, and is exactly-once at the receiv
   it('a non-2xx from motir-ai throws too, so the job retries rather than dropping the report', async () => {
     const fx = await seedTenant();
     const usage = usageFor(fx);
-    await ciFleetCostMeterService.recordContainerUsage(usage);
+    await settle(usage);
     answer = () =>
       new Response(JSON.stringify({ code: 'internal_error', title: 'Internal', status: 500 }), {
         status: 500,
@@ -290,7 +296,30 @@ describe('the report never touches the settle, and is exactly-once at the receiv
 
   it('off-cloud there is no fleet and nothing is enqueued', async () => {
     vi.stubEnv('MOTIR_CLOUD', 'false');
-    await platformMeterReportService.enqueueContainerReport('fake', 'm-1');
+    await platformMeterReportEnqueue.container('fake', 'm-1');
+    expect(enqueued).toHaveLength(0);
+  });
+
+  it('off-cloud a storage day enqueues nothing either', async () => {
+    vi.stubEnv('MOTIR_CLOUD', 'false');
+    await platformMeterReportEnqueue.storage('charge-1');
+    expect(enqueued).toHaveLength(0);
+  });
+
+  it('the wrapped meter passes a checkpoint straight through and enqueues nothing', async () => {
+    const accruals: unknown[] = [];
+    const meter = withPlatformMeterReport({
+      recordContainerUsage: async () => ({ outcome: 'duplicate' }),
+      recordContainerAccrual: async (accrual: unknown) => {
+        accruals.push(accrual);
+        return { outcome: 'checkpointed' };
+      },
+    });
+    const accrual = { handleId: 'm-1' } as unknown as Parameters<
+      typeof meter.recordContainerAccrual
+    >[0];
+    expect(await meter.recordContainerAccrual(accrual)).toEqual({ outcome: 'checkpointed' });
+    expect(accruals).toEqual([accrual]);
     expect(enqueued).toHaveLength(0);
   });
 });
@@ -403,7 +432,7 @@ describe('the backfill reports history exactly once, in bounded batches (MOTIR-7
   it('two runs send every settled container and charged storage day once — the second sends nothing', async () => {
     const fx = await seedTenant();
     for (let i = 0; i < 5; i += 1) {
-      await ciFleetCostMeterService.recordContainerUsage(
+      await settle(
         usageFor(fx, { workload: FLEET_WORKLOAD_KINDS[i % FLEET_WORKLOAD_KINDS.length] }),
       );
     }
@@ -453,7 +482,7 @@ describe('the backfill reports history exactly once, in bounded batches (MOTIR-7
   it('a row motir-ai refuses is counted, skipped past, and reported by the next run', async () => {
     const fx = await seedTenant();
     const usages = [usageFor(fx), usageFor(fx), usageFor(fx)];
-    for (const u of usages) await ciFleetCostMeterService.recordContainerUsage(u);
+    for (const u of usages) await settle(u);
     const rows = await adminDb.ciContainerUsage.findMany({ orderBy: { id: 'asc' } });
     const bad = rows[1]!.id;
     answer = (body) =>

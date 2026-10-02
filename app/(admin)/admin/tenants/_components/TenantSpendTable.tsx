@@ -32,6 +32,7 @@ export function TenantSpendTable({
   initialCursor,
   query,
   listHref,
+  chips,
 }: {
   estate: PlatformTenantSpendRowDTO;
   initialRows: PlatformTenantSpendRowDTO[];
@@ -39,6 +40,8 @@ export function TenantSpendTable({
   query: { period: string; sort: string; filter: string };
   /** The list's own URL, for the org page's ← Tenants. */
   listHref: string;
+  /** The two flags' labels, resolved by the page from `platformAdmin.orgs.chip`. */
+  chips: { isMeta: string; internalBilling: string };
 }) {
   const t = useTranslations('platformAdmin.tenants');
   const tc = useTranslations('platformAdmin.usage.category');
@@ -139,9 +142,9 @@ export function TenantSpendTable({
                       <span className="font-medium text-(--el-text)">{org.name}</span>
                       <span className="flex items-center gap-1 text-xs text-(--el-text-secondary)">
                         {org.slug ?? '—'}
-                        {org.isMeta ? <Pill severity="info">{t('chip.isMeta')}</Pill> : null}
+                        {org.isMeta ? <Pill severity="info">{chips.isMeta}</Pill> : null}
                         {org.internalBilling ? (
-                          <Pill severity="info">{t('chip.internalBilling')}</Pill>
+                          <Pill severity="info">{chips.internalBilling}</Pill>
                         ) : null}
                       </span>
                     </Link>

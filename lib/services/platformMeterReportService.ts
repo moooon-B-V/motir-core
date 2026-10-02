@@ -10,8 +10,6 @@ import {
   type PlatformMeterReport,
   type PlatformMeterWorkload,
 } from '@/lib/ai/motirAiClient';
-import { isCloudBilling } from '@/lib/billing/availability';
-import { sendSystemEvent } from '@/lib/jobs/sendEvent';
 import {
   ciContainerUsageRepository,
   type CiContainerWorkload,
@@ -31,7 +29,7 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
  * is the ONLY place the figure leaves motir-core.
  *
  * ⚠️ IT NEVER TOUCHES THE SETTLE. The report is a job enqueued AFTER the meter row
- * commits (`enqueueContainerReport`, best-effort like every post-commit emit), and
+ * commits (`platformMeterReportEnqueue`, best-effort like every post-commit emit), and
  * the job re-reads the row and sends it, so:
  *   - a motir-ai outage throws inside the JOB, whose `idempotent` retry policy owns
  *     it — the settle and its charge are long committed;
@@ -83,16 +81,6 @@ export interface MeterBackfillSummary {
 
 export const platformMeterReportService = {
   /**
-   * Enqueue ONE settled container's report. Called by the settle path after its
-   * transaction commits; a failed enqueue is swallowed by `sendSystemEvent` and can
-   * never fail the settle. Off-cloud there is no fleet and nothing to report.
-   */
-  async enqueueContainerReport(containerProvider: string, handleId: string): Promise<void> {
-    if (!isCloudBilling()) return;
-    await sendSystemEvent('system.platform-meter-report', { containerProvider, handleId });
-  },
-
-  /**
    * The job's body: read the container's settled figure and report it.
    *
    * A row that is absent or not yet settled reports NOTHING — the event is only
@@ -128,16 +116,6 @@ export const platformMeterReportService = {
       ciContainerUsageRepository.markMeterReported(row.id, new Date(), tx),
     );
     return { outcome: 'reported', containerUsageId: row.id, idempotent: result.idempotent };
-  },
-
-  /**
-   * Enqueue ONE charged storage day's report (MOTIR-7294). Called by the storage
-   * charge pass after the day is recorded `charged`; best-effort like the container
-   * enqueue, so it can never undo or fail the charge.
-   */
-  async enqueueStorageReport(storageChargeId: string): Promise<void> {
-    if (!isCloudBilling()) return;
-    await sendSystemEvent('system.platform-meter-report', { storageChargeId });
   },
 
   /**

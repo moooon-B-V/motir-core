@@ -8917,10 +8917,6 @@
         "cost": "Motir cost",
         "minutes": "min"
       },
-      "chip": {
-        "isMeta": "Motir's own",
-        "internalBilling": "Internal billing"
-      },
       "none": "No organization has spend in this period.",
       "noneFiltered": "No organization matching “{filter}” has spend in this period.",
       "filterCapped": "The filter matches more organizations than one list shows — narrow it to see the rest.",

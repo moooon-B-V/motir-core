@@ -38,6 +38,13 @@ export default async function AdminTenantsPage({
   const principal = await requirePlatformStaff('support');
   const t = await getTranslations('platformAdmin.tenants');
   const tu = await getTranslations('platformAdmin.usage');
+  // TWO chips, TWO labels — the operator's one vocabulary for the two flags
+  // (`internal-billing-classification.md` §1), never one collapsed "Internal".
+  const tp = await getTranslations('platformAdmin');
+  const chips = {
+    isMeta: tp('orgs.chip.isMeta'),
+    internalBilling: tp('orgs.chip.internalBilling'),
+  };
   const format = await getFormatter();
   const params = await searchParams;
   const period = parseSpendPeriod(params.period);
@@ -118,6 +125,7 @@ export default async function AdminTenantsPage({
             initialCursor={list.nextCursor}
             query={{ period, sort, filter: list.filter }}
             listHref={listHref}
+            chips={chips}
           />
         )}
       </Card>
