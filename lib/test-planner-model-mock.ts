@@ -36,6 +36,8 @@ export interface PlannerModelFixture {
   offered: { id: string; provider: string }[];
   /** Models whose save-time probe fails, with the probe's reason. */
   unreachable?: Record<string, string>;
+  /** motir-ai is down: every request answers 503, the page's unavailable state. */
+  unavailable?: boolean;
 }
 
 const SEEDED_AT = '2026-10-01T00:00:00.000Z';
@@ -110,13 +112,18 @@ export function installPlannerModelBoundaryMock(agent: MockAgent): void {
 
   pool
     .intercept({ path: isPath, method: 'GET' })
-    .reply(() => ({ statusCode: 200, data: toWire(readFixture()), responseOptions: json }))
+    .reply<object>(() => {
+      const fixture = readFixture();
+      if (fixture.unavailable) return problem(503, 'upstream_unavailable', 'motir-ai is down');
+      return { statusCode: 200, data: toWire(fixture), responseOptions: json };
+    })
     .persist();
 
   pool
     .intercept({ path: isPath, method: 'PUT' })
     .reply<object>((req) => {
       const fixture = readFixture();
+      if (fixture.unavailable) return problem(503, 'upstream_unavailable', 'motir-ai is down');
       let body: { audience?: string; model?: string; actorCoreUserId?: string } = {};
       try {
         body = JSON.parse(String(req.body ?? '{}')) as typeof body;

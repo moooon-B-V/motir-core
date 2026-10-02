@@ -468,6 +468,15 @@ export default defineConfig({
         MOTIR_AI_URL,
         E2E_TEST_CODE_HEALTH: '1',
         MOTIR_AI_CODE_HEALTH_FIXTURE_PATH: CODE_HEALTH_FIXTURE,
+        // The console's AI planning page (Story MOTIR-7220 · MOTIR-7235): the
+        // `/v1/planner-model-settings` intercept, from the same file the spec
+        // seeds (`tests/e2e/_helpers/planner-model-fixture.ts`).
+        E2E_TEST_PLANNER_MODEL: '1',
+        MOTIR_AI_PLANNER_MODEL_FIXTURE_PATH: path.join(
+          __dirname,
+          'out',
+          'e2e-planner-model-fixture.json',
+        ),
         E2E_TEST_AI_JOBS: '1',
         MOTIR_AI_JOBS_FIXTURE_PATH,
         MOTIR_AI_SERVICE_TOKEN: 'e2e-acceptance-placeholder-token',
