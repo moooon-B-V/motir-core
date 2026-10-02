@@ -383,6 +383,33 @@ export const ciContainerUsageRepository = {
   },
 
   /**
+   * ONE container's figure as the platform meter report needs it (Story MOTIR-727 ·
+   * MOTIR-5286): its id (the receiver's idempotency key), tenant path, workload,
+   * seconds, cost and settle instant. Read by provider + handle, the key the settle
+   * path knows. The rows are RLS-gated; the caller supplies the context.
+   */
+  async findForMeterReport(
+    containerProvider: string,
+    handleId: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    return tx.ciContainerUsage.findFirst({
+      where: { containerProvider, handleId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        organizationId: true,
+        workspaceId: true,
+        projectId: true,
+        workload: true,
+        billableSeconds: true,
+        costUsd: true,
+        containerStoppedAt: true,
+      },
+    });
+  },
+
+  /**
    * ONE dispatch run's machine time (MOTIR-6448) — Σ `billable_seconds` and
    * Σ `cost_usd` over every row naming the run, and whether all of them are
    * settled. Live while the container runs (a checkpoint row's figure is its

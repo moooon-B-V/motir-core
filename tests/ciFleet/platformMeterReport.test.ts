@@ -1,0 +1,286 @@
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '@/generated/prisma/client';
+import type { ContainerUsage } from '@motir/orchestrator';
+import { FLEET_WORKLOAD_KINDS, type FleetWorkloadKind } from '@/lib/ciFleet/workloads';
+
+/**
+ * The platform meter report (Story MOTIR-727 · MOTIR-5286) — every settled fleet
+ * container's seconds and Motir cost, reported to motir-ai's platform usage rollup.
+ *
+ * Over the REAL meter and real Postgres; motir-ai's HTTP edge is faked at `fetch`, so
+ * the assertions read the bytes that would cross the wire. The enqueue seam is
+ * captured, and the job body (`reportContainer`) is driven as the job would drive it.
+ */
+
+const enqueued: { name: string; data: { containerProvider: string; handleId: string } }[] = [];
+vi.mock('@/lib/jobs/sendEvent', () => ({
+  sendSystemEvent: vi.fn(
+    async (name: string, data: { containerProvider: string; handleId: string }) => {
+      enqueued.push({ name, data });
+    },
+  ),
+  sendEvent: vi.fn(),
+}));
+
+const { db } = await import('@/lib/db');
+const { usersService } = await import('@/lib/services/usersService');
+const { workspacesService } = await import('@/lib/services/workspacesService');
+const { projectsService } = await import('@/lib/services/projectsService');
+const { ciFleetCostMeterService } = await import('@/lib/services/ciFleetCostMeterService');
+const { platformMeterReportService, METER_REPORT_WORKLOAD } =
+  await import('@/lib/services/platformMeterReportService');
+const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
+const { adminDb } = await import('../helpers/adminDb');
+const { truncateAuthTables } = await import('../helpers/db');
+const { randomToken, randomInt } = await import('../helpers/random');
+
+const STOPPED_AT = new Date('2026-09-15T12:00:00.000Z');
+const IAD_USD_PER_SECOND = '0.000031636049';
+
+interface Fixture {
+  workspaceId: string;
+  organizationId: string;
+  projectId: string;
+}
+
+/** Every request the faked motir-ai received: its path and its RAW body. */
+let posted: { path: string; body: string }[] = [];
+let answer: () => Response = () => Response.json({ sourceId: 'x', idempotent: false });
+
+beforeEach(async () => {
+  await adminDb.$executeRawUnsafe(
+    'TRUNCATE TABLE "ci_period_usage", "ci_container_usage", "ci_container_period_cost" RESTART IDENTITY CASCADE',
+  );
+  await truncateAuthTables();
+  vi.stubEnv('MOTIR_CLOUD', 'true');
+  vi.stubEnv('MOTIR_AI_URL', 'http://motir-ai.test');
+  vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
+  enqueued.length = 0;
+  posted = [];
+  answer = () => Response.json({ sourceId: 'x', idempotent: false });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: string | URL, init?: RequestInit) => {
+      posted.push({ path: new URL(String(input)).pathname, body: String(init?.body ?? '') });
+      return answer();
+    }),
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
+
+afterAll(async () => {
+  await db.$disconnect();
+  await adminDb.$disconnect();
+});
+
+async function seedTenant(): Promise<Fixture> {
+  const email = `meter-report-${randomToken(6)}@example.com`;
+  const user = await usersService.createUser({ email, password: 'hunter2hunter2', name: 'Owner' });
+  const { workspace } = await workspacesService.createWorkspace({
+    name: `WS ${email}`,
+    ownerUserId: user.id,
+  });
+  const project = await projectsService.createProject({
+    workspaceId: workspace.id,
+    actorUserId: user.id,
+    name: 'Acme',
+    identifier: `M${randomInt(100, 1000)}`,
+  });
+  return {
+    workspaceId: workspace.id,
+    organizationId: workspace.organizationId,
+    projectId: project.id,
+  };
+}
+
+function usageFor(fx: Fixture, overrides: Partial<ContainerUsage> = {}): ContainerUsage {
+  const billableSeconds = overrides.billableSeconds ?? 240;
+  return {
+    handleId: `m-${randomToken(8)}`,
+    provider: 'fake',
+    region: 'iad',
+    orgId: fx.organizationId,
+    workspaceId: fx.workspaceId,
+    projectId: fx.projectId,
+    repoFullName: 'motir-projects/acme-web',
+    workload: 'ci_runner',
+    workflowJobId: 44001,
+    cpuKind: 'performance',
+    cpus: 2,
+    memoryMb: 8192,
+    createdAt: new Date(STOPPED_AT.getTime() - 300_000),
+    startedAt: new Date(STOPPED_AT.getTime() - billableSeconds * 1000),
+    stoppedAt: STOPPED_AT,
+    billableSeconds,
+    usdPerSecond: IAD_USD_PER_SECOND,
+    costUsd: new Prisma.Decimal(IAD_USD_PER_SECOND).mul(billableSeconds).toFixed(),
+    rateEffectiveFrom: new Date('2026-08-01T00:00:00.000Z'),
+    terminalState: 'destroyed',
+    teardownReason: 'job_completed',
+    ...overrides,
+  };
+}
+
+/** The expected receiver workload for each fleet kind — the instance line renamed. */
+const EXPECTED: Record<FleetWorkloadKind, string> = {
+  ci_runner: 'ci',
+  code_graph_index: 'index',
+  hosted_agent: 'agent',
+  agent_instance: 'agent_instance',
+};
+
+describe('a settled container is reported to the platform rollup', () => {
+  it.each(FLEET_WORKLOAD_KINDS)(
+    '%s — one enqueue on settle, one report with every field',
+    async (kind) => {
+      const fx = await seedTenant();
+      const usage = usageFor(fx, { workload: kind });
+      expect((await ciFleetCostMeterService.recordContainerUsage(usage)).outcome).toBe('recorded');
+
+      expect(enqueued).toEqual([
+        {
+          name: 'system.platform-meter-report',
+          data: { containerProvider: 'fake', handleId: usage.handleId },
+        },
+      ]);
+
+      const outcome = await platformMeterReportService.reportContainer('fake', usage.handleId);
+      const row = await adminDb.ciContainerUsage.findFirstOrThrow({
+        where: { handleId: usage.handleId },
+      });
+      expect(outcome).toEqual({ outcome: 'reported', containerUsageId: row.id, idempotent: false });
+      expect(posted).toHaveLength(1);
+      expect(posted[0]!.path).toBe('/v1/platform/meter');
+      expect(JSON.parse(posted[0]!.body)).toEqual({
+        kind: 'container',
+        containerUsageId: row.id,
+        coreOrganizationId: fx.organizationId,
+        coreWorkspaceId: fx.workspaceId,
+        coreProjectId: fx.projectId,
+        workload: EXPECTED[kind],
+        billableSeconds: 240,
+        costUsd: row.costUsd.toFixed(),
+        settledAt: STOPPED_AT.toISOString(),
+      });
+    },
+  );
+
+  it('maps every meter line onto the receiver’s vocabulary', () => {
+    expect(METER_REPORT_WORKLOAD).toEqual({
+      agent: 'agent',
+      instance: 'agent_instance',
+      ci: 'ci',
+      index: 'index',
+    });
+  });
+
+  it('sends costUsd as the exact decimal STRING the meter stored — a float round trip would bend it', async () => {
+    const fx = await seedTenant();
+    // 20 significant digits: no IEEE double holds it, so only a string survives.
+    const exact = '12345678.123456789012';
+    expect(String(Number(exact))).not.toBe(exact);
+    const usage = usageFor(fx, { costUsd: exact });
+    await ciFleetCostMeterService.recordContainerUsage(usage);
+    await platformMeterReportService.reportContainer('fake', usage.handleId);
+    expect(posted[0]!.body).toContain(`"costUsd":"${exact}"`);
+  });
+
+  it('a project-less container reports its workspace and org only', async () => {
+    const fx = await seedTenant();
+    const usage = usageFor(fx, { projectId: undefined, workload: 'code_graph_index' });
+    await ciFleetCostMeterService.recordContainerUsage(usage);
+    await platformMeterReportService.reportContainer('fake', usage.handleId);
+    expect(JSON.parse(posted[0]!.body)).toMatchObject({
+      coreProjectId: null,
+      coreWorkspaceId: fx.workspaceId,
+    });
+  });
+});
+
+describe('the report never touches the settle, and is exactly-once at the receiver', () => {
+  it('a duplicate teardown enqueues nothing more', async () => {
+    const fx = await seedTenant();
+    const usage = usageFor(fx);
+    await ciFleetCostMeterService.recordContainerUsage(usage);
+    expect((await ciFleetCostMeterService.recordContainerUsage(usage)).outcome).toBe('duplicate');
+    expect(enqueued).toHaveLength(1);
+  });
+
+  it('motir-ai down: the settle stays committed, the job throws to retry, and the retry carries the same key', async () => {
+    const fx = await seedTenant();
+    const usage = usageFor(fx);
+    await ciFleetCostMeterService.recordContainerUsage(usage);
+
+    answer = () => {
+      throw new TypeError('fetch failed');
+    };
+    await expect(
+      platformMeterReportService.reportContainer('fake', usage.handleId),
+    ).rejects.toBeInstanceOf(MotirAiUnavailableError);
+    // The settle and its period rollup are committed regardless.
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow({
+      where: { handleId: usage.handleId },
+    });
+    expect(row.containerStoppedAt).not.toBeNull();
+    expect(await adminDb.ciContainerPeriodCost.count()).toBe(1);
+
+    answer = () => Response.json({ sourceId: row.id, idempotent: true });
+    const retried = await platformMeterReportService.reportContainer('fake', usage.handleId);
+    expect(retried).toEqual({ outcome: 'reported', containerUsageId: row.id, idempotent: true });
+    const keys = posted.map(
+      (p) => (JSON.parse(p.body) as { containerUsageId: string }).containerUsageId,
+    );
+    expect(new Set(keys)).toEqual(new Set([row.id]));
+  });
+
+  it('a non-2xx from motir-ai throws too, so the job retries rather than dropping the report', async () => {
+    const fx = await seedTenant();
+    const usage = usageFor(fx);
+    await ciFleetCostMeterService.recordContainerUsage(usage);
+    answer = () =>
+      new Response(JSON.stringify({ code: 'internal_error', title: 'Internal', status: 500 }), {
+        status: 500,
+        headers: { 'content-type': 'application/problem+json' },
+      });
+    await expect(
+      platformMeterReportService.reportContainer('fake', usage.handleId),
+    ).rejects.toThrow();
+  });
+
+  it('a live checkpoint is never reported as final, and an unknown handle reports nothing', async () => {
+    const fx = await seedTenant();
+    const usage = usageFor(fx);
+    const {
+      stoppedAt: _s,
+      terminalState: _t,
+      teardownReason: _r,
+      billableSeconds,
+      ...rest
+    } = usage;
+    await ciFleetCostMeterService.recordContainerAccrual({
+      ...rest,
+      workload: 'code_graph_index',
+      startedAt: usage.startedAt ?? STOPPED_AT,
+      observedAt: STOPPED_AT,
+      accruedSeconds: billableSeconds,
+    });
+    expect(enqueued).toHaveLength(0);
+    expect(await platformMeterReportService.reportContainer('fake', usage.handleId)).toEqual({
+      outcome: 'not_settled',
+    });
+    expect(await platformMeterReportService.reportContainer('fake', 'm-nope')).toEqual({
+      outcome: 'missing',
+    });
+    expect(posted).toHaveLength(0);
+  });
+
+  it('off-cloud there is no fleet and nothing is enqueued', async () => {
+    vi.stubEnv('MOTIR_CLOUD', 'false');
+    await platformMeterReportService.enqueueContainerReport('fake', 'm-1');
+    expect(enqueued).toHaveLength(0);
+  });
+});

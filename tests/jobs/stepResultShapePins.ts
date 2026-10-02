@@ -566,6 +566,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/attachmentGc.ts',
     shape: '{ deleted: number; failed: number; scanned: number }',
   },
+  'report-container': {
+    file: 'lib/jobs/definitions/platformMeterReport.ts',
+    shape:
+      '{ containerUsageId: string; idempotent: boolean; outcome: "reported" } | { outcome: "missing" } | { outcome: "not_settled" }',
+  },
   'sync-seat-quantity': {
     file: 'lib/jobs/definitions/billingSeatSync.ts',
     shape:

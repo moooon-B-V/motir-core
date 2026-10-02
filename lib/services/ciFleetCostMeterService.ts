@@ -19,6 +19,7 @@ import {
 import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageRepository';
 import { containerWorkloadFor } from '@/lib/ciFleet/workloads';
 import { isCloudBilling } from '@/lib/billing/availability';
+import { platformMeterReportService } from '@/lib/services/platformMeterReportService';
 import { periodStartFor } from '@/lib/ciMetering/period';
 import type { ContainerAccrual, ContainerUsage, ContainerWorkSlice } from '@motir/orchestrator';
 
@@ -228,6 +229,12 @@ export const ciFleetCostMeterService = {
       // settled row and wrote neither the row nor the rollup.
       return { outcome: 'duplicate', containerProvider: usage.provider, handleId: usage.handleId };
     }
+
+    // The platform meter report (Story MOTIR-727 · MOTIR-5286): the settle has
+    // COMMITTED, so its seconds and cost go to motir-ai's rollup through a job.
+    // Best-effort by construction — a failed enqueue is logged, never thrown, so it
+    // cannot reach the teardown `finally` this method must never throw into.
+    await platformMeterReportService.enqueueContainerReport(usage.provider, usage.handleId);
 
     return {
       outcome: 'recorded',

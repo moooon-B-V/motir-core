@@ -2326,3 +2326,56 @@ export async function getPlatformRuns(query: PlatformRunsQuery): Promise<RawPlat
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawPlatformRunsPage;
 }
+
+// ── The PLATFORM METER REPORT (Story MOTIR-727 · MOTIR-5286 · motir-ai MOTIR-7290) ──
+
+/** The fleet workloads motir-ai's rollup takes, one category each. */
+export type PlatformMeterWorkload = 'agent' | 'agent_instance' | 'ci' | 'index';
+
+/**
+ * One meter owner's report (`POST /v1/platform/meter`). motir-core owns the fleet
+ * meter, so it reports a settled container's seconds and cost; motir-ai records
+ * them and never prices them. NOT a charge — credits move on the debit routes.
+ */
+export type PlatformMeterReport =
+  | {
+      kind: 'container';
+      /** `CiContainerUsage.id` — the idempotency key at the receiver. */
+      containerUsageId: string;
+      coreOrganizationId: string;
+      coreWorkspaceId: string | null;
+      coreProjectId: string | null;
+      workload: PlatformMeterWorkload;
+      billableSeconds: number;
+      /** A DECIMAL STRING, exactly as the meter stored it — never a float. */
+      costUsd: string;
+      settledAt: string;
+    }
+  | {
+      kind: 'storage';
+      instanceId: string;
+      coreOrganizationId: string;
+      /** `YYYY-MM-DD`, UTC. */
+      day: string;
+      gbSeconds: number;
+      costUsd: string;
+    };
+
+/**
+ * POST /v1/platform/meter — idempotent on the report's source id: a replay answers
+ * `idempotent: true` and adds nothing, so a job may retry it freely. Every failure
+ * throws (transport as {@link MotirAiUnavailableError}, a non-2xx as its §5 typed
+ * error), which is what lets the job's retry policy own the outage.
+ */
+export async function reportPlatformMeter(
+  report: PlatformMeterReport,
+): Promise<{ sourceId: string; idempotent: boolean }> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/platform/meter`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(report),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as { sourceId: string; idempotent: boolean };
+}
