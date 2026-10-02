@@ -12,6 +12,18 @@ import type {
   PlanWithItemsDto,
   WorkItemPlanHistoryEntryDto,
 } from '@/lib/dto/plans';
+import { redactNativeActor, redactNativeProvenance } from '@/lib/plans/redactNativeModel';
+
+/**
+ * The stored proposed fields as a tenant may read them: a native `add`'s
+ * `planningProvenance.model` is nulled (MOTIR-7225). The ROW keeps it, and
+ * `materialize` reads the row, so the work item still records it internally.
+ */
+function readableProposedFields(row: PlanItem): PlanItemProposedFields | null {
+  const fields = (row.proposedFields as PlanItemProposedFields | null) ?? null;
+  if (!fields?.planningProvenance) return fields;
+  return { ...fields, planningProvenance: redactNativeProvenance(fields.planningProvenance) };
+}
 
 export function toPlanItemDto(row: PlanItem): PlanItemDto {
   return {
@@ -20,7 +32,7 @@ export function toPlanItemDto(row: PlanItem): PlanItemDto {
     workItemId: row.workItemId,
     // The Json columns are written through the typed service inputs, so the
     // cast restores the shape the writer stored (null when the column is null).
-    proposedFields: (row.proposedFields as PlanItemProposedFields | null) ?? null,
+    proposedFields: readableProposedFields(row),
     patch: (row.patch as PlanItemPatch | null) ?? null,
     parentRef: row.parentRef,
     blockedByRefs: row.blockedByRefs,
@@ -54,7 +66,8 @@ export function toPlanDto(row: Plan, itemCount: number): PlanDto {
     // state the Plans surface draws.
     authorSource: row.authorSource,
     authorHarness: row.authorHarness,
-    authorModel: row.authorModel,
+    // Null for a NATIVE author (MOTIR-7225): Motir never names its own model.
+    authorModel: redactNativeActor(row.authorSource, row.authorModel),
     itemCount,
     createdAt: row.createdAt.toISOString(),
     plannedAt: row.plannedAt ? row.plannedAt.toISOString() : null,
@@ -91,7 +104,11 @@ export function toWorkItemPlanHistoryEntryDto(
     decidedAt: plan.decidedAt ? plan.decidedAt.toISOString() : null,
     decidedById: plan.decidedById,
     decidedByName: plan.decidedBy?.name ?? null,
-    author: { source: plan.authorSource, harness: plan.authorHarness, model: plan.authorModel },
+    author: {
+      source: plan.authorSource,
+      harness: plan.authorHarness,
+      model: redactNativeActor(plan.authorSource, plan.authorModel),
+    },
     relation: { op: null, childCount: 0 },
     proposalIds: { self: null, children: [] },
   };

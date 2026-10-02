@@ -8,6 +8,7 @@ import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { DERIVED_EVENT_KINDS, mergeTimeline, revisionCount } from '@/lib/plans/timeline';
+import { redactNativeActor, redactNativeProvenance } from '@/lib/plans/redactNativeModel';
 import {
   revisionLeaseOf,
   REVISION_STARTED_KIND,
@@ -1337,6 +1338,8 @@ export const planReviewService = {
       // A `remove`'s WHY (AMENDMENT 18 §3), verbatim; nothing else carries one.
       const removeReason = item.op === 'remove' ? (item.reason ?? null) : null;
       const proposed = item.proposedFields as PlanItemProposedFields | null;
+      // Never names Motir's own model (MOTIR-7225); the stored row keeps it.
+      const provenance = redactNativeProvenance(proposed?.planningProvenance) ?? null;
 
       const targetMissing = item.op !== 'add' && !target;
       // ONE computation of the diff, read twice: `changes` is the list row's
@@ -1564,7 +1567,7 @@ export const planReviewService = {
             : item.op === 'modify'
               ? seededExecutor(item.patch as PlanItemPatch | null, target)
               : (target?.executor ?? null),
-        planningProvenance: item.op === 'add' ? (proposed?.planningProvenance ?? null) : null,
+        planningProvenance: item.op === 'add' ? provenance : null,
         // ⚠️ `add`-ONLY, on `planningProvenance`'s own terms (Story MOTIR-5062 ·
         // MOTIR-5065): the subject describes the PASS that derived it, not the
         // card. `PlanItemPatch` has no `subject` twin, so a `modify` proposes
@@ -1805,7 +1808,8 @@ export const planReviewService = {
         byName: r.changedById ? (actorNameById.get(r.changedById) ?? null) : null,
         actorSource: r.actorSource,
         actorHarness: r.actorHarness,
-        actorModel: r.actorModel,
+        // Never names Motir's own model (MOTIR-7225); the trail row keeps it.
+        actorModel: redactNativeActor(r.actorSource, r.actorModel),
       }));
 
     const history = mergeTimeline(derived, stored);
@@ -1867,7 +1871,7 @@ export const planReviewService = {
       createdByName,
       authorSource: plan.authorSource,
       authorHarness: plan.authorHarness,
-      authorModel: plan.authorModel,
+      authorModel: redactNativeActor(plan.authorSource, plan.authorModel),
       // Present ⟺ the lease is HELD. A null is one check at the call site and
       // cannot be misread as *a revision that finished*.
       revision: lease
