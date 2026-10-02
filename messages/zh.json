@@ -11520,7 +11520,8 @@
     },
     "summary": {
       "all": "{app}获得<b>{count}/{total}</b>项权限，作用于<b>{workspace}</b>中你能打开的每个项目。",
-      "one": "{app}获得<b>{count}</b>项权限，仅作用于<b>{project}</b>。"
+      "one": "{app}获得<b>{count}</b>项权限，仅作用于<b>{project}</b>。",
+      "pickProject": "选择一个项目，查看{app}会获得哪些权限。"
     },
     "actions": {
       "group": "批准或拒绝{app}",
