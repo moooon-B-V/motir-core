@@ -16,7 +16,7 @@ import {
   INSTANCE_BOOT_DEADLINE_MS,
   INSTANCE_BOOT_EXIT_GRACE_MS,
   INSTANCE_HOME_PATH,
-  INSTANCE_INLINE_BOOT_WAIT_MS,
+  INSTANCE_INLINE_UPDATE_WAIT_MS,
   INSTANCE_INLINE_STOP_WAIT_MS,
   INSTANCE_MAX_PER_USER,
   INSTANCE_NAME_PATTERN,
@@ -65,10 +65,6 @@ import {
 import { checkAgentRunCredits } from '@/lib/ai/motirAiClient';
 import { isCloudBilling } from '@/lib/billing/availability';
 import type { AgentInstanceDto, AgentInstanceImageFields } from '@/lib/dto/agentInstances';
-import {
-  mintProjectReadCredentials,
-  revokeInstanceCloneCredential,
-} from '@/lib/github/runGitCredential';
 import { machineCreditsFor } from '@/lib/hostedRuns/machineRate';
 import {
   endLineReason,
@@ -97,7 +93,13 @@ import {
   agentInstanceClock,
   armIdleTimer,
 } from '@/lib/services/agentInstanceActivityService';
-import { agentInstanceBootService } from '@/lib/services/agentInstanceBootService';
+import {
+  agentBootEventKey,
+  agentInstanceBootService,
+  type AgentBootOpened,
+} from '@/lib/services/agentInstanceBootService';
+import { agentInstanceBootRepository } from '@/lib/repositories/agentInstanceBootRepository';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 import { agentInstanceChargeService } from '@/lib/services/agentInstanceChargeService';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { aiPlanGateService } from '@/lib/services/aiPlanGateService';
@@ -505,7 +507,7 @@ async function failInstance(
 
 /**
  * Why a boot that has not reached `running` is over, or null while it may still
- * get there (MOTIR-7336) — see {@link agentInstanceLifecycleService.settleBoot}.
+ * get there (MOTIR-7336) — read by the boot driver while it waits on the machine.
  */
 function bootFailureReason(
   row: AgentInstance,
@@ -528,26 +530,6 @@ function bootFailureReason(
     return `The machine did not finish starting within ${minutes} minutes. Wake to try again, or delete it.`;
   }
   return null;
-}
-
-/**
- * Fail a boot, with ONE lifecycle line saying which machine state ended it
- * (MOTIR-7336: a boot that ended silently cost a Fly-level read to explain).
- * The line carries ids, states and the exit code only — never a credential.
- */
-async function failBoot(
-  row: AgentInstance,
-  status: PersistentContainerStatus,
-  reason: string,
-): Promise<void> {
-  console.warn('[agentInstanceLifecycle] boot failed', {
-    instanceId: row.id,
-    state: row.state,
-    providerState: status.providerState,
-    exitCode: status.exitCode ?? null,
-    reason,
-  });
-  await failInstance(row, reason, RUN_BOOT_FAILED);
 }
 
 /** What a clone exec said on failure: git's words, trimmed, with no credential in them. */
@@ -579,24 +561,6 @@ async function cloneRepository(
     { timeoutSeconds: CLONE_EXEC_TIMEOUT_SECONDS },
   );
   return result.exitCode === 0 ? null : cloneFailureDetail(result, token);
-}
-
-/** Clone the project's repositories into a freshly booted instance (§1), one exec each. */
-async function cloneRepositories(
-  row: AgentInstance,
-  handle: PersistentContainerHandle,
-): Promise<void> {
-  const credentials = await mintProjectReadCredentials(row.projectId, row.workspaceId);
-  for (const credential of credentials) {
-    try {
-      for (const repository of credential.repositories) {
-        const failed = await cloneRepository(handle, repository, credential.token);
-        if (failed) throw new Error(`cloning ${repository} failed: ${failed}`);
-      }
-    } finally {
-      await revokeInstanceCloneCredential(credential.token);
-    }
-  }
 }
 
 /**
@@ -773,6 +737,18 @@ async function waitFor(deadlineMs: number, done: () => Promise<boolean>): Promis
   }
 }
 
+/**
+ * Hand a boot to its driver (AMENDMENT 6 §5): `provision` recorded done, then the
+ * `agent-instance/boot` event — AFTER the opening transaction committed. A lost
+ * send leaves an attempt nobody leased, which the sweep resends.
+ */
+async function handOverBoot(row: AgentInstance, boot: AgentBootOpened | null): Promise<void> {
+  /* v8 ignore next -- every create and every `waking` wake opened an attempt */
+  if (!boot) return;
+  await agentInstanceBootService.recordProvision(row, boot.attempt, null);
+  await sendEvent('agent-instance/boot', boot.event);
+}
+
 /** The catalog could not be asked: shown as "could not check", never as up to date. */
 const UNKNOWN_IMAGE: AgentInstanceImageFields = { imageVersion: null, update: 'unknown' };
 
@@ -904,7 +880,7 @@ async function beginRollback(row: AgentInstance, detail: string): Promise<void> 
 /**
  * The boot's step functions, for the boot driver (`agentInstanceBootService`,
  * `agent-instances.md` AMENDMENT 6 §3) — the same clone, probes and failure path
- * `settleBoot` uses, so the driver changes who calls them, never what they do.
+ * a boot always used, so the driver changes who calls them, never what they do.
  */
 export const agentInstanceBootSteps = {
   /** The caller's own agent in the project, or `AgentInstanceNotFoundError` (§8's gate). */
@@ -1003,9 +979,10 @@ export const agentInstanceLifecycleService = {
   },
 
   /**
-   * Create an instance (§1, §4): refuse or boot. On success the instance is
-   * `starting` or — when the machine reported running within the inline wait —
-   * `running` with the project's repositories cloned.
+   * Create an instance (§1, §4): refuse or boot. On success the instance answers
+   * `starting` (AMENDMENT 6 §5): its boot attempt is opened in the insert's
+   * transaction and handed to the `agent-instance/boot` driver once it commits,
+   * which clones the project's repositories and moves it to `running` or `failed`.
    */
   async create(
     projectKey: string,
@@ -1066,6 +1043,7 @@ export const agentInstanceLifecycleService = {
     const region = orchestrator.defaultRegion();
     const openedAt = agentInstanceClock.now();
     let row: AgentInstance;
+    let boot = null as AgentBootOpened | null;
     try {
       row = await inProject(project, ctx, async (tx) => {
         const created = await agentInstanceRepository.create(
@@ -1099,6 +1077,8 @@ export const agentInstanceLifecycleService = {
           },
           tx,
         );
+        // AMENDMENT 6 §5: attempt 1 is the opener's write, in the insert's transaction.
+        boot = await agentInstanceBootService.start(created, 'create', tx);
         return created;
       });
     } catch (err) {
@@ -1137,14 +1117,14 @@ export const agentInstanceLifecycleService = {
         ),
       );
     } catch (err) {
-      await failInstance(row, `The machine could not be created: ${describeError(err)}`);
+      const detail = describeError(err);
+      if (boot) await agentInstanceBootService.recordProvision(row, boot.attempt, detail);
+      await failInstance(row, `The machine could not be created: ${detail}`);
       return await toDtoWithImage(await reload(row));
     }
 
-    await waitFor(
-      INSTANCE_INLINE_BOOT_WAIT_MS,
-      async () => (await this.settleBoot(instanceId)) !== 'pending',
-    );
+    // AMENDMENT 6 §5: the boot is the driver's from here; the answer is `starting`.
+    await handOverBoot(row, boot);
     return await toDtoWithImage(await reload(row));
   },
 
@@ -1182,6 +1162,7 @@ export const agentInstanceLifecycleService = {
     });
 
     const now = agentInstanceClock.now();
+    let boot = null as AgentBootOpened | null;
     const moved = await inProject(project, ctx, async (tx) => {
       const n = await agentInstanceRepository.transition(
         row.id,
@@ -1205,6 +1186,9 @@ export const agentInstanceLifecycleService = {
           },
           tx,
         );
+        // AMENDMENT 6 §2: a wake opens attempt n+1 — but one entering `updating`
+        // opens none; its progress is the update flow's.
+        if (to === 'waking') boot = await agentInstanceBootService.start(row, 'wake', tx);
       }
       return n;
     });
@@ -1223,17 +1207,23 @@ export const agentInstanceLifecycleService = {
       await alignMachineImage(row, handle, target);
       await getPersistentOrchestrator().start(handle);
     } catch (err) {
+      const detail = describeError(err);
+      if (boot) await agentInstanceBootService.recordProvision(row, boot.attempt, detail);
       await failInstance(
         row,
-        `The machine could not start: ${describeError(err)}. Wake to try again, or delete it.`,
+        `The machine could not start: ${detail}. Wake to try again, or delete it.`,
       );
       return await toDtoWithImage(await reload(row));
     }
-    await waitFor(INSTANCE_INLINE_BOOT_WAIT_MS, async () =>
-      target
-        ? (await this.settleUpdate(instanceId)) !== 'pending'
-        : (await this.settleBoot(instanceId)) !== 'pending',
-    );
+    if (target) {
+      await waitFor(
+        INSTANCE_INLINE_UPDATE_WAIT_MS,
+        async () => (await this.settleUpdate(instanceId)) !== 'pending',
+      );
+    } else {
+      // AMENDMENT 6 §5: the boot is the driver's from here; the answer is `waking`.
+      await handOverBoot(row, boot);
+    }
     return await toDtoWithImage(await reload(row));
   },
 
@@ -1364,74 +1354,42 @@ export const agentInstanceLifecycleService = {
   },
 
   /**
-   * SETTLE A BOOT (`starting` / `waking`), idempotently. `running` → correct the
-   * interval's start to Fly's, clone on a first boot, move to `running`.
-   * `gone` / `failed` → `failed`, interval closed `lost`, slot released. Still
-   * booting → `'pending'`. Called inline by create and wake, and by the sweep.
+   * THE SWEEP'S BOOT BACKSTOP (`agent-instances.md` AMENDMENT 6 §4) — for a
+   * `starting` / `waking` agent, NEVER a step of the boot itself (the driver,
+   * `agentInstanceBootService.advance`, owns every step):
    *
-   * EVERY BOOT ENDS (MOTIR-7336). A machine that started during this boot and then
-   * EXITED is failed with its exit code — at once on a clean exit (Fly's
-   * `on-failure` never restarts one), after {@link INSTANCE_BOOT_EXIT_GRACE_MS} on
-   * any other (a restart may be on its way). And a boot not `running` within
-   * {@link INSTANCE_BOOT_DEADLINE_MS} of its start is failed whatever the machine
-   * says. A stop from BEFORE this boot (the hibernate a wake's start has not
-   * replaced yet) is not an exit during it.
+   * - the current attempt's lease is ALIVE → `alive`: its driver is working;
+   * - the lease is absent or EXPIRED → the boot event sent again for that
+   *   attempt, keyed by the expired lease so it is never deduplicated against the
+   *   first → `resent`. Its new holder resumes at the step in progress;
+   * - NO open attempt (a boot in flight across the deploy that brought the
+   *   driver in) → one opened, its kind from the state, then the event → `opened`.
    */
-  async settleBoot(instanceId: string): Promise<'running' | 'failed' | 'pending' | 'noop'> {
+  async resumeBoot(instanceId: string): Promise<'opened' | 'resent' | 'alive' | 'noop'> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
     if (!row || row.deletedAt || (row.state !== 'starting' && row.state !== 'waking'))
       return 'noop';
-    const handle = handleOf(row);
-    if (!handle) return 'pending';
-    let status;
-    try {
-      status = await getPersistentOrchestrator().describePersistent(handle);
-    } catch {
-      return 'pending';
-    }
-    if (status.state === 'gone' || status.state === 'failed') {
-      await failBoot(
-        row,
-        status,
-        'The machine stopped before it finished starting. Wake to try again, or delete it.',
+    const now = agentInstanceClock.now();
+    const current = await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+      agentInstanceBootRepository.findCurrentAttempt(row.id, tx),
+    );
+    if (!current || current.endedAt) {
+      const opened = await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+        agentInstanceBootService.start(row, row.state === 'waking' ? 'wake' : 'create', tx),
       );
-      return 'failed';
+      // The machine exists, so its provision is done; the driver reads the rest.
+      if (handleOf(row)) await agentInstanceBootService.recordProvision(row, opened.attempt, null);
+      await sendEvent('agent-instance/boot', opened.event);
+      return 'opened';
     }
-    if (status.state !== 'running') {
-      const reason = bootFailureReason(row, status, agentInstanceClock.now().getTime());
-      if (!reason) return 'pending';
-      await failBoot(row, status, reason);
-      return 'failed';
-    }
-
-    if (row.state === 'starting') {
-      try {
-        await cloneRepositories(row, handle);
-      } catch (err) {
-        await failInstance(
-          row,
-          `The project’s repositories could not be cloned: ${describeError(err)}`,
-          RUN_BOOT_FAILED,
-        );
-        return 'failed';
-      }
-    }
-    await probeTerminalServer(row, handle);
-    await probeRunCapabilities(row, handle);
-    const fresh = await reload(row);
-    if (fresh.state !== row.state) return 'noop';
-    await withWorkspaceServiceContext(row.workspaceId, async (tx) => {
-      const open = await agentInstanceIntervalRepository.findOpen(row.id, tx);
-      if (open && status.startedAt && status.startedAt > open.startedAt) {
-        await agentInstanceIntervalRepository.correctStart(open.id, status.startedAt, tx);
-      }
+    if (current.leaseExpiresAt && current.leaseExpiresAt.getTime() > now.getTime()) return 'alive';
+    await sendEvent('agent-instance/boot', {
+      workspaceId: row.workspaceId,
+      instanceId: row.id,
+      attempt: current.attempt,
+      idempotencyKey: agentBootEventKey(row.id, current.attempt, current.leaseExpiresAt),
     });
-    const moved = await systemTransition(row, [row.state], 'running', {
-      lastActivityAt: agentInstanceClock.now(),
-    });
-    if (!moved) return 'noop';
-    await armIdleTimer(row);
-    return 'running';
+    return 'resent';
   },
 
   /**
@@ -1557,7 +1515,7 @@ export const agentInstanceLifecycleService = {
       }
     }
     await waitFor(
-      INSTANCE_INLINE_BOOT_WAIT_MS,
+      INSTANCE_INLINE_UPDATE_WAIT_MS,
       async () => (await this.settleUpdate(instanceId)) !== 'pending',
     );
     return await toDtoWithImage(await reload(row));

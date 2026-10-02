@@ -65,7 +65,7 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
 // The clone command, the probes, the `running` transition, the idle timer, the
 // failure path (`failInstance`) and AMENDMENT 5's deadline and exit grace are
 // the lifecycle's own (`agentInstanceBootSteps`). The deadline applies while the
-// boot waits on the MACHINE, exactly as `settleBoot` applies it: once the machine
+// boot waits on the MACHINE, exactly as the old inline settle applied it: once the machine
 // is running, the clone runs on the lease's bound, not the deadline's.
 
 /** The boot event's idempotency key: one driver per attempt, a resend keyed apart. */
@@ -76,6 +76,12 @@ export function agentBootEventKey(
 ): string {
   const base = `agent-instance-boot:${instanceId}:${attempt}`;
   return expiredLeaseAt ? `${base}:${expiredLeaseAt.toISOString()}` : base;
+}
+
+/** An attempt as its opener holds it: its number and the event to send after commit. */
+export interface AgentBootOpened {
+  attempt: number;
+  event: AgentInstanceBootData;
 }
 
 /** What one pass leaves the job to do. */
@@ -160,8 +166,17 @@ class Pass {
    * to `failed` through `failInstance` (interval `lost`, slot released, a run in
    * it closed first). A delete that got there first owns the agent: its move
    * already closed the attempt, so nothing here is written.
+   *
+   * The ONE lifecycle line it logs carries ids, states and — when the machine's
+   * own state ended the boot — its provider state and exit code (MOTIR-7336: a
+   * boot that ended silently cost a Fly-level read to explain). Never a credential.
    */
-  async fail(step: AgentInstanceBootStep, detail: string, reason: string): Promise<void> {
+  async fail(
+    step: AgentInstanceBootStep,
+    detail: string,
+    reason: string,
+    machine?: PersistentContainerStatus,
+  ): Promise<void> {
     const now = agentInstanceClock.now();
     await leased(this.attempt, this.holder, async (tx) => {
       await writeStep(
@@ -179,8 +194,12 @@ class Pass {
     console.warn('[agentInstanceBoot] boot failed', {
       instanceId: this.row.id,
       attempt: this.attempt.attempt,
+      state: this.row.state,
       step: step.step,
       repository: step.repository,
+      ...(machine
+        ? { providerState: machine.providerState, exitCode: machine.exitCode ?? null }
+        : {}),
       reason,
     });
     await steps.failInstance(this.row, reason, steps.RUN_BOOT_FAILED);
@@ -258,7 +277,12 @@ async function advanceMachineStart(
   if (status.state === 'gone' || status.state === 'failed') {
     const reason =
       'The machine stopped before it finished starting. Wake to try again, or delete it.';
-    await pass.fail(current, `the machine is ${status.providerState || status.state}`, reason);
+    await pass.fail(
+      current,
+      `the machine is ${status.providerState || status.state}`,
+      reason,
+      status,
+    );
     return DONE;
   }
   if (status.state !== 'running') {
@@ -271,7 +295,7 @@ async function advanceMachineStart(
         : code === null
           ? 'the machine exited'
           : `exit code ${code}`;
-    await pass.fail(current, detail, reason);
+    await pass.fail(current, detail, reason, status);
     return DONE;
   }
   const startedAt = machineStartedAt(status, pass.row.stateChangedAt);
@@ -400,7 +424,7 @@ async function advanceTerminalCheck(pass: Pass, step: AgentInstanceBootStep): Pr
 
 /**
  * `ready`: the move to `running` and the attempt's close, in ONE transaction
- * under the lease — then the idle timer, exactly as `settleBoot` arms it.
+ * under the lease — then the idle timer, exactly as the old inline settle armed it.
  */
 async function advanceReady(pass: Pass, step: AgentInstanceBootStep): Promise<void> {
   const now = agentInstanceClock.now();
@@ -492,7 +516,7 @@ export const agentInstanceBootService = {
     row: AgentInstance,
     kind: AgentInstanceBootKind,
     tx: Prisma.TransactionClient,
-  ): Promise<{ attempt: number; event: AgentInstanceBootData }> {
+  ): Promise<AgentBootOpened> {
     const now = agentInstanceClock.now();
     const current = await agentInstanceBootRepository.findCurrentAttempt(row.id, tx);
     if (current && !current.endedAt) {

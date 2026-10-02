@@ -1,5 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { driveBoot, installInlineBootDriver } from '../helpers/agentBootDriver';
 import { fakePersistentOrchestrator as fleet } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
@@ -21,7 +22,6 @@ import {
 import { AGENT_IDLE_COMMAND } from '@/lib/agentInstances/terminal';
 import { OFFERED_AGENT_PROFILES } from '@/lib/agentInstances/profiles';
 import { imageDigestResolver } from '@/lib/agentInstances/imageDigest';
-import { agentInstanceSweepService } from '@/lib/services/agentInstanceSweepService';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import {
@@ -198,6 +198,7 @@ beforeEach(async () => {
     virtualNow += ms;
   });
   fleet.setNow(() => new Date(virtualNow));
+  installInlineBootDriver();
 });
 
 afterEach(async () => {
@@ -295,10 +296,10 @@ describe('create', () => {
     const opened = (await intervals())[0]!.startedAt;
     virtualNow += 45_000;
     fleet.completeBoot(row.machineId!);
-    expect(await lifecycle.settleBoot(row.id)).toBe('running');
+    expect(await driveBoot(row.id)).toBe('running');
     const corrected = (await intervals())[0]!.startedAt;
     expect(corrected.getTime()).toBe(opened.getTime() + 45_000 + 20_000);
-    expect(await lifecycle.settleBoot(row.id)).toBe('noop');
+    expect(await driveBoot(row.id)).toBe('noop');
   });
 
   describe('every refusal changes nothing and provisions nothing', () => {
@@ -751,11 +752,11 @@ describe('a boot that ends in a stopped machine always ends (MOTIR-7336)', () =>
     const row = (await instances())[0]!;
     virtualNow += 30_000;
     fleet.exitOutside(row.machineId!, 0);
-    expect(await lifecycle.settleBoot(row.id)).toBe('failed');
+    expect(await driveBoot(row.id)).toBe('failed');
     await expectFailedBoot(
       /exited during boot \(exit code 0\)\. Wake to try again, or delete it\./,
     );
-    expect(await lifecycle.settleBoot(row.id)).toBe('noop');
+    expect(await driveBoot(row.id)).toBe('noop');
   });
 
   it('a WAKE whose machine exits cleanly while waking ends failed the same way', async () => {
@@ -766,7 +767,7 @@ describe('a boot that ends in a stopped machine always ends (MOTIR-7336)', () =>
     const woken = await lifecycle.wake(KEY(), dto.id, fx.ctx);
     expect(woken.state).toBe('waking');
     fleet.exitOutside((await instances())[0]!.machineId!, 0);
-    expect(await lifecycle.settleBoot(dto.id)).toBe('failed');
+    expect(await driveBoot(dto.id)).toBe('failed');
     await expectFailedBoot(/exited during boot \(exit code 0\)/);
     // The owner can act on it: a failed agent wakes again.
     fleet.setBootBehaviour('start');
@@ -778,13 +779,13 @@ describe('a boot that ends in a stopped machine always ends (MOTIR-7336)', () =>
     await create();
     const row = (await instances())[0]!;
     fleet.exitOutside(row.machineId!, 1);
-    expect(await lifecycle.settleBoot(row.id)).toBe('pending');
+    expect(await driveBoot(row.id)).toBe('pending');
     virtualNow += INSTANCE_BOOT_EXIT_GRACE_MS - 1_000;
-    expect(await lifecycle.settleBoot(row.id)).toBe('pending');
+    expect(await driveBoot(row.id)).toBe('pending');
     // Fly's on-failure restart brings it up.
     await fleet.start(handleFor(row));
     fleet.completeBoot(row.machineId!);
-    expect(await lifecycle.settleBoot(row.id)).toBe('running');
+    expect(await driveBoot(row.id)).toBe('running');
   });
 
   it('a non-zero exit nobody restarts ends failed once the grace has passed', async () => {
@@ -793,7 +794,7 @@ describe('a boot that ends in a stopped machine always ends (MOTIR-7336)', () =>
     const row = (await instances())[0]!;
     fleet.exitOutside(row.machineId!, 137);
     virtualNow += INSTANCE_BOOT_EXIT_GRACE_MS;
-    expect(await lifecycle.settleBoot(row.id)).toBe('failed');
+    expect(await driveBoot(row.id)).toBe('failed');
     await expectFailedBoot(/exited during boot \(exit code 137\)/);
   });
 
@@ -803,11 +804,14 @@ describe('a boot that ends in a stopped machine always ends (MOTIR-7336)', () =>
     virtualNow += 3_600_000;
     // The state a wake leaves before Fly has acted on its start: waking, the
     // machine still stopped since the hibernate an hour ago.
+    // Staged in the database, so no attempt is open: the sweep's backstop opens
+    // one, and the driver's passes leave the agent waking.
     await adminDb.agentInstance.update({
       where: { id: dto.id },
       data: { state: 'waking', stateChangedAt: new Date(virtualNow) },
     });
-    expect(await lifecycle.settleBoot(dto.id)).toBe('pending');
+    expect(await lifecycle.resumeBoot(dto.id)).toBe('opened');
+    expect(await driveBoot(dto.id)).toBe('pending');
     expect((await instances())[0]!.state).toBe('waking');
   });
 
@@ -817,26 +821,28 @@ describe('a boot that ends in a stopped machine always ends (MOTIR-7336)', () =>
     const row = (await instances())[0]!;
     const began = row.stateChangedAt.getTime();
     virtualNow = began + INSTANCE_BOOT_DEADLINE_MS - 1_000;
-    expect(await lifecycle.settleBoot(row.id)).toBe('pending');
+    expect(await driveBoot(row.id)).toBe('pending');
     virtualNow = began + INSTANCE_BOOT_DEADLINE_MS;
-    expect(await lifecycle.settleBoot(row.id)).toBe('failed');
+    expect(await driveBoot(row.id)).toBe('failed');
     await expectFailedBoot(/did not finish starting within 10 minutes/);
   });
 
-  it('the SWEEP fails such a boot and logs one lifecycle line: the instance, the provider state and the exit code — no credential', async () => {
+  it('the DRIVER fails such a boot and logs one lifecycle line: the instance, the provider state and the exit code — no credential', async () => {
     fleet.setBootBehaviour('never_start');
     await create();
     const row = (await instances())[0]!;
     fleet.exitOutside(row.machineId!, 0);
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const summary = await agentInstanceSweepService.sweep();
-    expect(summary.settled).toBeGreaterThanOrEqual(1);
+    expect(await driveBoot(row.id)).toBe('failed');
     await expectFailedBoot(/exit code 0/);
     const lines = warn.mock.calls.filter((c) => String(c[0]).includes('boot failed'));
     expect(lines).toHaveLength(1);
     expect(lines[0]![1]).toEqual({
       instanceId: row.id,
+      attempt: 1,
       state: 'starting',
+      step: 'machine_start',
+      repository: null,
       providerState: 'stopped',
       exitCode: 0,
       reason: expect.stringMatching(/exit code 0/),
@@ -888,7 +894,7 @@ describe('delete from a boot or a stop that has not settled (AMENDMENT 4)', () =
     const row = (await instances())[0]!;
     fleet.stopOutside(row.machineId!);
     // The boot settle reads a stopped machine as still booting — the stuck agent.
-    expect(await lifecycle.settleBoot(dto.id)).toBe('pending');
+    expect(await driveBoot(dto.id)).toBe('pending');
     await lifecycle.delete(KEY(), dto.id, fx.ctx);
     await expectFullyDeleted(dto.id);
   });
@@ -949,7 +955,7 @@ describe('a settle after a delete has begun changes nothing', () => {
   it('a boot that finishes after the delete began does not move the agent to running', async () => {
     const { id, machineId } = await stuckBootThenDeleting();
     fleet.completeBoot(machineId);
-    expect(await lifecycle.settleBoot(id)).toBe('noop');
+    expect(await driveBoot(id)).toBe('noop');
     expect((await instances())[0]!.state).toBe('deleting');
     expect(await lifecycle.settleDelete(id)).toBe('deleted');
     expect((await intervals())[0]).toMatchObject({ endReason: 'deleted' });
@@ -967,7 +973,7 @@ describe('a settle after a delete has begun changes nothing', () => {
       await lifecycle.delete(KEY(), dto.id, fx.ctx);
       return real(handle);
     });
-    expect(await lifecycle.settleBoot(dto.id)).toBe('noop');
+    expect(await driveBoot(dto.id)).toBe('noop');
     expect((await instances())[0]!.state).toBe('deleting');
     expect(await lifecycle.settleDelete(dto.id)).toBe('deleted');
     expect(await intervals()).toHaveLength(1);
@@ -983,7 +989,7 @@ describe('a settle after a delete has begun changes nothing', () => {
       await lifecycle.delete(KEY(), dto.id, fx.ctx);
       return { ...(await real(handle)), state: 'gone' };
     });
-    expect(await lifecycle.settleBoot(dto.id)).toBe('failed');
+    expect(await driveBoot(dto.id)).toBe('noop');
     expect((await instances())[0]).toMatchObject({ state: 'deleting', failureReason: null });
     expect((await intervals()).filter((i) => i.endedAt === null)).toHaveLength(1);
     expect(await lifecycle.settleDelete(dto.id)).toBe('deleted');

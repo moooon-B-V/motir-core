@@ -10,6 +10,7 @@ import {
 } from '@/lib/services/agentInstanceLifecycleService';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
+import { bootDriver } from '../helpers/agentBootDriver';
 import {
   clock,
   fleet,
@@ -29,12 +30,15 @@ import {
 // The attempt is OPENED here the way create and wake open it (the opener's write,
 // §5): `start` inside a transaction, then `recordProvision`. The agent itself is
 // created through the lifecycle with a machine that does not start on its own,
-// so nothing but the driver moves it out of `starting`.
+// so nothing but the driver moves it out of `starting` — and the attempt the
+// create opened is removed, so each test opens and numbers its own.
 
 beforeEach(async () => {
   await setUpHarness();
   await seedRepo('acme', 'web');
   await seedRepo('acme', 'api');
+  // This suite IS the driver's test: it advances every pass by hand.
+  bootDriver.inline = false;
 });
 afterEach(tearDownHarness);
 afterAll(async () => {
@@ -48,6 +52,7 @@ async function startingAgent(name = 'yue-claude'): Promise<AgentInstance> {
   fleet.setBootBehaviour('never_start');
   const dto = await lifecycle.create(fx.projectIdentifier, { name, profileId: 'claude' }, fx.ctx);
   expect(dto.state).toBe('starting');
+  await adminDb.agentInstanceBootAttempt.deleteMany({ where: { agentInstanceId: dto.id } });
   return agentRow(dto.id);
 }
 
@@ -130,7 +135,7 @@ describe('one create attempt, driven pass by pass', () => {
     expect(agent.state).toBe('running');
     const openInterval = (await intervals()).find((i) => i.endedAt === null)!;
     expect(openInterval.startedAt).toEqual(startedAt);
-    // The idle timer is armed, exactly as `settleBoot` arms it.
+    // The idle timer is armed, exactly as the old inline settle armed it.
     const idle = await adminDb.jobQueueRun.findMany({
       where: { jobId: 'agent-instance/idle-check' },
     });
@@ -269,6 +274,7 @@ describe('a failure fails its own step, and the agent through failInstance', () 
 describe('a wake attempt', () => {
   it('records its clone rows skipped and runs no clone', async () => {
     fleet.setBootBehaviour('start');
+    bootDriver.inline = true;
     const dto = await lifecycle.create(
       fx.projectIdentifier,
       { name: 'yue-claude', profileId: 'claude' },
@@ -276,12 +282,14 @@ describe('a wake attempt', () => {
     );
     await lifecycle.hibernate(fx.projectIdentifier, dto.id, fx.ctx);
     fleet.setBootBehaviour('never_start');
+    bootDriver.inline = false;
     clock.advance(60_000);
+    const execsBefore = cloneExecs().length;
+    // The wake opens attempt 2 itself and hands it to the driver.
     expect((await lifecycle.wake(fx.projectIdentifier, dto.id, fx.ctx)).state).toBe('waking');
     const row = await agentRow(dto.id);
-    const execsBefore = cloneExecs().length;
-    const attempt = await open(row, 'wake');
-    expect(attempt).toBe(1);
+    const attempt = 2;
+    expect(bootDriver.sent.at(-1)).toMatchObject({ instanceId: row.id, attempt });
     fleet.completeBoot(row.machineId!);
     expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
     const a = await stepsOf(row.id, attempt);

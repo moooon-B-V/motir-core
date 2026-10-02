@@ -7,6 +7,7 @@ import { agentInstanceBootService as boot } from '@/lib/services/agentInstanceBo
 import { agentInstanceLifecycleService as lifecycle } from '@/lib/services/agentInstanceLifecycleService';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
+import { bootDriver } from '../helpers/agentBootDriver';
 import { fx, otherMember, seedRepo, setUpHarness, tearDownHarness } from './_harness';
 
 // THE BOOT READ AND ITS STREAM (Story MOTIR-7393 · MOTIR-7399, `agent-instances.md`
@@ -50,6 +51,8 @@ beforeEach(async () => {
   await setUpHarness();
   await seedRepo('acme', 'web');
   await actAs(fx.ownerId);
+  // The create opens attempt 1; the TEST writes its steps, so no driver runs.
+  bootDriver.inline = false;
   now = 1_000_000;
   waiting = [];
   vi.spyOn(live.agentBootStreamClock, 'now').mockImplementation(() => now);
@@ -76,10 +79,8 @@ async function agentWithAttempt(): Promise<{ row: AgentInstance; attempt: number
     fx.ctx,
   );
   const row = await adminDb.agentInstance.findUniqueOrThrow({ where: { id: dto.id } });
-  const { attempt } = await withWorkspaceServiceContext(row.workspaceId, (tx) =>
-    boot.start(row, 'create', tx),
-  );
-  return { row, attempt };
+  // The create opened the attempt and recorded `provision` done (seq 6).
+  return { row, attempt: 1 };
 }
 
 /** Write one step's state as the driver would: a new per-agent seq. */
@@ -131,9 +132,9 @@ describe('GET …/boot', () => {
     const { boot: dto } = (await res.json()) as {
       boot: { attempt: number; kind: string; seq: number; steps: Array<Record<string, unknown>> };
     };
-    expect(dto).toMatchObject({ attempt, kind: 'create', outcome: null, seq: 6 });
+    expect(dto).toMatchObject({ attempt, kind: 'create', outcome: null, seq: 7 });
     expect(dto.steps.map((s) => [s.step, s.repository, s.state])).toEqual([
-      ['provision', null, 'in_progress'],
+      ['provision', null, 'done'],
       ['machine_start', null, 'in_progress'],
       ['clone', 'acme/web', 'waiting'],
       ['terminal_check', null, 'waiting'],
@@ -143,11 +144,10 @@ describe('GET …/boot', () => {
   });
 
   it('answers { boot: null } for an agent that never booted under the driver', async () => {
-    const dto = await lifecycle.create(
-      fx.projectIdentifier,
-      { name: 'yue-claude', profileId: 'claude' },
-      fx.ctx,
-    );
+    const { row } = await agentWithAttempt();
+    // An agent created before the driver existed has no attempt at all.
+    await adminDb.agentInstanceBootAttempt.deleteMany({ where: { agentInstanceId: row.id } });
+    const dto = row;
     const res = await read.GET(new Request(url(dto.id)), params(dto.id));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ boot: null });
@@ -181,22 +181,22 @@ describe('GET …/boot/stream', () => {
     const next = frames(res.body!.getReader());
 
     const snapshot = await next();
-    expect(snapshot).toMatchObject({ event: 'snapshot', data: { attempt, seq: 5 } });
+    expect(snapshot).toMatchObject({ event: 'snapshot', data: { attempt, seq: 6 } });
 
     await writeStep(row, 1, 'in_progress');
     await tick();
     expect(await next()).toMatchObject({
       event: 'step',
-      data: { step: 'machine_start', state: 'in_progress', seq: 6, attempt },
+      data: { step: 'machine_start', state: 'in_progress', seq: 7, attempt },
     });
     // A row carries its LATEST state: two writes between polls are one frame.
     await writeStep(row, 1, 'done');
     await writeStep(row, 2, 'in_progress');
     await tick();
-    expect(await next()).toMatchObject({ event: 'step', data: { state: 'done', seq: 7 } });
+    expect(await next()).toMatchObject({ event: 'step', data: { state: 'done', seq: 8 } });
     expect(await next()).toMatchObject({
       event: 'step',
-      data: { step: 'clone', repository: 'acme/web', seq: 8 },
+      data: { step: 'clone', repository: 'acme/web', seq: 9 },
     });
 
     await closeAttempt(row, 'running');
@@ -207,16 +207,16 @@ describe('GET …/boot/stream', () => {
 
   it('resumes from ?since with exactly the steps after the cursor', async () => {
     const { row } = await agentWithAttempt();
-    await writeStep(row, 0, 'done'); // seq 6
-    await writeStep(row, 1, 'in_progress'); // seq 7
-    const res = await live.GET(new Request(url(row.id, '/stream?since=6')), params(row.id));
+    await writeStep(row, 0, 'done'); // seq 7
+    await writeStep(row, 1, 'in_progress'); // seq 8
+    const res = await live.GET(new Request(url(row.id, '/stream?since=7')), params(row.id));
     const next = frames(res.body!.getReader());
     expect(await next()).toMatchObject({ event: 'snapshot' });
     const resumed = await next();
-    expect(resumed).toMatchObject({ event: 'step', data: { step: 'machine_start', seq: 7 } });
-    await writeStep(row, 1, 'done'); // seq 8
+    expect(resumed).toMatchObject({ event: 'step', data: { step: 'machine_start', seq: 8 } });
+    await writeStep(row, 1, 'done'); // seq 9
     await tick();
-    expect(await next()).toMatchObject({ event: 'step', data: { seq: 8 } });
+    expect(await next()).toMatchObject({ event: 'step', data: { seq: 9 } });
   });
 
   it('sends a fresh snapshot when a new attempt begins', async () => {

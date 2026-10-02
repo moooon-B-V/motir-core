@@ -5,11 +5,10 @@ import { isJobRunDefer, type JobRunDefer } from '@/lib/jobs/engine/defer';
 import { engineJob } from '@/lib/jobs/engine/registry';
 import { jobServices } from '@/lib/jobs/services';
 import { agentInstanceBoot } from '@/lib/jobs/definitions/agentInstanceBoot';
-import { agentInstanceBootService as boot } from '@/lib/services/agentInstanceBootService';
 import { agentInstanceLifecycleService as lifecycle } from '@/lib/services/agentInstanceLifecycleService';
 import type { AgentInstanceBootData } from '@/lib/jobs/types';
-import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
+import { bootDriver } from '../helpers/agentBootDriver';
 import { clock, fleet, fx, seedRepo, setUpHarness, tearDownHarness } from './_harness';
 
 // THE `agent-instance/boot` JOB (Story MOTIR-7393 · MOTIR-7398): its declaration —
@@ -29,17 +28,16 @@ afterAll(async () => {
 
 async function openedBoot(): Promise<AgentInstanceBootData & { machineId: string }> {
   fleet.setBootBehaviour('never_start');
+  bootDriver.inline = false;
   const dto = await lifecycle.create(
     fx.projectIdentifier,
     { name: 'yue-claude', profileId: 'claude' },
     fx.ctx,
   );
   const row = await adminDb.agentInstance.findUniqueOrThrow({ where: { id: dto.id } });
-  const { attempt, event } = await withWorkspaceServiceContext(row.workspaceId, (tx) =>
-    boot.start(row, 'create', tx),
-  );
-  await boot.recordProvision(row, attempt, null);
-  return { ...event, machineId: row.machineId! };
+  // The create opened attempt 1, recorded `provision` and sent exactly this event.
+  expect(bootDriver.sent).toHaveLength(1);
+  return { ...bootDriver.sent[0]!, machineId: row.machineId! };
 }
 
 async function runPass(data: AgentInstanceBootData, runId: string): Promise<unknown> {

@@ -19,6 +19,7 @@ import { JobRunDefer } from '@/lib/jobs/engine/defer';
 import { jobServices } from '@/lib/jobs/services';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { agentInstanceBootService } from '@/lib/services/agentInstanceBootService';
 import {
   agentInstanceHandle,
   agentInstanceLifecycleService as lifecycle,
@@ -654,6 +655,8 @@ describe('after the open — every failure ends the run and leaves nothing live'
     // still coming up, so the pass defers.
     await fleet.stop(agentInstanceHandle(await agentRow(id))!);
     await adminDb.agentInstance.update({ where: { id }, data: { state: 'waking' } });
+    // AMENDMENT 6 §4: the launcher READS a boot, never drives it beside its driver.
+    const drive = vi.spyOn(agentInstanceBootService, 'advance');
     // The boot window is measured on the lifecycle's clock.
     await adminDb.dispatchRun.update({
       where: { id: dispatchRunId },
@@ -665,6 +668,7 @@ describe('after the open — every failure ends the run and leaves nothing live'
     await expect(runLaunchJob(dispatchRunId)).rejects.toBeInstanceOf(JobRunDefer);
     clock.advance(AGENT_RUN_BOOT_WAIT_MS + MIN);
     expect(await runs.awaitAgent(dispatchRunId)).toBe('failed');
+    expect(drive).not.toHaveBeenCalled();
     expect(
       (await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: dispatchRunId } })).status,
     ).toBe('failed');

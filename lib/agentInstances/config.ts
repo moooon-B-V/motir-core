@@ -63,9 +63,14 @@ export function instanceMaxRunning(): number {
   return positiveIntFromEnv('MOTIR_INSTANCE_MAX_RUNNING', 50);
 }
 
-/** How long a create or wake waits in the REQUEST for the machine to report running
- *  before leaving the rest to the sweep (the boot settle is idempotent). */
-export const INSTANCE_INLINE_BOOT_WAIT_MS = 20_000;
+/**
+ * How long an UPDATE (and a wake that applies a pinned one) waits in the REQUEST
+ * for its liveness settle before leaving the rest to the sweep
+ * (`agent-image-update.md` Q6). A create or wake no longer waits at all: it
+ * answers at `starting` / `waking` and the boot driver takes it from there
+ * (`agent-instances.md` AMENDMENT 6 §5).
+ */
+export const INSTANCE_INLINE_UPDATE_WAIT_MS = 20_000;
 
 /**
  * THE BOOT DEADLINE (MOTIR-7336): a create or wake that has not reported running
