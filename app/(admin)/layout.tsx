@@ -87,7 +87,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         searchPlaceholder: t('topBar.searchPlaceholder'),
         footerStaff: t('shell.footerStaff'),
         exitToApp: t('shell.exitToApp'),
-        soonUsage: t('nav.soonUsage'),
         soonGovernance: t('nav.soonGovernance'),
       }}
     >

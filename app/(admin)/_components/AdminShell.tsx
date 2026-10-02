@@ -68,7 +68,6 @@ export interface AdminShellLabels {
    * board takes this row and this panel goes away."* The row has one owner at a
    * time, and this is the handover.
    */
-  soonUsage: string;
   soonGovernance: string;
 }
 
@@ -109,8 +108,8 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           icon: <Coins />,
           label: labels.navUsage,
           href: '/admin/usage',
-          disabled: true,
-          badge: <Pill tone="neutral">{labels.soonUsage}</Pill>,
+          // LIVE since MOTIR-732: the estate's spend by category and model.
+          active: pathname.startsWith('/admin/usage'),
         },
         // The TENANT hierarchy, LIVE at its org level since MOTIR-4566. The row
         // has pointed at `/admin/tenants` since this shell was written and was

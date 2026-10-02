@@ -1,3 +1,9 @@
+import type { CategoryFigures } from '@/lib/platform/spend';
+import type {
+  RawPlatformUsage as RawPlatformUsageForDto,
+  RawPlatformUsageMonths,
+  RawSpendRow,
+} from '@/lib/ai/motirAiClient';
 import type { PlatformAuditTargetKind, PlatformRole } from '@/generated/prisma/client';
 
 /**
@@ -165,4 +171,209 @@ export interface PlatformOrganizationPageDTO {
    * on this organization"*, and a page view is not one.
    */
   actions: PlatformAuditLogDTO[];
+}
+
+/**
+ * The estate's four headline counts (MOTIR-730's `platformReadService.getEstateCounts`).
+ *
+ * Whole-estate totals, read as four `count(*)` statements in one audited platform
+ * transaction — never a row load (finding #57). The overview's "new this period"
+ * deltas and its activity feed are MOTIR-731's, built on top of this.
+ */
+export interface PlatformEstateCountsDTO {
+  organizations: number;
+  workspaces: number;
+  projects: number;
+  users: number;
+}
+
+/** One workspace inside an organization, as the estate read returns it (MOTIR-730). */
+export interface PlatformWorkspaceSummaryDTO {
+  id: string;
+  name: string;
+  slug: string;
+  /** ISO-8601 — when the workspace was created. */
+  createdAt: string;
+  projectCount: number;
+  memberCount: number;
+}
+
+/**
+ * One organization and the tiers beneath it (MOTIR-730's
+ * `platformReadService.getOrganizationEstate`) — the substrate MOTIR-733's
+ * drill-down renders. Carries no usage and no jobs: those live in motir-ai and
+ * are read over the 7.1 boundary by the cards that render them.
+ */
+export interface PlatformOrganizationEstateDTO {
+  organization: PlatformOrganizationSummaryDTO;
+  memberCount: number;
+  /** Oldest first, capped at `PLATFORM_ORG_WORKSPACE_LIMIT`. */
+  workspaces: PlatformWorkspaceSummaryDTO[];
+  /** True when the org holds more workspaces than `workspaces` shows. */
+  hasMoreWorkspaces: boolean;
+}
+
+/** The overview's period control (design D1): what every delta is counted over. */
+export type PlatformOverviewPeriod = '7d' | '30d' | 'month';
+
+/** One row of the overview's activity feed — a tenant event or a run (MOTIR-731). */
+export interface PlatformActivityItemDTO {
+  kind: 'new_organization' | 'new_workspace' | 'new_project' | 'planning_run' | 'coding_run';
+  id: string;
+  at: string;
+  organization: { id: string; name: string } | null;
+  workspace: { id: string; name: string } | null;
+  project: { id: string; name: string } | null;
+  /** A run whose org is known but that names no workspace/project ("(unattributed)"). */
+  unattributed: boolean;
+  /** Who a tenant belongs to (an owner's / manager's email) or a project's key. */
+  detail: string | null;
+  /** A run's model and credits. */
+  model: string | null;
+  credits: number | null;
+}
+
+/** The estate overview (MOTIR-731, design D1/D2) — one audited read. */
+export interface PlatformOverviewDTO {
+  period: PlatformOverviewPeriod;
+  /** The start of the period every delta counts from. */
+  since: string;
+  counts: PlatformEstateCountsDTO;
+  deltas: PlatformEstateCountsDTO;
+  feed: {
+    items: PlatformActivityItemDTO[];
+    /** Older items exist past this page. */
+    nextCursor: string | null;
+    /** The run half could not be read — the tenant half still renders. */
+    runsUnavailable: boolean;
+  };
+}
+
+/** One row of the Tenants list (MOTIR-7287, design D10): an org's spend for the period. */
+export interface PlatformTenantSpendRowDTO {
+  /** Null for the estate total row. A spend row whose org is gone keeps its id as its name. */
+  organization: {
+    id: string;
+    name: string;
+    slug: string | null;
+    isMeta: boolean;
+    internalBilling: boolean;
+  } | null;
+  credits: Record<
+    | 'planning_tokens'
+    | 'agent_tokens'
+    | 'agent_machine'
+    | 'agent_instance'
+    | 'agent_storage'
+    | 'ci'
+    | 'search',
+    number
+  >;
+  indexingSeconds: number;
+  chargedCredits: number;
+  costMicroUsd: number;
+}
+
+/** The Tenants list for one period, sort and filter. */
+export interface PlatformTenantListDTO {
+  period: string;
+  sort: string;
+  filter: string;
+  /** The total over EVERY organization — never the page, never the filter. */
+  estate: PlatformTenantSpendRowDTO | null;
+  rows: PlatformTenantSpendRowDTO[];
+  nextCursor: string | null;
+  /** The filter matched more organizations than one list can carry. */
+  filterCapped: boolean;
+  /** motir-ai could not be read; the list shows its error state. */
+  unavailable: boolean;
+}
+
+/** One member row on the org page's Overview (MOTIR-733). Roles are read-only here. */
+export interface PlatformOrgMemberDTO {
+  id: string;
+  userId: string;
+  name: string | null;
+  email: string;
+  role: 'owner' | 'admin' | 'member';
+  joinedAt: string;
+}
+
+/** The org page's Overview tab (MOTIR-733, design D5) — one audited read. */
+export interface PlatformOrgOverviewDTO {
+  organization: PlatformOrganizationDetailDTO;
+  /** The operator writes recorded against the org — the shipped action log. */
+  actions: PlatformAuditLogDTO[];
+  /** This month's eight categories; null when motir-ai could not be read. */
+  monthCategories: CategoryFigures[] | null;
+  month: string;
+  members: { items: PlatformOrgMemberDTO[]; nextCursor: string | null; total: number };
+  workspaces: (PlatformWorkspaceSummaryDTO & { monthChargedCredits: number | null })[];
+  hasMoreWorkspaces: boolean;
+  /** This month's per-workspace credits could not be read. */
+  workspaceSpendUnavailable: boolean;
+  jobs: { items: PlatformActivityItemDTO[]; nextCursor: string | null; unavailable: boolean };
+}
+
+/** A scope on the org page's Usage & cost tab (MOTIR-7288): the org, a workspace or a project. */
+export type PlatformOrgUsageScope =
+  | { level: 'organization' }
+  | { level: 'workspace'; id: string; name: string }
+  | { level: 'project'; id: string; name: string; workspace: { id: string; name: string } };
+
+/** The org page's Usage & cost tab (MOTIR-7288, design D8/D11) — one audited read. */
+export interface PlatformOrgUsageTabDTO {
+  organization: PlatformOrganizationDetailDTO;
+  period: string;
+  scope: PlatformOrgUsageScope;
+  /** The scope picker's choices: the org's workspaces, each with its projects. */
+  scopes: { id: string; name: string; projects: { id: string; name: string }[] }[];
+  /** The scope's spend; null when motir-ai could not be read. */
+  usage: RawPlatformUsageForDto | null;
+  /** The org's credit balance now; null when it could not be read. */
+  balance: number | null;
+  /**
+   * BY WORKSPACE AND PROJECT (MOTIR-7293): the scope's children with their names,
+   * and — at org scope — the two rows no workspace holds. Null at project scope
+   * (a project has no children) or when motir-ai could not be read (`childrenUnavailable`).
+   */
+  children: {
+    childLevel: 'workspace' | 'project';
+    rows: (RawSpendRow & { name: string })[];
+    remainder: { noProject: RawSpendRow; orgLevel: RawSpendRow } | null;
+    truncated: boolean;
+  } | null;
+  childrenUnavailable: boolean;
+  /** MONTH BY MONTH (MOTIR-7293), newest first, with the all-time row. */
+  months: RawPlatformUsageMonths | null;
+}
+
+/** The workspace page beneath the org (MOTIR-7295, design D6) — one audited read. */
+export interface PlatformWorkspacePageDTO {
+  organization: { id: string; name: string };
+  workspace: { id: string; name: string; slug: string; createdAt: string };
+  month: string;
+  /** The workspace's projects with this month's spend; spend null when motir-ai could not be read. */
+  projects: {
+    id: string;
+    name: string;
+    key: string;
+    planningCredits: number | null;
+    runsAndCiCredits: number | null;
+    chargedCredits: number | null;
+  }[];
+  projectSpendUnavailable: boolean;
+  members: {
+    items: {
+      id: string;
+      userId: string;
+      name: string | null;
+      email: string;
+      role: 'manager' | 'member' | 'viewer';
+      joinedAt: string;
+    }[];
+    nextCursor: string | null;
+    total: number;
+  };
+  jobs: { items: PlatformActivityItemDTO[]; nextCursor: string | null; unavailable: boolean };
 }

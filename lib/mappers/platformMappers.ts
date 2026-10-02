@@ -6,8 +6,13 @@ import type {
   PlatformOrganizationSummaryDTO,
   PlatformUserDetailDTO,
   PlatformUserSummaryDTO,
+  PlatformWorkspaceSummaryDTO,
 } from '@/lib/dto/platform';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
+import type { PlatformWorkspaceRow } from '@/lib/repositories/platformEstateRepository';
+import type { RawPlatformRun } from '@/lib/ai/motirAiClient';
+import type { PlatformTenantEventRow } from '@/lib/repositories/platformEstateRepository';
+import type { PlatformActivityItemDTO } from '@/lib/dto/platform';
 
 /** A `platform_audit_log` row → the DTO. */
 export function toPlatformAuditLogDTO(row: PlatformAuditLog): PlatformAuditLogDTO {
@@ -101,5 +106,67 @@ export function toPlatformOrganizationDetailDTO(row: Organization): PlatformOrga
     // whether one is on record, and forwarding the blob would put a payment
     // provider's payload on an operator screen for no rendered benefit.
     hasScaledTrackerSubscription: row.scaledTrackerSubscription !== null,
+  };
+}
+
+/** A workspace row with its relation counts → the estate read's workspace. */
+export function toPlatformWorkspaceSummaryDTO(
+  row: PlatformWorkspaceRow,
+): PlatformWorkspaceSummaryDTO {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    createdAt: row.createdAt.toISOString(),
+    projectCount: row._count.projects,
+    memberCount: row._count.memberships,
+  };
+}
+
+// ── The estate overview's feed (MOTIR-731) ────────────────────────────────────
+
+const TENANT_EVENT_KIND = {
+  organization: 'new_organization',
+  workspace: 'new_workspace',
+  project: 'new_project',
+} as const;
+
+/** A created organization / workspace / project, as a feed row. */
+export function toPlatformTenantEventDTO(row: PlatformTenantEventRow): PlatformActivityItemDTO {
+  return {
+    kind: TENANT_EVENT_KIND[row.kind],
+    id: row.id,
+    at: row.at.toISOString(),
+    organization: { id: row.organizationId, name: row.organizationName },
+    workspace:
+      row.workspaceId && row.workspaceName
+        ? { id: row.workspaceId, name: row.workspaceName }
+        : null,
+    project:
+      row.kind === 'project' && row.projectName ? { id: row.id, name: row.projectName } : null,
+    unattributed: false,
+    detail: row.detail,
+    model: null,
+    credits: null,
+  };
+}
+
+/** A motir-ai run, labelled with motir-core's names for its core ids. */
+export function toPlatformRunActivityDTO(
+  run: RawPlatformRun,
+  names: Map<string, string>,
+): PlatformActivityItemDTO {
+  const named = (id: string | null) => (id ? { id, name: names.get(id) ?? id } : null);
+  return {
+    kind: run.kind === 'planning' ? 'planning_run' : 'coding_run',
+    id: run.id,
+    at: run.startedAt,
+    organization: named(run.coreOrganizationId),
+    workspace: named(run.coreWorkspaceId),
+    project: named(run.coreProjectId),
+    unattributed: run.coreProjectId === null,
+    detail: null,
+    model: run.model,
+    credits: run.credits,
   };
 }

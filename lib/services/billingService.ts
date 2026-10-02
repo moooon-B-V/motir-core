@@ -31,6 +31,7 @@ import {
   UnknownBillingPriceError,
 } from '@/lib/billing/errors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
+import type { Organization } from '@/generated/prisma/client';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 import type { BillingSessionDTO, BillingStatusDTO, SeatSummaryDTO } from '@/lib/dto/billing';
 import type { AiAccessDTO } from '@/lib/dto/aiAccess';
@@ -103,9 +104,6 @@ export const billingService = {
       { userId: input.actorUserId, organizationId: input.organizationId },
       (tx) => organizationRepository.findByIdInTx(input.organizationId, tx),
     );
-    const scaledTrackerSubscription =
-      (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null;
-
     // (3) ② Motir AI — fold the tier + balance from the usage read AND the Stripe
     // subscription lifecycle (status + renewal) from the 8.1.13 subscription read,
     // so 8.1.7 renders the status `Pill` + "renews {date}". Both are over the
@@ -121,43 +119,10 @@ export const billingService = {
     // treatment for a boundary blip), which is why the panel can render the
     // balance-unavailable state at all — the AI line's read having succeeded
     // does not make the CI line's read succeed.
-    const [usage, subscription, ci] = await Promise.all([
-      getOrgUsage({ coreOrganizationId: input.organizationId, scope: 'org' }),
-      getOrgSubscription({ coreOrganizationId: input.organizationId }),
-      ciAllowanceService.getEntitlementState(input.organizationId, new Date()),
-    ]);
-
-    return {
-      organizationId: input.organizationId,
-      access: { role: access.role, canManageBilling: orgCan(access.role, 'manageBilling') },
-      isMeta: org?.isMeta ?? false,
-      internalBilling: org?.internalBilling ?? false,
-      motir: { scaledTrackerSubscription, aiIncludedSeat: org?.aiIncludedSeat ?? false },
-      motirAi: { tier: usage.tier, balance: usage.balance, subscription },
-      ci,
-      // The FOURTH billed line, off the SAME `getOrgUsage` read `motirAi` above
-      // uses — no second request. `?? null` is load-bearing: an absent block is
-      // UNAVAILABLE, and zeroing it here would render "you spent nothing on
-      // search" on a boundary that never answered.
-      search: usage.search ?? null,
-      // The Agents line (MOTIR-6920), off the same read. Either block missing is
-      // UNAVAILABLE — a total over one real figure and one invented zero would
-      // understate the charge.
-      agents: {
-        spend:
-          usage.agentMachine && usage.agentStorage
-            ? {
-                machineMonthSpend: usage.agentMachine.monthSpend,
-                storageMonthSpend: usage.agentStorage.monthSpend,
-              }
-            : null,
-        hasPaidAiPlan:
-          isPaidAiSubscriptionStatus(subscription.status) ||
-          (org?.isMeta ?? false) ||
-          (org?.internalBilling ?? false),
-      },
-      catalog: BILLING_CATALOG,
-    };
+    return assembleBillingStatus(org, input.organizationId, {
+      role: access.role,
+      canManageBilling: orgCan(access.role, 'manageBilling'),
+    });
   },
 
   /**
@@ -466,5 +431,64 @@ function notApplicableAiAccess(): AiAccessDTO {
     tierName: null,
     tierAllotment: null,
     renewsAt: null,
+  };
+}
+
+/**
+ * The billing status's ASSEMBLY — every read after the gate (Story MOTIR-727 ·
+ * MOTIR-7289 split it out of `getBillingStatus`).
+ *
+ * ⚠️ IT GATES NOTHING. Its two callers each gate first: the tenant path through
+ * `getBillingStatus`'s org-role check (an owner or admin of THIS org), and the
+ * operator's read-only Billing tab through `platformOrgBillingService`, behind
+ * `requirePlatformStaff` and an audited platform read. Never call it from anywhere
+ * else.
+ */
+export async function assembleBillingStatus(
+  org: Pick<
+    Organization,
+    'isMeta' | 'internalBilling' | 'aiIncludedSeat' | 'scaledTrackerSubscription'
+  > | null,
+  organizationId: string,
+  access: BillingStatusDTO['access'],
+): Promise<BillingStatusDTO> {
+  const scaledTrackerSubscription =
+    (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null;
+  const [usage, subscription, ci] = await Promise.all([
+    getOrgUsage({ coreOrganizationId: organizationId, scope: 'org' }),
+    getOrgSubscription({ coreOrganizationId: organizationId }),
+    ciAllowanceService.getEntitlementState(organizationId, new Date()),
+  ]);
+
+  return {
+    organizationId: organizationId,
+    access,
+    isMeta: org?.isMeta ?? false,
+    internalBilling: org?.internalBilling ?? false,
+    motir: { scaledTrackerSubscription, aiIncludedSeat: org?.aiIncludedSeat ?? false },
+    motirAi: { tier: usage.tier, balance: usage.balance, subscription },
+    ci,
+    // The FOURTH billed line, off the SAME `getOrgUsage` read `motirAi` above
+    // uses — no second request. `?? null` is load-bearing: an absent block is
+    // UNAVAILABLE, and zeroing it here would render "you spent nothing on
+    // search" on a boundary that never answered.
+    search: usage.search ?? null,
+    // The Agents line (MOTIR-6920), off the same read. Either block missing is
+    // UNAVAILABLE — a total over one real figure and one invented zero would
+    // understate the charge.
+    agents: {
+      spend:
+        usage.agentMachine && usage.agentStorage
+          ? {
+              machineMonthSpend: usage.agentMachine.monthSpend,
+              storageMonthSpend: usage.agentStorage.monthSpend,
+            }
+          : null,
+      hasPaidAiPlan:
+        isPaidAiSubscriptionStatus(subscription.status) ||
+        (org?.isMeta ?? false) ||
+        (org?.internalBilling ?? false),
+    },
+    catalog: BILLING_CATALOG,
   };
 }

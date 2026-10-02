@@ -2588,6 +2588,53 @@ jobs:
       - run: pnpm -r --filter './packages/*' build
       - run: pnpm coverage:agent-instances
 
+  story-727-coverage:
+    name: Coverage (operator console)
+    runs-on: ubuntu-latest
+    # Story MOTIR-727 (10.1, the operator console) — MOTIR-7296's per-file floor over
+    # the files the story's motir-core cards added (`vitest.coverage.platform-admin.config.ts`):
+    # the audited platform reads, the spend vocabulary, the console's client-side
+    # tables and the fleet meter reporter, measured by their own suites against
+    # Postgres. A new lane with no CI run to quote yet; locally it ran 15 files in
+    # ~2 min, so the 20-min ceiling bounds a hang rather than setting a target.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-727
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-727
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-727.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-727.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm coverage:platform-admin
+
   # Story MOTIR-1626 (9.8, the review agent) — MOTIR-6826's story gate: a per-file
   # floor over the server files the story created (`vitest.coverage.review-agent.config.ts`),
   # measured by the story journeys plus the per-card server suites. Needs Postgres, and
@@ -2675,6 +2722,7 @@ jobs:
         story-683-coverage,
         story-6860-coverage,
         story-1626-coverage,
+        story-727-coverage,
         e2e,
         e2e-at-scale,
         sandbox,

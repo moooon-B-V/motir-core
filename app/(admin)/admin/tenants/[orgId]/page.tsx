@@ -2,272 +2,499 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getFormatter, getTranslations } from 'next-intl/server';
-import { Activity, ChevronRight, Coins, Info, ShieldCheck, Users } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
-import { requirePlatformStaff } from '@/lib/platform/auth';
+import type { PlatformOrgOverviewDTO } from '@/lib/dto/platform';
+import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { PlatformOrganizationNotFoundError } from '@/lib/platform/errors';
-import { platformRoleAtLeast } from '@/lib/platform/auth';
-import { platformBillingClassificationService } from '@/lib/services/platformBillingClassificationService';
+import { buildSpendSheet, parseSpendPeriod } from '@/lib/platform/spend';
+import { platformOrgBillingService } from '@/lib/services/platformOrgBillingService';
 import { platformOrgIndexCostService } from '@/lib/services/platformOrgIndexCostService';
-import { ClassificationBar } from './_components/ClassificationBar';
+import { platformOrgPageService } from '@/lib/services/platformOrgPageService';
+import { formatMicroUsd } from '../../_components/spendFormat';
 import { OrgIndexCostCard } from './_components/OrgIndexCostCard';
+import { BillingTab } from './_components/BillingTab';
+import { OrgPageHeader } from './_components/OrgPageHeader';
+import { UsageTab } from './_components/UsageTab';
+import { orgTabHref, orgUsageHref, parseOrgTab, safeTenantsHref } from './_components/orgNav';
 
 /**
- * The operator ORGANIZATION page — design
- * `platform-admin/design-notes.md` **Panel 11** (MOTIR-4566).
+ * The operator's ORG PAGE — design `console--estate-usage-drilldown.mock.html`
+ * **D5** (MOTIR-733), rebuilt from the MOTIR-4566 page it was.
  *
- * Drawn in the ACCOUNT drill-down's exact grammar, because it is the same
- * console one entity over: the breadcrumb chips *"Platform › Tenants › {org}"*,
- * the `--el-info` audit banner recording the cross-tenant read, then the
- * identity header.
+ * Reached from Tenants (D10). NO breadcrumb: ← Tenants returns to the list with its
+ * filter, period and sort (`?from=`). Three tabs as URL state — Overview, Usage &
+ * cost (MOTIR-7288), Billing & plans (MOTIR-7289). The Overview: this month by
+ * category, Members, Workspaces with this month's credits, Recent jobs, and the
+ * shipped Index & fleet cost card, classification control and action log.
  *
- * ⚠️ THE BANNER IS TRUE BECAUSE THE READ THAT RENDERED THIS PAGE WROTE THE ROW.
- * `getOrganization` opens a platform transaction whose FIRST statement is the
- * audit INSERT, so the sentence on screen and the row in `platform_audit_log`
- * come from one call and cannot drift apart.
- *
- * ⚠️ AND IT RENDERS ONLY WHAT THIS STORY OWNS. The design's own ALLOCATION table
- * gives the usage rollup, the recent-jobs list and the members list to
- * MOTIR-733, and the workspace and project drill-down LEVELS to that card
- * entirely. They are drawn here as `EmptyState`s naming the card that brings
- * them — the move `admin/page.tsx` already makes for the estate counts, and for
- * the same reason: **a placeholder NUMBER is worse than an absent one**, because
- * a zero looks like an answer.
- *
- * ⚠️ AND IT WRITES NOTHING. The set/unset control is MOTIR-4568's; this page
- * renders the classification and cannot change it. That is why there is no
- * `'use client'` island here at all.
- *
- * ⚠️ NO `loading.tsx` ANYWHERE ABOVE THIS ROUTE. It calls `notFound()` for an
- * unknown org id, and a boundary above a status-deciding segment flushes the
- * response head at 200 — `CLAUDE.md`'s loading-boundary rule. The page is one
- * service call, so there is nothing to stream.
+ * One page view is ONE audited `estate.read` naming the org
+ * (`platformOrgPageService.getOverview`); the index-cost card reads under it.
  */
 
 export const metadata: Metadata = {
-  // Deliberately generic: a title carrying the tenant's name would put a
-  // customer's identity in the browser-tab history of an operator's machine.
+  // No description — the console's standing rule (see the landing page).
   title: 'Organization',
 };
 
-/** Never cached — a classification applied a minute ago must show on the next load. */
+/** Never cached: a classification applied a minute ago must show on the next load. */
 export const dynamic = 'force-dynamic';
 
 export default async function AdminOrganizationPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orgId: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    from?: string;
+    members?: string;
+    jobs?: string;
+    period?: string;
+    scope?: string;
+    months?: string;
+  }>;
 }) {
   const principal = await requirePlatformStaff('support');
-  const t = await getTranslations('platformAdmin');
-  const format = await getFormatter();
   const { orgId } = await params;
+  const query = await searchParams;
+  const tab = parseOrgTab(query.tab);
+  const backHref = safeTenantsHref(query.from);
+  // TWO chips, TWO labels — the operator's one vocabulary for the two flags
+  // (`internal-billing-classification.md` §1), never one collapsed "Internal".
+  const tp = await getTranslations('platformAdmin');
+  const chips = {
+    isMeta: tp('orgs.chip.isMeta'),
+    internalBilling: tp('orgs.chip.internalBilling'),
+  };
 
-  let page;
+  if (tab === 'usage') {
+    let usage;
+    try {
+      usage = await platformOrgPageService.getUsageTab(principal, orgId, {
+        period: parseSpendPeriod(query.period),
+        scope: query.scope ?? null,
+        monthsCursor: query.months ?? null,
+      });
+    } catch (err) {
+      if (err instanceof PlatformOrganizationNotFoundError) notFound();
+      throw err;
+    }
+    return (
+      <div className="mx-auto flex max-w-[72rem] flex-col gap-4 px-6 py-6">
+        <OrgPageHeader
+          org={usage.organization}
+          principal={principal}
+          tab="usage"
+          backHref={backHref}
+          chips={chips}
+        />
+        <UsageTab
+          data={usage}
+          monthsCursor={query.months ?? null}
+          hrefFor={(period, months) =>
+            orgUsageHref(orgId, { period, scope: query.scope, months, backHref })
+          }
+        />
+      </div>
+    );
+  }
+  if (tab === 'billing') {
+    let billing;
+    try {
+      billing = await platformOrgBillingService.getOrgBilling(principal, orgId);
+    } catch (err) {
+      if (err instanceof PlatformOrganizationNotFoundError) notFound();
+      throw err;
+    }
+    return (
+      <div className="mx-auto flex max-w-[72rem] flex-col gap-4 px-6 py-6">
+        <OrgPageHeader
+          org={billing.organization}
+          principal={principal}
+          tab="billing"
+          backHref={backHref}
+          chips={chips}
+        />
+        <BillingTab data={billing} />
+      </div>
+    );
+  }
+
+  // The Older/Newer stack of the jobs region: each cursor the operator stepped
+  // through, newest page first. Older pushes, Newer pops.
+  const jobsStack = (query.jobs ?? '').split(',').filter(Boolean);
+  let overview: PlatformOrgOverviewDTO;
   try {
-    page = await platformBillingClassificationService.getOrganizationPage(principal, orgId);
+    overview = await platformOrgPageService.getOverview(principal, orgId, {
+      membersCursor: query.members ?? null,
+      jobsCursor: jobsStack.at(-1) ?? null,
+    });
   } catch (err) {
-    // The console's own 404, which is NOT the gate's. The gate answers 404 so a
-    // non-staff visitor cannot confirm `/admin` exists; this one answers 404 to
-    // somebody already inside it, and means what it says — no such organization.
     if (err instanceof PlatformOrganizationNotFoundError) notFound();
     throw err;
   }
-
-  const { organization: org, actions } = page;
-  // Index & fleet cost (MOTIR-5341, design Panel 14) — read only once the page has
-  // established the organisation exists, so a 404 is never preceded by a read.
-  // Internal accounting only; Motir does not charge for code indexing.
-  const indexCost = await platformOrgIndexCostService.read(principal, org.id);
-
   return (
     <div className="mx-auto flex max-w-[72rem] flex-col gap-4 px-6 py-6">
-      <nav aria-label={t('orgs.breadcrumbAria')} className="flex flex-wrap items-center gap-1">
-        <BreadcrumbChip href="/admin">{t('orgs.crumbPlatform')}</BreadcrumbChip>
-        <ChevronRight aria-hidden className="h-3 w-3 text-(--el-text-secondary)" />
-        <BreadcrumbChip href="/admin/tenants">{t('orgs.crumbTenants')}</BreadcrumbChip>
-        <ChevronRight aria-hidden className="h-3 w-3 text-(--el-text-secondary)" />
-        <span className="rounded-(--radius-badge) bg-(--el-chip-bg) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs text-(--el-text-secondary)">
-          {org.name}
-        </span>
-      </nav>
-
-      {/* `--el-tint-sky` ground with `--el-text-strong` ink: on a tint,
-          `--el-text-muted` fails AA (CLAUDE.md's measured pair table), and this
-          is the one line on the page that must be readable on every screen. */}
-      <p className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-sky) p-(--spacing-card-padding) font-sans text-xs text-(--el-text-strong)">
-        <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-(--el-info)" />
-        <span>{t('orgs.auditBanner', { name: org.name, operator: principal.email })}</span>
-      </p>
-
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3">
-          <span
-            aria-hidden
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--el-tint-lavender) font-sans text-sm font-semibold text-(--el-text-strong)"
-          >
-            {org.name.trim().slice(0, 2).toUpperCase()}
-          </span>
-          <span className="min-w-0">
-            <h1 className="truncate font-serif text-2xl text-(--el-text)">{org.name}</h1>
-            <span className="block truncate font-sans text-sm text-(--el-text-secondary)">
-              {org.slug}
-            </span>
-            <span className="mt-2 flex flex-wrap items-center gap-2">
-              <Pill tone="neutral">
-                {t('orgs.createdAt', { at: format.dateTime(new Date(org.createdAt)) })}
-              </Pill>
-              {org.aiIncludedSeat ? <Pill severity="success">{t('orgs.paidAiPlan')}</Pill> : null}
-              {org.hasScaledTrackerSubscription ? (
-                <Pill severity="success">{t('orgs.scaledTracker')}</Pill>
-              ) : null}
-              {/* ⚠️ TWO CHIPS, TWO LABELS. A single "Internal" chip would draw the
-                exact conflation `internal-billing-classification.md` §1 refuses:
-                `isMeta` means "Motir's own COGS — caps lifted, AI paywall off,
-                excluded from revenue"; `internalBilling` means "charged exactly
-                like a customer, then made whole by a paired offset". They are
-                true together on `moooon` today and that is a coincidence, not an
-                identity. */}
-              {org.isMeta ? <Pill severity="info">{t('orgs.chip.isMeta')}</Pill> : null}
-              {org.internalBilling ? (
-                <Pill severity="info">{t('orgs.chip.internalBilling')}</Pill>
-              ) : null}
-            </span>
-          </span>
-        </div>
-
-        {/* ⚠️ THE BUTTON IS THE `superadmin` DEGREE'S, AND HIDING IT IS NOT THE
-            GATE. This page READS at `support`, and the classification write is a
-            billing change — `platform-staff-auth.md` §7 puts that class at
-            `superadmin`. So a support- or operator-degree principal legitimately
-            sees the organization and cannot act on it. What ENFORCES that is
-            `requirePlatformStaff('superadmin')`, asserted in the Server Action
-            AND again in the service (§2's two-layer rule); this is presentation,
-            and it is said here so nobody later reads the absence of a button as
-            the whole of the check. Drawing a control that always refuses would
-            teach an operator to ignore a refusal. */}
-        {platformRoleAtLeast(principal.role, 'superadmin') ? (
-          <ClassificationBar orgId={org.id} name={org.name} internalBilling={org.internalBilling} />
-        ) : (
-          <p className="max-w-[20rem] font-sans text-xs text-(--el-text-secondary)">
-            {t('orgs.action.readOnlyNotice')}
-          </p>
-        )}
-      </div>
-
-      {org.internalBilling ? (
-        <Card tint="sky">
-          <p className="font-sans text-sm text-(--el-text-strong)">
-            {t('orgs.internalBillingNote')}
-          </p>
-        </Card>
-      ) : null}
-
-      <OrgIndexCostCard data={indexCost} />
-
-      {/* ── MOTIR-733's regions, RESERVED rather than faked ─────────────────
-          Each renders the console's own `EmptyState` naming the card that brings
-          it. The alternative — a zero, a dash, a skeleton — asserts something:
-          that the number is nought, that the read failed, that data is on its
-          way. None of those is true, and the design draws these as reserved
-          regions for precisely that reason. */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card
-          header={
-            <h2 className="font-sans text-sm font-semibold text-(--el-text)">
-              {t('orgs.pending.usageTitle')}
-            </h2>
-          }
-        >
-          <EmptyState
-            icon={<Coins className="h-10 w-10" aria-hidden />}
-            title={t('orgs.pending.usageEmptyTitle')}
-            description={t('orgs.pending.broughtBy', { owner: 'MOTIR-733' })}
-          />
-        </Card>
-        <Card
-          header={
-            <h2 className="font-sans text-sm font-semibold text-(--el-text)">
-              {t('orgs.pending.membersTitle')}
-            </h2>
-          }
-        >
-          <EmptyState
-            icon={<Users className="h-10 w-10" aria-hidden />}
-            title={t('orgs.pending.membersEmptyTitle')}
-            description={t('orgs.pending.broughtBy', { owner: 'MOTIR-733' })}
-          />
-        </Card>
-      </div>
-
-      <Card
-        header={
-          <h2 className="font-sans text-sm font-semibold text-(--el-text)">
-            {t('orgs.pending.jobsTitle')}
-          </h2>
-        }
-      >
-        <EmptyState
-          icon={<Activity className="h-10 w-10" aria-hidden />}
-          title={t('orgs.pending.jobsEmptyTitle')}
-          description={t('orgs.pending.broughtBy', { owner: 'MOTIR-733' })}
-        />
-      </Card>
-
-      {/* ── THE RECORD, on the same surface as the action (MOTIR-4568) ───────
-          The console's standing line is that an operator can never perform an
-          action and wonder whether it was recorded — so the row the write just
-          produced is rendered by the same page, re-read by the action's
-          `revalidatePath`. Every row here is a WRITE: the service filters reads
-          out by their reason policy, and a page view is not an action. */}
-      <Card
-        header={
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-sans text-sm font-semibold text-(--el-text)">
-              {t('orgs.log.title')}
-            </h2>
-            <Pill tone="neutral">{t('orgs.log.scope')}</Pill>
-          </div>
-        }
-      >
-        {actions.length === 0 ? (
-          <EmptyState
-            icon={<ShieldCheck className="h-10 w-10" aria-hidden />}
-            title={t('orgs.log.emptyTitle')}
-            description={t('orgs.log.emptyDescription')}
-          />
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {actions.map((row) => (
-              <li key={row.id} className="flex flex-col gap-1">
-                <span className="flex flex-wrap items-center gap-2">
-                  <Pill severity="info">{t(`users.log.action.${row.action}`)}</Pill>
-                  <span className="font-sans text-xs text-(--el-text-secondary)">
-                    {format.dateTime(new Date(row.createdAt))}
-                  </span>
-                </span>
-                <span className="font-sans text-sm text-(--el-text)">
-                  {row.reason ?? t('orgs.log.noReason')}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+      <OrgPageHeader
+        org={overview.organization}
+        principal={principal}
+        tab="overview"
+        backHref={backHref}
+        chips={chips}
+      />
+      <OverviewTab
+        overview={overview}
+        backHref={backHref}
+        jobsStack={jobsStack}
+        membersCursor={query.members ?? null}
+      />
+      <OrgIndexCostSection principal={principal} orgId={orgId} />
+      <ActionLog overview={overview} />
     </div>
   );
 }
 
-/** One breadcrumb chip — the account drill-down's, verbatim. */
-function BreadcrumbChip({ href, children }: { href: string; children: React.ReactNode }) {
+/**
+ * The index-cost card reads below the page function, after the overview has
+ * proved the org exists — so the page's own serial chain stays within the
+ * ratchet (MOTIR-3449) and the card's read never runs for a missing org.
+ */
+async function OrgIndexCostSection({
+  principal,
+  orgId,
+}: {
+  principal: PlatformPrincipal;
+  orgId: string;
+}) {
+  const data = await platformOrgIndexCostService.read(principal, orgId, undefined, {
+    audited: true,
+  });
+  return <OrgIndexCostCard data={data} />;
+}
+
+async function OverviewTab({
+  overview,
+  backHref,
+  jobsStack,
+  membersCursor,
+}: {
+  overview: PlatformOrgOverviewDTO;
+  backHref: string;
+  jobsStack: string[];
+  membersCursor: string | null;
+}) {
+  const t = await getTranslations('platformAdmin.orgPage');
+  const tc = await getTranslations('platformAdmin.usage.category');
+  const tf = await getTranslations('platformAdmin.overview.feed');
+  const format = await getFormatter();
+  const org = overview.organization;
+  const usageHref = orgTabHref(org.id, 'usage', backHref);
+  const here = (extra: Record<string, string | null>) => {
+    const p = new URLSearchParams();
+    if (backHref !== '/admin/tenants') p.set('from', backHref);
+    const merged = { members: membersCursor, jobs: jobsStack.join(',') || null, ...extra };
+    for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
+    const q = p.toString();
+    return `/admin/tenants/${encodeURIComponent(org.id)}${q ? `?${q}` : ''}`;
+  };
+  const sheet = overview.monthCategories ? buildSpendSheet(overview.monthCategories) : null;
+  const monthLabel = format.dateTime(new Date(`${overview.month}-01T00:00:00Z`), {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+
   return (
-    <Link
-      href={href}
-      className="rounded-(--radius-badge) bg-(--el-chip-bg) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+    <>
+      <Card
+        header={
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-sans text-sm font-semibold text-(--el-text)">
+              {t('month.title', { month: monthLabel })}
+            </h2>
+            <Link
+              href={usageHref}
+              className="font-sans text-xs text-(--el-accent-on-surface) hover:underline"
+            >
+              {t('month.open')}
+            </Link>
+          </div>
+        }
+      >
+        {!sheet ? (
+          <p role="status" className="font-sans text-sm text-(--el-text-secondary)">
+            {t('month.unavailable')}
+          </p>
+        ) : (
+          <table className="w-full font-sans text-sm" data-testid="org-month-categories">
+            <thead>
+              <tr className="text-left text-xs text-(--el-text-secondary)">
+                <th className="py-1 font-medium">{t('month.category')}</th>
+                <th className="py-1 text-right font-medium">{t('month.credits')}</th>
+                <th className="py-1 text-right font-medium">{t('month.cost')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sheet.rows.map((row) => (
+                <tr key={row.category} className="border-t border-(--el-border)">
+                  <td className="py-1">
+                    <Link href={usageHref} className="text-(--el-text) hover:underline">
+                      {tc(row.category)}
+                    </Link>
+                  </td>
+                  <td className="py-1 text-right tabular-nums">
+                    {row.credits === null ? (
+                      <span className="text-(--el-text-secondary)">{t('month.notCharged')}</span>
+                    ) : (
+                      format.number(row.credits)
+                    )}
+                  </td>
+                  <td className="py-1 text-right tabular-nums">
+                    {formatMicroUsd(format, row.costMicroUsd)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-(--el-border) font-semibold">
+                <td className="py-1">{t('month.total')}</td>
+                <td className="py-1 text-right tabular-nums">
+                  {format.number(sheet.chargedCredits)}
+                </td>
+                <td className="py-1 text-right tabular-nums">
+                  {formatMicroUsd(format, sheet.costMicroUsdInclIndexing)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card
+          header={
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-sans text-sm font-semibold text-(--el-text)">
+                {t('members.title')}
+              </h2>
+              <Pill tone="neutral">{format.number(overview.members.total)}</Pill>
+            </div>
+          }
+        >
+          {overview.members.items.length === 0 ? (
+            <p className="font-sans text-sm text-(--el-text-secondary)">{t('members.empty')}</p>
+          ) : (
+            <ul className="flex flex-col" data-testid="org-members">
+              {overview.members.items.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex items-center justify-between gap-2 border-b border-(--el-border) py-2 last:border-b-0"
+                >
+                  <span className="min-w-0">
+                    <Link
+                      href={`/admin/users/${encodeURIComponent(m.userId)}`}
+                      className="block truncate font-sans text-sm text-(--el-text) hover:underline"
+                    >
+                      {m.name ?? m.email}
+                    </Link>
+                    <span className="block truncate font-sans text-xs text-(--el-text-secondary)">
+                      {m.email}
+                    </span>
+                  </span>
+                  <Pill tone="neutral">{t(`members.role.${m.role}`)}</Pill>
+                </li>
+              ))}
+            </ul>
+          )}
+          {overview.members.nextCursor || membersCursor ? (
+            <div className="mt-2 flex gap-3 font-sans text-xs">
+              {membersCursor ? (
+                <Link
+                  href={here({ members: null })}
+                  className="text-(--el-accent-on-surface) hover:underline"
+                >
+                  {t('members.first')}
+                </Link>
+              ) : null}
+              {overview.members.nextCursor ? (
+                <Link
+                  href={here({ members: overview.members.nextCursor })}
+                  className="text-(--el-accent-on-surface) hover:underline"
+                >
+                  {t('members.next')}
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
+        </Card>
+
+        <Card
+          header={
+            <h2 className="font-sans text-sm font-semibold text-(--el-text)">
+              {t('workspaces.title')}
+            </h2>
+          }
+        >
+          {overview.workspaces.length === 0 ? (
+            <p className="font-sans text-sm text-(--el-text-secondary)">{t('workspaces.empty')}</p>
+          ) : (
+            <table className="w-full font-sans text-sm" data-testid="org-workspaces">
+              <thead>
+                <tr className="text-left text-xs text-(--el-text-secondary)">
+                  <th className="py-1 font-medium">{t('workspaces.name')}</th>
+                  <th className="py-1 text-right font-medium">{t('workspaces.projects')}</th>
+                  <th className="py-1 text-right font-medium">{t('workspaces.members')}</th>
+                  <th className="py-1 text-right font-medium">{t('workspaces.credits')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overview.workspaces.map((w) => (
+                  <tr key={w.id} className="border-t border-(--el-border)">
+                    <td className="py-1">
+                      <Link
+                        href={`/admin/tenants/${encodeURIComponent(org.id)}/workspaces/${encodeURIComponent(w.id)}`}
+                        className="text-(--el-text) hover:underline"
+                      >
+                        {w.name}
+                      </Link>
+                    </td>
+                    <td className="py-1 text-right tabular-nums">
+                      {format.number(w.projectCount)}
+                    </td>
+                    <td className="py-1 text-right tabular-nums">{format.number(w.memberCount)}</td>
+                    <td className="py-1 text-right tabular-nums">
+                      {w.monthChargedCredits === null ? '—' : format.number(w.monthChargedCredits)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {overview.workspaceSpendUnavailable ? (
+            <p role="status" className="mt-2 font-sans text-xs text-(--el-text-secondary)">
+              {t('workspaces.spendUnavailable')}
+            </p>
+          ) : null}
+          {overview.hasMoreWorkspaces ? (
+            <p className="mt-2 font-sans text-xs text-(--el-text-secondary)">
+              {t('workspaces.more')}
+            </p>
+          ) : null}
+        </Card>
+      </div>
+
+      <Card
+        header={
+          <h2 className="font-sans text-sm font-semibold text-(--el-text)">{t('jobs.title')}</h2>
+        }
+      >
+        {overview.jobs.unavailable ? (
+          <p role="status" className="font-sans text-sm text-(--el-text-secondary)">
+            {t('jobs.unavailable')}
+          </p>
+        ) : overview.jobs.items.length === 0 ? (
+          <p className="font-sans text-sm text-(--el-text-secondary)">{t('jobs.empty')}</p>
+        ) : (
+          <table className="w-full font-sans text-sm" data-testid="org-jobs">
+            <tbody>
+              {overview.jobs.items.map((job) => (
+                <tr
+                  key={`${job.kind}:${job.id}`}
+                  className="border-t border-(--el-border) first:border-t-0"
+                >
+                  <td className="whitespace-nowrap py-1 tabular-nums text-(--el-text-secondary)">
+                    <time dateTime={job.at}>
+                      {format.dateTime(new Date(job.at), {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                      })}
+                    </time>
+                  </td>
+                  <td className="py-1">{tf(`kind.${job.kind}`)}</td>
+                  <td className="py-1 text-(--el-text)">
+                    {job.workspace ? job.workspace.name : tf('unattributed')}
+                    {job.project ? ` › ${job.project.name}` : ''}
+                  </td>
+                  <td className="py-1 text-right text-(--el-text-secondary)">
+                    {tf('runDetail', {
+                      model: job.model ?? '—',
+                      credits: format.number(job.credits ?? 0),
+                    })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {jobsStack.length > 0 || overview.jobs.nextCursor ? (
+          <div className="mt-2 flex gap-3 font-sans text-xs">
+            {jobsStack.length > 0 ? (
+              <Link
+                href={here({ jobs: jobsStack.slice(0, -1).join(',') || null })}
+                className="text-(--el-accent-on-surface) hover:underline"
+              >
+                {t('jobs.newer')}
+              </Link>
+            ) : null}
+            {overview.jobs.nextCursor ? (
+              <Link
+                href={here({ jobs: [...jobsStack, overview.jobs.nextCursor].join(',') })}
+                className="text-(--el-accent-on-surface) hover:underline"
+              >
+                {t('jobs.older')}
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
+      </Card>
+    </>
+  );
+}
+
+/**
+ * THE RECORD, on the same surface as the action (MOTIR-4568): an operator can never
+ * perform an action and wonder whether it was recorded. Every row here is a WRITE.
+ */
+async function ActionLog({ overview }: { overview: PlatformOrgOverviewDTO }) {
+  const t = await getTranslations('platformAdmin');
+  const format = await getFormatter();
+  return (
+    <Card
+      header={
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-sans text-sm font-semibold text-(--el-text)">
+            {t('orgs.log.title')}
+          </h2>
+          <Pill tone="neutral">{t('orgs.log.scope')}</Pill>
+        </div>
+      }
     >
-      {children}
-    </Link>
+      {overview.actions.length === 0 ? (
+        <EmptyState
+          icon={<ShieldCheck className="h-10 w-10" aria-hidden />}
+          title={t('orgs.log.emptyTitle')}
+          description={t('orgs.log.emptyDescription')}
+        />
+      ) : (
+        <ul className="flex flex-col gap-3">
+          {overview.actions.map((row) => (
+            <li key={row.id} className="flex flex-col gap-1">
+              <span className="flex flex-wrap items-center gap-2">
+                <Pill severity="info">{t(`users.log.action.${row.action}`)}</Pill>
+                <span className="font-sans text-xs text-(--el-text-secondary)">
+                  {format.dateTime(new Date(row.createdAt))}
+                </span>
+              </span>
+              <span className="font-sans text-sm text-(--el-text)">
+                {row.reason ?? t('orgs.log.noReason')}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }

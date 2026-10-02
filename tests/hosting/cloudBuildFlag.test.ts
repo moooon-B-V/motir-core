@@ -57,6 +57,14 @@ const BILLING_SURFACES: ReadonlyArray<readonly [file: string, why: string]> = [
   ['lib/services/billingService.ts', 'checkout, portal, subscriptions'],
   ['lib/services/ciFleetCostMeterService.ts', 'meters CI fleet cost against the plan'],
   [
+    'lib/services/platformMeterReportEnqueue.ts',
+    'reports the fleet meter (settled containers, charged storage days) to the platform usage rollup (MOTIR-5286, MOTIR-7294) — only a billing build runs the meter it reports',
+  ],
+  [
+    'lib/services/platformOrgBillingService.ts',
+    "the operator's read-only Billing & plans tab (MOTIR-7289) — the tenant billing page's own reads, which exist only on a billing build",
+  ],
+  [
     'lib/services/aiPlanGateService.ts',
     'the paid-AI-plan gate on the fleet and on hosted repositories (MOTIR-6909, fleet-per-org-pool.md) — off a billing build there is no plan to hold, so every org passes',
   ],

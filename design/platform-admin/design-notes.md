@@ -296,6 +296,13 @@ a code workaround.
   and the **`.seatmeter`** (seats used vs tier limit) are token-styled `div`s, no
   charting lib.
 
+## The page header grammar (every console page in this delta)
+
+Title and subtitle, then ONE **toolbar row** beneath them: what the page is scoped to on the left (the Tenants
+filter, the org page's scope picker — nothing on Usage & cost), and the **period switch** (`Segmented`: the
+month picker, then **All time**) always on the **right**. The switch never sits in the title row, so a long
+subtitle cannot move it. A back button (`← Tenants`, `← {org}`), where there is one, sits above the title.
+
 ## Colour roles (`--el-*` — palette, not grey-only · finding #54)
 
 | Element                                               | Token                                                                                             | Why                                                                     |
@@ -1049,3 +1056,182 @@ by-workspace and by-model usage rollup; MOTIR-732 keeps the Usage & cost page.
 - **Any customer-facing surface.** `design/billing/ci-line.mock.html` is the customer's CI line and is
   referenced only as the thing this must never resemble or feed.
 - **Hard gate B's live list or figures** — MOTIR-5280.
+
+# AMENDMENT 2026-10-01 — the estate overview, Usage & cost and the drill-down, redrawn and published (MOTIR-7237)
+
+**Mock:** `design/platform-admin/console--estate-usage-drilldown.mock.html` — a DELTA (panels D1–D11). It
+amends this file's **Panel 2** (estate overview), **Panels 4–5** (Usage & cost) and **Panels 6 and 11** (the
+drill-down and the org page's reserved regions). Those panels were drawn by MOTIR-728, which closed before
+design results were published, so they were never approved. This delta is what MOTIR-731, MOTIR-732, MOTIR-733
+and MOTIR-5285/5286 build against. The older panels stay as the record of June's drawing — where they disagree
+with this section, this section wins.
+
+**The console is for platform monitoring, so it shows as much detail as the data holds.** Every spending
+category, for any month and all time, with credits charged, usage in its own unit and **what it cost Motir**
+— for the whole estate, for one organization, and inside an organization per workspace and per project, with
+both kinds of token spend open to their models.
+
+## Review history
+
+1. **Published `c04ab4b`** — planning/coding split, an org → workspace → project tree on Usage & cost.
+2. **Sent back:** _"I can't see per org/workspace/project per month spending. I should be able to see what they
+   see, give the tenant bill and usage dashboard to me."_ Republished `97dc056` with tenant-view tabs and a
+   By month tree.
+3. **Sent back:** _"I don't see per-model usage for the tenant. Machine minutes are missing too, CI, indexing
+   (even not charged), agent run all need to show separately and in total. Search is missing too. I should just
+   be able to see what every tenant can see, with total number across all tenants."_ Then, in discussion: the
+   information should be as detailed as possible; both agent-run and planning tokens drill to models; every
+   month and all time, not only the current month; Motir's cost is needed; **no** org tree on the estate page —
+   the estate page is each org's spend per category; one org's page carries the full breakdown, per workspace,
+   project, month and all time, every axis combined, over every category. This version (D3, D4, D8, D11
+   rewritten; the By month tree removed). Republished `9f39007`.
+4. **Sent back:** _"Platform -> Tenants -> org ? why like this?"_ — the org page had inherited the shipped
+   _Platform › Tenants › {org}_ chips. Agreed with Yue: the Organizations list moves from Usage & cost to the
+   **Tenants** page, which shows the tenant list first; clicking an org opens its page; a **back button** returns
+   to the list. No breadcrumb (D3, D5, D6, D8, D9, D10, D11). Republished `b3426f2`.
+5. **Sent back:** _"Why screen D3 and D4 the period switch is one on the left and one on the right? Why only all
+   time has models break down?"_ — D3's header had let the switch wrap under the title on the left, and the model
+   tables had been drawn on the All-time panel only. Now one header grammar everywhere and the same sections for
+   every period (D3, D4).
+
+## The spending categories
+
+Every surface uses the same eight rows, in this order. "Org-level" means the source records no workspace or
+project, so the category appears at the org and estate and, below the org, as an explicit "not split by
+project" row — never spread over projects.
+
+| Category          | Usage unit                                    | Credits source (motir-ai ledger) | Motir cost                         | Lowest level              |
+| ----------------- | --------------------------------------------- | -------------------------------- | ---------------------------------- | ------------------------- |
+| Planning tokens   | tokens in / out / cache read / cache write    | `debit` (per planning turn)      | upstream price × tokens, per model | project                   |
+| Agent-run tokens  | tokens in / out / cache read / cache write    | the run's model-call debits      | upstream price × tokens, per model | project (once attributed) |
+| Agent-run machine | minutes (fleet meter, workload `agent`)       | `agent_machine` on a run         | fleet meter `costUsd`              | project (once attributed) |
+| Agent instances   | minutes (fleet meter, `agent_instance`)       | `agent_machine` on an interval   | fleet meter `costUsd`              | org                       |
+| Agent storage     | GB-days                                       | `agent_storage`                  | storage cost per GB-day            | org                       |
+| CI                | minutes (fleet meter, `ci`), allowance + over | `ci_overage`                     | fleet meter `costUsd`              | project                   |
+| Web search        | searches                                      | `search`                         | provider price per search          | org                       |
+| Indexing          | minutes (fleet meter, `index`)                | **not charged**                  | fleet meter `costUsd`              | project                   |
+
+**Totals, everywhere:** _Charged total_ (the seven charged categories' credits, and their Motir cost);
+_Total incl. indexing_ (Motir's whole cost for the scope); _machine minutes_ (agent-run + instances + CI +
+indexing).
+
+Agent runs charged before they carried a project (MOTIR-7240) get their own row, _Agent runs with no project_,
+beside the workspaces — never guessed into one.
+
+## The panels
+
+- **D1 — Estate overview (MOTIR-731).** Unchanged from the first publish: four counts with "+N in the last
+  {period}", and the activity feed merging tenant events with planning and coding runs (`GET /v1/platform/runs`).
+- **D2 — Overview states.** Unchanged: runs unavailable (the rest renders), empty estate, loading.
+- **D3 — Usage & cost · estate, a month (MOTIR-732).** The estate as a whole for the chosen month: four
+  figures (credits charged, Motir cost, machine minutes, orgs with spend), **the estate by category** (the eight
+  rows summed over every org, with usage, credits and Motir cost, and the totals), and the two model tables —
+  **planning tokens by model** and **agent-run tokens by model** (input, output, cache read, cache write, orgs
+  using it, credits, Motir cost). No list of organizations here — that list is Tenants (D10).
+- **D4 — Usage & cost · estate, All time (MOTIR-732).** The same page with the period on All time. **Every
+  section answers for any period** — a month or all time; nothing (the model tables included) exists for one
+  period only.
+- **D10 — Tenants (MOTIR-733).** Replaces the shipped search-first `/admin/tenants`: the **tenant list comes
+  first**. One flat row per org — credits per charged category, indexing minutes, charged total, Motir cost —
+  with the **estate total over all orgs** as the first row; sorted by Motir cost, every column sorts, Show more
+  (keyset). A filter field (name or slug) narrows the list; the period control (any month or All time) sets what
+  every spend column answers for. Clicking an org opens its page (D5).
+- **D5 — Drill-down · org · Overview tab (MOTIR-733).** Reached from Tenants (D10). **No breadcrumb**: a
+  **← Tenants** button returns to the list with its filter and period kept, on every tab. The org page with three tabs (Overview, Usage &
+  cost, Billing & plans). Overview: this month's spend per category (credits + Motir cost) linking to the Usage
+  & cost tab, Members, Workspaces (charged credits this month), Recent jobs. Status is display-only (Story 10.3).
+- **D6 — Drill-down · workspace (MOTIR-733).** A **← {org}** button returns to the org page. Projects with this month's spend, members, recent jobs
+  (attributed runs only). Tabs: Overview and Usage & cost (the D8 tab with the scope preset to the workspace).
+- **D7 — States.** No spend in the period; Usage & cost with motir-ai unreachable; a drill-down usage card
+  unavailable while Motir's own cards render; loading.
+- **D8 — Drill-down · org · Usage & cost tab (MOTIR-733).** The org's full breakdown, every axis combinable:
+  **scope** picker (whole org, or any workspace or project) × **period** (any month or All time). Four figures
+  (credits charged, Motir cost incl. indexing, machine minutes by kind, credit balance), then three tables over
+  the same scope + period:
+  1. **By category and model** — the eight categories with usage, credits and Motir cost; planning and
+     agent-run tokens expand to one row per model; Charged total and Total incl. indexing.
+  2. **By workspace and project** — each workspace (expanding to its projects) × every category, indexing
+     minutes, charged total, Motir cost; plus _Agent runs with no project_ and _Org-level (not by project)_.
+  3. **Month by month** — every month newest first × every category, with the **all-time total** row. A month
+     row sets the period to that month.
+- **D9 — Drill-down · org · Billing & plans tab (MOTIR-733).** Unchanged from the second publish: the tenant's
+  own billing page read-only (seat line, AI plan + allotment, this month's bill line by line, payment method and
+  invoices), every tenant action absent.
+- **D11 — The same tab scoped to a project, All time (MOTIR-733).** Scope picker on _Engineering › Mobile App_,
+  period All time: the category-and-model sheet (org-level categories listed with "Org-level — not split by
+  project") and the project's month by month with its all-time total.
+
+## What the views read
+
+- **Credits, by category, at every level, for any month:** the platform usage rollup (motir-ai, MOTIR-7238)
+  **gains a category dimension** — `(level, entityId, yearMonth, model, category)` with the eight categories
+  above (indexing carries no credits) — and a **Motir-cost column** written at the moment the spend lands,
+  from the upstream price (tokens) or the meter's `costUsd` (machine), so a later price change never rewrites
+  history. All time is the sum of the entity's months; a month is one indexed read. Never a scan of the source
+  tables.
+- **Minutes and machine cost:** motir-core's fleet meter (`CiContainerUsage`, workloads `agent`,
+  `agent_instance`, `ci`, `index`) rolled up per org / workspace / project / month on motir-core's side, so the
+  operator's indexing figures exist even though no tenant is charged for them. This is the fleet & index
+  COGS work MOTIR-5285/5286 were cut for; it becomes columns of these sheets rather than a separate segment.
+- **Billing tab:** the tenant's subscription, plan, allotment, this month's charge lines and invoices, through
+  the console's audited read. Every tab view, every scope and period change writes one audit row.
+
+## Primitives composed (no hand-rolling)
+
+The mock's style block and icon sprite are copied verbatim from `console.mock.html`; every element is one of
+its existing components: the admin shell (`admin-nav`, `adminbar`, staff mark, search), `card` / `card-head` /
+`card-foot` (`Card`), `tbl` and `tbl tree` (`Table`), `pill` (`Pill`), `segmented` (`Segmented` — tabs, scope
+picker, period picker), `stat-grid` stats, `scope` breadcrumb, `audit-banner`, `note`, `states-grid` / `state`
+/ `state err` (`EmptyState`, error state), `sk` skeletons. Two additions:
+
+- **`tbl dense`** — the Table at compact density (12px, tighter cells, two-line headers) for the
+  all-categories matrices, which carry 11–12 numeric columns. Wide tables also sit in a horizontal scroller.
+- **The tenant view (D9)** reuses the tenant's shipped billing components (`gico`, `line`, `row1`, `meter`,
+  `meterlbl`, `seatcalc`, `pay`, `pill-topup`), copied verbatim from `design/billing/billing.mock.html` and
+  scoped under `.tv`; the `i-card` icon is copied from the billing sprite.
+
+No new colour is introduced.
+
+## Colour roles
+
+Entity tints `ent-org` / `ent-ws` / `ent-proj` / `ent-user` for avatars and icons; run kinds `pill-plan` /
+`pill-code`. The _no project_ and _org-level_ rows are deliberately neutral (a "?" avatar, no tint) so they
+never read as a tenant. Numbers use `--el-text` / `--el-text-strong` (credits, totals) and
+`--el-text-secondary` (`.muted` cells), never `--el-text-muted` on a surface.
+
+## Copy strings (en — the `platformAdmin` namespace)
+
+| key                                                               | en                                                                                                                                                                             |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `overview.period.7d` / `.30d` / `.month`                          | 7 days / 30 days / This month                                                                                                                                                  |
+| `overview.stat.delta`                                             | +{count} in the last {period}                                                                                                                                                  |
+| `overview.feed.title`                                             | Recent estate activity                                                                                                                                                         |
+| `overview.feed.runsUnavailable`                                   | Runs are unavailable right now. The usage service didn’t answer, so planning and coding runs are missing from this feed. New tenants still show — they come from Motir itself. |
+| `pager.newer` / `pager.older` / `pager.showMore`                  | Newer / Older / Show more                                                                                                                                                      |
+| `period.allTime`                                                  | All time                                                                                                                                                                       |
+| `usage.title`                                                     | Usage & cost                                                                                                                                                                   |
+| `usage.subtitle`                                                  | The estate’s spend in every category — credits charged, usage, and what it cost Motir. Pick any month, or all time. Each organization’s figures are on Tenants.                |
+| `usage.cat.plan` / `.agent` / `.agentMachine`                     | Planning tokens / Agent-run tokens / Agent-run machine                                                                                                                         |
+| `usage.cat.instances` / `.storage` / `.ci` / `.search` / `.index` | Agent instances / Agent storage / CI / Web search / Indexing                                                                                                                   |
+| `usage.col.usage` / `.credits` / `.cost` / `.charged`             | Usage / Credits / Motir cost / Charged                                                                                                                                         |
+| `usage.notCharged`                                                | not charged                                                                                                                                                                    |
+| `usage.total.charged` / `.inclIndexing`                           | Charged total / Total incl. indexing                                                                                                                                           |
+| `usage.estateRow`                                                 | All {count} orgs                                                                                                                                                               |
+| `usage.row.noProject` / `.orgLevel`                               | Agent runs with no project / Org-level (not by project)                                                                                                                        |
+| `usage.orgLevelNote`                                              | Org-level — not split by project. See the whole org.                                                                                                                           |
+| `usage.scope.wholeOrg`                                            | Whole org                                                                                                                                                                      |
+| `usage.empty.title`                                               | No usage in {period}                                                                                                                                                           |
+| `usage.error.title` / `.body`                                     | Couldn’t load usage / The usage service didn’t respond, so these figures aren’t available. Nothing is zero — the figures simply aren’t loaded.                                 |
+| `tenants.title` / `tenants.subtitle`                              | Tenants / Every organization and what it spent, in every category. Click an org to open it. Opening one is an audited cross-tenant read.                                       |
+| `tenants.filterLabel` / `.filterPlaceholder`                      | Filter by name or slug / moooon, acme, northwind…                                                                                                                              |
+| `drill.back` / `drill.backToOrg`                                  | Tenants / {org}                                                                                                                                                                |
+| `drill.tab.overview` / `.usage` / `.billing`                      | Overview / Usage & cost / Billing & plans                                                                                                                                      |
+| `drill.workspaces.title` / `drill.members.title`                  | Workspaces · {count} / Members · {count}                                                                                                                                       |
+| `drill.jobs.title`                                                | Recent jobs                                                                                                                                                                    |
+| `drill.usageUnavailable`                                          | Usage isn’t available right now. Members and workspaces below are unaffected.                                                                                                  |
+| `drill.tenantView.billing`                                        | What {org}’s owner sees on their Billing & plans page and in their invoices, read-only. Changing a tenant’s plan or credits is Story 10.3.                                     |
+
+## What this amendment does NOT draw
+
+- **Any governance action** (suspend, grant, impersonate, tier change) — Story 10.3.
+- **The operator lessons console** — Story 10.5 (MOTIR-1408).
