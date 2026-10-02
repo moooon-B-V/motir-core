@@ -49,9 +49,14 @@ import type { PageMoveRequest } from './usePageMove';
 // ── THE BANDS ──────────────────────────────────────────────────────────────
 // On a page row the top quarter means BEFORE, the bottom quarter AFTER and the
 // middle half INSIDE; a folder row is INSIDE only (`dropZoneAt`). The band is
-// read from the POINTER (its start plus the drag's delta) against the hovered
-// row's measured rect — never from the overlay's rect, which lags the pointer by
-// the grab offset. While a drag is live a ROOT zone sits at the tree's foot:
+// read from the POINTER'S LIVE CLIENT Y against the hovered row's rect, which
+// dnd-kit keeps in client coordinates as its scroll container scrolls — never
+// from the overlay's rect, which lags the pointer by the grab offset, and never
+// from the drag's start plus `event.delta`, which dnd-kit adjusts for the scroll
+// since the drag began: once the tree's scroll container auto-scrolls (the
+// root zone mounting at drag start is enough to make it scrollable), that sum
+// drifts from the client rect by the scrolled distance and a drop aimed at a
+// row's middle reads as AFTER it (MOTIR-7376's depth E2E, CI run on cb925c3). While a drag is live a ROOT zone sits at the tree's foot:
 // dropping there moves the page to the project root, after the root's pages.
 //
 // ── REFUSED BEFORE THE DROP ────────────────────────────────────────────────
@@ -276,7 +281,14 @@ export function PageTreeDnd({
     byKeyRef.current = byKey;
   }, [byKey]);
 
-  const pointerStart = useRef(0);
+  /** The pointer's live client Y while a drag is live — what the bands read. */
+  const pointerY = useRef(0);
+  const stopPointer = useRef<(() => void) | null>(null);
+  const unwatchPointer = useCallback(() => {
+    stopPointer.current?.();
+    stopPointer.current = null;
+  }, []);
+  useEffect(() => unwatchPointer, [unwatchPointer]);
   /** The target under the pointer, as last resolved — what a release commits. */
   const targetRef = useRef<DropTarget | null>(null);
   const hoverTimer = useRef<{ key: LevelKey; id: ReturnType<typeof setTimeout> } | null>(null);
@@ -318,8 +330,7 @@ export function PageTreeDnd({
           setState((s) => (s.over === null ? s : { ...s, over: null }));
           return;
         }
-        const y = pointerStart.current + event.delta.y;
-        const zone = dropZoneAt(info.row.kind, over.rect, y);
+        const zone = dropZoneAt(info.row.kind, over.rect, pointerY.current);
         target = { kind: 'row', info, zone };
         mark = inSubtree(pageId, info.key, parentByKey()) ? 'refused' : zone;
         // A collapsed row hovered long enough opens, so a drop can go deeper.
@@ -350,15 +361,28 @@ export function PageTreeDnd({
 
   const clear = useCallback(() => {
     stopHover();
+    unwatchPointer();
     targetRef.current = null;
     setState({ activeKey: null, over: null });
-  }, [stopHover]);
+  }, [stopHover, unwatchPointer]);
 
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    pointerStart.current = startY(event);
-    targetRef.current = null;
-    setState({ activeKey: String(event.active.id), over: null });
-  }, []);
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      pointerY.current = startY(event);
+      unwatchPointer();
+      // Capture on the window, so the move is seen before dnd-kit's own
+      // document listener runs the collision and calls `onDragMove`.
+      const onMove = (e: PointerEvent) => {
+        pointerY.current = e.clientY;
+      };
+      window.addEventListener('pointermove', onMove, { capture: true, passive: true });
+      stopPointer.current = () =>
+        window.removeEventListener('pointermove', onMove, { capture: true });
+      targetRef.current = null;
+      setState({ activeKey: String(event.active.id), over: null });
+    },
+    [unwatchPointer],
+  );
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {

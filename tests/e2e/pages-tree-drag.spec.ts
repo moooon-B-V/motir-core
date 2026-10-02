@@ -43,24 +43,39 @@ const isPlacement = (id: string) => (r: Response) =>
 /**
  * A real pointer drag from `from` to a point `frac` of the way down `to`, past
  * dnd-kit's 8px activation, settling on the target before the release.
+ *
+ * The target is measured only once the drag is LIVE, and re-aimed until it holds
+ * still under the pointer: starting a drag mounts the root zone at the tree's
+ * foot, which can make the scroll container scrollable, and dnd-kit auto-scrolls
+ * it while the pointer is near its edge — so a box read before the drag can be
+ * rows away from where the target sits by the time the pointer gets there.
  */
 async function drag(page: Page, from: Locator, to: Locator, frac: number) {
   const f = (await from.boundingBox())!;
-  const t = (await to.boundingBox())!;
   const fx = f.x + f.width / 2;
   const fy = f.y + f.height / 2;
-  const tx = t.x + t.width / 2;
-  const ty = t.y + t.height * frac;
   await page.mouse.move(fx, fy);
   await page.mouse.down();
   await page.mouse.move(fx + 14, fy + 8, { steps: 5 });
-  await page.mouse.move(tx, ty, { steps: 18 });
-  await page.mouse.move(tx, ty, { steps: 4 });
+  let t = (await to.boundingBox())!;
+  await page.mouse.move(t.x + t.width / 2, t.y + t.height * frac, { steps: 18 });
+  for (let settle = 0; settle < 10; settle++) {
+    const now = (await to.boundingBox())!;
+    const still = now.x === t.x && now.y === t.y && now.height === t.height;
+    t = now;
+    await page.mouse.move(t.x + t.width / 2, t.y + t.height * frac, { steps: 4 });
+    if (still) break;
+  }
 }
 
 /**
  * Drag until the placement PATCH answers and its body is what `accept` wants;
  * up to four gestures. Returns the committed response.
+ *
+ * Only a gesture that changed NOTHING is made again: one that sent no PATCH, or
+ * one the server refused. A 2xx answer that is not the wanted one has already
+ * moved the page somewhere else — repeating the gesture from that tree would
+ * test a different setup — so it fails the test on the spot.
  */
 async function dragUntilCommitted(
   page: Page,
@@ -79,6 +94,9 @@ async function dragUntilCommitted(
     if (!res) continue; // the gesture wrote nothing — make it again
     last = { status: res.status(), body: (await res.json()) as Record<string, unknown> };
     if (accept(last.status, last.body)) return last;
+    if (last.status < 300) {
+      throw new Error(`the drag committed somewhere else: ${JSON.stringify(last)}`);
+    }
   }
   throw new Error(`the drag never committed as intended; last answer ${JSON.stringify(last)}`);
 }
@@ -123,7 +141,11 @@ test.describe('dragging in the /pages tree', () => {
     expect(await titles()).toEqual(['Charlie', 'Alpha', 'Bravo']);
 
     await page.reload();
-    const pageRows = tree.getByRole('treeitem').filter({ hasNot: page.locator('[aria-expanded]') });
+    // Page rows are the treeitems with no `aria-expanded` of their own (the folder
+    // row carries one; none of these pages has children). A `hasNot` filter
+    // would read DESCENDANTS — every row's menu trigger carries an
+    // `aria-expanded` — and match nothing.
+    const pageRows = tree.locator('[role="treeitem"]:not([aria-expanded])');
     await expect(row('Charlie')).toBeVisible();
     await expect(pageRows).toHaveText(['Charlie', 'Alpha', 'Bravo']);
 
