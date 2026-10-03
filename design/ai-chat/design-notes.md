@@ -4572,3 +4572,350 @@ stays on the thread.
 
 No composer intent control, no debug mode, no new panel: the chrome follows the latest turn (ADR
 Consequence 1), and after a debug turn the canvas footer rests, because nothing is proposed.
+
+## ⭐ Guide me through — the to-do list walk in the Motir AI window (MOTIR-7462, 2026-10-03)
+
+**Design system check.** `package.json` depends on `@motir/design-system` `workspace:*` and
+`app/globals.css` imports its `theme.css`, so both mocks are built from the package's primitives and its
+`--el-*` / shape tokens. The token blocks are copied verbatim from
+[`debug-turn.mock.html`](debug-turn.mock.html), which extracted them from
+`packages/design-system/theme.css`. No axis attribute is drawn; every element routes through a token.
+
+**Mocks (both DELTAS):** [`planning-workspace--guide.mock.html`](planning-workspace--guide.mock.html)
+(this area) and `design/runs/run-section--guide-door.mock.html` (the door). **Story:** MOTIR-7459.
+**Decision:** `docs/decisions/conversation-turn-intent.md` AMENDMENT 2 (the fourth intent, `guide`).
+This section is the design result's note; **the door** is specified in § _Guide me through — the door
+on a manual work item_ of `design/runs/design-notes.md`.
+
+**What it amends, by path.**
+
+- [`planning-workspace.mock.html`](planning-workspace.mock.html) sheet 6 (the overlay's frame) and its
+  sections above. Guide is a fifth `PlanningMode` beside the four that sheet 3 draws; the frame, its
+  exit chrome and its exits are unchanged.
+- [`debug-turn.mock.html`](debug-turn.mock.html) and § _Debug with Motir AI — the callout's third row,
+  and the debug turn in the rail (MOTIR-7045)_ above. A guide turn is drawn in the debug turn's shape:
+  user bubble, assistant bubble, outcome line, the shipped paywall.
+- `design/work-items/todo-list.mock.html` — the shipped to-do row the canvas composes.
+
+The existing mocks are records and are not edited.
+
+**What it composes, unchanged.** The overlay's split (`PlanningResizableFrame`, `PlanningSplitDivider`,
+`planningFrameRows.ts`; MOTIR-6248): canvas left, the rail at its default third with a 352px floor,
+the 11px divider, and below `md` the stacked fall-back (panel 23). The canvas pane's exit chrome from
+`PlanningWorkspaceHost.tsx` (Close, `Esc`, the crumb). The rail, `PlanChangeRail.tsx`: the `<aside>`,
+its head and mode `Pill`, `Bubble`, the act rail, marker lines, the notice row, the error block with
+_Try again_, the starters' inset, `<AiPaywall triggeredOutOfCredits />` (`components/ai/AiPaywall.tsx`).
+The composer, `PlanChangeComposer.tsx`: the field, Send, the running bar with a secondary Stop. The
+to-do row, `TodoListSection.tsx` (`TodoRowBody`, `TodoRowReadOnly`, the executor mark, the command
+row). The command in a step card, `components/markdown/CopyableCodeBlock.tsx`.
+
+### What guide mode changes
+
+1. **The canvas shows the guided card's to-do list in place of the project tree** (Consequence 2). One
+   `Card` centred on `--el-canvas`, max 560px: the shipped section header (_To-do list — the steps of
+   this work_, mono count), a NEW progress header, and the shipped rows. No tree, no edges, no plan list,
+   no zoom, locate or search clusters. The rows have the live `Checkbox` and no actions column, as in
+   `TodoRowReadOnly`; the list is edited on the item page or through the conversation. A PROPOSED list
+   (not yet saved or walked) uses the read face proper, with inert checkboxes (panel 3).
+2. **The header crumb names the card**: _PayFlow / PAY-212 Rotate the Stripe webhook signing secret_,
+   key in `--el-text-identifier` mono, title truncating.
+3. **The mode pill reads `guide`.** A guide conversation stays a guide (A2.1), so no switch is drawn
+   and the composer's target-search trigger is ABSENT in guide mode (a guide's target is fixed by the
+   door). The placeholder is the guide's own.
+4. **Each guide turn** is the debug turn's shape. The handler's appended text (MOTIR-7463) is rendered
+   by `MarkdownView` with `copyableCode`: the **step card** (bold _Step N of M: text_, the notes, the
+   command as `CopyableCodeBlock`, and for an agent row the agent sentence as a blockquote), the
+   **save-or-walk sentence**, and the **dropped-action list**. The **outcome line** under the bubble is
+   built from the turn's LANDED actions, never from the prose, exactly as the debug turn's is.
+5. **The reply row (NEW)** sits under the latest assistant bubble on the starter chips' `pl-9` inset:
+   `Button`s size sm. Each SENDS a user turn with fixed words, so every consent is a turn's words, as
+   `write_todos` and `close` require (A2.3, A2.6). It is drawn for `propose_todos` (Save to the card /
+   Walk without saving), `offer_close` (Close the card / Not yet), every correction and `edit_item`
+   (Undo), and a refused edit (Reload the card, which re-reads and sends nothing).
+
+### The states, panel by panel
+
+| #    | State                             | Action(s) drawn                                       | Specified by                                  |
+| ---- | --------------------------------- | ----------------------------------------------------- | --------------------------------------------- |
+| 1    | reading the card                  | (the act rail's `reading` line)                       | MOTIR-7466; A2.3 input                        |
+| 2    | a list, step 3 current            | `tick`, `current_step`                                | A2.3; MOTIR-7463 (step card)                  |
+| 3    | no list: proposed, the offer      | `propose_todos`                                       | A2.3; MOTIR-7463 (save-or-walk sentence)      |
+| 4    | a TEMPORARY walk                  | `tick`, `current_step` on the conversation            | A2.2 (temporary list), A2.3, A2.4             |
+| 5    | a temporary list saved part-way   | `write_todos` with ticks                              | A2.3, A2.4                                    |
+| 6    | the list written                  | `write_todos`                                         | A2.3, A2.4                                    |
+| 7    | the card edited live              | `edit_item`                                           | A2.5                                          |
+| 8–11 | the list corrected                | `add_step`, `revise_step`, `remove_step`, `move_step` | A2.3 (never a ticked row), A2.4               |
+| 12   | THE TICK, frames + reduced motion | `tick`                                                | A2.3; this design                             |
+| 13   | a tick / untick by the person     | none (a plain `setTodoDone`)                          | A2.4 (lands against the card as it stands)    |
+| 14   | an agent-executor step            | none run                                              | MOTIR-6856; A2.7; MOTIR-7463 (agent sentence) |
+| 15   | cannot be done                    | `cannot_do`                                           | A2.3, A2.4 (a comment)                        |
+| 16   | all done, the close offer         | `offer_close`                                         | A2.6                                          |
+| 17   | closed (Done)                     | `close`                                               | A2.6                                          |
+| 18   | a linked pull request             | `tick`, no offer                                      | A2.6                                          |
+| 19   | out of credits                    | none lands                                            | A2.4, A2.8                                    |
+| 20   | a failed turn, Try again          | none lands                                            | A2.4                                          |
+| 21   | the card changed elsewhere        | `edit_item` refused                                   | A2.5                                          |
+| 22   | a dropped action                  | a refused `tick`                                      | MOTIR-7463 (dropped-action list); A2.4        |
+| 23   | narrow viewport                   | —                                                     | MOTIR-6248's stacked frame                    |
+
+**Exactly the closed action set** (`propose_todos`, `write_todos`, `tick`, `untick`, `add_step`,
+`revise_step`, `remove_step`, `move_step`, `current_step`, `offer_close`, `close`, `edit_item`,
+`cannot_do`) is drawn. `untick` shares the tick's frames 2–3 in reverse and does not move the current
+step. Nothing in any panel runs a step, reads a third-party system, edits another card, or moves the
+card's status other than through `close`.
+
+### Motion (respects `prefers-reduced-motion`)
+
+| Transition                 | Frames and durations                                                                                                                                                                                                                              | Reduced motion                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| the tick                   | check strokes in 180ms → row settles (line-through, `--el-success-surface` wash fading) 200ms → count and bar advance 240ms (gain led in `--el-accent-pressed`) → current marker cross-fades to the next row 200ms; ≈ 820ms, sequential, ease-out | one paint to the end state                                   |
+| `add_step`                 | gap opens 160ms → row arrives on `--el-diff-added` 200ms → wash fades 600ms; **Added** tag stays until the next turn settles                                                                                                                      | row present with its tag                                     |
+| `revise_step`              | changed field struck on `--el-diff-removed` 160ms → new value on `--el-diff-added` 200ms → settles 600ms; **Changed** tag                                                                                                                         | new value with its tag                                       |
+| `remove_step`              | struck on `--el-diff-removed` 160ms → collapses 200ms → rows close up                                                                                                                                                                             | row gone; the rail statement carries it                      |
+| `move_step`                | lifts (`--el-card`, `--shadow-elevated`) 120ms → travels 240ms → set down on `--el-diff-moved`, fades 600ms; **Moved** tag                                                                                                                        | row in place with its tag; `workItemTodos.movedTo` announced |
+| header title (`edit_item`) | new title marked on `--el-diff-added` until the next turn                                                                                                                                                                                         | same, no fade                                                |
+
+### Primitives and tokens — the NEW elements
+
+| Element                       | Primitive                                      | Colour role                                                                                                                                                  | Shape token                                                           |
+| ----------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| guide canvas card             | `Card`                                         | `--el-card`, `--el-border`, `--shadow-card` on `--el-canvas`                                                                                                 | `--radius-card`, `--spacing-card-padding` (`--spacing-md` below `md`) |
+| progress header               | text + 4px bar                                 | label `--el-text`; track `--el-muted`, fill `--el-accent`                                                                                                    | `rounded-full` (a bar)                                                |
+| current-step marker           | the row's own box                              | fill `--el-surface-soft`, 3px inset bar `--el-accent`                                                                                                        | `--radius-control`                                                    |
+| _Current step_ tag            | `Pill`-shaped chip                             | `--el-tint-lavender`, `--el-text-strong`                                                                                                                     | `--radius-badge`, `--spacing-chip-x/y`                                |
+| _Not saved_ tag, the bands    | chip; band row                                 | `--el-tint-yellow`, `--el-text-strong`, `--el-border`                                                                                                        | `--radius-badge`; `--radius-control`, `--spacing-control-x/y`         |
+| _Added_ / _Moved_ tags        | chip                                           | `--el-diff-added` / `--el-diff-moved`, `--el-border` rim, `--el-text-strong`                                                                                 | `--radius-badge`                                                      |
+| _Changed_ tag                 | chip                                           | `--el-tint-sage`, `--el-text-strong`                                                                                                                         | `--radius-badge`                                                      |
+| _Cannot be done_ tag          | chip                                           | `--el-warning-surface`, `--el-text-strong`                                                                                                                   | `--radius-badge`                                                      |
+| before → after (rail, header) | inline spans                                   | `--el-diff-removed` struck / `--el-diff-added`, `--el-text-strong`                                                                                           | `--radius-kbd`                                                        |
+| step card                     | `MarkdownView` + `CopyableCodeBlock`           | hairline `--el-border-soft`; block `--el-surface` / bar `--el-surface-soft` / `--el-code-text`; agent quote `--el-border-strong` rule, `--el-text-secondary` | `--radius-input`, `--spacing-input-x/y`, `--radius-control` (Copy)    |
+| outcome line                  | the debug turn's foot slot + `WorkItemRefChip` | `--el-text`, glyph `--el-text-secondary`, hairline `--el-border-soft`; chip `--el-type-manual`, key `--el-link`, status `--el-status-done` once closed       | `--radius-control` (chip)                                             |
+| reply row                     | `Button` primary / secondary, size sm          | `--el-accent` / `--el-button-border`                                                                                                                         | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm`               |
+| person-tick marker            | the shipped marker line                        | `--el-text-secondary`, centred 12px                                                                                                                          | —                                                                     |
+| stale notice                  | the shipped notice row                         | `--el-notice-info-bg`, `--el-text-strong`                                                                                                                    | `--radius-control`, `--spacing-control-x/y`                           |
+| failed turn                   | the shipped error block                        | `--el-tint-rose`, `--el-text-strong`; Try again secondary                                                                                                    | `--radius-card`                                                       |
+
+Every grey ink on a tinted surface is `--el-text-secondary` or stronger; `--el-text-muted` appears only
+in the shipped paywall body on the white card.
+
+### Copy (en / zh)
+
+**motir-core strings** (the overlay, canvas and rail chrome):
+
+| where                       | key (suggested)                                                 | en                                                                                                              | zh                                                                                                                     |
+| --------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| mode pill                   | `planningWorkspace.mode.guide`                                  | guide                                                                                                           | 引导                                                                                                                   |
+| composer                    | `planningWorkspace.conversation.composerPlaceholderGuide`       | Tell Motir AI how the step went…                                                                                | 告诉 Motir AI 这一步进展如何…                                                                                          |
+| opening marker              | `planningWorkspace.guide.openedFrom`                            | Opened from {key}                                                                                               | 从 {key} 打开                                                                                                          |
+| act line (`reading`)        | `planningWorkspace.guide.reading`                               | Reading {key} and its to-do list…                                                                               | 正在读取 {key} 及其待办清单…                                                                                           |
+| progress header             | `planningWorkspace.guide.stepOf`                                | Step {n} of {total}                                                                                             | 第 {n} 步，共 {total} 步                                                                                               |
+| count suffix                | `planningWorkspace.guide.notSavedSuffix`                        | · not saved                                                                                                     | · 未保存                                                                                                               |
+| tags                        | `planningWorkspace.guide.tag.*`                                 | Current step · Not saved · Added · Changed · Moved · Cannot be done                                             | 当前步骤 · 未保存 · 已添加 · 已修改 · 已移动 · 无法完成                                                                |
+| proposed band               | `planningWorkspace.guide.proposedBand`                          | **Proposed, not saved.** Nothing is on the card until you choose.                                               | **建议的步骤，尚未保存。** 在你做出选择之前，卡片上不会写入任何内容。                                                  |
+| temporary band              | `planningWorkspace.guide.temporaryBand`                         | Not saved to the card. Stopping ends this walk.                                                                 | 尚未保存到卡片。停止后本次引导即结束。                                                                                 |
+| reply: save / its words     | `planningWorkspace.guide.save` / `.saveTurn`                    | Save to the card / Save this list to the card.                                                                  | 保存到卡片 / 把这份清单保存到卡片。                                                                                    |
+| reply: walk / its words     | `planningWorkspace.guide.walk` / `.walkTurn`                    | Walk without saving / Walk it without saving.                                                                   | 不保存，直接开始 / 不保存，直接带我做。                                                                                |
+| reply: undo / its words     | `planningWorkspace.guide.undo` / `.undoTurn`                    | Undo / Undo that change.                                                                                        | 撤销 / 撤销刚才的更改。                                                                                                |
+| reply: close / its words    | `planningWorkspace.guide.closeYes` / `.closeYesTurn`            | Close the card / Yes, close the card.                                                                           | 关闭卡片 / 好的，关闭卡片。                                                                                            |
+| reply: not yet / its words  | `planningWorkspace.guide.closeNo` / `.closeNoTurn`              | Not yet / Not yet.                                                                                              | 暂不 / 暂时不要。                                                                                                      |
+| reply: reload               | `planningWorkspace.guide.reload`                                | Reload the card                                                                                                 | 重新加载卡片                                                                                                           |
+| stale notice                | `planningWorkspace.guide.staleNotice`                           | {key} changed since this turn read it. Reload it, then ask again.                                               | {key} 在本轮读取之后已被修改。请重新加载后再问一次。                                                                   |
+| failed turn                 | `planningWorkspace.guide.failed`                                | That turn didn't finish, so nothing on the card changed.                                                        | 这一轮没有完成，因此卡片没有任何改动。                                                                                 |
+| person-tick markers         | `planningWorkspace.guide.youTicked` / `.youUnticked`            | You ticked step {n} on the list / You unticked step {n} on the list                                             | 你在清单上勾选了第 {n} 步 / 你在清单上取消勾选了第 {n} 步                                                              |
+| outcome: tick               | `planningWorkspace.guide.outcome.ticked`                        | Ticked step {n} on {chip}.                                                                                      | 已在 {chip} 上勾选第 {n} 步。                                                                                          |
+| outcome: temporary tick     | `planningWorkspace.guide.outcome.tickedTemp`                    | Ticked step {n} on this walk. Not saved to the card.                                                            | 已在本次引导中勾选第 {n} 步。尚未保存到卡片。                                                                          |
+| outcome: written            | `planningWorkspace.guide.outcome.saved`                         | Saved {count} steps to {chip}.                                                                                  | 已将 {count} 个步骤保存到 {chip}。                                                                                     |
+| outcome: written with ticks | `planningWorkspace.guide.outcome.savedTicked`                   | Saved {count} steps to {chip}, with the {done} you had done ticked.                                             | 已将 {count} 个步骤保存到 {chip}，并勾选了你已完成的 {done} 步。                                                       |
+| outcome: corrections        | `planningWorkspace.guide.outcome.{added,changed,removed,moved}` | Added step {n} to {chip}. · Changed step {n} on {chip}. · Removed a step from {chip}. · Moved a step on {chip}. | 已在 {chip} 中添加第 {n} 步。· 已修改 {chip} 的第 {n} 步。· 已从 {chip} 中删除一个步骤。· 已移动 {chip} 中的一个步骤。 |
+| outcome: edit               | `planningWorkspace.guide.outcome.edited`                        | Edited the {fields} of {chip}. (title · description · explanation)                                              | 已编辑 {chip} 的{fields}。（标题 · 描述 · 说明）                                                                       |
+| outcome: cannot_do          | `planningWorkspace.guide.outcome.commented`                     | Commented on {chip}: “{reason}”                                                                                 | 已在 {chip} 上评论：“{reason}”                                                                                         |
+| outcome: close              | `planningWorkspace.guide.outcome.closed`                        | Moved {chip} to Done, and added this summary as a comment.                                                      | 已将 {chip} 移至“已完成”，并将此总结添加为评论。                                                                       |
+| outcome: tick, linked PR    | `planningWorkspace.guide.outcome.tickedNoStatus`                | Ticked step {n} on {chip}. No status changed.                                                                   | 已在 {chip} 上勾选第 {n} 步。状态未改变。                                                                              |
+
+**motir-ai strings** — the fixed text MOTIR-7463's handler appends to the message (the rest of a
+message is the model's prose, in the conversation's language):
+
+| where                  | en                                                                                                                                                                       | zh                                                                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| step card heading      | Step {n} of {m}: {text}                                                                                                                                                  | 第 {n} 步（共 {m} 步）：{text}                                                                                                   |
+| agent row              | This step is marked for an agent, and nothing in Motir runs it. You can do it yourself, or tick it once it is done elsewhere.                                            | 此步骤标记为由 Agent 执行，但 Motir 中没有任何东西会运行它。你可以自己完成，或在别处完成后勾选它。                               |
+| save or walk           | You can save this list to the card, so you can stop and pick it up later, or walk it without saving, which writes nothing to the card and cannot be resumed if you stop. | 你可以把这份清单保存到卡片，这样可以中途停下、之后继续；也可以不保存直接开始，这样不会向卡片写入任何内容，但一旦停止便无法继续。 |
+| dropped actions (lead) | I left some of that out:                                                                                                                                                 | 以下内容我没有执行：                                                                                                             |
+| close offer            | Every step is done. Close {key}?                                                                                                                                         | 所有步骤均已完成。要关闭 {key} 吗？                                                                                              |
+| linked pull request    | Every step is ticked. This card closes when its linked pull request merges.                                                                                              | 所有步骤均已勾选。此卡片将在其关联的拉取请求合并时关闭。                                                                         |
+| cannot_do              | The walk stopped here. I recorded the reason as a comment on {key}.                                                                                                      | 引导在此停止。我已将原因作为评论记录在 {key} 上。                                                                                |
+
+Shipped strings reused unchanged: `planningWorkspace.close` / `.escKey`, `conversation.send`,
+`conversation.stop`, `conversation.retry`, `conversation.submitted`, `workItemTodos.*` (section title,
+gloss, progress, executor marks, instructions toggle, Copy command, _Done by_, _Every step is done._,
+`movedTo`), `github.development.howToTest.code.*` (Copy), `billing.paywall.outOfCredits.*`.
+
+### Open questions for the building cards
+
+- **Undo is a turn** (MOTIR-7466 / MOTIR-7463). A2.3 says an undo is the inverse action and A2.4 lands
+  actions only from a settled job, so Undo sends _Undo that change._ and is metered like any turn. If an
+  un-metered client-side inverse is wanted instead, that is an amendment to A2.4, not a drawing change.
+- **The first turn** (MOTIR-7466). Panel 1 draws the overlay reading the card as soon as the door
+  opens it; whether that is an automatic opening turn (metered) or the first thing the person sends is
+  not decided by A2.2.
+- **Reload the card** re-reads the card and list without a turn; it needs a read the overlay can call.
+
+## ⭐ Files on a guide turn — attach, paste and drop, the tray, and what Motir AI read (MOTIR-7482, 2026-10-03)
+
+**Design system check.** `package.json` depends on `@motir/design-system` `workspace:*` and
+`app/globals.css` imports its `theme.css`, so the mock is on Motir Design (branch (a)). Its token blocks
+are copied verbatim from the guide mock below (MOTIR-7462), which copied them from
+[`debug-turn.mock.html`](debug-turn.mock.html), which extracted them from
+`packages/design-system/theme.css`. No axis attribute is drawn; every element routes through a token.
+
+**Mock (a DELTA):** [`planning-workspace--guide-files.mock.html`](planning-workspace--guide-files.mock.html).
+**Story:** MOTIR-7471. **Decision:** `docs/decisions/guide-turn-files.md` (MOTIR-7481), A3.1–A3.9.
+
+**What it amends, by path.**
+
+- [`planning-workspace--guide.mock.html`](planning-workspace--guide.mock.html) and § _Guide me through —
+  the to-do list walk in the Motir AI window (MOTIR-7462)_ above: the guide composer, the guide turn, and
+  — from A3.9 — panel 14 (an agent step) and panels 8–11 (corrections, "never a ticked row").
+- `design/work-items/attachments.mock.html`: the upload row and its track, the inline refusal row, the
+  dropzone, the MIME glyph and the preview are composed from it unchanged.
+
+The existing mocks are records and are not edited.
+
+**What it composes, unchanged.** The guide overlay exactly as MOTIR-7462 draws it. The composer,
+`PlanChangeComposer.tsx`, and its **inset slot** (`absolute bottom-1.5 left-1.5`, field `pl-8`), which
+holds the target-search trigger in the other modes and is empty in guide mode. From the item page's
+`AttachmentsPanel.tsx`: the client pre-check against `lib/blob/allowlist.ts`, the upload track, the inline
+refusal row and the `errors.upload.*` copy, the dropzone grammar (`attachments.dropTitle`). `AttachmentGlyph`,
+`AttachmentPreview`, `CopyableCodeBlock`, `MarkdownView`, `WorkItemRefChip`, the reply row and the
+outcome line.
+
+### What files change
+
+1. **The attach control** (panel 1) is a paperclip icon button in the composer's inset slot, guide mode
+   only. It is the access path. Paste (panel 2) and drop on the rail (panel 3) are the other two ways in.
+2. **The tray** (panels 2, 4) holds the turn's queued files above the field. Queued files are local:
+   **Send uploads them to the guided card, then sends the turn** (A3.1, panel 5). An upload failure stops
+   the send and keeps the words (panel 6). The shipped refusals apply unchanged (panel 7).
+3. **The sent turn** shows its files as chips under the user bubble; each opens the shipped preview
+   (panel 8).
+4. **Every reply to a turn with files ends with the read statement** (A3.6): _What I read_ and, when it
+   applies, _What I could not read_ (panels 9, 10).
+5. **A3.9:** an agent step's card carries a prompt for the person's local agent (panel 11, replaces the
+   guide's panel 14); a ticked step may be corrected while the card's goal holds (panel 12); a change
+   that alters the goal returns `needs_replan` and offers the re-plan (panel 13).
+6. **Guide only** (A3.7, panel 14): ask, plan change and debug show no attach control, tray or drop
+   target.
+
+### The states, panel by panel
+
+| #   | State                                          | Specified by      |
+| --- | ---------------------------------------------- | ----------------- |
+| 1   | the attach control, at rest and hover          | A3.2 (guide only) |
+| 2   | a pasted image, queued                         | A3.1              |
+| 3   | a dropped file, the rail as drop target        | A3.1              |
+| 4   | several files queued; the cap of four          | A3.3              |
+| 5   | uploading — Send attaches first                | A3.1              |
+| 6   | an upload failed — not sent, words kept, Retry | A3.1              |
+| 7   | refused for type or size (the shipped message) | A3.1, A3.3        |
+| 8   | the sent turn's chips; the shipped preview     | A3.2              |
+| 9   | a screenshot read, the step ticked             | A3.5, A3.6        |
+| 10  | a text file quoted; a PDF not read; a cut file | A3.3, A3.4, A3.6  |
+| 11  | an agent step — the local-agent prompt         | A3.9(a)           |
+| 12  | a ticked step corrected — tick kept / unticked | A3.9(b)           |
+| 13  | the goal would change — `needs_replan`         | A3.9(b)           |
+| 14  | guide only — ask, plan change, debug unchanged | A3.7              |
+
+### Primitives and tokens — the NEW elements
+
+| Element                 | Primitive                                                         | Colour role                                                                                                                              | Shape token                                                 |
+| ----------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| attach control          | icon button in the composer's inset slot (the search trigger's)   | glyph `--el-text-secondary`; hover `--el-card` + `--el-text`; focus `--focus-ring-color`; disabled 50%                                   | `--radius-control`, `--spacing-icon-btn`                    |
+| its tooltip             | the shipped tooltip                                               | `--el-tooltip-bg`, `--el-tooltip-text`                                                                                                   | `--radius-control`, `--spacing-tooltip-x/y`, `--radius-kbd` |
+| tray                    | a wrapping row inside the composer, above the field               | —                                                                                                                                        | gap only                                                    |
+| file chip (queued/sent) | the upload row's grammar as a chip: `AttachmentGlyph`, name, meta | `--el-card`, `--el-border`; name `--el-text`; meta `--el-text-secondary`                                                                 | `--radius-control`, `--spacing-control-x/y`                 |
+| image chip              | the strip view's cover-fit thumbnail, 52×38, in the file chip     | thumbnail rim `--el-border-soft`                                                                                                         | `--radius-control`                                          |
+| upload track            | the shipped track                                                 | track `--el-muted`, fill `--el-accent`; done check `--el-success`                                                                        | `rounded-full` (a bar)                                      |
+| failed chip             | the shipped refusal colours                                       | `--el-tint-rose`, `--el-text-strong`; Retry underlined                                                                                   | `--radius-control`                                          |
+| refusal row             | `AttachmentsPanel`'s row, unchanged                               | `--el-tint-rose`, `--el-text-strong`, glyph `--el-danger-on-surface`                                                                     | `--radius-control`, `--spacing-control-x/y`                 |
+| not-sent line           | the composer's awaiting-answer strip                              | `--el-warning-surface`, `--el-warning-text`                                                                                              | `--radius-card`                                             |
+| uploading bar           | the composer's running bar                                        | `--el-surface-soft`, `--el-text-secondary`                                                                                               | `--radius-card`                                             |
+| drop target             | the shipped dropzone grammar, on the rail                         | rim `--el-accent` dashed, fill `--el-droptarget-bg`, glyph `--el-accent-on-surface`, title `--el-text-strong`, sub `--el-text-secondary` | `--radius-card`                                             |
+| turn chip row           | chips under the user bubble, right-aligned, on the rail surface   | as the file chip (never inside the accent bubble)                                                                                        | as the file chip                                            |
+| read statement          | the handler's appended markdown, under a hairline                 | hairline `--el-border-soft`; text `--el-text`                                                                                            | —                                                           |
+| quoted file line        | a mono block in the message                                       | `--el-code-bg`, `--el-code-text`                                                                                                         | `--radius-control`                                          |
+| local-agent prompt      | `CopyableCodeBlock` (lang `prompt`), wrapping                     | as the step card's command                                                                                                               | `--radius-input`, `--radius-control` (Copy)                 |
+| Re-plan button          | `Button` primary, size sm, in the reply row                       | `--el-accent`, `--el-accent-text`                                                                                                        | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm`     |
+
+Every grey ink on a tinted or surface fill is `--el-text-secondary` or stronger. No `--el-text-muted` or
+`--el-text-faint` is used. The thumbnail's picture is token-built decoration (`aria-hidden`).
+
+### Behaviour
+
+- **Paste:** an image on the clipboard joins the tray, named by the browser or `Pasted image.png`. Pasted
+  text stays text.
+- **Drop:** only on the rail. The canvas is not a target.
+- **Order:** chips keep the order files were added. The cap is 4 (A3.3): the control disables with
+  _Up to 4 files a turn_, and a fifth file gets a refusal row with the same sentence.
+- **Send:** uploads each queued file with `attachToWorkItem` (`source: 'panel'`) against the guided
+  card, then sends `attachmentIds` with the turn. While uploading, the field is read-only and Stop stops
+  the send. Any failure: the turn is not sent, no job runs, the words are kept, uploaded files stay on the
+  card and are not uploaded twice, and the failed chip offers Retry. Send retries every failed file.
+- **A files-only turn** (no words) sends. Its reply reads the files and drives no action that needs the
+  person's words (A3.2, A3.6).
+- **A removed attachment** on a past turn renders as a dashed _Removed_ chip that opens nothing.
+- **The item page** draws nothing new: its Attachments panel lists the files.
+
+### Copy (en / zh)
+
+**motir-core strings:**
+
+| where                  | key (suggested)                                 | en                                                                                                                                       | zh                                                                                                                   |
+| ---------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| attach control (aria)  | `planningWorkspace.guide.files.attach`          | Attach files                                                                                                                             | 添加文件                                                                                                             |
+| its tooltip            | `planningWorkspace.guide.files.attachTip`       | Attach files or a screenshot                                                                                                             | 添加文件或截图                                                                                                       |
+| at the cap             | `planningWorkspace.guide.files.cap`             | Up to 4 files a turn                                                                                                                     | 每轮最多 4 个文件                                                                                                    |
+| tray (aria)            | `planningWorkspace.guide.files.trayAria`        | Files on this turn                                                                                                                       | 本轮的文件                                                                                                           |
+| remove (aria)          | `planningWorkspace.guide.files.removeAria`      | Remove {name}                                                                                                                            | 移除 {name}                                                                                                          |
+| pasted image name      | `planningWorkspace.guide.files.pastedName`      | Pasted image                                                                                                                             | 粘贴的图片                                                                                                           |
+| drop title             | `planningWorkspace.guide.files.dropTitle`       | Drop to add to this turn                                                                                                                 | 拖放到这里，添加到本轮                                                                                               |
+| drop sub               | `planningWorkspace.guide.files.dropSub`         | They go on {key} when you send. Up to 4 files.                                                                                           | 发送时会添加到 {key}。最多 4 个文件。                                                                                |
+| chip meta: waiting     | `planningWorkspace.guide.files.waiting`         | Waiting                                                                                                                                  | 等待中                                                                                                               |
+| chip meta: on the card | `planningWorkspace.guide.files.onCard`          | On {key}                                                                                                                                 | 已在 {key} 上                                                                                                        |
+| uploading bar          | `planningWorkspace.guide.files.attaching`       | Attaching {count} files to {key}… the turn sends when they are on the card.                                                              | 正在把 {count} 个文件添加到 {key}…… 文件全部添加后即发送本轮。                                                       |
+| not-sent line          | `planningWorkspace.guide.files.notSent`         | **Not sent.** One file didn't upload, so Motir AI hasn't seen this turn. Your words are kept, and the files already on {key} stay there. | **未发送。** 有一个文件没有上传成功，所以 Motir AI 还没有看到本轮。你的文字已保留，已添加到 {key} 的文件仍在卡片上。 |
+| retry                  | `planningWorkspace.guide.files.retry`           | Retry                                                                                                                                    | 重试                                                                                                                 |
+| act line               | `planningWorkspace.guide.files.reading`         | Reading your {count} files and {key}…                                                                                                    | 正在读取你的 {count} 个文件和 {key}…                                                                                 |
+| removed chip           | `planningWorkspace.guide.files.removed`         | Removed                                                                                                                                  | 已删除                                                                                                               |
+| re-plan button         | `planningWorkspace.guide.replan`                | Re-plan {key}                                                                                                                            | 重新规划 {key}                                                                                                       |
+| outcome: needs_replan  | `planningWorkspace.guide.outcome.replanComment` | Commented on {chip}: “{reason}”                                                                                                          | 已在 {chip} 上评论：“{reason}”                                                                                       |
+
+Shipped strings reused unchanged: `errors.upload.FILE_TOO_LARGE` / `UNSUPPORTED_FILE_TYPE` /
+`RATE_LIMITED` / `failed`, `attachments.previewAria`, `attachments.previewDownload`,
+`attachments.closePreviewAria`, `attachments.pdfFallback`, `attachments.dismissErrorAria`,
+`conversation.send` / `.stop`, `planningWorkspace.guide.undo`.
+
+**motir-ai strings** — the fixed text MOTIR-7483's handler appends (the rest is the model's prose, in the
+conversation's language):
+
+| where                                        | en                                                                                                                                                                                                                                      | zh                                                                                                                                                                     |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| read heading                                 | What I read                                                                                                                                                                                                                             | 我读取了                                                                                                                                                               |
+| not-read heading                             | What I could not read                                                                                                                                                                                                                   | 我无法读取                                                                                                                                                             |
+| read whole                                   | {name} — all of it.                                                                                                                                                                                                                     | {name} — 全部内容。                                                                                                                                                    |
+| read cut                                     | {name} — only the first 20,000 characters.                                                                                                                                                                                              | {name} — 仅前 20,000 个字符。                                                                                                                                          |
+| read image                                   | {name} — the screenshot above.                                                                                                                                                                                                          | {name} — 上面的截图。                                                                                                                                                  |
+| not read: `type_not_read`                    | {name} — I can't read this kind of file. It is on the card.                                                                                                                                                                             | {name} — 我无法读取这类文件。它已在卡片上。                                                                                                                            |
+| not read: `image_too_large`                  | {name} — the image is too large for me to read. It is on the card.                                                                                                                                                                      | {name} — 图片太大，我无法读取。它已在卡片上。                                                                                                                          |
+| not read: `not_utf8`                         | {name} — I can't read this text encoding. It is on the card.                                                                                                                                                                            | {name} — 我无法读取这种文本编码。它已在卡片上。                                                                                                                        |
+| not read: `turn_text_budget`                 | {name} — this turn had more text than I can read at once. It is on the card.                                                                                                                                                            | {name} — 本轮文本超出了我一次能读取的量。它已在卡片上。                                                                                                                |
+| no image input (A3.4 retry)                  | The current model can't read images, so I couldn't see {name}.                                                                                                                                                                          | 当前模型无法读取图片，所以我看不到 {name}。                                                                                                                            |
+| agent step (replaces MOTIR-7462's agent row) | This step is marked for an agent. Motir doesn't hold your credentials, so it can't run it, but a coding agent on your own machine can: it reads the credentials where they already live and runs the step for you. Give it this prompt. | 此步骤标记为由 Agent 执行。Motir 不保存你的凭据，因此无法运行它；但你本机上的编程 Agent 可以：它会从凭据原本所在的位置读取凭据，帮你运行这一步。把下面的提示词交给它。 |
+| re-plan                                      | This change alters what {key} is for, so it needs a re-plan. I changed nothing on the card, and the walk stops here.                                                                                                                    | 这项更改会改变 {key} 的目标，因此需要重新规划。我没有改动卡片，引导在此停止。                                                                                          |
+
+### Open questions for the building cards
+
+- **Upload timing** (MOTIR-7486). A3.1 uploads at Send, so a person who closes the overlay with files in
+  the tray loses them, and nothing reaches the card. Uploading on queue would land files the person then
+  removes. This design follows A3.1; changing it is an amendment, not a drawing change.
+- **The local-agent prompt's lang label** reads `prompt`. `CopyableCodeBlock` shows the fence's info
+  string, so MOTIR-7483's handler fences the prompt as ` ```prompt `.
