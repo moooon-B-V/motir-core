@@ -4,7 +4,8 @@
 - **Amends:** [`dispatch-run-record.md`](dispatch-run-record.md). This is that record's
   **AMENDMENT 3**, written as its own file so the question can be read on its own. Every
   `Qn` and `AMENDMENT n` below names a section of that record. It amends **Q4** for one
-  event kind (§3) and **AMENDMENT 2's lapse window** for agent-reported runs (§5), and
+  event kind (§3) and **AMENDMENT 2's lapse window and reaped end time** for
+  agent-reported runs (§5), and
   it overturns the ruling recorded in `motir-core`
   `lib/mcp/payloads/sharedResources.ts` (`MCP_UNREACHABLE_RESOURCES.DispatchRun`) and
   repeated in `lib/mcp/tools/workItemContinue.ts` (_"NO RUN EVENTS"_). Q1, Q2's enums,
@@ -110,8 +111,7 @@ a recorded preference.
   events.
 - **With no arguments it is a heartbeat only**, over every open agent-reported run the
   caller opened. The server resolves the runs from the credential, so a caller that does
-  not know the run id can still keep it alive. This is the form the plugin's hook sends
-  (§5).
+  not know the run id can still keep it alive. This is the form a hook sends (§5).
 - **Events need `key` and `runId`**, and a call carrying events without both is refused.
 - **An agent may send only these kinds:**
 
@@ -146,34 +146,39 @@ a recorded preference.
   `workItemsService.recordImplementationProvenance`. **Any other outcome stamps
   nothing.** A model the run does not know is left as it is on the card, not cleared.
 
-### 5 · Liveness: a longer window for agent-reported runs
+### 5 · Liveness: any harness, with a hook where one exists
+
+The skill is read by many harnesses, not only Claude Code: Codex, Kimi and any other agent
+that speaks MCP. Liveness may therefore rest on nothing a particular harness provides.
 
 - **The reap is AMENDMENT 2's.** A silent agent-reported run is closed `abandoned` and
   writes no card status, exactly as a silent CLI run.
-- **The lapse window is 15 minutes for `reportedBy: agent`, and stays 5 minutes for
-  `cli`.** The CLI heartbeats from its own timer every 60 s. An agent can call a tool
-  only between its steps, so it cannot heartbeat while one of its commands is running,
-  and Claude Code lets one foreground command run up to 10 minutes. Fifteen minutes
-  covers that command and the turn around it; five would reap a live session in the
-  middle of a long build or test run.
-- **The heartbeat is mechanical, not remembered.** The `motir` plugin ships a hook,
-  `hooks/hooks.json`, of Claude Code's `mcp_tool` type. On `PreToolUse` and on
-  `PostToolUse`, for every tool, it calls `touch_work_item_run` with no arguments on the
-  Motir MCP server. An `mcp_tool` hook calls the server over the connection the session
-  already has, so it uses the same sign-in as the agent's own calls and needs no
-  second credential. The agent does not have to remember anything: a session that is
-  doing work is touching its run.
-- **The longest silence is one command.** The hook fires immediately before and
-  immediately after each tool, so a run is silent only while one command runs, and that
-  is at most 10 minutes, inside the 15-minute window.
-- **The skill still says to touch the run** with `key` and `runId` when it reports an
-  event. A session whose hook is missing (the skill installed without the plugin)
-  degrades to those calls and can lapse. The reap then closes the run `abandoned`, which
-  is what that run would read without this door.
-- **The hook must be cheap.** A no-argument touch writes only the heartbeat timestamp,
-  and the server may skip that write when the stored timestamp is under a minute old.
-- **The cost:** a dead agent session reads `running` for up to 15 minutes before the reap
+- **Every Motir MCP call by the caller is a heartbeat.** The server refreshes the
+  heartbeat of every open agent-reported run the caller opened whenever that caller calls
+  any Motir MCP tool, not only `touch_work_item_run`. The one thing every harness running
+  the skill does is call the Motir MCP, so this needs no client code and no agent memory.
+  The refresh writes only the heartbeat timestamp, and may skip the write when the stored
+  timestamp is under a minute old.
+- **The lapse window is 60 minutes for `reportedBy: agent`, and stays 5 minutes for
+  `cli`.** The CLI heartbeats from its own timer every 60 s. An agent calls Motir only at
+  its milestones and when the skill tells it to touch the run, and between them it may
+  build, test and edit for a long stretch without any Motir call. Sixty minutes covers
+  that stretch; a short window would reap live sessions in the middle of their work.
+- **`touch_work_item_run` with no arguments is the explicit heartbeat**, for a harness or
+  a skill step that wants one (§3). The skill tells the agent to call it at every step
+  boundary and before and after any long command.
+- **Where a harness has hooks, a hook tightens the heartbeat.** It is an addition, never
+  the mechanism the rule rests on. In Claude Code the `motir` plugin ships an `mcp_tool`
+  hook (`hooks/hooks.json`) that calls `touch_work_item_run` with no arguments on
+  `PreToolUse` and `PostToolUse`. An `mcp_tool` hook uses the session's existing MCP
+  connection, so it needs no second credential. Other harnesses get the same hook only
+  where they can call an MCP tool from one; a hook that would need a separate token is
+  Option 2 and is not shipped.
+- **The cost:** a dead agent session reads `running` for up to 60 minutes before the reap
   closes it, against 5 for a CLI run.
+- **A reaped agent-reported run ends at its last heartbeat, not at the reap.** Otherwise
+  every abandoned agent run would carry up to an hour of time nobody spent, and the
+  durations analysis compares would be wrong by the window.
 
 ### 6 · What stays the CLI's, or nobody's
 
@@ -216,7 +221,7 @@ Q3 holds in full:
   shows it is not decided here.
 - **The exact tool schemas, error codes and payload shapes.** Those are MOTIR-7450's and
   MOTIR-7451's, inside the terms above.
-- **The skill's wording and the hook file.** Those are MOTIR-7454's and MOTIR-7455's,
-  including the MCP server name the hook targets in each install, and how a runbook
-  install that copies skills without the plugin gets the same hook.
+- **The skill's wording and the hook files.** Those are MOTIR-7454's and MOTIR-7455's,
+  including which harnesses get a hook, the MCP server name each hook targets, and how a
+  runbook install that copies skills without the plugin gets one.
 - **Any change to the CLI's v1 ingest, or to who may read a run.**
