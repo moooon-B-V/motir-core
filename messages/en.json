@@ -8390,8 +8390,7 @@
       "tenants": "Tenants",
       "users": "Users",
       "monitoring": "Monitoring",
-      "governance": "Governance",
-      "soonGovernance": "10.3"
+      "auditLog": "Audit log"
     },
     "topBar": {
       "staffMark": "Platform staff",
@@ -9028,7 +9027,8 @@
       "tabs": {
         "overview": "Overview",
         "usage": "Usage & cost",
-        "billing": "Billing & plans"
+        "billing": "Billing & plans",
+        "operations": "Operations"
       },
       "month": {
         "title": "Usage & cost · {month}",
@@ -9288,6 +9288,263 @@
           "expiry": "Its time ran out.",
           "revoked": "It stopped being valid before its time ran out — you signed out, your platform role changed, or the account was suspended."
         }
+      }
+    },
+    "ops": {
+      "status": {
+        "title": "Organization status",
+        "subtitle": "Suspending an organization refuses every member of every workspace under it.",
+        "active": "{members, plural, one {# member} other {# members}} across {workspaces, plural, one {# workspace} other {# workspaces}} can sign in and work.",
+        "activePill": "Active",
+        "suspendedPill": "Suspended",
+        "suspendedSince": "Since {at} · by {operator} · “{reason}”",
+        "suspendedSinceNoReason": "Since {at} · by {operator}",
+        "suspendedEffect": "Every member is refused at their next request. Nothing has been deleted.",
+        "operatorUnknown": "a former operator"
+      },
+      "suspend": {
+        "button": "Suspend organization",
+        "title": "Suspend {org}?",
+        "lead": "Suspension is the lever for non-payment or abuse. From the moment you confirm:",
+        "c1": "All {members} members of all {workspaces} workspaces are refused at their next request and see that the organization is suspended.",
+        "c2": "New planning jobs and agent runs are refused; running ones are stopped.",
+        "c3": "Nothing is deleted. Work items, repositories and the ledger stay exactly as they are, and another superadmin can reactivate it.",
+        "confirm": "Suspend {org}"
+      },
+      "reactivate": {
+        "button": "Reactivate organization",
+        "title": "Reactivate {org}?",
+        "body": "All {members} members can sign in and work again from their next request. Kill-switches keep their own state — a switch you turned off stays off.",
+        "confirm": "Reactivate {org}"
+      },
+      "typeToConfirm": "Type {slug} to confirm",
+      "reason": {
+        "label": "Reason — required, written to the audit log",
+        "placeholder": "Why are you doing this? Name the ticket if there is one.",
+        "hint": "Shown to any operator reading this organization later. “Support” on its own answers nothing."
+      },
+      "cancel": "Cancel",
+      "failedTitle": "Nothing was changed",
+      "result": {
+        "suspended": "Suspended {org}. Its members are refused from their next request.",
+        "reactivated": "Reactivated {org}. Its members can work again.",
+        "granted": "Granted {n} credits to {org}. The ledger and the audit log both carry it.",
+        "adjusted": "Adjusted {org}’s balance by {n} credits. The ledger and the audit log both carry it.",
+        "planSet": "{org} is now on {tier}.",
+        "planUnchanged": "{org} was already on {tier}. The assignment is recorded.",
+        "replayed": "That action had already landed — nothing new was written.",
+        "switchOff": "Turned {switch} off for {org}.",
+        "switchOn": "Turned {switch} back on for {org}.",
+        "creditUnreachable": "Couldn’t reach the credit service. Nothing was granted and nothing was recorded. Try again in a moment."
+      },
+      "error": {
+        "REASON_REQUIRED": "A reason is required — it is written to the audit log.",
+        "NOT_FOUND": "This organization no longer exists. Reload the page.",
+        "ALREADY_IN_STATE": "Someone else changed this first. Reload the page to see where it stands.",
+        "NOT_PERMITTED": "Only a superadmin can do this.",
+        "FAILED": "Something went wrong and nothing was changed. The failure has been logged.",
+        "AMOUNT_INVALID": "Enter a whole number of credits the ledger can hold.",
+        "LARGE_GRANT_UNCONFIRMED": "A grant this large needs the organization’s slug typed to confirm.",
+        "INSUFFICIENT_BALANCE": "That would take the balance below zero.",
+        "CONFLICT": "The credit service refused it as a conflict with an earlier action. Reload and try again.",
+        "REJECTED": "The credit service refused it. Check the amount or the plan and try again.",
+        "CREDIT_SERVICE_UNREACHABLE": "Couldn’t reach the credit service. Nothing was granted and nothing was recorded. Try again in a moment.",
+        "UNKNOWN_KEY": "That switch no longer exists. Reload the page."
+      },
+      "credits": {
+        "title": "Credits & plan",
+        "subtitle": "Credits are Motir’s internal unit, never a currency. Read from the credit service; every write is recorded.",
+        "balance": "Balance",
+        "plan": "AI plan",
+        "noPlan": "No plan",
+        "amount": "{n} credits",
+        "lastPlanChange": "Set by {operator} on {at} · “{reason}”",
+        "grant": "Grant credits",
+        "adjust": "Adjust balance",
+        "changePlan": "Change plan",
+        "error": {
+          "title": "Couldn’t load credits",
+          "body": "The credit service didn’t answer, so the balance, plan and ledger aren’t shown. Nothing is zero — the figures simply aren’t loaded. Status and kill-switches above still work."
+        }
+      },
+      "grant": {
+        "title": "Grant credits to {org}",
+        "body": "Adds credits to the org’s balance as a grant row in its ledger. It changes no plan and touches no Stripe object.",
+        "amount": "Credits to grant",
+        "confirm": "Grant {n} credits",
+        "large": "This is a large grant — {threshold} credits or more. Type the org’s slug to confirm."
+      },
+      "adjust": {
+        "title": "Adjust {org}’s balance",
+        "body": "Corrects the balance with an adjustment row — for a billing mistake. A goodwill credit is a grant, not an adjustment.",
+        "amount": "Change in credits",
+        "hint": "Use − to remove credits. The balance may not go below zero.",
+        "confirm": "Adjust by {n} credits"
+      },
+      "balanceAfter": "Balance after: {after} credits (now {now})",
+      "plan": {
+        "title": "Change {org}’s AI plan",
+        "body": "Sets the tier the org’s credit allotment is read from.",
+        "current": "Currently {tier}.",
+        "currentNone": "Currently on no plan.",
+        "tier": "Plan",
+        "choose": "Choose a plan",
+        "allotmentMonthly": "{name} · {credits} credits a month",
+        "allotmentOnce": "{name} · {credits} credits once",
+        "allotmentCustom": "{name} · custom allotment",
+        "stripe": "{org} pays for its plan through Stripe. This changes the tier Motir reads; it does not change or cancel the Stripe subscription, and the subscription’s next event sets the tier from Stripe again.",
+        "confirm": "Change plan to {tier}"
+      },
+      "ledger": {
+        "col": {
+          "when": "When",
+          "kind": "Kind",
+          "credits": "Credits",
+          "balanceAfter": "Balance after",
+          "by": "By",
+          "reason": "Reason"
+        },
+        "kind": {
+          "grant": "Grant",
+          "adjustment": "Adjustment",
+          "top_up": "Top-up",
+          "debit": "Debit",
+          "internal_offset": "Internal offset",
+          "allotment": "Allotment"
+        },
+        "newer": "Newer",
+        "older": "Older",
+        "empty": {
+          "title": "No credit transactions yet",
+          "body": "{org} has not been charged, topped up or granted anything. Its balance is 0 credits."
+        }
+      },
+      "switches": {
+        "title": "Kill-switches",
+        "subtitle": "Durable per-organization switches, ON by default. A change takes effect on the org’s next request — no deploy.",
+        "col": {
+          "switch": "Switch",
+          "whenOff": "When OFF",
+          "state": "State",
+          "lastChanged": "Last changed"
+        },
+        "on": "On",
+        "off": "Off — disabled",
+        "turnOff": "Turn off",
+        "turnOn": "Turn on",
+        "never": "Never changed",
+        "lastChange": "{at} · {operator} · “{reason}”",
+        "suspendedNote": "This organization is suspended, so every switch evaluates OFF whatever is set here.",
+        "unavailable": "The kill-switches couldn’t be loaded. Reload the page to try again.",
+        "confirmOff": {
+          "title": "Turn off {switch} for {org}?"
+        },
+        "confirmOn": {
+          "title": "Turn {switch} back on for {org}?",
+          "body": "{switch} works again for every member of {org} from their next request."
+        }
+      },
+      "switch": {
+        "ai_planning": {
+          "name": "AI planning",
+          "whenOff": "New planning jobs are refused with “planning is paused for your organization”. Jobs already running finish."
+        },
+        "hosted_runs": {
+          "name": "Hosted agent runs",
+          "whenOff": "New agent runs and agent instances are refused. Running containers are stopped."
+        },
+        "web_search": {
+          "name": "Web search",
+          "whenOff": "Planning and agents run without web search; a search call returns “not available”."
+        }
+      },
+      "readOnlyRole": "Only a superadmin can change these. You can see them with the {role} role.",
+      "role": {
+        "support": "support",
+        "operator": "operator",
+        "superadmin": "superadmin"
+      },
+      "audit": {
+        "title": "Platform actions on this organization",
+        "subtitle": "Every operator write on this org, newest first. Append-only.",
+        "open": "Open in the audit log",
+        "empty": "No operator has changed anything on this organization yet.",
+        "noReason": "No reason recorded"
+      }
+    },
+    "audit": {
+      "title": "Audit log",
+      "subtitle": "Every platform-staff action, newest first. Append-only and hash-chained: an entry changed after it was written breaks the chain from that entry on.",
+      "chain": {
+        "ok": "Chain verified",
+        "okDetail": "All {count} entries hash-chain intact, checked through #{last} at {time}.",
+        "okEmpty": "No entries to check yet.",
+        "verify": "Verify again",
+        "brokenTitle": "Chain broken",
+        "broken": "The chain is broken at entry #{n} ({at}). That entry no longer matches the hash recorded for it, so it and the {after} entries after it can’t be trusted as written. This check changed nothing; the entries are shown as stored.",
+        "show": "Show #{n}",
+        "verified": "Verified",
+        "mismatch": "Hash mismatch",
+        "unverified": "Unverified",
+        "label": "Chain integrity"
+      },
+      "filter": {
+        "label": "Filter the audit log",
+        "text": "Search reasons and targets",
+        "operator": "Operator",
+        "operatorPlaceholder": "Anyone — paste a user id",
+        "tenant": "Tenant",
+        "tenantPlaceholder": "Any organization — paste an org id",
+        "action": "Action",
+        "anyAction": "Any action",
+        "from": "From",
+        "to": "Through",
+        "scope": "Show",
+        "writes": "Writes",
+        "writesReads": "Writes & reads",
+        "apply": "Apply filters",
+        "invalid": "Those filters can’t be read. Check the dates and clear the page position."
+      },
+      "col": {
+        "when": "When (UTC)",
+        "operator": "Operator",
+        "action": "Action",
+        "target": "Target",
+        "reason": "Reason",
+        "chain": "Chain"
+      },
+      "detail": {
+        "entry": "Entry",
+        "actor": "Actor",
+        "action": "Action",
+        "target": "Target",
+        "reason": "Reason",
+        "payload": "Payload",
+        "hash": "Hash",
+        "chainedTo": "chained to #{prev}",
+        "genesis": "the first entry — chained to nothing",
+        "none": "—",
+        "toggle": "Show entry #{n}"
+      },
+      "empty": {
+        "title": "No entries match these filters",
+        "body": "Nothing was recorded that matches. Widen the dates, or switch to Writes & reads."
+      },
+      "clear": "Clear filters",
+      "newer": "Newer",
+      "older": "Older",
+      "tableLabel": "Audit log entries"
+    },
+    "member": {
+      "suspended": {
+        "title": "{org} is suspended",
+        "body": "Your organization’s access to Motir is paused. Nothing has been deleted. Contact your organization’s owner, or write to support@motir.co.",
+        "unknownTitle": "This organization isn’t available",
+        "unknownBody": "You can’t open it right now. If you believe this is a mistake, write to support@motir.co.",
+        "switchTitle": "Work in another organization",
+        "switchTo": "Switch to {org}",
+        "switchFailed": "That organization couldn’t be opened. Reload the page.",
+        "signOut": "Sign out"
       }
     }
   },

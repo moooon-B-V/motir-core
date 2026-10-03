@@ -217,6 +217,14 @@ export const platformEstateRepository = {
     return tx.workspaceMembership.count({ where: { workspaceId } });
   },
 
+  /** How many workspaces one organization holds (the Operations tab's status line, MOTIR-752). */
+  async countOrganizationWorkspaces(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.workspace.count({ where: { organizationId } });
+  },
+
   /** How many accounts hold a membership of one organization. */
   async countOrganizationMembers(
     organizationId: string,

@@ -45,6 +45,7 @@ import {
 import type {
   CurrentOrganizationDTO,
   OrganizationDTO,
+  OrganizationSuspensionNoticeDTO,
   OrgFootprintDTO,
   OrgMemberDTO,
   OrgMemberPageDTO,
@@ -692,6 +693,29 @@ export const organizationsService = {
       organizationMembershipRepository.findOrganizationsByUser(userId, tx),
     );
     return orgs.map(toOrganizationDTO);
+  },
+
+  /**
+   * The member-side SUSPENDED notice (MOTIR-752): whether `organizationId` is a
+   * suspended organization the user belongs to, and which of their other
+   * organizations are open to switch to. One membership read under the user's
+   * own RLS context — an organization the user does not belong to is never
+   * named, so a forged `?org=` learns nothing.
+   */
+  async getSuspensionNotice(
+    userId: string,
+    organizationId: string | null,
+  ): Promise<OrganizationSuspensionNoticeDTO> {
+    const orgs = await withUserContext(userId, (tx) =>
+      organizationMembershipRepository.findOrganizationsByUser(userId, tx),
+    );
+    const named = organizationId
+      ? orgs.find((o) => o.id === organizationId && o.suspendedAt !== null)
+      : undefined;
+    return {
+      organization: named ? toOrganizationDTO(named) : null,
+      alternatives: orgs.filter((o) => o.suspendedAt === null).map(toOrganizationDTO),
+    };
   },
 
   /**

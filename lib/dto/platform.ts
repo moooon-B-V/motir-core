@@ -429,6 +429,26 @@ export interface PlatformOrgMemberDTO {
   joinedAt: string;
 }
 
+/**
+ * The org page's OPERATIONS tab (MOTIR-752, design `platform-admin` AMENDMENT
+ * 2026-10-03 Panel 1) — what motir-core itself holds for the tab, read as ONE
+ * audited `estate.read`: the organization (its suspension included), the
+ * counts the status line quotes, and the operator writes on it. The credit
+ * ledger (motir-ai) and the kill-switches are separate reads the tab streams in.
+ */
+export interface PlatformOrgOperationsDTO {
+  organization: PlatformOrganizationDetailDTO;
+  memberCount: number;
+  workspaceCount: number;
+  /**
+   * Who suspended it — the status line's "by {operator}". Null for an active
+   * organization, or once that operator's account is gone.
+   */
+  suspendedBy: { userId: string; email: string; name: string | null } | null;
+  /** Every operator WRITE on this organization, newest first (capped). */
+  actions: PlatformAuditLogDTO[];
+}
+
 /** The org page's Overview tab (MOTIR-733, design D5) — one audited read. */
 export interface PlatformOrgOverviewDTO {
   organization: PlatformOrganizationDetailDTO;

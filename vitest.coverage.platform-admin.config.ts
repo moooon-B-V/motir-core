@@ -52,6 +52,12 @@ export default defineConfig({
       'tests/platform/consoleGate.test.ts',
       'tests/platform/motirAiSeams.test.ts',
       'tests/ciFleet/platformMeterReport.test.ts',
+      // Story 10.3 extended two measured files: `platformEstateRepository` gained
+      // MOTIR-749's `listWorkspaceMembershipsForUser` (exercised by the View-as
+      // suite) and MOTIR-752's `countOrganizationWorkspaces`, and
+      // `platformOrgPageService` gained `getOperations` (the Operations tab read).
+      'tests/platform/impersonation.test.ts',
+      'tests/platform/platformOrgOperations.test.ts',
     ],
     coverage: {
       provider: 'v8',
