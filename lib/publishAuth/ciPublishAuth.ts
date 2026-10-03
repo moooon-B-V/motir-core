@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { WorkItem } from '@/generated/prisma/client';
 import { authenticateApiToken } from '@/lib/apiTokens/routeAuth';
+import { OrganizationSuspendedError } from '@/lib/organizations/errors';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { authenticateGithubOidc } from '@/lib/github/oidcAuth';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -61,7 +62,17 @@ export async function authenticateCiPublisher(
     return { userId: oidc.userId, workspaceId: oidc.workspaceId };
   }
 
-  const auth = await authenticateApiToken(req, requiredPermission);
+  let auth: Awaited<ReturnType<typeof authenticateApiToken>>;
+  try {
+    auth = await authenticateApiToken(req, requiredPermission);
+  } catch (err) {
+    // A valid token of a SUSPENDED organization (MOTIR-748): the dedicated 403,
+    // never a 500 and never a misleading 401.
+    if (err instanceof OrganizationSuspendedError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
+    }
+    throw err;
+  }
   if (!auth.ok) {
     return auth.reason === 'unauthenticated'
       ? NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 })

@@ -1,3 +1,4 @@
+import { OrgFeatureDisabledError } from '@/lib/featureFlags/errors';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   AssigneeNotInWorkspaceError,
@@ -251,6 +252,9 @@ export function toFilterDecodeToolError(
  * 404-not-403 cross-tenant rule) carries to the MCP surface unchanged.
  */
 export function toToolError(err: unknown): CallToolResult {
+  // A per-org kill-switch (MOTIR-750) — the message names the switch, so an
+  // agent reports "planning is paused for this organization" rather than retrying.
+  if (err instanceof OrgFeatureDisabledError) return toolError(err.code, err.message);
   // 404-not-403: identical message whether the row is absent or cross-tenant.
   if (err instanceof WorkItemNotFoundError || err instanceof ProjectNotFoundError) {
     return toolError(err.code, err.message);

@@ -22,6 +22,7 @@ import {
 } from '@/lib/tokens/grant';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import { OrganizationSuspendedError } from '@/lib/organizations/errors';
 import type {
   ApiTokenDto,
   CreateApiTokenResult,
@@ -30,6 +31,7 @@ import type {
   TokenScopeWorkspaceDTO,
 } from '@/lib/dto/apiTokens';
 import { projectsService } from '@/lib/services/projectsService';
+import { assertNoStaffSessionCookie } from '@/lib/platform/staffSession';
 
 // API-token service (Story 7.8 · Subtask 7.8.1) — the auth substrate every
 // other 7.8 subtask rides. Owns transactions, token generation/hashing,
@@ -185,6 +187,9 @@ export const apiTokensService = {
     workspaceId: string,
     input: CreateApiTokenInput,
   ): Promise<CreateApiTokenResult> {
+    // Never a credential minted as the customer inside a staff "View as"
+    // session (MOTIR-749) — it would outlive the time-box.
+    await assertNoStaffSessionCookie();
     const label = normalizeLabel(input.label);
     // The SHAPE first, so an illegal combination never reaches the DB.
     assertLegalBinding(input);
@@ -387,6 +392,13 @@ export const apiTokensService = {
       if (row.expiresAt && row.expiresAt.getTime() <= now.getTime()) {
         throw new ApiTokenExpiredError();
       }
+      // A SUSPENDED organization's tokens are refused (MOTIR-748) — every PAT,
+      // device credential (`motir login`) and run token bound to a workspace
+      // under it. Checked AFTER the credential is proven valid, so an invalid
+      // token stays a plain 401 and the dedicated 403 reaches only a holder of
+      // a real credential. Not a revocation: reactivating restores every token.
+      const org = row.workspace.organization;
+      if (org.suspendedAt) throw new OrganizationSuspendedError(org.id, org.name);
       // Throttle the last-used touch: skip the write inside the window.
       const lastUsed = row.lastUsedAt?.getTime();
       if (lastUsed === undefined || now.getTime() - lastUsed >= LAST_USED_THROTTLE_MS) {

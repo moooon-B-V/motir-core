@@ -3,6 +3,10 @@ import { getSession, SessionUnavailableError } from '@/lib/auth';
 import { TWO_FACTOR_REQUIRED_PATH } from '@/lib/auth/twoFactorGate';
 import { twoFactorPolicyService } from '@/lib/services/twoFactorPolicyService';
 import { getWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces';
+import { OrganizationSuspendedError } from '@/lib/organizations/errors';
+import { organizationSuspendedResponse } from '@/lib/organizations/errorResponse';
+import { ImpersonationReadOnlyError } from '@/lib/platform/errors';
+import { hasStaffSessionCookie } from '@/lib/platform/staffSession';
 
 // The API half of 2FA enforcement (Story MOTIR-1215 · Subtask MOTIR-3653).
 //
@@ -77,6 +81,15 @@ async function readOrUnavailable<T>(
   } catch (error) {
     if (error instanceof SessionUnavailableError)
       return { ok: false, response: sessionUnavailable() };
+    // A write inside a READ-ONLY staff "View as" session (MOTIR-749), refused at
+    // the session read itself — so every route behind these two doors answers
+    // the same typed 403 without an arm of its own.
+    if (error instanceof ImpersonationReadOnlyError) {
+      return {
+        ok: false,
+        response: NextResponse.json({ code: error.code }, { status: 403 }),
+      };
+    }
     throw error;
   }
 }
@@ -118,6 +131,10 @@ export async function requireCompliantSession(): Promise<CompliantSessionResult>
     };
   }
 
+  // Inside a staff "View as" session (MOTIR-749) the CUSTOMER's 2FA enrolment is
+  // not the operator's to satisfy — the operator's own second factor is enforced
+  // at the console (`app/(admin)/layout.tsx`).
+  if (session.impersonation) return { ok: true, session };
   const hold = await resolveTwoFactorHold(session.user.id);
   if (!hold) return { ok: true, session };
   return { ok: false, response: NextResponse.json(hold, { status: 403 }) };
@@ -224,7 +241,18 @@ export type CompliantWorkspaceContextResult =
  * the session again. One policy query, no extra auth round trip.
  */
 export async function requireCompliantWorkspaceContext(): Promise<CompliantWorkspaceContextResult> {
-  const read = await readOrUnavailable(() => getWorkspaceContext());
+  let read: { ok: true; value: WorkspaceContext | null } | { ok: false; response: NextResponse };
+  try {
+    read = await readOrUnavailable(() => getWorkspaceContext());
+  } catch (error) {
+    // A SUSPENDED organization (MOTIR-748): the workspace resolver's access gate
+    // refuses its members, and every tenant-scoped route answers the dedicated
+    // 403 from here — one door, so none of the 98 needs its own arm.
+    if (error instanceof OrganizationSuspendedError) {
+      return { ok: false, response: organizationSuspendedResponse(error) };
+    }
+    throw error;
+  }
   if (!read.ok) return read;
   const ctx = read.value;
   if (!ctx) {
@@ -234,6 +262,11 @@ export async function requireCompliantWorkspaceContext(): Promise<CompliantWorks
     };
   }
 
+  // A staff session's customer 2FA hold is not the operator's (see above). The
+  // cookie alone is enough here, and costs no second session read: a context
+  // exists, so the gate in `readSession` already resolved that cookie to an
+  // ACTIVE session (an ended one would have signed the request out).
+  if (await hasStaffSessionCookie()) return { ok: true, ctx };
   const hold = await resolveTwoFactorHold(ctx.userId);
   if (!hold) return { ok: true, ctx };
   return { ok: false, response: NextResponse.json(hold, { status: 403 }) };

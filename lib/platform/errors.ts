@@ -138,6 +138,56 @@ export class PlatformClassificationStateError extends Error {
 }
 
 /**
+ * A suspend of an organization that is already suspended, or a reactivate of
+ * one that is not (MOTIR-748). Decided under the row lock, so two operators
+ * racing produce one write and one of these — never two audit rows for one
+ * change. Thrown inside the platform transaction, so it rolls the audit row back.
+ */
+export class PlatformOrganizationSuspensionStateError extends Error {
+  readonly code = 'PLATFORM_ORGANIZATION_SUSPENSION_STATE';
+
+  constructor(readonly suspended: boolean) {
+    super(
+      suspended
+        ? 'That organization is already suspended'
+        : 'That organization is not currently suspended',
+    );
+    this.name = 'PlatformOrganizationSuspensionStateError';
+  }
+}
+
+/**
+ * A kill-switch flip named a key that is not in the registry (MOTIR-750) —
+ * flags are a CLOSED set (`lib/featureFlags/registry.ts`), never free-form.
+ * Thrown before the transaction opens, so it leaves no audit row.
+ */
+export class PlatformUnknownFeatureFlagError extends Error {
+  readonly code = 'PLATFORM_UNKNOWN_FEATURE_FLAG';
+
+  constructor(readonly key: string) {
+    super(`"${key}" is not a known kill-switch`);
+    this.name = 'PlatformUnknownFeatureFlagError';
+  }
+}
+
+/**
+ * A kill-switch flip to the state the switch is already in (MOTIR-750) —
+ * decided under the organization row lock, so two operators racing produce one
+ * change and one refusal, never two audit rows for one change.
+ */
+export class PlatformFeatureFlagStateError extends Error {
+  readonly code = 'PLATFORM_FEATURE_FLAG_STATE';
+
+  constructor(
+    readonly key: string,
+    readonly enabled: boolean,
+  ) {
+    super(`The ${key} switch is already ${enabled ? 'on' : 'off'} for that organization`);
+    this.name = 'PlatformFeatureFlagStateError';
+  }
+}
+
+/**
  * A planner-model save named the model the audience already holds (MOTIR-7227).
  *
  * Refused BEFORE the audited transaction opens, so the trail never records a
@@ -177,5 +227,217 @@ export class PlatformWorkspaceNotFoundError extends Error {
   constructor(readonly workspaceId: string) {
     super(`No workspace ${workspaceId} in this organization.`);
     this.name = 'PlatformWorkspaceNotFoundError';
+  }
+}
+
+/**
+ * An audit-log search was asked with an input that cannot be read (MOTIR-751)
+ * — a cursor that is not one this service handed out, a date that does not
+ * parse, a range that ends before it starts, or a verify range the wrong way
+ * round. Carries the offending field: the principal has already passed the
+ * `superadmin` gate, so there is nothing left to leak.
+ */
+export class PlatformAuditQueryInvalidError extends Error {
+  readonly code = 'PLATFORM_AUDIT_QUERY_INVALID';
+
+  constructor(readonly field: string) {
+    super(`The audit-log query field "${field}" is not valid`);
+    this.name = 'PlatformAuditQueryInvalidError';
+  }
+}
+
+// ── Credit ops (MOTIR-747 · 10.3.2) ─────────────────────────────────────────
+//
+// The console's typed refusals for grant / adjust / change plan / the ledger
+// read. Each is raised for a principal who has already passed the `superadmin`
+// gate, so each carries what the operator needs to see — there is nothing left to
+// leak. Every one of them is thrown BEFORE the audited transaction commits, so a
+// refused credit op leaves no audit row (design rule 6: "the write and its audit
+// row share one outcome").
+
+/**
+ * The amount is not one this operation accepts — a grant that is not a positive
+ * integer, an adjustment that is zero or not an integer, or either beyond the
+ * 32-bit range the ledger stores. Checked in core before anything is sent, so a
+ * typo never reaches motir-ai or the trail.
+ */
+export class PlatformCreditAmountInvalidError extends Error {
+  readonly code = 'PLATFORM_CREDIT_AMOUNT_INVALID';
+
+  constructor(
+    readonly kind: 'grant' | 'adjustment',
+    readonly credits: number,
+  ) {
+    super(
+      kind === 'grant'
+        ? `A grant must be a positive whole number of credits (got ${credits})`
+        : `An adjustment must be a non-zero whole number of credits (got ${credits})`,
+    );
+    this.name = 'PlatformCreditAmountInvalidError';
+  }
+}
+
+/**
+ * A LARGE grant (at or above `LARGE_GRANT_THRESHOLD_CREDITS`) arrived without the
+ * org's slug typed back as its confirmation (design Panel 2b). Enforced in the
+ * service as well as the dialog, because a Server Action is reachable without
+ * the dialog.
+ */
+export class PlatformLargeGrantUnconfirmedError extends Error {
+  readonly code = 'PLATFORM_LARGE_GRANT_UNCONFIRMED';
+
+  constructor(
+    readonly credits: number,
+    readonly threshold: number,
+  ) {
+    super(
+      `A grant of ${credits} credits is at or above ${threshold} and needs the organization's slug typed to confirm`,
+    );
+    this.name = 'PlatformLargeGrantUnconfirmedError';
+  }
+}
+
+/**
+ * An adjustment would take the org's balance below zero. Raised by core's own
+ * pre-check against the balance the operator saw, and by motir-ai's authoritative
+ * check under its ledger lock (`insufficient_balance:`) when the balance moved in
+ * between. Nothing was written either way.
+ */
+export class PlatformCreditInsufficientBalanceError extends Error {
+  readonly code = 'PLATFORM_CREDIT_INSUFFICIENT_BALANCE';
+
+  constructor(
+    readonly credits: number,
+    readonly balanceCredits: number | null,
+  ) {
+    super(
+      balanceCredits === null
+        ? `An adjustment of ${credits} credits would take the balance below zero`
+        : `An adjustment of ${credits} credits would take the balance of ${balanceCredits} below zero`,
+    );
+    this.name = 'PlatformCreditInsufficientBalanceError';
+  }
+}
+
+/**
+ * The credit service refused the operation as a STATE conflict: the action's
+ * `requestId` was already spent on a different amount / tier / org / kind, or the
+ * organization was offboarded in motir-ai (`org_erased: …`). Carries motir-ai's
+ * detail verbatim. Nothing was written.
+ */
+export class PlatformCreditConflictError extends Error {
+  readonly code = 'PLATFORM_CREDIT_CONFLICT';
+
+  constructor(readonly detail: string) {
+    super(`The credit service refused the operation: ${detail}`);
+    this.name = 'PlatformCreditConflictError';
+  }
+}
+
+/**
+ * The credit service rejected the request as invalid (`validation_error`) — most
+ * often an unknown `tierKey`, since core validates amounts before sending. Carries
+ * motir-ai's detail verbatim. Nothing was written.
+ */
+export class PlatformCreditRejectedError extends Error {
+  readonly code = 'PLATFORM_CREDIT_REJECTED';
+
+  constructor(readonly detail: string) {
+    super(`The credit service rejected the request: ${detail}`);
+    this.name = 'PlatformCreditRejectedError';
+  }
+}
+
+/**
+ * The credit service could not be reached, timed out, or answered something that
+ * is not its contract (design Panel 2f's "Couldn't reach the credit service.
+ * Nothing was granted and nothing was recorded."). The audited transaction rolls
+ * back with it, so that sentence is true.
+ */
+export class PlatformCreditServiceUnavailableError extends Error {
+  readonly code = 'PLATFORM_CREDIT_SERVICE_UNAVAILABLE';
+
+  constructor(readonly detail: string) {
+    super(`The credit service is unavailable: ${detail}`);
+    this.name = 'PlatformCreditServiceUnavailableError';
+  }
+}
+
+/**
+ * A WRITE was attempted inside a READ-ONLY staff "View as" session (MOTIR-749).
+ *
+ * Raised at the session chokepoint (`readSession`), before the request reaches
+ * any service: a Server Action, or a non-GET API request, made while the
+ * operator is viewing a tenant read-only. Nothing ran and nothing was written.
+ * The cookie-session API doors answer it 403 `IMPERSONATION_READ_ONLY`.
+ *
+ * Not a `NotPlatformStaffError` cousin: the caller IS staff and the surface is
+ * the tenant's, so there is no existence to hide — the refusal says what it is.
+ */
+export class ImpersonationReadOnlyError extends Error {
+  readonly code = 'IMPERSONATION_READ_ONLY';
+
+  constructor(readonly sessionId: string) {
+    super('This is a read-only staff session: nothing can be changed in it.');
+    this.name = 'ImpersonationReadOnlyError';
+  }
+}
+
+/** Why an account cannot be viewed as (MOTIR-749) — each refused at START. */
+export type ImpersonationIneligibility =
+  /** The operator asked to view as themselves. */
+  | 'self'
+  /** The target holds platform standing — staff never impersonate staff. */
+  | 'platform_staff'
+  /** The account is suspended (MOTIR-1167): it cannot sign in, so there is nothing to see as it. */
+  | 'suspended_account'
+  /** The account's organization is suspended (MOTIR-748): its members are refused at the gate. */
+  | 'suspended_organization'
+  /** The account belongs to no workspace — there is no tenant to enter. */
+  | 'no_workspace';
+
+/**
+ * The account cannot be viewed as (MOTIR-749) — see
+ * {@link ImpersonationIneligibility}. Thrown inside the audited transaction, so
+ * a refused start leaves no `user.impersonation_start` row.
+ */
+export class ImpersonationTargetIneligibleError extends Error {
+  readonly code = 'IMPERSONATION_TARGET_INELIGIBLE';
+
+  constructor(readonly ineligibility: ImpersonationIneligibility) {
+    super(`This account cannot be viewed as: ${ineligibility}`);
+    this.name = 'ImpersonationTargetIneligibleError';
+  }
+}
+
+/**
+ * The requested time-box or access mode is not one the console offers
+ * (MOTIR-749, design Panel 4: Read-only | Full access, 15 / 30 / 60 minutes).
+ * Enforced in the service because a Server Action is reachable without the
+ * dialog — an "indefinite" session must be impossible, not merely undrawn.
+ */
+export class ImpersonationInvalidRequestError extends Error {
+  readonly code = 'IMPERSONATION_INVALID_REQUEST';
+
+  constructor(readonly detail: string) {
+    super(`Invalid staff session request: ${detail}`);
+    this.name = 'ImpersonationInvalidRequestError';
+  }
+}
+
+/**
+ * A new CREDENTIAL — a personal access token, a `motir login` device credential,
+ * an OAuth / MCP connection — was about to be minted while a staff session
+ * cookie was present (MOTIR-749). Refused in EVERY mode: a credential minted as
+ * the customer would outlive the time-box and leave the session, which is the
+ * one thing a staff session must never produce. Answered 403
+ * `IMPERSONATION_CREDENTIAL_REFUSED` on the cookie API doors.
+ */
+export class ImpersonationCredentialRefusedError extends Error {
+  readonly code = 'IMPERSONATION_CREDENTIAL_REFUSED';
+
+  constructor() {
+    super('A credential cannot be created inside a staff session.');
+    this.name = 'ImpersonationCredentialRefusedError';
   }
 }

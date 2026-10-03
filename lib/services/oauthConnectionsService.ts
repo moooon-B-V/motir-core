@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { constantTimeEqual, makeSignature } from 'better-auth/crypto';
+import { assertNoStaffSessionCookie } from '@/lib/platform/staffSession';
 import type { OauthClient, User } from '@/generated/prisma/client';
 import { auth } from '@/lib/auth';
 import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
@@ -318,6 +319,9 @@ export const oauthConnectionsService = {
    * that already existed is left alone.
    */
   async approveConsent(input: ApproveConsentInput): Promise<ApproveConsentResult> {
+    // A connection IS a token: never minted as the customer inside a staff
+    // "View as" session (MOTIR-749).
+    await assertNoStaffSessionCookie();
     const params = await verifiedConsentQuery(input.oauthQuery);
     const client = await consentClient(params.get('client_id')!);
     const access = await organizationsService.resolveWorkspaceAccess(

@@ -566,7 +566,6 @@ export function PlanChangeRail({
           <Turn
             key={turn.id}
             turn={turn}
-            userTurns={userTurns}
             targetKeys={
               turnTargetKeys.length > 0 ? turnTargetKeys : anchorKeysOf(turn, turnAnchors)
             }
@@ -1049,7 +1048,6 @@ function latestAssistantTurn(turns: readonly PlanChangeTurnDto[]): PlanChangeTur
 
 interface TurnProps {
   turn: PlanChangeTurnDto;
-  userTurns: PlanChangeTurnDto[];
   /** The thread's anchor set — rendered on a user turn so the reader SEES what
    *  the planner was pointed at (design panel 3). Empty on the project thread. */
   targetKeys: readonly string[];
@@ -1206,21 +1204,16 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
     );
   },
 
-  // What the person typed. The second and later ones are REFINEMENTS, which is
-  // the whole point of a thread; one sent in reply to a question is labelled as
-  // the ANSWER it is.
-  user: function UserTurn({ turn, userTurns, targetKeys, disposition }: TurnProps) {
+  // What the person typed — just the message, with NO label (MOTIR-7497): the
+  // turn number, `refine` and `answer` were internal bookkeeping shown to the
+  // person. An answer to a question is still marked, by the disposition line
+  // below, never by a label on the bubble.
+  user: function UserTurn({ turn, targetKeys, disposition }: TurnProps) {
     const tc = useTranslations('planningWorkspace.conversation');
     const tt = useTranslations('planningWorkspace.targets');
-    const n = userTurns.findIndex((u) => u.id === turn.id) + 1;
-    const label = turn.isAnswer
-      ? tc('turnAnswer', { n })
-      : n > 1
-        ? tc('turnRefine', { n })
-        : tc('turn', { n });
     return (
       <>
-        <Bubble role="user" label={label}>
+        <Bubble role="user" testId="conversation-user-turn">
           {targetKeys.length > 0 ? (
             <span className="mb-1 flex flex-wrap items-center gap-1">
               <span className="text-[10px] font-semibold tracking-wide uppercase opacity-80">

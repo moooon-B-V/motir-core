@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
+import { ImpersonationCredentialRefusedError } from '@/lib/platform/errors';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import {
   InvalidApiTokenLabelError,
@@ -129,6 +130,10 @@ export async function POST(req: Request): Promise<Response> {
     });
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
+    // A credential cannot be minted inside a staff "View as" session (MOTIR-749).
+    if (err instanceof ImpersonationCredentialRefusedError) {
+      return NextResponse.json({ code: err.code }, { status: 403 });
+    }
     if (err instanceof InvalidApiTokenLabelError) {
       return NextResponse.json({ code: err.code }, { status: 422 });
     }

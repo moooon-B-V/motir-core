@@ -2,7 +2,8 @@ import 'server-only';
 
 import { cache } from 'react';
 import { type PlatformRole } from '@/generated/prisma/client';
-import { getSession } from '@/lib/auth';
+import { getSession, readOperatorSession } from '@/lib/auth';
+import { readStaffSessionToken } from './staffSession';
 import { platformStaffRepository } from '@/lib/repositories/platformStaffRepository';
 import { NotPlatformStaffError } from './errors';
 
@@ -75,7 +76,7 @@ export function platformRoleAtLeast(role: PlatformRole, minimum: PlatformRole): 
 export const requirePlatformStaff = cache(async function requirePlatformStaff(
   minimum: PlatformRole = 'support',
 ): Promise<PlatformPrincipal> {
-  const session = await getSession();
+  const session = await getOperatorSession();
   if (!session) throw new NotPlatformStaffError();
 
   const standing = await platformStaffRepository.findStandingByUserId(session.user.id);
@@ -83,4 +84,33 @@ export const requirePlatformStaff = cache(async function requirePlatformStaff(
   if (!platformRoleAtLeast(standing.platformRole, minimum)) throw new NotPlatformStaffError();
 
   return { userId: standing.id, email: standing.email, role: standing.platformRole };
+});
+
+/**
+ * The OPERATOR's own session — never a staff "View as" identity (MOTIR-749).
+ *
+ * Inside a staff session `getSession()` answers as the customer being viewed
+ * (`lib/platform/staffSession.ts`), and the console must not: its gate, its
+ * audit rows and its own actions (starting another session, leaving one) belong
+ * to the person at the keyboard. So when the staff-session cookie is present
+ * this reads Better-Auth's session directly (`readOperatorSession`), bypassing
+ * the staff-session layer — no tenant classification, no read-only refusal, no
+ * view row. Without the cookie the two reads are the same thing, and this
+ * defers to the request-memoised `getSession()`.
+ *
+ * Outside a request (a job, a test) there are no headers and no cookie, which is
+ * the second arm.
+ */
+export const getOperatorSession = cache(async function getOperatorSession() {
+  let requestHeaders: Headers | null = null;
+  try {
+    const { headers } = await import('next/headers');
+    requestHeaders = await headers();
+  } catch {
+    requestHeaders = null;
+  }
+  if (requestHeaders && readStaffSessionToken(requestHeaders)) {
+    return readOperatorSession(requestHeaders);
+  }
+  return getSession();
 });

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getFormatter, getTranslations } from 'next-intl/server';
-import { ArrowLeft, Info } from 'lucide-react';
+import { ArrowLeft, Info, Lock } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import type { PlatformOrganizationDetailDTO } from '@/lib/dto/platform';
@@ -72,6 +72,14 @@ export async function OrgPageHeader({
               {/* ⚠️ TWO CHIPS, TWO LABELS — `isMeta` and `internalBilling` are true
                   together on one org today, and that is a coincidence, not an
                   identity (`internal-billing-classification.md` §1). */}
+              {/* The Suspended pill rides the header on EVERY tab (design Panel 3b,
+                  MOTIR-752) — the hue in the tint, the label on strong ink. */}
+              {org.suspended ? (
+                <Pill severity="danger" data-testid="org-suspended-pill">
+                  <Lock aria-hidden className="h-3 w-3" />
+                  {t('ops.status.suspendedPill')}
+                </Pill>
+              ) : null}
               {org.isMeta ? <Pill severity="info">{chips.isMeta}</Pill> : null}
               {org.internalBilling ? <Pill severity="info">{chips.internalBilling}</Pill> : null}
             </span>

@@ -1,3 +1,4 @@
+import { orgFeatureDisabledResponse } from '@/lib/featureFlags/errorResponse';
 import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
@@ -60,6 +61,8 @@ export async function POST(req: Request): Promise<Response> {
     const { jobId } = await aiChatService.submitDiscoveryTurn(prompt, ctx);
     return NextResponse.json({ jobId }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
+    const switchedOff = orgFeatureDisabledResponse(err);
+    if (switchedOff) return switchedOff;
     // Any motir-ai-side failure (unreachable / misconfigured / rejected
     // envelope) maps through the 7.1.1 taxonomy to a typed error → 502: the
     // upstream dependency failed, not the caller's request.

@@ -278,6 +278,18 @@ describe('GuideRail', () => {
     expect(screen.getByTestId('planning-mode-chip')).toBeTruthy();
   });
 
+  it('shows what the person sent as just the message, with no turn label (MOTIR-7497)', () => {
+    renderRail([
+      turn('assistant', PROPOSAL),
+      turn('user', null, 'first'),
+      turn('assistant'),
+      turn('user', null, 'second'),
+    ]);
+    const bubbles = screen.getAllByTestId('conversation-user-turn');
+    expect(bubbles.map((b) => b.lastElementChild?.textContent)).toEqual(['first', 'second']);
+    expect(screen.queryByText(/turn \d/i)).toBeNull();
+  });
+
   it('sends the fixed words of a reply button', () => {
     const { onSend } = renderRail([turn('assistant', PROPOSAL)], { rows: [] });
     fireEvent.click(screen.getByTestId('guide-reply-walk'));

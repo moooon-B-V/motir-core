@@ -119,7 +119,6 @@ export function GuideRail({
   const tg = useTranslations('planningWorkspace.guide');
   const [draft, setDraft] = useState('');
   const turns = session?.turns ?? [];
-  const userTurns = turns.filter((x) => x.role === 'user');
   const running = phase !== 'idle';
   const tf = useTranslations('planningWorkspace.guide.files');
   const files = useGuideTurnFiles(card.id);
@@ -149,7 +148,7 @@ export function GuideRail({
 
   // The act line counts the files of the turn being read (panel 9's "Reading
   // your 2 files and MOTIR-9…").
-  const lastUser = userTurns[userTurns.length - 1];
+  const lastUser = turns.filter((x) => x.role === 'user').at(-1);
   const readingFiles = lastUser?.attachmentIds?.length ?? 0;
 
   /** Send the turn: upload its files first, then send it with their ids. */
@@ -236,12 +235,7 @@ export function GuideRail({
             {/* A turn of files alone draws no empty bubble — its chips stand
                 for it (A3.2). */}
             {turn.role === 'user' && turn.body.trim().length > 0 ? (
-              <Bubble
-                role="user"
-                label={t('conversation.turn', {
-                  n: userTurns.findIndex((u) => u.id === turn.id) + 1,
-                })}
-              >
+              <Bubble role="user" testId="conversation-user-turn">
                 {turn.body}
               </Bubble>
             ) : null}

@@ -18,6 +18,7 @@ closest existing usage surface.
 | **Platform admin console (access · search · nav shell · overview · usage/cost · seats · read-only drill-down · states)** | **`console.mock.html`** (HTML mockup) | The whole operator surface. Seven panels: **access path** · **estate overview** (in the left-nav shell + search top bar) · **global search** · **usage/cost · by tenancy** (rollup + members) · **usage/cost · by model & consumers** · **drill-down** (seats + read-only inspect) · **gating / empty / loading / error**. **Gates 10.1.4 / 10.1.5 / 10.1.6.** A `console.png` full-page export sits beside it. |
 
 | **ORG lookup · ORG page · the internal-billing CLASSIFICATION control** (AMENDMENT 2026-09-05) | **`console.mock.html`** (HTML mockup, Panels 10 · 10b · 11 · 12) | The ORG level of the reserved **Tenants** row. Four panels: the **org lookup** (a GET form, the shipped user-lookup grammar one entity over) · its **three states** (idle · query too short · no results) · the **org page** (identity, plan tier, balance, the `isMeta` and `internalBilling` chips drawn SEPARATELY, MOTIR-733's panels as RESERVED regions, and the allocation table) · the **classification control** in six states (not-classified · classified · confirm with a mandatory reason · reason-missing · already-in-that-state · generic failure) with the `PlatformAuditLog` row rendered back on the same surface. **Gates MOTIR-4566 and MOTIR-4568** (Story MOTIR-4337). Draws to `docs/decisions/internal-billing-classification.md`. |
+| **The OPS TOOLKIT — org Operations tab · credits & plan · org suspend · kill-switches · View as · the audit log** (AMENDMENT 2026-10-03) | **`console--ops-toolkit.mock.html`** (delta, Panels 1–8) | Story 10.3’s governance writes on the shipped org and user pages, plus the hash-chained audit log at `/admin/audit-log`. **Gates MOTIR-747 … MOTIR-752.** |
 
 ## What this area is
 
@@ -1481,3 +1482,265 @@ never read as a tenant. Numbers use `--el-text` / `--el-text-strong` (credits, t
 
 - **Any governance action** (suspend, grant, impersonate, tier change) — Story 10.3.
 - **The operator lessons console** — Story 10.5 (MOTIR-1408).
+
+# AMENDMENT 2026-10-03 — the ops toolkit (MOTIR-746 · story MOTIR-745)
+
+**Design system check (first, per the design-system rule).** Read `package.json` (depends on
+`@motir/design-system` `workspace:*`) and `app/globals.css` (`@import '@motir/design-system/theme.css'`).
+**Verdict: the project is on Motir Design** (package `0.8.0`), so every element is drawn from that system's
+`--el-*` / shape tokens and the shipped primitives. The root layout applies the signed-in person's own
+`data-style` / `data-palette` / `data-type`, so the mock draws the base values and routes every element through
+a token. **Nothing the package lacks is needed** — no proposed addition, no product-local component.
+
+**Mock (a DELTA):** [`console--ops-toolkit.mock.html`](console--ops-toolkit.mock.html), eight panels.
+**Amends:** D5 / D9 of `console--estate-usage-drilldown.mock.html` (the org page gains a fourth tab; D9's
+_"Changing a tenant's plan or credits is Story 10.3"_ is now answered), Panel 9 of `console.mock.html` (the user
+page gains one action), Panel 12 (its confirm-with-reason grammar, reused for every write here) and the rail's
+reserved **Governance · 10.3** row (it goes live as **Audit log**). The older mocks are records and are not edited.
+**Gates:** MOTIR-747 · 748 · 749 · 750 · 751 (each builds its panel's behaviour) and MOTIR-752 (the UI).
+
+**Composed, not redrawn.** The mock's token block, primitive CSS and lucide sprite are spliced verbatim from
+`console--ai-planning.mock.html` (itself from `console.mock.html`); the shell is the shipped `AdminShell.tsx`; the
+org header and tabs are the shipped `OrgPageHeader` + `orgNav`; the confirm is the shipped `ClassificationBar` /
+`SupportActionsBar` (`Modal role="alertdialog"` + `FormField` + a primary disabled until a reason is typed). The
+additions block at the end of `<style>` holds only the `Switch` (with the five `--el-switch-*` tokens spelled as
+`theme.css` defines them), the staff-session bar, the ledger amount cell, the audit row's detail list and two
+layout helpers.
+
+## ⚠️ Where the card's prose and this asset differ (rung 2 — shipped reality and this repo's rules win)
+
+The card was written on 2026-06-15, before the console it extends existed. Four differences, each deliberate:
+
+1. **File names.** The card asks for `ops-toolkit.mock.html` and a separate `ops-toolkit-design-notes.md`. This
+   repo's rule is ONE `design-notes.md` per area and a change drawn as a `<surface>--<change>.mock.html` delta
+   (CLAUDE.md § _Design assets_), so the asset is `console--ops-toolkit.mock.html` and these notes are a section here.
+2. **No "drawer".** The card's Panel 1 says _"the tenant ops drawer"_. The shipped org page is tabbed
+   (`?tab=overview|usage|billing`), so the toolkit is a fourth tab, **Operations**, not a drawer over the page.
+3. **The "Governance" section is not a page.** The rail has reserved a disabled `Governance · 10.3` row
+   since MOTIR-2896. Every 10.3 write targets ONE org or ONE user, so each sits on that entity's page; the only
+   estate-wide 10.3 surface is the audit log. The reserved row therefore goes live as **Audit log** →
+   `/admin/audit-log`, and the governance route the reserved row named is never served.
+4. **"Read-only View as tenant" was 10.1's and never shipped.** `console.mock.html` Panel 6 drew it and named
+   write-level impersonation as 10.3's. Nothing in `origin/main` serves either (`grep -ri impersonat app lib`
+   finds only prose). MOTIR-749 therefore owns BOTH modes, read-only as the default.
+
+## The access paths (the doors, drawn)
+
+| Surface                            | Door                                                                                | Panel |
+| ---------------------------------- | ----------------------------------------------------------------------------------- | ----- |
+| Status · Credits & plan · Switches | Tenants → an org → the **Operations** tab (`/admin/tenants/[orgId]?tab=operations`) | 1     |
+| The org's own audit slice          | the same tab, last card, with **Open in the audit log** (pre-filtered to the org)   | 1     |
+| Impersonation entry                | Users → a person → **View as {first name}** beside the two day-1 writes             | 4     |
+| Exiting a staff session            | **Exit session** on the bar that rides every page of the session                    | 5     |
+| The audit log                      | the rail's **Audit log** row in Operations (superadmin only)                        | 6     |
+
+## Roles (ADR `platform-staff-auth.md` §7 — every 10.3 write is `superadmin`)
+
+| Role                   | Operations tab                                | View as …       | Audit log                       |
+| ---------------------- | --------------------------------------------- | --------------- | ------------------------------- |
+| `superadmin`           | every card, every action (Panel 1)            | button + dialog | rail row + page                 |
+| `operator` · `support` | every card READ-ONLY, no action rendered (8c) | button absent   | rail row absent; the route 404s |
+| not platform staff     | the console's 404 (Panel 7a)                  | —               | 404                             |
+
+The missing control is presentation; each service re-gates at `superadmin` (the rule MOTIR-7227 follows).
+
+## The safe-action pattern (every write in this asset)
+
+1. **The button opens a dialog; nothing writes on the first click.** `Modal role="alertdialog"`, the
+   `ClassificationBar` shape.
+2. **The dialog states the consequence before it asks for anything** — what changes, for whom, what is NOT
+   touched (deleted, Stripe), and that it is reversible where it is.
+3. **A REASON is required on every write.** `FormField` + `Textarea`, label _"Reason — required, written to the
+   audit log"_. The primary is **`disabled` until it is non-empty** (Panel 2e) — a gate, never a post-submit
+   error — and the service re-checks it (the `PLATFORM_AUDIT_ACTIONS` `reason: 'required'` policy).
+4. **The heavy ones add a TYPED confirm** — type the org's slug. Applies to **Suspend organization** and to a
+   **grant of 10,000 credits or more** (Panel 2b). The threshold is a constant MOTIR-747 owns; 10,000 is the
+   proposal (half of the Team allotment; above any routine goodwill credit).
+5. **The record is rendered back on the surface that made it** — the Operations tab ends with _"Platform actions
+   on this organization"_, the user page keeps its _"Support actions"_ log. An operator never wonders whether a
+   write was recorded.
+6. **The write and its audit row share one outcome.** A refusal or an unreachable credit service leaves neither
+   (Panel 2f), exactly as Panel 12f says for the classification.
+7. **"This is audited" is said three times:** the `--el-info` audited-read banner at the top of every console
+   page, the reason field's label, and the record card.
+
+## Panels (review EACH — mistake #31)
+
+1. **Org page · Operations tab (superadmin).** Four cards: **Organization status** (Active pill + who it
+   affects + **Suspend organization**, `Button variant="danger"`); **Credits & plan** (balance, AI plan, **Grant
+   credits** primary, **Adjust balance** and **Change plan** secondary, then the ledger newest first, keyset-paged
+   with Newer/Older, 5 shown here, 25 a page in code); **Kill-switches** (one row per switch: `Switch` + name +
+   key, what OFF stops, state pill, last change with who and why, **Turn off / Turn on**); **Platform actions on
+   this organization** (the org's audit slice, 3 newest, link to the full log).
+2. **Credits & plan dialogs.** (a) grant, with the balance-after preview; (b) a large grant, slug not yet typed,
+   primary disabled; (c) adjust, signed amount, balance-after, may not go below zero; (d) change plan — a
+   `Combobox` of the tiers motir-ai offers, each with its allotment, and a warning when the org pays through
+   Stripe; (e) reason missing; (f) outcomes — a success toast and the unreachable-service toast.
+3. **Org lifecycle.** (a) Suspend: consequence list, typed slug, reason, danger fill; (c) Reactivate: reason, a
+   note that switches keep their own state; (b) the status card once suspended — who, when, why — and the header
+   pill on every tab; (d) what a member sees on any page: a calm `EmptyState`-style refusal with a lock, never a 500.
+4. **Impersonation entry.** The user page with **View as {first name}**; the dialog: Access (`Segmented`,
+   **Read-only** default / Full access), Ends after (`Segmented`, 15 / **30** / 60 min, max 60), the mode's
+   warning, reason. Full access turns the warning to the danger toast and the primary to the danger fill.
+5. **The active session.** The bar above the tenant's own TopNav on every page — not dismissible,
+   `role="status"`. (a) read-only: write controls disabled with a `Tooltip` _"Read-only staff session"_; (b) full
+   access; (c) the session-ended page with **Back to the console** / **Start a new session**.
+6. **Audit log.** `/admin/audit-log`: the integrity line (**Chain verified**, the count, when it was checked,
+   **Verify again**), filters (free text over reason + target, operator, tenant, action, date range, and
+   **Writes** / **Writes & reads**, default Writes), the entries table (when · operator + role at the time ·
+   action key · target · reason), keyset-paged 50 a page, never a total scan. One row open: the entry number,
+   exact time, actor, action, target with id, full reason, the metadata payload, and its hash chained to the
+   previous entry's.
+7. **Audit log, chain broken.** A danger toast naming the FIRST entry whose content no longer matches its hash,
+   how many follow it, and **Show #n**; that row reads **Hash mismatch**, later rows **Unverified**. The view
+   repairs and hides nothing.
+8. **States.** (a) loading, one skeleton per card; (b) credit service unreachable — that card only, with Retry;
+   (c) operator / support read-only; (d) ledger empty; (e) audit filters with no match; (f) the 404 for a
+   non-superadmin at `/admin/audit-log` and for anyone not staff.
+
+## Primitives composed (no hand-rolling)
+
+- [x] **Shell** — `AdminShell` (`Sidebar` rail + operator bar), one row relabelled live.
+- [x] **Org header + tabs** — `OrgPageHeader`, `Segmented` links (`orgNav.ts` gains `operations`).
+- [x] **`Card`** (+ head / flush body / foot) for every block; **`Table`** (`.tbl`) for ledger, switches, log.
+- [x] **`Pill`** — `pill-active` (Active, On, Chain verified), `pill-down` (Suspended, Off, Hash mismatch,
+      Unverified), `pill-warn` (Adjustment), `pill-plan` (Grant), `pill-readonly` (Top-up), `pill-neutral`
+      (Debit, counts), `pill-tier` (plan).
+- [x] **`Button`** — primary, secondary, danger, `sm`; disabled as the reason gate.
+- [x] **`Modal`** (`role="alertdialog"`) + **`FormField`** + **`Input`** / **`Textarea`**.
+- [x] **`Combobox`** (plan; the audit filters' operator / tenant / action), **`DatePicker`** (the date range).
+- [x] **`Segmented`** (tabs; impersonation access + length; Writes / Writes & reads).
+- [x] **`Switch`** (kill-switches — the visual state; the flip goes through the confirm).
+- [x] **`Toast`** (`toast-warn`, `toast-err`, success), **`Tooltip`**, **`EmptyState`** / **`ErrorState`**,
+      the skeleton, the `.audit-banner`.
+
+**No new primitive.** The staff-session bar is a page-level composition (an `role="status"` strip in the
+existing tint grammar), not a component the design system lacks.
+
+## Colour and shape roles (`--el-*` only — palette, not grey-only, finding #54)
+
+| Element                               | Token(s)                                                               | Why                                                                 |
+| ------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Suspend · full-access primary         | `--el-danger` fill + `--el-danger-text` ink                            | the shipped danger button; the ONLY legal use of `--el-danger-text` |
+| Suspended / Off / Hash mismatch pill  | `--el-tint-rose` + `--el-text-strong`, glyph `--el-danger`             | hue in the tint and the glyph, label on strong ink (finding #35)    |
+| Active / On / Chain verified pill     | `--el-tint-mint` + `--el-text-strong`                                  | the success family                                                  |
+| Grant pill · success toast            | `--el-tint-mint` + `--el-text-strong`                                  | grant and reactivate read as success                                |
+| Adjustment pill · warnings in dialogs | `--el-tint-yellow` + `--el-text-strong`, glyph `--el-warning`          | a correction or a caution, never danger                             |
+| Top-up pill                           | `--el-tint-sky` + `--el-text-strong`                                   | money in from the customer — informational                          |
+| Staff session bar, read-only          | `--el-tint-yellow` + `--el-text-strong`, glyph `--el-warning`          | high-visibility, not alarming                                       |
+| Staff session bar, full access        | `--el-tint-rose` + `--el-text-strong`, glyph `--el-danger`             | writes are real                                                     |
+| Switch                                | `--el-switch-on` / `-on-border` / `-off-border` / `-knob(-off)`        | as the design system ships it                                       |
+| Flag and action keys                  | `--el-text-identifier`, monospace                                      | the identifier ink                                                  |
+| Captions, cell notes, hints           | `--el-text-secondary`                                                  | never `--el-text-muted` on a surface or tint                        |
+| Radius · padding · height             | `--radius-modal/card/input/badge/control`, `--spacing-*`, `--height-*` | the shape axis                                                      |
+
+**Reactivate is a secondary button with a check glyph**, not a green fill: the design system has no success-filled
+button, and the success hue is carried by the **Active** pill the action produces.
+
+## Copy (en — the `platformAdmin` namespace; MOTIR-752 adds a `zh` twin of each)
+
+| Key                                                 | String                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `drill.tab.operations`                              | Operations                                                                                                                                                                                                                                                                                                                                     |
+| `ops.status.title` / `.subtitle`                    | Organization status / Suspending an organization refuses every member of every workspace under it.                                                                                                                                                                                                                                             |
+| `ops.status.active`                                 | {members} members across {workspaces} workspaces can sign in and work.                                                                                                                                                                                                                                                                         |
+| `ops.status.suspendedSince`                         | Since {at} · by {operator} · “{reason}”                                                                                                                                                                                                                                                                                                        |
+| `ops.suspend` / `ops.reactivate`                    | Suspend organization / Reactivate organization                                                                                                                                                                                                                                                                                                 |
+| `ops.suspend.title`                                 | Suspend {org}?                                                                                                                                                                                                                                                                                                                                 |
+| `ops.suspend.lead`                                  | Suspension is the lever for non-payment or abuse. From the moment you confirm:                                                                                                                                                                                                                                                                 |
+| `ops.suspend.c1` / `.c2` / `.c3`                    | All {members} members of all {workspaces} workspaces are refused at their next request and see that the organization is suspended. / New planning jobs and agent runs are refused; running ones are stopped. / Nothing is deleted. Work items, repositories and the ledger stay exactly as they are, and another superadmin can reactivate it. |
+| `ops.suspend.confirm`                               | Suspend {org}                                                                                                                                                                                                                                                                                                                                  |
+| `ops.reactivate.title` / `.body`                    | Reactivate {org}? / All {members} members can sign in and work again from their next request. Kill-switches keep their own state — a switch you turned off stays off.                                                                                                                                                                          |
+| `ops.typeToConfirm`                                 | Type {slug} to confirm                                                                                                                                                                                                                                                                                                                         |
+| `ops.reason.label` / `.placeholder`                 | Reason — required, written to the audit log / Why are you doing this? Name the ticket if there is one.                                                                                                                                                                                                                                         |
+| `ops.reason.hint`                                   | Shown to any operator reading this organization later. “Support” on its own answers nothing.                                                                                                                                                                                                                                                   |
+| `ops.credits.title` / `.subtitle`                   | Credits & plan / Credits are Motir’s internal unit, never a currency. Read from the credit service; every write is recorded.                                                                                                                                                                                                                   |
+| `ops.credits.balance` / `.plan`                     | Balance / AI plan                                                                                                                                                                                                                                                                                                                              |
+| `ops.credits.grant` / `.adjust` / `.changePlan`     | Grant credits / Adjust balance / Change plan                                                                                                                                                                                                                                                                                                   |
+| `ops.grant.title` / `.body`                         | Grant credits to {org} / Adds credits to the org’s balance as a grant row in its ledger. It changes no plan and touches no Stripe object.                                                                                                                                                                                                      |
+| `ops.grant.amount` / `.confirm`                     | Credits to grant / Grant {n} credits                                                                                                                                                                                                                                                                                                           |
+| `ops.grant.large`                                   | This is a large grant — {threshold} credits or more, more than this org’s whole monthly allotment. Type the org’s slug to confirm.                                                                                                                                                                                                             |
+| `ops.adjust.title` / `.body`                        | Adjust {org}’s balance / Corrects the balance with an adjustment row — for a billing mistake. A goodwill credit is a grant, not an adjustment.                                                                                                                                                                                                 |
+| `ops.adjust.amount` / `.hint` / `.confirm`          | Change in credits / Use − to remove credits. The balance may not go below zero. / Adjust by {n} credits                                                                                                                                                                                                                                        |
+| `ops.balanceAfter`                                  | Balance after: {after} credits (now {now})                                                                                                                                                                                                                                                                                                     |
+| `ops.plan.title` / `.body` / `.current`             | Change {org}’s AI plan / Sets the tier the org’s monthly credit allotment is read from. The tiers are read from the credit service. / Currently {tier} · {allotment} credits a month.                                                                                                                                                          |
+| `ops.plan.stripe`                                   | {org} pays for its plan through Stripe. This changes the tier Motir reads; it does not change or cancel the Stripe subscription.                                                                                                                                                                                                               |
+| `ops.plan.confirm`                                  | Change plan to {tier}                                                                                                                                                                                                                                                                                                                          |
+| `ops.result.granted`                                | Granted {n} credits to {org}. The ledger and the audit log both carry it.                                                                                                                                                                                                                                                                      |
+| `ops.result.creditUnreachable`                      | Couldn’t reach the credit service. Nothing was granted and nothing was recorded. Try again in a moment.                                                                                                                                                                                                                                        |
+| `ops.ledger.col.*`                                  | When / Kind / Credits / Balance after / By / Reason                                                                                                                                                                                                                                                                                            |
+| `ops.ledger.kind.*`                                 | Grant / Adjustment / Top-up / Debit · planning / Debit · agent run / Debit · CI / Debit · search / Internal offset                                                                                                                                                                                                                             |
+| `ops.ledger.empty.title` / `.body`                  | No credit transactions yet / {org} has not been charged, topped up or granted anything. Its balance is 0 credits.                                                                                                                                                                                                                              |
+| `ops.credits.error.title` / `.body`                 | Couldn’t load credits / The credit service didn’t answer, so the balance, plan and ledger aren’t shown. Nothing is zero — the figures simply aren’t loaded. Status and kill-switches above still work.                                                                                                                                         |
+| `ops.switches.title` / `.subtitle`                  | Kill-switches / Durable per-organization switches, ON by default. A change takes effect on the org’s next request — no deploy.                                                                                                                                                                                                                 |
+| `ops.switches.col.*`                                | Switch / When OFF / State / Last changed                                                                                                                                                                                                                                                                                                       |
+| `ops.switches.on` / `.off` / `.turnOff` / `.turnOn` | On / Off — disabled / Turn off / Turn on                                                                                                                                                                                                                                                                                                       |
+| `ops.switch.ai_planning`                            | AI planning — New planning jobs are refused with “planning is paused for your organization”. Jobs already running finish.                                                                                                                                                                                                                      |
+| `ops.switch.hosted_runs`                            | Hosted agent runs — New agent runs and agent instances are refused. Running containers are stopped.                                                                                                                                                                                                                                            |
+| `ops.switch.web_search`                             | Web search — Planning and agents run without web search; a search call returns “not available”.                                                                                                                                                                                                                                                |
+| `ops.switch.confirmOff.title`                       | Turn off {switch} for {org}? (body: the switch's own "When OFF" line, then the reason field)                                                                                                                                                                                                                                                   |
+| `ops.readOnlyRole`                                  | Only a superadmin can change these. You can see them as an {role}.                                                                                                                                                                                                                                                                             |
+| `ops.audit.title` / `.subtitle` / `.open`           | Platform actions on this organization / Every operator write on this org, newest first. Append-only. / Open in the audit log                                                                                                                                                                                                                   |
+| `member.suspended.title` / `.body`                  | {org} is suspended / Your organization’s access to Motir is paused. Nothing has been deleted. Contact your organization’s owner, or write to support@motir.co.                                                                                                                                                                                 |
+| `imp.viewAs`                                        | View as {firstName}                                                                                                                                                                                                                                                                                                                            |
+| `imp.title` / `.body`                               | View Motir as {name} / Opens {org}’s app as {email} in a staff session. A banner stays on every page until you exit or the session expires.                                                                                                                                                                                                    |
+| `imp.access` / `.readOnly` / `.full`                | Access / Read-only / Full access                                                                                                                                                                                                                                                                                                               |
+| `imp.length` / `.lengthHint`                        | Ends after / At most 60 minutes. A new session needs a new reason.                                                                                                                                                                                                                                                                             |
+| `imp.readOnlyNote`                                  | Read-only: you see exactly what {firstName} sees, and every control that would change something is disabled.                                                                                                                                                                                                                                   |
+| `imp.fullWarning`                                   | Full access acts as {firstName}. Anything you change is real and lands in {org}’s data, recorded as made by you on {firstName}’s behalf.                                                                                                                                                                                                       |
+| `imp.reasonHint`                                    | Recorded on the session and on every action taken in it.                                                                                                                                                                                                                                                                                       |
+| `imp.start.readOnly` / `.full`                      | Start read-only session / Start full-access session                                                                                                                                                                                                                                                                                            |
+| `imp.bar.readOnly`                                  | Viewing as {name} ({email}) · {org} — staff session, read-only, ends at {time}                                                                                                                                                                                                                                                                 |
+| `imp.bar.full`                                      | Acting as {name} ({email}) · {org} — staff session, full access, every change is yours, ends at {time}                                                                                                                                                                                                                                         |
+| `imp.bar.exit` / `imp.disabledTip`                  | Exit session / Read-only staff session                                                                                                                                                                                                                                                                                                         |
+| `imp.ended.title` / `.body`                         | Your staff session ended at {time} / You are no longer viewing Motir as {name}. The session and everything you opened in it are in the audit log.                                                                                                                                                                                              |
+| `imp.ended.back` / `.again`                         | Back to the console / Start a new session                                                                                                                                                                                                                                                                                                      |
+| `nav.auditLog`                                      | Audit log                                                                                                                                                                                                                                                                                                                                      |
+| `audit.title` / `.subtitle`                         | Audit log / Every platform-staff action, newest first. Append-only and hash-chained: an entry changed after it was written breaks the chain from that entry on.                                                                                                                                                                                |
+| `audit.chain.ok` / `.okDetail`                      | Chain verified / All {count} entries hash-chain intact, checked through #{last} at {time}.                                                                                                                                                                                                                                                     |
+| `audit.chain.verify`                                | Verify again                                                                                                                                                                                                                                                                                                                                   |
+| `audit.chain.broken`                                | The chain is broken at entry #{n} ({at}). That entry no longer matches the hash recorded for it, so it and the {after} entries after it can’t be trusted as written. This check changed nothing; the entries are shown as stored.                                                                                                              |
+| `audit.chain.show` / `.mismatch` / `.unverified`    | Show #{n} / Hash mismatch / Unverified                                                                                                                                                                                                                                                                                                         |
+| `audit.filter.*`                                    | Search reasons and targets / Operator / Tenant / Action / When / Writes / Writes & reads / Anyone / Any organization / Any write                                                                                                                                                                                                               |
+| `audit.col.*`                                       | When (UTC) / Operator / Action / Target / Reason                                                                                                                                                                                                                                                                                               |
+| `audit.detail.*`                                    | Entry / Actor / Action / Target / Reason / Payload / Hash · chained to #{prev}                                                                                                                                                                                                                                                                 |
+| `audit.empty.title` / `.body`                       | No entries match these filters / Nothing was recorded for “{query}” by anyone in {period}. Widen the dates, or switch to Writes & reads.                                                                                                                                                                                                       |
+| `audit.clear`                                       | Clear filters                                                                                                                                                                                                                                                                                                                                  |
+
+## The audit vocabulary this asset draws (PROPOSED — each owning card adds its members to `PLATFORM_AUDIT_ACTIONS` and ADR §7)
+
+Named by the file's own rule — the domain is the SUBJECT — so they sit beside `org.internal_billing_set`:
+`org.credit_grant`, `org.credit_adjust`, `org.plan_set` (MOTIR-747) · `org.suspend`, `org.reactivate`
+(MOTIR-748) · `org.kill_switch_off`, `org.kill_switch_on` (MOTIR-750) · `user.impersonation_start`,
+`user.impersonation_end` (MOTIR-749; every request inside a session carries the session id in `metadata`) — all
+`reason: 'required'` except `user.impersonation_end`, whose reason is the session's. The existing
+`org.internal_billing_set/unset` and `ai.planner_model.set` rows are sources the log shows like any other,
+not gaps to close (the story's carve-out).
+
+## Allocation — which card builds what this asset draws
+
+| Element                                                                              | Card      |
+| ------------------------------------------------------------------------------------ | --------- |
+| Grant / adjust / change plan, the ledger read, the large-grant threshold             | MOTIR-747 |
+| Org suspend / reactivate, the member-side refusal, the Suspended pill everywhere     | MOTIR-748 |
+| View as, the session (mode, time-box, bar, read-only enforcement, ended page)        | MOTIR-749 |
+| The switch registry, the per-org store, the evaluation on each request               | MOTIR-750 |
+| The hash chain, the verifier, the audit-log page and its filters, the org slice card | MOTIR-751 |
+| The Operations tab, the rail row, every rendered state above, en + zh strings        | MOTIR-752 |
+
+## Open questions the asset does not settle (for the owning card, not for the reviewer)
+
+- **Plan change vs Stripe** (MOTIR-747): the dialog promises the Stripe subscription is untouched. Whether the
+  next Stripe event then overwrites the manual tier is a rule MOTIR-747 must decide and, if so, say in the warning.
+- **Large-grant threshold** (MOTIR-747): 10,000 credits is a proposal.
+- **Full-access two-person rule** (MOTIR-749): the ADR names it as possible. The asset draws one operator; a
+  second approver would be a new state on Panel 4, not a change to the bar.
+
+## What this amendment deliberately does NOT draw (the deferred future 10.x)
+
+- **Abuse / content moderation** — a trust-and-safety queue beyond the blunt org-suspend lever.
+- **DSAR / compliance export and right-to-erasure.**
+- **Platform-wide status / maintenance banners** — distinct from the per-session staff bar drawn here.
+- **Email-delivery ops** — bounces, complaints, suppression lists.
+- **Granting / revoking `platformRole`** (ADR §7's last row, no card yet).
+- **The internal-billing classification control** — shipped by MOTIR-4568 (Panel 12); not re-drawn or moved.

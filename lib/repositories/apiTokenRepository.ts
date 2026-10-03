@@ -5,6 +5,18 @@ import { Prisma, type ApiToken } from '@/generated/prisma/client';
  * return shape, so the bearer gate resolves token → user in one round-trip. */
 export type ApiTokenWithUser = Prisma.ApiTokenGetPayload<{ include: { user: true } }>;
 
+/** {@link ApiTokenWithUser} plus the bound workspace's organization STATE — the
+ * verify path's shape, so the bearer gate refuses a suspended organization's
+ * tokens (MOTIR-748) in the same query that resolves the token. */
+export type ApiTokenWithUserAndOrgState = Prisma.ApiTokenGetPayload<{
+  include: {
+    user: true;
+    workspace: {
+      select: { organization: { select: { id: true; name: true; suspendedAt: true } } };
+    };
+  };
+}>;
+
 /** An `api_token` row with its bound workspace + that workspace's organization
  * eager-loaded (bug 7.21) — the list/create return shape, so the DTO can label
  * each token with the org → workspace it belongs to without a second query. */
@@ -121,8 +133,16 @@ export const apiTokenRepository = {
   async findByTokenHash(
     tokenHash: string,
     tx: Prisma.TransactionClient,
-  ): Promise<ApiTokenWithUser | null> {
-    return tx.apiToken.findUnique({ where: { tokenHash }, include: { user: true } });
+  ): Promise<ApiTokenWithUserAndOrgState | null> {
+    return tx.apiToken.findUnique({
+      where: { tokenHash },
+      include: {
+        user: true,
+        workspace: {
+          select: { organization: { select: { id: true, name: true, suspendedAt: true } } },
+        },
+      },
+    });
   },
 
   /** One token by id, scoped to its owner — the revoke ownership probe

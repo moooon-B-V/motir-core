@@ -1112,6 +1112,73 @@ describe('a settle after a delete has begun changes nothing', () => {
   });
 });
 
+describe('a failed agent’s machine is stopped (MOTIR-7343)', () => {
+  // `failed` is a RESTING state, like `hibernated`: its interval is closed `lost`
+  // and its slot released, so nobody is charged for its machine. A move to it
+  // that left the machine running leaked that machine to the attribution
+  // reconciler, which stopped it unbilled 10 minutes later — in production, after
+  // a clone cut off by the 30-second exec timeout (MOTIR-7405).
+  const machineState = async () => {
+    const row = (await instances())[0]!;
+    return (await fleet.describePersistent(handleFor(row))).state;
+  };
+
+  it('a clone that fails on a RUNNING machine stops it', async () => {
+    await seedRepo('acme', 'web');
+    fleet.setNextExecResult({ exitCode: 128, stdout: '', stderr: 'fatal: repository not found' });
+    const dto = await create();
+    expect(dto.state).toBe('failed');
+    expect(await machineState()).toBe('stopped');
+    // Stopped, never destroyed: the home volume is kept and the agent wakes again.
+    expect(fleet.liveVolumeIds()).toHaveLength(1);
+    expect((await lifecycle.wake(KEY(), dto.id, fx.ctx)).state).toBe('running');
+  });
+
+  it('a boot failed at the deadline stops a machine that may still come up', async () => {
+    fleet.setBootBehaviour('never_start');
+    await create();
+    const row = (await instances())[0]!;
+    virtualNow = row.stateChangedAt.getTime() + INSTANCE_BOOT_DEADLINE_MS;
+    expect(await driveBoot(row.id)).toBe('failed');
+    expect(await machineState()).toBe('stopped');
+  });
+
+  it('a machine the sweep finds failed under a running agent is stopped', async () => {
+    const dto = await create();
+    vi.spyOn(fleet, 'describePersistent').mockResolvedValueOnce({
+      machineId: (await instances())[0]!.machineId!,
+      state: 'failed',
+      providerState: 'failed',
+      startedAt: null,
+      stoppedAt: null,
+      events: [],
+    });
+    expect(await lifecycle.reconcileRunning(dto.id)).toBe('failed');
+    vi.mocked(fleet.describePersistent).mockRestore();
+    expect(await machineState()).toBe('stopped');
+  });
+
+  it('a stop the provider refuses still fails the agent, and is logged', async () => {
+    await seedRepo('acme', 'web');
+    fleet.setNextExecResult({ exitCode: 128, stdout: '', stderr: 'fatal: repository not found' });
+    fleet.failNextStop('fly said no');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const dto = await create();
+    expect(dto.state).toBe('failed');
+    expect(dto.failureReason).toMatch(/repository not found/);
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('stop after failure failed'))).toBe(
+      true,
+    );
+  });
+
+  it('a create whose machine was never made fails without asking the provider to stop anything', async () => {
+    fleet.failNextMachineCreate('no capacity in iad');
+    const stop = vi.spyOn(fleet, 'stop');
+    expect((await create()).state).toBe('failed');
+    expect(stop).not.toHaveBeenCalled();
+  });
+});
+
 describe('owner isolation (§8)', () => {
   it('another member cannot list, wake, hibernate or delete my instance — even on the same project', async () => {
     const dto = await create();
