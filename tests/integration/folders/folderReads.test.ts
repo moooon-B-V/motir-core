@@ -163,6 +163,7 @@ describe('describeFolderDeletion', () => {
       name: 'Doomed',
       childFolderCount: 2,
       workItemCount: 3,
+      pageCount: 0,
       destination: { folderId: later.id, name: 'Later' },
     });
 
@@ -186,6 +187,7 @@ describe('describeFolderDeletion', () => {
       name: 'Empty',
       childFolderCount: 0,
       workItemCount: 0,
+      pageCount: 0,
       destination: { folderId: null, name: null },
     });
   });

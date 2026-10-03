@@ -77,7 +77,7 @@ test.describe('@smoke the page at its own address', () => {
     await expect(page).toHaveTitle('Release runbook');
   });
 
-  test('the Pages section: the rail entry, the empty index, New page, then the row (MOTIR-7300)', async ({
+  test('the Pages section: the rail entry, the tree, New page, then the row (MOTIR-7300 · MOTIR-7373)', async ({
     page,
   }) => {
     await signUp(page, USER);
@@ -86,14 +86,16 @@ test.describe('@smoke the page at its own address', () => {
     expect(res?.status()).toBe(200);
     await expect(page.getByRole('link', { name: 'Pages', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Pages', level: 1 })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'No pages yet' })).toBeVisible();
+    // Every project is born with its Bugs folder, and `/pages` shows every
+    // project folder (design-notes § The page tree) — so a new project's tree
+    // is that folder, not the empty state.
+    const tree = page.getByRole('tree', { name: 'Folders and pages in this project' });
+    await expect(tree.getByRole('treeitem', { name: 'Bugs' })).toBeVisible();
 
-    // A member is offered New page twice on an empty index — the header's and the
-    // empty state's (design-notes § State 3); either creates the page.
     const created = page.waitForResponse(
       (r) => r.url().endsWith('/api/pages') && r.request().method() === 'POST',
     );
-    await page.getByRole('button', { name: 'New page' }).first().click();
+    await page.getByRole('button', { name: 'New page' }).click();
     const response = await created;
     expect(response.status()).toBe(201);
     const { id } = (await response.json()) as { id: string };
@@ -101,12 +103,55 @@ test.describe('@smoke the page at its own address', () => {
     await expect(page.getByRole('textbox', { name: 'Page body' })).toBeVisible();
 
     await page.goto('/pages');
-    const list = page.getByRole('list', { name: 'Pages in this project' });
-    const row = list.getByRole('link');
-    await expect(row).toHaveCount(1);
-    await expect(row).toHaveAttribute('href', `/pages/${id}`);
-    await expect(row).toContainText('Untitled');
-    await expect(row).toContainText('by you');
+    const row = tree.getByRole('treeitem', { name: 'Untitled' });
+    await expect(row).toHaveAttribute('aria-level', '1');
+    await expect(row.getByRole('link')).toHaveAttribute('href', `/pages/${id}`);
+  });
+
+  test('the tree opens level by level: folder › page › sub-page (MOTIR-7373)', async ({ page }) => {
+    await signUp(page, USER);
+
+    // Seeded through the real doors: the root level names the project's folder,
+    // and each create names its parent.
+    const rootRead = await page.request.get('/api/pages/tree?parent=root');
+    expect(rootRead.status(), await rootRead.text()).toBe(200);
+    const root = (await rootRead.json()) as { rows: { kind: string; id: string; name?: string }[] };
+    const folder = root.rows.find((r) => r.kind === 'folder' && r.name === 'Bugs');
+    expect(folder, JSON.stringify(root)).toBeDefined();
+
+    const create = async (title: string, parent: { kind: string; id: string }) => {
+      const r = await page.request.post('/api/pages', { data: { title, parent } });
+      expect(r.status(), await r.text()).toBe(201);
+      return ((await r.json()) as { id: string }).id;
+    };
+    const runbookId = await create('Release runbook', { kind: 'folder', id: folder!.id });
+    const subId = await create('Rollback steps', { kind: 'page', id: runbookId });
+
+    await page.goto('/pages');
+    const tree = page.getByRole('tree', { name: 'Folders and pages in this project' });
+
+    // Each level is read when its row is expanded; wait on THAT read's answer.
+    const folderLevel = page.waitForResponse(
+      (r) =>
+        new URL(r.url()).pathname === '/api/pages/tree' &&
+        new URL(r.url()).searchParams.get('parent') === `folder:${folder!.id}`,
+    );
+    await tree.getByRole('treeitem', { name: 'Bugs' }).click();
+    expect((await folderLevel).status()).toBe(200);
+    const runbook = tree.getByRole('treeitem', { name: 'Release runbook' });
+    await expect(runbook).toHaveAttribute('aria-level', '2');
+    await expect(runbook).toHaveAttribute('aria-expanded', 'false');
+
+    const pageLevel = page.waitForResponse(
+      (r) =>
+        new URL(r.url()).pathname === '/api/pages/tree' &&
+        new URL(r.url()).searchParams.get('parent') === `page:${runbookId}`,
+    );
+    await runbook.getByRole('button', { name: 'Expand Release runbook' }).click();
+    expect((await pageLevel).status()).toBe(200);
+    const sub = tree.getByRole('treeitem', { name: 'Rollback steps' });
+    await expect(sub).toHaveAttribute('aria-level', '3');
+    await expect(sub.getByRole('link')).toHaveAttribute('href', `/pages/${subId}`);
   });
 
   test('an address that names no page answers 404', async ({ page }) => {

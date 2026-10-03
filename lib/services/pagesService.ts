@@ -1,5 +1,6 @@
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { folderRepository } from '@/lib/repositories/folderRepository';
 import { pageRepository } from '@/lib/repositories/pageRepository';
 import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -7,7 +8,12 @@ import {
   toBase64,
   toLockedPageRow,
   toPageDto,
+  toPageLevelRow,
   toPageListItemDto,
+  toPageMoveResultDto,
+  toPageTrailDto,
+  toPageTreeFolderRowDto,
+  toPageTreePageRowDto,
   toPageVersionDto,
   toPageVersionListItemDto,
   toPageVersionRow,
@@ -15,26 +21,38 @@ import {
 import {
   PAGE_LEVEL_PAGE_SIZE,
   PAGE_LEVEL_PAGE_SIZE_MAX,
+  PageFolderNotFoundError,
+  PageLevelCursorInvalidError,
   PageNotFoundError,
   PageVersionNotFoundError,
   createPage as createPageProcedure,
+  movePage as movePageProcedure,
   pageStoreFor,
+  parsePlacement,
   renamePage as renamePageProcedure,
   restorePageVersion as restorePageVersionProcedure,
   savePageUpdate as savePageUpdateProcedure,
   systemClock,
+  type PagePlacement,
   type PageRow,
   type PageStore,
 } from '@/lib/pages';
 import type {
   CreatePageInput,
   GetPageInput,
+  GetPageTrailInput,
+  ListPageTreeLevelInput,
   GetPageVersionInput,
   ListPageVersionsInput,
   ListPagesInput,
+  MovePageInput,
   PageDto,
   PageListItemDto,
+  PageMoveResultDto,
   PageSummaryDto,
+  PageTrailDto,
+  PageTreeLevelDto,
+  PageTreeRowDto,
   PageVersionDto,
   PageVersionListDto,
   RenamePageInput,
@@ -43,6 +61,7 @@ import type {
   SavePageResultDto,
   SavePageUpdateInput,
 } from '@/lib/dto/pages';
+import type { Prisma } from '@/generated/prisma/client';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // Page service (Story MOTIR-5752 · MOTIR-7277) — who may create, read, rename and
@@ -67,11 +86,23 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //    create mints its position after `lockSiblings`. That is why two concurrent
 //    saves both land and two concurrent creates take distinct positions —
 //    `tests/services/pagesService.integration.test.ts` proves it with real
-//    parallel transactions. A RESTORE (MOTIR-5754) is the third: it reads the
-//    version and the current state under the same `lockPage`, so it serialises
-//    with a save — `tests/services/pagesService.history.integration.test.ts`.
+//    parallel transactions. A MOVE takes the same project structure lock first
+//    (`movePage` in the package), so a move, a create and another move
+//    serialise, and a refusal anywhere rolls the whole move back. A RESTORE
+//    (MOTIR-5754) reads the version and the current state under the same
+//    `lockPage`, so it serialises with a save —
+//    `tests/services/pagesService.history.integration.test.ts`.
 //
-// 4. HISTORY IS READ UNDER `page:view` AND RESTORED UNDER `page:edit` (§5).
+// 4. A TREE LEVEL IS READ ONE PARENT AT A TIME, NEVER AS A PROJECT WALK
+//    (`listTreeLevel`, MOTIR-7370). At the root or in a folder the level is two
+//    BANDS — its child folders, then its pages — each ordered by
+//    `(position, id) COLLATE "C"`; under a page it is the page band alone. ONE
+//    opaque keyset cursor spans both: it names the band and the last
+//    `(position, id)` served, so a page boundary never shifts when a row is
+//    created or moved between two reads, and walking the level visits each row
+//    exactly once.
+//
+// 5. HISTORY IS READ UNDER `page:view` AND RESTORED UNDER `page:edit` (§5).
 
 /** The page, refused as unknown unless it lives in `projectId`. */
 async function findInProject(store: PageStore, projectId: string, pageId: string) {
@@ -91,6 +122,69 @@ function scopeTo(ctx: ServiceContext, projectId: string) {
   return { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId };
 }
 
+/** The level-read cursor's decoded form: which band, and the last row served in it. */
+interface LevelCursor {
+  band: 'folder' | 'page';
+  position: string;
+  id: string;
+}
+
+/** Encode a level cursor — opaque base64url of the band and the `(position, id)` seek key. */
+function encodeLevelCursor(cursor: LevelCursor): string {
+  return Buffer.from(JSON.stringify([cursor.band, cursor.position, cursor.id])).toString(
+    'base64url',
+  );
+}
+
+/** Decode a level cursor, refusing anything this service did not issue. */
+function decodeLevelCursor(raw: string): LevelCursor {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+  } catch {
+    throw new PageLevelCursorInvalidError();
+  }
+  if (
+    !Array.isArray(parsed) ||
+    parsed.length !== 3 ||
+    (parsed[0] !== 'folder' && parsed[0] !== 'page') ||
+    typeof parsed[1] !== 'string' ||
+    typeof parsed[2] !== 'string' ||
+    parsed[1] === '' ||
+    parsed[2] === ''
+  ) {
+    throw new PageLevelCursorInvalidError();
+  }
+  return { band: parsed[0], position: parsed[1], id: parsed[2] };
+}
+
+/** Rows per level read: the default when unset, held to `[1, PAGE_LEVEL_PAGE_SIZE_MAX]`. */
+function clampLevelLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit)) return PAGE_LEVEL_PAGE_SIZE;
+  return Math.min(Math.max(1, Math.floor(limit)), PAGE_LEVEL_PAGE_SIZE_MAX);
+}
+
+/**
+ * Refuse a level parent that is not in `projectId` — a folder as the package's
+ * `PageFolderNotFoundError`, a page as `PageNotFoundError` — so reading a level
+ * cannot confirm that a folder or page exists in another project.
+ */
+async function assertLevelParent(
+  projectId: string,
+  parent: PagePlacement,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (parent.kind === 'folder') {
+    const folder = await folderRepository.findById(parent.folderId, tx);
+    if (!folder || folder.projectId !== projectId) {
+      throw new PageFolderNotFoundError(parent.folderId);
+    }
+  } else if (parent.kind === 'page') {
+    const page = await pageRepository.findById(parent.pageId, tx);
+    if (!page || page.projectId !== projectId) throw new PageNotFoundError(parent.pageId);
+  }
+}
+
 function toSummary(row: PageRow): PageSummaryDto {
   return {
     id: row.id,
@@ -103,8 +197,15 @@ function toSummary(row: PageRow): PageSummaryDto {
 }
 
 export const pagesService = {
-  /** Create an empty page, last at the project's root. `page:edit`. */
+  /**
+   * Create an empty page, LAST under its parent — the project root (the
+   * default), a folder or a page. `page:edit`. The parent is parsed by the
+   * package (`parsePlacement`), so a work item or any other kind is refused as
+   * `PAGE_PARENT_NOT_ALLOWED`; a parent missing, in another project or too deep
+   * is refused by the package's create before anything is written.
+   */
   async createPage(ctx: ServiceContext, input: CreatePageInput): Promise<PageSummaryDto> {
+    const parent = parsePlacement(input.parent ?? { kind: 'root' });
     return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
       const row = await createPageProcedure(pageStoreFor(tx), systemClock, {
@@ -112,8 +213,141 @@ export const pagesService = {
         projectId: input.projectId,
         actorId: ctx.userId,
         title: input.title,
+        parent,
       });
       return toSummary(row);
+    });
+  },
+
+  /**
+   * Move a page — re-parent it, reorder it among its siblings, or both — with
+   * its whole subtree, in ONE transaction. `page:edit`. The package's `movePage`
+   * takes the project's structure lock, checks the cycle, depth, cross-project
+   * and neighbour rules, writes the page and rewrites every descendant's
+   * ancestors; any refusal rolls all of it back. Returns where the page now sits.
+   */
+  async movePage(ctx: ServiceContext, input: MovePageInput): Promise<PageMoveResultDto> {
+    const parent = parsePlacement(input.parent);
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
+      const { page, moved } = await movePageProcedure(pageStoreFor(tx), {
+        pageId: input.pageId,
+        projectId: input.projectId,
+        parent,
+        beforeId: input.beforeId ?? null,
+        afterId: input.afterId ?? null,
+        actorId: ctx.userId,
+      });
+      return toPageMoveResultDto(page, moved);
+    });
+  },
+
+  /**
+   * One read of a `/pages` tree level. `page:view`. At the root or in a folder:
+   * the level's child FOLDERS, then its PAGES; under a page: its sub-pages only.
+   * Keyset-paged across both bands by one opaque cursor (contract 4 above);
+   * `limit` defaults to `PAGE_LEVEL_PAGE_SIZE` and is capped at
+   * `PAGE_LEVEL_PAGE_SIZE_MAX`. A folder or page parent outside the project is
+   * refused as not found.
+   */
+  async listTreeLevel(
+    ctx: ServiceContext,
+    input: ListPageTreeLevelInput,
+  ): Promise<PageTreeLevelDto> {
+    const parent = parsePlacement(input.parent);
+    const limit = clampLevelLimit(input.limit);
+    const cursor = input.cursor ? decodeLevelCursor(input.cursor) : null;
+    const hasFolderBand = parent.kind !== 'page';
+    if (cursor?.band === 'folder' && !hasFolderBand) throw new PageLevelCursorInvalidError();
+
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      await assertLevelParent(input.projectId, parent, tx);
+
+      const rows: PageTreeRowDto[] = [];
+      let lastFolder: LevelCursor | null = null;
+
+      // Band 1 — the folders. Skipped under a page, and once the cursor is past it.
+      if (hasFolderBand && (cursor === null || cursor.band === 'folder')) {
+        const folders = await folderRepository.findLevelForPages(
+          input.projectId,
+          parent.kind === 'folder' ? parent.folderId : null,
+          cursor,
+          limit + 1,
+          tx,
+        );
+        const served = folders.slice(0, limit);
+        rows.push(...served.map(toPageTreeFolderRowDto));
+        const last = served[served.length - 1];
+        if (last) lastFolder = { band: 'folder', position: last.position, id: last.id };
+        if (folders.length > limit) {
+          return { rows, nextCursor: encodeLevelCursor(lastFolder!) };
+        }
+      }
+
+      // Band 2 — the pages, from the start or after the cursor's page. Read one
+      // more than the room left, to learn whether anything follows.
+      const room = limit - rows.length;
+      const pages = (
+        await pageRepository.findLevelAfter(
+          input.projectId,
+          parent,
+          cursor?.band === 'page' ? cursor : null,
+          room + 1,
+          tx,
+        )
+      ).map(toPageLevelRow);
+      const served = pages.slice(0, room);
+      rows.push(...served.map(toPageTreePageRowDto));
+      if (pages.length <= room) return { rows, nextCursor: null };
+      const last = served[served.length - 1];
+      // A full folder band with pages still to come: the next read resumes after
+      // the last folder, finds the folder band spent, and starts the pages.
+      const next: LevelCursor = last
+        ? { band: 'page', position: last.position, id: last.id }
+        : lastFolder!;
+      return { rows, nextCursor: encodeLevelCursor(next) };
+    });
+  },
+
+  /**
+   * A page's breadcrumb trail, root-first, the page itself excluded. `page:view`.
+   * The folders are the chain its TOPMOST page is filed in (a sub-page carries no
+   * folder — it follows its top page), read as `foldersService.getFolderTrail`
+   * reads it; the pages are its `ancestorPageIds`, named in one batch read.
+   */
+  async getPageTrail(ctx: ServiceContext, input: GetPageTrailInput): Promise<PageTrailDto> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      const page = await pageRepository.findById(input.pageId, tx);
+      if (!page || page.projectId !== input.projectId) throw new PageNotFoundError(input.pageId);
+
+      const ancestorIds = page.ancestorPageIds;
+      const named = await pageRepository.findTrailByIds(ancestorIds, tx);
+      const byId = new Map(named.map((p) => [p.id, p]));
+      const pages = ancestorIds.flatMap((id) => {
+        const row = byId.get(id);
+        return row ? [{ id: row.id, title: row.title }] : [];
+      });
+
+      const topFolderId =
+        ancestorIds.length === 0 ? page.folderId : (byId.get(ancestorIds[0]!)?.folderId ?? null);
+      const folders: Array<{ id: string; name: string }> = [];
+      if (topFolderId !== null) {
+        const ids = await folderRepository.findAncestorIds(topFolderId, tx);
+        const folderById = new Map(
+          (await folderRepository.findByIds(ids, tx)).map((f) => [f.id, f]),
+        );
+        let at: string | null = topFolderId;
+        while (at !== null && folders.length <= ids.length) {
+          const row = folderById.get(at);
+          if (!row) break;
+          folders.push({ id: row.id, name: row.name });
+          at = row.parentFolderId;
+        }
+        folders.reverse();
+      }
+      return toPageTrailDto(folders, pages);
     });
   },
 
@@ -139,8 +373,9 @@ export const pagesService = {
 
   /**
    * The project's pages, most recently edited first, each with its last editor's
-   * display name — the `/pages` index (MOTIR-7300). `page:view`. Flat: the tree
-   * is MOTIR-5753's. Two reads in the one transaction: the pages (no body
+   * display name — the `/pages` index (MOTIR-7300). `page:view`. Flat, and KEPT
+   * beside {@link listTreeLevel} for its callers (the `/pages` index page) until
+   * the tree replaces it there. Two reads in the one transaction: the pages (no body
    * columns), then the editors' names in one batch, never one per row.
    */
   async listPages(ctx: ServiceContext, input: ListPagesInput): Promise<PageListItemDto[]> {

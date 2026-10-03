@@ -11121,7 +11121,7 @@
     "delete": "删除…",
     "deleteTitle": "删除文件夹“{name}”？",
     "deleteLead": "只会移除文件夹。其中归档的所有内容仍保留在项目中。",
-    "deleteMoves": "<strong>{kinds, select, both {{folders} 个文件夹和 {items} 个工作项} folders {{folders} 个文件夹} other {{items} 个工作项}}</strong>将移动到<strong>{destination}</strong>。不会删除任何工作项。",
+    "deleteMoves": "<strong>{kinds, select, all {{folders} 个文件夹、{items} 个工作项和 {pages} 个页面} foldersItems {{folders} 个文件夹和 {items} 个工作项} foldersPages {{folders} 个文件夹和 {pages} 个页面} itemsPages {{items} 个工作项和 {pages} 个页面} folders {{folders} 个文件夹} pages {{pages} 个页面} other {{items} 个工作项}}</strong>将移动到<strong>{destination}</strong>。不会删除任何工作项或页面。",
     "deleteEmpty": "“{name}”是空的。删除它只会移除该文件夹。",
     "deleteConfirm": "删除文件夹",
     "deleteCounting": "正在统计将要移动的内容…",
@@ -11611,22 +11611,56 @@
     "untitled": "无标题",
     "index": {
       "title": "页面",
-      "subtitle": "此项目的规格说明、运行手册和笔记——最近编辑的排在最前。",
       "newPage": "新建页面",
       "creating": "正在创建页面…",
       "createFailed": "无法创建页面，请重试。",
-      "listLabel": "此项目中的页面",
-      "edited": "{name}于{time}编辑",
-      "editedByYou": "你于{time}编辑",
       "empty": {
         "title": "还没有页面",
         "member": "写下规格说明、运行手册或会议记录——它们会留在这里，与项目的工作放在一起。",
         "viewer": "当项目成员写下页面后，它会显示在这里。"
       }
     },
+    "tree": {
+      "subtitle": "此项目的规格说明、运行手册和笔记，按文件夹和页面整理。",
+      "label": "此项目中的文件夹和页面",
+      "newPageHere": "在此新建页面",
+      "newSubPage": "新建子页面",
+      "pageActionsAria": "“{title}”的页面操作",
+      "expandAria": "展开“{title}”",
+      "collapseAria": "收起“{title}”",
+      "noPagesHere": "这里还没有页面",
+      "loadingLevel": "正在加载页面…",
+      "rootFailed": "无法加载页面。",
+      "levelFailed": "无法加载其中的内容。",
+      "loadMore": "加载更多",
+      "shown": "已显示 {count} 项",
+      "picker": {
+        "listLabel": "文件夹和页面",
+        "loading": "正在加载文件夹和页面…",
+        "isThisPage": "就是此页面——页面不能移动到其自身或其子页面中。"
+      },
+      "refusal": {
+        "cycle": "页面不能移动到其自身的子页面中。它保持在原位。",
+        "depth": "页面最多只能嵌套 {limit} 层，此次移动会超出该限制。它保持在原位。",
+        "crossProject": "该文件夹或页面属于另一个项目。页面保持在原位。",
+        "gone": "该文件夹或页面已不存在。页面保持在原位。"
+      },
+      "drop": {
+        "root": "拖放到此处，将其移动到项目根目录",
+        "refusedSelf": "不能将页面拖放到其自身的子页面中。"
+      },
+      "sidebar": {
+        "label": "页面树",
+        "hide": "隐藏页面树",
+        "show": "显示页面树"
+      },
+      "breadcrumb": {
+        "label": "此页面所在位置",
+        "more": "显示另外 {count} 层",
+        "folder": "文件夹："
+      }
+    },
     "page": {
-      "back": "页面",
-      "backLabel": "返回页面",
       "titleLabel": "页面标题",
       "titleTooLong": "标题过长——请控制在 {limit} 个字符以内。",
       "renameFailed": "无法保存标题，请检查网络连接后重试。"

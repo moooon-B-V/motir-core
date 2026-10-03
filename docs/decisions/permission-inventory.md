@@ -780,6 +780,8 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/pages/[pageId]/versions`                  | GET       | `pagesService.listPageVersions` → `assertCanViewPages` (MOTIR-7386)                                                                                            | `page:view`               | new      | R82 |
 | `/api/pages/[pageId]/versions/[number]`         | GET       | `pagesService.getPageVersion` → `assertCanViewPages` (MOTIR-7386)                                                                                              | `page:view`               | new      | R82 |
 | `/api/pages/[pageId]/versions/[number]/restore` | POST      | `pagesService.restorePageVersion` → `assertCanEditPages`; a restore is a write (MOTIR-7386)                                                                    | `page:edit`               | new      | R82 |
+| `/api/pages/[pageId]/placement`                 | PATCH     | `pagesService.movePage` → `assertCanEditPages`; the move runs under the project's page-structure lock (MOTIR-7372)                                             | `page:edit`               | new      | R82 |
+| `/api/pages/tree`                               | GET       | `pagesService.listTreeLevel` → `assertCanViewPages`; one level, folders then pages, keyset paged (MOTIR-7372)                                                  | `page:view`               | new      | R82 |
 
 ### `project`
 

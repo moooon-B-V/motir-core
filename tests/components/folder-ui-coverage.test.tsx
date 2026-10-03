@@ -12,16 +12,10 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 const { listProjectFoldersAction } = vi.hoisted(() => ({ listProjectFoldersAction: vi.fn() }));
 vi.mock('@/app/(authed)/items/actions', () => ({ listProjectFoldersAction }));
 
-import { FolderDeleteDialog } from '@/app/(authed)/items/_components/FolderDeleteDialog';
-import { FolderNameField } from '@/app/(authed)/items/_components/FolderNameField';
-import {
-  FolderPickerPanel,
-  FolderPickerPopover,
-} from '@/app/(authed)/items/_components/FolderPicker';
-import {
-  FolderRowMenu,
-  type FolderMenuEntry,
-} from '@/app/(authed)/items/_components/FolderRowMenu';
+import { FolderDeleteDialog } from '@/components/folders/FolderDeleteDialog';
+import { FolderNameField } from '@/components/folders/FolderNameField';
+import { FolderPickerPanel, FolderPickerPopover } from '@/components/folders/FolderPicker';
+import { FolderRowMenu, type FolderMenuEntry } from '@/components/folders/FolderRowMenu';
 import { QuickViewFolderControl } from '@/app/(authed)/items/_components/QuickViewFolderField';
 import type { FolderPickerNodeDto } from '@/lib/dto/folders';
 
@@ -58,6 +52,7 @@ describe('FolderDeleteDialog — dismissal', () => {
           name: 'Parked',
           childFolderCount: 0,
           workItemCount: 0,
+          pageCount: 0,
           destination: { folderId: null, name: null },
         }}
         refusal={null}

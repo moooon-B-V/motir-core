@@ -1,94 +1,86 @@
-import Link from 'next/link';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { NotebookText } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
-import type { PageListItemDto } from '@/lib/dto/pages';
+import { PageTree } from '@/components/pages/tree/PageTree';
+import type { FolderCommandActions } from '@/components/folders/folderActions';
+import type { PageTreeLevelDto } from '@/lib/dto/pages';
+import { NewFolderButton } from './NewFolderButton';
 import { NewPageButton } from './NewPageButton';
 
-// THE `/pages` INDEX BODY (Story MOTIR-5752 · MOTIR-7300) —
-// `design/pages/pages.mock.html` states 2–4, `design-notes.md` § The index.
+// THE `/pages` INDEX BODY (Story MOTIR-5752 · MOTIR-7300; the TREE since Story
+// MOTIR-5753 · MOTIR-7373) — `design/pages/pages--tree.mock.html` panels 1–8,
+// `design-notes.md` § The page tree.
 //
-// No `'use client'`: it renders inside the page's server <Suspense> and needs no
-// state. `useTranslations` / `useFormatter` work in a Server Component, so the
-// same component renders under a test's intl provider.
+// No `'use client'`: it renders inside the page's server <Suspense>, handing the
+// server-read root level to the client `PageTree`, which reads every deeper
+// level itself. `useTranslations` works in a Server Component, so the same
+// component renders under a test's intl provider.
 //
-// A FLAT list, newest edit first — the order `pagesService.listPages` returns.
-// The page tree, sub-pages and folders are MOTIR-5753's. Each row is ONE link to
-// `/pages/<id>`: the glyph, the title (or the untitled copy in italic secondary
-// ink, so a blank page is still a findable row) and "Edited <relative time> by
-// <name>" — "by you" when the last editor is the reader.
-//
-// With no pages it is the design system's `EmptyState` (§ State 3): New page as
-// the call to action for a reader who may write pages, and NO action at all for
-// a viewer, whose description says who writes pages so the empty room does not
-// read as broken.
+// An EMPTY project — no folders and no pages — is the design system's
+// `EmptyState` (panel 4, the base's state 3 unchanged): New page as the call to
+// action for a reader who may write pages, and NO action at all for a viewer,
+// whose description says who writes pages so the empty room does not read as
+// broken. The tree draws it in place of its frame, so a root that a retry finds
+// empty lands on the same state. A member gets New page (primary) and New
+// folder (secondary, MOTIR-7374 — only for a reader who may also write folders).
 
 export interface PagesIndexProps {
-  pages: PageListItemDto[];
-  /** The signed-in reader — a row they edited last reads "by you". */
-  viewerId: string;
-  /** Whether the reader holds `page:edit` — chooses the empty state's copy. */
+  /** The root level as the server read it; `null` when that read failed. */
+  root: PageTreeLevelDto | null;
+  /** The project's key — every deeper level is read against it. */
+  projectKey: string;
+  /** Whether the reader holds `page:edit` — the New controls and row menus. */
   canEdit: boolean;
-  /** The instant the relative times are measured from. */
-  now: Date;
+  /** Whether the reader also holds `work_item:edit` — the folder commands. */
+  canEditFolders?: boolean;
+  /** The folder writes, handed in by the page (MOTIR-7374). */
+  folderActions?: FolderCommandActions;
+  /** `?folder=<id>`'s chain as row keys, open on arrival (MOTIR-7375). */
+  expandedPath?: string[];
+  /** The levels the server read for `expandedPath`. */
+  initialLevels?: Record<string, PageTreeLevelDto>;
+  /** The `?folder=<id>` row — scrolled into view and focused. */
+  revealKey?: string;
 }
 
-export function PagesIndex({ pages, viewerId, canEdit, now }: PagesIndexProps) {
-  const t = useTranslations('pages');
-  const format = useFormatter();
-
-  if (pages.length === 0) {
-    return (
-      <EmptyState
-        data-testid="pages-empty"
-        icon={<NotebookText className="h-12 w-12" aria-hidden />}
-        title={t('index.empty.title')}
-        description={canEdit ? t('index.empty.member') : t('index.empty.viewer')}
-        action={canEdit ? <NewPageButton /> : undefined}
-      />
-    );
-  }
-
+export function PagesIndex({
+  root,
+  projectKey,
+  canEdit,
+  canEditFolders = false,
+  folderActions,
+  expandedPath,
+  initialLevels,
+  revealKey,
+}: PagesIndexProps) {
+  const t = useTranslations('pages.index');
   return (
-    <ul
-      aria-label={t('index.listLabel')}
-      data-testid="pages-list"
-      className="divide-y divide-(--el-border-soft) overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-card)"
-    >
-      {pages.map((page) => {
-        const time = format.relativeTime(new Date(page.updatedAt), now);
-        const edited =
-          page.updatedBy.id === viewerId
-            ? t('index.editedByYou', { time })
-            : t('index.edited', { time, name: page.updatedBy.name });
-        return (
-          <li key={page.id}>
-            <Link
-              href={`/pages/${encodeURIComponent(page.id)}`}
-              className="flex items-center gap-3 px-(--spacing-card-padding) py-2.5 transition-colors hover:bg-(--el-surface-soft) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-inset"
-            >
-              <NotebookText
-                className="h-[18px] w-[18px] shrink-0 text-(--el-icon-muted)"
-                aria-hidden
-              />
-              <span className="flex min-w-0 flex-col gap-0.5">
-                {page.title ? (
-                  <span className="truncate text-sm font-medium text-(--el-text)">
-                    {page.title}
-                  </span>
-                ) : (
-                  <span className="truncate text-sm font-medium text-(--el-text-secondary) italic">
-                    {t('untitled')}
-                  </span>
-                )}
-                <span className="text-[12.5px] leading-[18px] text-(--el-text-secondary)">
-                  {edited}
-                </span>
-              </span>
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+    <PageTree
+      initialRoot={root}
+      projectKey={projectKey}
+      canEdit={canEdit}
+      canEditFolders={canEditFolders}
+      folderActions={folderActions}
+      expandedPath={expandedPath}
+      initialLevels={initialLevels}
+      revealKey={revealKey}
+      focusRevealed={revealKey !== undefined}
+      emptyState={
+        <EmptyState
+          data-testid="pages-empty"
+          icon={<NotebookText className="h-12 w-12" aria-hidden />}
+          title={t('empty.title')}
+          description={canEdit ? t('empty.member') : t('empty.viewer')}
+          action={
+            canEdit ? (
+              <div className="flex items-center gap-2">
+                <NewPageButton />
+                <NewFolderButton />
+              </div>
+            ) : undefined
+          }
+        />
+      }
+    />
   );
 }

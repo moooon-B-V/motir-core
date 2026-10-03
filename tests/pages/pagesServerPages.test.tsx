@@ -5,9 +5,11 @@ import type { WorkspaceRole } from '@/generated/prisma/client';
 // The two SERVER pages of Story MOTIR-5752 — the `/pages` index (MOTIR-7300) and
 // the page at its address (MOTIR-7280) — rendered with the RSC harness
 // (`tests/helpers/serverPageHarness.tsx`) against real Postgres. Part of the
-// story's coverage gate (MOTIR-7281): the index's `page:view` gate and its list
-// read, the page's one-read gate with every not-found case, and both pages'
-// metadata.
+// story's coverage gate (MOTIR-7281): the index's `page:view` gate and its
+// root-level tree read (MOTIR-7373), the page's one-read gate with every not-found case, and both pages'
+// metadata. Story MOTIR-5753 · MOTIR-7375 adds the page's PLACE — the breadcrumb
+// and the sidebar tree read from the trail, a move showing the new trail on the
+// next open — and `/pages?folder=<id>` opening the tree to a folder.
 //
 // Mocked: the session and the active project (they need cookies), and the two
 // framework calls a page makes that only a Next request can honour —
@@ -54,6 +56,10 @@ const { PagesIndex } = await import('@/app/(authed)/pages/_components/PagesIndex
 const { NewPageButton } = await import('@/app/(authed)/pages/_components/NewPageButton');
 const { PagesIndexFrame } = await import('@/app/(authed)/pages/_components/PagesIndexFrame');
 const { PageView } = await import('@/app/(authed)/pages/[pageId]/_components/PageView');
+const { PageTree } = await import('@/components/pages/tree/PageTree');
+const { PageBreadcrumb } = await import('@/components/pages/tree/PageBreadcrumb');
+const { PageSidebarLayout } = await import('@/components/pages/tree/PageSidebarLayout');
+const { foldersService } = await import('@/lib/services/foldersService');
 const { PAGE_TITLE_MAX_LENGTH } = await import('@/lib/pages');
 const { pagesService } = await import('@/lib/services/pagesService');
 const { projectsService } = await import('@/lib/services/projectsService');
@@ -64,7 +70,7 @@ const { adminDb } = await import('../helpers/adminDb');
 const { truncateAuthTables } = await import('../helpers/db');
 const { createCustomRoleAs, setWorkspaceRoleFor } =
   await import('../helpers/workspaceRoleFixtures');
-const { findFirst, renderTree, textOf } = await import('../helpers/serverPageHarness');
+const { findAll, findFirst, renderTree, textOf } = await import('../helpers/serverPageHarness');
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -150,7 +156,7 @@ describe('/pages — the index', () => {
     ['member', true],
     ['viewer', false],
   ] as const)(
-    'a %s gets the header and the list, newest edit first (canEdit %s)',
+    'a %s gets the header and the tree’s root level, in position order (canEdit %s)',
     async (role, canEdit) => {
       const f = await makeFixture();
       const first = await pagesService.createPage(f.manager, {
@@ -160,6 +166,12 @@ describe('/pages — the index', () => {
       const second = await pagesService.createPage(f.manager, {
         projectId: f.manager.projectId,
         title: 'Second',
+      });
+      // A sub-page sits one level down — not in the root level.
+      await pagesService.createPage(f.manager, {
+        projectId: f.manager.projectId,
+        title: 'Under first',
+        parent: { kind: 'page', id: first.id },
       });
       // A page in the OTHER project is never listed here.
       await pagesService.createPage(f.manager, {
@@ -177,22 +189,36 @@ describe('/pages — the index', () => {
       )!;
       expect(boundary.props.fallback.type).toBe(PagesIndexFrame);
 
-      const list = (await settle(boundary.props.children)) as ReactElement<{
-        pages: { id: string; title: string }[];
-        viewerId: string;
+      const body = (await settle(boundary.props.children)) as ReactElement<{
+        root: {
+          rows: { kind: string; id: string; name?: string; hasChildren: boolean }[];
+          nextCursor: null;
+        };
+        projectKey: string;
         canEdit: boolean;
       }>;
-      expect(list.type).toBe(PagesIndex);
-      expect(list.props.canEdit).toBe(canEdit);
-      expect(list.props.viewerId).toBe(reader.current.userId);
-      expect(list.props.pages.map((p) => p.id)).toEqual([second.id, first.id]);
+      expect(body.type).toBe(PagesIndex);
+      expect(body.props.canEdit).toBe(canEdit);
+      expect(body.props.projectKey).toBe('RSC');
+      // Folders first — every project is created with its `Bugs` folder — then
+      // the root's pages; the sub-page is only its parent's `hasChildren`.
+      expect(
+        body.props.root.rows.map((r) =>
+          r.kind === 'folder' ? ['folder', r.name] : [r.id, r.hasChildren],
+        ),
+      ).toEqual([
+        ['folder', 'Bugs'],
+        [first.id, true],
+        [second.id, false],
+      ]);
+      expect(body.props.root.nextCursor).toBeNull();
     },
   );
 
-  it('a reader without `page:view` gets notFound() and the list is never read', async () => {
+  it('a reader without `page:view` gets notFound() and the tree is never read', async () => {
     const f = await makeFixture();
     reader.current = await browserWithoutPageKeys(f);
-    const list = vi.spyOn(pagesService, 'listPages');
+    const list = vi.spyOn(pagesService, 'listTreeLevel');
     await expect(renderTree(IndexPage.default)).rejects.toBeInstanceOf(NotFound);
     expect(list).not.toHaveBeenCalled();
   });
@@ -222,10 +248,12 @@ describe('/pages/<id> — the page at its address', () => {
     expect(view.props.viewerId).toBe(reader.current.userId);
     expect(typeof view.props.page.bodyState).toBe('string');
 
-    // The frame draws the header pair and paragraph bars — and no toolbar.
-    const boundary = findFirst<{ fallback: ReactElement }>(tree, Suspense)!;
-    const frame = await settle(boundary.props.fallback);
-    expect(frame).toBeTruthy();
+    // The frame draws the header pair and paragraph bars — and no toolbar. Two
+    // in-page boundaries, both after the gate: the sidebar's levels and the page.
+    const boundaries = findAll<{ fallback: ReactElement; children: ReactElement }>(tree, Suspense);
+    expect(boundaries).toHaveLength(2);
+    const pageBoundary = boundaries.find((b) => b.props.children.type === PageView)!;
+    expect(await settle(pageBoundary.props.fallback)).toBeTruthy();
 
     expect(await AddressPage.generateMetadata(params(page.id))).toEqual({ title: 'Runbook' });
   });
@@ -279,5 +307,213 @@ describe('/pages/<id> — the page at its address', () => {
   it('an anonymous reader is sent to sign in', async () => {
     reader.current = null;
     await expect(renderTree(AddressPage.default, params('any'))).rejects.toBeInstanceOf(Redirect);
+  });
+});
+
+describe('/pages/<id> — the page’s place (MOTIR-7375)', () => {
+  type TreeProps = {
+    density: string;
+    canEdit: boolean;
+    selectedPageId: string;
+    expandedPath: string[];
+    initialRoot?: { rows: { kind: string; id: string }[] };
+    initialLevels: Record<string, { rows: { kind: string; id: string }[] }>;
+  };
+
+  /** folder › page › sub-page: Specs › Auth flow › Edge cases. */
+  async function nested(f: Fixture) {
+    const specs = await foldersService.createFolder(
+      { projectId: f.manager.projectId, parentFolderId: null, name: 'Specs' },
+      f.manager,
+    );
+    const auth = await pagesService.createPage(f.manager, {
+      projectId: f.manager.projectId,
+      title: 'Auth flow',
+      parent: { kind: 'folder', id: specs.id },
+    });
+    const edge = await pagesService.createPage(f.manager, {
+      projectId: f.manager.projectId,
+      title: 'Edge cases',
+      parent: { kind: 'page', id: auth.id },
+    });
+    return { specs, auth, edge };
+  }
+
+  async function place(pageId: string) {
+    const tree = await renderTree(AddressPage.default, params(pageId));
+    const layout = findFirst<{ tree: ReactElement; breadcrumb: ReactElement }>(
+      tree,
+      PageSidebarLayout,
+    )!;
+    const crumb = findFirst<{
+      trail: { folders: { id: string; name: string }[]; pages: { id: string; title: string }[] };
+      page: { id: string; title: string };
+    }>(tree, PageBreadcrumb)!;
+    const boundary = layout.props.tree as ReactElement<{
+      fallback: ReactElement;
+      children: ReactElement;
+    }>;
+    expect(boundary.type).toBe(Suspense);
+    const sidebar = (await settle(boundary.props.children)) as ReactElement<TreeProps>;
+    return { tree, crumb, sidebar, boundary };
+  }
+
+  it('the breadcrumb reads folder › parent page › page, and the sidebar opens the path to the page, selected', async () => {
+    const f = await makeFixture();
+    const { specs, auth, edge } = await nested(f);
+    reader.current = await readerAs(f, 'member', 'member');
+
+    const { crumb, sidebar, boundary } = await place(edge.id);
+    expect(crumb.props.trail).toEqual({
+      folders: [{ id: specs.id, name: 'Specs' }],
+      pages: [{ id: auth.id, title: 'Auth flow' }],
+    });
+    expect(crumb.props.page).toEqual({ id: edge.id, title: 'Edge cases' });
+
+    expect(sidebar.type).toBe(PageTree);
+    expect(sidebar.props).toMatchObject({
+      density: 'compact',
+      canEdit: false,
+      selectedPageId: edge.id,
+      expandedPath: [`folder:${specs.id}`, `page:${auth.id}`],
+    });
+    // Every level on the path was read on the server, so the path paints open.
+    expect(sidebar.props.initialRoot!.rows.some((r) => r.id === specs.id)).toBe(true);
+    expect(sidebar.props.initialLevels[`folder:${specs.id}`]!.rows.map((r) => r.id)).toEqual([
+      auth.id,
+    ]);
+    expect(sidebar.props.initialLevels[`page:${auth.id}`]!.rows.map((r) => r.id)).toEqual([
+      edge.id,
+    ]);
+    // The sidebar's own frame while those levels are read.
+    expect(await settle(boundary.props.fallback)).toBeTruthy();
+  });
+
+  it('after a move, reopening the page shows the new trail in both', async () => {
+    const f = await makeFixture();
+    const { auth, edge } = await nested(f);
+    reader.current = f.manager;
+    await pagesService.movePage(f.manager, {
+      projectId: f.manager.projectId,
+      pageId: edge.id,
+      parent: { kind: 'root' },
+    });
+    void auth;
+    const { crumb, sidebar } = await place(edge.id);
+    expect(crumb.props.trail).toEqual({ folders: [], pages: [] });
+    expect(sidebar.props.expandedPath).toEqual([]);
+    expect(sidebar.props.initialRoot!.rows.some((r) => r.id === edge.id)).toBe(true);
+  });
+
+  it('a trail that cannot be read costs the trail, not the page: Pages › page, the tree at its root', async () => {
+    const f = await makeFixture();
+    const { edge } = await nested(f);
+    reader.current = f.manager;
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(pagesService, 'getPageTrail').mockRejectedValueOnce(new Error('trail down'));
+    const { crumb, sidebar } = await place(edge.id);
+    expect(crumb.props.trail).toBeNull();
+    expect(sidebar.props.expandedPath).toEqual([]);
+    expect(error).toHaveBeenCalled();
+    expect(
+      findFirst(await renderTree(AddressPage.default, params(edge.id)), PageView),
+    ).toBeDefined();
+  });
+
+  it('a level the server cannot read is left to the tree, which reads it on mount', async () => {
+    const f = await makeFixture();
+    const { specs, edge } = await nested(f);
+    reader.current = f.manager;
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(pagesService, 'listTreeLevel').mockRejectedValue(new Error('level down'));
+    const { sidebar } = await place(edge.id);
+    expect(sidebar.props.initialRoot).toBeUndefined();
+    expect(sidebar.props.initialLevels).toEqual({});
+    expect(sidebar.props.expandedPath[0]).toBe(`folder:${specs.id}`);
+  });
+
+  it('a page that 404s renders no sidebar and no breadcrumb', async () => {
+    const f = await makeFixture();
+    reader.current = f.manager;
+    const trail = vi.spyOn(pagesService, 'getPageTrail');
+    await expect(renderTree(AddressPage.default, params('no-such-page'))).rejects.toBeInstanceOf(
+      NotFound,
+    );
+    // The trail read ran beside the gate and was refused quietly — never rendered.
+    expect(trail).toHaveBeenCalled();
+  });
+});
+
+describe('/pages?folder=<id> — the breadcrumb’s way into the tree (MOTIR-7375)', () => {
+  const search = (folder: string | string[]) => ({
+    searchParams: Promise.resolve({ folder }),
+  });
+  async function body(args: ReturnType<typeof search>) {
+    const tree = await renderTree(IndexPage.default, args);
+    const boundary = findFirst<{ children: ReactElement }>(tree, Suspense)!;
+    return (await settle(boundary.props.children)) as ReactElement<{
+      expandedPath: string[];
+      initialLevels: Record<string, { rows: { id: string }[] }>;
+      revealKey?: string;
+    }>;
+  }
+
+  it('opens the tree with the path to the folder and the folder itself expanded, revealing it', async () => {
+    const f = await makeFixture();
+    const specs = await foldersService.createFolder(
+      { projectId: f.manager.projectId, parentFolderId: null, name: 'Specs' },
+      f.manager,
+    );
+    const api = await foldersService.createFolder(
+      { projectId: f.manager.projectId, parentFolderId: specs.id, name: 'API' },
+      f.manager,
+    );
+    const inApi = await pagesService.createPage(f.manager, {
+      projectId: f.manager.projectId,
+      title: 'Auth flow',
+      parent: { kind: 'folder', id: api.id },
+    });
+    reader.current = f.manager;
+
+    const index = await body(search(api.id));
+    expect(index.props.expandedPath).toEqual([`folder:${specs.id}`, `folder:${api.id}`]);
+    expect(index.props.revealKey).toBe(`folder:${api.id}`);
+    expect(index.props.initialLevels[`folder:${api.id}`]!.rows.map((r) => r.id)).toEqual([
+      inApi.id,
+    ]);
+    expect(index.props.initialLevels[`folder:${specs.id}`]!.rows.map((r) => r.id)).toEqual([
+      api.id,
+    ]);
+  });
+
+  it('a folder that is unknown, another project’s, or not a single value is ignored — the root, never a 404', async () => {
+    const f = await makeFixture();
+    const elsewhere = await foldersService.createFolder(
+      { projectId: f.other.projectId, parentFolderId: null, name: 'Elsewhere' },
+      f.other,
+    );
+    reader.current = f.manager;
+    for (const folder of ['no-such-folder', elsewhere.id, ['a', 'b'], '']) {
+      const index = await body(search(folder));
+      expect(index.props.expandedPath).toEqual([]);
+      expect(index.props.revealKey).toBeUndefined();
+    }
+  });
+
+  it('a folder level that cannot be read is left to the tree', async () => {
+    const f = await makeFixture();
+    const specs = await foldersService.createFolder(
+      { projectId: f.manager.projectId, parentFolderId: null, name: 'Specs' },
+      f.manager,
+    );
+    reader.current = f.manager;
+    const real = pagesService.listTreeLevel.bind(pagesService);
+    vi.spyOn(pagesService, 'listTreeLevel').mockImplementation(async (ctx, input) => {
+      if (input.parent.kind === 'folder') throw new Error('level down');
+      return real(ctx, input);
+    });
+    const index = await body(search(specs.id));
+    expect(index.props.expandedPath).toEqual([`folder:${specs.id}`]);
+    expect(index.props.initialLevels).toEqual({});
   });
 });

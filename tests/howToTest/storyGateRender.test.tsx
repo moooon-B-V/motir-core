@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
-import { createTranslator } from 'next-intl';
+import { createTranslator, type AbstractIntlMessages } from 'next-intl';
 import { db } from '@/lib/db';
 import { howToTestService } from '@/lib/services/howToTestService';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
@@ -37,9 +37,16 @@ import {
 // this seam asserts. The Development card, `DevelopmentSectionBody`,
 // `HowToTestBlock`, the Markdown pipeline and `CopyableCodeBlock` are all real.
 
+// The catalogue goes in as `AbstractIntlMessages`: the namespace is chosen at
+// runtime (`as never`), so a typed catalogue checks nothing here — it only makes
+// next-intl compute every key path in all ~600 KB of it.
 vi.mock('next-intl/server', () => ({
   getTranslations: async (namespace: string) =>
-    createTranslator({ locale: 'en', messages, namespace: namespace as never }),
+    createTranslator({
+      locale: 'en',
+      messages: messages as unknown as AbstractIntlMessages,
+      namespace: namespace as never,
+    }),
 }));
 vi.mock('@/app/(authed)/items/[key]/_components/RunSection', () => ({ RunSection: () => null }));
 vi.mock('@/app/(authed)/items/[key]/_components/AcceptancePanel', () => ({
