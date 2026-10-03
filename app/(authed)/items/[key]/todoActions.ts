@@ -88,6 +88,34 @@ async function genericError(): Promise<string> {
   return (await getTranslations('workItemTodos'))('errors.generic');
 }
 
+export type ListTodosActionResult =
+  | { ok: true; items: WorkItemTodoDto[]; progress: TodoProgressDto }
+  | { ok: false; error: string };
+
+/**
+ * READ the card's list as it stands (Story MOTIR-7459 · MOTIR-7466) — the guide
+ * canvas in the planning overlay re-reads the rows after every landed turn, on
+ * its live refresh, and on *Reload the card*. The page section is seeded by the
+ * server render and never needed this; the overlay has no server render of the
+ * card. The browse gate is the service's, exactly as for the page's own read.
+ */
+export async function listTodosAction(input: {
+  workItemId: string;
+}): Promise<ListTodosActionResult> {
+  const ctx = await getWorkspaceContext();
+  if (!ctx) return { ok: false, error: await genericError() };
+  try {
+    const list = await workItemTodosService.listTodos(input.workItemId, ctx);
+    return { ok: true, items: list.items, progress: list.progress };
+  } catch (err) {
+    const message = await todoErrorMessage(err);
+    if (message) return { ok: false, error: message };
+    const refused = await unmappedActionRefusalMessage(err, 'listTodosAction');
+    if (refused) return { ok: false, error: refused };
+    throw err;
+  }
+}
+
 export async function addTodoAction(input: {
   workItemId: string;
   text: string;

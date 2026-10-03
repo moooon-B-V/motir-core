@@ -97,12 +97,28 @@ export function useOpenPlanningWorkspace(context: PlanningLaunchContext): OpenPl
 }
 
 /**
+ * THE GUIDE ME THROUGH DOOR (Story MOTIR-7459 · MOTIR-7466) — `openGuide(itemKey)`.
+ *
+ * The same one opener, aimed at the guide mode: it writes
+ * `plan=guide&planFrom=guide&planItem=<KEY>` onto the page the door sits on
+ * (design MOTIR-7462 panel 1), so the overlay opens over the card's own page and
+ * Close returns to it. A thin name over {@link useOpenPlanningWorkspace} rather
+ * than a second resolver: the address is the launcher's, decided in one place.
+ */
+export function useOpenGuide(itemKey: string): OpenPlanningWorkspace & {
+  openGuide: (event?: MouseEvent<HTMLElement>) => void;
+} {
+  const door = useOpenPlanningWorkspace({ kind: 'guide', itemKey });
+  return { ...door, openGuide: door.open };
+}
+
+/**
  * The whole context as a dependency-safe scalar. `hasPlan` is included because
  * it changes the MODE, which changes the address.
  */
 function contextValueKey(context: PlanningLaunchContext): string {
   const target =
-    context.kind === 'work-item'
+    context.kind === 'work-item' || context.kind === 'guide'
       ? context.itemKey
       : context.kind === 'convention-refine'
         ? context.repoKey

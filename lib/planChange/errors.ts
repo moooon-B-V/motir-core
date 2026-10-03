@@ -278,3 +278,51 @@ export class PlanningSeedNotFoundError extends Error {
     this.name = 'PlanningSeedNotFoundError';
   }
 }
+
+/**
+ * A guide turn on a card that is not MANUAL (Story MOTIR-7459 · MOTIR-7464; ADR
+ * `conversation-turn-intent.md` AMENDMENT 2, A2.7). The predicate is
+ * `isManualReadyItem` — `executor: human` or `type: manual` — and the turn is
+ * refused BEFORE anything is written or submitted. → 422 `GUIDE_CARD_NOT_MANUAL`.
+ */
+export class GuideCardNotManualError extends Error {
+  readonly code = 'GUIDE_CARD_NOT_MANUAL' as const;
+  constructor(readonly identifier: string) {
+    super(`${identifier} is not a manual work item, so Motir AI cannot guide it.`);
+    this.name = 'GuideCardNotManualError';
+  }
+}
+
+/**
+ * A guide turn on a card that is already finished — in a `done`-category status,
+ * or archived (A2.7: the door shows only where the card is open). Refused before
+ * anything is written or submitted. → 409 `GUIDE_CARD_CLOSED`.
+ */
+export class GuideCardClosedError extends Error {
+  readonly code = 'GUIDE_CARD_CLOSED' as const;
+  constructor(
+    readonly identifier: string,
+    readonly reason: 'done' | 'archived',
+  ) {
+    super(
+      reason === 'archived'
+        ? `${identifier} is archived, so there is nothing left to guide.`
+        : `${identifier} is already finished, so there is nothing left to guide.`,
+    );
+    this.name = 'GuideCardClosedError';
+  }
+}
+
+/**
+ * A planning submit addressed at a GUIDE conversation (MOTIR-7464; ADR
+ * AMENDMENT 2, A2.1/A2.2). A guide conversation is session-scoped to one intent
+ * and never submits a plan — to plan, the person opens Motir AI from the orb,
+ * which is a different conversation. → 409 `GUIDE_SESSION_NOT_PLANNABLE`.
+ */
+export class GuideSessionNotPlannableError extends Error {
+  readonly code = 'GUIDE_SESSION_NOT_PLANNABLE' as const;
+  constructor(readonly sessionId: string) {
+    super('A guide conversation does not submit a plan.');
+    this.name = 'GuideSessionNotPlannableError';
+  }
+}

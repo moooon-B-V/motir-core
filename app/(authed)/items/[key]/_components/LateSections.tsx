@@ -18,6 +18,7 @@ import type { DevelopmentGateRead } from '@/components/github/DevelopmentGateFra
 import { DesignResultPanel } from './DesignResultPanel';
 import { RunSection } from './RunSection';
 import { HostedRunProvider } from './HostedRunProvider';
+import { GuideMeThroughSection, type GuideMeThroughProgress } from './GuideMeThroughSection';
 import { ContinueHostedDoor, ContinueHostedNotice } from './ContinueHostedDoor';
 import { FixHostedDoor } from './FixHostedDoor';
 import { RunHostedButton } from './RunHostedButton';
@@ -304,7 +305,13 @@ export async function LateUpperSections({
   canReplan = false,
   parentIdentifier = null,
   hostedDoor = null,
+  manual = null,
 }: LateProps & {
+  /** A MANUAL card (`isManualReadyItem`; Story MOTIR-7459 · MOTIR-7467): the Run
+   *  section's slot carries Guide me through instead, and `door` is null where the
+   *  door is not shown (A2.7) — the slot is then empty. Null for every other card,
+   *  which renders its Run section exactly as before. */
+  manual?: { door: { progress: GuideMeThroughProgress | null } | null } | null;
   /** The Run hosted door's inputs (MOTIR-691) — the card's own readiness — or
    *  null where no door is drawn: a reader who may not run the card, an archived
    *  card, or one already in the done category. */
@@ -465,7 +472,16 @@ export async function LateUpperSections({
           model list, read once, for both. */}
       {withHostedDoor(
         <>
-          {runCard}
+          {/* GUIDE ME THROUGH (MOTIR-7467): a manual card is never run, so its slot
+              carries the guide door instead — or nothing, where the door is not
+              shown — and never both. */}
+          {manual ? (
+            manual.door ? (
+              <GuideMeThroughSection itemKey={itemIdentifier} progress={manual.door.progress} />
+            ) : null
+          ) : (
+            runCard
+          )}
           {/* THE HOW-TO-TEST WRITE DOORS (Story MOTIR-5450 · MOTIR-5455, design § 24).
           Mounted ONLY for an actor holding `work_item:edit` and ONLY here: the
           block asks for this context and draws no door without it, so the

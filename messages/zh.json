@@ -7137,7 +7137,8 @@
         "generation": "生成的计划",
         "expand": "展开的计划",
         "cadence": "自动规划",
-        "legacy": "早期计划"
+        "legacy": "早期计划",
+        "guide": "引导步骤"
       },
       "anchorProject": "整个项目",
       "anchorMore": "{first} +{count}",
@@ -7331,7 +7332,8 @@
           "lessons": "经验教训"
         }
       },
-      "openerFollowUp": "你刚选择了{label}。Motir AI 正在规划它决定的工作。"
+      "openerFollowUp": "你刚选择了{label}。Motir AI 正在规划它决定的工作。",
+      "composerPlaceholderGuide": "告诉 Motir AI 这一步进展如何…"
     },
     "targets": {
       "sectionLabel": "工作项",
@@ -7363,7 +7365,8 @@
       "replan": "调整计划",
       "contextual": "上下文",
       "roadmap": "路线图",
-      "followUp": "后续规划"
+      "followUp": "后续规划",
+      "guide": "引导"
     },
     "lead": {
       "project": "已在 {project} 上打开。",
@@ -7461,6 +7464,69 @@
     "dividerAria": "调整对话窗口宽度",
     "followUpCard": {
       "label": "选择的后续规划"
+    },
+    "guide": {
+      "openedFrom": "从 {key} 打开",
+      "reading": "正在读取 {key} 及其待办清单…",
+      "stepOf": "第 {n} 步，共 {total} 步",
+      "notSavedSuffix": "· 未保存",
+      "tag": {
+        "current": "当前步骤",
+        "notSaved": "未保存",
+        "added": "已添加",
+        "changed": "已修改",
+        "moved": "已移动",
+        "cannot": "无法完成"
+      },
+      "proposedBand": "<b>建议的步骤，尚未保存。</b>在你做出选择之前，工作项上不会写入任何内容。",
+      "temporaryBand": "尚未保存到工作项。停止后本次引导即结束。",
+      "save": "保存到工作项",
+      "saveTurn": "把这份清单保存到工作项。",
+      "walk": "不保存，直接开始",
+      "walkTurn": "不保存，直接带我做。",
+      "undo": "撤销",
+      "undoTurn": "撤销刚才的更改。",
+      "closeYes": "关闭工作项",
+      "closeYesTurn": "好的，关闭工作项。",
+      "closeNo": "暂不",
+      "closeNoTurn": "暂时不要。",
+      "reload": "重新加载工作项",
+      "staleNotice": "{key} 在本轮读取之后已被修改。请重新加载后再问一次。",
+      "failed": "这一轮没有完成，因此工作项没有任何改动。",
+      "errors": {
+        "notManual": "Motir AI 引导人完成手动工作，而这个工作项是交给 Agent 的，因此这里没有可引导的内容。",
+        "closed": "这个工作项已完成或已归档，没有需要引导的内容了。",
+        "forbidden": "你需要拥有编辑这个工作项以及使用 Motir AI 规划的权限，才能被引导完成它。"
+      },
+      "youTicked": "你在清单上勾选了第 {n} 步",
+      "youUnticked": "你在清单上取消勾选了第 {n} 步",
+      "fieldTitle": "标题",
+      "field": {
+        "title": "标题",
+        "description": "描述",
+        "explanation": "说明",
+        "and": "和"
+      },
+      "outcome": {
+        "ticked": "已在 <chip>{key}</chip> 上勾选第 {n} 步。",
+        "tickedTemp": "已在本次引导中勾选第 {n} 步。尚未保存到工作项。",
+        "tickedNoStatus": "已在 <chip>{key}</chip> 上勾选第 {n} 步。状态未改变。",
+        "unticked": "已在 <chip>{key}</chip> 上取消勾选第 {n} 步。",
+        "untickedTemp": "已在本次引导中取消勾选第 {n} 步。尚未保存到工作项。",
+        "saved": "已将 {count} 个步骤保存到 <chip>{key}</chip>。",
+        "savedTicked": "已将 {count} 个步骤保存到 <chip>{key}</chip>，并勾选了你已完成的 {done} 步。",
+        "added": "已在 <chip>{key}</chip> 中添加第 {n} 步。",
+        "changed": "已修改 <chip>{key}</chip> 的第 {n} 步。",
+        "removed": "已从 <chip>{key}</chip> 中删除一个步骤。",
+        "moved": "已移动 <chip>{key}</chip> 中的一个步骤。",
+        "addedTemp": "已在本次引导中添加第 {n} 步。尚未保存到工作项。",
+        "changedTemp": "已在本次引导中修改第 {n} 步。尚未保存到工作项。",
+        "removedTemp": "已从本次引导中删除一个步骤。尚未保存到工作项。",
+        "movedTemp": "已在本次引导中移动一个步骤。尚未保存到工作项。",
+        "edited": "已编辑 <chip>{key}</chip> 的{fields}。",
+        "commented": "已在 <chip>{key}</chip> 上评论：“{reason}”",
+        "closed": "已将 <chip>{key}</chip> 移至“已完成”，并将此总结添加为评论。"
+      }
     }
   },
   "codeHealth": {
@@ -10288,6 +10354,16 @@
       "cancel": {
         "body": "{name} 中本次运行的会话会停止，它的凭据会被吊销。它已经推送的工作会保留在本次运行的分支上，此工作项保持原状。{name} 会继续运行，你在其中的终端不受影响。"
       }
+    },
+    "guide": {
+      "title": "引导",
+      "gloss": "Motir AI 将带你完成的步骤",
+      "lead": "Motir AI 会带你逐步完成此工作项的待办清单。你说某一步已完成，它就勾选该步骤，并在最后提议关闭工作项。",
+      "leadNoList": "此工作项还没有待办清单。Motir AI 会根据描述提出步骤，由你决定是否保存到工作项。",
+      "progress": "已完成 {done}/{total} 步 · 从第 {next} 步继续",
+      "progressAria": "已完成 {done}/{total} 步",
+      "progressAllDone": "已完成 {total}/{total} 步",
+      "door": "带我完成"
     }
   },
   "repositoryPicker": {
