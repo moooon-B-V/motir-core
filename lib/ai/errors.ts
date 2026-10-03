@@ -147,6 +147,19 @@ export class PlannerModelUnreachableError extends MotirAiError {
   }
 }
 
+// A PLATFORM lesson read or curate named a lesson motir-ai does not have
+// (`/v1/admin/lessons/:id` → `not_found`; MOTIR-1411). Its own class rather than
+// the generic `not_found` mapping, which names a JOB: the console turns this one
+// into the app 404 on a detail read and into "this lesson no longer exists" on
+// a write.
+export class PlatformLessonNotFoundError extends MotirAiError {
+  readonly code = 'PLATFORM_LESSON_NOT_FOUND' as const;
+  constructor(readonly lessonId: string) {
+    super(`no lesson "${lessonId}"`);
+    this.name = 'PlatformLessonNotFoundError';
+  }
+}
+
 // The GET /v1/jobs/:id result as the client returns it: status + result, with a
 // failed job's `error` already mapped to a motir-core typed error.
 export interface JobView {

@@ -106,6 +106,24 @@ export const PLATFORM_AUDIT_ACTIONS = {
    * planner, not the console screen.
    */
   'ai.planner_model.set': { reason: 'required' },
+  /**
+   * The four PLANNING-LESSON curate acts (Story MOTIR-1408 · MOTIR-1411) — what
+   * the planner is told, edited, switched off or on, or promoted out of one
+   * organisation into the global corpus every planner reads.
+   *
+   * `required`, all four: each changes what a planner is told from its next job,
+   * and a promote moves one customer's words in front of every other customer.
+   * Edit and enable/disable are `operator`; promote is `superadmin` (a disclosure
+   * decision, not a curation one). motir-ai stores the lesson and writes NO
+   * audit row; core appends this one. Target is `platform` with the lesson id as
+   * `targetId` (the planner-model precedent — a lesson is not a core entity, so
+   * no new target kind), `organizationId` the owning org on a tenant lesson, and
+   * `metadata` carries `{ lessonId, before, after }`, the changed fields only.
+   */
+  'ai.lesson.edit': { reason: 'required' },
+  'ai.lesson.enable': { reason: 'required' },
+  'ai.lesson.disable': { reason: 'required' },
+  'ai.lesson.promote': { reason: 'required' },
 } as const satisfies Record<string, { reason: PlatformAuditReasonPolicy }>;
 
 /**

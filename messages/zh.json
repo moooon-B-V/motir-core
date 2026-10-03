@@ -8378,7 +8378,8 @@
       "groupOperations": "运维",
       "footerStaff": "平台员工",
       "exitToApp": "返回应用",
-      "navAiPlanning": "AI 规划"
+      "navAiPlanning": "AI 规划",
+      "navPlanningLessons": "规划经验"
     },
     "nav": {
       "overview": "总览",
@@ -8530,6 +8531,12 @@
           "ai": {
             "planner_model": {
               "set": "已更改规划模型"
+            },
+            "lesson": {
+              "edit": "编辑了规划经验",
+              "enable": "开启了规划经验",
+              "disable": "关闭了规划经验",
+              "promote": "推广了规划经验"
             }
           }
         }
@@ -8948,6 +8955,185 @@
         "notPermitted": "只有超级管理员可以更改规划模型。",
         "reasonRequired": "必须填写原因。",
         "failed": "无法保存更改。未做任何更改。"
+      }
+    },
+    "lessons": {
+      "breadcrumb": "运营·规划经验",
+      "title": "规划经验",
+      "subtitle": "规划器从自身错误中学到的经验，覆盖所有组织，并列出每个规划器都会读取的全局经验库。你可以编辑一条经验、关闭它，或推广它，让每个规划器都学到。",
+      "readAuditedLead": "租户经验是客户文本。",
+      "readAuditedBody": "打开它属于跨租户读取，会写入审计日志。",
+      "card": {
+        "title": "经验",
+        "subtitle": "所有组织的经验和全局经验库，最新的在前。"
+      },
+      "filter": {
+        "label": "筛选经验",
+        "search": "搜索",
+        "searchPlaceholder": "搜索经验标题",
+        "scope": "范围",
+        "scopeAll": "全部",
+        "scopeGlobal": "全局",
+        "scopeTenant": "租户",
+        "type": "类型",
+        "typeAny": "任意类型",
+        "category": "分类",
+        "categoryAny": "任意分类",
+        "org": "组织",
+        "orgAny": "任意组织",
+        "state": "状态",
+        "stateAll": "全部",
+        "stateOn": "开启",
+        "stateOff": "关闭",
+        "apply": "应用",
+        "count": "{n} 个筛选条件",
+        "clearAll": "全部清除",
+        "remove": "移除{filter}"
+      },
+      "col": {
+        "lesson": "经验",
+        "type": "类型",
+        "owner": "归属",
+        "injection": "注入",
+        "recurred": "复现"
+      },
+      "type": {
+        "regular_planning": "常规规划",
+        "onboarding_planning": "引导规划",
+        "planning_craft": "规划技艺",
+        "coding": "编码"
+      },
+      "owner": {
+        "global": "全局",
+        "unknownOrg": "未知组织"
+      },
+      "inj": {
+        "on": "已注入",
+        "off": "已关闭",
+        "offSub": "由员工关闭",
+        "resting": "休眠",
+        "restSub": "{days} 天内未出现"
+      },
+      "recur": "{n} 次",
+      "recurLast": "最近 {when}",
+      "pager": {
+        "label": "最新的在前·每页 50 条",
+        "page": "第 {n} 页",
+        "previous": "上一页",
+        "next": "下一页"
+      },
+      "noMatch": {
+        "title": "没有符合这些筛选条件的经验",
+        "body": "没有内容因你的角色而隐藏。移除一个筛选条件，或全部清除。",
+        "action": "清除筛选"
+      },
+      "empty": {
+        "title": "还没有经验",
+        "body": "规划器发现自己犯错时会写下一条经验。这个平台上还没有捕获任何经验，也还没有预置全局经验。"
+      },
+      "unavailable": {
+        "title": "无法加载经验",
+        "body": "规划服务（motir-ai）没有响应，因此不显示任何经验。这是读取错误——没有任何改动。",
+        "retry": "重试"
+      },
+      "detail": {
+        "back": "规划经验",
+        "why": "为何重要",
+        "how": "如何应用",
+        "what": "发生了什么",
+        "categories": "分类",
+        "noCategories": "无",
+        "provenance": "来源",
+        "organisation": "组织",
+        "workspaceProject": "工作区·项目",
+        "source": "出处",
+        "captured": "捕获于",
+        "recurred": "复现",
+        "occurrences": "最近出现",
+        "occurrencesSub": "最新 20 条",
+        "noOccurrences": "没有出现记录。",
+        "history": "员工的改动",
+        "noHistory": "还没有员工改动。",
+        "historyBy": "{who}·{when}",
+        "readOnly": "只有运营或超级管理员可以更改经验。",
+        "switchLabel": "注入这条经验",
+        "unknownUser": "一位已离开的员工"
+      },
+      "edit": {
+        "open": "编辑",
+        "review": "检查改动",
+        "save": "保存编辑",
+        "cancel": "取消",
+        "title": "标题",
+        "why": "为何重要",
+        "how": "如何应用",
+        "categories": "分类",
+        "categoriesHint": "用逗号分隔。",
+        "blank": "此字段不能为空。",
+        "confirmTitle": "保存你对这条经验的编辑？",
+        "confirmBody": "规划器会从下一次规划任务起读取新的措辞。更改标题或如何应用也会改变它匹配到的任务。"
+      },
+      "off": {
+        "title": "停止注入这条经验？",
+        "body": "{owner}将从下一次规划任务起不再读取它。不会删除任何内容，它的出现次数会继续累计，你可以随时重新开启。",
+        "confirm": "关闭"
+      },
+      "on": {
+        "title": "重新注入这条经验？",
+        "body": "{owner}将从下一次规划任务起重新读取它，前提是它在最近 {days} 天内复现过。",
+        "confirm": "开启"
+      },
+      "ownerOne": "{owner} 的规划器",
+      "ownerAll": "每个组织的规划器",
+      "promote": {
+        "open": "推广",
+        "toGlobal": "设为全局",
+        "toCraft": "设为全局规划技艺",
+        "globalHint": "每个组织的规划器都会读取它。它的类型保持为{type}。",
+        "craftHint": "每个规划器都会读取它，引导规划和常规规划都一样。",
+        "globalTitle": "将这条经验设为全局？",
+        "globalBody": "它将不再属于 {owner}，每个组织的规划器都会从下一次规划任务起读取它。此操作无法在本页撤销。",
+        "craftTitle": "将这条经验设为全局规划技艺？",
+        "craftBody": "每个规划器都会从下一次规划任务起读取它，引导规划和常规规划都一样。它的类型将从{type}改为规划技艺，并且不再属于 {owner}。此操作无法在本页撤销。",
+        "craftBodyGlobal": "每个规划器都会从下一次规划任务起读取它，引导规划和常规规划都一样。它的类型将从{type}改为规划技艺。此操作无法在本页撤销。",
+        "warning": "这是 {org} 的文本。在推广之前，删去任何提及他们的产品、人员、代码或客户的内容——其他组织的规划将使用它。",
+        "confirm": "推广"
+      },
+      "reasonLabel": "原因——必填，会写入审计日志",
+      "reasonPlaceholder": "你为什么要做这个改动？",
+      "cancel": "取消",
+      "saved": {
+        "off": "经验已关闭。",
+        "on": "经验已开启。",
+        "edit": "经验已编辑。",
+        "promote": "经验已推广。",
+        "reads": "规划器从下一次规划任务起读取它。",
+        "stops": "规划器从下一次规划任务起不再读取它。"
+      },
+      "refused": {
+        "gone": "未保存——这条经验已不存在。它在你打开期间被移除了。没有写入任何内容。",
+        "unavailable": "未保存——规划服务没有响应。没有写入任何内容，也没有审计记录。你的编辑仍在表单中，请重试。",
+        "notPermitted": "未保存——你的员工角色无法进行此改动。",
+        "reasonRequired": "未保存——需要填写原因。",
+        "invalid": "未保存——规划服务拒绝了这个改动。",
+        "failed": "未保存——出了点问题。没有写入任何内容。"
+      },
+      "noop": "已是最新。有人刚刚改动了这条经验，因此没有需要改动的内容，也没有记录。",
+      "historyAction": {
+        "edit": "已编辑",
+        "enable": "已开启",
+        "disable": "已关闭",
+        "promote": "已推广"
+      },
+      "field": {
+        "title": "标题",
+        "why": "为何重要",
+        "howToApply": "如何应用",
+        "categories": "分类",
+        "enabled": "已注入",
+        "scope": "范围",
+        "mistakeType": "类型",
+        "aiProjectId": "归属"
       }
     },
     "usage": {

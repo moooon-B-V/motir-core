@@ -25,6 +25,7 @@ import {
 import {
   MotirAiConfigError,
   MotirAiUnavailableError,
+  PlatformLessonNotFoundError,
   PlannerModelNotOfferedError,
   PlannerModelUnreachableError,
   errorFromProblem,
@@ -2671,4 +2672,177 @@ export async function getPlatformUsageMonths(query: {
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawPlatformUsageMonths;
+}
+
+// ── The PLATFORM lessons console (MOTIR-1411 over motir-ai MOTIR-1410) ─────────
+//
+// `/v1/admin/lessons` — every tenant's lessons and the global corpus in one list,
+// and the three curate acts. Same `config()` / `aiFetch` / problem mapping as the
+// tenant-scoped `/v1/lessons` pair above; the difference is that these rows name
+// their TENANT (`null` for a global lesson), because the console shows them all.
+//
+// ⚠️ motir-ai WRITES NO AUDIT ROW; every write answers the from → to record and
+// core appends it to its own platform log (`platformLessonsService`), the
+// planner-model split. `audit: null` is a write that changed nothing.
+
+/** The core identity a tenant lesson belongs to; `null` on a global lesson. */
+export interface RawPlatformLessonTenant {
+  coreOrganizationId: string;
+  coreWorkspaceId: string;
+  coreProjectId: string;
+}
+
+export interface RawPlatformLesson extends RawLesson {
+  tenant: RawPlatformLessonTenant | null;
+}
+
+export interface RawPlatformLessonOccurrence {
+  at: string;
+  source: string;
+  occurrenceRef: string;
+}
+
+export interface RawPlatformLessonDetail extends RawPlatformLesson {
+  occurrences: RawPlatformLessonOccurrence[];
+}
+
+export interface RawPlatformLessonPage {
+  lessons: RawPlatformLesson[];
+  nextCursor: string | null;
+  retentionDays: number;
+}
+
+export interface RawPlatformLessonAudit {
+  action: 'ai.lesson.edit' | 'ai.lesson.enable' | 'ai.lesson.disable' | 'ai.lesson.promote';
+  lessonId: string;
+  actorCoreUserId: string;
+  at: string;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+}
+
+export interface RawPlatformLessonWrite {
+  lesson: RawPlatformLesson;
+  audit: RawPlatformLessonAudit | null;
+}
+
+export interface PlatformLessonListQuery {
+  scope?: 'global' | 'tenant';
+  mistakeType?: string;
+  category?: string;
+  enabled?: boolean;
+  coreOrganizationId?: string;
+  coreProjectId?: string;
+  q?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface PlatformLessonEditPatch {
+  title?: string;
+  why?: string;
+  howToApply?: string;
+  categories?: string[];
+}
+
+export type PlatformLessonPromotion = 'global' | 'planning_craft';
+
+/** A non-2xx from an id-addressed lesson route, with `not_found` given its own class. */
+async function platformLessonError(res: Response, lessonId: string): Promise<Error> {
+  const problem = await readProblem(res);
+  if (problem.code === 'not_found') return new PlatformLessonNotFoundError(lessonId);
+  return errorFromProblem(problem);
+}
+
+// GET /v1/admin/lessons — one page across every tenant and the global corpus.
+export async function listPlatformLessons(
+  query: PlatformLessonListQuery,
+): Promise<RawPlatformLessonPage> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams();
+  if (query.scope) params.set('scope', query.scope);
+  if (query.mistakeType) params.set('mistakeType', query.mistakeType);
+  if (query.category) params.set('category', query.category);
+  if (query.enabled !== undefined) params.set('enabled', String(query.enabled));
+  if (query.coreOrganizationId) params.set('coreOrganizationId', query.coreOrganizationId);
+  if (query.coreProjectId) params.set('coreProjectId', query.coreProjectId);
+  if (query.q) params.set('q', query.q);
+  if (query.cursor) params.set('cursor', query.cursor);
+  if (query.limit !== undefined) params.set('limit', String(query.limit));
+  const qs = params.toString();
+  const res = await aiFetch(`${url}/v1/admin/lessons${qs ? `?${qs}` : ''}`, {
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json().catch(() => null)) as Partial<RawPlatformLessonPage> | null;
+  // A 200 whose shape is wrong is an unavailable upstream, not an empty corpus.
+  if (!body || !Array.isArray(body.lessons)) {
+    throw new MotirAiUnavailableError('platform lessons response missing `lessons`');
+  }
+  return {
+    lessons: body.lessons,
+    nextCursor: body.nextCursor ?? null,
+    retentionDays: typeof body.retentionDays === 'number' ? body.retentionDays : 0,
+  };
+}
+
+// GET /v1/admin/lessons/:id — one lesson with its newest occurrences.
+export async function getPlatformLesson(lessonId: string): Promise<RawPlatformLessonDetail> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/admin/lessons/${encodeURIComponent(lessonId)}`, {
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw await platformLessonError(res, lessonId);
+  const body = (await res.json().catch(() => null)) as RawPlatformLessonDetail | null;
+  if (!body || typeof body.id !== 'string') {
+    throw new MotirAiUnavailableError('platform lesson response is not a lesson');
+  }
+  return { ...body, occurrences: Array.isArray(body.occurrences) ? body.occurrences : [] };
+}
+
+async function platformLessonWrite(
+  lessonId: string,
+  path: string,
+  method: 'PATCH' | 'PUT' | 'POST',
+  payload: Record<string, unknown>,
+): Promise<RawPlatformLessonWrite> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/admin/lessons/${encodeURIComponent(lessonId)}${path}`, {
+    method,
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await platformLessonError(res, lessonId);
+  const body = (await res.json().catch(() => null)) as RawPlatformLessonWrite | null;
+  if (!body || !body.lesson || typeof body.lesson.id !== 'string' || body.audit === undefined) {
+    throw new MotirAiUnavailableError('platform lesson write answered no `{ lesson, audit }`');
+  }
+  return body;
+}
+
+// PATCH /v1/admin/lessons/:id — edit title / why / howToApply / categories.
+export function editPlatformLesson(
+  lessonId: string,
+  patch: PlatformLessonEditPatch,
+  actorCoreUserId: string,
+): Promise<RawPlatformLessonWrite> {
+  return platformLessonWrite(lessonId, '', 'PATCH', { ...patch, actorCoreUserId });
+}
+
+// PUT /v1/admin/lessons/:id/enabled — the operator switch.
+export function setPlatformLessonEnabled(
+  lessonId: string,
+  enabled: boolean,
+  actorCoreUserId: string,
+): Promise<RawPlatformLessonWrite> {
+  return platformLessonWrite(lessonId, '/enabled', 'PUT', { enabled, actorCoreUserId });
+}
+
+// POST /v1/admin/lessons/:id/promote — to `global` or `planning_craft`.
+export function promotePlatformLesson(
+  lessonId: string,
+  to: PlatformLessonPromotion,
+  actorCoreUserId: string,
+): Promise<RawPlatformLessonWrite> {
+  return platformLessonWrite(lessonId, '/promote', 'POST', { to, actorCoreUserId });
 }

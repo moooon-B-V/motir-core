@@ -465,6 +465,17 @@ rather than introducing a second one.
 > `targetId`, and `{ audience, fromModel, toModel }` as metadata. The page's READ is covered by the
 > first row's `support` minimum; it reads no tenant row, so it writes no audit row of its own.
 
+> **⚠️ AMENDED 2026-10-02 (Story MOTIR-1408 · MOTIR-1411).** The planning-lessons page adds four
+> writes from outside Epic 10: `ai.lesson.edit`, `ai.lesson.enable`, `ai.lesson.disable` and
+> `ai.lesson.promote`, all `reason: 'required'`. Edit and enable/disable take `operator`, because
+> they curate what a planner is told; promote takes `superadmin`, because it puts one customer's
+> words in front of every other customer's planner, which is a disclosure decision. The lesson lives
+> in motir-ai, which writes no audit row: core appends it, with `targetKind: 'platform'`, the lesson
+> id as `targetId`, the owning organization as `organizationId` on a tenant lesson, and
+> `{ lessonId, before, after }` (changed fields only) as metadata. Unlike the planning-model page,
+> the READS here are audited: a tenant lesson is customer text, so opening the list or a detail is a
+> cross-tenant read and writes one `estate.read` row.
+
 ---
 
 ## What this ADR deliberately does NOT decide

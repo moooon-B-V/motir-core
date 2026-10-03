@@ -180,6 +180,12 @@ describe('the reason rule', () => {
     // The platform planning model per audience (Story MOTIR-7220 · MOTIR-7227) —
     // `superadmin` and `required`, like every billing-class row in ADR §7.
     'ai.planner_model.set': 'required',
+    // The planning-lesson curate acts (Story MOTIR-1408 · MOTIR-1411) — each
+    // changes what a planner is told, so each carries a reason.
+    'ai.lesson.edit': 'required',
+    'ai.lesson.enable': 'required',
+    'ai.lesson.disable': 'required',
+    'ai.lesson.promote': 'required',
   } as const;
 
   it('every action carries the policy the ADR allocates it', () => {
