@@ -204,6 +204,15 @@ describe('every E2E truncate runs under the 40P01 retry (MOTIR-3739)', () => {
     expect(code, `${RETRY} no longer bounds its attempts — an unbounded retry is a hang`).toMatch(
       /attempt >= \d+/,
     );
+    // MOTIR-7415 — a truncate that WAITS raises nothing, so a deadlock retry
+    // alone never fires on the failure that stalled the lane's worker for
+    // ~100 s. The door must bound the wait and retry the timeout it raises.
+    // `tests/e2e-truncate-lock-timeout.test.ts` drives that against Postgres;
+    // this keeps the two halves from being unpicked in source.
+    expect(code, `${RETRY} no longer bounds a truncate's lock wait`).toMatch(
+      /SET LOCAL lock_timeout/,
+    );
+    expect(code, `${RETRY} no longer retries the lock-timeout SQLSTATE`).toContain('55P03');
 
     const guarded = guardedIndices(source);
     const unguarded = truncateRefsIn(source, HELPERS)

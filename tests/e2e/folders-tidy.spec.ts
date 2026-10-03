@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { actionWrite } from './_helpers/authoritative-signal';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
@@ -11,9 +11,17 @@ import { foldersService } from '@/lib/services/foldersService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
-// TIDY A PROJECT INTO FOLDERS — THE ACCEPTANCE RECEIPT (Story MOTIR-5308 ·
-// Subtask MOTIR-5318). The story's verification recipe, in a real browser
-// against a production build and a real database.
+// TIDY A PROJECT INTO FOLDERS — Story MOTIR-5308's walk, as a REGRESSION spec.
+// It was that story's acceptance receipt (`acceptance-folders.spec.ts`, Subtask
+// MOTIR-5318); Story MOTIR-5753 PROMOTED it into the main lane
+// (docs/acceptance-lane-triage.md § MOTIR-5753) when a folder came to hold pages
+// too. The import swap to `_helpers/promoted-regression` keeps every `chapter()`
+// as a step and drops the pacing; the one assertion restated is the delete
+// dialog's closing sentence, which the design now words "No work items or pages
+// are deleted." (`design/pages/design-notes.md`, the MOTIR-7371 change).
+//
+// The story's verification recipe, in a real browser against a production build
+// and a real database.
 //
 // ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
 //
@@ -245,7 +253,7 @@ test('a person tidies a project into folders, and the work is untouched', async 
     const confirm = page.getByRole('alertdialog', { name: 'Delete folder “Parked”?' });
     await expect(confirm).toBeVisible();
     await expect(confirm).toContainText('1 folder and 1 work item will move to');
-    await expect(confirm).toContainText('No work items are deleted.');
+    await expect(confirm).toContainText('No work items or pages are deleted.');
     await beat();
 
     const remove = actionWrite(page, '/items', parkedId);

@@ -99,18 +99,32 @@ export function applyUpdate(state: Uint8Array, update: Uint8Array): Uint8Array {
 }
 
 /**
- * The ONE update that makes a state's document read as `markdown`.
+ * The ONE update that brings a state's document to `json`.
  *
- * The markdown is parsed, the fragment of a COPY of the document is brought to
- * it — y-prosemirror diffs, so unchanged blocks keep their Yjs identity — and
- * the update is everything the copy has that the original lacks. Applied to
- * the original it yields the markdown; applied after a concurrent edit it
- * merges, as any editor's update would.
+ * The fragment of a COPY of the document is brought to the JSON — y-prosemirror
+ * diffs, so unchanged blocks keep their Yjs identity — and the update is
+ * everything the copy has that the original lacks. Applied to the original it
+ * yields the JSON's document; applied after a concurrent edit it merges, as any
+ * editor's update would. The markdown write and the restore both go through
+ * here, so the two cannot drift.
  */
-export function markdownToUpdate(state: Uint8Array, markdown: string): Uint8Array {
+function jsonToUpdate(state: Uint8Array, json: Record<string, unknown>): Uint8Array {
   const original = load(state);
   const copy = load(state);
-  const json = parseMarkdown(markdown).toJSON() as Record<string, unknown>;
   prosemirrorJSONToYXmlFragment(pageSchema, json, copy.getXmlFragment(PAGE_FRAGMENT));
   return Y.encodeStateAsUpdate(copy, Y.encodeStateVector(original));
+}
+
+/** The ONE update that makes a state's document read as `markdown`. */
+export function markdownToUpdate(state: Uint8Array, markdown: string): Uint8Array {
+  return jsonToUpdate(state, parseMarkdown(markdown).toJSON() as Record<string, unknown>);
+}
+
+/**
+ * The ONE update that makes a state's document read as `targetState`'s — a
+ * restore's diff (§6). The target's CONTENT is copied, not its Yjs history: the
+ * stored state is never rewound, so a client holding newer state still merges.
+ */
+export function stateToUpdate(state: Uint8Array, targetState: Uint8Array): Uint8Array {
+  return jsonToUpdate(state, stateToDoc(targetState).toJSON() as Record<string, unknown>);
 }

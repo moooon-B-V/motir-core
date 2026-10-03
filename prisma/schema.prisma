@@ -411,6 +411,9 @@ model User {
   createdFolders                   Folder[]                      @relation("FolderCreator")
   createdPages                     Page[]                        @relation("PageCreator")
   updatedPages                     Page[]                        @relation("PageUpdater")
+  // Page versions this person authored (Story MOTIR-5754). Restrict, as
+  // `Page.updatedBy`: authorship is durable attribution.
+  pageVersions                     PageVersion[]                 @relation("PageVersionAuthor")
   // Monitor connections this person BOUND (Story MOTIR-4926 · MOTIR-4929 ·
   // MOTIR-5576) — whose identity the reconciler files each monitor bug as.
   // SetNull, NOT Cascade: removing the person must not remove the binding; the
@@ -1574,6 +1577,7 @@ model Workspace {
   /// Folders in this workspace's projects (Story MOTIR-5308). Cascade.
   folders                     Folder[]
   pages                       Page[]
+  pageVersions                PageVersion[]
   /// Users' agent instances in this workspace's projects (MOTIR-6870). Cascade.
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]
@@ -2069,6 +2073,7 @@ model Project {
   /// tree that carry no workflow. Cascade.
   folders                       Folder[]
   pages                         Page[]
+  pageVersions                  PageVersion[]
   /// The folder this project's filed bugs land in (Story MOTIR-4927 · MOTIR-4934).
   /// NULL MEANS THE PROJECT ROOT, CHOSEN — nullable with no default, and never to
   /// be made required. `NoAction`, the `Folder.parentFolder` idiom: a folder this
@@ -11747,20 +11752,60 @@ model Page {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parentPage  Page?        @relation("PageParent", fields: [parentPageId], references: [id], onDelete: NoAction)
-  childPages  Page[]       @relation("PageParent")
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentPage  Page?         @relation("PageParent", fields: [parentPageId], references: [id], onDelete: NoAction)
+  childPages  Page[]        @relation("PageParent")
   // The page's images (MOTIR-7279) — attachments it owns from upload.
   attachments Attachment[]
-  folder      Folder?      @relation("PageFolder", fields: [folderId], references: [id], onDelete: NoAction)
-  createdBy   User         @relation("PageCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy   User         @relation("PageUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  folder      Folder?       @relation("PageFolder", fields: [folderId], references: [id], onDelete: NoAction)
+  createdBy   User          @relation("PageCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy   User          @relation("PageUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  // The page's history (Story MOTIR-5754). Cascade: deleting a page takes them.
+  versions    PageVersion[]
 
   @@index([projectId, parentPageId, position, id])
   @@index([projectId, folderId, position, id])
   @@index([workspaceId])
   @@map("page")
+}
+
+// PAGE VERSIONS — a page's history (Story MOTIR-5754 · MOTIR-7382).
+//
+// `docs/decisions/pages.md` §6. A version is a SNAPSHOT of the page body
+// (`bodyState` + `bodyMarkdown`) by one author, coalesced per author over
+// `PAGE_VERSION_WINDOW_MS` and capped at `PAGE_VERSION_CAP` by `@motir/pages`.
+// `number` is per page and never reused (`max + 1`, even after pruning).
+//
+// A RESTORE row names its source twice: `restoredFromVersionId` (SET NULL when
+// the source is pruned) and `restoredFromNumber`, which outlives the source so
+// the row still reads "restored from vN, no longer kept". A CHECK keeps the
+// number present whenever the id is. Cotenancy of the page and the restore
+// source is a SECURITY DEFINER trigger; RLS is the `page` pair.
+model PageVersion {
+  id                    String   @id @default(cuid())
+  workspaceId           String   @map("workspace_id")
+  projectId             String   @map("project_id")
+  pageId                String   @map("page_id")
+  number                Int
+  authorId              String   @map("author_id")
+  bodyState             Bytes    @map("body_state")
+  bodyMarkdown          String   @map("body_markdown") @db.Text
+  startedAt             DateTime @map("started_at")
+  savedAt               DateTime @map("saved_at")
+  restoredFromVersionId String?  @map("restored_from_version_id")
+  restoredFromNumber    Int?     @map("restored_from_number")
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  page         Page          @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  author       User          @relation("PageVersionAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  restoredFrom PageVersion?  @relation("PageVersionRestore", fields: [restoredFromVersionId], references: [id], onDelete: SetNull)
+  restoredInto PageVersion[] @relation("PageVersionRestore")
+
+  @@unique([pageId, number])
+  @@index([workspaceId])
+  @@map("page_version")
 }
 
 model MonitorInstallation {
@@ -12231,6 +12276,11 @@ model AgentInstance {
   state          AgentInstanceState @default(starting)
   /// Set on `failed`, in words a person can read; cleared on a later wake.
   failureReason  String?            @map("failure_reason")
+  /// Why the stop in flight was begun (MOTIR-7406): written with the
+  /// `running → hibernating` move and cleared when the stop settles, so a stop
+  /// the SWEEP settles closes the interval with that reason (`credits`,
+  /// `backstop`, `idle`, …) rather than a blanket `hibernated`.
+  hibernateReason AgentInstanceIntervalEndReason? @map("hibernate_reason")
   stateChangedAt DateTime           @default(now()) @map("state_changed_at")
   /// The idle signal (§2): bumped by create, wake, and later stories' relay
   /// and runs. The idle sweep compares it with the 30-minute window.

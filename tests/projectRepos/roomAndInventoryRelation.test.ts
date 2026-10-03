@@ -7,7 +7,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { organizationIdOf } from '../helpers/organizationOf';
 
-beforeEach(truncateAuthTables);
+beforeEach(() => truncateAuthTables());
 afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();

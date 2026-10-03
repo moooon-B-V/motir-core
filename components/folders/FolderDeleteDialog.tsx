@@ -9,7 +9,8 @@ import type { FolderDeletionPreviewDto } from '@/lib/dto/folders';
 // The DELETE-FOLDER confirmation (Story MOTIR-5308 · MOTIR-5346), the design's
 // panel 5 — the shipped alertdialog chrome, telling the OPPOSITE story to the
 // work-item delete: nothing inside a folder is deleted, its direct contents move
-// up. The mint line names exactly what moves and where, from
+// up. The mint line names exactly what moves and where — child folders, work
+// items and pages (MOTIR-7371), each only when present — from
 // `describeFolderDeletion`, which counts the sets `deleteFolder` moves — and
 // until that read lands the dialog shows no number and cannot be confirmed.
 //
@@ -26,6 +27,24 @@ export interface FolderDeleteDialogProps {
   onCancel: () => void;
 }
 
+/**
+ * Which of the three counts the move line names — only the kinds that are
+ * present, so it never reads "0 pages". The keys are `folders.deleteMoves`'
+ * `kinds` select; a preview with nothing in it never reaches the line.
+ */
+function movedKinds(preview: FolderDeletionPreviewDto): string {
+  const folders = preview.childFolderCount > 0;
+  const items = preview.workItemCount > 0;
+  const pages = preview.pageCount > 0;
+  if (folders && items && pages) return 'all';
+  if (folders && items) return 'foldersItems';
+  if (folders && pages) return 'foldersPages';
+  if (items && pages) return 'itemsPages';
+  if (folders) return 'folders';
+  if (pages) return 'pages';
+  return 'items';
+}
+
 export function FolderDeleteDialog({
   folderName,
   preview,
@@ -36,15 +55,11 @@ export function FolderDeleteDialog({
 }: FolderDeleteDialogProps) {
   const t = useTranslations('folders');
   const tc = useTranslations('common');
-  const empty = preview !== null && preview.childFolderCount === 0 && preview.workItemCount === 0;
-  const kinds =
-    preview === null
-      ? 'both'
-      : preview.childFolderCount > 0 && preview.workItemCount > 0
-        ? 'both'
-        : preview.childFolderCount > 0
-          ? 'folders'
-          : 'items';
+  const empty =
+    preview !== null &&
+    preview.childFolderCount === 0 &&
+    preview.workItemCount === 0 &&
+    preview.pageCount === 0;
 
   return (
     <Modal
@@ -78,9 +93,10 @@ export function FolderDeleteDialog({
             <ArrowUp className="mt-px h-4 w-4 shrink-0 text-(--el-success)" aria-hidden />
             <span>
               {t.rich('deleteMoves', {
-                kinds,
+                kinds: movedKinds(preview),
                 folders: preview.childFolderCount,
                 items: preview.workItemCount,
+                pages: preview.pageCount,
                 destination: preview.destination.name ?? t('projectRoot'),
                 strong: (chunks) => <strong className="font-semibold">{chunks}</strong>,
               })}

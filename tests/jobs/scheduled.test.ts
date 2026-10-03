@@ -10,8 +10,12 @@ import {
 import { registerMonitorProvider } from '@/lib/monitors/registry';
 import { sentryMonitorProvider } from '@/lib/monitors/providers/sentry';
 import { adminDb } from '../helpers/adminDb';
-import { truncateJobRuns } from '../helpers/db';
+import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { seedHealthyJobSchedules } from '../helpers/jobs';
+import { Prisma } from '@/generated/prisma/client';
+import { usersService } from '@/lib/services/usersService';
+import { workspacesService } from '@/lib/services/workspacesService';
+import { classifyRunner, MOTIR_FLEET_RUNNER_FAMILY } from '@/lib/ciMetering/runnerRates';
 
 // Scheduled-job primitive (Story 1.6 · Subtask 1.6.4) — the replacement for the
 // 1.6.2 system.ping smoke test. Drives the `system.daily-health-check` cron job
@@ -674,5 +678,209 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
     expect(error?.message).toBeDefined();
     expect(error?.message).not.toContain(SECRET);
     expect(error?.message).not.toContain(String(SECRET.length));
+  });
+
+  // ── The SEVENTH probe: credential expiry (MOTIR-1933) ──────────────────────
+  //
+  // The only probe here whose subject is a DECLARED date
+  // (`lib/health/credentialRegistry.ts`), so its fixture is the clock and one
+  // env var. The clock is set BEFORE the schedules are seeded, so the
+  // schedule-health probe judges them against the same `now`.
+
+  describe('credential expiry', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    async function greenAt(now: string, billingToken: string) {
+      vi.setSystemTime(new Date(now));
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+      vi.stubEnv('GITHUB_BILLING_TOKEN', billingToken);
+      // The Fly read token (MOTIR-7331) is registered too; held unset so each case
+      // judges the billing token alone.
+      vi.stubEnv('FLY_DEPLOYMENT_READ_TOKEN', '');
+    }
+
+    it('PASSES months ahead of the declared expiry, and records the entry', async () => {
+      await greenAt('2026-10-02T09:00:00.000Z', 'ghp_billing');
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result } = await engine.execute();
+
+      expect(result).toMatchObject({
+        ok: true,
+        credentialExpiry: {
+          verdict: 'ok',
+          entries: [{ envVar: 'GITHUB_BILLING_TOKEN', state: 'healthy' }],
+        },
+      });
+    });
+
+    it('FAILS inside the lead time, naming the variable, the date and the renewal', async () => {
+      await greenAt('2027-07-05T09:00:00.000Z', 'ghp_billing');
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result, error } = await engine.execute();
+
+      expect(result).toBeUndefined();
+      expect(error?.name).toBe('CredentialExpiringError');
+      expect(error?.message).toContain('GITHUB_BILLING_TOKEN');
+      expect(error?.message).toContain('2027-07-31');
+      expect(error?.message).toContain('in 25 day(s)');
+      expect(error?.message).toContain('fly secrets set GITHUB_BILLING_TOKEN');
+      expect(error?.message).toContain('credentialRegistry.ts');
+      expect(error?.message).not.toContain('ghp_billing');
+    });
+
+    it('FAILS as EXPIRED once the date has passed and the variable is still set', async () => {
+      await greenAt('2027-08-03T09:00:00.000Z', 'ghp_billing');
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { error } = await engine.execute();
+
+      expect(error?.name).toBe('CredentialExpiredError');
+      expect(error?.message).toContain('PAST their declared expiry');
+      expect(error?.message).toContain('3 day(s) ago');
+    });
+
+    it('SKIPS an unset token — a deployment without the audit is not a fault', async () => {
+      await greenAt('2027-08-03T09:00:00.000Z', '');
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result } = await engine.execute();
+
+      expect(result).toMatchObject({
+        ok: true,
+        credentialExpiry: {
+          verdict: 'ok',
+          entries: [],
+          skipped: ['GITHUB_BILLING_TOKEN', 'FLY_DEPLOYMENT_READ_TOKEN'],
+        },
+      });
+    });
+
+    it('a credential failure still records every other probe first', async () => {
+      await greenAt('2027-07-05T09:00:00.000Z', 'ghp_billing');
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { error, ctx } = await engine.execute();
+
+      expect(error?.name).toBe('CredentialExpiringError');
+      const stepIds = ctx.step.run.mock.calls.map((call) => call[0] as string);
+      for (const id of [
+        'schedule-health',
+        'fleet-boot-preflight',
+        'index-fleet-boot-preflight',
+        'index-container-ai-address',
+        'index-rebuild-streak',
+        'monitor-config-preflight',
+        'credential-expiry',
+      ]) {
+        expect(stepIds).toContain(id);
+      }
+    });
+  });
+
+  // ── The EIGHTH probe: a hosted run in a Motir-owned org (MOTIR-1934) ───────
+  //
+  // Its fixture is a metered `ci_workflow_run_usage` row, which needs a real
+  // workspace and organization behind it. The probe's own arms are pinned in
+  // `tests/ciMetering/hostedRunProbe.test.ts`; these assert the job surface.
+
+  describe('hosted runs in an owned org', () => {
+    const OWNED = 'motir-projects';
+
+    beforeEach(async () => {
+      await adminDb.$executeRawUnsafe(
+        'TRUNCATE TABLE "ci_workflow_run_usage" RESTART IDENTITY CASCADE',
+      );
+      await truncateAuthTables();
+    });
+
+    async function seedRun(runId: string, family: string) {
+      const user = await usersService.createUser({
+        email: `hosted-${runId}@example.com`,
+        password: 'hunter2hunter2',
+        name: 'Owner',
+      });
+      const { workspace } = await workspacesService.createWorkspace({
+        name: `WS ${runId}`,
+        ownerUserId: user.id,
+      });
+      const completedAt = new Date(Date.now() - 60 * 60 * 1000);
+      await adminDb.ciWorkflowRunUsage.create({
+        data: {
+          workspaceId: workspace.id,
+          organizationId: workspace.organizationId,
+          runId,
+          runAttempt: 1,
+          repoOwner: OWNED,
+          repoName: 'acme-web',
+          periodStart: new Date(
+            Date.UTC(completedAt.getUTCFullYear(), completedAt.getUTCMonth(), 1),
+          ),
+          runCompletedAt: completedAt,
+          billableMinutes: 4,
+          rawWallClockSeconds: new Prisma.Decimal(200),
+          linearEquivalentMinutes: new Prisma.Decimal(4),
+          jobCount: 1,
+          runnerBreakdown: [
+            {
+              family,
+              multiplier: 1,
+              billableMinutes: 4,
+              rawWallClockSeconds: 200,
+              linearEquivalentMinutes: 4,
+              jobCount: 1,
+              unpriced: false,
+            },
+          ],
+        },
+      });
+    }
+
+    it('PASSES and records the verdict when every run ran on the fleet', async () => {
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+      vi.stubEnv('GITHUB_FALLBACK_ORG', OWNED);
+      await seedRun('run-fleet', MOTIR_FLEET_RUNNER_FAMILY);
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result } = await engine.execute();
+
+      expect(result).toMatchObject({ ok: true, hostedRuns: { verdict: 'ok', runsChecked: 1 } });
+    });
+
+    it('FAILS on an ubuntu-latest run, naming the org, repo, run id and the variable to check', async () => {
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+      vi.stubEnv('GITHUB_FALLBACK_ORG', OWNED);
+      await seedRun('run-4242', classifyRunner(['ubuntu-latest']));
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result, error, ctx } = await engine.execute();
+
+      expect(result).toBeUndefined();
+      expect(error?.name).toBe('HostedRunInOwnedOrgError');
+      expect(error?.message).toContain('motir-projects/acme-web run run-4242');
+      expect(error?.message).toContain(classifyRunner(['ubuntu-latest']));
+      expect(error?.message).toContain('vars.MOTIR_RUNNER');
+      expect(error?.message).toContain('already spent');
+      // Every other probe still ran and recorded its verdict first.
+      const stepIds = ctx.step.run.mock.calls.map((call) => call[0] as string);
+      expect(stepIds).toEqual(
+        expect.arrayContaining([
+          'schedule-health',
+          'fleet-boot-preflight',
+          'index-fleet-boot-preflight',
+          'index-container-ai-address',
+          'index-rebuild-streak',
+          'monitor-config-preflight',
+          'credential-expiry',
+          'hosted-run-probe',
+        ]),
+      );
+    });
   });
 });

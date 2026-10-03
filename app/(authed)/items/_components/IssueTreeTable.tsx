@@ -63,11 +63,11 @@ import {
   type FolderWriteResult,
   type ListProjectFoldersResult,
 } from '../actions';
-import { useFolderCommands, type WorkItemPlacement } from './FolderCommands';
-import { FolderDeleteDialog } from './FolderDeleteDialog';
-import { FolderNameField } from './FolderNameField';
-import { FolderPickerPanel, FolderPickerPopover } from './FolderPicker';
-import { FolderRowMenu, type FolderMenuEntry } from './FolderRowMenu';
+import { useFolderCommands, type WorkItemPlacement } from '@/components/folders/FolderCommands';
+import { FolderDeleteDialog } from '@/components/folders/FolderDeleteDialog';
+import { FolderNameField } from '@/components/folders/FolderNameField';
+import { FolderPickerPanel, FolderPickerPopover } from '@/components/folders/FolderPicker';
+import { FolderRowMenu, type FolderMenuEntry } from '@/components/folders/FolderRowMenu';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 

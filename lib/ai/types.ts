@@ -801,6 +801,23 @@ export interface RawSubscriptionResponse {
   planTier: { key: string; name: string; monthlyCreditAllotment: number } | null;
 }
 
+// GET /v1/stripe/billing-history (MOTIR-7303) — an org's default payment method
+// and its most recent invoices (at most 12, newest first), read live from Stripe
+// by motir-ai. Mirrors motir-ai's BillingHistoryDto. An org with no Stripe
+// customer answers `{ paymentMethod: null, invoices: [] }`, never a 404.
+export interface RawBillingHistoryResponse {
+  paymentMethod: { brand: string; last4: string; expMonth: number; expYear: number } | null;
+  invoices: {
+    id: string;
+    /** When Stripe raised the invoice, ISO-8601. */
+    createdAt: string;
+    status: string;
+    /** The invoice total in integer cents of `currency`. */
+    amountCents: number;
+    currency: string;
+  }[];
+}
+
 // ── Pre-plan read surface (Subtask 7.3.25) ───────────────────────────────────
 // The resumable pre-plan state motir-core fetches over GET /v1/preplan to resume
 // the onboarding loop and render each artifact's revision diffs at the gate

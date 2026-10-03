@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  EXEC_RESPONSE_GRACE_SECONDS,
   FLEET_CONTAINER_SIZE,
   INSTANCE_METADATA_KEY,
   MACHINE_CONFIG_METADATA_KEY,
@@ -7,6 +8,8 @@ import {
   OrchestratorApiError,
   OrchestratorImageUnpullableError,
   OrchestratorNotConfiguredError,
+  OrchestratorTimeoutError,
+  ORCHESTRATOR_REQUEST_TIMEOUT_MS,
   VOLUME_RELEASE_ATTEMPTS,
   currentRunInstants,
   flyInstancesConfig,
@@ -38,6 +41,8 @@ interface Call {
   /** The body exactly as sent — for the byte-identity pin. */
   rawBody: string | null;
   auth: string | null;
+  /** The abort signal `flyRequest` armed — what a stalled answer races. */
+  signal: AbortSignal | null;
 }
 
 let calls: Call[];
@@ -140,6 +145,7 @@ beforeEach(() => {
         typeof init.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : null,
       rawBody: typeof init.body === 'string' ? init.body : null,
       auth: headers['authorization'] ?? null,
+      signal: init.signal ?? null,
     };
     calls.push(call);
     return handler(call);
@@ -718,6 +724,90 @@ describe('exec — one command inside a running machine (MOTIR-6872)', () => {
       expect(call.body).not.toHaveProperty('cmd');
       expect(Array.isArray(call.body?.['command'])).toBe(true);
     }
+  });
+});
+
+// MOTIR-7405: the Machines API's exec is SYNCHRONOUS — the response arrives when
+// the command exits — so the request stays open for as long as the command runs.
+// `flyRequest` used to abort EVERY call at ORCHESTRATOR_REQUEST_TIMEOUT_MS (30 s),
+// so a clone allowed 600 s was cut off at 30 s on production ("The fly
+// orchestrator did not answer within 30000ms"), while the fake adapter's bridge
+// waited `timeoutSeconds + 5` and every fake-fleet test passed.
+describe('exec waits as long as its command may run (MOTIR-7405)', () => {
+  /** A Machines API that answers after `ms`, unless the caller hangs up first. */
+  function answerAfter(ms: number, body: unknown, signal: AbortSignal | null): Promise<Response> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => resolve(json(200, body)), ms);
+      signal?.addEventListener('abort', () => {
+        clearTimeout(timer);
+        reject(new DOMException('This operation was aborted', 'AbortError'));
+      });
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('gets the answer of a command that runs 35 s when it was allowed 60 s', async () => {
+    handler = (call) =>
+      answerAfter(35_000, { exit_code: 0, stdout: 'cloned', stderr: '' }, call.signal);
+
+    const settled = flyPersistentOrchestrator
+      .exec(HANDLE, ['git', 'clone', 'x'], { timeoutSeconds: 60 })
+      .catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(35_000);
+
+    expect(await settled).toEqual({ exitCode: 0, stdout: 'cloned', stderr: '' });
+    expect(calls[0]!.body).toEqual({ command: ['git', 'clone', 'x'], timeout: 60 });
+  });
+
+  it('hangs up at timeoutSeconds + the grace, and the timeout error names the deadline that applied', async () => {
+    expect(EXEC_RESPONSE_GRACE_SECONDS).toBe(5);
+    handler = (call) => answerAfter(35_000, { exit_code: 0 }, call.signal);
+
+    const settled = flyPersistentOrchestrator
+      .exec(HANDLE, ['git', 'clone', 'x'], { timeoutSeconds: 10 })
+      .catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(15_000 - 1);
+    await expect(Promise.race([settled, Promise.resolve('still pending')])).resolves.toBe(
+      'still pending',
+    );
+
+    await vi.advanceTimersByTimeAsync(1);
+    const err = await settled;
+    expect(err).toBeInstanceOf(OrchestratorTimeoutError);
+    expect(err).toMatchObject({ provider: 'fly', timeoutMs: 15_000 });
+    expect((err as Error).message).toContain('15000ms');
+  });
+
+  it('waits the default exec timeout + the grace when the caller names none', async () => {
+    handler = (call) => answerAfter(124_000, { exit_code: 0 }, call.signal);
+
+    const settled = flyPersistentOrchestrator.exec(HANDLE, ['true']).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(124_000);
+
+    expect(await settled).toMatchObject({ exitCode: 0 });
+    expect(calls[0]!.body).toMatchObject({ timeout: 120 });
+  });
+
+  it('every call that is not an exec still aborts at the 30-second default', async () => {
+    handler = (call) => answerAfter(60_000, flyMachine('started'), call.signal);
+
+    const settled = flyPersistentOrchestrator.describePersistent(HANDLE).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(ORCHESTRATOR_REQUEST_TIMEOUT_MS - 1);
+    await expect(Promise.race([settled, Promise.resolve('still pending')])).resolves.toBe(
+      'still pending',
+    );
+
+    await vi.advanceTimersByTimeAsync(1);
+    const err = await settled;
+    expect(err).toBeInstanceOf(OrchestratorTimeoutError);
+    expect(err).toMatchObject({ provider: 'fly', timeoutMs: ORCHESTRATOR_REQUEST_TIMEOUT_MS });
   });
 });
 

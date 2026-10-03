@@ -1,7 +1,14 @@
 import { defineConfig } from 'vitest/config';
 import baseConfig from './vitest.config';
 
-// STORY MOTIR-5752's `motir-core` COVERAGE FLOOR (write a page; MOTIR-7281).
+// STORY MOTIR-5752's `motir-core` COVERAGE FLOOR (write a page; MOTIR-7281), and
+// STORY MOTIR-5753's (the `/pages` tree; MOTIR-7377), which extends the same lane
+// rather than adding a second job: the tree's app files join `STORY_FILES` and its
+// gate (`tests/integration/pagesTreeStoryGate.test.ts`) joins `include`. The tree
+// story's other app files are gated where they already were — the folder surface
+// it moved to `components/folders/` and `folderRepository` / `foldersService` /
+// `folderMappers` by the main lane (`vitest.config.ts`), the rest by the entries
+// below — and `packages/pages/src/move.ts` by the package's own floor.
 //
 // ⚠️ WHAT A FLOOR IS FOR HERE, AND WHAT IT IS NOT. It does not decide whether the
 // assembled pages layer is correct — `tests/integration/pagesStoryGate.test.ts`
@@ -53,12 +60,23 @@ const STORY_FILES = [
   'lib/pages/index.ts',
   'lib/pages/pageStoreAdapter.ts',
   'lib/pages/routeErrors.ts',
-  // `/api/pages`, `/api/pages/[pageId]`, `…/updates`, `…/images`.
+  // `/api/pages`, `/api/pages/[pageId]`, `…/updates`, `…/images`, `…/versions`,
+  // and (MOTIR-5754) `…/versions/[number]` and `…/versions/[number]/restore`.
   'app/api/pages/route.ts',
   'app/api/pages/*/route.ts',
   'app/api/pages/*/*/route.ts',
+  'app/api/pages/*/*/*/route.ts',
+  'app/api/pages/*/*/*/*/route.ts',
+  'lib/repositories/pageVersionRepository.ts',
   // The editor host.
   'components/pages/*.tsx',
+  // Story MOTIR-5753 (the `/pages` tree; MOTIR-7377): the tree, its rows, menus,
+  // Move to… picker, drag, the page route's sidebar and breadcrumb, and the two
+  // hooks — the `*.tsx` glob above stops at `components/pages/`, one level up.
+  'components/pages/tree/*.tsx',
+  'components/pages/tree/*.ts',
+  // The tree routes' `parent` parser (`?parent=` and the JSON `parent`).
+  'lib/pages/parentInput.ts',
   // `app/(authed)/pages/**` — the index, New page and the page at its address.
   'app/**/pages/page.tsx',
   'app/**/pages/*/page.tsx',
@@ -76,8 +94,10 @@ export default defineConfig({
   test: {
     ...baseConfig.test,
     include: [
-      // The story gate — the assembly, on the real doors.
+      // The story gates — the assembly, on the real doors (MOTIR-5752 · MOTIR-5753).
       'tests/integration/pagesStoryGate.test.ts',
+      'tests/integration/pagesTreeStoryGate.test.ts',
+      'tests/integration/pageHistoryStoryGate.test.ts',
       // The per-card server suites (MOTIR-7276 · 7277 · 7278 · 7279 · 7300).
       'tests/page-schema-rls.test.ts',
       'tests/pages/*.test.ts',
@@ -87,6 +107,9 @@ export default defineConfig({
       'tests/jobs/attachment-gc.test.ts',
       'tests/api/pages-routes.test.ts',
       'tests/api/pages-routes-refusals.test.ts',
+      'tests/api/pages-routes-tree.test.ts',
+      // A page's history (Story MOTIR-5754 · MOTIR-7385 · 7386).
+      'tests/api/pages-history-routes.test.ts',
       // The client surfaces (MOTIR-7280 · 7300).
       'tests/components/new-page-button.test.tsx',
       'tests/components/page-view.test.tsx',

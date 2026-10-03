@@ -192,6 +192,12 @@ update that applies only when the row is in the expected prior state, so two cli
 the sweep, cannot both win. The Fly call happens after the guard commits, outside the transaction
 (`motir-core/CLAUDE.md`, side effects outside the transaction).
 
+**A stop that never reached its machine is sent again (MOTIR-7406).** `running → hibernating` records
+the reason the stop was begun for (`hibernate_reason`), and the interval closes with it however the
+stop settles: inline, or on a later sweep. When the sweep finds a `hibernating` agent whose machine
+still reports `running`, Fly refused or lost the stop, so the sweep sends it again, once per pass, and
+reads the machine again. `stop` is idempotent, so a stop that did land costs nothing.
+
 ### §5 · The charge — one debit per running interval
 
 - **An interval** runs from the machine's `start` event to its `stop` or `destroy` event, read from

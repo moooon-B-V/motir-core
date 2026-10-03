@@ -10,6 +10,7 @@ import {
   type FlyMachine,
 } from './flyMachines';
 import {
+  EXEC_RESPONSE_GRACE_SECONDS,
   OrchestratorApiError,
   OrchestratorImageUnpullableError,
   OrchestratorNotConfiguredError,
@@ -577,6 +578,10 @@ const flyInstancesClient = {
     const res = await flyRequest(path(app, `/machines/${encodeURIComponent(id)}/exec`), {
       method: 'POST',
       token: config.token,
+      // Exec is SYNCHRONOUS — Fly answers when the command exits — so the
+      // request has to stay open as long as the command may run, not the 30 s
+      // every other call gets (MOTIR-7405: a 600 s clone was cut off at 30 s).
+      timeoutMs: (timeoutSeconds + EXEC_RESPONSE_GRACE_SECONDS) * 1000,
       // The argv goes in `command`. `cmd` is the Machines API's legacy STRING
       // field: an array there is refused 400 "body is missing command: json:
       // cannot unmarshal array into … machineExecRequestRaw.cmd of type string"

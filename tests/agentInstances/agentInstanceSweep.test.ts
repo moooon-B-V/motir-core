@@ -312,6 +312,55 @@ describe('the sweep', () => {
     expect(fleet.liveVolumeIds()).toEqual([]);
   });
 
+  // MOTIR-7406: a stop Fly refused left the row `hibernating` with its machine up,
+  // and the sweep only DESCRIBED it, pass after pass, so it never stopped and its
+  // interval never closed. The sweep now re-issues the stop, and the interval
+  // closes with the reason the hibernate was begun for, not `hibernated`.
+  for (const reason of ['credits', 'backstop', 'idle'] as const) {
+    it(`re-issues a \`${reason}\` stop the provider refused, and closes the interval \`${reason}\``, async () => {
+      const dto = await createRunning();
+      const stop = vi.spyOn(fleet, 'stop');
+      fleet.failNextStop();
+      expect(await lifecycle.beginHibernate(dto.id, reason)).toBe(true);
+      const row = await instance();
+      expect(row.state).toBe('hibernating');
+      expect(row.hibernateReason).toBe(reason);
+      expect(fleet.liveMachineIds()).toEqual([row.machineId]);
+      // The inline settle only waits; it never re-issues the stop it just sent.
+      expect(stop).toHaveBeenCalledTimes(1);
+
+      virtualNow += 30 * MIN;
+      expect((await sweeper.sweep()).settled).toBe(1);
+      const after = await instance();
+      expect(after.state).toBe('hibernated');
+      expect(after.hibernateReason).toBeNull();
+      const all = await intervals();
+      expect(all).toHaveLength(1);
+      expect(all[0]!.endReason).toBe(reason);
+      expect(all[0]!.endedAt).not.toBeNull();
+    });
+  }
+
+  it('re-issues the stop on every pass while the provider keeps refusing it', async () => {
+    const dto = await createRunning();
+    const stop = vi.spyOn(fleet, 'stop');
+    fleet.failNextStop();
+    await lifecycle.beginHibernate(dto.id, 'credits');
+    for (let pass = 0; pass < 2; pass += 1) {
+      fleet.failNextStop();
+      virtualNow += 30 * MIN;
+      expect((await sweeper.sweep()).settled).toBe(0);
+      expect((await instance()).state).toBe('hibernating');
+      expect((await intervals())[0]!.endedAt).toBeNull();
+    }
+    virtualNow += 30 * MIN;
+    expect((await sweeper.sweep()).settled).toBe(1);
+    expect((await instance()).state).toBe('hibernated');
+    expect((await intervals())[0]!.endReason).toBe('credits');
+    // One refused stop inline, two refused re-issues, one that took.
+    expect(stop).toHaveBeenCalledTimes(4);
+  });
+
   // The orphan MACHINE is the attribution reconciler's since MOTIR-6925
   // (`fleet-per-org-pool.md` §6); the sweep keeps the VOLUME half.
   it('leaves an orphan machine to the reconciler, then destroys its volume once detached', async () => {

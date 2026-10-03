@@ -19,7 +19,11 @@ export function toFolderDto(row: Folder): FolderDto {
   };
 }
 
-/** The row `folderRepository.findLevel` projects for a lazy tree level. */
+/**
+ * The row `folderRepository.findLevel` projects for a lazy tree level — and
+ * `findLevelForPages` for the `/pages` tree's (MOTIR-7371), whose `hasChildren`
+ * counts pages where this one counts work items.
+ */
 export interface FolderTreeRow {
   id: string;
   parentFolderId: string | null;
@@ -55,6 +59,8 @@ export interface FolderDirectCountRow {
   id: string;
   childFolderCount: number;
   itemCount: number;
+  /** Pages filed directly in the folder (MOTIR-7371); a sub-page follows its page. */
+  pageCount: number;
 }
 
 /**

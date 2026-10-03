@@ -8538,7 +8538,8 @@
     "monitoring": {
       "breadcrumb": "平台·监控",
       "title": "系统健康",
-      "subtitle": "机器还在转吗？六个只读信号，打开页面时刷新。每张卡片都跳转到对应服务商自己的控制台——Motir 只显示状态，从不重新部署、取消或重放。更深入的分服务商看板属于故事 10.2。",
+      "subtitle": "机器还在转吗？七个只读信号，打开页面时刷新。每张卡片都跳转到对应服务商自己的控制台——Motir 只显示状态，从不重新部署、取消或重放。",
+      "announce": "系统健康已加载。{count, plural, =0 {全部 {total} 个信号正常。} other {{total} 个信号中有 # 个降级或读不到。}}",
       "state": {
         "healthy": "正常",
         "degraded": "降级",
@@ -8559,15 +8560,39 @@
         },
         "hosting": {
           "title": "托管",
-          "value": "由 {region} 响应",
-          "detail": "Fly 应用 {app} · 机器 {machineId}。这是正在为你服务的机器；机器总数请看 Fly 控制台，分服务商看板属于故事 10.2。",
+          "value": "<appGroup>app {appStarted}/{appExpected}</appGroup> · <workerGroup>worker {workerStarted}/{workerExpected}</workerGroup>",
+          "detail": "所有机器均已启动，全部运行版本 {release}。Fly 应用 {app} · {region}。",
+          "degradedDetail": {
+            "shortGroup": "{group} 不足：{expected} 台机器中只有 {started} 台已启动。版本 {release}。",
+            "mixedReleases": "机器正在运行 {count} 个不同的版本——某次部署可能中途停止了。最新版本 {release}。"
+          },
           "unreachable": {
-            "notManaged": "非托管环境"
+            "notManaged": "非托管环境",
+            "noReadCredential": "由 {region} 响应",
+            "readFailed": "Fly 没有响应"
           },
           "unreachableDetail": {
-            "notManaged": "此构建没有运行在 Fly 上，因此没有可跳转的托管控制台。本地或自托管实例出现这种情况是正常的。"
+            "notManaged": "此构建没有运行在 Fly 上，因此没有可跳转的托管控制台。本地或自托管实例出现这种情况是正常的。",
+            "noReadCredential": "Fly 应用 {app} · 机器 {machineId}。本控制台还没有 Fly 读取令牌，因此无法统计机器或版本。这不是数量为零。",
+            "readFailed": "刚才没能读到机器列表。这不是数量为零。"
           },
           "linkOut": "Fly 控制台"
+        },
+        "gateway": {
+          "title": "网关",
+          "value": "可访问 · {ms} 毫秒",
+          "detail": "motir-gateway {version} · 自 {since} 起运行。",
+          "degradedValue": "响应慢 · {ms} 毫秒",
+          "degradedDetail": "有响应，但超过了 {threshold} 毫秒的阈值。motir-gateway {version} · 自 {since} 起运行。",
+          "unreachable": {
+            "noAnswer": "网关没有响应",
+            "notConfigured": "未配置网关"
+          },
+          "unreachableDetail": {
+            "noAnswer": "状态检查在 {timeout} 秒内没有得到响应。经过网关的 AI 请求可能正在失败。没有测到任何数据，因此不显示延迟。",
+            "notConfigured": "未设置 MOTIR_GATEWAY_URL，因此没有可检查的对象。不运行网关的实例出现这种情况是正常的。"
+          },
+          "linkOut": "网关状态"
         },
         "schedules": {
           "title": "定时任务",
@@ -8595,15 +8620,18 @@
         },
         "errors": {
           "title": "错误",
-          "value": "无读数",
-          "detail": "—",
+          "value": "24 小时内 {count} 个错误",
+          "detail": "过去 24 小时内 Motir 的 Sentry 项目中的事件。低于 {threshold} 个错误的阈值。",
+          "degradedDetail": "过去 24 小时内超过 {threshold} 个错误的阈值。打开 Sentry 查看哪些问题在激增。",
           "unreachable": {
             "noReadCredential": "读不到 Sentry",
-            "notConfigured": "错误上报未开启"
+            "notConfigured": "错误上报未开启",
+            "readFailed": "Sentry 没有响应"
           },
           "unreachableDetail": {
-            "noReadCredential": "错误确实在上报，但本控制台没有可用于读回计数的 Sentry API 凭据。这不是错误数为零。凭据和分服务商看板随故事 10.2 一起交付。",
-            "notConfigured": "此构建没有配置 Sentry DSN，因此不会向任何地方上报。这不是错误数为零——自托管实例出现这种情况是正常的。"
+            "noReadCredential": "Sentry 正在接收错误，但本控制台还读不到计数：它没有 Sentry 读取凭据。这不是错误数为零。",
+            "notConfigured": "此构建没有配置 Sentry DSN，因此不会向任何地方上报。这不是错误数为零——自托管实例出现这种情况是正常的。",
+            "readFailed": "刚才没能读到计数。这不是错误数为零。"
           },
           "linkOut": "Sentry 问题"
         },
@@ -9180,7 +9208,6 @@
       },
       "payment": {
         "title": "付款与发票",
-        "notConnected": "付款方式和发票尚未接入控制台。",
         "unavailable": "暂时无法显示付款方式和发票。",
         "none": "暂无发票。",
         "noMethod": "未登记付款方式",
@@ -11146,7 +11173,7 @@
     "delete": "删除…",
     "deleteTitle": "删除文件夹“{name}”？",
     "deleteLead": "只会移除文件夹。其中归档的所有内容仍保留在项目中。",
-    "deleteMoves": "<strong>{kinds, select, both {{folders} 个文件夹和 {items} 个工作项} folders {{folders} 个文件夹} other {{items} 个工作项}}</strong>将移动到<strong>{destination}</strong>。不会删除任何工作项。",
+    "deleteMoves": "<strong>{kinds, select, all {{folders} 个文件夹、{items} 个工作项和 {pages} 个页面} foldersItems {{folders} 个文件夹和 {items} 个工作项} foldersPages {{folders} 个文件夹和 {pages} 个页面} itemsPages {{items} 个工作项和 {pages} 个页面} folders {{folders} 个文件夹} pages {{pages} 个页面} other {{items} 个工作项}}</strong>将移动到<strong>{destination}</strong>。不会删除任何工作项或页面。",
     "deleteEmpty": "“{name}”是空的。删除它只会移除该文件夹。",
     "deleteConfirm": "删除文件夹",
     "deleteCounting": "正在统计将要移动的内容…",
@@ -11636,22 +11663,56 @@
     "untitled": "无标题",
     "index": {
       "title": "页面",
-      "subtitle": "此项目的规格说明、运行手册和笔记——最近编辑的排在最前。",
       "newPage": "新建页面",
       "creating": "正在创建页面…",
       "createFailed": "无法创建页面，请重试。",
-      "listLabel": "此项目中的页面",
-      "edited": "{name}于{time}编辑",
-      "editedByYou": "你于{time}编辑",
       "empty": {
         "title": "还没有页面",
         "member": "写下规格说明、运行手册或会议记录——它们会留在这里，与项目的工作放在一起。",
         "viewer": "当项目成员写下页面后，它会显示在这里。"
       }
     },
+    "tree": {
+      "subtitle": "此项目的规格说明、运行手册和笔记，按文件夹和页面整理。",
+      "label": "此项目中的文件夹和页面",
+      "newPageHere": "在此新建页面",
+      "newSubPage": "新建子页面",
+      "pageActionsAria": "“{title}”的页面操作",
+      "expandAria": "展开“{title}”",
+      "collapseAria": "收起“{title}”",
+      "noPagesHere": "这里还没有页面",
+      "loadingLevel": "正在加载页面…",
+      "rootFailed": "无法加载页面。",
+      "levelFailed": "无法加载其中的内容。",
+      "loadMore": "加载更多",
+      "shown": "已显示 {count} 项",
+      "picker": {
+        "listLabel": "文件夹和页面",
+        "loading": "正在加载文件夹和页面…",
+        "isThisPage": "就是此页面——页面不能移动到其自身或其子页面中。"
+      },
+      "refusal": {
+        "cycle": "页面不能移动到其自身的子页面中。它保持在原位。",
+        "depth": "页面最多只能嵌套 {limit} 层，此次移动会超出该限制。它保持在原位。",
+        "crossProject": "该文件夹或页面属于另一个项目。页面保持在原位。",
+        "gone": "该文件夹或页面已不存在。页面保持在原位。"
+      },
+      "drop": {
+        "root": "拖放到此处，将其移动到项目根目录",
+        "refusedSelf": "不能将页面拖放到其自身的子页面中。"
+      },
+      "sidebar": {
+        "label": "页面树",
+        "hide": "隐藏页面树",
+        "show": "显示页面树"
+      },
+      "breadcrumb": {
+        "label": "此页面所在位置",
+        "more": "显示另外 {count} 层",
+        "folder": "文件夹："
+      }
+    },
     "page": {
-      "back": "页面",
-      "backLabel": "返回页面",
       "titleLabel": "页面标题",
       "titleTooLong": "标题过长——请控制在 {limit} 个字符以内。",
       "renameFailed": "无法保存标题，请检查网络连接后重试。"
@@ -11700,6 +11761,43 @@
         "reload": "重新加载已保存版本",
         "newPageNewTab": "在新标签页中新建页面"
       }
+    },
+    "history": {
+      "open": "历史记录",
+      "title": "历史记录",
+      "close": "关闭历史记录",
+      "listLabel": "此页面的版本",
+      "version": "v{number}",
+      "versionLabel": "第 {number} 版",
+      "current": "当前",
+      "you": "你",
+      "restoredFrom": "从 v{number} 恢复",
+      "noLongerKept": "（已不再保留）",
+      "loading": "正在加载历史记录",
+      "loadFailed": "无法加载历史记录。",
+      "retry": "重试",
+      "loadMore": "加载更多",
+      "keepsLatest": "页面保留最近的 100 个版本。",
+      "onlyVersion": "这是目前唯一的版本。每次编辑会话都会新增一个版本。",
+      "compare": {
+        "label": "正在将 v{number} 与当前页面对比",
+        "current": "当前页面",
+        "close": "关闭 v{number}"
+      },
+      "restore": "恢复此版本",
+      "confirm": {
+        "title": "恢复 v{number}？",
+        "body": "页面将以新版本的形式显示 v{number} 的内容。不会删除任何内容。",
+        "action": "恢复 v{number}"
+      },
+      "restoring": "正在恢复…",
+      "restored": "已将 v{from} 恢复为 v{number}。",
+      "refusal": {
+        "tooLarge": "无法恢复 v{number}：页面将超过 2 MB 的上限。未做任何更改。",
+        "gone": "v{number} 已不再保留——页面只保留最近的 100 个版本。未做任何更改，列表已刷新。",
+        "failed": "无法恢复 v{number}。未做任何更改，请重试。"
+      },
+      "unsavedHold": "在你的编辑保存之前无法恢复。页面显示“已保存”后即可恢复。"
     }
   }
 }

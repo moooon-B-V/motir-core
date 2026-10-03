@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type { FolderPickerNodeDto, ProjectFoldersDto } from '@/lib/dto/folders';
 import { listProjectFoldersAction } from '../actions';
-import { FolderPickerPanel } from './FolderPicker';
+import { FolderPickerPanel } from '@/components/folders/FolderPicker';
 
 // The quick view's FOLDER field control (Story MOTIR-5308 · MOTIR-5316), the
 // design's panel 6 — the folder picker in `file` mode, in flow inside the rail,
