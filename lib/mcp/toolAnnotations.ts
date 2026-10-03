@@ -308,9 +308,9 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: false,
     openWorldHint: false,
   },
-  // W: publishDecisionPage.ts → decisionPageService.publish — seals a version, records the
-  // publication, and supersedes + raises the decision gate. A replay of the same version
-  // writes nothing, so it is idempotent; not destructive (nothing is removed).
+  // A replay of the same version writes nothing, so it is idempotent; not destructive
+  // (nothing is removed).
+  // W: publishDecisionPage.ts → decisionPageService.publish — seals a version, records the publication, supersedes + raises the decision gate
   publish_decision_page: {
     readOnlyHint: false,
     destructiveHint: false,
