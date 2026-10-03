@@ -1139,7 +1139,7 @@ describe('a failed agent’s machine is stopped (MOTIR-7343)', () => {
     await create();
     const row = (await instances())[0]!;
     virtualNow = row.stateChangedAt.getTime() + INSTANCE_BOOT_DEADLINE_MS;
-    expect(await lifecycle.settleBoot(row.id)).toBe('failed');
+    expect(await driveBoot(row.id)).toBe('failed');
     expect(await machineState()).toBe('stopped');
   });
 
@@ -1151,6 +1151,7 @@ describe('a failed agent’s machine is stopped (MOTIR-7343)', () => {
       providerState: 'failed',
       startedAt: null,
       stoppedAt: null,
+      events: [],
     });
     expect(await lifecycle.reconcileRunning(dto.id)).toBe('failed');
     vi.mocked(fleet.describePersistent).mockRestore();
