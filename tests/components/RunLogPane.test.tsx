@@ -31,6 +31,7 @@ function leg(over: Partial<DispatchRunCardDto> = {}): DispatchRunCardDto {
     startedAt: null,
     endedAt: null,
     exitCode: null,
+    model: null,
     ...over,
   };
 }

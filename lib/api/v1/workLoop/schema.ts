@@ -2089,6 +2089,11 @@ export const dispatchRunCardSchema = z.object({
   startedAt: z.string().datetime().nullable(),
   endedAt: z.string().datetime().nullable(),
   exitCode: z.number().int().nullable(),
+  /**
+   * The agent's self-reported model for THIS leg (MOTIR-7502), null when it
+   * reported none. Read rule: the leg's model, else the run's `model`.
+   */
+  model: z.string().nullable(),
 });
 
 /** The run HEADER with its SET. */
@@ -2297,6 +2302,13 @@ export const dispatchRunEventInputSchema = z
     skipReason: dispatchSkipReasonSchema.optional(),
     sessionBranch: z.string().max(400).optional(),
     exitCode: z.number().int().optional(),
+    /**
+     * The agent's SELF-REPORTED model (MOTIR-7502), on `agent_exited` ONLY — any
+     * other kind carrying it is refused with `DISPATCH_RUN_EVENT_MODEL_NOT_ALLOWED`
+     * (422). Null when the agent reported none; never a guess. Written onto the
+     * leg when valid; when absent, the server reads `data.model` instead.
+     */
+    model: z.string().max(200).nullable().optional(),
   })
   .strict();
 
