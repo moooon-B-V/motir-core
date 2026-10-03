@@ -69,6 +69,11 @@ function judged(byOrg: Record<string, FleetVerdict[] | Error>) {
 }
 
 beforeEach(async () => {
+  // The org list is read from the fleet tables, which do not cascade from the
+  // org: a sibling file's leftover slot or accrual would be judged as a second org.
+  await adminDb.$executeRawUnsafe(
+    'TRUNCATE TABLE "fleet_machine_kill", "ci_period_usage", "fleet_in_flight_slot", "ci_live_accrual", "ci_runner_provisioning_intent", "ci_period_charge" RESTART IDENTITY CASCADE',
+  );
   await truncateJobRuns();
   await truncateAuthTables();
   captureException.mockReset();
