@@ -299,7 +299,6 @@ export function LessonCurate({ lesson }: { lesson: PlatformLessonDetailDTO }) {
             <Textarea
               label={t('edit.why')}
               value={draft.why}
-              autoGrow
               rows={3}
               onChange={(e) => setDraft({ ...draft, why: e.target.value })}
               error={draft.why.trim() === '' ? t('edit.blank') : undefined}
@@ -307,7 +306,6 @@ export function LessonCurate({ lesson }: { lesson: PlatformLessonDetailDTO }) {
             <Textarea
               label={t('edit.how')}
               value={draft.howToApply}
-              autoGrow
               rows={3}
               onChange={(e) => setDraft({ ...draft, howToApply: e.target.value })}
               error={draft.howToApply.trim() === '' ? t('edit.blank') : undefined}
