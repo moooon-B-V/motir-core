@@ -10,6 +10,7 @@ vi.mock('@/lib/github/appAuth', async (importOriginal) => ({
 
 import { getGitProvider } from '@/lib/git';
 import { MergeChangeRequestError } from '@/lib/git/errors';
+import { GithubAppTokenError, mintInstallationToken } from '@/lib/github/appAuth';
 import type { MergeChangeRequestInput } from '@/lib/git/types';
 
 // THE MERGE SEAM'S EDGES (Story MOTIR-4882 · MOTIR-5519 — the story gate's coverage
@@ -252,5 +253,49 @@ describe('the ENQUEUE call', () => {
       ],
     });
     await expect(merge()).rejects.toBeInstanceOf(MergeChangeRequestError);
+  });
+});
+
+describe('the INSTALLATION-TOKEN mint every merge-side call starts with (MOTIR-7508)', () => {
+  // The seam's contract: what throws out of a merge is only what is not an answer, and
+  // it throws as `MergeChangeRequestError` — the one non-answer every caller maps
+  // (the press to its UNEXPECTED arm, the auto-merge to its unreachable comment). A
+  // token endpoint that answered 503 used to escape as `GithubAppTokenError`, which no
+  // caller maps, so an Approve-and-merge press crashed AFTER its approval committed.
+  const mintFails = (err: unknown) => vi.mocked(mintInstallationToken).mockRejectedValueOnce(err);
+
+  it('a token endpoint that ANSWERED with a status throws as the merge non-answer, carrying it', async () => {
+    const calls = stubHost({});
+    mintFails(new GithubAppTokenError('token endpoint returned 503', 503));
+    const err = await merge().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(MergeChangeRequestError);
+    expect(err).toMatchObject({ reason: 'unexpected_status', status: 503 });
+    // Nothing reached the repository without a token.
+    expect(calls).toEqual([]);
+  });
+
+  it('a token endpoint that never answered is unreachable', async () => {
+    stubHost({});
+    mintFails(new GithubAppTokenError('token endpoint unreachable (ECONNRESET)'));
+    await expect(merge()).rejects.toMatchObject({
+      name: 'MergeChangeRequestError',
+      reason: 'unreachable',
+      status: null,
+    });
+  });
+
+  it('the mergeability read takes the same translation', async () => {
+    stubHost({});
+    mintFails(new GithubAppTokenError('token endpoint returned 502', 502));
+    await expect(github.readChangeRequestMergeability!(INPUT)).rejects.toBeInstanceOf(
+      MergeChangeRequestError,
+    );
+  });
+
+  it('an error that is not a mint failure passes through unchanged', async () => {
+    stubHost({});
+    const boom = new Error('not a mint failure');
+    mintFails(boom);
+    await expect(merge()).rejects.toBe(boom);
   });
 });
