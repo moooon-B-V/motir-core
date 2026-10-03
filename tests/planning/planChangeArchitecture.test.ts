@@ -582,7 +582,7 @@ describe('the story’s new copy exists in every locale', () => {
   });
 
   it('the rail’s conversation copy matches key-for-key across locales, nesting included', () => {
-    // `planningWorkspace.conversation` is a NESTED subtree (turn labels, the
+    // `planningWorkspace.conversation` is a NESTED subtree (the opener, the
     // composer, the confirm bar's plural forms, the starters, the progress
     // narration). Whole-file parity is proven elsewhere; this walks the story's
     // own subtree so a zh block that lost a nested group cannot pass.
@@ -591,7 +591,7 @@ describe('the story’s new copy exists in every locale', () => {
     expect(enConv).toBeDefined();
     expect(keyPaths(enConv)).toEqual(keyPaths(zhConv));
     expect(keyPaths(enConv).length).toBeGreaterThan(10);
-    for (const required of ['opener', 'turn', 'turnRefine', 'submitted', 'starters.addWork']) {
+    for (const required of ['opener', 'asking', 'submitted', 'starters.addWork']) {
       expect(keyPaths(enConv)).toContain(required);
     }
   });

@@ -369,10 +369,9 @@ test('plan change is a conversation — open, describe, refine, approve', async 
   await chapter('Refine in a second turn — the diff updates', async () => {
     await sendTurn(page, 'Also add reporting, and keep both at story level.');
 
-    // The thread is a conversation: turn 2 is labelled a REFINEMENT of turn 1,
-    // and both turns are still on it (they are persisted rows, not UI state).
-    await expect(rail(page).getByText('turn 2 · refine')).toBeVisible();
-    await expect(rail(page).getByText('turn 1')).toBeVisible();
+    // The thread is a conversation: both turns are still on it (they are
+    // persisted rows, not UI state), each shown as just the message (MOTIR-7497).
+    await expect(rail(page).getByTestId('conversation-user-turn')).toHaveCount(2);
 
     // The SECOND delta replaced the first on the canvas — the counts moved.
     await expect(confirmBar(page)).toContainText('2 added, 1 changed');
@@ -485,7 +484,7 @@ test('a failed run is recoverable in place — the thread and the retry survive'
   // The failure is stated, and it is RECOVERABLE: the turn is still on the thread
   // and "Try again" re-sends the accumulated intent rather than restarting.
   await expect(rail(page).getByRole('alert')).toContainText(/didn't go through/);
-  await expect(rail(page).getByText('turn 1')).toBeVisible();
+  await expect(rail(page).getByTestId('conversation-user-turn').first()).toBeVisible();
   await expect(confirmBar(page)).toHaveCount(0);
 
   failing = false;

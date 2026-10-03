@@ -518,7 +518,7 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
     );
 
     // The turn is a PERSISTED row, appended by the real route — not a stub echo.
-    await expect(rail(page).getByText('turn 1')).toBeVisible();
+    await expect(rail(page).getByTestId('conversation-user-turn').first()).toBeVisible();
   });
   await dwell(page);
 
@@ -827,7 +827,7 @@ test('Discard declines the plan and leaves the tree untouched', async ({
   await expect(confirmBar(page)).toHaveCount(0);
   await expect(railReview(page)).toHaveCount(0);
   await expect(composer(page)).toBeEnabled();
-  await expect(rail(page).getByText('turn 1')).toBeVisible();
+  await expect(rail(page).getByTestId('conversation-user-turn').first()).toBeVisible();
   expect(await childTitlesOf(seed.notifId)).toEqual([]);
   expect(await planStatus(planId)).toBe('declined');
 });
@@ -868,7 +868,7 @@ test('a failed run is recoverable in place — the thread survives, the tree is 
   // The failure is STATED and recoverable: the turn is still on the thread, no
   // gate appeared, and nothing was written.
   await expect(rail(page).getByRole('alert')).toContainText(/didn't go through/);
-  await expect(rail(page).getByText('turn 1')).toBeVisible();
+  await expect(rail(page).getByTestId('conversation-user-turn').first()).toBeVisible();
   await expect(confirmBar(page)).toHaveCount(0);
   expect(await childTitlesOf(seed.notifId)).toEqual([]);
   expect(await planStatus(planId)).toBe('planned');
@@ -879,5 +879,5 @@ test('a failed run is recoverable in place — the thread survives, the tree is 
 
   await expect(confirmBar(page)).toContainText('2 added');
   await expect(rail(page).getByRole('alert')).toHaveCount(0);
-  await expect(rail(page).getByText('turn 1')).toBeVisible();
+  await expect(rail(page).getByTestId('conversation-user-turn').first()).toBeVisible();
 });
