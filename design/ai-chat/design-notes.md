@@ -4768,6 +4768,10 @@ are copied verbatim from the guide mock below (MOTIR-7462), which copied them fr
 [`debug-turn.mock.html`](debug-turn.mock.html), which extracted them from
 `packages/design-system/theme.css`. No axis attribute is drawn; every element routes through a token.
 
+> **Revised at review (2026-10-03, Yue):** the guide is the universal Motir AI surface, so its composer
+> keeps the target-search icon. The attach control sits BESIDE it, not in its place. This reverses
+> item 3 of § _Guide me through_ above ("the composer's target-search trigger is ABSENT in guide mode").
+
 **Mock (a DELTA):** [`planning-workspace--guide-files.mock.html`](planning-workspace--guide-files.mock.html).
 **Story:** MOTIR-7471. **Decision:** `docs/decisions/guide-turn-files.md` (MOTIR-7481), A3.1–A3.9.
 
@@ -4783,7 +4787,7 @@ The existing mocks are records and are not edited.
 
 **What it composes, unchanged.** The guide overlay exactly as MOTIR-7462 draws it. The composer,
 `PlanChangeComposer.tsx`, and its **inset slot** (`absolute bottom-1.5 left-1.5`, field `pl-8`), which
-holds the target-search trigger in the other modes and is empty in guide mode. From the item page's
+holds the target-search trigger. Guide mode now keeps that trigger too (`GuideRail` passes `mentions`). From the item page's
 `AttachmentsPanel.tsx`: the client pre-check against `lib/blob/allowlist.ts`, the upload track, the inline
 refusal row and the `errors.upload.*` copy, the dropzone grammar (`attachments.dropTitle`). `AttachmentGlyph`,
 `AttachmentPreview`, `CopyableCodeBlock`, `MarkdownView`, `WorkItemRefChip`, the reply row and the
@@ -4791,8 +4795,9 @@ outcome line.
 
 ### What files change
 
-1. **The attach control** (panel 1) is a paperclip icon button in the composer's inset slot, guide mode
-   only. It is the access path. Paste (panel 2) and drop on the rail (panel 3) are the other two ways in.
+1. **The attach control** (panel 1) is a paperclip icon button in the composer's bottom-left inset,
+   immediately right of the target-search icon (`left: 34px`; the field's left padding grows from `pl-8`
+   to 60px). Guide mode only; the search icon stays in every mode. It is the access path. Paste (panel 2) and drop on the rail (panel 3) are the other two ways in.
 2. **The tray** (panels 2, 4) holds the turn's queued files above the field. Queued files are local:
    **Send uploads them to the guided card, then sends the turn** (A3.1, panel 5). An upload failure stops
    the send and keeps the words (panel 6). The shipped refusals apply unchanged (panel 7).
@@ -4803,14 +4808,14 @@ outcome line.
 5. **A3.9:** an agent step's card carries a prompt for the person's local agent (panel 11, replaces the
    guide's panel 14); a ticked step may be corrected while the card's goal holds (panel 12); a change
    that alters the goal returns `needs_replan` and offers the re-plan (panel 13).
-6. **Guide only** (A3.7, panel 14): ask, plan change and debug show no attach control, tray or drop
-   target.
+6. **Guide only** (A3.7, panel 14): ask, plan change and debug keep the search icon where they have it,
+   and show no attach control, tray or drop target.
 
 ### The states, panel by panel
 
 | #   | State                                          | Specified by      |
 | --- | ---------------------------------------------- | ----------------- |
-| 1   | the attach control, at rest and hover          | A3.2 (guide only) |
+| 1   | the attach control beside the search icon      | A3.2 (guide only) |
 | 2   | a pasted image, queued                         | A3.1              |
 | 3   | a dropped file, the rail as drop target        | A3.1              |
 | 4   | several files queued; the cap of four          | A3.3              |
@@ -4829,7 +4834,7 @@ outcome line.
 
 | Element                 | Primitive                                                         | Colour role                                                                                                                              | Shape token                                                 |
 | ----------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| attach control          | icon button in the composer's inset slot (the search trigger's)   | glyph `--el-text-secondary`; hover `--el-card` + `--el-text`; focus `--focus-ring-color`; disabled 50%                                   | `--radius-control`, `--spacing-icon-btn`                    |
+| attach control          | icon button beside the search trigger, same geometry              | glyph `--el-text-secondary`; hover `--el-card` + `--el-text`; focus `--focus-ring-color`; disabled 50%                                   | `--radius-control`, `--spacing-icon-btn`                    |
 | its tooltip             | the shipped tooltip                                               | `--el-tooltip-bg`, `--el-tooltip-text`                                                                                                   | `--radius-control`, `--spacing-tooltip-x/y`, `--radius-kbd` |
 | tray                    | a wrapping row inside the composer, above the field               | —                                                                                                                                        | gap only                                                    |
 | file chip (queued/sent) | the upload row's grammar as a chip: `AttachmentGlyph`, name, meta | `--el-card`, `--el-border`; name `--el-text`; meta `--el-text-secondary`                                                                 | `--radius-control`, `--spacing-control-x/y`                 |

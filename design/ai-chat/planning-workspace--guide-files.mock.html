@@ -1450,6 +1450,10 @@
       .cinput.with-attach {
         padding-left: 32px;
       }
+      /* guide mode: the search trigger keeps the inset slot, the attach control sits beside it */
+      .cinput.with-both {
+        padding-left: 60px;
+      }
       .cinput.typed {
         color: var(--el-text);
       }
@@ -1461,7 +1465,7 @@
       .attach {
         position: absolute;
         bottom: 6px;
-        left: 6px;
+        left: 34px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -1496,7 +1500,7 @@
       .tip {
         position: absolute;
         bottom: calc(100% + 6px);
-        left: 0;
+        left: 28px;
         z-index: 2;
         padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
         border-radius: var(--radius-control);
@@ -2262,13 +2266,15 @@ vercel env add STRIPE_WEBHOOK_SECRET production</pre
                   </div>
                   <div class="composer">
                     <div class="cfield">
-                      <div class="cinput with-attach">
-                        <span class="attach hover" aria-label="Attach files"
+                      <div class="cinput with-both">
+                        <span class="srch" aria-label="Set the target"
                           ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                            <use href="#i-clip" /></svg
-                          ><span class="tip" role="tooltip"
-                            >Attach files or a screenshot<kbd>⌘V</kbd></span
-                          ></span
+                            <use href="#i-search" /></svg></span
+                        ><span class="attach hover" aria-label="Attach files"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-clip" /></svg></span
+                        ><span class="tip" role="tooltip"
+                          >Attach files or a screenshot<kbd>⌘V</kbd></span
                         >Tell Motir AI how the step went…
                       </div>
                       <span class="btn primary"
@@ -2284,13 +2290,15 @@ vercel env add STRIPE_WEBHOOK_SECRET production</pre
             <div class="notes2">
               <p class="note">
                 <b>NEW — the attach control is the ACCESS PATH.</b> A paperclip icon button sits in
-                the composer field’s bottom-left inset slot. That slot is where
-                <code>PlanChangeComposer</code> renders the target-search trigger (<code
-                  >absolute bottom-1.5 left-1.5</code
-                >, field <code>pl-8</code>); guide mode already removes that trigger (the guide’s
-                target is fixed by the door, § <i>Guide me through</i> item 3), so the slot is free
-                and the field keeps its shipped left padding. Nothing about the field’s height, Send
-                or the running bar changes.
+                the composer field’s bottom-left inset, immediately RIGHT of the shipped
+                target-search trigger. The guide is the universal Motir AI surface, so its composer
+                keeps the search control exactly as every other mode has it
+                (<code>PlanChangeComposer</code>’s slot: <code>absolute bottom-1.5 left-1.5</code>);
+                the attach control takes the next 28px (<code>left: 34px</code>), and the field’s
+                left padding grows from <code>pl-8</code> to 60px so text clears both. Nothing about
+                the field’s height, Send or the running bar changes. This reverses the MOTIR-7462
+                guide design’s “no search in guide mode” (its § item 3), so
+                <code>GuideRail</code> passes <code>mentions</code> again.
               </p>
               <p class="note">
                 <b>Its shape and colour are the search trigger’s:</b> <code>--radius-control</code>,
@@ -2526,8 +2534,11 @@ vercel env add STRIPE_WEBHOOK_SECRET production</pre
                       ></span>
                     </div>
                     <div class="cfield">
-                      <div class="cinput with-attach typed">
-                        <span class="attach" aria-label="Attach files"
+                      <div class="cinput with-both typed">
+                        <span class="srch" aria-label="Set the target"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-search" /></svg></span
+                        ><span class="attach" aria-label="Attach files"
                           ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
                             <use href="#i-clip" /></svg></span
                         >Stored it, see screenshot
@@ -2768,8 +2779,11 @@ vercel env add STRIPE_WEBHOOK_SECRET production</pre
                   </div>
                   <div class="composer">
                     <div class="cfield">
-                      <div class="cinput with-attach">
-                        <span class="attach" aria-label="Attach files"
+                      <div class="cinput with-both">
+                        <span class="srch" aria-label="Set the target"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-search" /></svg></span
+                        ><span class="attach" aria-label="Attach files"
                           ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
                             <use href="#i-clip" /></svg></span
                         >Tell Motir AI how the step went…
@@ -3058,8 +3072,11 @@ vercel env add STRIPE_WEBHOOK_SECRET production</pre
                         ></span>
                       </div>
                       <div class="cfield">
-                        <div class="cinput with-attach typed">
-                          <span class="attach" aria-label="Attach files"
+                        <div class="cinput with-both typed">
+                          <span class="srch" aria-label="Set the target"
+                            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-search" /></svg></span
+                          ><span class="attach" aria-label="Attach files"
                             ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
                               <use href="#i-clip" /></svg></span
                           >Stored it. Here is the env file and the smoke output
@@ -3313,12 +3330,15 @@ vercel env add STRIPE_WEBHOOK_SECRET production</pre
                         ></span>
                       </div>
                       <div class="cfield">
-                        <div class="cinput with-attach typed">
-                          <span class="attach off" aria-label="Attach files"
+                        <div class="cinput with-both typed">
+                          <span class="srch" aria-label="Set the target"
                             ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                              <use href="#i-clip" /></svg
-                            ><span class="tip" role="tooltip">Up to 4 files a turn</span></span
-                          >Stored it. Here is the env file and the smoke output
+                              <use href="#i-search" /></svg></span
+                          ><span class="attach off" aria-label="Attach files"
+                            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-clip" /></svg></span
+                          ><span class="tip" role="tooltip">Up to 4 files a turn</span>Stored it.
+                          Here is the env file and the smoke output
                         </div>
                         <span class="btn primary"
                           ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
@@ -3599,8 +3619,11 @@ vercel env add STRIPE_WEBHOOK_SECRET production</pre
                       >
                     </div>
                     <div class="cfield">
-                      <div class="cinput with-attach typed locked">
-                        <span class="attach" aria-label="Attach files"
+                      <div class="cinput with-both typed locked">
+                        <span class="srch" aria-label="Set the target"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-search" /></svg></span
+                        ><span class="attach" aria-label="Attach files"
                           ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
                             <use href="#i-clip" /></svg></span
                         >Stored it. Here is the env file and the smoke output
@@ -3874,8 +3897,11 @@ vercel env add STRIPE_WEBHOOK_SECRET production</pre
                       >
                     </div>
                     <div class="cfield">
-                      <div class="cinput with-attach typed">
-                        <span class="attach" aria-label="Attach files"
+                      <div class="cinput with-both typed">
+                        <span class="srch" aria-label="Set the target"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-search" /></svg></span
+                        ><span class="attach" aria-label="Attach files"
                           ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
                             <use href="#i-clip" /></svg></span
                         >Stored it. Here is the env file and the smoke output
@@ -4150,8 +4176,11 @@ vercel env add STRIPE_WEBHOOK_SECRET production</pre
                       ></span>
                     </div>
                     <div class="cfield">
-                      <div class="cinput with-attach typed">
-                        <span class="attach" aria-label="Attach files"
+                      <div class="cinput with-both typed">
+                        <span class="srch" aria-label="Set the target"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-search" /></svg></span
+                        ><span class="attach" aria-label="Attach files"
                           ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
                             <use href="#i-clip" /></svg></span
                         >Stored it, see screenshot
@@ -4372,8 +4401,11 @@ vercel env add STRIPE_WEBHOOK_SECRET production</pre
                     </div>
                     <div class="composer">
                       <div class="cfield">
-                        <div class="cinput with-attach">
-                          <span class="attach" aria-label="Attach files"
+                        <div class="cinput with-both">
+                          <span class="srch" aria-label="Set the target"
+                            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-search" /></svg></span
+                          ><span class="attach" aria-label="Attach files"
                             ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
                               <use href="#i-clip" /></svg></span
                           >Tell Motir AI how the step went…
@@ -4635,8 +4667,11 @@ vercel env add STRIPE_WEBHOOK_SECRET production</pre
                   </div>
                   <div class="composer">
                     <div class="cfield">
-                      <div class="cinput with-attach">
-                        <span class="attach" aria-label="Attach files"
+                      <div class="cinput with-both">
+                        <span class="srch" aria-label="Set the target"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-search" /></svg></span
+                        ><span class="attach" aria-label="Attach files"
                           ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
                             <use href="#i-clip" /></svg></span
                         >Tell Motir AI how the step went…
@@ -5047,8 +5082,11 @@ Report the summary line of the run back to me.</pre
                   </div>
                   <div class="composer">
                     <div class="cfield">
-                      <div class="cinput with-attach">
-                        <span class="attach" aria-label="Attach files"
+                      <div class="cinput with-both">
+                        <span class="srch" aria-label="Set the target"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-search" /></svg></span
+                        ><span class="attach" aria-label="Attach files"
                           ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
                             <use href="#i-clip" /></svg></span
                         >Tell Motir AI how the step went…
@@ -5283,8 +5321,11 @@ Report the summary line of the run back to me.</pre
                     </div>
                     <div class="composer">
                       <div class="cfield">
-                        <div class="cinput with-attach">
-                          <span class="attach" aria-label="Attach files"
+                        <div class="cinput with-both">
+                          <span class="srch" aria-label="Set the target"
+                            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-search" /></svg></span
+                          ><span class="attach" aria-label="Attach files"
                             ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
                               <use href="#i-clip" /></svg></span
                           >Tell Motir AI how the step went…
@@ -5498,8 +5539,11 @@ vercel env add STRIPE_WEBHOOK_SECRET production</pre
                     </div>
                     <div class="composer">
                       <div class="cfield">
-                        <div class="cinput with-attach">
-                          <span class="attach" aria-label="Attach files"
+                        <div class="cinput with-both">
+                          <span class="srch" aria-label="Set the target"
+                            ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-search" /></svg></span
+                          ><span class="attach" aria-label="Attach files"
                             ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
                               <use href="#i-clip" /></svg></span
                           >Tell Motir AI how the step went…
@@ -5706,8 +5750,11 @@ vercel env add STRIPE_WEBHOOK_SECRET production</pre
                   </div>
                   <div class="composer">
                     <div class="cfield">
-                      <div class="cinput with-attach">
-                        <span class="attach" aria-label="Attach files"
+                      <div class="cinput with-both">
+                        <span class="srch" aria-label="Set the target"
+                          ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-search" /></svg></span
+                        ><span class="attach" aria-label="Attach files"
                           ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
                             <use href="#i-clip" /></svg></span
                         >Tell Motir AI how the step went…
@@ -5852,8 +5899,8 @@ vercel env add STRIPE_WEBHOOK_SECRET production</pre
                 a file over their rail paints nothing, and pasting an image does nothing.
               </p>
               <p class="note">
-                This is a drawing of what does NOT change, so a reviewer can see the control is
-                scoped to the guide door and not added to the one composer every mode shares.
+                This is a drawing of what does NOT change: the attach control is the guide’s
+                addition, beside the search trigger every mode keeps.
               </p>
             </div>
           </div>
