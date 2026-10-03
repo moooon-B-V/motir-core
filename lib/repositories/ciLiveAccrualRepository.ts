@@ -43,6 +43,46 @@ export const ciLiveAccrualRepository = {
     return agg._sum.accruedSeconds ?? 0;
   },
 
+  /** What one organisation accrued live in ticks starting at or after `since` —
+   *  the fleet monitor's "accrued in the window" (MOTIR-7316). Rides
+   *  `[organization_id]`. */
+  async sumForOrganizationSince(
+    organizationId: string,
+    since: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const agg = await tx.ciLiveAccrual.aggregate({
+      where: { organizationId, tickStart: { gte: since } },
+      _sum: { accruedSeconds: true },
+    });
+    return agg._sum.accruedSeconds ?? 0;
+  },
+
+  /** The DISTINCT organisations that accrued anything in ticks starting at or
+   *  after `since` — so the fleet monitor also sees an org being debited while
+   *  nothing of its runs (MOTIR-7316). Ids only. */
+  async listOrganizationsSince(since: Date, tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.ciLiveAccrual.findMany({
+      where: { tickStart: { gte: since } },
+      distinct: ['organizationId'],
+      select: { organizationId: true },
+    });
+    return rows.map((row) => row.organizationId);
+  },
+
+  /** The start of the latest tick that accrued anything for one organisation, or
+   *  null — the fleet monitor's "is the debit job reaching this org?". */
+  async latestTickForOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Date | null> {
+    const agg = await tx.ciLiveAccrual.aggregate({
+      where: { organizationId },
+      _max: { tickStart: true },
+    });
+    return agg._max.tickStart ?? null;
+  },
+
   /** What one GitHub run attempt was already charged live, across all of its
    *  jobs' containers — the completion meter's reconciliation input. */
   async sumSecondsForRun(

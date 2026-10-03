@@ -20,6 +20,8 @@ export const AGENT_RUN_END_DETAIL = {
   machineLost: 'the agent’s machine was lost',
   outOfCredits: 'out of credits',
   cancelled: 'cancelled by the agent’s owner',
+  /** A platform admin stopped the organisation's containers (Story MOTIR-6905, MOTIR-7323). */
+  adminStop: 'stopped by a platform admin',
 } as const;
 
 /**

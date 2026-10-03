@@ -138,6 +138,10 @@ describe('append-only, as an application property', () => {
     // assertion rather than passing review.
     expect(Object.keys(platformAuditLogRepository).sort()).toEqual([
       'create',
+      // MOTIR-6905's last-stop line on the tenant page's Fleet card (MOTIR-7320):
+      // the newest `fleet.stop` on one target. A READ, added by the story and
+      // missed here until its integration gate (MOTIR-7321) ran this file.
+      'findLatestByTargetAndAction',
       'listByActor',
       'listByOrganization',
       // MOTIR-1167's target read — Panel 9's "Support actions" log. A READ, so
@@ -188,6 +192,9 @@ describe('the reason rule', () => {
     'ai.lesson.promote': 'required',
     // The lesson-retirement window (MOTIR-1463) — superadmin, one platform rule.
     'ai.lesson.retention_set': 'required',
+    // A platform admin's stop of one organisation's fleet (Story MOTIR-6905 ·
+    // MOTIR-7317) — destructive and cross-tenant, so `superadmin` with a reason.
+    'fleet.stop': 'required',
   } as const;
 
   it('every action carries the policy the ADR allocates it', () => {

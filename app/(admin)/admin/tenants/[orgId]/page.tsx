@@ -11,9 +11,12 @@ import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/aut
 import { PlatformOrganizationNotFoundError } from '@/lib/platform/errors';
 import { buildSpendSheet, parseSpendPeriod } from '@/lib/platform/spend';
 import { platformOrgBillingService } from '@/lib/services/platformOrgBillingService';
+import { platformFleetMonitorService } from '@/lib/services/platformFleetMonitorService';
+import { platformFleetStopService } from '@/lib/services/platformFleetStopService';
 import { platformOrgIndexCostService } from '@/lib/services/platformOrgIndexCostService';
 import { platformOrgPageService } from '@/lib/services/platformOrgPageService';
 import { formatMicroUsd } from '../../_components/spendFormat';
+import { OrgFleetCard } from './_components/OrgFleetCard';
 import { OrgIndexCostCard } from './_components/OrgIndexCostCard';
 import { BillingTab } from './_components/BillingTab';
 import { OrgPageHeader } from './_components/OrgPageHeader';
@@ -152,6 +155,7 @@ export default async function AdminOrganizationPage({
         membersCursor={query.members ?? null}
       />
       <OrgIndexCostSection principal={principal} orgId={orgId} />
+      <OrgFleetSection principal={principal} orgId={orgId} orgName={overview.organization.name} />
       <ActionLog overview={overview} />
     </div>
   );
@@ -173,6 +177,39 @@ async function OrgIndexCostSection({
     audited: true,
   });
   return <OrgIndexCostCard data={data} />;
+}
+
+/**
+ * FLEET · RUNNING NOW (MOTIR-7320 · design `tenant--stop-containers.mock.html`
+ * S1): after the index-cost card and before the action log — cost, then what is
+ * running, then the record of what was done about it. Like the index-cost card
+ * it reads after the overview has proved the org exists. Its two reads run in
+ * parallel. Off-cloud there is no fleet and no meter, so there is no card.
+ */
+async function OrgFleetSection({
+  principal,
+  orgId,
+  orgName,
+}: {
+  principal: PlatformPrincipal;
+  orgId: string;
+  orgName: string;
+}) {
+  const [fleet, lastStop] = await Promise.all([
+    platformFleetMonitorService.orgFleet(principal, orgId),
+    platformFleetStopService.lastStop(principal, orgId),
+  ]);
+  if (fleet.meter === 'disabled') return null;
+  return (
+    <OrgFleetCard
+      orgId={orgId}
+      orgName={orgName}
+      role={principal.role}
+      row={fleet.row}
+      window={fleet.window}
+      lastStop={lastStop}
+    />
+  );
 }
 
 async function OverviewTab({

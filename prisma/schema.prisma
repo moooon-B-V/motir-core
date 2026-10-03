@@ -9614,8 +9614,13 @@ model CiPeriodCharge {
   /// resolve a timed-out debit without risking a double charge. A new debit is
   /// never issued while one is pending — the outstanding delta is simply carried
   /// by `chargedCredits - debitedCredits` until the pending one clears.
-  pendingDebitRef     String? @map("pending_debit_ref")
-  pendingDebitCredits Int     @default(0) @map("pending_debit_credits")
+  pendingDebitRef     String?   @map("pending_debit_ref")
+  pendingDebitCredits Int       @default(0) @map("pending_debit_credits")
+  /// When the pending slot was first occupied (MOTIR-7316): set with the first
+  /// `pendingDebitRef`, kept while one stays outstanding, cleared with it. The
+  /// fleet monitor dates an unconfirmed debit from this — `updatedAt` moves on
+  /// every metered tick, pending or not, so it cannot.
+  pendingDebitSince   DateTime? @map("pending_debit_since")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -12210,6 +12215,9 @@ enum AgentInstanceIntervalEndReason {
   /// Closed by the running charge (AMENDMENT 2): the machine is still up, and the
   /// next interval of the same run opens at this one's end.
   rolled
+  /// A platform admin stopped the organisation's containers (Story MOTIR-6905,
+  /// MOTIR-7323) — never recorded as `credits`.
+  admin_stop
 
   @@map("agent_instance_interval_end_reason")
 }

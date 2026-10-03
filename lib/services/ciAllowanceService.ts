@@ -306,6 +306,22 @@ export const ciAllowanceService = {
       // simply carried until the pending ref resolves — which the retry below
       // attempts on the next event that actually meters something.
       const hasPending = locked.pendingDebitRef !== null;
+      const pendingDebitRef = hasPending
+        ? locked.pendingDebitRef
+        : outstandingCredits > 0
+          ? debitRef(
+              organizationId,
+              periodStart,
+              locked.debitedCredits,
+              computed.nextChargedCredits,
+            )
+          : null;
+      // When the slot was FIRST occupied (MOTIR-7316): kept while a debit stays
+      // outstanding, stamped when one is first written, cleared with the slot. The
+      // fleet monitor dates an unconfirmed debit from it, because this very write
+      // moves `updatedAt` on every metered tick whether a debit is pending or not.
+      const pendingDebitSince =
+        pendingDebitRef === null ? null : (locked.pendingDebitSince ?? new Date());
 
       await ciPeriodChargeRepository.applyCharge(
         {
@@ -314,27 +330,19 @@ export const ciAllowanceService = {
           accountedMinutes: computed.nextAccountedMinutes,
           chargedMinutes: computed.nextChargedMinutes,
           chargedCredits: computed.nextChargedCredits,
-          pendingDebitRef: hasPending
-            ? locked.pendingDebitRef
-            : outstandingCredits > 0
-              ? debitRef(
-                  organizationId,
-                  periodStart,
-                  locked.debitedCredits,
-                  computed.nextChargedCredits,
-                )
-              : null,
+          pendingDebitRef,
           pendingDebitCredits: hasPending
             ? locked.pendingDebitCredits
             : Math.max(0, outstandingCredits),
+          pendingDebitSince,
         },
         tx,
       );
 
-      return { locked, pool, computed, hasPending, outstandingCredits };
+      return { locked, pool, computed, hasPending, outstandingCredits, pendingDebitSince };
     });
 
-    const { locked, pool, computed, hasPending, outstandingCredits } = decision;
+    const { locked, pool, computed, hasPending, outstandingCredits, pendingDebitSince } = decision;
 
     // ── Everything below runs AFTER the transaction committed (§8.6). ──────────
 
@@ -354,6 +362,9 @@ export const ciAllowanceService = {
     // retry has just advanced it, and billing the remainder from the stale value
     // would re-charge the credits the retry settled.
     let confirmedCredits = locked.debitedCredits;
+    // A retry that settles CLEARS the pending slot, so a debit that then fails is
+    // newly outstanding from now, not from when the settled one began.
+    let outstandingSince = pendingDebitSince;
     if (hasPending && locked.pendingDebitRef) {
       const settled = await this.settlePendingDebit(organizationId, periodStart, locked);
       if (!settled) {
@@ -365,6 +376,7 @@ export const ciAllowanceService = {
         };
       }
       confirmedCredits += locked.pendingDebitCredits;
+      outstandingSince = null;
     }
 
     if (computed.chargeableMinutes === 0 && outstandingCredits <= 0) {
@@ -443,6 +455,7 @@ export const ciAllowanceService = {
             debitedCredits: confirmedCredits,
             pendingDebitRef: externalRef,
             pendingDebitCredits: remainingCredits,
+            pendingDebitSince: outstandingSince ?? new Date(),
           },
           tx,
         ),

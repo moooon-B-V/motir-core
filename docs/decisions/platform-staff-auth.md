@@ -433,6 +433,7 @@ every consumer builds to.
 | Per-org feature flags / kill-switches                            | 10.3 MOTIR-750                    | `superadmin` | yes             | yes     |
 | Classify an **organization** internal-billing / remove it        | **MOTIR-4565** (Story MOTIR-4337) | `superadmin` | **yes**         | yes     |
 | Set the platform planning model per audience                     | **MOTIR-7227** (Story MOTIR-7220) | `superadmin` | **yes**         | yes     |
+| Stop one organisation's fleet containers                         | **MOTIR-7317** (Story MOTIR-6905) | `superadmin` | **yes**         | yes     |
 | The audit-log **VIEW**, searchable + tamper-evident (hash chain) | 10.3 MOTIR-751                    | `superadmin` | n/a             | n/a     |
 | Grant / revoke `platformRole`                                    | 10.3 (no card yet — §6)           | `superadmin` | yes             | yes     |
 
@@ -478,6 +479,14 @@ rather than introducing a second one.
 > MOTIR-1463 adds a fifth, `ai.lesson.retention_set` (`superadmin`, reason required): the
 > platform-wide lesson-retirement window N, with `lesson-retention` as `targetId` and
 > `{ before: { days }, after: { days } }` as metadata.
+>
+> **⚠️ AMENDED 2026-10-03 (Story MOTIR-6905 · MOTIR-7317).** The fleet-stop row is the third member
+> from outside Epic 10. A stop cancels one organisation's GitHub Actions runs, destroys its CI
+> containers, ends its hosted-agent runs and hibernates its agent instances, so it is destructive and
+> cross-tenant and takes `superadmin`. Its action, `fleet.stop`, joins `PLATFORM_AUDIT_ACTIONS` as
+> `reason: 'required'`, with `targetKind: 'organization'`, and is written AFTER the effects with what
+> they achieved, failures included, as metadata. The preview it confirms from is a read under the
+> first row's `support` minimum, audited as `estate.read`.
 
 ---
 
