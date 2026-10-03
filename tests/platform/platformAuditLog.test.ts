@@ -190,6 +190,11 @@ describe('the reason rule', () => {
     // The platform planning model per audience (Story MOTIR-7220 · MOTIR-7227) —
     // `superadmin` and `required`, like every billing-class row in ADR §7.
     'ai.planner_model.set': 'required',
+    // Story 10.3's credit & plan ops (MOTIR-747) — `superadmin`, `required`: they
+    // change what an organization holds and is charged.
+    'org.credit_grant': 'required',
+    'org.credit_adjust': 'required',
+    'org.plan_set': 'required',
     // MOTIR-751 — reading the audit log, and verifying its chain, are platform
     // READS like any other: audited, reason-free.
     'audit.read': 'never',

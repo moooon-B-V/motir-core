@@ -497,6 +497,18 @@ rather than introducing a second one.
 > `targetId`, and `{ audience, fromModel, toModel }` as metadata. The page's READ is covered by the
 > first row's `support` minimum; it reads no tenant row, so it writes no audit row of its own.
 
+> **⚠️ AMENDED 2026-10-03 (Story 10.3 · MOTIR-747) — credit & plan ops.** The "Credit grants, plan /
+> tier assignment" row ships as `platformCreditOpsService` (`grantCredits` / `adjustCredits` /
+> `setPlan` / `getLedger`) over motir-ai's `POST /v1/admin/credits`, `POST /v1/admin/tier` and
+> `GET /v1/admin/ledger`. Three actions join `PLATFORM_AUDIT_ACTIONS`, all `reason: 'required'`,
+> `targetKind: 'organization'`: **`org.credit_grant`** and **`org.credit_adjust`** (metadata
+> `{ requestId, credits, balanceBefore, balanceAfter }`, the balances as the operator saw them) and
+> **`org.plan_set`** (metadata `{ requestId, fromTierKey, toTierKey }`). The ledger read is an
+> `estate.read` at `support`. motir-ai's write runs INSIDE the audited transaction, so a refusal or
+> an unreachable credit service leaves no row; the residual case (motir-ai applied, core's commit
+> failed) is recoverable because every write is idempotent on its `requestId`. Core gained no
+> billing table.
+
 ---
 
 ## What this ADR deliberately does NOT decide

@@ -107,6 +107,33 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'ai.planner_model.set': { reason: 'required' },
   /**
+   * Credits were GRANTED to an organization (MOTIR-747 · 10.3.2, design Panel
+   * 2a/2b) — a positive `grant` row appended to its motir-ai ledger, the
+   * support / goodwill path. Never a `top_up` (that is the customer's checkout,
+   * Epic 8) and never a Stripe object.
+   *
+   * `required`, at the `superadmin` degree of ADR §7's "credit grants" row.
+   * `metadata` carries `{ requestId, credits, balanceBefore, balanceAfter }` —
+   * the two balances as the operator SAW them when the action was taken, the
+   * planner-model row's from/to convention; `requestId` is motir-ai's idempotency
+   * key and joins this row to the ledger row's `externalRef`
+   * (`grant:staff:<requestId>`).
+   */
+  'org.credit_grant': { reason: 'required' },
+  /**
+   * An organization's balance was CORRECTED by a signed `adjustment` row
+   * (MOTIR-747, design Panel 2c) — a billing mistake, not goodwill. Same degree,
+   * same metadata shape as `org.credit_grant`; `credits` is signed.
+   */
+  'org.credit_adjust': { reason: 'required' },
+  /**
+   * An organization's AI PLAN TIER was assigned by an operator (MOTIR-747, design
+   * Panel 2d). `metadata` carries `{ requestId, fromTierKey, toTierKey }`, the
+   * from-tier as the operator saw it. It grants nothing and changes no Stripe
+   * subscription — a paid org's next subscription event still sets its tier.
+   */
+  'org.plan_set': { reason: 'required' },
+  /**
    * The audit log ITSELF was searched (MOTIR-751 — the page is MOTIR-752,
    * design Panel 6). Reading the record of who touched the estate is a platform
    * read like any other, so it leaves a row: "who looked at the audit log, and

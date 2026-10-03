@@ -147,6 +147,31 @@ export class PlannerModelUnreachableError extends MotirAiError {
   }
 }
 
+// A staff credit ADJUSTMENT would take the org's balance below zero
+// (`POST /v1/admin/credits` → 409 `conflict` with a detail starting
+// `insufficient_balance:`; MOTIR-747). A detail PREFIX, not a code — the §5 union
+// is closed — so `adminWriteCredits` recognises it before the generic switch.
+// Nothing was written.
+export class MotirAiInsufficientBalanceError extends MotirAiError {
+  readonly code = 'MOTIR_AI_INSUFFICIENT_BALANCE' as const;
+  constructor(readonly detail: string) {
+    super(`motir-ai refused the adjustment — it would overdraw the balance: ${detail}`);
+    this.name = 'MotirAiInsufficientBalanceError';
+  }
+}
+
+// Any other 409 `conflict` from a staff credit op (MOTIR-747): a `requestId`
+// reused for a different amount / tier / org / kind, or an offboarded org
+// (`org_erased: …`). Nothing was written. Kept distinct from
+// `MotirAiBadRequestError` because it is a STATE refusal, not a malformed body.
+export class MotirAiConflictError extends MotirAiError {
+  readonly code = 'MOTIR_AI_CONFLICT' as const;
+  constructor(readonly detail: string) {
+    super(`motir-ai refused the write as a conflict: ${detail}`);
+    this.name = 'MotirAiConflictError';
+  }
+}
+
 // The GET /v1/jobs/:id result as the client returns it: status + result, with a
 // failed job's `error` already mapped to a motir-core typed error.
 export interface JobView {

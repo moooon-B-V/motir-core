@@ -195,3 +195,120 @@ export class PlatformAuditQueryInvalidError extends Error {
     this.name = 'PlatformAuditQueryInvalidError';
   }
 }
+
+// ── Credit ops (MOTIR-747 · 10.3.2) ─────────────────────────────────────────
+//
+// The console's typed refusals for grant / adjust / change plan / the ledger
+// read. Each is raised for a principal who has already passed the `superadmin`
+// gate, so each carries what the operator needs to see — there is nothing left to
+// leak. Every one of them is thrown BEFORE the audited transaction commits, so a
+// refused credit op leaves no audit row (design rule 6: "the write and its audit
+// row share one outcome").
+
+/**
+ * The amount is not one this operation accepts — a grant that is not a positive
+ * integer, an adjustment that is zero or not an integer, or either beyond the
+ * 32-bit range the ledger stores. Checked in core before anything is sent, so a
+ * typo never reaches motir-ai or the trail.
+ */
+export class PlatformCreditAmountInvalidError extends Error {
+  readonly code = 'PLATFORM_CREDIT_AMOUNT_INVALID';
+
+  constructor(
+    readonly kind: 'grant' | 'adjustment',
+    readonly credits: number,
+  ) {
+    super(
+      kind === 'grant'
+        ? `A grant must be a positive whole number of credits (got ${credits})`
+        : `An adjustment must be a non-zero whole number of credits (got ${credits})`,
+    );
+    this.name = 'PlatformCreditAmountInvalidError';
+  }
+}
+
+/**
+ * A LARGE grant (at or above `LARGE_GRANT_THRESHOLD_CREDITS`) arrived without the
+ * org's slug typed back as its confirmation (design Panel 2b). Enforced in the
+ * service as well as the dialog, because a Server Action is reachable without
+ * the dialog.
+ */
+export class PlatformLargeGrantUnconfirmedError extends Error {
+  readonly code = 'PLATFORM_LARGE_GRANT_UNCONFIRMED';
+
+  constructor(
+    readonly credits: number,
+    readonly threshold: number,
+  ) {
+    super(
+      `A grant of ${credits} credits is at or above ${threshold} and needs the organization's slug typed to confirm`,
+    );
+    this.name = 'PlatformLargeGrantUnconfirmedError';
+  }
+}
+
+/**
+ * An adjustment would take the org's balance below zero. Raised by core's own
+ * pre-check against the balance the operator saw, and by motir-ai's authoritative
+ * check under its ledger lock (`insufficient_balance:`) when the balance moved in
+ * between. Nothing was written either way.
+ */
+export class PlatformCreditInsufficientBalanceError extends Error {
+  readonly code = 'PLATFORM_CREDIT_INSUFFICIENT_BALANCE';
+
+  constructor(
+    readonly credits: number,
+    readonly balanceCredits: number | null,
+  ) {
+    super(
+      balanceCredits === null
+        ? `An adjustment of ${credits} credits would take the balance below zero`
+        : `An adjustment of ${credits} credits would take the balance of ${balanceCredits} below zero`,
+    );
+    this.name = 'PlatformCreditInsufficientBalanceError';
+  }
+}
+
+/**
+ * The credit service refused the operation as a STATE conflict: the action's
+ * `requestId` was already spent on a different amount / tier / org / kind, or the
+ * organization was offboarded in motir-ai (`org_erased: …`). Carries motir-ai's
+ * detail verbatim. Nothing was written.
+ */
+export class PlatformCreditConflictError extends Error {
+  readonly code = 'PLATFORM_CREDIT_CONFLICT';
+
+  constructor(readonly detail: string) {
+    super(`The credit service refused the operation: ${detail}`);
+    this.name = 'PlatformCreditConflictError';
+  }
+}
+
+/**
+ * The credit service rejected the request as invalid (`validation_error`) — most
+ * often an unknown `tierKey`, since core validates amounts before sending. Carries
+ * motir-ai's detail verbatim. Nothing was written.
+ */
+export class PlatformCreditRejectedError extends Error {
+  readonly code = 'PLATFORM_CREDIT_REJECTED';
+
+  constructor(readonly detail: string) {
+    super(`The credit service rejected the request: ${detail}`);
+    this.name = 'PlatformCreditRejectedError';
+  }
+}
+
+/**
+ * The credit service could not be reached, timed out, or answered something that
+ * is not its contract (design Panel 2f's "Couldn't reach the credit service.
+ * Nothing was granted and nothing was recorded."). The audited transaction rolls
+ * back with it, so that sentence is true.
+ */
+export class PlatformCreditServiceUnavailableError extends Error {
+  readonly code = 'PLATFORM_CREDIT_SERVICE_UNAVAILABLE';
+
+  constructor(readonly detail: string) {
+    super(`The credit service is unavailable: ${detail}`);
+    this.name = 'PlatformCreditServiceUnavailableError';
+  }
+}
