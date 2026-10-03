@@ -288,11 +288,13 @@ test.describe('every decision waiting on you, in one place', () => {
       'aria-current',
       'page',
     );
-    await expect(emptyHeading(page, '没有等待你审批的工作')).toBeVisible();
+    await expect(emptyHeading(page, '没有等你处理的事项')).toBeVisible();
     // The body is a `<p>`: the `paragraph` role carries no accessible name, so
     // it is narrowed by its text — still inside the accessibility tree.
     await expect(
-      page.getByRole('paragraph').filter({ hasText: '需要你签字确认才能继续的工作会显示在这里。' }),
+      page
+        .getByRole('paragraph')
+        .filter({ hasText: '需要你决定的审批，以及运行交给你完成的工作，都会显示在这里。' }),
     ).toBeVisible();
     // Negatively too: the English literal must not be reachable on a `zh` page.
     await expect(page.getByText('Nothing is waiting on you')).toHaveCount(0);
