@@ -19,8 +19,22 @@ import type { LockedPageRow, PageRow, PageVersionRow, PageVersionWithBody } from
 // returns. These two functions are the whole translation, so the adapter only
 // maps and the repository only queries.
 
-/** A page read without its body — every column the port's `PageRow` carries. */
-export type PageRecord = Omit<Page, 'bodyState' | 'bodyJson' | 'bodyMarkdown' | 'bodyText'>;
+/**
+ * A page read without its body — every column the port's `PageRow` carries.
+ *
+ * The archive columns (MOTIR-7417) are left out until a reader exists: the
+ * repository card (MOTIR-7420) is the first to select them.
+ */
+export type PageRecord = Omit<
+  Page,
+  | 'bodyState'
+  | 'bodyJson'
+  | 'bodyMarkdown'
+  | 'bodyText'
+  | 'archivedAt'
+  | 'archiveRootId'
+  | 'archivedById'
+>;
 
 /** The raw `SELECT … FOR UPDATE` row `pageRepository.lockById` returns. */
 export interface PageLockedRecord extends PageRecord {
