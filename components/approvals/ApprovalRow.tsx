@@ -459,7 +459,7 @@ function SubjectMeta({
       decided?.state === 'overturned'
         ? tConfirm('row.overturned', { count })
         : decided?.state === 'approved'
-          ? decided.confirmedRecord?.kind === 'attachment'
+          ? decided.confirmedRecord && decided.confirmedRecord.kind !== 'none'
             ? tConfirm('row.confirmedWith', { count })
             : tConfirm('row.confirmedWithout', { count })
           : tConfirm('row.awaiting', {

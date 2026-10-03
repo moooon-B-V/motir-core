@@ -90,6 +90,21 @@ function RecordLine({ record, count }: { record: ConfirmedRecordDTO; count: numb
   if (record.kind === 'none') {
     return <p className="text-[13px] text-(--el-text-secondary)">{t('none')}</p>;
   }
+  if (record.kind === 'page') {
+    // A published page version (MOTIR-7435) — the port's page row is MOTIR-7444's.
+    return (
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
+        <span className="text-(--el-text-secondary)">{t('link')}</span>
+        <Link
+          href={`/pages/${encodeURIComponent(record.pageId)}`}
+          className="inline-flex items-center gap-1 text-(--el-link) hover:underline"
+        >
+          <FileText className="h-3.5 w-3.5 flex-none" aria-hidden />
+          {record.title}
+        </Link>
+      </p>
+    );
+  }
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
       <span className="text-(--el-text-secondary)">{t('link')}</span>
@@ -251,7 +266,9 @@ export function DecisionConfirmGateFrame({
         consequences: [
           record.kind === 'attachment'
             ? t('confirmStep.recordWith', { file: record.originalFilename })
-            : t('confirmStep.recordWithout'),
+            : record.kind === 'page'
+              ? t('confirmStep.recordWith', { file: record.title })
+              : t('confirmStep.recordWithout'),
           t('confirmStep.done', { key: identifier }),
           t('confirmStep.nothingElse'),
         ],
@@ -337,6 +354,21 @@ function ConfirmedBand({
   const t = useTranslations('approvalGate.decisionConfirm.band');
   if (!stamp || stamp.kind === 'none') {
     return <span className="basis-full text-(--el-text)">{t('withoutRecord')}</span>;
+  }
+  if (stamp.kind === 'page') {
+    // The FROZEN version (MOTIR-7435): it cannot be removed while its gate stands.
+    return (
+      <span className="flex basis-full flex-wrap items-center gap-2 text-(--el-text)">
+        <span>{t('withRecord')}</span>
+        <Link
+          href={`/pages/${encodeURIComponent(stamp.pageId)}`}
+          className="inline-flex items-center gap-1 text-(--el-link) hover:underline"
+        >
+          <FileText className="h-3.5 w-3.5 flex-none" aria-hidden />
+          {stamp.title}
+        </Link>
+      </span>
+    );
   }
   const present = presentRecordIds.includes(stamp.attachmentId);
   return (
