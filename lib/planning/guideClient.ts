@@ -56,13 +56,20 @@ export function openGuideConversation(
   return post('/api/ai/guide', { itemKey }, signal);
 }
 
-/** The person's next turn in the conversation. */
+/** The person's next turn in the conversation. `attachmentIds` are files
+ *  already attached to the guided card, in the order the person added them
+ *  (Story MOTIR-7471 · MOTIR-7486); a turn with files may carry no words. */
 export function sendGuideTurn(
   sessionId: string,
   text: string,
+  attachmentIds: readonly string[] = [],
   signal?: AbortSignal,
 ): Promise<GuideTurnResponse> {
-  return post('/api/ai/guide', { sessionId, text }, signal);
+  return post(
+    '/api/ai/guide',
+    attachmentIds.length > 0 ? { sessionId, text, attachmentIds } : { sessionId, text },
+    signal,
+  );
 }
 
 /** Re-run a turn already on the thread (Try again). Replay-safe server-side. */

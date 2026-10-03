@@ -57,6 +57,7 @@ import {
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
 import { resumableSince } from '@/lib/planChange/sessionWindow';
+import { attachmentsService } from '@/lib/services/attachmentsService';
 
 /**
  * How a write ADDRESSES its session (AMENDMENT 17 §2, story MOTIR-6011): by its
@@ -166,7 +167,15 @@ async function toDto(
     pctx.projectId,
     { userId: pctx.userId, workspaceId: pctx.workspaceId },
   );
-  return toPlanChangeSessionDto(row, turns, workItemRefs);
+  // A guide thread's files (MOTIR-7486), resolved once as the caller may see them.
+  const fileIds = turns.flatMap((t) => t.attachmentIds);
+  const dto = toPlanChangeSessionDto(row, turns, workItemRefs);
+  if (fileIds.length === 0) return dto;
+  const attachments = await attachmentsService.listViewableByIds(fileIds, {
+    userId: pctx.userId,
+    workspaceId: pctx.workspaceId,
+  });
+  return { ...dto, attachments };
 }
 
 /**

@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState, type DragEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ArrowRight,
@@ -22,6 +22,16 @@ import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { Bubble } from '@/components/planning/PlanChangeRail';
+import {
+  GuideDropOverlay,
+  GuideFileRefusals,
+  GuideFilesNotSent,
+  GuideFileTray,
+  GuideSentFiles,
+} from '@/components/planning/GuideTurnFiles';
+import { GUIDE_FILES_MAX } from '@/lib/ai/guideFiles';
+import { ALLOWED_UPLOAD_TYPES } from '@/lib/blob/allowlist';
+import { useGuideTurnFiles } from '@/lib/hooks/useGuideTurnFiles';
 import type { GuideAction } from '@/lib/ai/guideWorkItem';
 import type { PlanChangeTurnDto, PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { WorkItemRefSummaryDto } from '@/lib/dto/workItems';
@@ -53,6 +63,14 @@ import {
 // and undoing a change each need the person's consent in a TURN (A2.3, A2.6), so
 // each button sends a fixed sentence as a user turn. *Reload the card* is the one
 // exception: it is a read, and sends nothing.
+//
+// FILES ON A TURN (Story MOTIR-7471 · MOTIR-7486; design MOTIR-7482). The rail
+// owns the turn being written — its words AND its files — so the composer gains
+// the attach control and image paste here, the rail itself is the drop target,
+// and Send UPLOADS the queued files to the guided card before the turn is sent
+// (A3.1). A failed upload sends nothing and keeps the words; Stop stops the
+// send. The composer keeps its target search in guide mode (design review,
+// 2026-10-03): a picked item is written into the message as its key.
 
 export interface GuideRailProps {
   card: PlanningTarget;
@@ -62,7 +80,8 @@ export interface GuideRailProps {
   errorCode: string | null;
   outOfCredits: boolean;
   markers: readonly GuidePersonMarker[];
-  onSend: (text: string) => void;
+  /** Send a turn. `attachmentIds` are files already on the card (A3.1). */
+  onSend: (text: string, attachmentIds?: readonly string[]) => void;
   onRetry: () => void;
   onReload: () => void;
 }
@@ -102,6 +121,10 @@ export function GuideRail({
   const turns = session?.turns ?? [];
   const userTurns = turns.filter((x) => x.role === 'user');
   const running = phase !== 'idle';
+  const tf = useTranslations('planningWorkspace.guide.files');
+  const files = useGuideTurnFiles(card.id);
+  const [dragging, setDragging] = useState(false);
+  const canAttach = !running && session !== null && !files.uploading;
 
   // The chip every outcome line names the card with — the thread's resolved
   // reference when it has one, else the card as the overlay read it, with its
@@ -124,14 +147,63 @@ export function GuideRail({
     if (el && stickRef.current) el.scrollTop = el.scrollHeight;
   }, [turns.length, phase, markers.length, view.replies.length]);
 
+  // The act line counts the files of the turn being read (panel 9's "Reading
+  // your 2 files and MOTIR-9…").
+  const lastUser = userTurns[userTurns.length - 1];
+  const readingFiles = lastUser?.attachmentIds?.length ?? 0;
+
+  /** Send the turn: upload its files first, then send it with their ids. */
+  async function submitTurn(text: string) {
+    if (files.files.length === 0) {
+      if (!text) return;
+      setDraft('');
+      onSend(text);
+      return;
+    }
+    const ids = await files.upload();
+    if (!ids) return; // not sent — the words and the tray stay (panel 6)
+    setDraft('');
+    files.reset();
+    onSend(text, ids);
+  }
+
+  /** A picked target is written into the message as its key. */
+  function insertTarget(target: PlanningTarget) {
+    setDraft((d) => `${d}${d && !/\s$/.test(d) ? ' ' : ''}${target.identifier} `);
+  }
+
+  const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
+
   const latestAssistantId = [...turns].reverse().find((x) => x.role === 'assistant')?.id ?? null;
   const markersAfter = (turnId: string | null) => markers.filter((m) => m.afterTurnId === turnId);
 
   return (
     <aside
-      className="flex h-full min-h-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
+      className="relative flex h-full min-h-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
       aria-label={t('railLabel')}
+      data-testid="guide-rail"
+      // THE RAIL IS THE DROP TARGET (panel 3) — the canvas is not.
+      onDragEnter={(e) => {
+        if (!canAttach || !hasFiles(e)) return;
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragOver={(e) => {
+        if (!canAttach || !hasFiles(e)) return;
+        e.preventDefault();
+      }}
+      onDragLeave={(e) => {
+        const next = e.relatedTarget as Node | null;
+        if (!next || !e.currentTarget.contains(next)) setDragging(false);
+      }}
+      onDrop={(e) => {
+        setDragging(false);
+        if (!canAttach || !hasFiles(e)) return;
+        e.preventDefault();
+        files.add(Array.from(e.dataTransfer.files));
+      }}
     >
+      {dragging ? <GuideDropOverlay cardKey={card.identifier} /> : null}
       <div className="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
         <span className="size-2 rounded-full bg-(--el-success)" aria-hidden="true" />
         <span className="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
@@ -161,7 +233,9 @@ export function GuideRail({
 
         {turns.map((turn) => (
           <Fragment key={turn.id}>
-            {turn.role === 'user' ? (
+            {/* A turn of files alone draws no empty bubble — its chips stand
+                for it (A3.2). */}
+            {turn.role === 'user' && turn.body.trim().length > 0 ? (
               <Bubble
                 role="user"
                 label={t('conversation.turn', {
@@ -170,6 +244,12 @@ export function GuideRail({
               >
                 {turn.body}
               </Bubble>
+            ) : null}
+            {turn.role === 'user' && (turn.attachmentIds?.length ?? 0) > 0 ? (
+              <GuideSentFiles
+                attachmentIds={turn.attachmentIds ?? []}
+                attachments={session?.attachments ?? {}}
+              />
             ) : turn.role === 'assistant' ? (
               <GuideAssistantTurn
                 turn={turn}
@@ -211,7 +291,11 @@ export function GuideRail({
                 <span className="mt-px w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
                   {t('conversation.act.reading')}
                 </span>
-                <span className="min-w-0 flex-1">{tg('reading', { key: card.identifier })}</span>
+                <span className="min-w-0 flex-1">
+                  {readingFiles > 0
+                    ? tf('reading', { count: readingFiles, key: card.identifier })
+                    : tg('reading', { key: card.identifier })}
+                </span>
               </li>
             </ol>
           ) : null}
@@ -246,13 +330,55 @@ export function GuideRail({
       <PlanChangeComposer
         draft={draft}
         onDraftChange={setDraft}
+        // The guide's target is fixed by the door, so a pick is not a target:
+        // the search stays (MOTIR-7482's review) and writes the key into the
+        // message instead.
         targets={[]}
-        onAddTarget={() => {}}
+        onAddTarget={insertTarget}
         onRemoveTarget={() => {}}
-        // A guide's target is fixed by the door, so there is no target search
-        // (design § What guide mode changes, 3).
-        mentions={false}
-        onSubmit={(text) => onSend(text)}
+        onSubmit={(text) => void submitTurn(text)}
+        clearOnSubmit={false}
+        canSendEmpty={files.files.length > 0}
+        readOnly={files.uploading}
+        attach={{
+          onFiles: (picked) =>
+            files.add(
+              picked.map((f) =>
+                f.name
+                  ? f
+                  : new File([f], `${tf('pastedName')}.${f.type.split('/')[1] ?? 'png'}`, {
+                      type: f.type,
+                    }),
+              ),
+            ),
+          atCap: files.files.length >= GUIDE_FILES_MAX,
+          label: tf('attach'),
+          tip: tf('attachTip'),
+          capLabel: tf('cap'),
+          accept: ALLOWED_UPLOAD_TYPES.join(','),
+        }}
+        running={
+          files.uploading
+            ? {
+                line: tf('attaching', { count: files.files.length, key: card.identifier }),
+                stopping: false,
+                onStop: files.stop,
+              }
+            : null
+        }
+        beforeField={
+          <>
+            {files.notSent ? <GuideFilesNotSent cardKey={card.identifier} /> : null}
+            <GuideFileRefusals refusals={files.refusals} onDismiss={files.dismissRefusal} />
+            <GuideFileTray
+              files={files.files}
+              cardKey={card.identifier}
+              uploading={files.uploading}
+              onRemove={files.remove}
+              onRetry={() => void submitTurn(draft.trim())}
+            />
+          </>
+        }
         placeholder={t('conversation.composerPlaceholderGuide')}
         disabled={running || session === null}
       />

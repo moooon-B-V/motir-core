@@ -502,6 +502,44 @@ export const attachmentsService = {
   },
 
   /**
+   * The attachments `ids` names that the caller can SEE, keyed by id (MOTIR-7486)
+   * — what a guide conversation's sent turns draw as chips. Lenient by design:
+   * an id that no longer resolves (deleted from its card, unlinked, in another
+   * workspace, lifecycle-owned) or whose card the caller cannot browse is simply
+   * absent, and the rail draws it as removed. Each distinct card is view-gated
+   * once.
+   */
+  async listViewableByIds(
+    ids: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<Record<string, AttachmentDTO>> {
+    if (ids.length === 0) return {};
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      attachmentRepository.findManyByIds(ctx.workspaceId, [...new Set(ids)], tx),
+    );
+    const linked = rows.filter(
+      (r): r is Attachment & { workItemId: string } =>
+        r.workItemId !== null && !LIFECYCLE_OWNED_SOURCES.includes(r.source),
+    );
+    const visible = new Set<string>();
+    for (const workItemId of new Set(linked.map((r) => r.workItemId))) {
+      try {
+        await resolveGatedWorkItem(workItemId, ctx);
+        visible.add(workItemId);
+      } catch (err) {
+        if (!(err instanceof WorkItemNotFoundError)) throw err;
+      }
+    }
+    const shown = linked.filter((r) => visible.has(r.workItemId));
+    if (shown.length === 0) return {};
+    const uploaders = await userRepository.findByIds([
+      ...new Set(shown.map((r) => r.uploaderUserId)),
+    ]);
+    const uploadersById = new Map(uploaders.map((u) => [u.id, u]));
+    return Object.fromEntries(shown.map((r) => [r.id, toAttachmentDto(r, uploadersById)]));
+  },
+
+  /**
    * The BYTES of one attachment on `workItemId`, read on the server (MOTIR-7484):
    * a guide turn's readable files are resolved into the job's input, because
    * motir-ai cannot read the blob store (`guide-turn-files.md` A3.4). The same

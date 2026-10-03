@@ -7530,6 +7530,28 @@
         "edited": "已编辑 <chip>{key}</chip> 的{fields}。",
         "commented": "已在 <chip>{key}</chip> 上评论：“{reason}”",
         "closed": "已将 <chip>{key}</chip> 移至“已完成”，并将此总结添加为评论。"
+      },
+      "files": {
+        "attach": "添加文件",
+        "attachTip": "添加文件或截图",
+        "cap": "每轮最多 4 个文件",
+        "trayAria": "本轮的文件",
+        "removeAria": "移除 {name}",
+        "pastedName": "粘贴的图片",
+        "dropTitle": "拖放到这里，添加到本轮",
+        "dropSub": "发送时会添加到 {key}。最多 4 个文件。",
+        "waiting": "等待中",
+        "uploadingPct": "上传中… {pct}%",
+        "uploading": "上传中…",
+        "onCard": "已在 {key} 上",
+        "attaching": "正在把 {count} 个文件添加到 {key}…… 文件全部添加后即发送本轮。",
+        "notSent": "<b>未发送。</b>有一个文件没有上传成功，所以 Motir AI 还没有看到本轮。你的文字已保留，已添加到 {key} 的文件仍在该工作项上。",
+        "retry": "重试",
+        "reading": "正在读取你的 {count} 个文件和 {key}…",
+        "removed": "已删除",
+        "typeText": "文本",
+        "typeMarkdown": "Markdown",
+        "typeFile": "文件"
       }
     }
   },
