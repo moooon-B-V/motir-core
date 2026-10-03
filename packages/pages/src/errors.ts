@@ -104,6 +104,26 @@ export class PageBodyTooLargeError extends PageError {
   }
 }
 
+/**
+ * A whole-body write (the markdown save, §3 / §8.2) that stated a revision the
+ * page has since moved past. A Yjs update merges and is never refused for
+ * staleness; a whole-body replace would erase whatever landed in between, so it
+ * is refused and nothing is written. Re-read the page and write again.
+ */
+export class PageRevisionConflictError extends PageError {
+  readonly code = 'PAGE_REVISION_CONFLICT' as const;
+  readonly status = 409 as const;
+  constructor(
+    readonly expected: number,
+    readonly actual: number,
+  ) {
+    super(
+      `This page is at revision ${actual}, not the revision ${expected} the write was based on. Re-read the page and write again.`,
+    );
+    this.name = 'PageRevisionConflictError';
+  }
+}
+
 /** A page that does not exist, or is outside the caller's scope. */
 export class PageNotFoundError extends PageError {
   readonly code = 'PAGE_NOT_FOUND' as const;
