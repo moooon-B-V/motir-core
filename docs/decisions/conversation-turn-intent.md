@@ -7,8 +7,8 @@
   **Amended 2026-09-30** by MOTIR-7044 — a third intent, `debug` (see
   _AMENDMENT 1_ at the end). **Amended 2026-10-03** by MOTIR-7461 — a
   fourth intent, `guide` (see _AMENDMENT 2_ at the end). **Amended
-  2026-10-03** by MOTIR-7481 — files on a guide turn (see _AMENDMENT 3_ at the
-  end).
+  2026-10-03** by MOTIR-7481 — files on a guide turn, agent-step prompts and
+  changes to ticked steps (see _AMENDMENT 3_ at the end).
 - **Story / Subtask:** MOTIR-1343 (The AI assistant — Ask about this project) ·
   Subtask MOTIR-1816.
 - **Consumed by:** MOTIR-1815 (design: the cited-answer turn and the correction
@@ -706,11 +706,12 @@ of credits is the shipped paywall state, and the turn writes nothing (A2.4).
 
 ---
 
-## AMENDMENT 3 (2026-10-03, MOTIR-7481) — files on a guide turn
+## AMENDMENT 3 (2026-10-03, MOTIR-7481) — files on a guide turn, and two changes to the guide
 
 - **Status:** Accepted on approval of MOTIR-7481's pull request. It **extends**
   AMENDMENT 2 (A2.2's persisted turn, A2.3's input, A2.8's credits) and adds one
-  field to §1's wire. Every rule above holds exactly as written. `ask`,
+  field to §1's wire. A3.9 **amends** A2.3, A2.4 and A2.7: agent steps and
+  changes to ticked steps. Every other rule above holds exactly as written. `ask`,
   `plan_change` and `debug` turns are unchanged and still carry text only.
 - **Story / Subtask:** MOTIR-7471 (Show Motir AI what you see) · Subtask
   MOTIR-7481.
@@ -719,6 +720,9 @@ of credits is the shipped paywall state, and the turn writes nothing (A2.4).
   `guide_work_item` handler) and its tests MOTIR-7485, the motir-core intake
   MOTIR-7484 (attach, then resolve into the job's input), the composer
   MOTIR-7486, its Postgres tests MOTIR-7487 and the acceptance run MOTIR-7488.
+  A3.9 changes the shipped guide, so MOTIR-7483 also changes the
+  `guide_work_item` handler for it, MOTIR-7484 lands `needs_replan`, and
+  MOTIR-7482 draws the agent prompt and the re-plan reply.
   Outside the story, MOTIR-1344 (Help with a task) may reuse A3.2's wire field
   and A3.4's resolution if it takes files.
 
@@ -885,6 +889,40 @@ an owner). Files in item-scoped help outside a guide belong to MOTIR-1344.
 | the upload     | The shipped attachment rate limit and the org storage cap. A file counts against storage like any attachment.                                                    |
 | out of credits | The shipped paywall state. The turn writes nothing (A2.4). Files already uploaded stay on the card, because the upload is not part of the turn.                  |
 
+#### A3.9 — Two changes to the guide itself, made at the requester's review. (Amends A2.3, A2.4 and A2.7.)
+
+These are not about files. The requester made them when reviewing this record
+(MOTIR-7481's decision gate, 2026-10-03). They change how the guide shipped in
+MOTIR-7459, and they are recorded here because this is the record under review.
+
+**(a) An agent step gets a prompt for the person's LOCAL agent.** This replaces
+A2.7's first "never" row and the shipped handler's rule that an `agent` row is
+only "not runnable yet".
+
+| Concern                     | Pinned value                                                                                                                                                                                                                                                                             |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| what Motir AI says          | The step can be run by a coding agent in the person's own environment. Motir does not hold the person's credentials, so it cannot run the step. Their local agent can read the credentials where they already live and help run it.                                                      |
+| what Motir AI produces      | A prompt to give that local agent: the step's goal, its notes and command, what is done when it succeeds, and which credentials or access the agent needs to find locally. It is returned as a new action, `local_agent_prompt` (row id, prompt), so the rail can show it ready to copy. |
+| what the prompt never holds | A secret. Motir AI never asks the person to paste a credential into the conversation, and the prompt names what the agent needs without carrying it.                                                                                                                                     |
+| what it never does          | Run the step, or start an agent. MOTIR-6856's boundary (no secret store, so no hosted run) is unchanged.                                                                                                                                                                                 |
+| the tick                    | Unchanged: the step is ticked on the person's word that it is done (A2.3), whoever did it.                                                                                                                                                                                               |
+| what lands                  | `local_agent_prompt` writes nothing to the card. It is recorded on the conversation, like `current_step`.                                                                                                                                                                                |
+
+**(b) The guide may change the card and any step, ticked or not, as long as the
+card's TARGET stays the same.** This replaces A2.7's rule that a ticked row is
+never changed, A2.3's "the row is not ticked" condition on `revise_step`,
+`remove_step` and `move_step`, and A2.4's rule that a correction aimed at a
+ticked row is skipped.
+
+| Concern               | Pinned value                                                                                                                                                                                                                                                                                                           |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the target**        | What the card exists to achieve: the outcome that is true when the card is done. A different way of reaching the same outcome is not a change of target. A different outcome is.                                                                                                                                       |
+| **target unchanged**  | `edit_item`, `add_step`, `revise_step`, `remove_step` and `move_step` are legal on any row, ticked or not. A revised ticked row keeps its tick unless the revision means the work already done no longer satisfies it. Then Motir AI unticks it and says so. Every change is stated with its reason (A2.3, unchanged). |
+| **target changed**    | Motir AI edits nothing and changes no step. It says the change needs a re-plan, and why, and the walk stops. It returns a new action, `needs_replan` (reason), landed like `cannot_do` as a comment on the guided card through `commentsService.addComment`.                                                           |
+| **who judges**        | Motir AI, from the card and the conversation. When it is unsure whether the target changed, it asks the person before changing anything.                                                                                                                                                                               |
+| **what a re-plan is** | The shipped planning conversation on that card. The guide does not submit a plan, because a guide conversation is never a planning session (A2.2).                                                                                                                                                                     |
+| **unchanged**         | `edit_item` still sets only `title`, `descriptionMd` and `explanationMd` on the guided card (A2.5). Status still moves only through `close` (A2.6). The landers and permissions of A2.4 are unchanged.                                                                                                                 |
+
 ### Consequences
 
 1. **motir-ai's gateway client gains multi-part content.** This is the one new
@@ -897,6 +935,9 @@ an owner). Files in item-scoped help outside a guide belong to MOTIR-1344.
 4. **The vitest gates gain a files arm:** ownership by the guided card, the
    count limit, guide-only, the temporary walk, cut and unread files, and a
    file whose text asks for a tick and gets none.
+5. **The guide's closed action set gains `local_agent_prompt` and
+   `needs_replan`** (A3.9), and the handler stops dropping corrections aimed at
+   a ticked row.
 
 ### What this does NOT decide
 
@@ -913,5 +954,9 @@ an owner). Files in item-scoped help outside a guide belong to MOTIR-1344.
   design.
 - **The prompt wording** that frames files and states what was seen. That is
   MOTIR-7483.
+- **How the guide decides that a target changed**, beyond A3.9's definition.
+  That is the prompt's, MOTIR-7483.
+- **Running an agent step from Motir.** A3.9 hands the person a prompt; a
+  hosted run still waits on MOTIR-6856.
 - **Files on `ask`, `plan_change` or `debug` turns, and in Help with a task**
   (MOTIR-1344).
