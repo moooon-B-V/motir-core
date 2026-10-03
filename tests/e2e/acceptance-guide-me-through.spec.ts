@@ -71,13 +71,16 @@ const guideSubmits = () =>
 
 // ── Locators ────────────────────────────────────────────────────────────────
 
-const door = (page: Page) => page.getByTestId('guide-door');
+// Every locator is a role, or scoped to a live landmark (the overlay's dialog, the
+// rail): a page-rooted strict locator can match the outgoing streamed subtree.
+const door = (page: Page) => page.getByRole('button', { name: /Guide me through/ });
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
-const canvas = (page: Page) => page.getByTestId('guide-canvas');
+const overlay = (page: Page) => page.getByRole('dialog');
+const canvas = (page: Page) => overlay(page).getByTestId('guide-canvas');
 const rows = (page: Page) => canvas(page).getByTestId('guide-row');
 /** A PROPOSED list is the shipped read face (`TodoRowReadOnly`), not guide rows. */
 const proposedRows = (page: Page) => canvas(page).getByTestId('guide-list').getByRole('listitem');
-const composer = (page: Page) => page.getByPlaceholder('Tell Motir AI how the step went…');
+const composer = (page: Page) => rail(page).getByPlaceholder('Tell Motir AI how the step went…');
 
 // ── Authoritative signals ───────────────────────────────────────────────────
 
@@ -118,7 +121,7 @@ async function say(page: Page, text: string): Promise<void> {
 async function reply(page: Page, chip: string): Promise<void> {
   const opened = guideDoor(page);
   const settled = guideSettled(page);
-  await page.getByTestId(`guide-reply-${chip}`).click();
+  await rail(page).getByTestId(`guide-reply-${chip}`).click();
   expect((await opened).status()).toBe(200);
   await landed(settled);
 }
@@ -322,7 +325,7 @@ test('Guide me through — a four-step manual card walked to Done', async ({
     ]);
     await say(page, 'The record is in and the test email arrived.');
     await expect.poll(() => doneFlags(card.id)).toEqual([true, true, true, true]);
-    await expect(page.getByTestId('guide-reply-closeYes')).toBeVisible();
+    await expect(rail(page).getByTestId('guide-reply-closeYes')).toBeVisible();
     await beat();
 
     queueTurn('All four steps are done; closing it with a summary.', [{ type: 'close' }]);
