@@ -48,6 +48,7 @@ function run(over: { status?: 'running' | 'failed'; endedAt?: string | null } = 
     startedAt: null,
     endedAt: null,
     exitCode: null,
+    model: null,
   });
   return {
     id: 'run-7',

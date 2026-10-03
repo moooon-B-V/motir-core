@@ -45,6 +45,7 @@ function card(over: {
     startedAt: null,
     endedAt: null,
     exitCode: null,
+    model: null,
   };
 }
 
