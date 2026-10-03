@@ -34,6 +34,20 @@ export type DecisionDocumentViewDTO =
       /** The file on the host, at the head it was read at — a page link, not an API. */
       hostUrl: string;
     }
+  /**
+   * A published PAGE version (Story MOTIR-5761 · MOTIR-7433): its text, number and
+   * title, and the page's address. The port draws it per the delta mocks (MOTIR-7436).
+   */
+  | {
+      outcome: 'page';
+      pageId: string;
+      versionId: string;
+      versionNumber: number;
+      title: string;
+      markdown: string;
+      /** The page in Motir — `/pages/<id>`. */
+      pageUrl: string;
+    }
   | {
       outcome: 'unresolvable';
       reason: DecisionDocumentViewReason;

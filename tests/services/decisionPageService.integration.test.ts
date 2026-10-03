@@ -8,10 +8,8 @@ import {
   DecisionPageNotFoundError,
   NotADecisionCardError,
 } from '@/lib/decisionPages/errors';
-import {
-  decisionPageService,
-  pageDecisionSubjectVersion,
-} from '@/lib/services/decisionPageService';
+import { pageDecisionSubjectVersion } from '@/lib/approvalGates/decisionSubject';
+import { decisionPageService } from '@/lib/services/decisionPageService';
 import { pagesService } from '@/lib/services/pagesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';

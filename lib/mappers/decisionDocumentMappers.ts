@@ -17,6 +17,31 @@ export function toDecisionDocumentViewDTO(
 ): DecisionDocumentViewDTO | null {
   const { identity, content } = read;
   if (!identity || !content) return null;
+  if (identity.source === 'page') {
+    if (content.outcome === 'page') {
+      return {
+        outcome: 'page',
+        pageId: content.pageId,
+        versionId: content.versionId,
+        versionNumber: content.versionNumber,
+        title: content.title,
+        markdown: content.markdown,
+        pageUrl: `/pages/${content.pageId}`,
+      };
+    }
+    // A page version that cannot be read: there is no pull request to name, and the
+    // page itself is the only link worth offering.
+    return {
+      outcome: 'unresolvable',
+      reason: content.outcome === 'unresolvable' ? content.reason : 'unreadable',
+      repo: '',
+      number: 0,
+      headSha: null,
+      path: null,
+      paths: [],
+      hostUrl: `/pages/${identity.pageId}`,
+    };
+  }
   if (identity.resolvable && content.outcome === 'resolved') {
     return {
       outcome: 'resolved',

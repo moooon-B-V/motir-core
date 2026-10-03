@@ -6,7 +6,7 @@ import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository'
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { handlerFor } from '@/lib/approvalGates/registry';
+import { reconcileGatesFor } from '@/lib/services/gateSetFor';
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -45,11 +45,6 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // save takes (`lockPage`), so a racing save lands INSIDE the version before it
 // is sealed, or starts N+1 after it — never extends a sealed one (the version
 // policy refuses to, MOTIR-7431).
-
-/** The gate's subject version for a page decision (§8 NINTH AMENDMENT clause 2). */
-export function pageDecisionSubjectVersion(pageId: string, versionId: string): string {
-  return `page:${pageId}@${versionId}`;
-}
 
 /** `page:view` on `projectId`, as a boolean — a denial is not an error here. */
 async function canViewPages(
@@ -195,21 +190,14 @@ export const decisionPageService = {
             'republished',
             tx,
           );
-          const gate = await approvalGateRepository.create(
-            {
-              workspaceId: ctx.workspaceId,
-              projectId: item.projectId,
-              workItemId: item.id,
-              kind: 'decision_approval',
-              // The CARD is the subject (the gate set's convention); the VERSION
-              // says which page version was asked about.
-              subjectId: item.id,
-              subjectVersion: pageDecisionSubjectVersion(page.id, latest.id),
-              routedToId: handlerFor('decision_approval').routeTo({ item, ctx, tx }),
-            },
-            tx,
+          // RAISED BY THE PREDICATE (`reconcileGatesFor`), the one place a gate row is
+          // created from what the card owes: it now reads the publication just written
+          // (MOTIR-7433), so it asks `page:<pageId>@<versionId>` of this card.
+          await reconcileGatesFor(item, tx);
+          const raised = (await approvalGateRepository.findAwaitingByWorkItem(item.id, tx)).find(
+            (gate) => gate.kind === 'decision_approval',
           );
-          gateId = gate.id;
+          gateId = raised?.id ?? null;
           // The status follows the question, after it, in the same transaction.
           await moveToReviewWhenUndelivered(item, ctx, tx);
         }
