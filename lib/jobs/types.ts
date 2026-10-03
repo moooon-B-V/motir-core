@@ -470,6 +470,25 @@ export interface AgentInstanceIdleCheckData {
 }
 
 /**
+ * The `agent-instance/boot` payload (Story MOTIR-7393 · MOTIR-7398,
+ * `docs/decisions/agent-instances.md` AMENDMENT 6 §3) — one boot attempt of one
+ * agent, driven to `running` or `failed`. Sent by the create or wake that opened
+ * the attempt, and again by the sweep for an attempt whose lease expired.
+ */
+export interface AgentInstanceBootData {
+  workspaceId: string;
+  instanceId: string;
+  /** The boot attempt this driver advances, numbered per agent from 1. */
+  attempt: number;
+  /**
+   * `agent-instance-boot:<instanceId>:<attempt>` — one driver per attempt; a
+   * resend for an expired lease carries that lease's expiry, so it is never
+   * swallowed as a duplicate of the first (`agentBootEventKey`).
+   */
+  idempotencyKey: string;
+}
+
+/**
  * Map of event-name → payload. Each key is a job id and the event name that
  * triggers it; for an event's FIRST consumer the two are the same string (the
  * 1:1 convention). An event with MULTIPLE consumers (e.g.
@@ -617,6 +636,8 @@ export interface JobEventDataMap {
   'hosted-run/supervise': HostedRunSuperviseData;
   /** One agent instance's idle timer (Story MOTIR-6860 · MOTIR-6873). */
   'agent-instance/idle-check': AgentInstanceIdleCheckData;
+  /** One boot attempt of an agent, driven step by step (Story MOTIR-7393 · MOTIR-7398). */
+  'agent-instance/boot': AgentInstanceBootData;
   /** The launch of a card's run in a developer's agent (Story MOTIR-6864 · MOTIR-7026). */
   'agent-instance-run/launch': AgentInstanceRunLaunchData;
   /** The supervision of a card's run in a developer's agent (Story MOTIR-6864 · MOTIR-7027). */

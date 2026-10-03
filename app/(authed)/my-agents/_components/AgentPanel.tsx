@@ -31,6 +31,7 @@ import { AgentPanelHeader, ICON_BUTTON } from './AgentPanelHeader';
 import { itemHref } from './AgentRunLine';
 import { AgentTerminal } from './AgentTerminal';
 import { RefusalBox, type AgentRefusal } from './agentRefusal';
+import { AgentBootReadout } from './AgentBootReadout';
 import {
   DOT,
   FACE_ICON,
@@ -40,6 +41,7 @@ import {
   type FaceComponent,
   type TabArea,
 } from './panelParts';
+import { useAgentBoot } from './useAgentBoot';
 import { useAgentChat } from './useAgentChat';
 import { useAgentTerminal, type TerminalConn, type TerminalSink } from './useAgentTerminal';
 import { useRunSessionWatch } from './useRunSessionWatch';
@@ -82,6 +84,9 @@ import { useRunSessionWatch } from './useRunSessionWatch';
 // the reader's own list (the server's answer), or null when the address names an
 // agent that list does not hold; the relay's 4403 lands on the same face. It
 // never asks for, and never shows, anything about an agent that is not theirs.
+
+/** The states whose boot is read: live while booting, once for the summary or the failure. */
+const BOOT_READ_STATES = new Set(['starting', 'waking', 'running', 'failed']);
 
 /** The panel fills down to the viewport's bottom edge, but never below this. */
 const MIN_PANEL_PX = 420;
@@ -360,6 +365,22 @@ function OpenAgent({
     void wake();
   };
 
+  // THE BOOT READ-OUT (MOTIR-7400): read while the agent boots, and once for a
+  // running or failed agent (its summary, or its failure). A change of state
+  // re-opens the stream, which is how a wake's new attempt is picked up.
+  const { boot } = useAgentBoot({
+    projectKey,
+    agentId: agent.id,
+    live: BOOT_READ_STATES.has(agent.state),
+    epoch: agent.state,
+  });
+  // The read-out is the panel's only progress while it covers this state.
+  const bootShown =
+    boot !== null &&
+    (agent.state === 'starting' ||
+      agent.state === 'waking' ||
+      (agent.state === 'failed' && boot.outcome === 'failed'));
+
   const terminalLifecycle = useLifecycleArea({
     agent,
     waking,
@@ -367,6 +388,7 @@ function OpenAgent({
     onWake,
     Face,
     wakingHint: t('panel.face.wakingHint'),
+    bootShown,
   });
   const chatLifecycle = useLifecycleArea({
     agent,
@@ -375,6 +397,7 @@ function OpenAgent({
     onWake,
     Face: ChatFace,
     wakingHint: t('panel.chat.face.wakingHint'),
+    bootShown,
   });
 
   const terminalArea = useTerminalArea({
@@ -433,6 +456,15 @@ function OpenAgent({
         <div className="border-b border-(--el-border-soft) p-(--spacing-card-padding)">
           <RefusalBox refusal={refusal} />
         </div>
+      ) : null}
+      {boot && !wakeRefusal ? (
+        <AgentBootReadout
+          boot={boot}
+          agentState={agent.state}
+          waking={waking}
+          onWake={onWake}
+          onDelete={() => actions.onDelete(agent)}
+        />
       ) : null}
       <div className="flex items-center justify-between gap-3 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2">
         {/* The shipped tab track: Terminal, then Chat (MOTIR-7011 panel 1). */}
@@ -760,6 +792,7 @@ function useLifecycleArea({
   onWake,
   Face: FaceC,
   wakingHint,
+  bootShown,
 }: {
   agent: AgentInstanceListItemDto;
   waking: boolean;
@@ -767,6 +800,8 @@ function useLifecycleArea({
   onWake: () => void;
   Face: FaceComponent;
   wakingHint: string;
+  /** The boot read-out above the tabs carries the progress and the failure (MOTIR-7400). */
+  bootShown: boolean;
 }): TabArea | null {
   const t = useTranslations('myAgents');
   const wakeButton = (
@@ -791,6 +826,31 @@ function useLifecycleArea({
       {wakeButton}
     </FaceC>
   );
+
+  // While the read-out shows the boot, the area under the tabs only says where
+  // the terminal will be — the old progress title leaves it (the boot delta).
+  if (bootShown && (agent.state === 'starting' || agent.state === 'waking')) {
+    return {
+      word: t('panel.conn.waiting'),
+      dot: agent.state === 'waking' ? 'busy' : 'idle',
+      strip: null,
+      body: (
+        <FaceC>
+          <span>{t('panel.face.startingHint')}</span>
+        </FaceC>
+      ),
+    };
+  }
+  if (bootShown && agent.state === 'failed' && !wakeRefusal) {
+    return {
+      ...closed,
+      body: (
+        <FaceC>
+          <span>{t('boot.terminalClosed')}</span>
+        </FaceC>
+      ),
+    };
+  }
 
   switch (agent.state) {
     case 'starting':

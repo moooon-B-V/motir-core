@@ -341,6 +341,86 @@ describe('each reason alone', () => {
   });
 });
 
+// MOTIR-7491 — the MOTIR-1408 shape: a card moved to In Review by hand while one of its two
+// members was ALREADY red. The red hold is edge-triggered, so nothing moved it back, and the
+// predicate refused every In Review card without a queue exit — so it sat in no queue.
+describe('In Review with a red member (MOTIR-7491)', () => {
+  /** A card at `status` delivered by one green and one red open pull request. */
+  async function oneGreenOneRed(fx: WorkItemFixture, status: string) {
+    const card = await createTestWorkItem(fx, { kind: 'story', title: `card ${randomToken(4)}` });
+    await setStatus(card.id, status);
+    const core = await connectRepairRepo(fx, `core-${randomToken(4)}`);
+    const ai = await connectRepairRepo(fx, `ai-${randomToken(4)}`);
+    await deliveredPr(fx, card.id, core, { headRef: 'parent/x', checks: { Vitest: 'success' } });
+    const red = await deliveredPr(fx, card.id, ai, {
+      headRef: 'parent/x',
+      checks: { 'Guard against the gateway artifact': 'failure', Vitest: 'success' },
+    });
+    return { card, red };
+  }
+
+  it.each(['in_review', 'implemented'])(
+    'at %s, one green member and one red is ci_failed naming the red check, 1 of 2',
+    async (status) => {
+      const fx = await makeWorkItemFixture();
+      const { card } = await oneGreenOneRed(fx, status);
+
+      const value = await recompute(fx, card.id);
+
+      expect(value).toEqual({
+        fixReason: 'ci_failed',
+        fixDetail: {
+          repair: 'fix',
+          check: 'Guard against the gateway artifact',
+          queueReason: null,
+          base: null,
+          reviewerName: null,
+          notePreview: null,
+          gate: null,
+          ...NO_DEAD_RUN,
+          affected: 1,
+          total: 2,
+        },
+      });
+      expect(await stored(card.id)).toEqual(value);
+    },
+  );
+
+  it('…and `motir fix` claims it at In Review, handing over only the red member, status untouched', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, red } = await oneGreenOneRed(fx, 'in_review');
+
+    const claim = await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx);
+
+    expect(claim).toMatchObject({ outcome: 'claimed', repairClass: 'ci' });
+    expect(claim.pullRequests).toEqual([
+      expect.objectContaining({ number: red.number, ci: 'failing' }),
+    ]);
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).status).toBe(
+      'in_review',
+    );
+  });
+
+  it('In Review with every member green and no refusal stays null — To approve owns it', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await cardWith(fx, 'in_review');
+
+    expect(await recompute(fx, card.id)).toEqual({ fixReason: null, fixDetail: null });
+  });
+
+  it('In Review with a red member only at an OLD head (a push since) stays null', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await cardWith(fx, 'in_review', { Vitest: 'failure' });
+    await adminDb.githubPullRequest.update({
+      where: { id: pr.id },
+      data: { headSha: 'd'.repeat(40) },
+    });
+
+    // The new head has no check rows yet — not reported, so not red.
+    expect(await recompute(fx, card.id)).toEqual({ fixReason: null, fixDetail: null });
+  });
+});
+
 describe('agreement with `motir fix` — the repair claim’s own matrix', () => {
   // Each shape is built, recomputed, then CLAIMED: a claimable shape stores a
   // pull-request reason, and every refusal stores nothing. The claim runs last because
@@ -456,9 +536,18 @@ describe('agreement with `motir fix` — the repair claim’s own matrix', () =>
       },
     ],
     [
-      'in_review + red, no ejection (not_failing)',
+      'in_review + red, no ejection (MOTIR-7491: claimed)',
       async (fx) => (await cardWith(fx, 'in_review', { Vitest: 'failure' })).card.id,
     ],
+    [
+      'in_review + conflict, no ejection (MOTIR-7491: claimed)',
+      async (fx) => {
+        const { card, pr } = await cardWith(fx, 'in_review');
+        await conflict(pr.id);
+        return card.id;
+      },
+    ],
+    ['in_review + green (not_failing)', async (fx) => (await cardWith(fx, 'in_review')).card.id],
   ];
 
   it.each(shapes)('%s', async (_label, build) => {

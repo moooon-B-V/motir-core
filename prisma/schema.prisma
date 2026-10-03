@@ -1368,19 +1368,19 @@ model Organization {
   /// resolver asks on every request (MOTIR-6396), which is why it lives on the
   /// org row rather than being joined from the request: a join on the hot path
   /// for a state almost no org is ever in. Non-null ⇔ an OPEN request exists.
-  closingSince     DateTime?                     @map("closing_since")
+  closingSince          DateTime?                     @map("closing_since")
   /// When the erasure sweep scrubbed this org to a TOMBSTONE (DECISION §6 step
   /// 4, §7): name and slug replaced, memberships gone, only `CiPeriodCharge`
   /// kept. Non-null marks a tombstone; the seven-year purge (MOTIR-6401) keys on
   /// it. Null for every live org.
-  erasedAt         DateTime?                     @map("erased_at")
+  erasedAt              DateTime?                     @map("erased_at")
   // Deletion requests against this org — a LIST: at most one OPEN at a time
   // (the partial unique index), but a cancelled one stays on record and a new
   // one may follow it. `Restrict` on the request's side: an org row may not
   // vanish under its own deletion record (the purge deletes the requests first).
-  deletionRequests OrganizationDeletionRequest[]
+  deletionRequests      OrganizationDeletionRequest[]
   /// Per-org kill-switch OVERRIDES (MOTIR-750); absence = the registry default.
-  featureFlags     OrgFeatureFlag[]
+  featureFlags          OrgFeatureFlag[]
   /// Staff "View as" sessions opened inside this organization (MOTIR-749).
   impersonationSessions ImpersonationSession[]
 
@@ -1410,6 +1410,8 @@ model Organization {
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]
   agentInstanceStorageCharges AgentInstanceStorageCharge[]
+  /// An agent's boot attempts (`agent-instances.md` AMENDMENT 6, MOTIR-7397). Cascade.
+  agentInstanceBootAttempts   AgentInstanceBootAttempt[]
 
   @@map("organization")
 }
@@ -1637,6 +1639,10 @@ model Workspace {
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]
   agentInstanceStorageCharges AgentInstanceStorageCharge[]
+  /// An agent's boot attempts and their steps (`agent-instances.md` AMENDMENT 6,
+  /// MOTIR-7397). Cascade.
+  agentInstanceBootAttempts   AgentInstanceBootAttempt[]
+  agentInstanceBootSteps      AgentInstanceBootStep[]
   /// The agent terminal's tickets and connection records (MOTIR-6940). Cascade.
   agentTerminalTickets        AgentTerminalTicket[]
   agentTerminalConnections    AgentTerminalConnection[]
@@ -6973,6 +6979,11 @@ enum PlanSessionOrigin {
   expand
   cadence
   legacy
+  /// The Guide me through door on ONE manual card (MOTIR-7464 · ADR
+  /// `conversation-turn-intent.md` AMENDMENT 2, A2.2): `targetKeys = [<KEY>]`, every
+  /// turn is `guide`, it submits no plan and takes no `PlanTargetLock`. The resume
+  /// reads that filter on `conversation` never pick it up.
+  guide
 
   @@map("plan_session_origin")
 }
@@ -8775,6 +8786,21 @@ model PlanChangeTurn {
   /// after a reload. Null on every other turn — every non-debug reply, and every
   /// `user` / `system` turn.
   debugLanding          Json?                 @map("debug_landing")
+  /// The CLAIM on a `guide` turn's landing (Story MOTIR-7459 · MOTIR-7470; ADR
+  /// `conversation-turn-intent.md` AMENDMENT 2, A2.4) — set on the `user` turn,
+  /// by a compare-and-set under the session's row lock, BEFORE the turn's
+  /// actions are written to the card. The debug claim's shape: a replayed or
+  /// concurrent settle of the same job finds it taken and lands nothing.
+  guideLandingClaimedAt DateTime?             @map("guide_landing_claimed_at")
+  /// What a `guide` turn's job returned and what landed (MOTIR-7470), on the
+  /// `assistant` turn carrying its message — `{ actions, outcomes, temporary }`:
+  /// the validated actions, each one's outcome (`landed`, `recorded` on the
+  /// conversation only, or `skipped` with its reason), and whether the walk was
+  /// on a temporary (unsaved) list. Written in the SAME append as the reply. The
+  /// rail and canvas read it, and the temporary list is re-derived from it, so
+  /// an unsaved walk lives on the conversation and nowhere else (A2.2). Null on
+  /// every other turn.
+  guideTurn             Json?                 @map("guide_turn")
   /// The work items an `assistant` ANSWER rests on, as work-item IDENTIFIERS
   /// ("MOTIR-812"), in the order the answer cites them. Empty on every other
   /// role and on an answer the graphs could not support.
@@ -8953,6 +8979,11 @@ enum PlanChangeTurnIntent {
   /// A1.6): `ask_project` redirected the turn and a `debug_bug` job ran for it.
   /// It writes at most ONE card (A1.4) — landed by MOTIR-7049, not here.
   debug
+  /// A turn of a GUIDE conversation (MOTIR-7464 · the ADR's AMENDMENT 2, A2.1):
+  /// chosen by the Guide me through door, never by a classifier, and run as ONE
+  /// `guide_work_item` job anchored on the card (`anchorKey`). Every user turn of
+  /// a `guide`-origin session carries it; `intentCorrected` stays false.
+  guide
 
   @@map("plan_change_turn_intent")
 }
@@ -12332,21 +12363,21 @@ model AgentInstance {
   volumeId  String? @map("volume_id")
   region    String
 
-  state          AgentInstanceState @default(starting)
+  state           AgentInstanceState              @default(starting)
   /// Set on `failed`, in words a person can read; cleared on a later wake.
-  failureReason  String?            @map("failure_reason")
+  failureReason   String?                         @map("failure_reason")
   /// Why the stop in flight was begun (MOTIR-7406): written with the
   /// `running → hibernating` move and cleared when the stop settles, so a stop
   /// the SWEEP settles closes the interval with that reason (`credits`,
   /// `backstop`, `idle`, …) rather than a blanket `hibernated`.
   hibernateReason AgentInstanceIntervalEndReason? @map("hibernate_reason")
-  stateChangedAt DateTime           @default(now()) @map("state_changed_at")
+  stateChangedAt  DateTime                        @default(now()) @map("state_changed_at")
   /// The idle signal (§2): bumped by create, wake, and later stories' relay
   /// and runs. The idle sweep compares it with the 30-minute window.
-  lastActivityAt DateTime           @default(now()) @map("last_activity_at")
+  lastActivityAt  DateTime                        @default(now()) @map("last_activity_at")
   /// A deleted instance keeps its row so its intervals keep their parent (§4);
   /// every list excludes it.
-  deletedAt      DateTime?          @map("deleted_at")
+  deletedAt       DateTime?                       @map("deleted_at")
 
   /// `agent-instance-storage.md` §4 (MOTIR-6921): when the org's AI plan lapsed,
   /// the instant this instance is deleted — the start of the UTC day 30 days on.
@@ -12392,6 +12423,8 @@ model AgentInstance {
   terminalTickets     AgentTerminalTicket[]
   terminalConnections AgentTerminalConnection[]
   storageCharges      AgentInstanceStorageCharge[]
+  /// `agent-instances.md` AMENDMENT 6 (MOTIR-7397): one per create and per wake.
+  bootAttempts        AgentInstanceBootAttempt[]
   /// agent-instance-run.md §5 (MOTIR-7023): the runs executed in this agent.
   dispatchRuns        DispatchRun[]
 
@@ -12688,4 +12721,113 @@ model ImpersonationSession {
   @@index([workspaceId])
   @@index([endedAt, expiresAt])
   @@map("impersonation_session")
+}
+
+/// Whether a boot attempt was opened by a create or a wake (`agent-instances.md`
+/// AMENDMENT 6 §2). A wake writes its `clone` rows `skipped`.
+enum AgentInstanceBootKind {
+  create
+  wake
+
+  @@map("agent_instance_boot_kind")
+}
+
+/// How a CLOSED boot attempt ended (AMENDMENT 6 §2) — the stream's `done` frame.
+enum AgentInstanceBootOutcome {
+  running
+  failed
+  deleted
+
+  @@map("agent_instance_boot_outcome")
+}
+
+/// The five boot steps, in order (AMENDMENT 6 §1). `clone` is one row per
+/// project repository.
+enum AgentInstanceBootStepKind {
+  provision
+  machine_start
+  clone
+  terminal_check
+  ready
+
+  @@map("agent_instance_boot_step_kind")
+}
+
+/// The five states a boot step is in (AMENDMENT 6 §1).
+enum AgentInstanceBootStepState {
+  waiting
+  in_progress
+  done
+  failed
+  skipped
+
+  @@map("agent_instance_boot_step_state")
+}
+
+/// ONE BOOT ATTEMPT of an agent (`docs/decisions/agent-instances.md` AMENDMENT 6
+/// §2, §4 · MOTIR-7397): numbered per agent from 1, opened by each create and
+/// each wake, so a read shows the current attempt and history is never
+/// overwritten. It carries the LEASE that makes one party — the boot driver
+/// holding it — the only writer of its steps.
+model AgentInstanceBootAttempt {
+  id              String                @id @default(cuid())
+  workspaceId     String                @map("workspace_id")
+  organizationId  String                @map("organization_id")
+  agentInstanceId String                @map("agent_instance_id")
+  /// 1, 2, 3 … per agent; unique with the agent.
+  attempt         Int
+  kind            AgentInstanceBootKind
+
+  /// The job run holding the lease, null while nobody has taken it.
+  leaseHolder    String?   @map("lease_holder")
+  /// A lease past this instant is free to take (AMENDMENT 6 §4).
+  leaseExpiresAt DateTime? @map("lease_expires_at")
+
+  startedAt DateTime                  @map("started_at")
+  /// Null while the attempt is OPEN.
+  endedAt   DateTime?                 @map("ended_at")
+  outcome   AgentInstanceBootOutcome?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace     Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization  Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agentInstance AgentInstance           @relation(fields: [agentInstanceId], references: [id], onDelete: Cascade)
+  steps         AgentInstanceBootStep[]
+
+  @@unique([agentInstanceId, attempt])
+  @@index([workspaceId])
+  @@map("agent_instance_boot_attempt")
+}
+
+/// ONE STEP of a boot attempt (AMENDMENT 6 §1). Written `waiting` (or `skipped`)
+/// when the attempt opens; every later write stamps a new `seq`, monotonic per
+/// AGENT across its attempts, which is the stream's `since` cursor.
+model AgentInstanceBootStep {
+  id            String                     @id @default(cuid())
+  workspaceId   String                     @map("workspace_id")
+  bootAttemptId String                     @map("boot_attempt_id")
+  seq           Int
+  step          AgentInstanceBootStepKind
+  /// `owner/name` on a `clone` row, null elsewhere.
+  repository    String?
+  /// The row's place in the read-out, 0-based.
+  ordinal       Int
+  state         AgentInstanceBootStepState
+  startedAt     DateTime?                  @map("started_at")
+  endedAt       DateTime?                  @map("ended_at")
+  /// The failure's words, the exit code, or the terminal probe's answer.
+  detail        String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace   Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  bootAttempt AgentInstanceBootAttempt @relation(fields: [bootAttemptId], references: [id], onDelete: Cascade)
+
+  @@unique([bootAttemptId, ordinal])
+  @@index([bootAttemptId, seq])
+  @@index([workspaceId])
+  @@map("agent_instance_boot_step")
 }

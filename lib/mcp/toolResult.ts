@@ -104,6 +104,7 @@ import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { AttachmentError } from '@/lib/blob/errors';
 import { DesignEvidenceError } from '@/lib/designEvidence/errors';
 import { TestInstructionsError } from '@/lib/testInstructions/errors';
+import { PageError, PageRevisionConflictError, PageTreeError } from '@/lib/pages';
 import {
   EmptyTodoTextError,
   TodoCommandTooLongError,
@@ -420,6 +421,24 @@ export function toToolError(err: unknown): CallToolResult {
     return toolError(err.code, err.message);
   }
   if (err instanceof TestInstructionsError) {
+    return toolError(err.code, err.message);
+  }
+  // The page tools (MOTIR-5760). Every refusal `@motir/pages` raises carries its
+  // own code — `PAGE_NOT_FOUND` (one message whether the page is unknown or in
+  // another project: the 404-not-403 rule), the size caps, the placement rules,
+  // and `PAGE_REVISION_CONFLICT`, whose message tells the agent to re-read.
+  // A stale `update_page` (MOTIR-7411) is the one an agent must ACT on, so its
+  // sentence is an instruction rather than the package's description: the two
+  // revisions, and the read-redo-resend loop that resolves it.
+  if (err instanceof PageRevisionConflictError) {
+    return toolError(
+      err.code,
+      `The page is at revision ${err.actual}; you sent ${err.expected}. Someone saved since you ` +
+        `read it, and nothing was written — call get_page, apply your change to what it ` +
+        `returns, and send revision ${err.actual}.`,
+    );
+  }
+  if (err instanceof PageError || err instanceof PageTreeError) {
     return toolError(err.code, err.message);
   }
   // The organization's storage cap. Not an AttachmentError (it is a billing

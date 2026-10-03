@@ -446,6 +446,58 @@ export const fleetCeilingService = {
   },
 
   /**
+   * Make `request.ownerRef` the owner of the `(workload, ref)` slot, taking it
+   * if it is gone (MOTIR-7492) — for a caller that got `already_held` from
+   * {@link reserve} and then WON the state transition that slot stands for.
+   *
+   * A held slot is stamped with the run that reserved it. When two attempts race
+   * for one `ref`, the one that reserved can be the one that loses the
+   * transition, and its ownership-checked release then deletes the only slot
+   * while the winner's container runs. Adopting stamps the winner instead, so
+   * the loser's release removes nothing and the winner's own release, when its
+   * run ends, removes the slot. If the loser's release got there first, the row
+   * is put back.
+   *
+   * No admission lock and no census: this admits nothing new — the winner was
+   * admitted by the `already_held` answer, against a slot that was counted.
+   * Best-effort like {@link release}: a failure is logged and leaves the slot as
+   * it was, bounded by its `expires_at`, rather than failing a live start.
+   */
+  async adopt(
+    request: Pick<
+      FleetSlotRequest,
+      'workload' | 'ref' | 'organizationId' | 'workspaceId' | 'ttlSeconds'
+    > & { ownerRef: string },
+    now = new Date(),
+  ): Promise<boolean> {
+    const ttlSeconds = request.ttlSeconds ?? fleetSlotTtlSeconds();
+    try {
+      await withSystemContext((tx) =>
+        slots.adopt(
+          {
+            workload: request.workload,
+            ref: request.ref,
+            ownerRef: request.ownerRef,
+            organizationId: request.organizationId,
+            workspaceId: request.workspaceId ?? null,
+            expiresAt: new Date(now.getTime() + ttlSeconds * 1_000),
+          },
+          tx,
+        ),
+      );
+      return true;
+    } catch (err) {
+      console.error('[fleetCeilingService] could not adopt a fleet slot', {
+        workload: request.workload,
+        ref: request.ref,
+        ownerRef: request.ownerRef,
+        detail: detailOf(err),
+      });
+      return false;
+    }
+  },
+
+  /**
    * Drop slots whose safety net has expired — the OPERATOR's door onto the reap.
    *
    * ⚠️ THIS IS NOT THE PATH THAT RECOVERS A LEAKED SLOT, AND IT NEVER WAS

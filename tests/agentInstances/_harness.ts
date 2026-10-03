@@ -7,6 +7,7 @@ import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { installInlineBootDriver } from '../helpers/agentBootDriver';
 
 // The agent-instance story's shared test harness (Story MOTIR-6860 · MOTIR-6876):
 // the fake persistent fleet, motir-ai and GitHub stubbed at `fetch`, and a virtual
@@ -71,6 +72,7 @@ export async function setUpHarness(): Promise<void> {
     virtualNow += ms;
   });
   fleet.setNow(() => new Date(virtualNow));
+  installInlineBootDriver();
   let tokenSeq = 0;
   vi.stubGlobal(
     'fetch',

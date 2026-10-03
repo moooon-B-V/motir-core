@@ -9,6 +9,7 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { plansService } from '@/lib/services/plansService';
+import { pagesService } from '@/lib/services/pagesService';
 import { commentsService } from '@/lib/services/commentsService';
 import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 import {
@@ -245,12 +246,14 @@ async function seed(): Promise<Seeded> {
     fx.ctx,
   );
   await plansService.markPlanned(plan.id, fx.ctx);
+  const page = await pagesService.createPage(fx.ctx, { projectId: fx.projectId });
   const argFor = mcpToolArgs({
     projectKey: fx.projectIdentifier,
     item1,
     item2,
     sprintId: sprint.id,
     planId: plan.id,
+    pageId: page.id,
   });
   // The shared map aims every tool at a TASK, which is the right target for a
   // non-member's refusal and the wrong one for a MEMBER's success on the two

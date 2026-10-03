@@ -24,7 +24,16 @@
  * augment from the live tree. `'generation'` / `'replan'` are the resolved
  * fine split for callers that DO know (`hasPlan`).
  */
-export type PlanningMode = 'project' | 'generation' | 'replan' | 'contextual' | 'roadmap';
+export type PlanningMode =
+  | 'project'
+  | 'generation'
+  | 'replan'
+  | 'contextual'
+  | 'roadmap'
+  /** GUIDE ME THROUGH (Story MOTIR-7459 · MOTIR-7466) — Motir AI walks the person
+   *  through ONE manual card's to-do list. It always carries its card
+   *  (`planItem`); an address without one degrades to the default mode. */
+  | 'guide';
 
 /**
  * Where the launcher was invoked from — the originating context the workspace
@@ -61,7 +70,10 @@ export type PlanningLaunchContext =
     }
   | { kind: 'roadmap' }
   | { kind: 'convention-refine'; repoKey: string }
-  | { kind: 'refused-gate'; gateId: string };
+  | { kind: 'refused-gate'; gateId: string }
+  /** The Guide me through door on a manual card (MOTIR-7466; design MOTIR-7462
+   *  panel 1): `plan=guide&planFrom=guide&planItem=<KEY>`. */
+  | { kind: 'guide'; itemKey: string };
 
 /**
  * The shipped planning-workspace entry path — the ESTABLISHED-project host
@@ -126,6 +138,8 @@ export function resolvePlanningMode(context: PlanningLaunchContext): PlanningMod
     // always wrote.
     case 'refused-gate':
       return 'replan';
+    case 'guide':
+      return 'guide';
     case 'project':
       if (context.hasPlan === undefined) return 'project';
       return context.hasPlan ? 'replan' : 'generation';
@@ -152,6 +166,7 @@ const PLANNING_MODES: readonly PlanningMode[] = [
   'replan',
   'contextual',
   'roadmap',
+  'guide',
 ];
 
 const PLANNING_ORIGINS: readonly PlanningOrigin[] = [
@@ -160,6 +175,7 @@ const PLANNING_ORIGINS: readonly PlanningOrigin[] = [
   'roadmap',
   'convention-refine',
   'refused-gate',
+  'guide',
 ];
 
 /**
@@ -214,8 +230,11 @@ export function parsePlanningOrigin(raw: RawParam): PlanningOrigin {
 /** Read the whole launch context back off the host route's query params. */
 export function parsePlanningLaunch(searchParams: Record<string, RawParam>): PlanningLaunch {
   const from = parsePlanningOrigin(searchParams['from']);
+  const mode = parsePlanningMode(searchParams['mode']);
   return {
-    mode: parsePlanningMode(searchParams['mode']),
+    // The route era never had a guide; an old address naming one has no card to
+    // guide through, so it opens the default mode (MOTIR-7466).
+    mode: mode === 'guide' ? DEFAULT_PLANNING_MODE : mode,
     from,
     // Only the origin that WRITES the param may carry it back, so a hand-edited
     // `?from=roadmap&item=X` can't smuggle a target into a non-item mode.
@@ -331,7 +350,9 @@ export function planningOverlaySearch(context: PlanningLaunchContext): URLSearch
     [OVERLAY_PARAM_NAMES.mode]: resolvePlanningMode(context),
     [OVERLAY_PARAM_NAMES.origin]: context.kind,
   });
-  if (context.kind === 'work-item') params.set(OVERLAY_PARAM_NAMES.item, context.itemKey);
+  if (context.kind === 'work-item' || context.kind === 'guide') {
+    params.set(OVERLAY_PARAM_NAMES.item, context.itemKey);
+  }
   if (context.kind === 'convention-refine') params.set(OVERLAY_PARAM_NAMES.repo, context.repoKey);
   if (context.kind === 'refused-gate') params.set(OVERLAY_PARAM_NAMES.gate, context.gateId);
   if ((context.kind === 'project' || context.kind === 'work-item') && context.sessionId) {
@@ -400,7 +421,9 @@ function joinHref(path: string, query: URLSearchParams, hash: string): string {
  * mapping inlined. Two copies of it is the drift MOTIR-4732's note is about.
  */
 export function planningHostPathFor(context: PlanningLaunchContext): string {
-  if (context.kind === 'work-item') return `/items/${encodeURIComponent(context.itemKey)}`;
+  if (context.kind === 'work-item' || context.kind === 'guide') {
+    return `/items/${encodeURIComponent(context.itemKey)}`;
+  }
   if (context.kind === 'convention-refine') return '/code';
   return '/roadmap';
 }
@@ -460,6 +483,22 @@ function readParam(params: PlanningOverlayParams, name: string): RawParam {
  */
 export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLaunch | null {
   if (first(readParam(params, OVERLAY_PARAM_NAMES.mode)) === null) return null;
+  // ⭐ GUIDE (MOTIR-7466) — the one mode whose card is REQUIRED. It reads
+  // `planItem` whatever the origin says (the door writes `planFrom=guide`; a
+  // hand-typed `plan=guide&planItem=<KEY>` means the same thing), and an address
+  // with no card has nothing to guide through, so it opens the default mode with
+  // no target rather than a guide about nothing.
+  if (parsePlanningMode(readParam(params, OVERLAY_PARAM_NAMES.mode)) === 'guide') {
+    const itemKey = first(readParam(params, OVERLAY_PARAM_NAMES.item));
+    return itemKey
+      ? { mode: 'guide', from: 'guide', itemKey, repoKey: null }
+      : {
+          mode: DEFAULT_PLANNING_MODE,
+          from: DEFAULT_PLANNING_ORIGIN,
+          itemKey: null,
+          repoKey: null,
+        };
+  }
   const from = parsePlanningOrigin(readParam(params, OVERLAY_PARAM_NAMES.origin));
   const sessionId =
     from === 'project' || from === 'work-item'

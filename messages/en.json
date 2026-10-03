@@ -7141,7 +7141,8 @@
         "generation": "Generated plan",
         "expand": "Expanded plan",
         "cadence": "Auto-planned",
-        "legacy": "Earlier plan"
+        "legacy": "Earlier plan",
+        "guide": "Guided walk"
       },
       "anchorProject": "Whole project",
       "anchorMore": "{first} +{count}",
@@ -7335,7 +7336,8 @@
           "lessons": "lessons"
         }
       },
-      "openerFollowUp": "You just chose {label}. Motir AI is planning what it gates."
+      "openerFollowUp": "You just chose {label}. Motir AI is planning what it gates.",
+      "composerPlaceholderGuide": "Tell Motir AI how the step went…"
     },
     "targets": {
       "sectionLabel": "Work items",
@@ -7367,7 +7369,8 @@
       "replan": "plan change",
       "contextual": "in context",
       "roadmap": "roadmap",
-      "followUp": "follow-up"
+      "followUp": "follow-up",
+      "guide": "guide"
     },
     "lead": {
       "project": "Opened on {project}.",
@@ -7465,6 +7468,69 @@
     "dividerAria": "Resize the conversation",
     "followUpCard": {
       "label": "Follow-up to a choice"
+    },
+    "guide": {
+      "openedFrom": "Opened from {key}",
+      "reading": "Reading {key} and its to-do list…",
+      "stepOf": "Step {n} of {total}",
+      "notSavedSuffix": "· not saved",
+      "tag": {
+        "current": "Current step",
+        "notSaved": "Not saved",
+        "added": "Added",
+        "changed": "Changed",
+        "moved": "Moved",
+        "cannot": "Cannot be done"
+      },
+      "proposedBand": "<b>Proposed, not saved.</b> Nothing is on the work item until you choose.",
+      "temporaryBand": "Not saved to the work item. Stopping ends this walk.",
+      "save": "Save to the work item",
+      "saveTurn": "Save this list to the work item.",
+      "walk": "Walk without saving",
+      "walkTurn": "Walk it without saving.",
+      "undo": "Undo",
+      "undoTurn": "Undo that change.",
+      "closeYes": "Close the work item",
+      "closeYesTurn": "Yes, close the work item.",
+      "closeNo": "Not yet",
+      "closeNoTurn": "Not yet.",
+      "reload": "Reload the work item",
+      "staleNotice": "{key} changed since this turn read it. Reload it, then ask again.",
+      "failed": "That turn didn't finish, so nothing on the work item changed.",
+      "errors": {
+        "notManual": "Motir AI guides a person through manual work, and this work item is for an agent, so there is nothing to guide here.",
+        "closed": "This work item is done or archived, so there is nothing left to guide.",
+        "forbidden": "You need permission to edit this work item and to plan with Motir AI to be guided through it."
+      },
+      "youTicked": "You ticked step {n} on the list",
+      "youUnticked": "You unticked step {n} on the list",
+      "fieldTitle": "Title",
+      "field": {
+        "title": "title",
+        "description": "description",
+        "explanation": "explanation",
+        "and": " and "
+      },
+      "outcome": {
+        "ticked": "Ticked step {n} on <chip>{key}</chip>.",
+        "tickedTemp": "Ticked step {n} on this walk. Not saved to the work item.",
+        "tickedNoStatus": "Ticked step {n} on <chip>{key}</chip>. No status changed.",
+        "unticked": "Unticked step {n} on <chip>{key}</chip>.",
+        "untickedTemp": "Unticked step {n} on this walk. Not saved to the work item.",
+        "saved": "Saved {count} steps to <chip>{key}</chip>.",
+        "savedTicked": "Saved {count} steps to <chip>{key}</chip>, with the {done} you had done ticked.",
+        "added": "Added step {n} to <chip>{key}</chip>.",
+        "changed": "Changed step {n} on <chip>{key}</chip>.",
+        "removed": "Removed a step from <chip>{key}</chip>.",
+        "moved": "Moved a step on <chip>{key}</chip>.",
+        "addedTemp": "Added step {n} to this walk. Not saved to the work item.",
+        "changedTemp": "Changed step {n} on this walk. Not saved to the work item.",
+        "removedTemp": "Removed a step from this walk. Not saved to the work item.",
+        "movedTemp": "Moved a step on this walk. Not saved to the work item.",
+        "edited": "Edited the {fields} of <chip>{key}</chip>.",
+        "commented": "Commented on <chip>{key}</chip>: “{reason}”",
+        "closed": "Moved <chip>{key}</chip> to Done, and added this summary as a comment."
+      }
     }
   },
   "codeHealth": {
@@ -10184,6 +10250,58 @@
         "state": "This agent is {state}, so it can’t be updated right now.",
         "unknown": "Motir couldn’t check for a newer version just now. Try again in a few minutes."
       }
+    },
+    "boot": {
+      "label": "Boot steps",
+      "title": {
+        "create": "Booting",
+        "wake": "Waking",
+        "failed": "Failed after {time}",
+        "deleted": "Deleted — this panel closes"
+      },
+      "step": {
+        "provision": "Machine provisioned",
+        "machineStart": "Machine started",
+        "clone": "Cloning {repository}",
+        "terminalCheck": "Terminal checked",
+        "ready": "Ready"
+      },
+      "state": {
+        "waiting": "Waiting",
+        "inProgress": "In progress",
+        "done": "Done",
+        "failed": "Failed",
+        "skipped": "Skipped"
+      },
+      "announce": "{step}: {state}",
+      "skipped": {
+        "clone": "Skipped — a wake keeps the home",
+        "terminal": "Skipped — no terminal on this deployment"
+      },
+      "detail": {
+        "cloneNoAccess": "Could not read {repository} — the app has no access",
+        "exited": "The machine exited during boot (exit code {code})",
+        "deadline": "The boot didn’t finish within {minutes} minutes",
+        "deleted": "Deleted while booting"
+      },
+      "summary": {
+        "create": "Booted in {time}",
+        "wake": "Woke in {time}"
+      },
+      "showSteps": "Show steps",
+      "hideSteps": "Hide steps",
+      "duration": {
+        "seconds": "{s}s",
+        "minutes": "{m}m {s}s"
+      },
+      "row": {
+        "provision": "Provisioning the machine…",
+        "machineStart": "Starting the machine…",
+        "clone": "Cloning {repository}…",
+        "terminalCheck": "Checking the terminal…",
+        "ready": "Getting ready…"
+      },
+      "terminalClosed": "The terminal stays closed until the agent is running."
     }
   },
   "runs": {
@@ -10612,6 +10730,16 @@
       "cancel": {
         "body": "The run’s session in {name} stops and its credentials are revoked. Work it already pushed stays on the run’s branch, and this work item stays where it is. {name} keeps running, and your own shells in it are untouched."
       }
+    },
+    "guide": {
+      "title": "Guide",
+      "gloss": "what Motir AI will walk you through",
+      "lead": "Motir AI takes you through this work item's to-do list one step at a time. It ticks a step when you say it is done, and offers to close the work item at the end.",
+      "leadNoList": "This work item has no to-do list yet. Motir AI will propose the steps from its description, and you choose whether to save them to the work item.",
+      "progress": "{done} of {total} steps done · picks up at step {next}",
+      "progressAria": "{done} of {total} steps done",
+      "progressAllDone": "{total} of {total} steps done",
+      "door": "Guide me through"
     }
   },
   "repositoryPicker": {

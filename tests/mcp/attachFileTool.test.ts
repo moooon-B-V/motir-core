@@ -92,6 +92,10 @@ describe('the tool is reachable by the caller it was built for', () => {
       // the constant (a stated widening, not an unrelated one).
       'plan:view_any',
       'run:view_any',
+      // MOTIR-7412 — the page keys, for `get_page` / `create_page` / `update_page`;
+      // the argument is at the constant. `page:delete` stays out.
+      'page:view',
+      'page:edit',
       'ai:plan',
     ]);
   });

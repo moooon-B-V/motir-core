@@ -495,3 +495,40 @@ describe('planGate — a REFUSED gate opens the seeded re-plan (MOTIR-6210, §10
     expect([...params.keys()]).toEqual(['plan', 'planFrom', 'planGate']);
   });
 });
+
+describe('the GUIDE address (MOTIR-7466)', () => {
+  it('resolves a guide launch to the guide mode', () => {
+    expect(resolvePlanningMode({ kind: 'guide', itemKey: 'MOTIR-9' })).toBe('guide');
+  });
+
+  it('writes the guided card into the address and reads it back', () => {
+    const params = planningOverlaySearch({ kind: 'guide', itemKey: 'MOTIR-9' });
+    expect(params.get('plan')).toBe('guide');
+    expect(params.get('planFrom')).toBe('guide');
+    expect(params.get('planItem')).toBe('MOTIR-9');
+    expect(parsePlanningOverlay(params)).toEqual({
+      mode: 'guide',
+      from: 'guide',
+      itemKey: 'MOTIR-9',
+      repoKey: null,
+    });
+  });
+
+  it('opens the guide from a bare plan=guide with a card', () => {
+    expect(parsePlanningOverlay(new URLSearchParams('plan=guide&planItem=MOTIR-9'))).toEqual({
+      mode: 'guide',
+      from: 'guide',
+      itemKey: 'MOTIR-9',
+      repoKey: null,
+    });
+  });
+
+  it('degrades a guide address with NO card to the default project mode', () => {
+    expect(parsePlanningOverlay(new URLSearchParams('plan=guide&planFrom=guide'))).toEqual({
+      mode: 'project',
+      from: 'project',
+      itemKey: null,
+      repoKey: null,
+    });
+  });
+});

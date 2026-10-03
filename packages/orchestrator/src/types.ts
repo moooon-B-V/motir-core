@@ -606,6 +606,20 @@ export type PersistentContainerState =
   | 'failed';
 
 /** Provider-truth status of one persistent machine. */
+/**
+ * One entry of the machine's own lifecycle timeline (MOTIR-7396). The port does
+ * not interpret it: `type` is the provider's own string ('launch' | 'start' |
+ * 'exit' | 'stop' | ...), and a type this code has never seen passes through
+ * as itself.
+ */
+export interface PersistentMachineEvent {
+  readonly type: string;
+  readonly status: string;
+  readonly at: Date;
+  /** Present on an exit event the provider attached a code to. */
+  readonly exitCode?: number;
+}
+
 export interface PersistentContainerStatus {
   readonly machineId: string;
   readonly state: PersistentContainerState;
@@ -626,6 +640,11 @@ export interface PersistentContainerStatus {
    * adapter that cannot read it.
    */
   readonly exitCode?: number | null;
+  /**
+   * The machine's own lifecycle events, oldest first, newest last (MOTIR-7396).
+   * Empty when the machine is gone or the provider reported none.
+   */
+  readonly events: readonly PersistentMachineEvent[];
   /**
    * The image the machine's config names right now (`agent-image-update.md` Q6:
    * the settle of an interrupted update reads WHERE the machine is). Null when

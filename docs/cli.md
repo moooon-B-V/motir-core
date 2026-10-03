@@ -95,18 +95,23 @@ never written to disk at all.
 The token `motir login` creates is **not** a general-purpose PAT. It is fixed at
 the boundary, and the approval screen shows it rather than letting you edit it:
 
-| Property        | Value                                                                           |
-| --------------- | ------------------------------------------------------------------------------- |
-| **Permissions** | `project:browse`, `work_item:edit`, `comment:add`, `ai:plan` — and nothing else |
-| **Expiry**      | 90 days                                                                         |
-| **Label**       | `CLI · <hostname>`, so you can tell which machine it is                         |
-| **Workspace**   | the one you choose on the approval screen                                       |
+| Property        | Value                                                                                                                                                                         |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Permissions** | `project:browse`, `lesson:view`, `lesson:reinforce`, `work_item:edit`, `comment:add`, `plan:view_any`, `run:view_any`, `page:view`, `page:edit`, `ai:plan` — and nothing else |
+| **Expiry**      | 90 days                                                                                                                                                                       |
+| **Label**       | `CLI · <hostname>`, so you can tell which machine it is                                                                                                                       |
+| **Workspace**   | the one you choose on the approval screen                                                                                                                                     |
 
 Those permissions are exactly what the CLI's requests need: `project:browse` for
 the selection, detail and prompt endpoints, `work_item:edit` for the status flips
 and for marking an item integrated / closing a session (which `motir auto` and
 `motir done --session` use), `comment:add` for posting a comment, and `ai:plan`
-for a planning submit. It calls nothing gated by `sprint:manage`,
+for a planning submit. A dispatched agent's MCP calls add the rest: `lesson:view`
+and `lesson:reinforce` for the mistakes corpus, `plan:view_any` and
+`run:view_any` for reading plans and its own runs, and `page:view` and
+`page:edit` for reading a page and replacing its body (`get_page`,
+`create_page`, `update_page`; every replaced body stays a restorable version).
+It calls nothing gated by `sprint:manage`, `page:delete`,
 `work_item:archive` or `work_item:delete` — so a credential living unattended on a
 remote box cannot delete a subtree, and cannot archive one either (it never asks
 to).

@@ -764,6 +764,9 @@ describe('the routes are actually WIRED to the guards', () => {
     'app/api/ai/coding-convention/refresh/route.ts',
     'app/api/ai/expand/route.ts',
     'app/api/ai/explanation/route.ts',
+    // The GUIDE door (Story MOTIR-7459 · MOTIR-7464): every turn submits a
+    // `guide_work_item` model job, so it draws the same `ai:generate` bucket.
+    'app/api/ai/guide/route.ts',
     'app/api/ai/plan-change/session/submit/route.ts',
     'app/api/ai/plan/generate/route.ts',
     // THE ROUTING RUN (Story MOTIR-4753 · MOTIR-4769). It opens no plan, which
@@ -799,6 +802,9 @@ describe('the routes are actually WIRED to the guards', () => {
     'app/api/ai/coding-convention/audit/route.ts',
     'app/api/ai/coding-convention/convention/route.ts',
     'app/api/ai/explanation/[jobId]/stream/route.ts',
+    // The guide settle READS a finished job back and lands it — the ask settle
+    // precedent exactly (MOTIR-7470).
+    'app/api/ai/guide/settle/route.ts',
     'app/api/ai/jobs/[jobId]/route.ts',
     // The boundary MAILBOX (Story MOTIR-4054 · MOTIR-4067 / MOTIR-4068): a turn
     // or a stop attached to a job that is ALREADY running and already paid for —

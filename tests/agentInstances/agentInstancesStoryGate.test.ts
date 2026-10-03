@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { driveBoot } from '../helpers/agentBootDriver';
 import { db } from '@/lib/db';
 import {
   AgentInstanceNameTakenError,
@@ -284,25 +285,27 @@ describe('3 · the edges', () => {
     expect(dto.failureReason).toContain('exit 128');
   });
 
-  it('a boot that never finishes stays starting, and the sweep settles it when it does', async () => {
+  it('a boot that never finishes stays starting, and its driver finishes it when it does', async () => {
     fleet.setBootBehaviour('never_start');
     const dto = await create();
     expect(dto.state).toBe('starting');
-    expect(await lifecycle.settleBoot(dto.id)).toBe('pending');
+    expect(await driveBoot(dto.id)).toBe('pending');
+    // The sweep leaves a boot whose driver holds a live lease to that driver.
+    expect((await sweeper.sweep()).settled).toBe(0);
     fleet.completeBoot((await row(dto.id)).machineId!);
-    expect((await sweeper.sweep()).settled).toBe(1);
+    expect(await driveBoot(dto.id)).toBe('running');
     expect((await row(dto.id)).state).toBe('running');
-    expect(await lifecycle.settleBoot(dto.id)).toBe('noop');
+    expect(await driveBoot(dto.id)).toBe('noop');
   });
 
   it('a boot whose machine vanishes fails, and a describe that throws leaves it pending', async () => {
     fleet.setBootBehaviour('never_start');
     const dto = await create();
     const spy = vi.spyOn(fleet, 'describePersistent').mockRejectedValueOnce(new Error('api down'));
-    expect(await lifecycle.settleBoot(dto.id)).toBe('pending');
+    expect(await driveBoot(dto.id)).toBe('pending');
     spy.mockRestore();
     fleet.destroyOutside((await row(dto.id)).machineId!);
-    expect(await lifecycle.settleBoot(dto.id)).toBe('failed');
+    expect(await driveBoot(dto.id)).toBe('failed');
     expect((await intervals())[0]).toMatchObject({ endReason: 'lost' });
   });
 
@@ -514,7 +517,8 @@ describe('3b · the edges, staged in the database', () => {
     expect(await lifecycle.rollInterval(running.id)).toBe('noop');
     expect(await lifecycle.beginHibernate(running.id, 'idle')).toBe(true);
     const starting = await bareAgent('starting', 'bare-2');
-    expect(await lifecycle.settleBoot(starting.id)).toBe('pending');
+    expect(await lifecycle.resumeBoot(starting.id)).toBe('opened');
+    expect((await row(starting.id)).state).not.toBe('running');
   });
 
   it('the list shows an agent with no intervals as no time and no credits', async () => {

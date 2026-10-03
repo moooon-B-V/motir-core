@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { driveBoot } from '../helpers/agentBootDriver';
 import type { PersistentExecResult } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import type { WorkspaceContext } from '@/lib/workspaces';
@@ -559,7 +560,7 @@ describe('the lifecycle under a live run (§6)', () => {
     );
     expect((await agentRow(agentId)).state).toBe('waking');
     fleet.destroyOutside((await agentRow(agentId)).machineId!);
-    expect(await lifecycle.settleBoot(agentId)).toBe('failed');
+    expect(await driveBoot(agentId)).toBe('failed');
     expect(await runRow(started.dispatchRunId)).toMatchObject({ status: 'failed' });
     expect((await closingLines(started.dispatchRunId))[0]).toContain(
       'the agent stopped before the run could start',

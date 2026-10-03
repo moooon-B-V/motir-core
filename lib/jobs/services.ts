@@ -64,6 +64,7 @@ import { organizationRetentionPurgeService } from '@/lib/services/organizationRe
 import { supervisionSweepService } from '@/lib/services/supervisionSweepService';
 import { agentInstanceSweepService } from '@/lib/services/agentInstanceSweepService';
 import { agentInstanceRunService } from '@/lib/services/agentInstanceRunService';
+import { agentInstanceBootService } from '@/lib/services/agentInstanceBootService';
 import { agentTerminalRelayService } from '@/lib/services/agentTerminalRelayService';
 import { agentInstanceStorageChargeService } from '@/lib/services/agentInstanceStorageChargeService';
 
@@ -192,6 +193,8 @@ export const jobServices = {
   // launch job's wait for the agent and its launcher exec; and (MOTIR-7027) the
   // supervise job's pass.
   agentInstanceRun: agentInstanceRunService,
+  // An agent's boot (Story MOTIR-7393 · MOTIR-7398): one pass of the boot driver.
+  agentInstanceBoot: agentInstanceBootService,
   // The agent terminal (Story MOTIR-6861 · MOTIR-6940): the sweep's second step
   // deletes terminal tickets past their 60-second life; the third (MOTIR-6959)
   // closes connections a dead relay left open.

@@ -571,7 +571,7 @@ export const agentInstanceRunService = {
    * THE LAUNCH JOB'S WAIT (§4) — one pass: `ready` once the run is still open and
    * its agent is `running`; `noop` for a run already closed (a cancel, a reap);
    * `failed` once the run was ended because its agent stopped or never came up.
-   * An agent still `starting` / `waking` is settled once and the answer is
+   * An agent still `starting` / `waking` is READ, never settled (its boot driver owns it), and the answer is
    * `{ deferUntil }` — the job DEFERS to it (the engine's defer is the jobs
    * runtime's, never a service's).
    */
@@ -579,10 +579,9 @@ export const agentInstanceRunService = {
     const run = await withSystemContext((tx) => dispatchRunRepository.findById(dispatchRunId, tx));
     if (!run || run.status !== 'running' || !run.agentInstanceId) return 'noop';
     let agent = await readAgent(run.agentInstanceId);
-    if (agent && (agent.state === 'starting' || agent.state === 'waking')) {
-      await agentInstanceLifecycleService.settleBoot(agent.id);
-      agent = await readAgent(agent.id);
-    } else if (agent && agent.state === 'updating') {
+    // AMENDMENT 6 §4: a boot is its driver's — this only READS how it stands and
+    // defers while it runs, never settling it beside the driver.
+    if (agent && agent.state === 'updating') {
       // The launch's wake applied a pinned update (Q5): the run starts on whichever
       // image the update settles on.
       await agentInstanceLifecycleService.settleUpdate(agent.id);
