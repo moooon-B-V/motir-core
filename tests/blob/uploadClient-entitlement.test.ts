@@ -24,8 +24,18 @@ function stubFetch(status: number, body: unknown) {
 const file = new File(['x'], 'big.png', { type: 'image/png' });
 // The caller passes `useTranslations('errors')`; a translator over the real
 // catalogue stands in for it, widened to the client's own `(key: string)` shape.
-const enT = createTranslator({ locale: 'en', messages: enMessages, namespace: 'errors' });
-const zhT = createTranslator({ locale: 'zh', messages: zhMessages, namespace: 'errors' });
+// Its `errors` subtree only: the namespace is all the translator reads, and
+// typing the WHOLE catalogue makes next-intl compute every key path in it.
+const enT = createTranslator({
+  locale: 'en',
+  messages: { errors: enMessages.errors },
+  namespace: 'errors',
+});
+const zhT = createTranslator({
+  locale: 'zh',
+  messages: { errors: zhMessages.errors },
+  namespace: 'errors',
+});
 const en = (key: string) => enT(key as Parameters<typeof enT>[0]);
 const zh = (key: string) => zhT(key as Parameters<typeof zhT>[0]);
 

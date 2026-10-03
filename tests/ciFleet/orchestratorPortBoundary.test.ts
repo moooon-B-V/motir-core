@@ -41,6 +41,12 @@ import { describe, expect, it } from 'vitest';
 const ADAPTER_DIRS = [
   join('packages', 'orchestrator', 'src', 'adapters', 'fly'),
   join('lib', 'publicAddresses', 'adapters', 'fly'),
+  // ⚠️ A THIRD PORT, NOT A WIDENING OF EITHER (MOTIR-7332). The DEPLOYMENT-STATUS
+  // port's adapter reads motir-core's OWN machines for the operator console's
+  // Hosting card, with its own read-only token (`FLY_DEPLOYMENT_READ_TOKEN`), and
+  // that token is read only there. It boots nothing and imports nothing from
+  // `lib/orchestrator/`; its callers see `DeploymentStatus` only.
+  join('lib', 'deployment', 'adapters', 'fly'),
 ];
 
 /**
@@ -161,6 +167,19 @@ const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
     file: join('lib', 'publicAddresses', 'providers.ts'),
     tell: /publicAddresses\/adapters\/fly/,
     why: "the CERTIFICATE port's composition root — it selects that adapter, not the fleet's",
+  },
+  {
+    // The daily health check's credential registry (MOTIR-1933) DECLARES the
+    // read token by name so its expiry is watched (MOTIR-7332). It reads the
+    // variable's presence through the probe, never its value, and calls no API.
+    file: join('lib', 'health', 'credentialRegistry.ts'),
+    tell: /\bFLY_DEPLOYMENT_READ_TOKEN\b/,
+    why: "declares the deployment read token's expiry for the daily health check — a name, not a client",
+  },
+  {
+    file: join('lib', 'deployment', 'providers.ts'),
+    tell: /deployment\/adapters\/fly/,
+    why: "the DEPLOYMENT-STATUS port's composition root — it selects that adapter, not the fleet's (MOTIR-7332)",
   },
   {
     file: join('packages', 'orchestrator', 'src', 'index.ts'),

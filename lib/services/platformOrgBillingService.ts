@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { getBillingHistory } from '@/lib/ai/motirAiClient';
+import type { RawBillingHistoryResponse } from '@/lib/ai/types';
 import { isCloudBilling } from '@/lib/billing/availability';
 import type { BillingStatusDTO } from '@/lib/dto/billing';
 import type { PlatformOrganizationDetailDTO } from '@/lib/dto/platform';
@@ -29,10 +31,10 @@ import { assembleBillingStatus } from '@/lib/services/billingService';
  */
 
 /**
- * The PAYMENT & INVOICES slot (MOTIR-7292, design D9). Story 10.1 builds the card
- * and fills the slot with `not_connected` — motir-core holds no Stripe client by
- * design, and the read that fills it from Stripe through motir-ai is the follow-up
- * story's. Every amount is integer CENTS, so no float reaches a money figure.
+ * The PAYMENT & INVOICES slot (MOTIR-7292, design D9), filled from motir-ai's
+ * read-only Stripe billing history (MOTIR-7304) — motir-core holds no Stripe
+ * client by design. Every amount is integer CENTS, so no float reaches a money
+ * figure; `month` is the invoice's `YYYY-MM` in UTC.
  */
 export type BillingHistorySlot =
   | {
@@ -48,9 +50,8 @@ export type BillingHistorySlot =
     }
   /** The org has no Stripe customer. */
   | { state: 'none' }
-  | { state: 'unavailable' }
-  /** No source is connected yet — the only state this story produces. */
-  | { state: 'not_connected' };
+  /** motir-ai or Stripe could not be read; the rest of the tab still renders. */
+  | { state: 'unavailable' };
 
 export type PlatformOrgBillingDTO =
   | { enabled: false; organization: PlatformOrganizationDetailDTO }
@@ -111,8 +112,34 @@ export const platformOrgBillingService = {
       memberCount: local.memberCount,
       status,
       bill: status ? buildOrgBill(status, local.memberCount) : null,
-      // Not connected yet: the Stripe read is the follow-up story's (MOTIR-7292).
-      billingHistory: { state: 'not_connected' },
+      billingHistory: await readBillingHistory(organizationId),
     };
   },
 };
+
+/**
+ * The Payment & invoices slot from motir-ai's billing history, read after the
+ * audited transaction like the tab's other remote reads. An answer with no payment
+ * method and no invoice is an org with no Stripe customer (`none`); a throw is
+ * `unavailable`, so the card says so while the rest of the tab renders.
+ */
+async function readBillingHistory(organizationId: string): Promise<BillingHistorySlot> {
+  let history: RawBillingHistoryResponse;
+  try {
+    history = await getBillingHistory({ coreOrganizationId: organizationId });
+  } catch {
+    return { state: 'unavailable' };
+  }
+  if (!history.paymentMethod && history.invoices.length === 0) return { state: 'none' };
+  return {
+    state: 'connected',
+    paymentMethod: history.paymentMethod,
+    invoices: history.invoices.map((inv) => ({
+      id: inv.id,
+      month: inv.createdAt.slice(0, 7),
+      status: inv.status,
+      amountCents: inv.amountCents,
+      currency: inv.currency,
+    })),
+  };
+}

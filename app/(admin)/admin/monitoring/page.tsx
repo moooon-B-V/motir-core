@@ -6,6 +6,7 @@ import {
   Database,
   ExternalLink,
   HeartPulse,
+  Network,
   ShieldAlert,
   Timer,
 } from 'lucide-react';
@@ -22,17 +23,18 @@ import { platformIndexAllowanceService } from '@/lib/services/platformIndexAllow
 import { IndexAllowanceSection } from './_components/IndexAllowanceSection';
 
 /**
- * The day-1 system-health glance — design `platform-admin/design-notes.md`
- * **Panel 8**, card MOTIR-1167. It occupies the left-nav **Operations →
- * Monitoring** row the asset reserved for Story 10.2, per that asset's own
- * boundary #1: the row has one owner at a time, and until MOTIR-737 draws the
- * full ops board this is it.
+ * The system-health board — design `platform-admin/design-notes.md` **Panel 8**
+ * (card MOTIR-1167) and its Story 10.2 delta (MOTIR-737). It occupies the
+ * left-nav **Operations → Monitoring** row, and Story 10.2 extends it IN PLACE
+ * rather than replacing it: the Errors card reads Motir's own Sentry count
+ * (MOTIR-740), the Hosting card counts motir-core's machines and releases
+ * (MOTIR-7332), and a seventh card probes motir-gateway (MOTIR-742).
  *
- * ⚠️ READ AND LINK, NEVER REMEDIATE. Six cards, each a state and a link-out to
+ * ⚠️ READ AND LINK, NEVER REMEDIATE. Seven cards, each a state and a link-out to
  * the provider's own dashboard. There is no replay button, no redeploy, no
- * cancel, no trace timeline and no log search — that is 10.2's
- * *integrate-not-rebuild* stance applied one story early, and it is why this
- * page renders nothing interactive.
+ * cancel, no trace timeline and no log search — Story 10.2's
+ * *integrate-not-rebuild* stance, and it is why this page renders nothing
+ * interactive.
  *
  * ⚠️ AND NO FORK OF `/settings/workspace/jobs`. A per-WORKSPACE view of this
  * same job data already ships there (`JobsDashboard.tsx`, tabs `runs | dlq |
@@ -86,6 +88,16 @@ export default async function AdminMonitoringPage({
           {t('monitoring.subtitle')}
         </p>
       </div>
+
+      {/* One polite announcement once the board has loaded: how many cards need
+          a look. The chips say it per card; this says it once, so a screen-reader
+          user does not have to visit seven cards to learn the board is green. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {t('monitoring.announce', {
+          count: health.signals.filter((signal) => signal.state !== 'healthy').length,
+          total: health.signals.length,
+        })}
+      </p>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {health.signals.map((signal) => (
@@ -246,22 +258,44 @@ async function SignalBody({ signal }: { signal: PlatformSignalDTO }) {
   // A Server Component, so `format.dateTime` is deterministic — there is no
   // second render to disagree with the first (the hydration hazard that makes
   // `relativeTime` a client-side trap does not arise).
-  const values: Record<string, string | number> =
-    typeof signal.values['ranAt'] === 'string'
-      ? { ...signal.values, ranAt: format.dateTime(new Date(signal.values['ranAt'])) }
-      : signal.values;
-  const key =
-    signal.state === 'unreachable'
-      ? `monitoring.signal.${signal.id}.unreachable.${String(signal.values['reason'])}`
-      : `monitoring.signal.${signal.id}.value`;
+  //
+  // `since` (the Gateway card's up-since, MOTIR-742) is the same kind of reading
+  // and takes the same conversion.
+  const values: Record<string, string | number> = { ...signal.values };
+  for (const field of ['ranAt', 'since']) {
+    const iso = signal.values[field];
+    if (typeof iso === 'string') values[field] = format.dateTime(new Date(iso));
+  }
+  // A DEGRADED card says so in words where its copy carries a degraded sentence
+  // (the Gateway's "Slow · {ms} ms") — otherwise a slow gateway would headline
+  // "Reachable" under an amber chip. Cards without one keep their single string.
+  // A card with more than one degraded arm (Hosting's `shortGroup` /
+  // `mixedReleases`, MOTIR-7332) keys its detail by the reason the DTO carries.
+  const reason = String(signal.values['reason']);
+  const base = `monitoring.signal.${signal.id}`;
+  const degraded = (suffix: 'value' | 'detail') => {
+    const own = `${base}.degraded${suffix === 'value' ? 'Value' : 'Detail'}`;
+    if (signal.state !== 'degraded') return `${base}.${suffix}`;
+    if (t.has(`${own}.${reason}`)) return `${own}.${reason}`;
+    return t.has(own) ? own : `${base}.${suffix}`;
+  };
+  const key = signal.state === 'unreachable' ? `${base}.unreachable.${reason}` : degraded('value');
   const detailKey =
-    signal.state === 'unreachable'
-      ? `monitoring.signal.${signal.id}.unreachableDetail.${String(signal.values['reason'])}`
-      : `monitoring.signal.${signal.id}.detail`;
+    signal.state === 'unreachable' ? `${base}.unreachableDetail.${reason}` : degraded('detail');
+  // The Hosting headline names its process groups, and a SHORT group is set in
+  // weight, not in a hue (design § colour roles): the chip already carries the
+  // warning tone, and a second colour on one word would read as a second signal.
+  const short = reason === 'shortGroup' ? String(signal.values['group']) : null;
+  const group = (name: string) =>
+    function GroupChunk(chunks: React.ReactNode) {
+      return <span className={short === name ? 'font-semibold' : undefined}>{chunks}</span>;
+    };
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="font-sans text-lg text-(--el-text)">{t(key, values)}</p>
+      <p className="font-sans text-lg text-(--el-text)">
+        {t.rich(key, { ...values, appGroup: group('app'), workerGroup: group('worker') })}
+      </p>
       <p className="font-sans text-xs text-(--el-text-secondary)">{t(detailKey, values)}</p>
       {signal.linkOut ? (
         <a
@@ -302,6 +336,7 @@ function Td({ children, className = '' }: { children: React.ReactNode; className
 const SIGNAL_ICONS: Record<PlatformSignalId, typeof Database> = {
   database: Database,
   hosting: Cloud,
+  gateway: Network,
   schedules: Timer,
   failedJobs: AlertTriangle,
   errors: ShieldAlert,

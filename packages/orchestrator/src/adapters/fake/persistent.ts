@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { OrchestratorApiError } from '../../errors';
+import { EXEC_RESPONSE_GRACE_SECONDS, OrchestratorApiError } from '../../errors';
 import type {
   PersistentAppInventory,
   PersistentContainerHandle,
@@ -703,7 +703,7 @@ async function bridgeExec(
   command: readonly string[],
   options: { timeoutSeconds?: number; stdin?: string },
 ): Promise<PersistentExecResult> {
-  const timeoutMs = ((options.timeoutSeconds ?? 60) + 5) * 1000;
+  const timeoutMs = ((options.timeoutSeconds ?? 60) + EXEC_RESPONSE_GRACE_SECONDS) * 1000;
   let res: Response;
   try {
     res = await fetch(url, {

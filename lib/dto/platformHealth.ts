@@ -2,8 +2,9 @@
  * The day-1 system-health glance — design `platform-admin/design-notes.md`
  * **Panel 8** (MOTIR-1167).
  *
- * Six read-only signals and one list, shaped so the UI renders them uniformly
- * and the SERVICE owns every judgement about what a signal means.
+ * Seven read-only signals (six from MOTIR-1167, Gateway from MOTIR-742) and one
+ * list, shaped so the UI renders them uniformly and the SERVICE owns every
+ * judgement about what a signal means.
  *
  * ⚠️ THE THREE STATES ARE NOT A SEVERITY SCALE, and the third is the reason
  * this file exists. The asset's own argument:
@@ -25,14 +26,39 @@ export type PlatformSignalState = 'healthy' | 'degraded' | 'unreachable';
 /** Which signal a card is — the key the UI resolves its copy and icon from. */
 export type PlatformSignalId =
   | 'database'
+  /**
+   * The web deployment (MOTIR-1167, MOTIR-7332). `values` always carry the
+   * process's own identity — `app`, `region`, `machineId` — once on a managed
+   * host. On a read they add `<group>Started` / `<group>Expected` per process
+   * group (`appStarted`, `appExpected`, `workerStarted`, `workerExpected`) and
+   * `release` (the newest release a running machine carries). Degraded adds
+   * `reason`: `shortGroup` with `group`, `started` and `expected` for the first
+   * group short of its expectation, or `mixedReleases` with `count` (distinct
+   * releases running). Unreachable: `reason` — `notManaged` (no values),
+   * `noReadCredential` (identity only, no counts) or `readFailed` (no values).
+   */
   | 'hosting'
+  /**
+   * motir-gateway (MOTIR-742). `values` when it answers: `ms` (latency),
+   * `version`, `since` (ISO-8601, when the gateway process started) and
+   * `threshold` (the slow bar in ms). Unreachable: `reason` — `notConfigured`
+   * (no `MOTIR_GATEWAY_URL`) or `noAnswer`, the latter with `timeout` as a string (the probe's
+   * deadline in seconds, a setting and not a measurement).
+   */
+  | 'gateway'
   | 'schedules'
   | 'failedJobs'
+  /**
+   * Motir's own Sentry project (MOTIR-740). `values` on a read: `count` (errors
+   * accepted over the window), `windowHours` (24) and `threshold` (the degraded
+   * bar, inclusive). Unreachable: `reason` — `notConfigured`, `noReadCredential`
+   * or `readFailed` — and no count.
+   */
   | 'errors'
   | 'lastHealthCheck';
 
 /**
- * One of the six cards.
+ * One of the seven cards.
  *
  * `value` and `detail` are DATA the UI interpolates into its own localized copy
  * — never a rendered English sentence. The asset's copy strings are template

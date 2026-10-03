@@ -1,5 +1,13 @@
 import { adminDb as db } from './adminDb';
 
+/**
+ * Whatever issues a reset statement — the admin client by default, or a
+ * transaction a caller opened around it. The E2E lane passes one so its
+ * truncates run under `SET LOCAL lock_timeout` (MOTIR-7415,
+ * `tests/e2e/_helpers/db-reset.ts`); every Vitest caller passes nothing.
+ */
+export type ResetExecutor = Pick<typeof db, '$executeRawUnsafe'>;
+
 // ⚠️ These reset helpers run through the ADMIN client, never `@/lib/db`
 // (MOTIR-2513). `TRUNCATE` requires table OWNERSHIP, which the non-bypass
 // runtime role does not have and must never be granted — under
@@ -40,8 +48,8 @@ import { adminDb as db } from './adminDb';
 // `oauth_client` (MOTIR-6984) is named for the same reason: a dynamically
 // registered client carries no user, so no cascade from `user` reaches it, and a
 // client left behind would decide the next OAuth sweep suite's counts.
-export async function truncateAuthTables(): Promise<void> {
-  await db.$executeRawUnsafe(
+export async function truncateAuthTables(executor: ResetExecutor = db): Promise<void> {
+  await executor.$executeRawUnsafe(
     'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "public_hostname_reservation", "oauth_client", "user" RESTART IDENTITY CASCADE',
   );
 }
@@ -69,7 +77,7 @@ export async function truncateAuthTables(): Promise<void> {
 // test leaves its last test's rows in the worker's database for whatever file
 // that worker picks up next — which surfaces as a failure in an unrelated suite,
 // nowhere near the diff that caused it.
-export async function truncateJobRuns(): Promise<void> {
+export async function truncateJobRuns(executor: ResetExecutor = db): Promise<void> {
   // `job_supervision` (MOTIR-3826) is named EXPLICITLY even though it would be
   // reached by the `CASCADE` from `job_queue` — the same call this list already
   // makes for `job_step`. A truncate list that relies on a cascade is one FK
@@ -82,7 +90,7 @@ export async function truncateJobRuns(): Promise<void> {
   // has a NULL workspace_id, so a `TRUNCATE "workspace" CASCADE` never reaches
   // it. Any suite that sends an email writes one, so clearing it here is what
   // keeps those rows from leaking into the next test.
-  await db.$executeRawUnsafe(
+  await executor.$executeRawUnsafe(
     'TRUNCATE TABLE "job_run", "job_run_dlq", "job_event", "job_queue", "job_step", "job_supervision", "email_delivery", "job_dlq_standing_filing" RESTART IDENTITY CASCADE',
   );
 }

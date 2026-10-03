@@ -118,11 +118,14 @@ const WALLED_SITES: Record<string, string> = {
     'reason this map exists. Fixed by binding the tenant inside the resolver the moment ' +
     'the repo row supplies it (MOTIR-2910), not by arming workspace_membership. ' +
     'GitLab: github_repo + its installation relation only — no membership read, clean.',
-  'lib/services/changeRequestCiFeedback.ts#applyCiStatusFeedback':
+  'lib/services/changeRequestCiFeedback.ts#applyOneCiDelivery':
     'resolveContext ∈ { resolveGithubCiContext, resolveGitlabCiContext }. Read in full ' +
     'for MOTIR-2910: both reach github_installation and github_repo and nothing else, ' +
     'both armed, and neither resolves an author — the CI path attributes to no member. ' +
-    'CLEAN, and recorded so the next reader does not have to re-read them.',
+    'CLEAN, and recorded so the next reader does not have to re-read them. (The block ' +
+    'moved from applyCiStatusFeedback into applyOneCiDelivery behind the MOTIR-6788 ' +
+    'concurrency gate, which passes resolveContext through unchanged; the two callers ' +
+    'are still githubWebhookService.handleCiStatus and gitlabWebhookService.handlePipeline.)',
   'lib/services/repoDeploymentService.ts#record':
     'resolveRepo ∈ { the inline resolvers in githubWebhookService.handleDeploymentStatus ' +
     '(MOTIR-5329) and gitlabWebhookService.handleDeployment (MOTIR-5332) }. Read in full: ' +

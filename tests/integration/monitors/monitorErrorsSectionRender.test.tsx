@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen, within } from '@testing-library/react';
-import { createTranslator } from 'next-intl';
+import { createTranslator, type AbstractIntlMessages } from 'next-intl';
 import { db } from '@/lib/db';
 import type { MonitorProvider } from '@/lib/monitors/provider';
 import { fakeMonitorProvider, resetFakeMonitorProvider } from '@/lib/monitors/providers/fake';
@@ -28,9 +28,16 @@ import {
 // "loading the page makes no provider call" is a measurement of this render,
 // not a reading of the code.
 
+// The catalogue goes in as `AbstractIntlMessages`: the namespace is chosen at
+// runtime (`as never`), so a typed catalogue checks nothing here — it only makes
+// next-intl compute every key path in all ~600 KB of it.
 vi.mock('next-intl/server', () => ({
   getTranslations: async (namespace: string) =>
-    createTranslator({ locale: 'en', messages, namespace: namespace as never }),
+    createTranslator({
+      locale: 'en',
+      messages: messages as unknown as AbstractIntlMessages,
+      namespace: namespace as never,
+    }),
 }));
 vi.mock('@/app/(authed)/items/[key]/_components/RunSection', () => ({ RunSection: () => null }));
 vi.mock('@/app/(authed)/items/[key]/_components/AcceptancePanel', () => ({

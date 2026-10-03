@@ -8551,7 +8551,8 @@
     "monitoring": {
       "breadcrumb": "Platform · Monitoring",
       "title": "System health",
-      "subtitle": "Is the machinery running? Six signals, read-only, refreshed on load. Each card links OUT to the provider's own dashboard — Motir shows the state and never redeploys, cancels or replays. The deeper per-provider board is Story 10.2.",
+      "subtitle": "Is the machinery running? Seven signals, read-only, refreshed on load. Each card links OUT to the provider's own dashboard — Motir shows the state and never redeploys, cancels or replays.",
+      "announce": "System health loaded. {count, plural, =0 {All {total} signals are healthy.} one {# of {total} signals is degraded or can't be reached.} other {# of {total} signals are degraded or can't be reached.}}",
       "state": {
         "healthy": "Healthy",
         "degraded": "Degraded",
@@ -8572,15 +8573,39 @@
         },
         "hosting": {
           "title": "Hosting",
-          "value": "Answering from {region}",
-          "detail": "Fly app {app} · machine {machineId}. This is the machine serving you — the fleet's size lives in the Fly dashboard, and the per-provider board is Story 10.2.",
+          "value": "<appGroup>app {appStarted}/{appExpected}</appGroup> · <workerGroup>worker {workerStarted}/{workerExpected}</workerGroup>",
+          "detail": "Every machine started, all on release {release}. Fly app {app} · {region}.",
+          "degradedDetail": {
+            "shortGroup": "{group} is short: {started} of {expected} machines started. Release {release}.",
+            "mixedReleases": "Machines are running {count} different releases — a deploy may have stopped part-way. Newest {release}."
+          },
           "unreachable": {
-            "notManaged": "Not a managed host"
+            "notManaged": "Not a managed host",
+            "noReadCredential": "Answering from {region}",
+            "readFailed": "No answer from Fly"
           },
           "unreachableDetail": {
-            "notManaged": "This build is not running on Fly, so there is no hosting dashboard to point at. Expected on a local or self-hosted instance."
+            "notManaged": "This build is not running on Fly, so there is no hosting dashboard to point at. Expected on a local or self-hosted instance.",
+            "noReadCredential": "Fly app {app} · machine {machineId}. This console holds no Fly read token yet, so it can't count machines or releases. This is not a count of zero.",
+            "readFailed": "The machine list could not be read just now. This is not a count of zero."
           },
           "linkOut": "Fly dashboard"
+        },
+        "gateway": {
+          "title": "Gateway",
+          "value": "Reachable · {ms} ms",
+          "detail": "motir-gateway {version} · up since {since}.",
+          "degradedValue": "Slow · {ms} ms",
+          "degradedDetail": "Answering, but over the {threshold} ms threshold. motir-gateway {version} · up since {since}.",
+          "unreachable": {
+            "noAnswer": "No answer from the gateway",
+            "notConfigured": "Gateway not configured"
+          },
+          "unreachableDetail": {
+            "noAnswer": "The status check got no answer within {timeout} s. AI requests that go through the gateway may be failing. Nothing was measured, so no latency is shown.",
+            "notConfigured": "MOTIR_GATEWAY_URL is not set, so there is nothing to check. Expected on an instance that runs no gateway."
+          },
+          "linkOut": "Gateway status"
         },
         "schedules": {
           "title": "Scheduled jobs",
@@ -8608,15 +8633,18 @@
         },
         "errors": {
           "title": "Errors",
-          "value": "No reading",
-          "detail": "—",
+          "value": "{count} errors · 24h",
+          "detail": "Events in Motir's Sentry project over the last 24 hours. Under the {threshold}-error threshold.",
+          "degradedDetail": "Over the {threshold}-error threshold for the last 24 hours. Open Sentry to see which issues are spiking.",
           "unreachable": {
             "noReadCredential": "No reading from Sentry",
-            "notConfigured": "Error reporting is off"
+            "notConfigured": "Error reporting is off",
+            "readFailed": "No response from Sentry"
           },
           "unreachableDetail": {
-            "noReadCredential": "Errors ARE being reported, but this console holds no Sentry API credential to read the count back. This is not an error count of zero. The credential and the per-provider board arrive with Story 10.2.",
-            "notConfigured": "This build has no Sentry DSN, so nothing is reported anywhere. This is not an error count of zero — expected on a self-hosted instance."
+            "noReadCredential": "Sentry is receiving errors, but this console can't read the count yet: it holds no Sentry read credential. This is not an error count of zero.",
+            "notConfigured": "This build has no Sentry DSN, so nothing is reported anywhere. This is not an error count of zero — expected on a self-hosted instance.",
+            "readFailed": "The count could not be read just now. This is not an error count of zero."
           },
           "linkOut": "Sentry issues"
         },
@@ -9194,7 +9222,6 @@
       },
       "payment": {
         "title": "Payment & invoices",
-        "notConnected": "The payment method and invoices aren't connected to the console yet.",
         "unavailable": "The payment method and invoices can't be shown right now.",
         "none": "No invoices yet.",
         "noMethod": "No payment method on file",
@@ -11418,7 +11445,7 @@
     "delete": "Delete…",
     "deleteTitle": "Delete folder “{name}”?",
     "deleteLead": "Only the folder is removed. Everything filed in it stays in the project.",
-    "deleteMoves": "<strong>{kinds, select, both {{folders, plural, one {# folder} other {# folders}} and {items, plural, one {# work item} other {# work items}}} folders {{folders, plural, one {# folder} other {# folders}}} other {{items, plural, one {# work item} other {# work items}}}}</strong> will move to <strong>{destination}</strong>. No work items are deleted.",
+    "deleteMoves": "<strong>{kinds, select, all {{folders, plural, one {# folder} other {# folders}}, {items, plural, one {# work item} other {# work items}} and {pages, plural, one {# page} other {# pages}}} foldersItems {{folders, plural, one {# folder} other {# folders}} and {items, plural, one {# work item} other {# work items}}} foldersPages {{folders, plural, one {# folder} other {# folders}} and {pages, plural, one {# page} other {# pages}}} itemsPages {{items, plural, one {# work item} other {# work items}} and {pages, plural, one {# page} other {# pages}}} folders {{folders, plural, one {# folder} other {# folders}}} pages {{pages, plural, one {# page} other {# pages}}} other {{items, plural, one {# work item} other {# work items}}}}</strong> will move to <strong>{destination}</strong>. No work items or pages are deleted.",
     "deleteEmpty": "“{name}” is empty. Deleting it removes only the folder.",
     "deleteConfirm": "Delete folder",
     "deleteCounting": "Counting what moves…",
@@ -11908,22 +11935,56 @@
     "untitled": "Untitled",
     "index": {
       "title": "Pages",
-      "subtitle": "Specs, runbooks and notes for this project — most recently edited first.",
       "newPage": "New page",
       "creating": "Creating page…",
       "createFailed": "Couldn’t create the page. Try again.",
-      "listLabel": "Pages in this project",
-      "edited": "Edited {time} by {name}",
-      "editedByYou": "Edited {time} by you",
       "empty": {
         "title": "No pages yet",
         "member": "Write down a spec, a runbook or the notes from a meeting — it stays here, beside the project’s work.",
         "viewer": "When someone in this project writes a page, it appears here."
       }
     },
+    "tree": {
+      "subtitle": "Specs, runbooks and notes for this project, kept in folders and pages.",
+      "label": "Folders and pages in this project",
+      "newPageHere": "New page here",
+      "newSubPage": "New sub-page",
+      "pageActionsAria": "Page actions for {title}",
+      "expandAria": "Expand {title}",
+      "collapseAria": "Collapse {title}",
+      "noPagesHere": "No pages here",
+      "loadingLevel": "Loading pages…",
+      "rootFailed": "Couldn’t load the pages.",
+      "levelFailed": "Couldn’t load what’s inside.",
+      "loadMore": "Load more",
+      "shown": "{count} shown",
+      "picker": {
+        "listLabel": "Folders and pages",
+        "loading": "Loading folders and pages…",
+        "isThisPage": "It’s this page — a page can’t move into itself or its sub-pages."
+      },
+      "refusal": {
+        "cycle": "A page can’t move into one of its own sub-pages. It stayed where it was.",
+        "depth": "Pages nest at most {limit} levels deep, and this move would go past that. It stayed where it was.",
+        "crossProject": "That folder or page belongs to another project. The page stayed where it was.",
+        "gone": "That folder or page no longer exists. The page stayed where it was."
+      },
+      "drop": {
+        "root": "Drop here to move it to the project root",
+        "refusedSelf": "Can’t drop a page into its own sub-page."
+      },
+      "sidebar": {
+        "label": "Page tree",
+        "hide": "Hide page tree",
+        "show": "Show page tree"
+      },
+      "breadcrumb": {
+        "label": "Where this page is",
+        "more": "Show {count} more levels",
+        "folder": "Folder:"
+      }
+    },
     "page": {
-      "back": "Pages",
-      "backLabel": "Back to Pages",
       "titleLabel": "Page title",
       "titleTooLong": "The title is too long — keep it to {limit} characters.",
       "renameFailed": "Couldn’t save the title. Check your connection and try again."
@@ -11972,6 +12033,43 @@
         "reload": "Reload saved version",
         "newPageNewTab": "New page in a new tab"
       }
+    },
+    "history": {
+      "open": "History",
+      "title": "History",
+      "close": "Close history",
+      "listLabel": "Versions of this page",
+      "version": "v{number}",
+      "versionLabel": "Version {number}",
+      "current": "Current",
+      "you": "You",
+      "restoredFrom": "Restored from v{number}",
+      "noLongerKept": "(no longer kept)",
+      "loading": "Loading history",
+      "loadFailed": "Couldn’t load the history.",
+      "retry": "Try again",
+      "loadMore": "Load more",
+      "keepsLatest": "A page keeps its latest 100 versions.",
+      "onlyVersion": "This is the only version so far. Each editing session adds one.",
+      "compare": {
+        "label": "Comparing v{number} with the current page",
+        "current": "Current page",
+        "close": "Close v{number}"
+      },
+      "restore": "Restore this version",
+      "confirm": {
+        "title": "Restore v{number}?",
+        "body": "The page will show v{number}’s content as a new version. Nothing is deleted.",
+        "action": "Restore v{number}"
+      },
+      "restoring": "Restoring…",
+      "restored": "Restored v{from} as v{number}.",
+      "refusal": {
+        "tooLarge": "v{number} can’t be restored: the page would pass its 2 MB limit. Nothing was changed.",
+        "gone": "v{number} is no longer kept — a page keeps its latest 100 versions. Nothing was changed, and the list has been refreshed.",
+        "failed": "v{number} couldn’t be restored. Nothing was changed — try again."
+      },
+      "unsavedHold": "Restore is held until your edits are saved. It becomes available as soon as the page says Saved."
     }
   }
 }

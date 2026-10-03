@@ -28,6 +28,10 @@
 - **EXTENDED 2026-10-02 (MOTIR-4332):** §2 gains dated rows for **Z.ai (GLM)**
   and **Alibaba Cloud Model Studio, Frankfurt (Qwen)**, transcribed from the
   legal card MOTIR-7192. No decision in §3 changes.
+- **EXTENDED 2026-10-02 (MOTIR-7351):** §2 gains a dated row for **Moonshot AI,
+  international platform (`api.moonshot.ai`, Kimi)**, transcribed from the legal
+  card MOTIR-7356. The 2026-08-26 Moonshot rows (the `.cn` channel row and the
+  _not established_ vendor row) are struck in place. No decision in §3 changes.
 
 > Convention per `work-item-type-taxonomy.md`: **Status → Context → Decision →
 > Consequences**, load-bearing facts pinned in explicit tables.
@@ -228,12 +232,12 @@ POST https://api.machines.dev/v1/apps/motir-gateway/machines/<id>/exec
 `model/channel.go` defines the status enum: `1` enabled, `2` manually disabled,
 `3` auto-disabled.
 
-| #   | Channel      | Upstream                    | Models served                                              | Status on 2026-08-26            |
-| --- | ------------ | --------------------------- | ---------------------------------------------------------- | ------------------------------- |
-| 1   | **DeepSeek** | `https://api.deepseek.com`  | `deepseek-v4-pro`, `deepseek-v4-flash`                     | **ENABLED** (`status: 1`)       |
-| 2   | Anthropic    | `https://api.anthropic.com` | `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5` | manually disabled (`status: 2`) |
-| 3   | **OpenAI**   | `https://api.openai.com`    | `gpt-4o`, `gpt-4o-mini`, `o3`, `text-embedding-3-small`    | **ENABLED** (`status: 1`)       |
-| 4   | Moonshot     | `https://api.moonshot.cn`   | `moonshot-v1-128k`, `kimi-k2`                              | manually disabled (`status: 2`) |
+| #   | Channel      | Upstream                      | Models served                                              | Status on 2026-08-26                                                                                                                                                                                    |
+| --- | ------------ | ----------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **DeepSeek** | `https://api.deepseek.com`    | `deepseek-v4-pro`, `deepseek-v4-flash`                     | **ENABLED** (`status: 1`)                                                                                                                                                                               |
+| 2   | Anthropic    | `https://api.anthropic.com`   | `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5` | manually disabled (`status: 2`)                                                                                                                                                                         |
+| 3   | **OpenAI**   | `https://api.openai.com`      | `gpt-4o`, `gpt-4o-mini`, `o3`, `text-embedding-3-small`    | **ENABLED** (`status: 1`)                                                                                                                                                                               |
+| 4   | ~~Moonshot~~ | ~~`https://api.moonshot.cn`~~ | ~~`moonshot-v1-128k`, `kimi-k2`~~                          | ~~manually disabled (`status: 2`)~~ **Struck 2026-10-02 (MOTIR-7351):** the channel moves to `https://api.moonshot.ai` — see _Added 2026-10-02 (MOTIR-7351): Moonshot AI, international platform_ below |
 
 There is one further upstream that is **not a channel row** and is therefore
 absent from the table above and easy to miss: the **Brave Search API**
@@ -290,13 +294,13 @@ data is a question for **MOTIR-3621**, not for this record.
 
 ### The transfer bases, read per vendor on 2026-08-26
 
-| Upstream             | Jurisdiction                   | Chapter V basis                                                                                                                                                                                                   | Read from                                       |
-| -------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| **DeepSeek**         | **People's Republic of China** | **NONE.** Its policy names no SCCs, no BCRs and no mechanism — only _"appropriate safeguards … in accordance with the requirements of applicable data protection laws"_                                           | DeepSeek's published privacy policy             |
-| **OpenAI**           | USA                            | **SCCs** — Module 2 as controller, Module 3 as processor                                                                                                                                                          | OpenAI's published DPA (recorded by MOTIR-1160) |
-| **Anthropic**        | USA                            | **SCCs** — its DPA is auto-incorporated into the Commercial Terms and relies on SCCs for transfers to countries without an adequacy decision                                                                      | Anthropic's published DPA / Trust Center        |
-| **Moonshot**         | **People's Republic of China** | **Not established.** Same jurisdictional problem as DeepSeek; not read further, because §3 keeps it disabled                                                                                                      | —                                               |
-| **Brave Search API** | USA                            | **SCCs** — its Search API DPA incorporates the EU SCCs (and the UK Addendum). Query records retained **90 days** by default for billing/troubleshooting; Zero Data Retention is available to enterprise customers | Brave's published Search API DPA                |
+| Upstream             | Jurisdiction                       | Chapter V basis                                                                                                                                                                                                                                                               | Read from                                       |
+| -------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **DeepSeek**         | **People's Republic of China**     | **NONE.** Its policy names no SCCs, no BCRs and no mechanism — only _"appropriate safeguards … in accordance with the requirements of applicable data protection laws"_                                                                                                       | DeepSeek's published privacy policy             |
+| **OpenAI**           | USA                                | **SCCs** — Module 2 as controller, Module 3 as processor                                                                                                                                                                                                                      | OpenAI's published DPA (recorded by MOTIR-1160) |
+| **Anthropic**        | USA                                | **SCCs** — its DPA is auto-incorporated into the Commercial Terms and relies on SCCs for transfers to countries without an adequacy decision                                                                                                                                  | Anthropic's published DPA / Trust Center        |
+| ~~**Moonshot**~~     | ~~**People's Republic of China**~~ | ~~**Not established.** Same jurisdictional problem as DeepSeek; not read further, because §3 keeps it disabled~~ **Struck 2026-10-02 (MOTIR-7351):** re-read from the international platform — see _Added 2026-10-02 (MOTIR-7351): Moonshot AI, international platform_ below | —                                               |
+| **Brave Search API** | USA                                | **SCCs** — its Search API DPA incorporates the EU SCCs (and the UK Addendum). Query records retained **90 days** by default for billing/troubleshooting; Zero Data Retention is available to enterprise customers                                                             | Brave's published Search API DPA                |
 
 DeepSeek's own words are the load-bearing quote: _"we directly collect, process
 and store your Personal Data in People's Republic of China."_ **China has no EU
@@ -366,6 +370,51 @@ both `default` and `transfer-basis`.
 **Who reaches them.** For both vendors: **the hosted planner**, when a caller
 asks for a GLM or Qwen model, and **hosted agent runs**, when a person picks one
 for a run or a project's per-level default names one (`hosted-agent-run.md` §7).
+
+### Added 2026-10-02 (MOTIR-7351): Moonshot AI, international platform (`api.moonshot.ai`)
+
+The row is transcribed field for field from the dated reading commented on the
+legal card **MOTIR-7356**, read 2026-10-02 as moooon B.V. (controller and
+exporter). The verdict column is that card's verdict, unparaphrased. The
+account is held by moooon B.V.: a Google sign-in with the company address, no
+separate organisation profile, nothing changed.
+
+| Upstream                                       | Vendor and jurisdiction                                                                          | Endpoint                  | Art. 28 instrument                                                                                                         | Chapter V mechanism                                                                | Filed at                                                                                                   | Verdict                                                       | Read on    |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------- |
+| **Moonshot AI, international platform (Kimi)** | Moonshot AI PTE. LTD., **Singapore** (data stored in Singapore; Singapore law, SIAC arbitration) | `https://api.moonshot.ai` | **NONE** — none in the Terms (updated 2026-07-30), the Privacy Policy (2025-04-30), the docs index, or the account console | **NONE** — no SCCs or other Art. 46 instrument; Singapore has no adequacy decision | `https://platform.kimi.ai/docs/agreement/modeluse` · `https://platform.kimi.ai/docs/agreement/userprivacy` | **no basis — served in default only, outside transfer-basis** | 2026-10-02 |
+
+`platform.moonshot.ai` now redirects to `platform.kimi.ai`; both are the
+international platform. Training and retention, as its documents state them (the
+full quotes are on MOTIR-7356):
+
+- **Training:** yes by default. Customer Content may be used to _"provide,
+  maintain, develop, support, and improve the Services"_, and _"Unless otherwise
+  expressly agreed in writing, Customer Content may be used for the foregoing
+  purposes"_ — a restriction is available only through an enterprise or separate
+  written agreement (Terms §4).
+- **Retention:** **not stated** as a period. _"account, input, and payment
+  information are retained while your account is active"_ (Privacy Policy §6),
+  and content is deleted after termination _"in accordance with the requirements
+  of applicable laws and regulations"_ (Terms §11).
+
+**Why this endpoint and not the mainland one.** `api.moonshot.cn` is Moonshot's
+mainland platform, a separate product with separate accounts and terms, which
+requires a PRC-registered company; moooon B.V. is not one (**MOTIR-6258**). The
+2026-08-26 row above (_People's Republic of China, not established_) and the
+2026-09-06 Kimi Open Platform reading on the public pages were both taken from mainland-facing
+documents (the 2026-09-06 one from the Chinese-language terms on `platform.kimi.com`);
+this row reads the international one.
+
+**What the verdict means for routing.** **_No basis_ does not switch Kimi off.**
+The channel is **served**: enabled in the gateway's `default` group and kept out
+of `transfer-basis`, the treatment DeepSeek and GLM have
+under **MOTIR-3665** (the amendment at the top), chosen for Kimi by the
+hosted-agent decision **MOTIR-7350** on 2026-10-02. A caller that needs a basis
+excludes it per request.
+
+**Who reaches it.** **The hosted planner**, when a caller asks for a Kimi model,
+and **hosted agent runs**, when a person picks a Kimi model for a run or a
+project's per-level default names one (`hosted-agent-run.md` §7).
 
 ---
 

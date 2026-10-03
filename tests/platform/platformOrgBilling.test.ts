@@ -12,6 +12,7 @@ import { NotPlatformStaffError, PlatformOrganizationNotFoundError } from '@/lib/
 let currentPrincipal: PlatformPrincipal | null = null;
 const getOrgUsage = vi.fn();
 const getOrgSubscription = vi.fn();
+const getBillingHistory = vi.fn();
 
 vi.mock('@/lib/platform/auth', async () => {
   const actual = await vi.importActual<typeof import('@/lib/platform/auth')>('@/lib/platform/auth');
@@ -35,6 +36,7 @@ vi.mock('@/lib/ai/motirAiClient', async () => {
     ...actual,
     getOrgUsage: (q: unknown) => getOrgUsage(q),
     getOrgSubscription: (q: unknown) => getOrgSubscription(q),
+    getBillingHistory: (q: unknown) => getBillingHistory(q),
   };
 });
 
@@ -80,6 +82,7 @@ beforeEach(async () => {
     priceId: 'pro_pool_monthly',
     planTier: { key: 'pro', name: 'Pro', monthlyCreditAllotment: 8000 },
   });
+  getBillingHistory.mockReset().mockResolvedValue({ paymentMethod: null, invoices: [] });
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -98,8 +101,9 @@ describe('platformOrgBillingService.getOrgBilling', () => {
     expect(billing.memberCount).toBe(1);
     expect(billing.status!.motirAi.balance).toBe(900);
     expect('access' in billing.status!).toBe(false);
-    // The Payment & invoices slot: not connected yet, and no read of its own (MOTIR-7292).
-    expect(billing.billingHistory).toEqual({ state: 'not_connected' });
+    // The Payment & invoices slot (MOTIR-7304): an org with no Stripe customer.
+    expect(billing.billingHistory).toEqual({ state: 'none' });
+    expect(getBillingHistory).toHaveBeenCalledWith({ coreOrganizationId: orgId });
     expect(billing.bill!.money).toEqual([
       expect.objectContaining({ key: 'aiPlan', amountCents: 7_500 }),
     ]);
@@ -132,6 +136,71 @@ describe('platformOrgBillingService.getOrgBilling', () => {
     for (const spy of spies) expect(spy).not.toHaveBeenCalled();
   });
 
+  it('Payment & invoices: connected from motir-ai, amounts in integer cents, under the same one audit row', async () => {
+    const { workspace } = await createTestWorkspace({ name: 'Acme' });
+    const orgId = workspace.organizationId;
+    getBillingHistory.mockResolvedValue({
+      paymentMethod: { brand: 'visa', last4: '4242', expMonth: 8, expYear: 2028 },
+      invoices: [
+        {
+          id: 'in_2',
+          createdAt: '2026-09-01T00:04:11.000Z',
+          status: 'paid',
+          amountCents: 44_800,
+          currency: 'usd',
+        },
+        {
+          id: 'in_1',
+          createdAt: '2026-08-31T23:59:59.000Z',
+          status: 'open',
+          amountCents: 1_999,
+          currency: 'usd',
+        },
+      ],
+    });
+    const billing = await platformOrgBillingService.getOrgBilling(currentPrincipal!, orgId);
+    if (!billing.enabled) throw new Error('expected billing');
+    expect(billing.billingHistory).toEqual({
+      state: 'connected',
+      paymentMethod: { brand: 'visa', last4: '4242', expMonth: 8, expYear: 2028 },
+      invoices: [
+        { id: 'in_2', month: '2026-09', status: 'paid', amountCents: 44_800, currency: 'usd' },
+        { id: 'in_1', month: '2026-08', status: 'open', amountCents: 1_999, currency: 'usd' },
+      ],
+    });
+    const audit = await adminDb.platformAuditLog.findMany();
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({ action: 'estate.read', targetId: orgId });
+  });
+
+  it('Payment & invoices: a payment method with no invoice yet is still connected', async () => {
+    const { workspace } = await createTestWorkspace({ name: 'Acme' });
+    getBillingHistory.mockResolvedValue({
+      paymentMethod: { brand: 'visa', last4: '4242', expMonth: 8, expYear: 2028 },
+      invoices: [],
+    });
+    const billing = await platformOrgBillingService.getOrgBilling(
+      currentPrincipal!,
+      workspace.organizationId,
+    );
+    if (!billing.enabled) throw new Error('expected billing');
+    expect(billing.billingHistory).toMatchObject({ state: 'connected', invoices: [] });
+  });
+
+  it('Payment & invoices: motir-ai or Stripe down is unavailable, and the rest of the tab renders', async () => {
+    const { workspace } = await createTestWorkspace({ name: 'Acme' });
+    getBillingHistory.mockRejectedValue(new Error('down'));
+    const billing = await platformOrgBillingService.getOrgBilling(
+      currentPrincipal!,
+      workspace.organizationId,
+    );
+    if (!billing.enabled) throw new Error('expected billing');
+    expect(billing.billingHistory).toEqual({ state: 'unavailable' });
+    expect(billing.status!.motirAi.balance).toBe(900);
+    expect(billing.bill).not.toBeNull();
+    expect(await adminDb.platformAuditLog.count()).toBe(1);
+  });
+
   it('billing reads down: the tab says so while the org renders', async () => {
     const { workspace } = await createTestWorkspace({ name: 'Acme' });
     getOrgUsage.mockRejectedValue(new Error('down'));
@@ -156,6 +225,7 @@ describe('platformOrgBillingService.getOrgBilling', () => {
     );
     expect(billing.enabled).toBe(false);
     expect(getOrgUsage).not.toHaveBeenCalled();
+    expect(getBillingHistory).not.toHaveBeenCalled();
   });
 
   it('an unknown org throws inside the read — no audit row — and a non-staff caller is refused', async () => {

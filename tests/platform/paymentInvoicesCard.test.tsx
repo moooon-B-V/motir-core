@@ -8,7 +8,7 @@ import { PaymentInvoicesCard } from '@/app/(admin)/admin/tenants/[orgId]/_compon
 
 /**
  * The Billing tab's PAYMENT & INVOICES card (Story MOTIR-727 · MOTIR-7292, design D9):
- * the connected layout over a recorded fixture, the three other states, and no
+ * the connected layout over a recorded fixture, the two other states, and no
  * mutation control in any of them.
  */
 
@@ -61,8 +61,30 @@ describe('PaymentInvoicesCard', () => {
     expect(screen.getByText('$19.99')).toBeTruthy();
   });
 
+  it('connected with no card on file and no invoice yet: says both, and no Paid up pill', () => {
+    renderCard({ state: 'connected', paymentMethod: null, invoices: [] });
+    expect(screen.getByTestId('payment-method').textContent).toContain('No payment method on file');
+    expect(screen.getByTestId('payment-invoices').textContent).toContain('No invoices yet.');
+    expect(screen.queryByText('Paid up')).toBeNull();
+    expect(screen.queryByTestId('invoices')).toBeNull();
+  });
+
+  it("a void invoice reads Void, and a status the catalog doesn't know shows Stripe's own word", () => {
+    renderCard({
+      ...RECORDED,
+      invoices: [
+        { id: 'in_8', month: '2026-10', status: 'void', amountCents: 0, currency: 'usd' },
+        { id: 'in_7', month: '2026-09', status: 'mystery', amountCents: 500, currency: 'usd' },
+      ],
+    } as BillingHistorySlot);
+    const rows = within(screen.getByTestId('invoices')).getAllByRole('row').slice(1);
+    expect(rows.map((r) => [...r.querySelectorAll('td')].map((c) => c.textContent))).toEqual([
+      ['Oct 2026', 'Void', '$0.00'],
+      ['Sep 2026', 'mystery', '$5.00'],
+    ]);
+  });
+
   it.each([
-    ['not_connected', "The payment method and invoices aren't connected to the console yet."],
     ['none', 'No invoices yet.'],
     ['unavailable', "The payment method and invoices can't be shown right now."],
   ] as const)('%s renders its own line and names no figure', (state, line) => {
@@ -78,7 +100,6 @@ describe('PaymentInvoicesCard', () => {
       RECORDED,
       { state: 'none' },
       { state: 'unavailable' },
-      { state: 'not_connected' },
     ] as BillingHistorySlot[]) {
       const { container } = renderCard(slot);
       expect(container.querySelectorAll('a, button')).toHaveLength(0);

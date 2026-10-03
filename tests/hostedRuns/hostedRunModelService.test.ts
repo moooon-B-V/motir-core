@@ -286,4 +286,9 @@ describe('toOpenCodeModel', () => {
     expect(toOpenCodeModel({ id: 'glm-4.6', provider: 'z-ai' })).toBe('z-ai/glm-4.6');
     expect(toOpenCodeModel({ id: 'qwen-plus', provider: 'qwen' })).toBe('qwen/qwen-plus');
   });
+  it('prefixes a Kimi entry with the catalog provider `moonshotai` (MOTIR-7361)', () => {
+    expect(toOpenCodeModel({ id: 'kimi-k2.6', provider: 'moonshotai' })).toBe(
+      'moonshotai/kimi-k2.6',
+    );
+  });
 });

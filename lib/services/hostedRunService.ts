@@ -634,6 +634,26 @@ async function runOpenedByPress(
 }
 
 /**
+ * RUN HOSTED'S READINESS REFUSAL, READ AGAINST THE KEY FIRST (MOTIR-7330). The
+ * same interleaving {@link runOpenedByPress} answers for continue and fix: a
+ * double-click's second press passes step 0 before the first press opens its run,
+ * the first press then opens it and claims the card (or its scope), and the second
+ * press's readiness check reads a card its own first press moved. A run this key
+ * opened answers the press, `created: false`; no key match ⇒ the card is refused
+ * as not ready, exactly as before.
+ */
+async function notReadyUnlessPressed(
+  idempotencyKey: string,
+  identifier: string,
+  detail: string,
+  ctx: ServiceContext,
+): Promise<HostedRunStarted> {
+  const replay = await runOpenedByPress(idempotencyKey, ctx);
+  if (replay) return replay;
+  throw new HostedRunCardNotReadyError(identifier, detail);
+}
+
+/**
  * The model a start runs on (MOTIR-6994): the person's pick when they sent one
  * (trimmed), else the card's resolution — a leaf's difficulty, a parent's highest
  * among its unfinished leaves. Nothing to resolve (motir-ai offers no model) is
@@ -977,7 +997,8 @@ export const hostedRunService = {
     let legIds: string[];
     if (isParent) {
       const preview = await scopeClaimService.previewWorkItemScope(project.id, identifier, ctx);
-      if (!preview.ok) throw new HostedRunCardNotReadyError(identifier, preview.detail);
+      if (!preview.ok)
+        return notReadyUnlessPressed(input.idempotencyKey, identifier, preview.detail, ctx);
       const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
         workItemLinkRepository.findBlockedByAmong(
           preview.childIds,
@@ -997,14 +1018,21 @@ export const hostedRunService = {
       /* v8 ignore next -- the row was resolved above; only a delete in between gets here */
       if (!state) throw new HostedRunCardNotReadyError(identifier, 'it no longer exists');
       if (!isClaimableState(state)) {
-        throw new HostedRunCardNotReadyError(
+        return notReadyUnlessPressed(
+          input.idempotencyKey,
           identifier,
           `it is ${state.status}, not in the to-do category`,
+          ctx,
         );
       }
       const readiness = await workItemsService.getReadiness(item.id, ctx);
       if (!readiness.ready) {
-        throw new HostedRunCardNotReadyError(identifier, 'it is waiting on an open blocker');
+        return notReadyUnlessPressed(
+          input.idempotencyKey,
+          identifier,
+          'it is waiting on an open blocker',
+          ctx,
+        );
       }
       legIds = [item.id];
     }

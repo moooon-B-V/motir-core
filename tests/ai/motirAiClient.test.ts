@@ -115,6 +115,44 @@ describe('submitJob', () => {
       MotirAiUnavailableError,
     );
   });
+
+  // MOTIR-7337: undici throws one `TypeError('fetch failed')` for every
+  // transport failure, and the only thing that says WHICH is `err.cause`.
+  it('names the transport failure on a REAL refused connection, and keeps the cause', async () => {
+    // A port that was just listening and is now closed: a genuine ECONNREFUSED
+    // through Node's own fetch, no stub in between.
+    const { createServer } = await import('node:net');
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as { port: number };
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    process.env['MOTIR_AI_URL'] = `http://127.0.0.1:${port}`;
+
+    const err = await submitJob('noop', tenant, {}, actor).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(MotirAiUnavailableError);
+    expect((err as Error).message).toBe('motir-ai is unavailable: fetch failed (ECONNREFUSED)');
+    expect(((err as Error).cause as Error).message).toBe('fetch failed');
+  });
+
+  it('names a nested cause by its code only — never the host or address it carries', async () => {
+    const dns = Object.assign(new Error('getaddrinfo ENOTFOUND motir-ai.internal'), {
+      code: 'ENOTFOUND',
+    });
+    const thrown = new TypeError('fetch failed', { cause: dns });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(thrown));
+
+    const err = await submitJob('noop', tenant, {}, actor).catch((e: unknown) => e);
+    expect((err as Error).message).toBe('motir-ai is unavailable: fetch failed (ENOTFOUND)');
+    // The message reaches API callers; the private name must not.
+    expect((err as Error).message).not.toContain('motir-ai.internal');
+    expect((err as Error).cause).toBe(thrown);
+  });
+
+  it('leaves a failure with no coded cause exactly as it was', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
+    const err = await submitJob('noop', tenant, {}, actor).catch((e: unknown) => e);
+    expect((err as Error).message).toBe('motir-ai is unavailable: ECONNREFUSED');
+  });
 });
 
 describe('getJob', () => {

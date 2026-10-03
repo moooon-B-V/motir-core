@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import { FolderPickerPanel } from '@/app/(authed)/items/_components/FolderPicker';
+import { FolderPickerPanel } from '@/components/folders/FolderPicker';
 import type { FolderPickerNodeDto } from '@/lib/dto/folders';
 
 // The FOLDER PICKER panel (Story MOTIR-5308 · MOTIR-5345), built once for two

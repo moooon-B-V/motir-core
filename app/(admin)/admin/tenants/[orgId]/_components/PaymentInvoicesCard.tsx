@@ -8,9 +8,8 @@ import type { BillingHistorySlot } from '@/lib/services/platformOrgBillingServic
  * PAYMENT & INVOICES (MOTIR-7292, design D9): the org's payment method and its recent
  * invoices, read-only — no Customer Portal link, no Update control, in any state.
  *
- * It renders whatever the billing-history slot holds. Story 10.1 fills the slot with
- * `not_connected`, which says so and names no figure; the follow-up story connects
- * it to Stripe through motir-ai without changing this card.
+ * It renders whatever the billing-history slot holds, which is filled from Stripe
+ * through motir-ai (MOTIR-7304).
  */
 export function PaymentInvoicesCard({ slot }: { slot: BillingHistorySlot }) {
   const t = useTranslations('platformAdmin.orgBilling.payment');
@@ -25,9 +24,7 @@ export function PaymentInvoicesCard({ slot }: { slot: BillingHistorySlot }) {
         data-testid="payment-invoices"
         data-state={slot.state}
       >
-        {slot.state === 'not_connected' ? (
-          <p className="text-(--el-text-secondary)">{t('notConnected')}</p>
-        ) : slot.state === 'unavailable' ? (
+        {slot.state === 'unavailable' ? (
           <p role="status" className="text-(--el-text-secondary)">
             {t('unavailable')}
           </p>

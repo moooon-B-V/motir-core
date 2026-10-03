@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  CrossProjectPageParentError,
+  PAGE_DEPTH_LIMIT,
+  PageDepthExceededError,
+  PageFolderNotFoundError,
   PAGE_BODY_MAX_BYTES,
   PAGE_SAVE_MAX_BYTES,
   PAGE_TITLE_MAX_LENGTH,
@@ -79,6 +83,87 @@ describe('createPage', () => {
       createPage(store, clock, { ...scope, title: 'x'.repeat(PAGE_TITLE_MAX_LENGTH + 1) }),
     ).rejects.toBeInstanceOf(PageTitleTooLongError);
     expect(store.calls).toEqual([]);
+  });
+});
+
+describe('createPage — placement', () => {
+  it('files a page in a folder: a folder id, no parent page, a chain of its own', async () => {
+    store.addFolder('f1', 'p1');
+    await createPage(store, clock, { ...scope, title: 'Root page' });
+    const first = await createPage(store, clock, {
+      ...scope,
+      parent: { kind: 'folder', folderId: 'f1' },
+    });
+    const second = await createPage(store, clock, {
+      ...scope,
+      parent: { kind: 'folder', folderId: 'f1' },
+    });
+
+    expect(first).toMatchObject({ folderId: 'f1', parentPageId: null, ancestorPageIds: [] });
+    expect(first.position < second.position).toBe(true);
+    expect(store.calls.filter((c) => c.method === 'lockSiblings').at(-1)!.args).toEqual([
+      'p1',
+      { kind: 'folder', folderId: 'f1' },
+    ]);
+  });
+
+  it('creates a sub-page under a page: no folder id, the parent chain plus the parent', async () => {
+    store.addFolder('f1', 'p1');
+    const top = await createPage(store, clock, {
+      ...scope,
+      parent: { kind: 'folder', folderId: 'f1' },
+    });
+    const child = await createPage(store, clock, {
+      ...scope,
+      parent: { kind: 'page', pageId: top.id },
+    });
+    const grandchild = await createPage(store, clock, {
+      ...scope,
+      parent: { kind: 'page', pageId: child.id },
+    });
+
+    expect(child).toMatchObject({ parentPageId: top.id, folderId: null });
+    expect(child.ancestorPageIds).toEqual([top.id]);
+    expect(grandchild.ancestorPageIds).toEqual([top.id, child.id]);
+  });
+
+  it('refuses a page at level 11, writing nothing', async () => {
+    let parent = await createPage(store, clock, scope);
+    for (let level = 2; level <= PAGE_DEPTH_LIMIT; level += 1) {
+      parent = await createPage(store, clock, {
+        ...scope,
+        parent: { kind: 'page', pageId: parent.id },
+      });
+    }
+    const inserts = store.called('insertPage');
+    const err = await createPage(store, clock, {
+      ...scope,
+      parent: { kind: 'page', pageId: parent.id },
+    }).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(PageDepthExceededError);
+    expect(err).toMatchObject({ limit: 10, attemptedLevel: 11 });
+    expect(store.called('insertPage')).toBe(inserts);
+  });
+
+  it('refuses a missing parent and a parent in another project, writing nothing', async () => {
+    store.addFolder('fx', 'p2');
+    const elsewhere = await createPage(store, clock, { ...scope, projectId: 'p2' });
+    const inserts = store.called('insertPage');
+
+    await expect(
+      createPage(store, clock, { ...scope, parent: { kind: 'folder', folderId: 'gone' } }),
+    ).rejects.toBeInstanceOf(PageFolderNotFoundError);
+    await expect(
+      createPage(store, clock, { ...scope, parent: { kind: 'page', pageId: 'gone' } }),
+    ).rejects.toBeInstanceOf(PageNotFoundError);
+    await expect(
+      createPage(store, clock, { ...scope, parent: { kind: 'folder', folderId: 'fx' } }),
+    ).rejects.toBeInstanceOf(CrossProjectPageParentError);
+    await expect(
+      createPage(store, clock, { ...scope, parent: { kind: 'page', pageId: elsewhere.id } }),
+    ).rejects.toBeInstanceOf(CrossProjectPageParentError);
+    expect(store.called('insertPage')).toBe(inserts);
   });
 });
 
@@ -287,5 +372,44 @@ describe('savePageUpdate', () => {
       savePageUpdate(store, clock, { pageId: 'nope', actorId: 'u1', update: new Uint8Array(2) }),
     ).rejects.toBeInstanceOf(PageNotFoundError);
     expect(store.called('updateBody')).toBe(0);
+  });
+});
+
+describe('every write leaves a version (§6, MOTIR-5754)', () => {
+  it('createPage leaves exactly one version, number 1, by the creator, holding the empty state', async () => {
+    const page = await createPage(store, clock, scope);
+    const versions = store.versions.filter((v) => v.pageId === page.id);
+    expect(versions).toHaveLength(1);
+    expect(versions[0]).toMatchObject({
+      number: 1,
+      authorId: 'u1',
+      bodyMarkdown: '',
+      startedAt: clock.current,
+      savedAt: clock.current,
+      restoredFromVersionId: null,
+      restoredFromNumber: null,
+    });
+    expect(stateToMarkdown(versions[0]!.bodyState)).toBe('');
+  });
+
+  // The guard against Plane's silently broken version task: a save that writes
+  // a body and no version FAILS here, whichever branch the policy took.
+  it('a save writes either a new version or an extension, every time', async () => {
+    const page = await createPage(store, clock, scope);
+    for (const [actorId, gapMs] of [
+      ['u1', 60_000],
+      ['u1', 60_000],
+      ['u2', 60_000],
+      ['u2', 11 * 60_000],
+    ] as const) {
+      clock.current = new Date(clock.current.getTime() + gapMs);
+      const before = store.called('insertVersion') + store.called('updateVersion');
+      await savePageUpdate(store, clock, {
+        pageId: page.id,
+        actorId,
+        update: markdownToUpdate(store.pages.get(page.id)!.bodyState, `by ${actorId} ${gapMs}`),
+      });
+      expect(store.called('insertVersion') + store.called('updateVersion')).toBe(before + 1);
+    }
   });
 });
