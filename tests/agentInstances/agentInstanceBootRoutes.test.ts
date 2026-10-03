@@ -39,12 +39,28 @@ async function actAs(userId: string): Promise<void> {
 // The stream's seam: each poll waits for the test's `tick()`, and the clock is virtual.
 let now = 0;
 let waiting: Array<() => void> = [];
+let arrived: Array<() => void> = [];
+/** Resolves once the stream is parked in its sleep, or after `ms` if it never parks again. */
+const parked = (ms: number) =>
+  waiting.length > 0
+    ? Promise.resolve()
+    : new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, ms);
+        arrived.push(() => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
 const tick = async () => {
+  // Wait on the stream reaching its sleep, never on a guessed delay: under CI
+  // load a fixed 50ms let a test end mid-poll, with that poll's transaction open.
+  await parked(10_000);
   const next = waiting.shift();
   expect(next, 'the stream should be waiting to poll').toBeDefined();
   next!();
-  // Let the poll run and write its frames.
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  // The poll ran and wrote its frames once the stream parks again; a stream that
+  // ended (closed, or a terminal frame) never does, so that wait is bounded.
+  await parked(1_000);
 };
 
 beforeEach(async () => {
@@ -55,9 +71,14 @@ beforeEach(async () => {
   bootDriver.inline = false;
   now = 1_000_000;
   waiting = [];
+  arrived = [];
   vi.spyOn(live.agentBootStreamClock, 'now').mockImplementation(() => now);
   vi.spyOn(live.agentBootStreamClock, 'sleep').mockImplementation(
-    () => new Promise<void>((resolve) => waiting.push(resolve)),
+    () =>
+      new Promise<void>((resolve) => {
+        waiting.push(resolve);
+        for (const wake of arrived.splice(0)) wake();
+      }),
   );
 });
 afterEach(tearDownHarness);
@@ -343,6 +364,7 @@ describe('the boot doors’ edges', () => {
       read = real(...args);
       return read as ReturnType<typeof real>;
     });
+    await parked(10_000);
     waiting.shift()!();
     await held;
     await reader.cancel();
