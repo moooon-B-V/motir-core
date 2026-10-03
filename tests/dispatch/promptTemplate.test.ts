@@ -1189,6 +1189,31 @@ describe('assembleDispatchPrompt — REPORTING THE OUTCOME', () => {
   });
 });
 
+describe('assembleDispatchPrompt — REPORTING YOUR STEPS (MOTIR-7501)', () => {
+  it('a run prompt tells the agent to call report_action before each step, naming its key', () => {
+    const { prompt } = assembleDispatchPrompt(source());
+    expect(prompt).toContain('\nREPORTING YOUR STEPS');
+    expect(prompt).toContain('call the report_action tool with key PROD-7');
+    expect(prompt).toContain('report_action { key: "PROD-7", action: "Run the changed tests" }');
+    expect(prompt).toContain('at most 500 characters');
+    expect(prompt).toContain('Never a transcript, file contents, a diff, a prompt or a secret');
+    expect(prompt).toContain('Do not send `events`');
+    // Before the git workflow, so it is read before the agent starts working.
+    expect(prompt.indexOf('REPORTING YOUR STEPS')).toBeLessThan(prompt.indexOf('GIT WORKFLOW'));
+  });
+
+  it('a session-lineage prompt carries it too', () => {
+    const { prompt } = assembleDispatchPrompt(source({ sessionBranch: 'session/PROD-2-run' }));
+    expect(prompt).toContain('call the report_action tool with key PROD-7');
+  });
+
+  it('a prompt that builds nothing — a MANUAL item — does not', () => {
+    const { prompt } = assembleDispatchPrompt(source({ type: 'manual', executor: 'human' }));
+    expect(prompt).not.toContain('report_action');
+    expect(prompt).not.toContain('REPORTING YOUR STEPS');
+  });
+});
+
 describe('assembleDispatchPrompt — ONE CARD, ONE COMMIT (MOTIR-2406)', () => {
   it.each([
     ['per_item_pr', null],
