@@ -55,8 +55,24 @@ export interface PlatformLessonListFilters {
   cursor?: string;
 }
 
+/** The lesson-retirement window N (MOTIR-1463), as the list's card renders it. */
+export interface PlatformLessonRetentionDTO {
+  days: number;
+  defaultDays: number;
+  /** False while nobody has set it — the default applies. */
+  isSet: boolean;
+  updatedAt: string | null;
+  /** Null when unset, or when the setter's account is gone. */
+  updatedByName: string | null;
+  minDays: number;
+  maxDays: number;
+  /** `superadmin` only. */
+  canChange: boolean;
+}
+
 export interface PlatformLessonListDTO {
   rows: PlatformLessonRowDTO[];
+  retention: PlatformLessonRetentionDTO;
   nextCursor: string | null;
   retentionDays: number;
   /** The Organisation filter's options. */

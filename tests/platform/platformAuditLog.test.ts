@@ -186,6 +186,8 @@ describe('the reason rule', () => {
     'ai.lesson.enable': 'required',
     'ai.lesson.disable': 'required',
     'ai.lesson.promote': 'required',
+    // The lesson-retirement window (MOTIR-1463) — superadmin, one platform rule.
+    'ai.lesson.retention_set': 'required',
   } as const;
 
   it('every action carries the policy the ADR allocates it', () => {

@@ -48,8 +48,10 @@ function refused(err: unknown, lessonId: string, act: string): LessonActionResul
     return { ok: false, code: 'GONE' };
   }
   if (err instanceof PlatformLessonUnchangedError) {
-    // The page re-reads, so the control shows where the lesson actually is.
+    // The page re-reads, so the control shows where the lesson (or the window)
+    // actually is.
     revalidatePath(`/admin/planning-lessons/${lessonId}`);
+    revalidatePath('/admin/planning-lessons');
     return { ok: false, code: 'UNCHANGED' };
   }
   if (err instanceof MissingAuditReasonError) return { ok: false, code: 'REASON_REQUIRED' };
@@ -110,5 +112,32 @@ export async function promoteLessonAction(
     return saved(lessonId);
   } catch (err) {
     return refused(err, lessonId, 'promote');
+  }
+}
+
+export async function setLessonRetentionAction(
+  days: number,
+  reason: string,
+): Promise<LessonActionResult> {
+  try {
+    const principal = await requirePlatformStaff('superadmin');
+    await platformLessonsService.setRetention(principal, days, reason);
+    revalidatePath('/admin/planning-lessons');
+    return { ok: true };
+  } catch (err) {
+    return refused(err, 'lesson-retention', 'retention change');
+  }
+}
+
+/** The confirm's impact count; `null` when it cannot be read — the confirm still works. */
+export async function previewLessonRetentionAction(days: number): Promise<number | null> {
+  try {
+    const principal = await requirePlatformStaff('superadmin');
+    return await platformLessonsService.previewRetention(principal, days);
+  } catch (err) {
+    if (!(err instanceof PlatformLessonInvalidError)) {
+      console.error('[admin] lesson-retention impact could not be read', { days }, err);
+    }
+    return null;
   }
 }

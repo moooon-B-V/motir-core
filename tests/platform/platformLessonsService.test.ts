@@ -97,9 +97,59 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+/** The stored retirement window; `null` days is the unset default. */
+let retention: { days: number | null; updatedAt: string | null; by: string | null } = {
+  days: null,
+  updatedAt: null,
+  by: null,
+};
+
+function retentionBody() {
+  return {
+    days: retention.days ?? 90,
+    defaultDays: 90,
+    isSet: retention.days !== null,
+    updatedAt: retention.updatedAt,
+    updatedByCoreUserId: retention.by,
+    minDays: 7,
+    maxDays: 365,
+  };
+}
+
 const fetchStub = vi.fn(async (input: string, init: RequestInit = {}) => {
   const url = new URL(input);
   const method = init.method ?? 'GET';
+  if (url.pathname === '/v1/admin/lesson-retention/impact') {
+    return json({ days: Number(url.searchParams.get('days')), wouldRest: 4 });
+  }
+  if (url.pathname === '/v1/admin/lesson-retention') {
+    if (method === 'GET') return json(retentionBody());
+    const body = JSON.parse(String(init.body)) as { days: number; actorCoreUserId: string };
+    writes.push({ method, path: url.pathname, body });
+    if (writeAnswer === 'unavailable') {
+      return json(
+        { type: 'about:blank', title: 'down', status: 503, code: 'upstream_unavailable' },
+        503,
+      );
+    }
+    const before = retentionBody().days;
+    if (writeAnswer === 'noop') return json({ setting: retentionBody(), audit: null });
+    retention = {
+      days: body.days,
+      updatedAt: '2026-10-03T10:00:00.000Z',
+      by: body.actorCoreUserId,
+    };
+    return json({
+      setting: retentionBody(),
+      audit: {
+        action: 'ai.lesson.retention_set',
+        actorCoreUserId: body.actorCoreUserId,
+        at: '2026-10-03T10:00:00.000Z',
+        before: { days: before },
+        after: { days: body.days },
+      },
+    });
+  }
   if (method === 'GET' && url.pathname === '/v1/admin/lessons') {
     listQueries.push(url.searchParams);
     const { occurrences: _o, ...row } = stored ?? lesson();
@@ -146,6 +196,7 @@ beforeEach(async () => {
   writes = [];
   listQueries = [];
   writeAnswer = 'apply';
+  retention = { days: null, updatedAt: null, by: null };
   await adminDb.$executeRawUnsafe('TRUNCATE TABLE "platform_audit_log" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
   const { workspace, owner } = await createTestWorkspace({ name: 'Acme Space' });
@@ -413,5 +464,89 @@ describe('writes — one audit row each, none on a refusal', () => {
       platformLessonsService.promote(currentPrincipal!, 'lsn_1', 'global', 'r'),
     ).rejects.toBeInstanceOf(PlatformLessonUnchangedError);
     expect(writes).toHaveLength(0);
+  });
+});
+
+describe('retention — the retirement window (MOTIR-1463)', () => {
+  it('the list carries the window; only a superadmin may change it', async () => {
+    const asSuper = await platformLessonsService.list(currentPrincipal!, {});
+    expect(asSuper.retention).toMatchObject({
+      days: 90,
+      defaultDays: 90,
+      isSet: false,
+      updatedByName: null,
+      minDays: 7,
+      maxDays: 365,
+      canChange: true,
+    });
+    currentPrincipal = await seedStaff('operator');
+    const asOperator = await platformLessonsService.list(currentPrincipal, {});
+    expect(asOperator.retention.canChange).toBe(false);
+  });
+
+  it('a set window names who set it', async () => {
+    retention = { days: 30, updatedAt: '2026-10-01T09:00:00.000Z', by: currentPrincipal!.userId };
+    const list = await platformLessonsService.list(currentPrincipal!, {});
+    expect(list.retention).toMatchObject({
+      days: 30,
+      isSet: true,
+      updatedByName: 'Ops superadmin',
+    });
+  });
+
+  it('preview returns the count that would rest, superadmin only', async () => {
+    await expect(platformLessonsService.previewRetention(currentPrincipal!, 30)).resolves.toBe(4);
+    await expect(
+      platformLessonsService.previewRetention(currentPrincipal!, 3),
+    ).rejects.toBeInstanceOf(PlatformLessonInvalidError);
+    currentPrincipal = await seedStaff('operator');
+    await expect(
+      platformLessonsService.previewRetention(currentPrincipal, 30),
+    ).rejects.toBeInstanceOf(NotPlatformStaffError);
+  });
+
+  it('set writes the new N and one retention_set row, from → to', async () => {
+    await platformLessonsService.setRetention(currentPrincipal!, 30, 'Lessons go stale faster');
+    expect(writes).toEqual([
+      {
+        method: 'PUT',
+        path: '/v1/admin/lesson-retention',
+        body: { days: 30, actorCoreUserId: currentPrincipal!.userId },
+      },
+    ]);
+    const rows = await auditRows();
+    const row = rows.find((r) => r.action === 'ai.lesson.retention_set');
+    expect(row).toMatchObject({
+      targetKind: 'platform',
+      targetId: 'lesson-retention',
+      reason: 'Lessons go stale faster',
+      metadata: { before: { days: 90 }, after: { days: 30 } },
+    });
+  });
+
+  it('refusals leave no row: same N, out of bounds, blank reason, operator, no-op, motir-ai down', async () => {
+    await expect(
+      platformLessonsService.setRetention(currentPrincipal!, 90, 'r'),
+    ).rejects.toBeInstanceOf(PlatformLessonUnchangedError);
+    await expect(
+      platformLessonsService.setRetention(currentPrincipal!, 400, 'r'),
+    ).rejects.toBeInstanceOf(PlatformLessonInvalidError);
+    await expect(
+      platformLessonsService.setRetention(currentPrincipal!, 30, '  '),
+    ).rejects.toBeInstanceOf(MissingAuditReasonError);
+    writeAnswer = 'noop';
+    await expect(
+      platformLessonsService.setRetention(currentPrincipal!, 30, 'r'),
+    ).rejects.toBeInstanceOf(PlatformLessonUnchangedError);
+    writeAnswer = 'unavailable';
+    await expect(
+      platformLessonsService.setRetention(currentPrincipal!, 30, 'r'),
+    ).rejects.toBeInstanceOf(MotirAiUnavailableError);
+    currentPrincipal = await seedStaff('operator');
+    await expect(
+      platformLessonsService.setRetention(currentPrincipal, 30, 'r'),
+    ).rejects.toBeInstanceOf(NotPlatformStaffError);
+    const rows = await auditRows();
+    expect(rows.filter((r) => r.action === 'ai.lesson.retention_set')).toHaveLength(0);
   });
 });

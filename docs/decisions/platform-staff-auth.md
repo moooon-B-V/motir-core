@@ -475,6 +475,9 @@ rather than introducing a second one.
 > `{ lessonId, before, after }` (changed fields only) as metadata. Unlike the planning-model page,
 > the READS here are audited: a tenant lesson is customer text, so opening the list or a detail is a
 > cross-tenant read and writes one `estate.read` row.
+> MOTIR-1463 adds a fifth, `ai.lesson.retention_set` (`superadmin`, reason required): the
+> platform-wide lesson-retirement window N, with `lesson-retention` as `targetId` and
+> `{ before: { days }, after: { days } }` as metadata.
 
 ---
 

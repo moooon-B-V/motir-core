@@ -124,6 +124,14 @@ export const PLATFORM_AUDIT_ACTIONS = {
   'ai.lesson.enable': { reason: 'required' },
   'ai.lesson.disable': { reason: 'required' },
   'ai.lesson.promote': { reason: 'required' },
+  /**
+   * The LESSON-RETIREMENT WINDOW N was changed (MOTIR-1463) — how many days a
+   * lesson may go without recurring before every organisation's planner stops
+   * being told it. `required`, at `superadmin`: one platform-wide rule. Target
+   * is `platform` with `lesson-retention` as `targetId`; `metadata` carries
+   * `{ before: { days }, after: { days } }`.
+   */
+  'ai.lesson.retention_set': { reason: 'required' },
 } as const satisfies Record<string, { reason: PlatformAuditReasonPolicy }>;
 
 /**

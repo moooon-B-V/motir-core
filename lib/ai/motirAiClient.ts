@@ -2846,3 +2846,92 @@ export function promotePlatformLesson(
 ): Promise<RawPlatformLessonWrite> {
   return platformLessonWrite(lessonId, '/promote', 'POST', { to, actorCoreUserId });
 }
+
+// ── The lesson-retirement window N (MOTIR-1463) ────────────────────────────────
+//
+// `/v1/admin/lesson-retention` — one platform-wide setting motir-ai owns. Like
+// the curate writes, a PUT answers the from → to record core appends to its
+// platform audit log, `audit: null` when N already had that value.
+
+export interface RawLessonRetention {
+  days: number;
+  defaultDays: number;
+  isSet: boolean;
+  updatedAt: string | null;
+  updatedByCoreUserId: string | null;
+  minDays: number;
+  maxDays: number;
+}
+
+export interface RawLessonRetentionWrite {
+  setting: RawLessonRetention;
+  audit: {
+    action: 'ai.lesson.retention_set';
+    actorCoreUserId: string;
+    at: string;
+    before: { days: number };
+    after: { days: number };
+  } | null;
+}
+
+function isRetention(body: unknown): body is RawLessonRetention {
+  return (
+    !!body &&
+    typeof body === 'object' &&
+    typeof (body as RawLessonRetention).days === 'number' &&
+    typeof (body as RawLessonRetention).isSet === 'boolean'
+  );
+}
+
+// GET /v1/admin/lesson-retention
+export async function getLessonRetention(): Promise<RawLessonRetention> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/admin/lesson-retention`, {
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = await res.json().catch(() => null);
+  if (!isRetention(body)) {
+    throw new MotirAiUnavailableError('lesson-retention response is not a setting');
+  }
+  return body;
+}
+
+// GET /v1/admin/lesson-retention/impact?days=N
+export async function previewLessonRetentionImpact(
+  days: number,
+): Promise<{ days: number; wouldRest: number }> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(
+    `${url}/v1/admin/lesson-retention/impact?days=${encodeURIComponent(String(days))}`,
+    { headers: authHeaders(serviceToken) },
+  );
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json().catch(() => null)) as {
+    days?: unknown;
+    wouldRest?: unknown;
+  } | null;
+  if (!body || typeof body.wouldRest !== 'number' || typeof body.days !== 'number') {
+    throw new MotirAiUnavailableError('lesson-retention impact response has no count');
+  }
+  return { days: body.days, wouldRest: body.wouldRest };
+}
+
+// PUT /v1/admin/lesson-retention
+export async function setLessonRetention(
+  days: number,
+  actorCoreUserId: string,
+): Promise<RawLessonRetentionWrite> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/admin/lesson-retention`, {
+    method: 'PUT',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify({ days, actorCoreUserId }),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json().catch(() => null)) as RawLessonRetentionWrite | null;
+  if (!body || !isRetention(body.setting) || body.audit === undefined) {
+    throw new MotirAiUnavailableError('lesson-retention write answered no `{ setting, audit }`');
+  }
+  return body;
+}

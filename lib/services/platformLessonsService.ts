@@ -2,19 +2,22 @@ import 'server-only';
 
 import {
   editPlatformLesson,
+  getLessonRetention,
   getPlatformLesson,
+  previewLessonRetentionImpact,
+  setLessonRetention,
   listPlatformLessons,
   promotePlatformLesson,
   setPlatformLessonEnabled,
   type PlatformLessonEditPatch,
   type RawPlatformLesson,
-  type RawPlatformLessonWrite,
 } from '@/lib/ai/motirAiClient';
 import type {
   PlatformLessonDetailDTO,
   PlatformLessonEditInput,
   PlatformLessonListDTO,
   PlatformLessonListFilters,
+  PlatformLessonRetentionDTO,
 } from '@/lib/dto/platformLessons';
 import {
   isLessonCurateRow,
@@ -73,6 +76,8 @@ const PAGE_SIZE = 50;
 const ORG_OPTIONS = 200;
 /** "Changes by staff" — this lesson's rows only, newest first. */
 const HISTORY_LIMIT = 50;
+/** The audit `targetId` of the retirement window — a platform rule, not a lesson. */
+const RETENTION_TARGET = 'lesson-retention';
 
 type EditableField = 'title' | 'why' | 'howToApply' | 'categories';
 
@@ -127,13 +132,13 @@ function diffEdit(current: RawPlatformLesson, input: PlatformLessonEditInput) {
  * Run one remote curate write inside the audited transaction, and log the case
  * where motir-ai applied it but core's row did not commit.
  */
-async function auditedWrite(
+async function auditedWrite<W extends { audit: { before: unknown; after: unknown } | null }>(
   principal: PlatformPrincipal,
   entry: PlatformAuditEntry,
   lessonId: string,
-  write: () => Promise<RawPlatformLessonWrite>,
-): Promise<RawPlatformLessonWrite> {
-  let applied: RawPlatformLessonWrite | null = null;
+  write: () => Promise<W>,
+): Promise<W> {
+  let applied: W | null = null;
   try {
     return await withPlatformRead(principal, entry, async () => {
       const written = await write();
@@ -145,7 +150,7 @@ async function auditedWrite(
     });
   } catch (err) {
     if (applied) {
-      const { audit } = applied as RawPlatformLessonWrite;
+      const { audit } = applied as W;
       console.error(
         `[platform-lessons] motir-ai applied ${entry.action} to lesson ${lessonId} by ` +
           `${principal.userId}, but the audit row did not commit`,
@@ -172,6 +177,36 @@ function baseEntry(
   };
 }
 
+/** The retirement window with its setter's name, for the list's card. */
+async function readRetention(principal: PlatformPrincipal): Promise<PlatformLessonRetentionDTO> {
+  const setting = await getLessonRetention();
+  const [setter] = setting.updatedByCoreUserId
+    ? await userRepository.findByIds([setting.updatedByCoreUserId])
+    : [];
+  return {
+    days: setting.days,
+    defaultDays: setting.defaultDays,
+    isSet: setting.isSet,
+    updatedAt: setting.updatedAt,
+    updatedByName: setter?.name ?? null,
+    minDays: setting.minDays,
+    maxDays: setting.maxDays,
+    canChange: platformRoleAtLeast(principal.role, 'superadmin'),
+  };
+}
+
+function assertRetentionDays(days: number): void {
+  if (!Number.isInteger(days) || days < RETENTION_MIN || days > RETENTION_MAX) {
+    throw new PlatformLessonInvalidError(
+      `days must be a whole number from ${RETENTION_MIN} to ${RETENTION_MAX}`,
+    );
+  }
+}
+
+/** motir-ai's bounds, asserted here too so a bad value never leaves core. */
+const RETENTION_MIN = 7;
+const RETENTION_MAX = 365;
+
 export const platformLessonsService = {
   /**
    * One page of every tenant's lessons and the global corpus, newest first.
@@ -194,6 +229,7 @@ export const platformLessonsService = {
       ...(filters.cursor ? { cursor: filters.cursor } : {}),
       limit: PAGE_SIZE,
     });
+    const retention = await readRetention(principal);
     const entry: PlatformAuditEntry = {
       action: 'estate.read',
       targetKind: 'platform',
@@ -218,6 +254,7 @@ export const platformLessonsService = {
       ]).sort((a, b) => a.localeCompare(b));
       return {
         rows: page.lessons.map((l) => toPlatformLessonRowDTO(l, names)),
+        retention,
         nextCursor: page.nextCursor,
         retentionDays: page.retentionDays,
         organizations: [...orgs, ...missing]
@@ -367,6 +404,51 @@ export const platformLessonsService = {
       },
       lessonId,
       () => promotePlatformLesson(lessonId, to, principal.userId),
+    );
+  },
+
+  /**
+   * How many lessons injected today would rest under `days` — the count the
+   * window confirm shows before a superadmin commits. Not audited: it reads a
+   * count, no lesson and no tenant.
+   *
+   * @throws NotPlatformStaffError below `superadmin`.
+   * @throws PlatformLessonInvalidError for days out of bounds.
+   */
+  async previewRetention(principal: PlatformPrincipal, days: number): Promise<number> {
+    await requirePlatformStaff('superadmin');
+    assertRetentionDays(days);
+    return (await previewLessonRetentionImpact(days)).wouldRest;
+  },
+
+  /**
+   * Change the lesson-retirement window N (`superadmin`, MOTIR-1463). One row in
+   * the platform audit log, `ai.lesson.retention_set`, from → to.
+   *
+   * @throws NotPlatformStaffError below `superadmin`.
+   * @throws MissingAuditReasonError for a blank reason.
+   * @throws PlatformLessonInvalidError for days out of bounds.
+   * @throws PlatformLessonUnchangedError when N already is `days`.
+   * @throws MotirAiError from motir-ai.
+   */
+  async setRetention(principal: PlatformPrincipal, days: number, reason: string): Promise<void> {
+    await requirePlatformStaff('superadmin');
+    assertReasonSatisfied({ action: 'ai.lesson.retention_set', targetKind: 'platform', reason });
+    assertRetentionDays(days);
+    const current = await getLessonRetention();
+    if (current.days === days) throw new PlatformLessonUnchangedError(RETENTION_TARGET);
+    await auditedWrite(
+      principal,
+      {
+        action: 'ai.lesson.retention_set',
+        targetKind: 'platform',
+        targetId: RETENTION_TARGET,
+        targetLabel: 'lesson retirement window',
+        reason,
+        metadata: { before: { days: current.days }, after: { days } },
+      },
+      RETENTION_TARGET,
+      () => setLessonRetention(days, principal.userId),
     );
   },
 };

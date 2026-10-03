@@ -13,6 +13,7 @@ import { platformLessonsService } from '@/lib/services/platformLessonsService';
 import { LessonFilters, FILTER_KEYS } from './_components/LessonFilters';
 import { LessonsTable } from './_components/LessonsTable';
 import { LessonsUnavailable } from './_components/LessonsUnavailable';
+import { RetentionCard } from './_components/RetentionCard';
 
 /**
  * The console's PLANNING LESSONS page — design `platform-admin/design-notes.md`
@@ -152,37 +153,42 @@ async function LessonsSection({
   const showPager = pageNumber > 1 || list.nextCursor !== null;
 
   return (
-    <Card
-      data-testid="planning-lessons-card"
-      header={
-        <div className="flex min-w-0 items-start gap-3">
-          <span
-            aria-hidden
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)"
-          >
-            <BookOpen className="h-4 w-4" />
-          </span>
-          <div className="flex min-w-0 flex-col gap-1">
-            <h2 className="font-sans text-sm font-semibold text-(--el-text)">{t('card.title')}</h2>
-            <p className="font-sans text-xs text-(--el-text-secondary)">{t('card.subtitle')}</p>
+    <>
+      <RetentionCard retention={list.retention} />
+      <Card
+        data-testid="planning-lessons-card"
+        header={
+          <div className="flex min-w-0 items-start gap-3">
+            <span
+              aria-hidden
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)"
+            >
+              <BookOpen className="h-4 w-4" />
+            </span>
+            <div className="flex min-w-0 flex-col gap-1">
+              <h2 className="font-sans text-sm font-semibold text-(--el-text)">
+                {t('card.title')}
+              </h2>
+              <p className="font-sans text-xs text-(--el-text-secondary)">{t('card.subtitle')}</p>
+            </div>
           </div>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <LessonFilters organizations={list.organizations} categories={list.categories} />
+          {body}
+          {showPager ? (
+            <Pager
+              params={params}
+              pageNumber={pageNumber}
+              trail={trail}
+              cursor={cursor}
+              nextCursor={list.nextCursor}
+            />
+          ) : null}
         </div>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        <LessonFilters organizations={list.organizations} categories={list.categories} />
-        {body}
-        {showPager ? (
-          <Pager
-            params={params}
-            pageNumber={pageNumber}
-            trail={trail}
-            cursor={cursor}
-            nextCursor={list.nextCursor}
-          />
-        ) : null}
-      </div>
-    </Card>
+      </Card>
+    </>
   );
 }
 

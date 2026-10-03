@@ -8536,7 +8536,8 @@
               "edit": "编辑了规划经验",
               "enable": "开启了规划经验",
               "disable": "关闭了规划经验",
-              "promote": "推广了规划经验"
+              "promote": "推广了规划经验",
+              "retention_set": "更改了经验休眠窗口"
             }
           }
         }
@@ -9134,6 +9135,24 @@
         "scope": "范围",
         "mistakeType": "类型",
         "aiProjectId": "归属"
+      },
+      "window": {
+        "title": "休眠窗口",
+        "line": "休眠窗口：{days} 天。{days} 天内未复现的经验将停止注入。它会被保留，并在下次复现时恢复。",
+        "subDefault": "默认 {days}·尚无人设置",
+        "subBy": "由 {who} 于 {when} 设置",
+        "subByUnknown": "设置于 {when}",
+        "change": "更改",
+        "readOnly": "只有超级管理员可以更改此项。",
+        "confirmTitle": "更改休眠窗口？",
+        "confirmBody": "在窗口内未复现的经验将从下一次规划任务起，对所有组织停止注入。不会删除任何内容：休眠的经验会在下次复现时恢复。",
+        "daysLabel": "窗口（天）",
+        "bounds": "介于 {min} 到 {max} 天之间。",
+        "impact": "设为 {days} 天时，今天正在注入的经验中将有 {n} 条进入休眠。",
+        "impactCounting": "正在统计将进入休眠的经验……",
+        "confirm": "更改窗口",
+        "saved": "休眠窗口已更改。",
+        "savedBody": "规划器将从下一次规划任务起使用 {days} 天。"
       }
     },
     "usage": {

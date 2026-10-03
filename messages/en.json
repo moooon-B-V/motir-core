@@ -8540,7 +8540,8 @@
               "edit": "Edited a planning lesson",
               "enable": "Switched a planning lesson on",
               "disable": "Switched a planning lesson off",
-              "promote": "Promoted a planning lesson"
+              "promote": "Promoted a planning lesson",
+              "retention_set": "Changed the lesson retirement window"
             }
           }
         }
@@ -9138,6 +9139,24 @@
         "scope": "Scope",
         "mistakeType": "Type",
         "aiProjectId": "Owner"
+      },
+      "window": {
+        "title": "Retirement window",
+        "line": "Retirement window: {days} days. A lesson that has not recurred in {days} days stops being injected. It is kept, and comes back the next time it recurs.",
+        "subDefault": "Default {days} · set by nobody yet",
+        "subBy": "Set by {who} on {when}",
+        "subByUnknown": "Set on {when}",
+        "change": "Change",
+        "readOnly": "Only a superadmin can change this.",
+        "confirmTitle": "Change the retirement window?",
+        "confirmBody": "Lessons that have not recurred within the window stop being injected for every organisation, from the next planning job. Nothing is deleted: a resting lesson comes back the next time it recurs.",
+        "daysLabel": "Window, in days",
+        "bounds": "Between {min} and {max} days.",
+        "impact": "At {days} days, {n, plural, one {# lesson that is injected today will rest} other {# lessons that are injected today will rest}}.",
+        "impactCounting": "Counting the lessons this would rest…",
+        "confirm": "Change window",
+        "saved": "Retirement window changed.",
+        "savedBody": "Planners use {days} days from their next planning job."
       }
     },
     "usage": {
