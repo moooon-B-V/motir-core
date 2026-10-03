@@ -148,6 +148,10 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // credential is proven, so it is no existence oracle: the holder's own token
   // already names the org. Distinct from the 404 so a CLI can say why.
   ORGANIZATION_SUSPENDED: 403,
+  // 403 — a per-org KILL-SWITCH is off for the token's organization (MOTIR-750):
+  // `ai_planning`, `hosted_runs` or `web_search`. The body names the switch via
+  // the message; the holder's own org, so no existence oracle.
+  ORG_FEATURE_DISABLED: 403,
 
   // ── Story MOTIR-1789, the DISPATCH RUN ingest (MOTIR-1792) ────────────────
   // Every row is driven through the wrapper by a real service error in

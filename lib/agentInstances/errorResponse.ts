@@ -1,3 +1,4 @@
+import { orgFeatureDisabledResponse } from '@/lib/featureFlags/errorResponse';
 import { NextResponse } from 'next/server';
 import {
   PermissionDeniedError,
@@ -39,6 +40,9 @@ import {
 // a 500 (`tests/permissions/storyGate.test.ts` guard 3 refuses exactly that).
 
 export function mapAgentInstanceError(err: unknown): NextResponse | null {
+  // The `hosted_runs` kill-switch (MOTIR-750), or a suspended org.
+  const switchedOff = orgFeatureDisabledResponse(err);
+  if (switchedOff) return switchedOff;
   if (err instanceof ProjectNotFoundError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }

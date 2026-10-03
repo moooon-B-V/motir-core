@@ -84,7 +84,7 @@ export const platformOrgLifecycleService = {
     assertReasonSatisfied(entry);
 
     const row = await withPlatformRead(principal, entry, async (tx) => {
-      const locked = await platformOrganizationRepository.lockSuspension(organizationId, tx);
+      const locked = await platformOrganizationRepository.lockOrganization(organizationId, tx);
       if (!locked) throw new PlatformOrganizationNotFoundError(organizationId);
       if (locked.suspendedAt) throw new PlatformOrganizationSuspensionStateError(true);
       return platformOrganizationRepository.setSuspended(
@@ -132,7 +132,7 @@ export const platformOrgLifecycleService = {
     assertReasonSatisfied(entry);
 
     const row = await withPlatformRead(principal, entry, async (tx) => {
-      const locked = await platformOrganizationRepository.lockSuspension(organizationId, tx);
+      const locked = await platformOrganizationRepository.lockOrganization(organizationId, tx);
       if (!locked) throw new PlatformOrganizationNotFoundError(organizationId);
       if (!locked.suspendedAt) throw new PlatformOrganizationSuspensionStateError(false);
       return platformOrganizationRepository.clearSuspended(organizationId, tx);

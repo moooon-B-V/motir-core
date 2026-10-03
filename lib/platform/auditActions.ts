@@ -147,6 +147,14 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'org.reactivate': { reason: 'required' },
   /**
+   * A per-org KILL-SWITCH was turned OFF (MOTIR-750) — `ai_planning`,
+   * `hosted_runs` or `web_search`, named in `metadata.key` with
+   * `metadata.enabled: false`. Takes effect on the org's next request.
+   */
+  'org.kill_switch_off': { reason: 'required' },
+  /** A per-org kill-switch was turned back ON (MOTIR-750), `metadata.key`. */
+  'org.kill_switch_on': { reason: 'required' },
+  /**
    * The audit log ITSELF was searched (MOTIR-751 — the page is MOTIR-752,
    * design Panel 6). Reading the record of who touched the estate is a platform
    * read like any other, so it leaves a row: "who looked at the audit log, and

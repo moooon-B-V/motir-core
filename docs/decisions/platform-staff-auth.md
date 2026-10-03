@@ -525,6 +525,18 @@ rather than introducing a second one.
 > so staff keep full access to a suspended org. A suspend also stops the org's CI fleet after
 > commit (`fleetStopService.stopOrganization(…, 'admin_stop')`, best-effort).
 
+> **⚠️ AMENDED 2026-10-03 (Story 10.3 · MOTIR-750) — per-org kill-switches.** The "Per-org feature
+> flags / kill-switches" row ships as `featureFlagService` over one new table, `org_feature_flag`
+> (unique `(organization_id, key)`, overrides only — absence is the registry default, ON for every
+> key). The keys are a CLOSED set: `ai_planning`, `hosted_runs`, `web_search`. Two actions join
+> `PLATFORM_AUDIT_ACTIONS`, both `reason: 'required'`, `targetKind: 'organization'`:
+> **`org.kill_switch_off`** and **`org.kill_switch_on`**, metadata `{ key, enabled }`. A flip locks
+> the organization row (a first flip has no override row to lock) and refuses a no-op inside the
+> audited transaction. The table carries NO tenant arm: `app.platform_staff` reads and writes,
+> `app.system_admin` reads (the hot-path evaluation, which several actorless callers reach). A
+> suspended org (MOTIR-748) evaluates every switch OFF without touching its overrides. The switches
+> are not the internal-billing classification (MOTIR-4337), and MOTIR-751's log is their only log.
+
 ---
 
 ## What this ADR deliberately does NOT decide

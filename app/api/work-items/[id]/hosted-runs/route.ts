@@ -1,3 +1,4 @@
+import { orgFeatureDisabledResponse } from '@/lib/featureFlags/errorResponse';
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { OrchestratorNotConfiguredError } from '@motir/orchestrator';
@@ -90,6 +91,9 @@ export async function POST(
       { status: started.created ? 201 : 200, headers: NO_STORE },
     );
   } catch (err) {
+    // The `hosted_runs` kill-switch (MOTIR-750), or a suspended org.
+    const switchedOff = orgFeatureDisabledResponse(err);
+    if (switchedOff) return switchedOff;
     if (err instanceof HostedModelNotOfferedError) return problem(err.code, err.message, 422);
     if (err instanceof HostedModelsUnavailableError) return problem(err.code, err.message, 503);
     if (err instanceof HostedRunOutOfCreditsError) {

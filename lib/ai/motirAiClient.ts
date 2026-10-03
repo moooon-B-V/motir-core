@@ -11,6 +11,7 @@ import 'server-only';
 // streams them, mapping the §5 problem+json taxonomy to motir-core typed errors.
 
 import { mintJobToken } from './jobToken';
+import { assertFlagOn, evaluateOrgFeatureFlags } from '@/lib/featureFlags/evaluate';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import {
@@ -252,6 +253,16 @@ export async function submitJob(
   actor: RequestActor,
 ): Promise<{ jobId: string }> {
   const { url, serviceToken } = config();
+  // THE PER-ORG KILL-SWITCHES (MOTIR-750), read here because every new planning
+  // job — every surface, every actorless cadence — leaves through this one
+  // function. One indexed statement against core's own database, no external
+  // round trip; a suspended org (MOTIR-748) reads every switch off. `ai_planning`
+  // off refuses the job before anything is minted or sent (→ 403
+  // `ORG_FEATURE_DISABLED`); `web_search` off rides the envelope as
+  // `tenant.webSearch: false` for motir-ai to honour.
+  const switches = await evaluateOrgFeatureFlags(tenant.organizationId);
+  assertFlagOn(switches, 'ai_planning');
+  const sentTenant: Tenant = switches.web_search ? tenant : { ...tenant, webSearch: false };
   const readBackToken = mintJobToken({
     userId: actor.userId,
     workspaceId: tenant.workspaceId,
@@ -260,7 +271,7 @@ export async function submitJob(
   const envelope: RequestEnvelope = {
     envelopeVersion: 'v1',
     jobKind: kind,
-    tenant,
+    tenant: sentTenant,
     context,
     readBackToken,
   };

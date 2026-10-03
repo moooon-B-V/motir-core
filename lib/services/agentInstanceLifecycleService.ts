@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { assertOrgFeatureEnabled } from '@/lib/featureFlags/evaluate';
 import type {
   AgentInstance,
   AgentInstanceInterval,
@@ -961,6 +962,8 @@ export const agentInstanceLifecycleService = {
   ): Promise<AgentInstanceDto> {
     const project = await resolveProject(projectKey, ctx);
     requireLane();
+    // The `hosted_runs` kill-switch (MOTIR-750) refuses NEW agent instances.
+    await assertOrgFeatureEnabled(project.organizationId, 'hosted_runs');
     const name = input.name.trim();
     if (!INSTANCE_NAME_PATTERN.test(name)) throw new AgentInstanceNameInvalidError();
     if (!isOfferedProfile(input.profileId)) {
@@ -1103,6 +1106,8 @@ export const agentInstanceLifecycleService = {
   ): Promise<AgentInstanceDto> {
     const project = await resolveProject(projectKey, ctx);
     requireLane();
+    // …and refuses WAKING one: a woken agent is a running hosted container.
+    await assertOrgFeatureEnabled(project.organizationId, 'hosted_runs');
     const row = await ownInstance(project, instanceId, ctx);
     const from = statesThatMayEnter('waking');
     if (!from.includes(row.state))

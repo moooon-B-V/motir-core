@@ -383,6 +383,7 @@ model User {
   // role must not block, or cascade into, a tenant's suspension state — the
   // hash-chained audit log keeps WHO for ever.
   suspendedOrganizations           Organization[]                @relation("OrganizationSuspendedBy")
+  updatedOrgFeatureFlags           OrgFeatureFlag[]              @relation("OrgFeatureFlagUpdatedBy")
   // What this account has agreed to, and when (Story 8.4 · MOTIR-1135). A LIST
   // and append-only: the row set IS the evidence, so an acceptance is never
   // overwritten by the next one. Cascade — the record is about a person's
@@ -1371,6 +1372,8 @@ model Organization {
   // one may follow it. `Restrict` on the request's side: an org row may not
   // vanish under its own deletion record (the purge deletes the requests first).
   deletionRequests OrganizationDeletionRequest[]
+  /// Per-org kill-switch OVERRIDES (MOTIR-750); absence = the registry default.
+  featureFlags     OrgFeatureFlag[]
 
   // ── Organization SUSPENSION (Story 10.3 · MOTIR-748) ───────────────────────
   /// When a platform `superadmin` SUSPENDED this organization — the account-level
@@ -12498,4 +12501,40 @@ model AgentInstanceStorageCharge {
   @@index([chargeOutcome, day])
   @@index([workspaceId])
   @@map("agent_instance_storage_charge")
+}
+
+/// A per-organization KILL-SWITCH override (Story 10.3 · MOTIR-750) — a durable
+/// ops flag a platform superadmin flips without a deploy (disable AI planning
+/// for one abusive org, turn off hosted runs for one tenant). NOT an experiment
+/// flag: the set of keys is CLOSED, registered in `lib/featureFlags/registry.ts`
+/// with a safe platform default each (every one ON today). Evaluation is "this
+/// org's row, else the registry default", so ABSENCE IS THE DEFAULT and a fresh
+/// org needs no rows.
+///
+/// Written only from the platform tier (`app.platform_staff`, audited
+/// `org.kill_switch_off` / `org.kill_switch_on`); read on the hot path under the
+/// system context. No tenant arm: a customer never reads or writes its own
+/// switches.
+model OrgFeatureFlag {
+  id              String       @id @default(cuid())
+  organizationId  String       @map("organization_id")
+  /// Cascade: a switch means nothing once its organization is gone.
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// A registry key (`ai_planning` · `hosted_runs` · `web_search`). A String,
+  /// not an enum, so a later key is a code change and no migration; the SERVICE
+  /// refuses an unknown key on write, and an unknown stored key is ignored on read.
+  key             String
+  enabled         Boolean
+  /// The operator's stated reason for the CURRENT state — the same text the
+  /// audit row holds; the history is the audit log's, not this row's.
+  reason          String?
+  /// The operator who last flipped it. SetNull: the switch outlives the account.
+  updatedByUserId String?      @map("updated_by_user_id")
+  updatedBy       User?        @relation("OrgFeatureFlagUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  @@unique([organizationId, key])
+  @@index([updatedByUserId])
+  @@map("org_feature_flag")
 }

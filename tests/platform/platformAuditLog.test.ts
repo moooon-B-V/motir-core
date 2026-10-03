@@ -198,6 +198,9 @@ describe('the reason rule', () => {
     // MOTIR-748 — suspending and reactivating an organization are writes.
     'org.suspend': 'required',
     'org.reactivate': 'required',
+    // MOTIR-750 — flipping a per-org kill-switch is a write.
+    'org.kill_switch_off': 'required',
+    'org.kill_switch_on': 'required',
     // MOTIR-751 — reading the audit log, and verifying its chain, are platform
     // READS like any other: audited, reason-free.
     'audit.read': 'never',

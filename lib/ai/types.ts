@@ -132,6 +132,13 @@ export interface Tenant {
   // non-optionally, so a site that has the org has the flag. The optionality is
   // about what a RECEIVER must tolerate, not about what a producer may skip.
   internalBilling?: boolean;
+  // Whether the planner may use WEB SEARCH for this org — the `web_search`
+  // per-org kill-switch (MOTIR-750). Set by `submitJob` to `false` ONLY when the
+  // switch is off; ABSENT means allowed, the same additive wire contract as
+  // `internalBilling` above, so merge order with motir-ai is free. A motir-ai that
+  // does not yet read it simply keeps searching — the switch is then recorded and
+  // sent, and takes effect when the far side honours it.
+  webSearch?: boolean;
   workspaceId: string;
   projectId: string;
   projectKey: string;

@@ -121,9 +121,11 @@ export const platformOrganizationRepository = {
    * (MOTIR-748) — {@link lockInternalBilling}'s twin, for the same reason:
    * suspending is a read-derived write (suspending a suspended org is a
    * refusal, not a no-op), so two operators racing must serialise on the row.
-   * `null` when the id names no organization.
+   * Also the serialising lock for a kill-switch flip (MOTIR-750), whose first
+   * flip has no override row of its own to lock. `null` when the id names no
+   * organization.
    */
-  async lockSuspension(
+  async lockOrganization(
     organizationId: string,
     tx: Prisma.TransactionClient,
   ): Promise<{ suspendedAt: Date | null } | null> {

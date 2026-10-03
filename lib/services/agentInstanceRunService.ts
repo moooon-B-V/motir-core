@@ -1,4 +1,5 @@
 import type { AgentInstance } from '@/generated/prisma/client';
+import { assertWorkspaceFeatureEnabled } from '@/lib/featureFlags/evaluate';
 import { INSTANCE_MAX_PER_USER } from '@/lib/agentInstances/config';
 import {
   AgentInstanceImageTooOldError,
@@ -400,6 +401,8 @@ export const agentInstanceRunService = {
       );
       if (already) return { dispatchRunId: already.id, created: false, woke: false };
     }
+    // The `hosted_runs` kill-switch (MOTIR-750): an agent run is a hosted run.
+    await assertWorkspaceFeatureEnabled(ctx.workspaceId, 'hosted_runs');
 
     // ── 2 · The agent: the caller's, live, on the card's project ─────────────
     const agent = await withWorkspaceContext(

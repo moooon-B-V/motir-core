@@ -122,11 +122,14 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
       WHERE "qual" LIKE '%app.platform_staff%' OR "with_check" LIKE '%app.platform_staff%'
       ORDER BY "tablename"
     `;
+    // `org_feature_flag` is MOTIR-750's kill-switch table — platform-only by
+    // design (no tenant arm), written solely from this tier.
     // `platform_audit_log` is MOTIR-2896's own table — the gate's, not a tenant
     // table. The four estate tiers are MOTIR-730's SELECT-only arms
     // (`20261001200000_platform_staff_estate_read_arms`, asserted in
     // `platformReadService.test.ts`).
     expect(rows.map((r) => r.tablename)).toEqual([
+      'org_feature_flag',
       'organization',
       'organization_membership',
       'platform_audit_log',

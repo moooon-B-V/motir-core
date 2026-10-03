@@ -157,6 +157,37 @@ export class PlatformOrganizationSuspensionStateError extends Error {
 }
 
 /**
+ * A kill-switch flip named a key that is not in the registry (MOTIR-750) —
+ * flags are a CLOSED set (`lib/featureFlags/registry.ts`), never free-form.
+ * Thrown before the transaction opens, so it leaves no audit row.
+ */
+export class PlatformUnknownFeatureFlagError extends Error {
+  readonly code = 'PLATFORM_UNKNOWN_FEATURE_FLAG';
+
+  constructor(readonly key: string) {
+    super(`"${key}" is not a known kill-switch`);
+    this.name = 'PlatformUnknownFeatureFlagError';
+  }
+}
+
+/**
+ * A kill-switch flip to the state the switch is already in (MOTIR-750) —
+ * decided under the organization row lock, so two operators racing produce one
+ * change and one refusal, never two audit rows for one change.
+ */
+export class PlatformFeatureFlagStateError extends Error {
+  readonly code = 'PLATFORM_FEATURE_FLAG_STATE';
+
+  constructor(
+    readonly key: string,
+    readonly enabled: boolean,
+  ) {
+    super(`The ${key} switch is already ${enabled ? 'on' : 'off'} for that organization`);
+    this.name = 'PlatformFeatureFlagStateError';
+  }
+}
+
+/**
  * A planner-model save named the model the audience already holds (MOTIR-7227).
  *
  * Refused BEFORE the audited transaction opens, so the trail never records a

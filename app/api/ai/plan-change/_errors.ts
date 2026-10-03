@@ -1,3 +1,4 @@
+import { orgFeatureDisabledResponse } from '@/lib/featureFlags/errorResponse';
 import { NextResponse } from 'next/server';
 
 import {
@@ -28,6 +29,8 @@ import { InvalidAuthoredBugError } from '@/lib/ai/authoredBug';
 // can rethrow (a 500). Kept out of the route files so open / append / submit map
 // identically.
 export function mapPlanChangeError(err: unknown): NextResponse | null {
+  const switchedOff = orgFeatureDisabledResponse(err);
+  if (switchedOff) return switchedOff;
   // A mailbox turn addressed at a job this thread is not on joins the 404s
   // (MOTIR-4067): from the caller's side that job simply is not on their
   // conversation, and telling "no such thread" apart from "not that run" would
