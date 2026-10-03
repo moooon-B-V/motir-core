@@ -80,7 +80,7 @@ interface ClientConfig {
  * what it said. **CORRECTED (MOTIR-4518):** `MOTIR_AI_URL` is the address
  * motir-core reaches motir-ai at, which in production was a PRIVATE, org-scoped
  * 6PN name (`http://motir-ai.internal:8080`) from 2026-08-21 until 2026-10-02 —
- * and is the public `https://motir-ai.fly.dev` since, because motir-ai's pool
+ * and is motir-ai's PUBLIC origin since, because motir-ai's pool
  * suspends to zero and a 6PN name cannot wake it (application-hosting.md
  * Amendment 9, MOTIR-7407); an index container runs in a DIFFERENT
  * organization, where that 6PN name does not resolve at all. Every index run died at
