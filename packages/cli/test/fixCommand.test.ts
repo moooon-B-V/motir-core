@@ -233,6 +233,7 @@ describe('motir fix — the happy path', () => {
     const deps = setup({
       claims: [claim()],
       verdicts: [[delivery('failing')], [delivery('passing')]],
+      agentModel: 'claude-opus-5-5',
     });
 
     await fixCommand('PROD-7', {}, deps);
@@ -267,9 +268,18 @@ describe('motir fix — the happy path', () => {
     expect(events().map((e) => e.kind)).toEqual([
       'run_opened',
       'checkout_ready',
+      // Each fixing attempt is a started / exited pair, so a `ci` repair's leg
+      // learns the model that answered (MOTIR-7506).
+      'agent_started',
+      'agent_exited',
       'ci_verdict',
       'card_settled',
     ]);
+    expect(events().find((e) => e.kind === 'agent_exited')).toMatchObject({
+      exitCode: 0,
+      model: 'claude-opus-5-5',
+      data: { step: 'ci_fix', model: 'claude-opus-5-5' },
+    });
     expect(events().at(-1)?.disposition).toBe('implemented');
     expect(process.exitCode).toBeUndefined();
   });
