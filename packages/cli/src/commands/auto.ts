@@ -57,6 +57,7 @@ import {
   type ReplanRefresh,
   type SkipRecord,
   type StopReason,
+  manualWaitingOn,
 } from '../autoLoop.js';
 import { inLane, renderElsewhereAnchored, renderLaneDecline, type Lane } from '../replanLane.js';
 import {
@@ -629,7 +630,15 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       if (disposition !== 'dispatch') {
         // Not dispatched, so NOT transitioned: a planning item and a human item
         // are both left exactly as the loop found them.
-        skipped.push({ key: item.key, title: item.title, reason: disposition });
+        // Who a manual card now waits on (MOTIR-7477, ADR §8) — absent is the starter.
+        const waitingOn =
+          disposition === 'needs_human' ? manualWaitingOn(item, ownerId) : undefined;
+        skipped.push({
+          key: item.key,
+          title: item.title,
+          reason: disposition,
+          ...(waitingOn ? { waitingOn } : {}),
+        });
         // The LEG is appended here too — a card the run looked at and left is
         // exactly the thing that exists nowhere else, and a skip with no leg is
         // a skip nobody can read.

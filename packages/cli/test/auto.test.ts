@@ -14,6 +14,7 @@ import {
   classifyReadyItem,
   formatDuration,
   landedWork,
+  manualWaitingOn,
   planReviewUrl,
   renderAutoSummary,
   renderSessionPrBody,
@@ -487,6 +488,18 @@ describe('classifyReadyItem', () => {
   });
 });
 
+describe('manualWaitingOn (MOTIR-7477, manual-work-gate.md §8)', () => {
+  it("is the run's starter — absent — for an unassigned card or the starter's own", () => {
+    expect(manualWaitingOn({ assigneeId: null, assigneeName: null }, 'u1')).toBeUndefined();
+    expect(manualWaitingOn({ assigneeId: 'u1', assigneeName: 'Yue' }, 'u1')).toBeUndefined();
+  });
+
+  it("names the assignee when the card is somebody else's", () => {
+    expect(manualWaitingOn({ assigneeId: 'u2', assigneeName: 'Mara S.' }, 'u1')).toBe('Mara S.');
+    expect(manualWaitingOn({ assigneeId: 'u2' }, 'u1')).toBe('its assignee');
+  });
+});
+
 describe('parseMax', () => {
   it('accepts a positive whole number and defaults to no cap', () => {
     expect(parseMax(undefined)).toBeNull();
@@ -598,7 +611,10 @@ describe('motir auto — the WHILE loop', () => {
 
     const text = renderAutoSummary(summary);
     expect(text).toContain('Skipped — needs planning (1)');
-    expect(text).toContain('Skipped — needs a human (1)');
+    // ADR `manual-work-gate.md` §8 (MOTIR-7477): the card waits on its person in
+    // Motir's Waiting on you — the run's starter, here — never "needs a human".
+    expect(text).toContain("Skipped — waiting on you in Motir's Waiting on you (1)");
+    expect(text).not.toContain('needs a human');
   });
 
   it('honours --max and stops with the cap named', async () => {

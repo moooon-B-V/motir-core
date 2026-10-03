@@ -34,6 +34,7 @@ import type {
   DispatchRunCostDto,
   DispatchRunDetailDto,
   DispatchRunHostedEndDto,
+  DispatchRunLegGateDto,
   DispatchRunMachineTimeDto,
   DispatchRunDto,
   DispatchRunEventDto,
@@ -47,9 +48,13 @@ import {
   toDispatchRunRepairDto,
   toDispatchRunDto,
   toDispatchRunEventDto,
+  toDispatchRunLegGateDto,
   toDispatchRunListItemDto,
   toDispatchRunScopeDto,
+  toDispatchRunWaitingCounts,
+  type DispatchRunReader,
 } from '@/lib/mappers/dispatchRunMappers';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { assembleRunCloseOutPrompt } from '@/lib/dispatch/runCloseOutPrompt';
 import { getAgentRunUsage } from '@/lib/ai/motirAiClient';
 import { toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
@@ -65,7 +70,11 @@ import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService'
 import { agentInstanceActivityService } from '@/lib/services/agentInstanceActivityService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/context';
+import {
+  VISITOR_ACTOR_ID,
+  visitorServiceContext,
+  type VisitorReadContext,
+} from '@/lib/visitor/context';
 import { isVisitorContext } from '@/lib/visitor/readScope';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -433,6 +442,54 @@ function runReader(ctx: ServiceContext | VisitorReadContext): {
     hidden: [...ctx.hiddenIds],
     projectId: ctx.project.id,
   };
+}
+
+/** Who reads a run surface — the *you* its manual legs are resolved against (MOTIR-7477). */
+function runSurfaceReader(ctx: ServiceContext): DispatchRunReader {
+  return { userId: ctx.userId, visitor: ctx.userId === VISITOR_ACTOR_ID };
+}
+
+/** A leg the run skipped because a PERSON owes the work — the only leg with a gate to name. */
+const isManualLeg = (card: { disposition: string; skipReason: string | null }): boolean =>
+  card.disposition === 'skipped' && card.skipReason === 'needs_human';
+
+/**
+ * Each MANUAL leg's `manual_work` gate, resolved for this reader (Story MOTIR-7460
+ * · MOTIR-7477) — keyed by work-item id, over EVERY run handed in, in ONE read: a
+ * page of runs costs the same one query as a single run.
+ */
+async function manualLegGates(
+  runs: ReadonlyArray<{
+    cards: ReadonlyArray<{
+      workItemId: string | null;
+      disposition: string;
+      skipReason: string | null;
+    }>;
+  }>,
+  reader: DispatchRunReader,
+  tx: Prisma.TransactionClient,
+): Promise<Map<string, DispatchRunLegGateDto | null>> {
+  const ids = new Set<string>();
+  for (const run of runs) {
+    for (const card of run.cards) {
+      if (card.workItemId !== null && isManualLeg(card)) ids.add(card.workItemId);
+    }
+  }
+  const heads = await approvalGateRepository.findLatestWithPeopleByWorkItems(
+    [...ids],
+    'manual_work',
+    tx,
+  );
+  return new Map([...ids].map((id) => [id, toDispatchRunLegGateDto(heads.get(id), reader)]));
+}
+
+/** A leg's gate out of {@link manualLegGates}' map — `null` for every leg that is not manual. */
+function legGateOf(
+  card: { workItemId: string | null; disposition: string; skipReason: string | null },
+  gates: ReadonlyMap<string, DispatchRunLegGateDto | null>,
+): DispatchRunLegGateDto | null {
+  if (card.workItemId === null || !isManualLeg(card)) return null;
+  return gates.get(card.workItemId) ?? null;
 }
 
 /** Whether a loaded run joins a withheld work item (its scope or any card). */
@@ -1378,6 +1435,8 @@ export const dispatchRunService = {
         }
 
         const base = toDispatchRunDto(run, seq);
+        // Each manual leg's gate (MOTIR-7477) — who the skip waits on, for this reader.
+        const gates = await manualLegGates([run], runSurfaceReader(ctx), tx);
         // A HOSTED run's reason line (MOTIR-691) — read in the same transaction,
         // off the two events that carry it. A run in an agent has the same two
         // (MOTIR-7028): its end path (`agent-instance-run.md` §6) writes the same
@@ -1396,6 +1455,7 @@ export const dispatchRunService = {
           ...(hostedEnd ? { hostedEnd } : {}),
           cards: base.cards.map((card) => ({
             ...card,
+            manualGate: legGateOf(card, gates),
             // A leg whose card was deleted has no deliveries to join and never
             // will — an empty array, never a missing key.
             deliveries: card.workItemId ? (byWorkItem.get(card.workItemId) ?? []) : [],
@@ -1464,9 +1524,18 @@ export const dispatchRunService = {
           { take: page.take, cursor: page.cursor, createdById },
           tx,
         );
+        // Each manual leg's gate (MOTIR-7477), one read for the page — the Run
+        // section's leg line names who the skip waits on.
+        const gates = await manualLegGates(runs, runSurfaceReader(ctx), tx);
         // The `seq` on a HISTORY row is not worth a read per run — the page
         // renders a list, and a client that opens one asks for its detail.
-        return runs.map((run) => toDispatchRunDto(run, 0));
+        return runs.map((run) => {
+          const dto = toDispatchRunDto(run, 0);
+          return {
+            ...dto,
+            cards: dto.cards.map((card) => ({ ...card, manualGate: legGateOf(card, gates) })),
+          };
+        });
       },
     );
   },
@@ -1548,7 +1617,16 @@ export const dispatchRunService = {
           return dispatchRunRepository.listByScope(scope.id, bounded, tx);
         })();
 
-        return { runs: runs.map(toDispatchRunListItemDto), scope: served };
+        // The waiting legs (MOTIR-7477) leave *skipped* in the summary, counted by
+        // whether they wait on this reader — one gate read for the whole page.
+        const gates = await manualLegGates(runs, runSurfaceReader(ctx), tx);
+        return {
+          runs: runs.map((run) => ({
+            ...toDispatchRunListItemDto(run),
+            waiting: toDispatchRunWaitingCounts(run.cards.map((card) => legGateOf(card, gates))),
+          })),
+          scope: served,
+        };
       },
     );
   },

@@ -760,7 +760,8 @@ describe('motir batch — exclusions', () => {
 
     const text = renderBatchSummary(summary);
     expect(text).toContain('Not in the snapshot — needs planning (1)');
-    expect(text).toContain('Not in the snapshot — needs a human (1)');
+    expect(text).toContain("Not in the snapshot — waiting on you in Motir's Waiting on you (1)");
+    expect(text).not.toContain('needs a human');
     expect(text).toContain(
       'Not in the snapshot — ready only via an integrated dependency (not on main) (1)',
     );
@@ -1397,8 +1398,22 @@ describe('the snapshot plan block', () => {
       skipped: [{ key: 'PROD-2', title: null, reason: 'needs_human' }],
     });
     expect(text).toContain('—');
-    expect(text).toContain('Not in the snapshot — needs a human (1)');
+    expect(text).toContain("Not in the snapshot — waiting on you in Motir's Waiting on you (1)");
     expect(text).not.toContain('null');
+  });
+
+  it("names the person a manual card waits on when it is not the run's starter (MOTIR-7477)", () => {
+    const text = renderSnapshotPlan({
+      taken: [],
+      skipped: [
+        { key: 'PROD-2', title: 'Order badges', reason: 'needs_human' },
+        { key: 'PROD-3', title: 'Add DNS', reason: 'needs_human', waitingOn: 'Mara S.' },
+      ],
+    });
+    expect(text).toContain("Not in the snapshot — waiting on you in Motir's Waiting on you (1)");
+    expect(text).toContain('Not in the snapshot — waiting on someone else in Motir (1)');
+    expect(text).toContain('PROD-3 — Add DNS (waiting on Mara S.)');
+    expect(text).not.toContain('needs a human');
   });
 });
 
