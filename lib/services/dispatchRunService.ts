@@ -73,6 +73,7 @@ import { availableRoomViews, holdsAnyOf, RUN_ACT_PERMISSIONS } from '@/lib/rooms
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { uniqueViolationConstraints } from '@/lib/prisma/uniqueViolation';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { manualWorkGateService } from './manualWorkGateService';
 
 // THE DISPATCH RUN SERVICE (Story MOTIR-1789 · MOTIR-1792) — the WRITE half of
 // the run seam, specified by `docs/decisions/dispatch-run-record.md`.
@@ -144,6 +145,18 @@ export const DISPATCH_RUN_LIST_MAX_TAKE = 100;
  * running, which is the exact class the run surfaces' totality maps exist to
  * refuse. One definition, in a module with no server imports, read by both.
  */
+/**
+ * Whether a recorded leg is a run reaching a manual card it could not do — the one
+ * skip that raises the `manual_work` gate (Story MOTIR-7460 · MOTIR-7475). Every
+ * other skip reason is the run's own business and asks nobody anything.
+ */
+function raisesManualWork(
+  disposition: DispatchCardDisposition | undefined,
+  skipReason: DispatchSkipReason | null | undefined,
+): boolean {
+  return disposition === 'skipped' && skipReason === 'needs_human';
+}
+
 export { DISPATCH_RUN_LIVE_STATUSES, DISPATCH_RUN_PAST_STATUSES } from '@/lib/runs/timeline';
 
 /** One card in the SET a run is opened with. */
@@ -712,6 +725,19 @@ export const dispatchRunService = {
         }),
         tx,
       );
+      // A run that reached a manual card asks its person to do the work
+      // (MOTIR-7475; `docs/decisions/manual-work-gate.md` §2) — in this
+      // transaction, so the leg and its gate commit together or not at all.
+      for (const [position, card] of input.cards.entries()) {
+        if (raisesManualWork(card.disposition, card.skipReason)) {
+          await manualWorkGateService.raise(
+            byKey.get(keys[position]!)!.id,
+            { createdById: run.createdById },
+            ctx.workspaceId,
+            tx,
+          );
+        }
+      }
     }
 
     const withCards = await dispatchRunRepository.findByIdWithCards(run.id, tx);
@@ -836,6 +862,16 @@ export const dispatchRunService = {
               tx,
             );
             touched.set(updated.workItemKey ?? updated.id, updated);
+            // The same raise as the open's, for a leg the run skips as it goes.
+            // Idempotent on the card, so a leg reported twice asks once.
+            if (updated.workItemId !== null && raisesManualWork(disposition, event.skipReason)) {
+              await manualWorkGateService.raise(
+                updated.workItemId,
+                { createdById: locked.createdById },
+                ctx.workspaceId,
+                tx,
+              );
+            }
           }
         }
 
