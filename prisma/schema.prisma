@@ -8723,6 +8723,21 @@ model PlanChangeTurn {
   /// after a reload. Null on every other turn — every non-debug reply, and every
   /// `user` / `system` turn.
   debugLanding          Json?                 @map("debug_landing")
+  /// The CLAIM on a `guide` turn's landing (Story MOTIR-7459 · MOTIR-7470; ADR
+  /// `conversation-turn-intent.md` AMENDMENT 2, A2.4) — set on the `user` turn,
+  /// by a compare-and-set under the session's row lock, BEFORE the turn's
+  /// actions are written to the card. The debug claim's shape: a replayed or
+  /// concurrent settle of the same job finds it taken and lands nothing.
+  guideLandingClaimedAt DateTime?             @map("guide_landing_claimed_at")
+  /// What a `guide` turn's job returned and what landed (MOTIR-7470), on the
+  /// `assistant` turn carrying its message — `{ actions, outcomes, temporary }`:
+  /// the validated actions, each one's outcome (`landed`, `recorded` on the
+  /// conversation only, or `skipped` with its reason), and whether the walk was
+  /// on a temporary (unsaved) list. Written in the SAME append as the reply. The
+  /// rail and canvas read it, and the temporary list is re-derived from it, so
+  /// an unsaved walk lives on the conversation and nowhere else (A2.2). Null on
+  /// every other turn.
+  guideTurn             Json?                 @map("guide_turn")
   /// The work items an `assistant` ANSWER rests on, as work-item IDENTIFIERS
   /// ("MOTIR-812"), in the order the answer cites them. Empty on every other
   /// role and on an answer the graphs could not support.

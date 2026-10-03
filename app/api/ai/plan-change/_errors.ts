@@ -25,6 +25,7 @@ import {
 } from '@/lib/projects/errors';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 import { InvalidAuthoredBugError } from '@/lib/ai/authoredBug';
+import { InvalidGuideTurnError } from '@/lib/ai/guideWorkItem';
 
 // Shared typed-error → HTTP mapping for the plan-change conversation routes
 // (Story 7.30 · MOTIR-1728). Returns null for an unrecognized error so the route
@@ -82,7 +83,7 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   // A `debug_bug` result that failed re-validation at this boundary (MOTIR-7049):
   // the far side produced something this build will not write onto a card. An
   // upstream fault, so 502, and it names the field that failed.
-  if (err instanceof InvalidAuthoredBugError) {
+  if (err instanceof InvalidAuthoredBugError || err instanceof InvalidGuideTurnError) {
     return NextResponse.json(
       { code: err.code, error: err.message, field: err.field },
       { status: 502 },

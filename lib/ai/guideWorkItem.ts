@@ -425,3 +425,153 @@ export function parseGuideTurn(raw: unknown): GuideTurn {
   }));
   return { messageMd, actions, dropped };
 }
+
+// ── The record: what a settled guide turn did (MOTIR-7470) ───────────────────
+
+/**
+ * What ONE action of a settled guide turn did (A2.4):
+ *  * `landed` — written to the card through the service that owns the write;
+ *  * `recorded` — kept on the conversation only (a temporary walk's tick, a
+ *    proposal, the current step, the close offer);
+ *  * `skipped` — refused by its guard, with the reason the turn states. A
+ *    skipped action never fails the turn: the others still land.
+ */
+export interface GuideActionOutcome {
+  type: GuideActionType;
+  outcome: 'landed' | 'recorded' | 'skipped';
+  /** Why it was skipped, in words the rail can show. */
+  reason?: string;
+  /** The to-do row it touched on the CARD, when it landed on one. */
+  todoId?: string;
+}
+
+/** The `guide_turn` column on an assistant turn: the validated actions, each
+ *  one's outcome (same order), and whether the walk was on a temporary list. */
+export interface GuideTurnRecord {
+  actions: GuideAction[];
+  outcomes: GuideActionOutcome[];
+  temporary: boolean;
+}
+
+/**
+ * The persisted `guide_turn` JSON → its record, or null. Written only by the
+ * landing, so this is a NARROWING: the actions are re-run through the same
+ * parser that admitted them, and a record that no longer parses reads as null
+ * rather than as a guess.
+ */
+export function readGuideTurnRecord(value: unknown): GuideTurnRecord | null {
+  if (!isRecord(value) || !Array.isArray(value['actions'])) return null;
+  let actions: GuideAction[];
+  try {
+    actions = parseGuideTurn({ messageMd: '-', actions: value['actions'] }).actions;
+  } catch {
+    return null;
+  }
+  const rawOutcomes = Array.isArray(value['outcomes']) ? value['outcomes'] : [];
+  const outcomes: GuideActionOutcome[] = actions.map((a, i) => {
+    const o = rawOutcomes[i];
+    const kind = isRecord(o) ? o['outcome'] : undefined;
+    return {
+      type: a.type,
+      outcome: kind === 'landed' || kind === 'recorded' ? kind : 'skipped',
+      ...(isRecord(o) && typeof o['reason'] === 'string' ? { reason: o['reason'] } : {}),
+      ...(isRecord(o) && typeof o['todoId'] === 'string' ? { todoId: o['todoId'] } : {}),
+    };
+  });
+  return { actions, outcomes, temporary: value['temporary'] === true };
+}
+
+/** The id a temporary walk gives a step an `add_step` added — derived from where
+ *  the action sits, so every reader of the thread derives the same one. */
+export function temporaryAddedStepId(turnSeq: number, actionIndex: number): string {
+  return `tmp-t${turnSeq}-a${actionIndex}`;
+}
+
+/**
+ * The TEMPORARY list as the conversation now stands (A2.2 / A2.3): the latest
+ * `propose_todos`, with every action the conversation RECORDED since applied in
+ * order — ticks, unticks and corrections. A `write_todos` that landed ends it:
+ * the list is the card's from then on, so the result is empty.
+ *
+ * Pure, and derived only from the assistant turns' records, so an unsaved walk
+ * lives on the conversation and is discarded with it.
+ */
+export function deriveTemporaryList(
+  turns: ReadonlyArray<{ seq: number; record: GuideTurnRecord | null }>,
+): GuideRowInput[] {
+  let rows: GuideRowInput[] = [];
+  const indexOf = (id: string) => rows.findIndex((r) => r.id === id);
+  // `null` puts the row first; an anchor that is no longer on the list puts it last.
+  const insertAfter = (afterRowId: string | null, row: GuideRowInput) => {
+    if (afterRowId === null) return void rows.splice(0, 0, row);
+    const anchor = indexOf(afterRowId);
+    rows.splice(anchor < 0 ? rows.length : anchor + 1, 0, row);
+  };
+  for (const { seq, record } of turns) {
+    if (!record) continue;
+    record.actions.forEach((action, i) => {
+      const outcome = record.outcomes[i]?.outcome;
+      if (action.type === 'write_todos' && outcome === 'landed') {
+        rows = [];
+        return;
+      }
+      if (outcome !== 'recorded') return;
+      switch (action.type) {
+        case 'propose_todos':
+          rows = action.rows.map((r) => ({
+            id: r.id,
+            text: r.text,
+            notesMd: r.notesMd,
+            commandText: r.commandText,
+            executor: r.executor,
+            done: false,
+          }));
+          return;
+        case 'tick':
+        case 'untick': {
+          const at = indexOf(action.rowId);
+          if (at >= 0) rows[at] = { ...rows[at]!, done: action.type === 'tick' };
+          return;
+        }
+        case 'add_step':
+          insertAfter(action.afterRowId, {
+            id: temporaryAddedStepId(seq, i),
+            text: action.text,
+            notesMd: action.notesMd,
+            commandText: action.commandText,
+            executor: action.executor,
+            done: false,
+          });
+          return;
+        case 'revise_step': {
+          const at = indexOf(action.rowId);
+          if (at < 0) return;
+          const cur = rows[at]!;
+          rows[at] = {
+            ...cur,
+            ...(action.text !== undefined ? { text: action.text } : {}),
+            ...(action.notesMd !== undefined ? { notesMd: action.notesMd } : {}),
+            ...(action.commandText !== undefined ? { commandText: action.commandText } : {}),
+            ...(action.executor !== undefined ? { executor: action.executor } : {}),
+          };
+          return;
+        }
+        case 'remove_step': {
+          const at = indexOf(action.rowId);
+          if (at >= 0) rows.splice(at, 1);
+          return;
+        }
+        case 'move_step': {
+          const at = indexOf(action.rowId);
+          if (at < 0) return;
+          const [moved] = rows.splice(at, 1);
+          insertAfter(action.afterRowId, moved!);
+          return;
+        }
+        default:
+          return;
+      }
+    });
+  }
+  return rows;
+}

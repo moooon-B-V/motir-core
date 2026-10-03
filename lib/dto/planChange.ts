@@ -1,4 +1,5 @@
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
+import type { GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 
 // DTO types for the plan-change CONVERSATION (Story 7.30 · MOTIR-1728) — the
 // shape that crosses the API boundary. No Prisma row leaks: the
@@ -95,6 +96,14 @@ export interface PlanChangeTurnDto {
    * Optional for the reason {@link anchorKey} is.
    */
   debugLanding?: DebugLandingDto | null;
+  /**
+   * What a `guide` turn's job returned and what landed (MOTIR-7470), on the
+   * `assistant` turn carrying its message: the actions in order (the proposed
+   * list, the current step, the close offer, the ticks), each one's outcome, and
+   * whether the walk was on a temporary list. The rail and the canvas read it.
+   * Null on every other turn. Optional for the reason {@link anchorKey} is.
+   */
+  guide?: GuideTurnRecord | null;
   authorId: string | null;
   createdAt: string;
 }

@@ -6,6 +6,7 @@ import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { MotirAiConfigError } from '@/lib/ai/errors';
 import {
   buildGuideContext,
+  deriveTemporaryList,
   type GuideCardInput,
   type GuideContextTurn,
   type GuideRowInput,
@@ -180,7 +181,16 @@ async function readGuideCard(item: WorkItemDto, ctx: ProjectContext): Promise<Gu
 function contextTurns(session: PlanChangeSessionDto, throughTurnId: string): GuideContextTurn[] {
   const out: GuideContextTurn[] = [];
   for (const t of session.turns) {
-    if (t.role === 'user' || t.role === 'assistant') out.push({ role: t.role, body: t.body });
+    // An assistant turn carries the actions it returned, which is how a later
+    // turn undoes one (A2.3: an undo is the inverse action).
+    if (t.role === 'user') out.push({ role: 'user', body: t.body });
+    if (t.role === 'assistant') {
+      out.push({
+        role: 'assistant',
+        body: t.body,
+        ...(t.guide && t.guide.actions.length > 0 ? { actions: t.guide.actions } : {}),
+      });
+    }
     if (t.id === throughTurnId) break;
   }
   return out;
@@ -197,7 +207,22 @@ async function submitGuideJob(
   ctx: ProjectContext,
 ): Promise<{ jobId: string }> {
   const card = await readGuideCard(guided.item, ctx);
-  const guideContext = buildGuideContext(card, guided.rows, contextTurns(session, turn.id));
+  // A card with no rows walks the conversation's TEMPORARY list, if one was
+  // proposed (A2.2 / A2.3): it lives on the thread, never on the card.
+  const temporary =
+    guided.rows.length === 0
+      ? deriveTemporaryList(
+          session.turns
+            .filter((t) => t.role === 'assistant')
+            .map((t) => ({ seq: t.seq, record: t.guide ?? null })),
+        )
+      : [];
+  const guideContext = buildGuideContext(
+    card,
+    temporary.length > 0 ? temporary : guided.rows,
+    contextTurns(session, turn.id),
+    { temporary: temporary.length > 0 },
+  );
   const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,

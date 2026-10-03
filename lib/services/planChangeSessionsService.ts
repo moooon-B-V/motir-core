@@ -36,6 +36,7 @@ import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs
 import { readPlanningTurn } from '@/lib/planning/plannerTurn';
 import { getJob } from '@/lib/ai/motirAiClient';
 import type { SubmittedRequirement } from '@/lib/ai/types';
+import type { GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import type {
   DebugLandingDto,
   PlanChangeSessionDto,
@@ -271,6 +272,8 @@ interface AppendTurn {
   anchorKey?: string | null;
   /** A debug reply's landing (MOTIR-7064), persisted with the reply itself. */
   debugLanding?: DebugLandingDto | null;
+  /** A guide reply's record (MOTIR-7470), persisted with the reply itself. */
+  guideTurn?: GuideTurnRecord | null;
 }
 
 async function appendLocked(
@@ -344,6 +347,11 @@ async function appendWithin(
                 createdInTriage: turn.debugLanding.createdInTriage,
               },
             }
+          : {}),
+        // The record round-trips through JSON: it is plain data by construction
+        // (the parsed actions and their outcomes), so this is a copy, not a cast.
+        ...(turn.guideTurn
+          ? { guideTurn: JSON.parse(JSON.stringify(turn.guideTurn)) as Prisma.InputJsonObject }
           : {}),
         authorId: turn.authorId ?? null,
       },
@@ -1250,6 +1258,68 @@ export const planChangeSessionsService = {
         if (turn.intent !== 'debug') return false;
         return planChangeTurnRepository.claimDebugLanding(turn.id, pctx.workspaceId, tx);
       },
+    );
+  },
+
+  /**
+   * CLAIM a `guide` turn's landing (MOTIR-7470; ADR AMENDMENT 2, A2.4) — a
+   * compare-and-set of the turn's `guideLandingClaimedAt` under the session's row
+   * lock, {@link claimDebugLanding}'s shape. `true` when THIS call claimed it;
+   * `false` when an earlier or concurrent settle of the same job already had, the
+   * loser's cue to land nothing. Only a `user` turn that ran as `guide` can be
+   * claimed.
+   */
+  async claimGuideLanding(
+    turnId: string,
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<boolean> {
+    const session = await requireSession(pctx, address);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        const turn = await planChangeTurnRepository.findByIdInSession(
+          turnId,
+          session.id,
+          pctx.workspaceId,
+          tx,
+        );
+        if (!turn || turn.role !== 'user') throw new PlanChangeTurnNotFoundError(turnId);
+        if (turn.intent !== 'guide') return false;
+        return planChangeTurnRepository.claimGuideLanding(turn.id, pctx.workspaceId, tx);
+      },
+    );
+  },
+
+  /**
+   * Append a guide turn's REPLY (MOTIR-7470) — the `assistant` turn carrying the
+   * job's message and its {@link GuideTurnRecord}, in ONE append. IDEMPOTENT ON
+   * `jobId` under the session lock, {@link appendAnswerTurn}'s mechanism, so a
+   * replayed settle never appends a second reply.
+   */
+  async appendGuideReplyTurn(
+    input: { jobId: string; body: string; record: GuideTurnRecord },
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanChangeSessionDto> {
+    const trimmed = input.body.trim();
+    if (!trimmed) throw new EmptyPlanChangeTurnError();
+    const session = await requireSession(pctx, address);
+    return appendLocked(
+      session,
+      pctx,
+      { role: 'assistant', body: trimmed, jobId: input.jobId, guideTurn: input.record },
+      {},
+      async (tx) =>
+        (await planChangeTurnRepository.findByJobIdAndRole(
+          session.id,
+          input.jobId,
+          'assistant',
+          pctx.workspaceId,
+          tx,
+        )) !== null,
     );
   },
 
