@@ -186,3 +186,55 @@ export class PageVersionNotFoundError extends PageError {
     this.name = 'PageVersionNotFoundError';
   }
 }
+
+// ── Archive, restore and delete (Story MOTIR-5755 · MOTIR-7418, §7) ──────────
+
+/**
+ * A write to a page that is ARCHIVED — a save, a rename, a move, a version
+ * restore, or a second archive. An archived page is read-only until it is
+ * restored (§7).
+ */
+export class PageArchivedError extends PageError {
+  readonly code = 'PAGE_ARCHIVED' as const;
+  readonly status = 409 as const;
+  constructor(readonly pageId: string) {
+    super('This page is archived. Restore it before changing it.');
+    this.name = 'PageArchivedError';
+  }
+}
+
+/** A restore or a delete of a page that is not archived — "archive it first" on a delete. */
+export class PageNotArchivedError extends PageError {
+  readonly code = 'PAGE_NOT_ARCHIVED' as const;
+  readonly status = 409 as const;
+  constructor(readonly pageId: string) {
+    super('This page is not archived. Archive it first.');
+    this.name = 'PageNotArchivedError';
+  }
+}
+
+/**
+ * A restore or a delete of an archived page that is not its archive's ROOT —
+ * a sub-page that left with its parent comes back, or goes, with that parent.
+ * Carries the root so a client can offer it instead.
+ */
+export class PageArchiveRootRequiredError extends PageError {
+  readonly code = 'PAGE_ARCHIVE_ROOT_REQUIRED' as const;
+  readonly status = 409 as const;
+  constructor(
+    readonly pageId: string,
+    readonly rootId: string,
+  ) {
+    super('This page was archived with a parent page. Restore or delete that page instead.');
+    this.name = 'PageArchiveRootRequiredError';
+  }
+}
+
+/** A create or a move naming an ARCHIVED page as the parent. */
+export class PageParentArchivedError extends PageTreeError {
+  readonly code = 'PAGE_PARENT_ARCHIVED' as const;
+  constructor(readonly parentPageId: string) {
+    super('A page cannot be placed under an archived page.');
+    this.name = 'PageParentArchivedError';
+  }
+}

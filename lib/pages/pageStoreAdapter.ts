@@ -165,5 +165,26 @@ export function createPageStore(tx: Prisma.TransactionClient): PageStore {
     // ADR §2: "a no-op adapter until then" — the derived link rows are the
     // linking epic's (MOTIR-5747), which replaces this body with its writer.
     async replaceDerivedLinks() {},
+
+    // ── Archive (Story MOTIR-5755) — the port methods MOTIR-7418 adds. ──
+    // Their Postgres writes are the repository card's (MOTIR-7420); nothing in
+    // the app calls an archive procedure until the service card (MOTIR-7421),
+    // so until then a call is a wiring defect and says so rather than no-op.
+    async setArchived() {
+      throw archiveNotWired('setArchived');
+    },
+    async findArchiveSet() {
+      throw archiveNotWired('findArchiveSet');
+    },
+    async deletePages() {
+      throw archiveNotWired('deletePages');
+    },
+    async positionTaken() {
+      throw archiveNotWired('positionTaken');
+    },
   };
+}
+
+function archiveNotWired(method: string): Error {
+  return new Error(`PageStore.${method} is not wired to Postgres yet (MOTIR-7420).`);
 }

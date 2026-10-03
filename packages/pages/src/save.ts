@@ -1,6 +1,7 @@
 import { PAGE_BODY_MAX_BYTES, PAGE_SAVE_MAX_BYTES, PAGE_TITLE_MAX_LENGTH } from './constants';
 import { applyUpdate, deriveFormats, emptyState } from './document/convert';
 import {
+  PageArchivedError,
   PageBodyTooLargeError,
   PageNotFoundError,
   PageTitleTooLongError,
@@ -106,9 +107,13 @@ export interface RenamePageInput {
   title: string;
 }
 
-/** Rename a page: trim, refuse a title over the limit, write it. */
+/** Rename a page: trim, refuse a title over the limit or an archived page, write it. */
 export async function renamePage(store: PageStore, input: RenamePageInput): Promise<PageRow> {
   const title = normaliseTitle(input.title);
+  // The body-less read, not the lock: a rename never needs the 2 MiB state.
+  const current = await store.findPage(input.pageId);
+  if (!current) throw new PageNotFoundError(input.pageId);
+  if (current.archivedAt !== null) throw new PageArchivedError(input.pageId);
   const row = await store.updateTitle(input.pageId, title, input.actorId);
   if (!row) throw new PageNotFoundError(input.pageId);
   return row;
@@ -139,6 +144,7 @@ export async function savePageUpdate(
 
   const page = await store.lockPage(input.pageId);
   if (!page) throw new PageNotFoundError(input.pageId);
+  if (page.archivedAt !== null) throw new PageArchivedError(input.pageId);
 
   const state = applyUpdate(page.bodyState, input.update);
   if (state.byteLength > PAGE_BODY_MAX_BYTES) {

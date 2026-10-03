@@ -62,6 +62,8 @@ export interface PageFolderRef {
 export interface PageSubtreeRecord {
   id: string;
   ancestorPageIds: string[];
+  archivedAt: Date | null;
+  archiveRootId: string | null;
 }
 
 /** What `updatePlacement` writes. */
@@ -126,7 +128,10 @@ export const pageRepository = {
              "created_by_id" AS "createdById",
              "updated_by_id" AS "updatedById",
              "created_at" AS "createdAt",
-             "updated_at" AS "updatedAt"
+             "updated_at" AS "updatedAt",
+             "archived_at" AS "archivedAt",
+             "archive_root_id" AS "archiveRootId",
+             "archived_by_id" AS "archivedById"
         FROM "page"
        WHERE "id" = ${id}
          FOR UPDATE
@@ -293,7 +298,11 @@ export const pageRepository = {
    */
   async findSubtree(pageId: string, tx: Prisma.TransactionClient): Promise<PageSubtreeRecord[]> {
     return tx.$queryRaw<PageSubtreeRecord[]>`
-      SELECT "id", "ancestor_page_ids" AS "ancestorPageIds" FROM "page"
+      SELECT "id",
+             "ancestor_page_ids" AS "ancestorPageIds",
+             "archived_at" AS "archivedAt",
+             "archive_root_id" AS "archiveRootId"
+        FROM "page"
        WHERE "ancestor_page_ids" @> ARRAY[${pageId}]::text[]
     `;
   },

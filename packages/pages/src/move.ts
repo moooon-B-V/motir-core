@@ -1,8 +1,10 @@
 import {
   CrossProjectPageParentError,
+  PageArchivedError,
   PageFolderNotFoundError,
   PageNeighbourInvalidError,
   PageNotFoundError,
+  PageParentArchivedError,
 } from './errors';
 import { positionBetween } from './position';
 import type { PageRow, PageStore, SubtreePage } from './store';
@@ -22,8 +24,9 @@ import type { PagePlacement } from './types';
 // A refusal at any step leaves the store untouched.
 
 /**
- * Read and check the parent a placement names, refusing a missing parent and a
- * parent in another project. Returns the parent page's facts under a page, and
+ * Read and check the parent a placement names, refusing a missing parent, a
+ * parent in another project, and an ARCHIVED parent page (§7 — nothing is
+ * created or moved under a page that has left the tree). Returns the parent page's facts under a page, and
  * nothing at the root or in a folder (whose pages start a chain of their own).
  * Shared by the create and the move.
  */
@@ -44,6 +47,7 @@ export async function resolvePlacementParent(
   const page = await store.findPage(parent.pageId);
   if (!page) throw new PageNotFoundError(parent.pageId);
   if (page.projectId !== projectId) throw new CrossProjectPageParentError('page', parent.pageId);
+  if (page.archivedAt !== null) throw new PageParentArchivedError(parent.pageId);
   return { id: page.id, ancestorPageIds: page.ancestorPageIds };
 }
 
@@ -58,8 +62,11 @@ export function placementColumns(parent: PagePlacement): {
   };
 }
 
+/** The chain facts {@link subtreeHeight} reads. */
+type ChainNode = Pick<SubtreePage, 'id' | 'ancestorPageIds'>;
+
 /** Levels in a subtree, the page itself counting 1 — `assertWithinDepth`'s `subtreeHeight`. */
-export function subtreeHeight(page: SubtreePage, descendants: readonly SubtreePage[]): number {
+export function subtreeHeight(page: ChainNode, descendants: readonly ChainNode[]): number {
   let height = 1;
   for (const descendant of descendants) {
     height = Math.max(height, descendant.ancestorPageIds.length - page.ancestorPageIds.length + 1);
@@ -68,7 +75,10 @@ export function subtreeHeight(page: SubtreePage, descendants: readonly SubtreePa
 }
 
 /** Whether `page` already sits at `parent`. */
-function sitsAt(page: PageRow, parent: PagePlacement): boolean {
+export function sitsAt(
+  page: Pick<PageRow, 'parentPageId' | 'folderId'>,
+  parent: PagePlacement,
+): boolean {
   const columns = placementColumns(parent);
   return page.parentPageId === columns.parentPageId && page.folderId === columns.folderId;
 }
@@ -104,6 +114,7 @@ export async function movePage(store: PageStore, input: MovePageInput): Promise<
   await store.lockSiblings(input.projectId, input.parent);
   const page = await store.lockPage(input.pageId);
   if (!page || page.projectId !== input.projectId) throw new PageNotFoundError(input.pageId);
+  if (page.archivedAt !== null) throw new PageArchivedError(page.id);
 
   const parent = await resolvePlacementParent(store, input.projectId, input.parent);
   const descendants = await store.findSubtree(page.id);
@@ -144,19 +155,51 @@ export async function movePage(store: PageStore, input: MovePageInput): Promise<
   }
 
   const position = positionBetween(neighbours.before, neighbours.after);
-  const moved = await store.updatePlacement(
+  const moved = await writePlacement(store, {
+    page,
+    parent: input.parent,
+    position,
+    ancestorPageIds,
+    hasDescendants: descendants.length > 0,
+    actorId: input.actorId,
+  });
+  return { page: moved, moved: true };
+}
+
+export interface WritePlacementInput {
+  /** The page as read under its lock: its current chain decides whether to rebase. */
+  page: Pick<PageRow, 'id' | 'ancestorPageIds'>;
+  parent: PagePlacement;
+  position: string;
+  /** The page's chain at `parent`, already checked (`planPlacement`). */
+  ancestorPageIds: readonly string[];
+  hasDescendants: boolean;
+  actorId: string;
+}
+
+/**
+ * THE placement write a move and a restore share: the page's own row, then ONE
+ * rewrite of every descendant's chain when the page's chain changed — a reorder
+ * keeps every chain, a re-parent rewrites the subtree's. Checks nothing; the
+ * caller has.
+ */
+export async function writePlacement(
+  store: PageStore,
+  input: WritePlacementInput,
+): Promise<PageRow> {
+  const { page, ancestorPageIds } = input;
+  const written = await store.updatePlacement(
     page.id,
-    { ...placementColumns(input.parent), position, ancestorPageIds },
+    { ...placementColumns(input.parent), position: input.position, ancestorPageIds },
     input.actorId,
   );
   const ancestorsChanged =
     ancestorPageIds.length !== page.ancestorPageIds.length ||
     ancestorPageIds.some((id, i) => id !== page.ancestorPageIds[i]);
-  // A reorder keeps every chain; a re-parent rewrites the subtree's in one write.
-  if (ancestorsChanged && descendants.length > 0) {
+  if (ancestorsChanged && input.hasDescendants) {
     await store.rebaseDescendants(page.id, ancestorPageIds);
   }
-  return { page: moved, moved: true };
+  return written;
 }
 
 /** Refuse a named neighbour that is the moving page itself or not a child of the target. */
@@ -170,7 +213,13 @@ async function assertNeighbour(
   if (neighbourId === null) return;
   if (neighbourId === pageId) throw new PageNeighbourInvalidError(side, neighbourId, 'self');
   const neighbour = await store.findPage(neighbourId);
-  if (!neighbour || neighbour.projectId !== input.projectId || !sitsAt(neighbour, input.parent)) {
+  // An archived page has left its level, so it is no neighbour of anything.
+  if (
+    !neighbour ||
+    neighbour.projectId !== input.projectId ||
+    neighbour.archivedAt !== null ||
+    !sitsAt(neighbour, input.parent)
+  ) {
     throw new PageNeighbourInvalidError(side, neighbourId, 'not_sibling');
   }
 }

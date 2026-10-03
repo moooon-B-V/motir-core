@@ -273,6 +273,8 @@ A new **`page`** domain in `PERMISSION_DOMAINS`, and three keys:
   meanwhile has already moved the page up (§4), so its stored placement is still a real one.
   The position is kept when it still sorts among the new siblings, and appended otherwise.
 - **Delete is permanent** and takes the same set, versions included. It needs `page:delete`.
+- [AMENDMENT 2](#amendment-2-2026-10-03--what-7-left-open-about-archive-restore-and-delete) records the
+  depth-skip rung, delete's re-homing, root-only restore and delete, and the four refusals.
 
 ### §8 — What the other epics consume
 
@@ -376,6 +378,42 @@ a work item is never parented by a page.
   for a `/pages` tree as for the mixed one; nothing here adds or removes a column.
 - **How a folder that holds only pages, or only work items, shows on the other surface.**
   That is a tree-view question for MOTIR-5753.
+
+### AMENDMENT 2 (2026-10-03) — What §7 left open about archive, restore and delete
+
+- **Decided by:** MOTIR-7418 (Story MOTIR-5755), building `packages/pages/src/archive.ts`.
+- **Amends:** §7 _Archive and delete_. Every §7 rule stands; this records the four things it did
+  not say and the package now does.
+
+1. **A landing rung that would pass the depth limit is skipped as if it did not survive.** The
+   ladder is: the original parent (page, folder, or the project root where the page was); the
+   nearest page up `ancestor_page_ids` that exists and is live; the topmost ancestor's folder
+   (the page's own when it has no ancestors), when that folder exists; the project root. A rung
+   under a page is evaluated against that page's CURRENT chain, and is skipped when the restored
+   subtree's deepest page would land past `PAGE_DEPTH_LIMIT`. The project root always fits.
+   _Assumption, not observed in practice:_ the move procedure counts archived descendants in a
+   subtree's height, so the depth skip is a backstop for a chain changed by something other than
+   the procedures.
+2. **Delete re-homes a separately-archived descendant.** A sub-page archived on its own before
+   its ancestor is not in the ancestor's set, but it is still a descendant, and
+   `parent_page_id NO ACTION` would refuse deleting its parent. So before the one-statement
+   delete, the topmost page of each such group moves to the deleted root's own place — its parent
+   page or folder, and its position — with its chain rebased, and stays archived. Its own restore
+   later starts its ladder there.
+3. **Restore and delete are root-only.** Either on an archived page that is not its archive's
+   root is refused with `PAGE_ARCHIVE_ROOT_REQUIRED` (409), carrying the root's id: a sub-page
+   that left with its parent comes back, or goes, with that parent.
+4. **The four refusals.** `PAGE_ARCHIVED` (409): a save, rename, move, version restore or second
+   archive of an archived page. `PAGE_NOT_ARCHIVED` (409): a restore, or a delete ("archive it
+   first"), of a live page. `PAGE_ARCHIVE_ROOT_REQUIRED` (409), above. `PAGE_PARENT_ARCHIVED`
+   (422, a tree refusal): a create or a move under an archived page. An archived page is also no
+   neighbour for a move — it has left its level.
+
+**Position on restore.** On the original level a page keeps its stored `position` unless a LIVE
+sibling now holds that exact key — a create while it was archived can mint the same key, since
+the level reads see live pages only — and then goes last; on every other rung it goes last. The
+port gained `positionTaken(projectId, parent, position)` for that check, beside §2's
+`setArchived` / `deletePages` and the set read `findArchiveSet`.
 
 ---
 

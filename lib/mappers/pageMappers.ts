@@ -20,21 +20,11 @@ import type { LockedPageRow, PageRow, PageVersionRow, PageVersionWithBody } from
 // maps and the repository only queries.
 
 /**
- * A page read without its body — every column the port's `PageRow` carries.
- *
- * The archive columns (MOTIR-7417) are left out until a reader exists: the
- * repository card (MOTIR-7420) is the first to select them.
+ * A page read without its body — every column the port's `PageRow` carries,
+ * the archive columns (MOTIR-7417) included: every procedure that writes a page
+ * refuses an archived one (MOTIR-7418), so every row read must carry them.
  */
-export type PageRecord = Omit<
-  Page,
-  | 'bodyState'
-  | 'bodyJson'
-  | 'bodyMarkdown'
-  | 'bodyText'
-  | 'archivedAt'
-  | 'archiveRootId'
-  | 'archivedById'
->;
+export type PageRecord = Omit<Page, 'bodyState' | 'bodyJson' | 'bodyMarkdown' | 'bodyText'>;
 
 /** The raw `SELECT … FOR UPDATE` row `pageRepository.lockById` returns. */
 export interface PageLockedRecord extends PageRecord {
@@ -59,6 +49,9 @@ export const PAGE_RECORD_SELECT = {
   updatedById: true,
   createdAt: true,
   updatedAt: true,
+  archivedAt: true,
+  archiveRootId: true,
+  archivedById: true,
 } as const;
 
 export function toPageRow(record: PageRecord): PageRow {
@@ -76,6 +69,9 @@ export function toPageRow(record: PageRecord): PageRow {
     updatedById: record.updatedById,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
+    archivedAt: record.archivedAt,
+    archiveRootId: record.archiveRootId,
+    archivedById: record.archivedById,
   };
 }
 
