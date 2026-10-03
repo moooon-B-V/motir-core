@@ -3,6 +3,7 @@ import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { paidOrgState, resetBillingFixture, setOrgBillingState } from './_helpers/billing';
 import { signUpToOnboarding } from './_helpers/shell-session';
 import {
+  clearFleetRows,
   FLEET_WINDOW_MS,
   inFlightCi,
   seedAccrual,
@@ -60,6 +61,7 @@ test('a platform admin reads the fleet, stops one org’s containers, and the ot
   acceptanceStory('MOTIR-6905');
 
   await resetDatabase();
+  await clearFleetRows();
   resetBillingFixture();
 
   // ── The estate. Two tenants with CI containers on the fake orchestrator, both

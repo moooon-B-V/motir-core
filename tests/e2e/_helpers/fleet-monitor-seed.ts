@@ -46,6 +46,17 @@ export const FLEET_WINDOW_MS = 2 * CI_DEBIT_PERIOD_MINUTES * MIN;
 
 let seq = 0;
 
+/**
+ * Clear the fleet rows `resetDatabase()` never reaches. An in-flight slot and a
+ * reconciler kill carry no foreign key to an org, so an earlier spec's hosted
+ * agent leaves its slot behind, and the monitor would count it as one more org
+ * running.
+ */
+export async function clearFleetRows(): Promise<void> {
+  await adminDb.fleetInFlightSlot.deleteMany({});
+  await adminDb.fleetMachineKill.deleteMany({});
+}
+
 export interface TenantOrg {
   organizationId: string;
   workspaceId: string;

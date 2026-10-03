@@ -2,7 +2,13 @@ import { expect, test } from '@playwright/test';
 import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { resetBillingFixture } from './_helpers/billing';
 import { signUpToOnboarding } from './_helpers/shell-session';
-import { inFlightCi, seedKill, seedRunningCi, seedTenantOrg } from './_helpers/fleet-monitor-seed';
+import {
+  clearFleetRows,
+  inFlightCi,
+  seedKill,
+  seedRunningCi,
+  seedTenantOrg,
+} from './_helpers/fleet-monitor-seed';
 import enMessages from '@/messages/en.json';
 
 /**
@@ -36,6 +42,7 @@ test.describe.configure({ timeout: 120_000 });
 
 test.beforeEach(async () => {
   await resetDatabase();
+  await clearFleetRows();
   resetBillingFixture();
 });
 
