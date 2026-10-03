@@ -242,6 +242,24 @@ export interface PlatformOrganizationSummaryDTO {
   isMeta: boolean;
   /** Charged exactly like a customer, then made whole by a paired offset. */
   internalBilling: boolean;
+  /** Suspended by platform staff (MOTIR-748) — every member is refused. The
+   *  "Suspended" pill the design puts on every row that names the org. */
+  suspended: boolean;
+}
+
+/**
+ * An organization's suspension as the console's status card renders it
+ * (design `ops.status.suspendedSince`: *Since {at} · by {operator} · “{reason}”*).
+ * `suspendedByUserId` is the operator's user id; their label is on the audit row
+ * the suspension wrote (`org.suspend`), which the org page's trail already shows.
+ */
+export interface PlatformOrganizationSuspensionDTO {
+  /** ISO-8601 — when the suspension took effect. */
+  suspendedAt: string;
+  /** The reason the operator gave — the same text the `org.suspend` audit row holds. */
+  reason: string | null;
+  /** The operator who suspended it; null once that account is deleted. */
+  suspendedByUserId: string | null;
 }
 
 /**
@@ -262,6 +280,8 @@ export interface PlatformOrganizationDetailDTO extends PlatformOrganizationSumma
   aiIncludedSeat: boolean;
   /** Whether a scaled-tracker (per-seat PM) subscription is on record. */
   hasScaledTrackerSubscription: boolean;
+  /** The suspension in force, or null for an active organization (MOTIR-748). */
+  suspension: PlatformOrganizationSuspensionDTO | null;
 }
 
 /**

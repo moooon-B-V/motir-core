@@ -134,6 +134,19 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'org.plan_set': { reason: 'required' },
   /**
+   * An organization was SUSPENDED (MOTIR-748, design Panel 3a) — the
+   * non-payment / abuse lever: every member of every workspace under it is
+   * refused at the access gate on every door until it is reactivated. Nothing is
+   * deleted. `targetKind: 'organization'`, the org as `organizationId`.
+   */
+  'org.suspend': { reason: 'required' },
+  /**
+   * A suspended organization was REACTIVATED (MOTIR-748, design Panel 3c) — its
+   * members are admitted again on their next request. Kill-switches keep their
+   * own state across a suspension; reactivating does not touch them.
+   */
+  'org.reactivate': { reason: 'required' },
+  /**
    * The audit log ITSELF was searched (MOTIR-751 — the page is MOTIR-752,
    * design Panel 6). Reading the record of who touched the estate is a platform
    * read like any other, so it leaves a row: "who looked at the audit log, and

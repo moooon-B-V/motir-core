@@ -3,6 +3,8 @@ import { getSession, SessionUnavailableError } from '@/lib/auth';
 import { TWO_FACTOR_REQUIRED_PATH } from '@/lib/auth/twoFactorGate';
 import { twoFactorPolicyService } from '@/lib/services/twoFactorPolicyService';
 import { getWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces';
+import { OrganizationSuspendedError } from '@/lib/organizations/errors';
+import { organizationSuspendedResponse } from '@/lib/organizations/errorResponse';
 
 // The API half of 2FA enforcement (Story MOTIR-1215 · Subtask MOTIR-3653).
 //
@@ -224,7 +226,18 @@ export type CompliantWorkspaceContextResult =
  * the session again. One policy query, no extra auth round trip.
  */
 export async function requireCompliantWorkspaceContext(): Promise<CompliantWorkspaceContextResult> {
-  const read = await readOrUnavailable(() => getWorkspaceContext());
+  let read: { ok: true; value: WorkspaceContext | null } | { ok: false; response: NextResponse };
+  try {
+    read = await readOrUnavailable(() => getWorkspaceContext());
+  } catch (error) {
+    // A SUSPENDED organization (MOTIR-748): the workspace resolver's access gate
+    // refuses its members, and every tenant-scoped route answers the dedicated
+    // 403 from here — one door, so none of the 98 needs its own arm.
+    if (error instanceof OrganizationSuspendedError) {
+      return { ok: false, response: organizationSuspendedResponse(error) };
+    }
+    throw error;
+  }
   if (!read.ok) return read;
   const ctx = read.value;
   if (!ctx) {

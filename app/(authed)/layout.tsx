@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { assertTwoFactorCompliance } from '@/lib/auth/twoFactorGate';
 import { getWorkspaceContext } from '@/lib/workspaces';
+import { redirectIfOrganizationSuspended } from '@/lib/organizations/suspensionRedirect';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { platformStaffRepository } from '@/lib/repositories/platformStaffRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
@@ -143,7 +144,10 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   //                                     exactly how it wins the ordering the
   //                                     comment under the wave records.
   const [ctx, workspaceModels, platformStanding, cookieStore, reconsentHold] = await Promise.all([
-    getWorkspaceContext(),
+    // A SUSPENDED organization (MOTIR-748) refuses its members at the access
+    // gate; on a page that refusal is the notice redirect, thrown from inside
+    // this wave exactly as the 2FA gate's is.
+    redirectIfOrganizationSuspended(getWorkspaceContext()),
     workspacesService.listUserWorkspaces(session.user.id),
     platformStaffRepository.findStandingByUserId(session.user.id),
     cookies(),

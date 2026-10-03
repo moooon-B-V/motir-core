@@ -8525,7 +8525,14 @@
           },
           "org": {
             "internal_billing_set": "已标记为内部计费",
-            "internal_billing_unset": "已移除内部计费标记"
+            "internal_billing_unset": "已移除内部计费标记",
+            "credit_grant": "已发放额度",
+            "credit_adjust": "已调整额度余额",
+            "plan_set": "已更改 AI 套餐",
+            "suspend": "已暂停组织",
+            "reactivate": "已恢复组织",
+            "kill_switch_off": "已关闭一项紧急开关",
+            "kill_switch_on": "已重新开启一项紧急开关"
           },
           "ai": {
             "planner_model": {

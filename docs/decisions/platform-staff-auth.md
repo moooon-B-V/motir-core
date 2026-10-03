@@ -509,6 +509,22 @@ rather than introducing a second one.
 > failed) is recoverable because every write is idempotent on its `requestId`. Core gained no
 > billing table.
 
+> **⚠️ AMENDED 2026-10-03 (Story 10.3 · MOTIR-748) — organization suspension.** The "Suspend /
+> reactivate an organization" row ships as `platformOrgLifecycleService.suspend` / `.reactivate`
+> over three new `organization` columns (`suspended_at`, `suspended_reason`,
+> `suspended_by_user_id` → `user`, `ON DELETE SET NULL`). Two actions join
+> `PLATFORM_AUDIT_ACTIONS`, both `reason: 'required'`, `targetKind: 'organization'`:
+> **`org.suspend`** and **`org.reactivate`**. Each locks the org row (`FOR UPDATE`) and refuses a
+> no-op inside the audited transaction, so the refusal leaves no row. The EFFECT is enforced at the
+> two gates every door already passes: `organizationsService.resolveWorkspaceAccess` (cookie pages,
+> the cookie API, server actions, OAuth connections) and `apiTokensService.verify` (PATs, device
+> credentials, run tokens), each raising `OrganizationSuspendedError` → 403
+> `ORGANIZATION_SUSPENDED` on an API, a redirect to `/organization-suspended?org=<id>` on a page.
+> It is raised only after membership is established, so a non-member keeps the no-leak 404. This
+> tier is untouched: the console reads through `withPlatformRead`, never through the tenant gate,
+> so staff keep full access to a suspended org. A suspend also stops the org's CI fleet after
+> commit (`fleetStopService.stopOrganization(…, 'admin_stop')`, best-effort).
+
 ---
 
 ## What this ADR deliberately does NOT decide

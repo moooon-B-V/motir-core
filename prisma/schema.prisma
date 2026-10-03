@@ -378,6 +378,11 @@ model User {
   // must outlive their account. Modelled on both sides per the FK-`@relation`
   // rule so `migrate dev` reports no drift.
   platformAuditEntries             PlatformAuditLog[]            @relation("PlatformAuditLogActor")
+  // Organizations this platform operator SUSPENDED and that are still suspended
+  // (MOTIR-748). SetNull on the org's side: an operator's account outliving its
+  // role must not block, or cascade into, a tenant's suspension state — the
+  // hash-chained audit log keeps WHO for ever.
+  suspendedOrganizations           Organization[]                @relation("OrganizationSuspendedBy")
   // What this account has agreed to, and when (Story 8.4 · MOTIR-1135). A LIST
   // and append-only: the row set IS the evidence, so an acceptance is never
   // overwritten by the next one. Cascade — the record is about a person's
@@ -1355,17 +1360,40 @@ model Organization {
   /// resolver asks on every request (MOTIR-6396), which is why it lives on the
   /// org row rather than being joined from the request: a join on the hot path
   /// for a state almost no org is ever in. Non-null ⇔ an OPEN request exists.
-  closingSince                DateTime?                     @map("closing_since")
+  closingSince     DateTime?                     @map("closing_since")
   /// When the erasure sweep scrubbed this org to a TOMBSTONE (DECISION §6 step
   /// 4, §7): name and slug replaced, memberships gone, only `CiPeriodCharge`
   /// kept. Non-null marks a tombstone; the seven-year purge (MOTIR-6401) keys on
   /// it. Null for every live org.
-  erasedAt                    DateTime?                     @map("erased_at")
+  erasedAt         DateTime?                     @map("erased_at")
   // Deletion requests against this org — a LIST: at most one OPEN at a time
   // (the partial unique index), but a cancelled one stays on record and a new
   // one may follow it. `Restrict` on the request's side: an org row may not
   // vanish under its own deletion record (the purge deletes the requests first).
-  deletionRequests            OrganizationDeletionRequest[]
+  deletionRequests OrganizationDeletionRequest[]
+
+  // ── Organization SUSPENSION (Story 10.3 · MOTIR-748) ───────────────────────
+  /// When a platform `superadmin` SUSPENDED this organization — the account-level
+  /// lever for non-payment or abuse. NULL for every open org. While set, every
+  /// member of every workspace under the org is refused at their next request
+  /// (`OrganizationSuspendedError`, read off the org row the access gate already
+  /// reads — `organizationsService.resolveWorkspaceAccess`, the PAT verify), and
+  /// nothing is deleted. Platform staff still inspect it through the console.
+  ///
+  /// A timestamp on the row rather than a history table: this is the ENFORCED
+  /// state, and the history of every suspend and reactivate — who, when, why —
+  /// is the hash-chained `PlatformAuditLog` (`org.suspend` / `org.reactivate`),
+  /// written in the same transaction as this column. A second history table would
+  /// be a second record of the same facts that the chain does not protect.
+  suspendedAt                 DateTime?                    @map("suspended_at")
+  /// The operator's stated reason for the CURRENT suspension, snapshotted so the
+  /// console's status card answers "why?" without a log read. Cleared with
+  /// `suspendedAt` on reactivate; the audit log keeps every reason ever given.
+  suspendedReason             String?                      @map("suspended_reason")
+  /// Who suspended it. SetNull: the record of who did it lives in the audit log,
+  /// and an operator's account must never be held by, or cascade into, a tenant.
+  suspendedByUserId           String?                      @map("suspended_by_user_id")
+  suspendedBy                 User?                        @relation("OrganizationSuspendedBy", fields: [suspendedByUserId], references: [id], onDelete: SetNull)
   /// Agent instances billed to this organisation (MOTIR-6870). Cascade.
   agentInstances              AgentInstance[]
   agentInstanceIntervals      AgentInstanceInterval[]

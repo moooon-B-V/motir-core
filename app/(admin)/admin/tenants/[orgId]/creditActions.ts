@@ -81,7 +81,7 @@ function toFailure(orgId: string, what: string, err: unknown): CreditOpsActionRe
   }
   if (err instanceof PlatformOrganizationNotFoundError) return { ok: false, code: 'NOT_FOUND' };
   if (err instanceof NotPlatformStaffError) return { ok: false, code: 'NOT_PERMITTED' };
-  console.error(`[admin] ${what} failed for organization ${orgId}`, err);
+  console.error('[admin] %s failed for organization %s', what, orgId, err);
   return { ok: false, code: 'FAILED' };
 }
 

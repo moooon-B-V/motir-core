@@ -8529,7 +8529,14 @@
           },
           "org": {
             "internal_billing_set": "Classified internal billing",
-            "internal_billing_unset": "Internal classification removed"
+            "internal_billing_unset": "Internal classification removed",
+            "credit_grant": "Granted credits",
+            "credit_adjust": "Adjusted the credit balance",
+            "plan_set": "Changed the AI plan",
+            "suspend": "Suspended the organization",
+            "reactivate": "Reactivated the organization",
+            "kill_switch_off": "Turned a kill-switch off",
+            "kill_switch_on": "Turned a kill-switch back on"
           },
           "ai": {
             "planner_model": {

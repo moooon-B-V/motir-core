@@ -143,6 +143,11 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // tenant's data. 403 answers "your token may not do this KIND of thing";
   // 404 answers "there is no such resource *for you*". (ADR §4.)
   NOT_A_MEMBER: 404,
+  // 403 — the token is valid but its workspace's ORGANIZATION is suspended by
+  // Motir staff (MOTIR-748). Raised by `apiTokensService.verify` only after the
+  // credential is proven, so it is no existence oracle: the holder's own token
+  // already names the org. Distinct from the 404 so a CLI can say why.
+  ORGANIZATION_SUSPENDED: 403,
 
   // ── Story MOTIR-1789, the DISPATCH RUN ingest (MOTIR-1792) ────────────────
   // Every row is driven through the wrapper by a real service error in

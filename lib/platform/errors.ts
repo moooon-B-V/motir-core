@@ -138,6 +138,25 @@ export class PlatformClassificationStateError extends Error {
 }
 
 /**
+ * A suspend of an organization that is already suspended, or a reactivate of
+ * one that is not (MOTIR-748). Decided under the row lock, so two operators
+ * racing produce one write and one of these — never two audit rows for one
+ * change. Thrown inside the platform transaction, so it rolls the audit row back.
+ */
+export class PlatformOrganizationSuspensionStateError extends Error {
+  readonly code = 'PLATFORM_ORGANIZATION_SUSPENSION_STATE';
+
+  constructor(readonly suspended: boolean) {
+    super(
+      suspended
+        ? 'That organization is already suspended'
+        : 'That organization is not currently suspended',
+    );
+    this.name = 'PlatformOrganizationSuspensionStateError';
+  }
+}
+
+/**
  * A planner-model save named the model the audience already holds (MOTIR-7227).
  *
  * Refused BEFORE the audited transaction opens, so the trail never records a

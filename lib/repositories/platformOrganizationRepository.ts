@@ -115,4 +115,49 @@ export const platformOrganizationRepository = {
       data: { internalBilling },
     });
   },
+
+  /**
+   * Lock the organization row and return its CURRENT suspension state
+   * (MOTIR-748) — {@link lockInternalBilling}'s twin, for the same reason:
+   * suspending is a read-derived write (suspending a suspended org is a
+   * refusal, not a no-op), so two operators racing must serialise on the row.
+   * `null` when the id names no organization.
+   */
+  async lockSuspension(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ suspendedAt: Date | null } | null> {
+    const rows = await tx.$queryRaw<{ suspended_at: Date | null }[]>`
+      SELECT "suspended_at" FROM "organization" WHERE "id" = ${organizationId} FOR UPDATE
+    `;
+    const row = rows[0];
+    return row ? { suspendedAt: row.suspended_at } : null;
+  },
+
+  /** Suspend the organization: stamp when, why and by whom. */
+  async setSuspended(
+    organizationId: string,
+    data: { suspendedAt: Date; reason: string; suspendedByUserId: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<Organization> {
+    return tx.organization.update({
+      where: { id: organizationId },
+      data: {
+        suspendedAt: data.suspendedAt,
+        suspendedReason: data.reason,
+        suspendedByUserId: data.suspendedByUserId,
+      },
+    });
+  },
+
+  /** Reactivate the organization: clear all three suspension columns. */
+  async clearSuspended(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Organization> {
+    return tx.organization.update({
+      where: { id: organizationId },
+      data: { suspendedAt: null, suspendedReason: null, suspendedByUserId: null },
+    });
+  },
 };

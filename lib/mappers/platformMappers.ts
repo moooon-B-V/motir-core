@@ -130,6 +130,7 @@ export function toPlatformOrganizationSummaryDTO(
     createdAt: row.createdAt.toISOString(),
     isMeta: row.isMeta,
     internalBilling: row.internalBilling,
+    suspended: row.suspendedAt !== null,
   };
 }
 
@@ -142,6 +143,13 @@ export function toPlatformOrganizationDetailDTO(row: Organization): PlatformOrga
     // whether one is on record, and forwarding the blob would put a payment
     // provider's payload on an operator screen for no rendered benefit.
     hasScaledTrackerSubscription: row.scaledTrackerSubscription !== null,
+    suspension: row.suspendedAt
+      ? {
+          suspendedAt: row.suspendedAt.toISOString(),
+          reason: row.suspendedReason,
+          suspendedByUserId: row.suspendedByUserId,
+        }
+      : null,
   };
 }
 

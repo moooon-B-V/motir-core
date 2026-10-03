@@ -195,6 +195,9 @@ describe('the reason rule', () => {
     'org.credit_grant': 'required',
     'org.credit_adjust': 'required',
     'org.plan_set': 'required',
+    // MOTIR-748 — suspending and reactivating an organization are writes.
+    'org.suspend': 'required',
+    'org.reactivate': 'required',
     // MOTIR-751 — reading the audit log, and verifying its chain, are platform
     // READS like any other: audited, reason-free.
     'audit.read': 'never',

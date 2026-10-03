@@ -28,6 +28,7 @@ import {
   OwnerOnlyByTransferError,
   OwnershipChangedError,
   OwnershipConfirmationMismatchError,
+  OrganizationSuspendedError,
 } from '@/lib/organizations/errors';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
@@ -174,7 +175,7 @@ export const organizationsService = {
       const workspace = await workspaceRepository.findByIdInTx(workspaceId, t);
       if (!workspace) return null;
 
-      const orgMembership = await organizationMembershipRepository.findByOrgAndUserInTx(
+      const orgMembership = await organizationMembershipRepository.findByOrgAndUserWithOrgStateInTx(
         workspace.organizationId,
         userId,
         t,
@@ -182,6 +183,18 @@ export const organizationsService = {
       // Org membership gates workspace access — no org membership ⇒ denied,
       // even if a (stale) workspace membership row exists.
       if (!orgMembership) return null;
+      // A SUSPENDED organization refuses every one of its members, whatever
+      // their role (MOTIR-748). Raised only AFTER membership is established, so
+      // a non-member still gets the no-leak null (→ 404); a member gets the
+      // dedicated ORGANIZATION_SUSPENDED refusal each door translates (403 on an
+      // API, a redirect on a page). Every workspace-scoped door — the session
+      // resolver, server actions, OAuth/MCP connections — reaches this gate.
+      if (orgMembership.organization.suspendedAt) {
+        throw new OrganizationSuspendedError(
+          orgMembership.organization.id,
+          orgMembership.organization.name,
+        );
+      }
 
       const workspaceMembership = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
         userId,

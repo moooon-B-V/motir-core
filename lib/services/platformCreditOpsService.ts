@@ -216,10 +216,14 @@ function logUnrecordedWrite(
   requestId: string,
   err: unknown,
 ): void {
+  // A CONSTANT format string first: every value is an argument, never part of
+  // the format (CodeQL js/tainted-format-string).
   console.error(
-    `[platform-credit-ops] motir-ai applied ${what} on organization ${organizationId} by ` +
-      `${principal.userId} (requestId ${requestId}), but the audit row did not commit — ` +
-      'retry the same action with the same requestId to record it',
+    '[platform-credit-ops] motir-ai applied %s on organization %s by %s (requestId %s), but the audit row did not commit — retry the same action with the same requestId to record it',
+    what,
+    organizationId,
+    principal.userId,
+    requestId,
     err,
   );
 }
@@ -292,8 +296,12 @@ async function writeCredits(
       // this one. The write still stands — the amount is what the operator
       // chose — and the row's balances are the ones the operator SAW.
       console.warn(
-        `[platform-credit-ops] ${kind} on ${organizationId}: expected balance ${balanceAfter}, ` +
-          `motir-ai answered ${result.balanceCredits} (requestId ${requestId})`,
+        '[platform-credit-ops] %s on %s: expected balance %s, motir-ai answered %s (requestId %s)',
+        kind,
+        organizationId,
+        balanceAfter,
+        result.balanceCredits,
+        requestId,
       );
     }
     return toPlatformCreditWriteDTO(organizationId, result, requestId);

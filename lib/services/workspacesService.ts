@@ -1,5 +1,8 @@
 import { assertOrgNotClosing } from '@/lib/organizations/closingGuard';
-import { OrganizationNotErasingError } from '@/lib/organizations/errors';
+import {
+  OrganizationNotErasingError,
+  OrganizationSuspendedError,
+} from '@/lib/organizations/errors';
 import { organizationDeletionRequestRepository } from '@/lib/repositories/organizationDeletionRequestRepository';
 import { Prisma, type Workspace, type WorkspaceMembership } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
@@ -725,6 +728,25 @@ export const workspacesService = {
     // Set when the cookie names a workspace the user holds NO membership in —
     // the one case a second, workspace-bound read is needed (below).
     let cookieWithoutMembership = false as boolean;
+    // The first SUSPENDED organization a DEFAULT candidate fell in (MOTIR-748).
+    // A default (last-active, first-by-createdAt) that lands in a suspended org
+    // falls through to the user's next accessible workspace — a member of two
+    // orgs is not locked out of both by one suspension. Only when NO workspace
+    // is accessible is the suspension raised, and never by self-healing a fresh
+    // default workspace past it. A cookie the user PINNED to a suspended org's
+    // workspace is an explicit choice, so that refusal is raised as-is.
+    let suspended = null as OrganizationSuspendedError | null;
+    const passesGate = async (workspaceId: string, tx: Prisma.TransactionClient) => {
+      try {
+        return (
+          (await organizationsService.resolveWorkspaceAccess(userId, workspaceId, tx)) !== null
+        );
+      } catch (err) {
+        if (!(err instanceof OrganizationSuspendedError)) throw err;
+        suspended ??= err;
+        return false;
+      }
+    };
     const existing = await withUserContext(
       userId,
       async (tx) => {
@@ -734,6 +756,7 @@ export const workspacesService = {
             cookieWorkspaceId,
             tx,
           );
+          // Not `passesGate`: a suspension of the PINNED workspace's org throws.
           if (
             pinned &&
             (await organizationsService.resolveWorkspaceAccess(userId, pinned.workspaceId, tx))
@@ -748,15 +771,26 @@ export const workspacesService = {
         // account-keyed — the Linear "last visited context" standard). The
         // resolver re-checks the access gate, so a since-revoked membership or an
         // archived/deleted project falls through cleanly to the default below.
-        const lastActive = await this.resolveLastActiveContext(userId, tx);
-        if (lastActive) return lastActive.workspaceId;
+        try {
+          const lastActive = await this.resolveLastActiveContext(userId, tx);
+          if (lastActive) return lastActive.workspaceId;
+        } catch (err) {
+          if (!(err instanceof OrganizationSuspendedError)) throw err;
+          suspended ??= err;
+        }
 
         const first = await workspaceMembershipRepository.findFirstByUserWithWorkspace(userId, tx);
-        if (
-          first &&
-          (await organizationsService.resolveWorkspaceAccess(userId, first.workspaceId, tx))
-        ) {
+        if (first && (await passesGate(first.workspaceId, tx))) {
           return first.workspaceId;
+        }
+        // Only reached past a SUSPENDED first default: walk the rest of the
+        // user's memberships for one whose org is not suspended (the rare path —
+        // the common one returned above without this read).
+        if (suspended) {
+          const all = await workspaceMembershipRepository.findWorkspacesByUser(userId, tx);
+          for (const w of all) {
+            if (w.id !== first?.workspaceId && (await passesGate(w.id, tx))) return w.id;
+          }
         }
         return null;
       },
@@ -777,6 +811,9 @@ export const workspacesService = {
     }
 
     if (existing) return existing;
+    // Every workspace the user holds sits in a suspended organization: refuse
+    // with the suspension, never self-heal a default workspace around it.
+    if (suspended) throw suspended;
 
     const name = userName ?? (await userRepository.findById(userId))?.name ?? 'My';
     const { workspace } = await this.ensureDefaultWorkspace({ userId, userName: name });
