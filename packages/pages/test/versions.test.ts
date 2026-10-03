@@ -60,6 +60,8 @@ describe('decideVersionWrite', () => {
     savedAt: new Date(0),
     restoredFromVersionId: null,
     restoredFromNumber: null,
+    sealedAt: null,
+    frozenAt: null,
   };
 
   it('starts version 1 on an empty history', () => {
@@ -178,7 +180,7 @@ describe('the cap', () => {
   it('does not prune when a save only extends', async () => {
     const page = await createPage(store, clock, scope);
     await write(page.id, 'A', 'x');
-    expect(store.called('deleteOldestVersions')).toBe(0);
+    expect(store.called('deleteOldestUnmarkedVersions')).toBe(0);
   });
 });
 
@@ -241,7 +243,7 @@ describe('restorePageVersion', () => {
     // `page` has versions 1–2; `other` has 1–3, so 3 exists only on `other`.
     const before = JSON.stringify([...store.pages.values(), store.versions]);
     const writes = () =>
-      ['updateBody', 'insertVersion', 'updateVersion', 'deleteOldestVersions'].map((m) =>
+      ['updateBody', 'insertVersion', 'updateVersion', 'deleteOldestUnmarkedVersions'].map((m) =>
         store.called(m as never),
       );
     const writesBefore = writes();

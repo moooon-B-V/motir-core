@@ -117,6 +117,9 @@ export const PAGE_VERSION_RECORD_SELECT = {
   savedAt: true,
   restoredFromVersionId: true,
   restoredFromNumber: true,
+  sealedAt: true,
+  frozenAt: true,
+  frozenByGateId: true,
 } as const;
 
 export function toPageVersionRow(record: PageVersionRecord): PageVersionRow {
@@ -129,6 +132,8 @@ export function toPageVersionRow(record: PageVersionRecord): PageVersionRow {
     savedAt: record.savedAt,
     restoredFromVersionId: record.restoredFromVersionId,
     restoredFromNumber: record.restoredFromNumber,
+    sealedAt: record.sealedAt,
+    frozenAt: record.frozenAt,
   };
 }
 

@@ -118,6 +118,8 @@ describe('toPageVersionListItemDto', () => {
           savedAt: at,
           restoredFromVersionId: null,
           restoredFromNumber: null,
+          sealedAt: null,
+          frozenAt: null,
         },
         undefined,
         true,

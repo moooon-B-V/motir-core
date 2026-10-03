@@ -48,7 +48,7 @@ export function decideVersionWrite(
 /** Deletes the oldest versions past the cap. */
 async function applyCap(store: PageStore, pageId: string): Promise<void> {
   if ((await store.countVersions(pageId)) > PAGE_VERSION_CAP) {
-    await store.deleteOldestVersions(pageId, PAGE_VERSION_CAP);
+    await store.deleteOldestUnmarkedVersions(pageId, PAGE_VERSION_CAP);
   }
 }
 

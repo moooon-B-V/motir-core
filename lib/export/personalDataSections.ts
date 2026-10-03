@@ -126,6 +126,7 @@ export type PersonalDataDelegate =
   | 'folder'
   | 'page'
   | 'pageVersion'
+  | 'decisionPagePublication'
   | 'monitorConnection'
   | 'approvalGate'
   | 'planRevision';
@@ -527,6 +528,17 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     basis: 'Versions of pages the reader saved or restored.',
     redact: ['bodyState'],
     where: (userId) => ({ authorId: userId }),
+  },
+  {
+    // `published_by_id` attributes an act — publishing a page version as a work
+    // item's decision — to a person, the same shape as `page_version.author_id`
+    // directly above, so it is EXPORTED (Story MOTIR-5761 · MOTIR-7428). The row
+    // carries ids and a time, no content.
+    table: 'decision_page_publication',
+    model: 'decisionPagePublication',
+    tier: 'tenant',
+    basis: 'Decision pages the reader published to a work item.',
+    where: (userId) => ({ publishedById: userId }),
   },
   {
     // `bound_by_user_id` attributes an act — binding a monitored project to this

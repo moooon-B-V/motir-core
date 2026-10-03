@@ -66,22 +66,97 @@ export const pageVersionRepository = {
   },
 
   /**
-   * Delete every version of a page but the `keep` highest numbers, in ONE
-   * statement — it runs under the page's lock, and a single statement cannot
-   * race itself. A restore row whose source goes is kept: the FK sets its
-   * `restored_from_version_id` to NULL and `restored_from_number` stays.
+   * Delete a page's oldest UNMARKED versions — neither sealed nor frozen — until
+   * `keep` versions remain or only marked ones are left (`pages.md` AMENDMENT 3:
+   * the cap counts every version and deletes only unmarked ones). ONE
+   * statement, under the page's lock. A restore row whose source goes is kept:
+   * the FK sets its `restored_from_version_id` to NULL and `restored_from_number`
+   * stays.
    */
-  async deleteOldest(pageId: string, keep: number, tx: Prisma.TransactionClient): Promise<number> {
+  async deleteOldestUnmarked(
+    pageId: string,
+    keep: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
     return tx.$executeRaw`
       DELETE FROM "page_version"
-       WHERE "page_id" = ${pageId}
-         AND "number" NOT IN (
-           SELECT "number" FROM "page_version"
-            WHERE "page_id" = ${pageId}
-            ORDER BY "number" DESC
-            LIMIT ${keep}
-         )
+       WHERE "id" IN (
+         SELECT "id" FROM "page_version"
+          WHERE "page_id" = ${pageId}
+            AND "sealed_at" IS NULL
+            AND "frozen_at" IS NULL
+          ORDER BY "number" ASC
+          LIMIT GREATEST(
+            (SELECT count(*) FROM "page_version" WHERE "page_id" = ${pageId}) - ${keep},
+            0
+          )
+       )
     `;
+  },
+
+  /**
+   * SEAL one version (`pages.md` AMENDMENT 3) — a decision publish. Idempotent:
+   * an already-sealed version keeps its first `sealed_at`. Returns whether the
+   * version exists.
+   */
+  async sealVersion(versionId: string, at: Date, tx: Prisma.TransactionClient): Promise<boolean> {
+    const found = await tx.pageVersion.updateMany({
+      where: { id: versionId, sealedAt: null },
+      data: { sealedAt: at },
+    });
+    if (found.count > 0) return true;
+    return (await tx.pageVersion.count({ where: { id: versionId } })) > 0;
+  },
+
+  /**
+   * FREEZE one version, naming the gate that approved it. The CHECK
+   * `page_version_frozen_requires_sealed` refuses an unsealed version — the
+   * caller seals at publish, so a violation here is a bug, not a user error.
+   * Idempotent on an already-frozen version (its first freeze stands).
+   */
+  async freezeVersion(
+    versionId: string,
+    gateId: string,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.pageVersion.updateMany({
+      where: { id: versionId, frozenAt: null },
+      data: { frozenAt: at, frozenByGateId: gateId },
+    });
+  },
+
+  /** Whether any version of the page is FROZEN — what blocks its hard delete. */
+  async hasFrozenVersion(pageId: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    const hit = await tx.pageVersion.findFirst({
+      where: { pageId, frozenAt: { not: null } },
+      select: { id: true },
+    });
+    return hit !== null;
+  },
+
+  /** Whether any of these pages holds a FROZEN version — the set a delete takes. */
+  async anyFrozenVersion(
+    pageIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    if (pageIds.length === 0) return null;
+    const hit = await tx.pageVersion.findFirst({
+      where: { pageId: { in: [...pageIds] }, frozenAt: { not: null } },
+      select: { pageId: true },
+    });
+    return hit?.pageId ?? null;
+  },
+
+  /** One version by id, with its marks and its snapshot; `null` when it is gone. */
+  async findVersionById(
+    versionId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PageVersionBodyRecord | null> {
+    return tx.pageVersion.findUnique({
+      where: { id: versionId },
+      select: { ...PAGE_VERSION_RECORD_SELECT, bodyState: true, bodyMarkdown: true },
+    });
   },
 
   /**

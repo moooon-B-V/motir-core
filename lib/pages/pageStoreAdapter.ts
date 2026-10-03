@@ -158,8 +158,8 @@ export function createPageStore(tx: Prisma.TransactionClient): PageStore {
       return pageVersionRepository.countByPage(pageId, tx);
     },
 
-    async deleteOldestVersions(pageId, keep) {
-      await pageVersionRepository.deleteOldest(pageId, keep, tx);
+    async deleteOldestUnmarkedVersions(pageId, keep) {
+      await pageVersionRepository.deleteOldestUnmarked(pageId, keep, tx);
     },
 
     // ADR §2: "a no-op adapter until then" — the derived link rows are the
