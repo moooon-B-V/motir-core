@@ -51,6 +51,10 @@ const STAFF = 'acceptance-fleet-staff@example.com';
 const STOP_REASON = 'CI ran 30 min with no debit reaching Northwind — stopping until it is fixed';
 
 const MIN = 60_000;
+// The Fleet table is 64rem wide and scrolls inside its own box; at the lane's
+// default 1280px, beside the 240px admin sidebar, its Own pool, accrual,
+// credits and verdict columns sat past the box's edge in the video.
+const WIDE = { width: 1440, height: 810 };
 
 test('a platform admin reads the fleet, stops one org’s containers, and the other org keeps running', async ({
   page,
@@ -93,6 +97,7 @@ test('a platform admin reads the fleet, stops one org’s containers, and the ot
 
   // ── The operator: a signed-up account granted `superadmin`; the gate reads a
   //    fresh row per request.
+  await page.setViewportSize(WIDE);
   await signUpToOnboarding(page, STAFF);
   await adminDb.user.update({ where: { email: STAFF }, data: { platformRole: 'superadmin' } });
 
@@ -118,6 +123,12 @@ test('a platform admin reads the fleet, stops one org’s containers, and the ot
       await expect(northwindRow.getByText(fm.orgs.accrued.none)).toBeVisible();
       await expect(halcyonRow.getByText(fm.verdict.ok)).toBeVisible();
       await expect(halcyonRow.getByRole('cell').nth(1)).toHaveText('2');
+      // Every column is ON SCREEN, not merely in the DOM: the Own pool group and
+      // the last column are inside the table's scroll box, not past its edge.
+      const ownPool = fleetOrgs.getByRole('columnheader', { name: fm.orgs.group.own });
+      const verdictCol = fleetOrgs.getByRole('columnheader', { name: fm.orgs.col.verdict });
+      await expect(ownPool).toBeInViewport({ ratio: 1 });
+      await expect(verdictCol).toBeInViewport({ ratio: 1 });
       await expect(fleetOrgs.getByText('1 mismatched')).toBeVisible();
       await expect(fleetOrgs.getByText('2 orgs running')).toBeVisible();
       await beat();
