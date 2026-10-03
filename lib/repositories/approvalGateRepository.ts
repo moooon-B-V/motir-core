@@ -279,6 +279,63 @@ export const approvalGateRepository = {
       ORDER BY g."decided_at" ASC, wi."identifier" ASC`;
   },
 
+  /**
+   * The APPROVED page decisions under the same epic (Story MOTIR-5761 · MOTIR-7438) —
+   * every agent `decision` card whose latest `decision_approval` gate is approved over
+   * a PAGE, with the version that approval FROZE (`page_version.frozen_by_gate_id`),
+   * oldest approval first. The frozen version, never the page's latest: a run reads
+   * the text that was approved. Same epic walk as
+   * {@link findConfirmedDecisionsUnderEpicOf}, beside which the prompt merges it.
+   */
+  async findApprovedPageDecisionsUnderEpicOf(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      identifier: string;
+      title: string;
+      decidedAt: Date;
+      pageId: string;
+      versionNumber: number;
+    }>
+  > {
+    return tx.$queryRaw`
+      WITH RECURSIVE up AS (
+        SELECT wi."id", wi."parentId", wi."kind"::text AS "kind", 0 AS "depth"
+        FROM "work_item" wi WHERE wi."id" = ${workItemId}
+        UNION ALL
+        SELECT p."id", p."parentId", p."kind"::text, up."depth" + 1
+        FROM "work_item" p JOIN up ON p."id" = up."parentId"
+      ),
+      epic AS (
+        SELECT "id" FROM up WHERE "kind" = 'epic' ORDER BY "depth" ASC LIMIT 1
+      ),
+      down AS (
+        SELECT e."id" FROM epic e
+        UNION ALL
+        SELECT c."id" FROM "work_item" c JOIN down ON c."parentId" = down."id"
+      )
+      SELECT wi."identifier" AS "identifier", wi."title" AS "title",
+             g."decided_at" AS "decidedAt", pv."page_id" AS "pageId",
+             pv."number" AS "versionNumber"
+      FROM down
+      JOIN "work_item" wi ON wi."id" = down."id"
+      JOIN LATERAL (
+        SELECT ag."id", ag."state", ag."decided_at"
+        FROM "approval_gate" ag
+        WHERE ag."work_item_id" = wi."id" AND ag."kind" = 'decision_approval'
+        ORDER BY (ag."state" = 'awaiting') DESC, ag."created_at" DESC
+        LIMIT 1
+      ) g ON TRUE
+      JOIN "page_version" pv ON pv."frozen_by_gate_id" = g."id"
+      WHERE wi."type"::text = 'decision'
+        AND wi."executor"::text <> 'human'
+        AND wi."archivedAt" IS NULL
+        AND g."state" = 'approved'
+        AND g."decided_at" IS NOT NULL
+      ORDER BY g."decided_at" ASC, wi."identifier" ASC`;
+  },
+
   async findLatestByWorkItem(
     workItemId: string,
     kind: ApprovalGateKind,

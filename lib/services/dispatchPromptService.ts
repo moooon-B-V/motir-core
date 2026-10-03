@@ -554,10 +554,13 @@ async function readConfirmedDecisions(
   workItemId: string,
   workspaceId: string,
 ): Promise<ConfirmedDecisionForPrompt[]> {
-  const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
-    approvalGateRepository.findConfirmedDecisionsUnderEpicOf(workItemId, tx),
+  const [rows, pageRows] = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    Promise.all([
+      approvalGateRepository.findConfirmedDecisionsUnderEpicOf(workItemId, tx),
+      approvalGateRepository.findApprovedPageDecisionsUnderEpicOf(workItemId, tx),
+    ]),
   );
-  return rows.map((row) => {
+  const confirmed: ConfirmedDecisionForPrompt[] = rows.map((row) => {
     const parse = parseDecisionRecord(row.descriptionMd);
     const sections = parse.ok ? parse : parse.draft;
     return {
@@ -568,4 +571,18 @@ async function readConfirmedDecisions(
       resultingDirectionMd: sections.resultingDirectionMd,
     };
   });
+  // AGENT decisions approved over a PAGE (MOTIR-7438) join the SAME ordered feed, by
+  // the date a person decided them — one block, one calendar rule.
+  if (pageRows.length === 0) return confirmed;
+  const pages: ConfirmedDecisionForPrompt[] = pageRows.map((row) => ({
+    key: row.identifier,
+    title: row.title,
+    decidedAt: row.decidedAt.toISOString(),
+    decisionMd: '',
+    resultingDirectionMd: '',
+    page: { pageId: row.pageId, versionNumber: row.versionNumber },
+  }));
+  return [...confirmed, ...pages].sort(
+    (a, b) => a.decidedAt.localeCompare(b.decidedAt) || a.key.localeCompare(b.key),
+  );
 }

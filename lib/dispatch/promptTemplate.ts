@@ -288,6 +288,12 @@ export interface ConfirmedDecisionForPrompt {
   decisionMd: string;
   /** The body's `## Resulting direction` section — the epic's direction in full. */
   resultingDirectionMd: string;
+  /**
+   * An AGENT decision approved over a PAGE (MOTIR-7438): the page and the version
+   * the approval froze. Its text lives there, not in the card's body, so the two
+   * sections above are empty and the prompt names the `get_page` call instead.
+   */
+  page?: { pageId: string; versionNumber: number };
 }
 
 /**
@@ -1618,6 +1624,20 @@ function confirmedDecisionsSection(decisions: readonly ConfirmedDecisionForPromp
     'CONFIRMED DECISIONS ON THIS EPIC — the direction a person agreed, oldest first',
   ];
   for (const decision of decisions) {
+    if (decision.page) {
+      // An agent decision approved over a PAGE (MOTIR-7438): the approved text is
+      // the FROZEN version, read by number — never the live page, which may since
+      // have moved on.
+      const projectKey = decision.key.replace(/-\d+$/, '');
+      lines.push(
+        '',
+        `  ${decision.key} — ${decision.title}`,
+        `    approved ${decision.decidedAt}`,
+        '    Read the approved text — that version, not the page as it is now:',
+        `      get_page { projectKey: "${projectKey}", pageId: "${decision.page.pageId}", version: ${decision.page.versionNumber} }`,
+      );
+      continue;
+    }
     lines.push(
       '',
       `  ${decision.key} — ${decision.title}`,
