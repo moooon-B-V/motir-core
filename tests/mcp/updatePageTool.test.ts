@@ -82,6 +82,26 @@ describe('update_page', () => {
     await client.close();
   });
 
+  it('names an untitled page as Untitled in its save line', async () => {
+    const fx = await makeWorkItemFixture();
+    const seeded = await pagesService.createPageFromMarkdown(fx.ctx, {
+      projectId: fx.projectId,
+      markdown: 'No title yet.',
+    });
+    const client = await connectClient(fx.ctx, EDIT);
+    const res = await client.callTool({
+      name: 'update_page',
+      arguments: {
+        projectKey: 'PROD',
+        pageId: seeded.id,
+        markdown: 'Still no title.',
+        revision: seeded.revision,
+      },
+    });
+    expect(textOf(res)).toContain(`Saved page Untitled (${seeded.id})`);
+    await client.close();
+  });
+
   it('a stale revision is refused PAGE_REVISION_CONFLICT, naming both revisions, and writes nothing', async () => {
     const fx = await makeWorkItemFixture();
     const seeded = await seedPage(fx.ctx, fx.projectId);

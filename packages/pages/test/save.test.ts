@@ -393,6 +393,13 @@ function seedBody(pageId: string, markdown: string) {
   });
 }
 
+// The two size refusals below build a body near the 1–2 MiB caps, which takes a
+// few seconds bare and several times that under the coverage instrumentation CI
+// runs this package with — over vitest's 5s default (MOTIR-7413). The time is
+// the fixture's, not the code under test's, so it is given room rather than a
+// smaller body that would no longer reach the cap.
+const HEAVY_BODY_TIMEOUT_MS = 60_000;
+
 describe('savePageMarkdown (§3, §8.2, MOTIR-7408)', () => {
   const markdown = [
     '# Runbook',
@@ -531,50 +538,58 @@ describe('savePageMarkdown (§3, §8.2, MOTIR-7408)', () => {
     expect(store.called('updateBody')).toBe(0);
   });
 
-  it('refuses an update over the save cap after the lock, writing nothing', async () => {
-    const page = await createPage(store, clock, scope);
-    const markdownIn = paragraphs(40_000, 'p');
-    expect(new TextEncoder().encode(markdownIn).byteLength).toBeLessThan(PAGE_SAVE_MAX_BYTES);
+  it(
+    'refuses an update over the save cap after the lock, writing nothing',
+    async () => {
+      const page = await createPage(store, clock, scope);
+      const markdownIn = paragraphs(40_000, 'p');
+      expect(new TextEncoder().encode(markdownIn).byteLength).toBeLessThan(PAGE_SAVE_MAX_BYTES);
 
-    const refusal = await savePageMarkdown(store, clock, {
-      pageId: page.id,
-      actorId: 'u1',
-      markdown: markdownIn,
-      expectedRevision: 1,
-    }).catch((err: unknown) => err);
+      const refusal = await savePageMarkdown(store, clock, {
+        pageId: page.id,
+        actorId: 'u1',
+        markdown: markdownIn,
+        expectedRevision: 1,
+      }).catch((err: unknown) => err);
 
-    expect(refusal).toMatchObject({ code: 'PAGE_BODY_TOO_LARGE', limit: PAGE_SAVE_MAX_BYTES });
-    expect((refusal as PageBodyTooLargeError).size).toBeGreaterThan(PAGE_SAVE_MAX_BYTES);
-    expect(store.called('lockPage')).toBe(1);
-    expect(store.called('updateBody')).toBe(0);
-    expect(store.called('insertVersion')).toBe(1);
-  });
+      expect(refusal).toMatchObject({ code: 'PAGE_BODY_TOO_LARGE', limit: PAGE_SAVE_MAX_BYTES });
+      expect((refusal as PageBodyTooLargeError).size).toBeGreaterThan(PAGE_SAVE_MAX_BYTES);
+      expect(store.called('lockPage')).toBe(1);
+      expect(store.called('updateBody')).toBe(0);
+      expect(store.called('insertVersion')).toBe(1);
+    },
+    HEAVY_BODY_TIMEOUT_MS,
+  );
 
-  it('refuses a merged state over the body cap after the lock, writing nothing', async () => {
-    const page = await createPage(store, clock, scope);
-    const kept = paragraphs(32_000, 'a');
-    seedBody(page.id, kept);
-    const seeded = store.pages.get(page.id)!;
-    const next = `${kept}\n\n${paragraphs(22_000, 'b')}`;
-    const update = markdownToUpdate(seeded.bodyState, next);
-    expect(update.byteLength).toBeLessThanOrEqual(PAGE_SAVE_MAX_BYTES);
-    const reached = applyUpdate(seeded.bodyState, update).byteLength;
-    expect(reached).toBeGreaterThan(PAGE_BODY_MAX_BYTES);
+  it(
+    'refuses a merged state over the body cap after the lock, writing nothing',
+    async () => {
+      const page = await createPage(store, clock, scope);
+      const kept = paragraphs(32_000, 'a');
+      seedBody(page.id, kept);
+      const seeded = store.pages.get(page.id)!;
+      const next = `${kept}\n\n${paragraphs(22_000, 'b')}`;
+      const update = markdownToUpdate(seeded.bodyState, next);
+      expect(update.byteLength).toBeLessThanOrEqual(PAGE_SAVE_MAX_BYTES);
+      const reached = applyUpdate(seeded.bodyState, update).byteLength;
+      expect(reached).toBeGreaterThan(PAGE_BODY_MAX_BYTES);
 
-    const refusal = await savePageMarkdown(store, clock, {
-      pageId: page.id,
-      actorId: 'u1',
-      markdown: next,
-      expectedRevision: 1,
-    }).catch((err: unknown) => err);
+      const refusal = await savePageMarkdown(store, clock, {
+        pageId: page.id,
+        actorId: 'u1',
+        markdown: next,
+        expectedRevision: 1,
+      }).catch((err: unknown) => err);
 
-    expect(refusal).toBeInstanceOf(PageBodyTooLargeError);
-    expect(refusal).toMatchObject({ limit: PAGE_BODY_MAX_BYTES, size: reached });
-    expect(store.called('lockPage')).toBe(1);
-    expect(store.called('updateBody')).toBe(0);
-    expect(store.called('replaceDerivedLinks')).toBe(0);
-    expect(store.pages.get(page.id)!.revision).toBe(1);
-  });
+      expect(refusal).toBeInstanceOf(PageBodyTooLargeError);
+      expect(refusal).toMatchObject({ limit: PAGE_BODY_MAX_BYTES, size: reached });
+      expect(store.called('lockPage')).toBe(1);
+      expect(store.called('updateBody')).toBe(0);
+      expect(store.called('replaceDerivedLinks')).toBe(0);
+      expect(store.pages.get(page.id)!.revision).toBe(1);
+    },
+    HEAVY_BODY_TIMEOUT_MS,
+  );
 
   it('refuses an unknown page', async () => {
     await expect(
