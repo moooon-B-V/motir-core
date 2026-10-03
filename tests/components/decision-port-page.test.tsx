@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import en from '@/messages/en.json';
 import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
@@ -102,6 +102,21 @@ describe('a published page version, awaiting (delta 1)', () => {
     expect(document.body.textContent).toContain(
       plain(fill(dec.consequencePage, { number: 3, key: 'ACME-12' })),
     );
+  });
+});
+
+describe('band 3 over a page (delta 1)', () => {
+  it('the verb is Approve — never Approve and merge — and its confirm step names the freeze', () => {
+    renderPort();
+    expect(
+      screen.queryByRole('button', {
+        name: en.approvalGate.pullRequestApproval.verb.approveAndMerge,
+      }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.approve }));
+    expect(screen.getByText(dec.confirm.records)).toBeTruthy();
+    expect(screen.getByText(fill(dec.confirm.freezesPage, { number: 3 }))).toBeTruthy();
+    expect(screen.getByText(fill(dec.confirm.movesDone, { key: 'ACME-12' }))).toBeTruthy();
   });
 });
 

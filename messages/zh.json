@@ -11010,7 +11010,9 @@
       "withdrawnNext": "没有人对它做出决定。新版本已取而代之。",
       "confirm": {
         "records": "记录你接受此决策",
-        "moves": "将 {key} 移至“已批准”"
+        "moves": "将 {key} 移至“已批准”",
+        "freezesPage": "冻结此页面的第 {number} 版——之后的编辑会生成新版本",
+        "movesDone": "将 {key} 移至“已完成”"
       },
       "consequencePage": "批准即接受此页面的第 {number} 版，并将 <b>{key}</b> 移至“已完成”。不涉及拉取请求。",
       "page": {

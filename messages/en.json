@@ -11014,7 +11014,9 @@
       "withdrawnNext": "Nobody decided it. The new version is asked in its place.",
       "confirm": {
         "records": "Records that you accept this decision",
-        "moves": "Moves {key} to Approved"
+        "moves": "Moves {key} to Approved",
+        "freezesPage": "Freezes version {number} of this page — later edits start new versions",
+        "movesDone": "Moves {key} to Done"
       },
       "consequencePage": "Approving accepts version {number} of this page and moves <b>{key}</b> to Done. No pull request is involved.",
       "page": {

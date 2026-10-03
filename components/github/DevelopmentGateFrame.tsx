@@ -975,7 +975,11 @@ export function DevelopmentGateFrame({
           ),
           {
             decision: 'approve',
-            label: t('verb.approveAndMerge'),
+            // A PAGE subject merges nothing (MOTIR-7436, delta 1): its verb is Approve.
+            label:
+              isDecision && decisionDoc?.outcome === 'page'
+                ? tGate('verb.approve')
+                : t('verb.approveAndMerge'),
             variant: 'primary',
             // Merging is not reversible from here, which is what the confirm step says aloud.
             confirms: true,
@@ -1037,36 +1041,43 @@ export function DevelopmentGateFrame({
   const rowPressMember = rowPress
     ? (members.find((member) => member.subjectVersion === rowPress.subjectVersion) ?? null)
     : null;
-  const confirmConsequences = isDecision
-    ? [
-        tDecision('confirm.records'),
-        ...decisionPrs.map((pr) => t('confirm.mergeOrQueue', { pr })),
-        tDecision('confirm.moves', { key: itemIdentifier }),
-      ]
-    : // ⚠️ A ROW PRESS AGREES TO ITS OWN TWO THINGS (§ 28 panel 8a). The set's list would
-      // name pull requests this press does not touch, and — the point of the whole
-      // amendment — it must say ALOUD that this is a NEW approval, not the spent one.
-      rowPress && rowPressMember
+  const confirmConsequences =
+    isDecision && decisionDoc?.outcome === 'page'
       ? [
-          t('reasked.confirm.newApproval', { count }),
-          rowPress.queueAgain
-            ? t('reasked.confirm.requeue', { pr: nameOf(rowPressMember) })
-            : t('reasked.confirm.merge', { pr: nameOf(rowPressMember) }),
-          t('confirm.movesToApproved', { key: itemIdentifier }),
+          tDecision('confirm.records'),
+          tDecision('confirm.freezesPage', { number: decisionDoc.versionNumber }),
+          tDecision('confirm.movesDone', { key: itemIdentifier }),
         ]
-      : decideActions
-        ? acceptanceLeads
+      : isDecision
+        ? [
+            tDecision('confirm.records'),
+            ...decisionPrs.map((pr) => t('confirm.mergeOrQueue', { pr })),
+            tDecision('confirm.moves', { key: itemIdentifier }),
+          ]
+        : // ⚠️ A ROW PRESS AGREES TO ITS OWN TWO THINGS (§ 28 panel 8a). The set's list would
+          // name pull requests this press does not touch, and — the point of the whole
+          // amendment — it must say ALOUD that this is a NEW approval, not the spent one.
+          rowPress && rowPressMember
           ? [
-              tAcceptance('confirm.records'),
-              tAcceptance('confirm.freezes'),
-              tAcceptance('confirm.merges', { prs: prsNamed }),
-            ]
-          : [
-              t('confirm.records', { count }),
-              ...members.map((member) => t('confirm.mergeOrQueue', { pr: nameOf(member) })),
+              t('reasked.confirm.newApproval', { count }),
+              rowPress.queueAgain
+                ? t('reasked.confirm.requeue', { pr: nameOf(rowPressMember) })
+                : t('reasked.confirm.merge', { pr: nameOf(rowPressMember) }),
               t('confirm.movesToApproved', { key: itemIdentifier }),
             ]
-        : [];
+          : decideActions
+            ? acceptanceLeads
+              ? [
+                  tAcceptance('confirm.records'),
+                  tAcceptance('confirm.freezes'),
+                  tAcceptance('confirm.merges', { prs: prsNamed }),
+                ]
+              : [
+                  t('confirm.records', { count }),
+                  ...members.map((member) => t('confirm.mergeOrQueue', { pr: nameOf(member) })),
+                  t('confirm.movesToApproved', { key: itemIdentifier }),
+                ]
+            : [];
 
   /** The row verb, as a frame verb: the band opens for it, and proceeding runs its act. */
   const requestedVerb: GateVerb | null =
