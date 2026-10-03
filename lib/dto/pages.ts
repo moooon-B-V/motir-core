@@ -16,6 +16,11 @@ export interface PageDto {
   updatedAt: string;
   /** Whether the caller holds `page:edit` — the editor opens writable or read-only. */
   canEdit: boolean;
+  /**
+   * Whether the caller holds `page:delete` (MOTIR-7419) — Manager only — so the
+   * page can hide Delete… without a second round trip.
+   */
+  canDelete: boolean;
 }
 
 /** A page row without its body — what a create or a rename returns. */

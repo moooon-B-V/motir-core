@@ -362,12 +362,15 @@ export const pagesService = {
       if (!record || record.projectId !== input.projectId) {
         throw new PageNotFoundError(input.pageId);
       }
-      const { canEditPages } = await projectAccessService.getPageCapabilities(
+      const { canEditPages, canDeletePages } = await projectAccessService.getPageCapabilities(
         input.projectId,
         ctx,
         tx,
       );
-      return toPageDto(toLockedPageRow(record), canEditPages);
+      return toPageDto(toLockedPageRow(record), {
+        canEdit: canEditPages,
+        canDelete: canDeletePages,
+      });
     });
   },
 

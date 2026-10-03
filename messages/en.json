@@ -443,6 +443,10 @@
       "label": "Edit pages",
       "description": "Create pages, rename them and change what they say."
     },
+    "page_delete": {
+      "label": "Delete pages",
+      "description": "Permanently delete an archived page and its archived sub-pages."
+    },
     "public_request_comment": {
       "label": "Comment on requests",
       "description": "Reply on a public request's thread. Public projects only."

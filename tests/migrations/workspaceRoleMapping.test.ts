@@ -55,9 +55,10 @@ const sorted = (s: Iterable<string>) => [...s].sort();
  * `workspaceRoleNeverWider.test.ts` carries).
  * MOTIR-6872 — `instance:use` (agent instances), granted to member and above.
  * MOTIR-7277 — `page:view` (every built-in) and `page:edit` (member and above).
+ * MOTIR-7419 — `page:delete`, admin only.
  */
 const KEYS_ADDED_AFTER_MIGRATION: Record<'admin' | 'member' | 'viewer', string[]> = {
-  admin: ['instance:use', 'page:view', 'page:edit'],
+  admin: ['instance:use', 'page:view', 'page:edit', 'page:delete'],
   member: ['instance:use', 'page:view', 'page:edit'],
   viewer: ['page:view'],
 };

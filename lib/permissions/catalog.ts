@@ -269,10 +269,13 @@ export const PERMISSIONS = [
   // operation is also owner-scoped, whatever keys the reader holds.
   'instance:use',
   // Story MOTIR-5752 · MOTIR-7277 — reading and writing a project's pages
-  // (`docs/decisions/pages.md` §5). `page:delete` is NOT here: it arrives with
-  // MOTIR-5755, in the change that first asserts it.
+  // (`docs/decisions/pages.md` §5) — and Story MOTIR-5755 · MOTIR-7419 —
+  // PERMANENTLY deleting an archived page. All three page keys are present.
+  // Archive and restore ride `page:edit` (they are reversible); only the
+  // irreversible delete needs `page:delete`, which implies `page:edit` below.
   'page:view',
   'page:edit',
+  'page:delete',
   'public_request:comment',
   'public_request:submit',
   'public_request:upvote',
@@ -402,6 +405,9 @@ const PERMISSION_META: Record<
   // `projectAccessService.assertCanViewPages` / `assertCanEditPages`.
   'page:view': { domain: 'page', enforcement: 'enforced' }, // MOTIR-7277
   'page:edit': { domain: 'page', enforcement: 'enforced' }, // MOTIR-7277
+  // `enforced` on arrival — `projectAccessService.assertCanDeletePages` consults
+  // it, and the page delete (MOTIR-7421) is its caller.
+  'page:delete': { domain: 'page', enforcement: 'enforced' }, // MOTIR-7419
   'public_request:comment': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:submit': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:upvote': { domain: 'public_request', enforcement: 'enforced' },
@@ -476,6 +482,10 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionDescriptor> = O
  */
 export const PERMISSION_IMPLICATIONS: Partial<Record<PermissionKey, readonly PermissionKey[]>> = {
   'work_item:delete': ['work_item:archive'],
+  // MOTIR-7419 — the same shape for pages: a role that may destroy a page may
+  // also archive it, which is the only way to reach a deletable page (pages ADR
+  // §5/§7 — delete is allowed only from the archive).
+  'page:delete': ['page:edit'],
 };
 
 /**

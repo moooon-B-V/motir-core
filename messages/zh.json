@@ -443,6 +443,10 @@
       "label": "编辑页面",
       "description": "创建页面、重命名页面并修改其内容。"
     },
+    "page_delete": {
+      "label": "删除页面",
+      "description": "永久删除已归档的页面及其已归档的子页面。"
+    },
     "public_request_comment": {
       "label": "评论请求",
       "description": "在公开请求的讨论串中回复。仅适用于公开项目。"

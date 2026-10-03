@@ -215,7 +215,10 @@ export function toPageLevelRow(record: PageLevelRecord): PageLevelRow {
  * base64 — the editor's seed, from which it derives everything else — and
  * whether THIS caller may write it.
  */
-export function toPageDto(row: LockedPageRow, canEdit: boolean): PageDto {
+export function toPageDto(
+  row: LockedPageRow,
+  caps: { canEdit: boolean; canDelete: boolean },
+): PageDto {
   return {
     id: row.id,
     projectId: row.projectId,
@@ -223,7 +226,8 @@ export function toPageDto(row: LockedPageRow, canEdit: boolean): PageDto {
     revision: row.revision,
     bodyState: toBase64(row.bodyState),
     updatedAt: row.updatedAt.toISOString(),
-    canEdit,
+    canEdit: caps.canEdit,
+    canDelete: caps.canDelete,
   };
 }
 

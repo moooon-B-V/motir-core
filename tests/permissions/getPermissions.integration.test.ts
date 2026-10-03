@@ -452,6 +452,9 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     expect([...(catalog.roles.find((r) => r.key === 'manager')?.permissions ?? [])].sort()).toEqual(
       ROLE_GATED_PERMISSIONS.filter((key) => isEnforced(key)).sort(),
     );
+    // MOTIR-7419 — `page:delete` is the Manager's alone; the two exhaustive
+    // assertions above already keep it off the member and viewer sets.
+    expect(catalog.roles.find((r) => r.key === 'manager')?.permissions).toContain('page:delete');
 
     // No role holds a level-gated public-request grant — a role cannot give one.
     for (const role of catalog.roles) {
