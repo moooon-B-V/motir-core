@@ -3,6 +3,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { getJob } from '@/lib/ai/motirAiClient';
 import {
   deriveTemporaryList,
+  GUIDE_SKIP_LINKED_PULL_REQUEST,
   parseGuideTurn,
   type GuideAction,
   type GuideActionOutcome,
@@ -380,7 +381,7 @@ async function landOne(
         throw new Skip('not every step is ticked');
       }
       if (await hasLinkedPullRequest(card.item, ctx)) {
-        throw new Skip('a linked pull request closes this card when it merges');
+        throw new Skip(GUIDE_SKIP_LINKED_PULL_REQUEST);
       }
       const path = await walkToDone(card.item, ctx);
       if (path === null) throw new Skip('the workflow has no way from here to Done');

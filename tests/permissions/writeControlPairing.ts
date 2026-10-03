@@ -112,6 +112,8 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
   'items/[key]/labelComponentActions.ts#removeLabelAction': EDIT,
   'items/[key]/todoActions.ts#addTodoAction': EDIT,
   'items/[key]/todoActions.ts#deleteTodoAction': EDIT,
+  // The guide overlay's re-read of the card's rows (MOTIR-7466) — the browse gate.
+  'items/[key]/todoActions.ts#listTodosAction': READ,
   'items/[key]/todoActions.ts#moveTodoAction': EDIT,
   'items/[key]/todoActions.ts#setTodoDoneAction': EDIT,
   'items/[key]/todoActions.ts#updateTodoAction': EDIT,

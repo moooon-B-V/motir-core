@@ -21,6 +21,12 @@ import {
   TODO_TEXT_MAX_LENGTH,
 } from '@/lib/workItemTodos/limits';
 
+/** The reason a `close` is skipped on a card a linked pull request will close
+ *  (A2.6). Shared so the rail can say *No status changed* from the record rather
+ *  than from the prose (design MOTIR-7462 panel 18). */
+export const GUIDE_SKIP_LINKED_PULL_REQUEST =
+  'a linked pull request closes this card when it merges';
+
 /** A bound on the rail message, applied on READ (motir-ai caps it at 4 000). */
 export const GUIDE_MESSAGE_MAX = 4_000;
 /** A bound on a correction's / edit's / cannot-do's reason (motir-ai: 500). */

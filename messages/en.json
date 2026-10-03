@@ -7336,7 +7336,8 @@
           "lessons": "lessons"
         }
       },
-      "openerFollowUp": "You just chose {label}. Motir AI is planning what it gates."
+      "openerFollowUp": "You just chose {label}. Motir AI is planning what it gates.",
+      "composerPlaceholderGuide": "Tell Motir AI how the step went…"
     },
     "targets": {
       "sectionLabel": "Work items",
@@ -7368,7 +7369,8 @@
       "replan": "plan change",
       "contextual": "in context",
       "roadmap": "roadmap",
-      "followUp": "follow-up"
+      "followUp": "follow-up",
+      "guide": "guide"
     },
     "lead": {
       "project": "Opened on {project}.",
@@ -7466,6 +7468,69 @@
     "dividerAria": "Resize the conversation",
     "followUpCard": {
       "label": "Follow-up to a choice"
+    },
+    "guide": {
+      "openedFrom": "Opened from {key}",
+      "reading": "Reading {key} and its to-do list…",
+      "stepOf": "Step {n} of {total}",
+      "notSavedSuffix": "· not saved",
+      "tag": {
+        "current": "Current step",
+        "notSaved": "Not saved",
+        "added": "Added",
+        "changed": "Changed",
+        "moved": "Moved",
+        "cannot": "Cannot be done"
+      },
+      "proposedBand": "<b>Proposed, not saved.</b> Nothing is on the card until you choose.",
+      "temporaryBand": "Not saved to the card. Stopping ends this walk.",
+      "save": "Save to the card",
+      "saveTurn": "Save this list to the card.",
+      "walk": "Walk without saving",
+      "walkTurn": "Walk it without saving.",
+      "undo": "Undo",
+      "undoTurn": "Undo that change.",
+      "closeYes": "Close the card",
+      "closeYesTurn": "Yes, close the card.",
+      "closeNo": "Not yet",
+      "closeNoTurn": "Not yet.",
+      "reload": "Reload the card",
+      "staleNotice": "{key} changed since this turn read it. Reload it, then ask again.",
+      "failed": "That turn didn't finish, so nothing on the card changed.",
+      "errors": {
+        "notManual": "Motir AI guides a person through manual work, and this card is for an agent, so there is nothing to guide here.",
+        "closed": "This card is done or archived, so there is nothing left to guide.",
+        "forbidden": "You need permission to edit this card and to plan with Motir AI to be guided through it."
+      },
+      "youTicked": "You ticked step {n} on the list",
+      "youUnticked": "You unticked step {n} on the list",
+      "fieldTitle": "Title",
+      "field": {
+        "title": "title",
+        "description": "description",
+        "explanation": "explanation",
+        "and": " and "
+      },
+      "outcome": {
+        "ticked": "Ticked step {n} on <chip>{key}</chip>.",
+        "tickedTemp": "Ticked step {n} on this walk. Not saved to the card.",
+        "tickedNoStatus": "Ticked step {n} on <chip>{key}</chip>. No status changed.",
+        "unticked": "Unticked step {n} on <chip>{key}</chip>.",
+        "untickedTemp": "Unticked step {n} on this walk. Not saved to the card.",
+        "saved": "Saved {count} steps to <chip>{key}</chip>.",
+        "savedTicked": "Saved {count} steps to <chip>{key}</chip>, with the {done} you had done ticked.",
+        "added": "Added step {n} to <chip>{key}</chip>.",
+        "changed": "Changed step {n} on <chip>{key}</chip>.",
+        "removed": "Removed a step from <chip>{key}</chip>.",
+        "moved": "Moved a step on <chip>{key}</chip>.",
+        "addedTemp": "Added step {n} to this walk. Not saved to the card.",
+        "changedTemp": "Changed step {n} on this walk. Not saved to the card.",
+        "removedTemp": "Removed a step from this walk. Not saved to the card.",
+        "movedTemp": "Moved a step on this walk. Not saved to the card.",
+        "edited": "Edited the {fields} of <chip>{key}</chip>.",
+        "commented": "Commented on <chip>{key}</chip>: “{reason}”",
+        "closed": "Moved <chip>{key}</chip> to Done, and added this summary as a comment."
+      }
     }
   },
   "codeHealth": {
