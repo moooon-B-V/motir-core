@@ -269,6 +269,8 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //  kept only as the evidence that it fired once, and is itself deletable.
   //  It fired a second time for the Approval records room: MOTIR-5300 drew
   //  `/approvals` before MOTIR-5302 built the page, and that card removed the row.
+  //  And a third time for the Planning lessons console: MOTIR-1409 drew
+  //  `/admin/planning-lessons` before MOTIR-1411 built it, and that card removed the rows.
   // ── An address named as HISTORY, by the asset that retires it ─────────────
   // `design/code-context/design-notes.md` (MOTIR-1764) documents a collapse:
   // Code health, the code index and Git were three things in two rail sections

@@ -353,6 +353,8 @@ describe('(5b) every `Textarea` caller in the tree is pinned by name', () => {
    * `autoGrow`, so each is a field whose height a user still drags.
    */
   const FIXED = [
+    // The platform lessons console's why / how-to-apply editors (MOTIR-1411).
+    'app/(admin)/admin/planning-lessons/_components/LessonCurate.tsx',
     // The ops reason field (MOTIR-752): a fixed three-row editor.
     'app/(admin)/admin/tenants/[orgId]/_components/ops/ReasonConfirmDialog.tsx',
     'app/(authed)/_components/ReportWidgetModal.tsx',

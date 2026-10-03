@@ -8449,7 +8449,8 @@
       "groupOperations": "Operations",
       "footerStaff": "Platform staff",
       "exitToApp": "Exit to app",
-      "navAiPlanning": "AI planning"
+      "navAiPlanning": "AI planning",
+      "navPlanningLessons": "Planning lessons"
     },
     "nav": {
       "overview": "Overview",
@@ -8610,6 +8611,13 @@
           "ai": {
             "planner_model": {
               "set": "Changed the planning model"
+            },
+            "lesson": {
+              "edit": "Edited a planning lesson",
+              "enable": "Switched a planning lesson on",
+              "disable": "Switched a planning lesson off",
+              "promote": "Promoted a planning lesson",
+              "retention_set": "Changed the lesson retirement window"
             }
           },
           "fleet": {
@@ -9167,6 +9175,203 @@
         "notPermitted": "Only a superadmin can change the planning model.",
         "reasonRequired": "A reason is required.",
         "failed": "The change could not be saved. Nothing was changed."
+      }
+    },
+    "lessons": {
+      "breadcrumb": "Operations · Planning lessons",
+      "title": "Planning lessons",
+      "subtitle": "What the planner has learned from its own mistakes, across every organisation, beside the global corpus every planner reads. Edit a lesson, switch it off, or promote it so every planner learns it.",
+      "readAuditedLead": "Tenant lessons are customer text.",
+      "readAuditedBody": "Opening one is a cross-tenant read and is written to the audit log.",
+      "card": {
+        "title": "Lessons",
+        "subtitle": "Every organisation’s lessons and the global corpus, newest first."
+      },
+      "filter": {
+        "label": "Filter lessons",
+        "search": "Search",
+        "searchPlaceholder": "Search lesson titles",
+        "scope": "Scope",
+        "scopeAll": "All",
+        "scopeGlobal": "Global",
+        "scopeTenant": "Tenant",
+        "type": "Type",
+        "typeAny": "Any type",
+        "category": "Category",
+        "categoryAny": "Any category",
+        "org": "Organisation",
+        "orgAny": "Any organisation",
+        "state": "State",
+        "stateAll": "All",
+        "stateOn": "On",
+        "stateOff": "Off",
+        "apply": "Apply",
+        "count": "{n, plural, one {# filter} other {# filters}}",
+        "clearAll": "Clear all",
+        "remove": "Remove {filter}"
+      },
+      "col": {
+        "lesson": "Lesson",
+        "type": "Type",
+        "owner": "Owner",
+        "injection": "Injection",
+        "recurred": "Recurred"
+      },
+      "type": {
+        "regular_planning": "Regular planning",
+        "onboarding_planning": "Onboarding planning",
+        "planning_craft": "Planning craft",
+        "coding": "Coding"
+      },
+      "owner": {
+        "global": "Global",
+        "unknownOrg": "Unknown organisation"
+      },
+      "inj": {
+        "on": "Injected",
+        "off": "Off",
+        "offSub": "Switched off by staff",
+        "resting": "Resting",
+        "restSub": "Not seen in {days} days"
+      },
+      "recur": "{n}×",
+      "recurLast": "last {when}",
+      "pager": {
+        "label": "Newest first · 50 a page",
+        "page": "Page {n}",
+        "previous": "Previous",
+        "next": "Next"
+      },
+      "noMatch": {
+        "title": "No lessons match these filters",
+        "body": "Nothing is hidden by your role. Remove a filter, or clear them all.",
+        "action": "Clear filters"
+      },
+      "empty": {
+        "title": "No lessons yet",
+        "body": "The planner writes a lesson when it notices it made a mistake. None has been captured on this platform yet, and no global lesson has been seeded."
+      },
+      "unavailable": {
+        "title": "Couldn’t load the lessons",
+        "body": "The planning service (motir-ai) didn’t respond, so no lesson is shown. This is a fetch error — nothing has changed.",
+        "retry": "Retry"
+      },
+      "detail": {
+        "back": "Planning lessons",
+        "why": "Why it matters",
+        "how": "How to apply",
+        "what": "What happened",
+        "categories": "Categories",
+        "noCategories": "None",
+        "provenance": "Provenance",
+        "organisation": "Organisation",
+        "workspaceProject": "Workspace · project",
+        "source": "Source",
+        "captured": "Captured",
+        "recurred": "Recurred",
+        "occurrences": "Recent occurrences",
+        "occurrencesSub": "newest 20",
+        "noOccurrences": "No occurrence recorded.",
+        "history": "Changes by staff",
+        "noHistory": "No staff change yet.",
+        "historyBy": "{who} · {when}",
+        "readOnly": "Only an operator or superadmin can change lessons.",
+        "switchLabel": "Inject this lesson",
+        "unknownUser": "A former staff member"
+      },
+      "edit": {
+        "open": "Edit",
+        "review": "Review change",
+        "save": "Save edit",
+        "cancel": "Cancel",
+        "title": "Title",
+        "why": "Why it matters",
+        "how": "How to apply",
+        "categories": "Categories",
+        "categoriesHint": "Comma-separated.",
+        "blank": "This field can’t be blank.",
+        "confirmTitle": "Save your edit to this lesson?",
+        "confirmBody": "The planner reads the new wording from its next planning job. Changing the title or how-to-apply also changes which tasks it is matched to."
+      },
+      "off": {
+        "title": "Stop injecting this lesson?",
+        "body": "{owner} stops reading it from its next planning job. Nothing is deleted, its occurrences keep counting, and you can switch it back on at any time.",
+        "confirm": "Switch off"
+      },
+      "on": {
+        "title": "Inject this lesson again?",
+        "body": "{owner} reads it again from its next planning job, as long as it has recurred in the last {days} days.",
+        "confirm": "Switch on"
+      },
+      "ownerOne": "The planner for {owner}",
+      "ownerAll": "Every organisation’s planner",
+      "promote": {
+        "open": "Promote",
+        "toGlobal": "Make global",
+        "toCraft": "Make global planning craft",
+        "globalHint": "Every organisation’s planner reads it. Its type stays {type}.",
+        "craftHint": "Every planner reads it, during onboarding and regular planning alike.",
+        "globalTitle": "Make this lesson global?",
+        "globalBody": "It stops belonging to {owner}, and every organisation’s planner reads it from its next planning job. This cannot be undone from this page.",
+        "craftTitle": "Make this lesson global planning craft?",
+        "craftBody": "Every planner reads it, during onboarding and regular planning alike, from its next planning job. Its type changes from {type} to Planning craft, and it stops belonging to {owner}. This cannot be undone from this page.",
+        "craftBodyGlobal": "Every planner reads it, during onboarding and regular planning alike, from its next planning job. Its type changes from {type} to Planning craft. This cannot be undone from this page.",
+        "warning": "This is {org}’s text. Edit out anything that names their product, people, code or customers BEFORE you promote it — other organisations will be planned with it.",
+        "confirm": "Promote"
+      },
+      "reasonLabel": "Reason — required, written to the audit log",
+      "reasonPlaceholder": "Why are you making this change?",
+      "cancel": "Cancel",
+      "saved": {
+        "off": "Lesson switched off.",
+        "on": "Lesson switched on.",
+        "edit": "Lesson edited.",
+        "promote": "Lesson promoted.",
+        "reads": "The planner reads it from its next planning job.",
+        "stops": "The planner stops reading it from its next planning job."
+      },
+      "refused": {
+        "gone": "Not saved — this lesson no longer exists. It was removed while you had it open. Nothing was written.",
+        "unavailable": "Not saved — the planning service didn’t answer. Nothing was written and no audit row exists. Your edit is still in the form; try again.",
+        "notPermitted": "Not saved — your staff role can’t make this change.",
+        "reasonRequired": "Not saved — a reason is required.",
+        "invalid": "Not saved — the planning service refused this change.",
+        "failed": "Not saved — something went wrong. Nothing was written."
+      },
+      "noop": "Already up to date. Someone changed this lesson a moment ago, so there was nothing to change and nothing was logged.",
+      "historyAction": {
+        "edit": "Edited",
+        "enable": "Switched on",
+        "disable": "Switched off",
+        "promote": "Promoted"
+      },
+      "field": {
+        "title": "Title",
+        "why": "Why it matters",
+        "howToApply": "How to apply",
+        "categories": "Categories",
+        "enabled": "Injected",
+        "scope": "Scope",
+        "mistakeType": "Type",
+        "aiProjectId": "Owner"
+      },
+      "window": {
+        "title": "Retirement window",
+        "line": "Retirement window: {days} days. A lesson that has not recurred in {days} days stops being injected. It is kept, and comes back the next time it recurs.",
+        "subDefault": "Default {days} · set by nobody yet",
+        "subBy": "Set by {who} on {when}",
+        "subByUnknown": "Set on {when}",
+        "change": "Change",
+        "readOnly": "Only a superadmin can change this.",
+        "confirmTitle": "Change the retirement window?",
+        "confirmBody": "Lessons that have not recurred within the window stop being injected for every organisation, from the next planning job. Nothing is deleted: a resting lesson comes back the next time it recurs.",
+        "daysLabel": "Window, in days",
+        "bounds": "Between {min} and {max} days.",
+        "impact": "At {days} days, {n, plural, one {# lesson that is injected today will rest} other {# lessons that are injected today will rest}}.",
+        "impactCounting": "Counting the lessons this would rest…",
+        "confirm": "Change window",
+        "saved": "Retirement window changed.",
+        "savedBody": "Planners use {days} days from their next planning job."
       }
     },
     "usage": {

@@ -1483,6 +1483,316 @@ never read as a tenant. Numbers use `--el-text` / `--el-text-strong` (credits, t
 - **Any governance action** (suspend, grant, impersonate, tier change) — Story 10.3.
 - **The operator lessons console** — Story 10.5 (MOTIR-1408).
 
+---
+
+# AMENDMENT 2026-10-02 — Planning lessons (MOTIR-1409 · story MOTIR-1408)
+
+**Design system check (first, per the design-system rule).** The same verdict as the AI planning
+amendment above: the project is on Motir Design (`@motir/design-system`, `workspace:*`), so the page
+is drawn from its `--el-*` / shape tokens and its shipped primitives. **Nothing the package lacks is
+needed.** The page uses the shipped `Switch`, and its five `--el-switch-*` tokens are spelled in the
+mock exactly as `packages/design-system/theme.css` defines them.
+
+**Mock (a DELTA):**
+[`console--planning-lessons.mock.html`](console--planning-lessons.mock.html), eleven panels.
+**Amends:**
+
+- `console.mock.html` Panel 2 / 13: the shell gets one more rail row.
+- Panel 7a: the 404, referenced and not redrawn.
+- Panels 11–12 and the AI planning amendment's Panel 4: the confirm-with-reason grammar, reused for
+  four more writes.
+
+The older mocks are records and are not edited.
+
+**Gates:**
+
+- **MOTIR-1411**: the page `/admin/planning-lessons`, the detail `/admin/planning-lessons/[id]`, the
+  nav row, every state below, en + zh.
+- **MOTIR-1463**: the retirement-window control, Panel 10.
+
+It builds on motir-ai's `/v1/admin/lessons` API (MOTIR-1410, documented in motir-ai's boundary contract). That
+API returns each write's audit record for motir-core to append.
+
+**Composed, not redrawn.** The token block, primitive CSS and lucide sprite are spliced verbatim from
+`console--ai-planning.mock.html`. The shell is the shipped `AdminShell.tsx`, and every confirm is the
+shipped `ClassificationBar` grammar. The additions block at the end of the mock's `<style>` holds
+three things only: this page's cell styles, the `Switch`'s tokens, and six lucide glyphs (`BookOpen`,
+`Pencil`, `Globe`, `History`, `Filter`, `Hourglass`).
+
+## What this page is
+
+This is where Motir platform staff review what the planner has learned from its own mistakes,
+**across every organisation**, beside the global corpus every planner reads. They curate it in three
+ways: edit a lesson, switch it off, or promote it so every planner learns it. **Staff-facing only.**
+For a non-staff user both routes are a 404 (Panel 7a). No tenant surface links here.
+
+The tenant-facing lessons view (Settings → Project → AI planning, MOTIR-3335) shows one project its
+OWN lessons. This page is the only one that shows them all, and the only one that writes.
+
+## The access path — a new rail row (Panel 1)
+
+The new row is **Operations → Planning lessons**:
+
+- **Position:** after **AI planning** and before the reserved **Governance (10.3)** row.
+- **Icon:** `BookOpen` (lucide).
+- **Route:** `/admin/planning-lessons`, active when `pathname.startsWith('/admin/planning-lessons')`,
+  so the detail keeps it lit.
+- **Visibility:** it is a LIVE row, visible to **every staff role**.
+
+It sits in Operations beside AI planning because both are knobs on how the planner runs.
+
+## The roles
+
+| Staff role               | Reads                                | Can change                                                                     |
+| ------------------------ | ------------------------------------ | ------------------------------------------------------------------------------ |
+| `support`                | the list and every detail (Panel 5b) | nothing — no switch, no Edit, no Promote, no window Change                     |
+| `operator`               | the list and every detail            | **edit** and **switch on / off** (Panel 5a)                                    |
+| `superadmin`             | the list and every detail            | the above, plus **promote** (Panel 4) and the **retirement window** (Panel 10) |
+| not staff (owners incl.) | the app 404 (Panel 11 → Panel 7a)    | —                                                                              |
+
+- **Reads** are `requirePlatformStaff('support')`.
+- **Edit and enable/disable** are `operator`, re-asserted in the service, which is the rule. The
+  missing control is only presentation.
+- **Promote is `superadmin`**, for a reason specific to this page. Promoting takes one customer's
+  words and puts them in front of every other customer's planner. That is a disclosure decision, not
+  a curation one.
+- **The window is `superadmin`**, because it changes what every organisation's planner is told
+  (MOTIR-1463's card says so).
+
+**Reads are audited.** A tenant lesson is customer text, so it is a cross-tenant read.
+
+- Opening a detail writes one `estate.read` row targeting the lesson.
+- Loading a list page writes one `estate.read` row targeting the platform.
+
+This is the console's standing rule ("all reads audited" in the operator bar). The page line under
+the title says so.
+
+## The panels (review EACH — mistake #31)
+
+1. **The list, populated.** It renders inside the shell, with the rail row active. Two cards stack:
+   - **The retirement-window card** (Panel 10's door). It holds one sentence with the current N, a
+     line saying who set it, and **Change** for a superadmin.
+   - **Lessons**, holding the filter bar, the table and the pager. The table's columns:
+     - **Lesson**: title, with its categories as mono chips beneath.
+     - **Type**: the mistake type as a `Pill`, one tint per type.
+     - **Owner**: the organisation with `workspace / project` beneath, or a **Global** pill with a
+       globe glyph.
+     - **Injection**: a dot + a word. **Injected**, **Off** (_Switched off by staff_) or **Resting**
+       (_Not seen in N days_).
+     - **Recurred**: `N×` with _last {when}_.
+     - A chevron.
+
+   The whole row opens the detail. Newest first, 50 a page.
+
+2. **Filtered.**
+   - **LEFT:** the filters narrow together. Each set filter becomes a removable chip on a strip
+     under the bar, with **Clear all**. The pager drops when the results fit one page.
+   - **RIGHT:** no match. A filter-shaped empty state with **Clear filters**, distinct from 3b.
+3. **States.**
+   - **(a) Loading:** the card, its head and the filters paint at once, and five skeleton rows wait.
+     No count is guessed.
+   - **(b) Empty store:** no lesson exists anywhere, so there is nothing to filter.
+   - **(c) Unavailable:** motir-ai did not answer. The console's error card with Retry, and no rows.
+4. **Detail, a superadmin.** At `/admin/planning-lessons/[id]`. The title is the page heading, with
+   three pills: type, owner (or Global) and injection state.
+   - **Left card:** _Why it matters_, _How to apply_, _What happened_ (the lesson's `body`), and
+     _Categories_.
+   - **Right column, Provenance:** organisation, workspace · project, source (`sourceRef`), captured
+     date, and recurrence count with its last date.
+   - **Right column, Recent occurrences:** the newest 20, each with ref, source and date.
+   - **Right column, Changes by staff:** the platform audit rows for this lesson, newest first, each
+     with the act, what changed, who, when and the reason.
+
+   The curate controls sit top-right: the **Injected** `Switch`, **Edit**, and **Promote**. Promote
+   is a menu, drawn open, whose two targets each explain themselves in one line.
+
+5. **Controls by role** (header only).
+   - **(a) operator:** the switch and Edit. No Promote.
+   - **(b) support:** pills only, with one line saying who can change lessons. No disabled controls
+     are rendered.
+6. **Edit.**
+   - **(a)** The form replaces the text card in place: Title (`Input`), Why it matters and How to
+     apply (`Textarea`), and Categories. No field may be blank.
+   - **(b)** **Review change** opens the confirm. It shows ONLY the fields that changed, old struck
+     through above new: the same from → to the audit row records. It requires a reason.
+
+   If nothing changed, Review change stays disabled.
+
+7. **The switch.** Flipping it opens a confirm with a required reason. The switch moves only after
+   the write succeeds.
+   - **(a) Off:** names whose planner stops reading the lesson, and says nothing is deleted.
+   - **(b) On, reason missing:** the primary is disabled.
+
+   For a global lesson the sentence names _every organisation's planner_.
+
+8. **Promote** (superadmin). One confirm per target.
+   - **→ Global:** the lesson leaves its organisation, and every planner reads it.
+   - **→ Global planning craft:** the same, and its type becomes Planning craft, so planners of
+     both phases read it.
+
+   Both carry a **warning box**: _this is {org}'s text; edit out anything that names their product,
+   people, code or customers BEFORE you promote it_. Both say there is no demote on this page.
+   Which targets the menu offers depends on the lesson:
+   - A global regular lesson offers only the planning-craft target.
+   - A global planning-craft lesson shows no Promote at all.
+
+9. **After a write.**
+   - **TOP:** the switch has moved, a success `Toast` says when it takes effect, and the change
+     heads _Changes by staff_ with the reason.
+   - **BELOW:** the three other answers a write can get:
+     - **The lesson is gone** (`not_found`): back to the list.
+     - **motir-ai did not answer:** nothing was written, and the form keeps the edit.
+     - **Someone got there first:** a **no-op**. motir-ai answers `audit: null`, so no audit row is
+       written, and the page says so in a warning toast rather than a success one.
+10. **The retirement window** (MOTIR-1463, superadmin).
+    - **(a)** The confirm takes one number in days, bounded 7–365. It counts how many currently
+      injected lessons would rest under the new value before you commit, and it requires a reason.
+    - **(b)** operator and support see the card with _Only a superadmin can change this._ in place
+      of Change.
+11. **Not staff.** The app 404, drawn BY REFERENCE (Panel 7a). Not redrawn.
+
+## Copy (en — the `platformAdmin` namespace MOTIR-1411 adds, with a `zh` twin each)
+
+Lesson text, organisation names, keys and counts in the mock are **examples**. Interpolated values
+are in `{braces}`.
+
+| key                                                     | string                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shell.navPlanningLessons`                              | Planning lessons                                                                                                                                                                                                                                                     |
+| `lessons.breadcrumb`                                    | Operations · Planning lessons                                                                                                                                                                                                                                        |
+| `lessons.title`                                         | Planning lessons                                                                                                                                                                                                                                                     |
+| `lessons.subtitle`                                      | What the planner has learned from its own mistakes, across every organisation, beside the global corpus every planner reads. Edit a lesson, switch it off, or promote it so every planner learns it.                                                                 |
+| `lessons.readAuditedLead`                               | Tenant lessons are customer text.                                                                                                                                                                                                                                    |
+| `lessons.readAuditedBody`                               | Opening one is a cross-tenant read and is written to the audit log.                                                                                                                                                                                                  |
+| `lessons.card.title`                                    | Lessons                                                                                                                                                                                                                                                              |
+| `lessons.card.subtitle`                                 | Every organisation’s lessons and the global corpus, newest first.                                                                                                                                                                                                    |
+| `lessons.filter.search`                                 | Search · Search lesson titles                                                                                                                                                                                                                                        |
+| `lessons.filter.scope`                                  | Scope · All · Global · Tenant                                                                                                                                                                                                                                        |
+| `lessons.filter.type`                                   | Type · Any type                                                                                                                                                                                                                                                      |
+| `lessons.filter.category`                               | Category · Any category                                                                                                                                                                                                                                              |
+| `lessons.filter.org`                                    | Organisation · Any organisation                                                                                                                                                                                                                                      |
+| `lessons.filter.state`                                  | State · All · On · Off                                                                                                                                                                                                                                               |
+| `lessons.filter.count`                                  | {n} filters                                                                                                                                                                                                                                                          |
+| `lessons.filter.clearAll`                               | Clear all                                                                                                                                                                                                                                                            |
+| `lessons.col.*`                                         | Lesson · Type · Owner · Injection · Recurred                                                                                                                                                                                                                         |
+| `lessons.type.*`                                        | Regular planning · Onboarding planning · Planning craft · Coding                                                                                                                                                                                                     |
+| `lessons.owner.global`                                  | Global                                                                                                                                                                                                                                                               |
+| `lessons.inj.on`                                        | Injected                                                                                                                                                                                                                                                             |
+| `lessons.inj.off` / `.offSub`                           | Off / Switched off by staff                                                                                                                                                                                                                                          |
+| `lessons.inj.resting` / `.restSub`                      | Resting / Not seen in {days} days                                                                                                                                                                                                                                    |
+| `lessons.recur`                                         | {n}× · last {when}                                                                                                                                                                                                                                                   |
+| `lessons.pager`                                         | Newest first · 50 a page · Page {n} · Previous · Next                                                                                                                                                                                                                |
+| `lessons.noMatch.title` / `.body`                       | No lessons match these filters / Nothing is hidden by your role. Remove a filter, or clear them all.                                                                                                                                                                 |
+| `lessons.noMatch.action`                                | Clear filters                                                                                                                                                                                                                                                        |
+| `lessons.empty.title` / `.body`                         | No lessons yet / The planner writes a lesson when it notices it made a mistake. None has been captured on this platform yet, and no global lesson has been seeded.                                                                                                   |
+| `lessons.unavailable.title` / `.body`                   | Couldn’t load the lessons / The planning service (motir-ai) didn’t respond, so no lesson is shown. This is a fetch error — nothing has changed.                                                                                                                      |
+| `lessons.detail.why` · `.how` · `.what` · `.categories` | Why it matters · How to apply · What happened · Categories                                                                                                                                                                                                           |
+| `lessons.detail.provenance`                             | Provenance — Organisation · Workspace · project · Source · Captured · Recurred                                                                                                                                                                                       |
+| `lessons.detail.occurrences`                            | Recent occurrences · newest 20                                                                                                                                                                                                                                       |
+| `lessons.detail.history`                                | Changes by staff                                                                                                                                                                                                                                                     |
+| `lessons.detail.readOnly`                               | Only an operator or superadmin can change lessons.                                                                                                                                                                                                                   |
+| `lessons.edit` · `.review` · `.save`                    | Edit · Review change · Save edit                                                                                                                                                                                                                                     |
+| `lessons.edit.confirmTitle` / `.body`                   | Save your edit to this lesson? / The planner reads the new wording from its next planning job. Changing the title or how-to-apply also changes which tasks it is matched to.                                                                                         |
+| `lessons.off.title` / `.body`                           | Stop injecting this lesson? / The planner for {owner} stops reading it from its next planning job. Nothing is deleted, its occurrences keep counting, and you can switch it back on at any time.                                                                     |
+| `lessons.on.title` / `.body`                            | Inject this lesson again? / The planner for {owner} reads it again from its next planning job, as long as it has recurred in the last {days} days.                                                                                                                   |
+| `lessons.ownerAll`                                      | every organisation’s planner (replaces “the planner for {owner}” on a global lesson)                                                                                                                                                                                 |
+| `lessons.promote` · `.toGlobal` · `.toCraft`            | Promote · Make global · Make global planning craft                                                                                                                                                                                                                   |
+| `lessons.promote.globalHint`                            | Every organisation’s planner reads it. Its type stays {type}.                                                                                                                                                                                                        |
+| `lessons.promote.craftHint`                             | Every planner reads it, during onboarding and regular planning alike.                                                                                                                                                                                                |
+| `lessons.promote.globalTitle` / `.body`                 | Make this lesson global? / It stops belonging to {owner}, and every organisation’s planner reads it from its next planning job. This cannot be undone from this page.                                                                                                |
+| `lessons.promote.craftTitle` / `.body`                  | Make this lesson global planning craft? / Every planner reads it, during onboarding and regular planning alike, from its next planning job. Its type changes from {type} to Planning craft, and it stops belonging to {owner}. This cannot be undone from this page. |
+| `lessons.promote.warning`                               | This is {org}’s text. Edit out anything that names their product, people, code or customers BEFORE you promote it — other organisations will be planned with it.                                                                                                     |
+| `lessons.reasonLabel`                                   | Reason — required, written to the audit log                                                                                                                                                                                                                          |
+| `lessons.saved.*`                                       | Lesson switched off. / Lesson switched on. / Lesson edited. / Lesson promoted. — each followed by: The planner {reads / stops reading} it from its next planning job.                                                                                                |
+| `lessons.refused.gone`                                  | Not saved — this lesson no longer exists. It was removed while you had it open. Nothing was written.                                                                                                                                                                 |
+| `lessons.refused.unavailable`                           | Not saved — the planning service didn’t answer. Nothing was written and no audit row exists. Your edit is still in the form; try again.                                                                                                                              |
+| `lessons.noop`                                          | Already {state}. Someone changed this lesson a moment ago, so there was nothing to change and nothing was logged.                                                                                                                                                    |
+| `lessons.window.line` / `.sub`                          | Retirement window: {days} days. A lesson that has not recurred in {days} days stops being injected. It is kept, and comes back the next time it recurs. / Default 90 · set by nobody yet                                                                             |
+| `lessons.window.change`                                 | Change                                                                                                                                                                                                                                                               |
+| `lessons.window.readOnly`                               | Only a superadmin can change this.                                                                                                                                                                                                                                   |
+| `lessons.window.confirmTitle` / `.body`                 | Change the retirement window? / Lessons that have not recurred within the window stop being injected for every organisation, from the next planning job. Nothing is deleted: a resting lesson comes back the next time it recurs.                                    |
+| `lessons.window.bounds`                                 | Between 7 and 365 days.                                                                                                                                                                                                                                              |
+| `lessons.window.impact`                                 | At {days} days, {n} lessons that are injected today will rest.                                                                                                                                                                                                       |
+
+## Data — what each element reads
+
+| element                       | source                                                                                                                       |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| list rows, filters, pager     | `GET /v1/admin/lessons` (`scope`, `mistakeType`, `category`, `enabled`, `coreOrganizationId`, `coreProjectId`, `q`, cursor)  |
+| owner                         | the row's `tenant` (`null` → Global); org name, workspace and project names resolved in motir-core from the core ids         |
+| Organisation filter's options | motir-core's org list (the tenants lookup's read), sent as `coreOrganizationId`                                              |
+| injection state               | the row's `injected` / `injectionBlock` (`disabled` → Off, `not_recurred` → Resting), N from `retentionDays`                 |
+| detail, occurrences           | `GET /v1/admin/lessons/:id` (`occurrences`, newest 20)                                                                       |
+| Changes by staff              | motir-core's platform audit log, rows whose target is this lesson (`ai.lesson.*`), newest first — a by-target read 1411 adds |
+| edit / switch / promote       | `PATCH` · `PUT …/enabled` · `POST …/promote`; motir-core appends the returned `audit` record (skipped when it is `null`)     |
+| no-op answer                  | `audit: null` on a write                                                                                                     |
+| retirement window             | MOTIR-1463's persisted setting; the impact count is a read 1463 adds                                                         |
+
+**There is no total count.** The list API is cursor-paged and returns no total. A count would be a
+second, full-table query on every page turn, so the pager says _Page {n}_ and offers Previous and
+Next. Previous walks back through the cursors the client has already seen.
+
+## Audit actions this page adds
+
+These go in motir-core's `PLATFORM_AUDIT_ACTIONS`, all with reason `required`:
+
+- `ai.lesson.edit`
+- `ai.lesson.enable`
+- `ai.lesson.disable`
+- `ai.lesson.promote`
+- MOTIR-1463's window change.
+
+The target is the lesson for the first four, and the platform for the window. `metadata` carries
+motir-ai's `before` / `after`, which hold only the fields that changed.
+
+## Colour and shape roles (`--el-*` only)
+
+| element                                 | token                                                                                                                                             |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| card, table, rows, pager                | the console's `Card` + `.tbl` + `.pager` roles, unchanged                                                                                         |
+| lesson title · categories               | `--el-text` · mono `--el-text-identifier` on `--el-surface`, `--radius-badge`                                                                     |
+| type pills                              | `Pill` tints: Regular `--el-tint-mint`, Onboarding `--el-tint-sky`, Craft `--el-tint-lavender`, Coding `--el-tint-peach`; text `--el-text-strong` |
+| owner · its path                        | `--el-text` · mono `--el-text-identifier`; Global pill `--el-tint-lavender` + `--el-text-strong`                                                  |
+| injection dot                           | Injected `--el-success`, Resting `--el-warning`, Off `--el-switch-off-border`; word `--el-text`, reason `--el-text-secondary`                     |
+| filter triggers                         | `--el-page-bg`, `--el-border` (set: `--el-border-strong`, value `--el-text-strong`), `--radius-input`, `--height-control`                         |
+| active-filter strip · chip              | `--el-surface-soft` with `--el-text-secondary` · chip on `--el-page-bg`, `--radius-badge`                                                         |
+| Switch                                  | the shipped `Switch`: `--el-switch-on` / `-on-border` / `-off-border` / `-knob` / `-knob-off`, `--el-muted` track off                             |
+| promote menu                            | `Popover`: `--el-page-bg`, `--shadow-elevated`, `--radius-card`; active row `--el-option-active-bg`; glyph `--el-accent-on-surface`               |
+| promote warning · window impact         | `--el-tint-yellow` + `--el-text-strong`, glyph `--el-warning`                                                                                     |
+| edit diff                               | old `--el-text-secondary` struck through, new `--el-text`                                                                                         |
+| toasts                                  | success `--el-tint-mint`, no-op `--el-tint-yellow`, refused `--el-tint-rose`; all `--el-text-strong`                                              |
+| retirement card glyph · page-line glyph | `--el-info`                                                                                                                                       |
+
+**No muted or faint ink carries text on this page.** These rows sit on `--el-surface` / `--el-surface-soft`
+as well as on white, and there `--el-text-muted` fails AA. Every secondary line is
+`--el-text-secondary`.
+
+## A11y
+
+- **The table** is a real `<table>`. Each row is a link to the detail, and its accessible name is
+  the lesson's title.
+- **The filter bar** is `role="search"`. Each chip's remove control is labelled _Remove {filter}_.
+- **The switch** is the shipped `Switch` (`role="switch"`, `aria-checked`), labelled _Inject this
+  lesson_. Flipping it opens the confirm. The switch's own state changes only after the write.
+- **Every confirm** is `role="alertdialog"`. Focus lands in the reason field, and the primary
+  carries `disabled` until the reason is non-blank.
+- **Toasts:** a success or no-op toast is `role="status"`; a refusal is `role="alert"`.
+- **The read-only face** renders no disabled controls.
+
+## What this amendment does NOT draw
+
+- **Deleting a lesson.** Off is the reversible answer, and retirement is the automatic one. Delete
+  is a later story if one is needed.
+- **Demoting a global lesson** back to a tenant. The confirm says so.
+- **Creating a lesson by hand.** Lessons come from the planner and from the `add_lesson` door.
+- **An audit browser.** _Changes by staff_ is this lesson's rows only. The browser is Story 10.3's
+  (MOTIR-745).
+- **The routing axes** (`kinds` / `types` / `phases`) as filters. They are not on the API (MOTIR-1410)
+  and nobody asked for them here.
+- **A `.png` export.** `docs/decisions/design-result.md` AMENDMENT 4 retired exports.
+
+---
+
 # AMENDMENT 2026-10-03 — the ops toolkit (MOTIR-746 · story MOTIR-745)
 
 **Design system check (first, per the design-system rule).** Read `package.json` (depends on

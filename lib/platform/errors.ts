@@ -231,6 +231,31 @@ export class PlatformWorkspaceNotFoundError extends Error {
 }
 
 /**
+ * A planning-lesson curate act would change nothing (MOTIR-1411): the edit names
+ * the values already stored, the switch is already where it was asked to go, or
+ * motir-ai answered `audit: null` because another write got there first. Thrown
+ * INSIDE the audited transaction in the last case, so no row is left for it.
+ */
+export class PlatformLessonUnchangedError extends Error {
+  readonly code = 'PLATFORM_LESSON_UNCHANGED';
+
+  constructor(readonly lessonId: string) {
+    super(`Lesson "${lessonId}" already holds that value — nothing to change`);
+    this.name = 'PlatformLessonUnchangedError';
+  }
+}
+
+/** A lesson edit that would blank a field, or a promote to a target the lesson cannot take. */
+export class PlatformLessonInvalidError extends Error {
+  readonly code = 'PLATFORM_LESSON_INVALID';
+
+  constructor(readonly detail: string) {
+    super(detail);
+    this.name = 'PlatformLessonInvalidError';
+  }
+}
+
+/**
  * An audit-log search was asked with an input that cannot be read (MOTIR-751)
  * — a cursor that is not one this service handed out, a date that does not
  * parse, a range that ends before it starts, or a verify range the wrong way

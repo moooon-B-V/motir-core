@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Activity,
+  BookOpen,
   Building2,
   Coins,
   LogOut,
@@ -53,6 +54,7 @@ export interface AdminShellLabels {
   navMonitoring: string;
   /** Operations → AI planning (MOTIR-7231), visible to every staff role. */
   navAiPlanning: string;
+  navPlanningLessons: string;
   /** Operations → Audit log (MOTIR-752), superadmin only. */
   navAuditLog: string;
   staffMarkTitle: string;
@@ -150,6 +152,14 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           label: labels.navAiPlanning,
           href: '/admin/ai-planning',
           active: pathname === '/admin/ai-planning',
+        },
+        // The planner's captured lessons across every organisation (MOTIR-1411,
+        // design MOTIR-1409). `startsWith` so a lesson's detail keeps it lit.
+        {
+          icon: <BookOpen />,
+          label: labels.navPlanningLessons,
+          href: '/admin/planning-lessons',
+          active: pathname.startsWith('/admin/planning-lessons'),
         },
         // The reserved `Governance · 10.3` row goes LIVE as the audit log
         // (design `platform-admin` AMENDMENT 2026-10-03 § 3, MOTIR-752). Every

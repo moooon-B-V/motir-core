@@ -151,6 +151,19 @@ export class PlannerModelUnreachableError extends MotirAiError {
   }
 }
 
+// A PLATFORM lesson read or curate named a lesson motir-ai does not have
+// (`/v1/admin/lessons/:id` → `not_found`; MOTIR-1411). Its own class rather than
+// the generic `not_found` mapping, which names a JOB: the console turns this one
+// into the app 404 on a detail read and into "this lesson no longer exists" on
+// a write.
+export class PlatformLessonNotFoundError extends MotirAiError {
+  readonly code = 'PLATFORM_LESSON_NOT_FOUND' as const;
+  constructor(readonly lessonId: string) {
+    super(`no lesson "${lessonId}"`);
+    this.name = 'PlatformLessonNotFoundError';
+  }
+}
+
 // A staff credit ADJUSTMENT would take the org's balance below zero
 // (`POST /v1/admin/credits` → 409 `conflict` with a detail starting
 // `insufficient_balance:`; MOTIR-747). A detail PREFIX, not a code — the §5 union
