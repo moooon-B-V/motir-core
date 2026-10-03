@@ -126,11 +126,21 @@ test('@smoke jobs dashboard: empty states + sidebar link', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
 
   // Fresh workspace → empty "Recent runs".
-  await expect(page.getByText('No job runs yet')).toBeVisible();
+  //
+  // ⚠️ BY ROLE, NOT BY TEXT (MOTIR-7415). The org pane streams under an in-page
+  // `<Suspense>`, so a re-render keeps the PREVIOUS pane mounted and hidden
+  // while the new one streams: the failing trace on motir-core#3369's merge
+  // group held every fold-in section twice, and `getByText` matched both `<h2>`s
+  // and refused strict mode. Not a second workspace — at two the fold-in is not
+  // rendered at all (`isWorkspaceTierRevealed`). The accessibility tree excludes
+  // the hidden copy (CLAUDE.md, *the second cost*).
+  await expect(page.getByRole('heading', { name: 'No job runs yet' })).toBeVisible();
 
   // Empty "Dead letter".
   await page.getByRole('link', { name: /Dead letter/ }).click();
-  await expect(page.getByText('Nothing in the dead-letter queue')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Nothing in the dead-letter queue' }),
+  ).toBeVisible();
 });
 
 test('@smoke jobs dashboard: a failed run shows under the Failed filter', async ({ page }) => {
@@ -148,7 +158,7 @@ test('@smoke jobs dashboard: a failed run shows under the Failed filter', async 
 
   // Filter to Succeeded → the failed run is gone (empty state).
   await page.getByRole('link', { name: 'Succeeded' }).click();
-  await expect(page.getByText('No job runs yet')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No job runs yet' })).toBeVisible();
 });
 
 test('@smoke jobs dashboard: a run in another workspace is NOT visible', async ({ page }) => {
@@ -167,7 +177,7 @@ test('@smoke jobs dashboard: a run in another workspace is NOT visible', async (
 
   await gotoJobs(page);
   // The user's own workspace has no runs, so the foreign run must not leak.
-  await expect(page.getByText('No job runs yet')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No job runs yet' })).toBeVisible();
 });
 
 test('@smoke jobs dashboard: DLQ badge counts entries, and an owner replays', async ({ page }) => {
