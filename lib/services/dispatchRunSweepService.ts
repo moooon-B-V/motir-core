@@ -110,10 +110,15 @@ export const dispatchRunSweepService = {
    */
   async reapLapsed(now: Date = new Date()): Promise<RunLivenessSweepSummary> {
     const summary: RunLivenessSweepSummary = { runsReaped: 0, runsRacedByClose: 0, runsFailed: 0 };
-    const cutoff = heartbeatLapsedBefore(now);
+    // One window per reporter (MOTIR-7450, `agent-reported-runs.md` §5): five
+    // minutes for a CLI-reported run, sixty for one the agent reports itself.
+    const cutoffs = {
+      cliHeartbeatBefore: heartbeatLapsedBefore(now, 'cli'),
+      agentHeartbeatBefore: heartbeatLapsedBefore(now, 'agent'),
+    };
     const lapsed = await withSystemContext((tx) =>
       dispatchRunRepository.listLapsedHeartbeatingRunningAcrossWorkspaces(
-        cutoff,
+        cutoffs,
         DISPATCH_RUN_SWEEP_BATCH_SIZE,
         tx,
       ),
@@ -157,7 +162,18 @@ export const dispatchRunSweepService = {
         // `skip_if_busy` (MOTIR-6881): a card this run covers is held by another
         // writer — a continue claim closing this very run, as a rule — so the reap
         // backs off rather than wait on it; the next pass reaps it if nobody did.
-        await dispatchRunService.close(run.id, { stopReason: 'abandoned' }, ctx, 'skip_if_busy');
+        // An AGENT-reported run ends at its last heartbeat, not at the reap
+        // (`agent-reported-runs.md` §5): otherwise every abandoned agent run would
+        // carry up to an hour nobody spent. A CLI run keeps AMENDMENT 2's end.
+        await dispatchRunService.close(
+          run.id,
+          {
+            stopReason: 'abandoned',
+            ...(run.reportedBy === 'agent' ? { endedAt: run.lastHeartbeatAt! } : {}),
+          },
+          ctx,
+          'skip_if_busy',
+        );
         summary.runsReaped += 1;
       } catch (err) {
         if (err instanceof DispatchRunTerminalError || err instanceof DispatchRunCardsBusyError) {

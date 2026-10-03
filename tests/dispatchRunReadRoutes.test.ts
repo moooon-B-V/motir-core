@@ -62,6 +62,7 @@ async function openRun(keys: string[], command: 'run_scope' | 'auto' | 'batch' =
     {
       projectKey: fixture.projectIdentifier,
       command,
+      reportedBy: 'cli',
       cards: keys.map((key) => ({ key, disposition: 'queued' as const })),
     },
     fixture.ctx,
@@ -92,6 +93,7 @@ describe('GET /api/dispatch-runs/[id]', () => {
       {
         projectKey: fixture.projectIdentifier,
         command: 'batch',
+        reportedBy: 'cli',
         scopeLabel: 'the active sprint',
         cards: [
           { key: c!, disposition: 'queued' },
@@ -292,6 +294,7 @@ describe('GET /api/work-items/[id]/dispatch-runs', () => {
       {
         projectKey: fixture.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         scopeKey: scope.identifier,
         cards: [
           { key: swept!, disposition: 'queued' },

@@ -591,7 +591,7 @@ describe('run activity keeps the agent awake (§6)', () => {
     const agentId = await agent();
     const before = (await agentRow(agentId)).lastActivityAt;
     const opened = await dispatchRunService.open(
-      { projectKey: KEY(), command: 'run', origin: 'local', cards: [] },
+      { projectKey: KEY(), command: 'run', reportedBy: 'cli', origin: 'local', cards: [] },
       fx.ctx,
     );
     const touch = vi.spyOn(agentInstanceActivityService, 'touchRunActivity');

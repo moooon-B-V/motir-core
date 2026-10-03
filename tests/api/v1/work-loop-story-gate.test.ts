@@ -182,23 +182,27 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     'browse-readable document look like an AI capability.',
   openDispatchRun:
     'MOTIR-1789 · MOTIR-1792 — the DISPATCH RUN ingest reports what a CLI invocation DID, and ' +
-    'its only writers are dispatch processes: `packages/cli` today, 9.1.7’s hosted orchestrator ' +
-    'with `origin: "hosted"` next. `packages/cli` retired its MCP transport in 11.5.6, so a ' +
-    'mirrored tool would be a second implementation with no caller. There is a second reason ' +
-    'here that the scope claim does not have: an MCP tool is the AGENT’s surface, and the agent ' +
-    'is the SUBJECT of a run rather than its reporter — handing it the ability to write its own ' +
-    'run record would let the thing being observed edit the observation. It takes ' +
-    '`work_item:edit`, the key every other work-loop write asserts, so no permission is invented.',
+    'its only writers are dispatch processes: `packages/cli`, and the hosted orchestrator with ' +
+    '`origin: "hosted"`. `packages/cli` retired its MCP transport in 11.5.6, so a mirrored tool ' +
+    'would be a second implementation with no caller. ⚠️ AMENDMENT 3 of ' +
+    '`dispatch-run-record.md` (`agent-reported-runs.md`, MOTIR-7446) did NOT mirror it: ' +
+    '`start_work_item_run` is a different operation over a different service method ' +
+    '(`openAgentRun`) — an agent opening its OWN run over a claim it holds, every row it writes ' +
+    'marked `reportedBy: agent` — and it cannot open a run for anything it does not hold. This ' +
+    'ingest stays the runner’s. `work_item:edit`, the key every other work-loop write asserts, so ' +
+    'no permission is invented.',
   appendDispatchRunEvents:
-    'MOTIR-1789 · MOTIR-1792 — the same argument as `openDispatchRun`, and one degree sharper: ' +
-    'the event stream is the account of what the agent did, and an agent that could append to it ' +
-    'could write its own account. The reporter is the process AROUND the agent, which speaks ' +
-    '/api/v1. `work_item:edit`, mirroring the rest of the ingest.',
+    'MOTIR-1789 · MOTIR-1792 — the same argument as `openDispatchRun`: the full event stream is ' +
+    'the RUNNER’s account of a run, every kind included, and the reporter is the process AROUND ' +
+    'the agent, which speaks /api/v1. `report_action` (MOTIR-7451) is not its mirror: it calls ' +
+    '`reportAction`, which takes one step line and only four milestone kinds, refuses those in a ' +
+    'runner’s run, and marks everything it writes `reportedBy: agent`, so an agent’s account is ' +
+    'never mistaken for the runner’s. `work_item:edit`, mirroring the rest of the ingest.',
   getDispatchRun:
     'MOTIR-6558 — a run READ for the process AROUND the agent: the `motir` CLI in a hosted ' +
     'container reads the run the server opened so it can ADOPT it, rather than open a second. ' +
-    'The agent is the SUBJECT of that run, not its reporter, so it has no use for reading the ' +
-    'record and a tool would have no caller. It takes `project:browse`, the key ' +
+    'The agent never needs the record back — even one reporting its own run holds the receipts ' +
+    'its run tools answered — so a tool would have no caller. It takes `project:browse`, the key ' +
     '`dispatchRunService.getRun` asserts on every run read, so no permission is invented.',
   issueDispatchRunGitCredentials:
     "MOTIR-6538 — a run's git credentials, for the process AROUND the agent: the git " +

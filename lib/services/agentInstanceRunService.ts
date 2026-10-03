@@ -477,6 +477,7 @@ export const agentInstanceRunService = {
           projectKey: project.identifier,
           command,
           origin: 'instance',
+          reportedBy: 'cli',
           agentInstanceId: agent.id,
           agent: agent.profileId,
           idempotencyKey: input.idempotencyKey,

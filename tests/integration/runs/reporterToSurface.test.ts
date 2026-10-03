@@ -99,6 +99,7 @@ async function roundTrip(opts: { withBody?: boolean } = {}) {
     {
       projectKey: openBody.projectKey,
       command: openBody.command,
+      reportedBy: 'cli',
       ...(openBody.scopeLabel === undefined ? {} : { scopeLabel: openBody.scopeLabel }),
       ...(openBody.agent === undefined ? {} : { agent: openBody.agent }),
       ...(openBody.model === undefined ? {} : { model: openBody.model }),
@@ -215,6 +216,7 @@ describe('the two list reads agree about the same data', () => {
       {
         projectKey: fixture.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         cards: [{ key: keys[0]!, disposition: 'queued' }],
       },
       fixture.ctx,

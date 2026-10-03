@@ -369,6 +369,7 @@ export const workItemRepairService = {
           projectId,
           {
             command: 'fix',
+            reportedBy: 'cli',
             cards: [{ key: item.identifier, disposition: 'queued' }],
             ...(opening
               ? {
@@ -392,6 +393,7 @@ export const workItemRepairService = {
                 dispatchRunId: openedRun.run.id,
                 seq: 1,
                 kind: 'run_opened',
+                reportedBy: 'cli',
                 data: await hostedRepairOpenedData(
                   item,
                   opening,

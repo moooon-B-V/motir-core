@@ -75,6 +75,7 @@ async function openIn(agentInstanceId: string, key: string) {
     {
       projectKey: fx.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       origin: 'instance',
       agentInstanceId,
       agent: 'claude',
@@ -240,13 +241,14 @@ describe('the reads, directly', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         scopeKey,
         cards: [],
       },
       fx.ctx,
     );
     const bare = await dispatchRunService.open(
-      { projectKey: fx.projectIdentifier, command: 'run', cards: [] },
+      { projectKey: fx.projectIdentifier, command: 'run', reportedBy: 'cli', cards: [] },
       fx.ctx,
     );
 

@@ -11103,6 +11103,13 @@ model DispatchRun {
   /// (`lib/runs/runLiveness.ts`) and nowhere else.
   lastHeartbeatAt DateTime? @map("last_heartbeat_at")
 
+  /// WHO REPORTS this run (MOTIR-7450, `agent-reported-runs.md` §1): `cli` for every
+  /// run a runner observes — the v1 ingest, a hosted or instance start, a repair or
+  /// continue claim — and `agent` for a run the agent opened about ITSELF through
+  /// `start_work_item_run`. Set by the door that opened the run, never by a caller.
+  /// It also picks the lapse window the reap applies (§5).
+  reportedBy DispatchRunReporter @default(cli) @map("reported_by")
+
   /// The operator who started it. `SET NULL`: deleting a person must not destroy
   /// the record of what their runs did.
   createdById String? @map("created_by_id")
@@ -11302,6 +11309,11 @@ model DispatchRunEvent {
   /// 30-day retention sweep — both MOTIR-1792's.
   body String?
 
+  /// Who wrote THIS event (MOTIR-7450, `agent-reported-runs.md` §3): `agent` for an
+  /// event written through `report_action`, `cli` for every other writer — so a CLI
+  /// run can carry the agent's own account of its steps without the two being confused.
+  reportedBy DispatchRunReporter @default(cli) @map("reported_by")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -11490,7 +11502,19 @@ enum DispatchEventKind {
   /// appends it, and the v1 ingest refuses it, so a run token cannot forge one.
   review_verdict
 
+  /// One step the agent says it is about to take, in one line of at most 500
+  /// characters (`agent-reported-runs.md` §3) — written through `report_action`.
+  agent_action
+
   @@map("dispatch_event_kind")
+}
+
+/// Who reports a run, or an event (MOTIR-7450, `agent-reported-runs.md` §1).
+enum DispatchRunReporter {
+  cli
+  agent
+
+  @@map("dispatch_run_reporter")
 }
 
 /// How the run-found report on one leg concluded (MOTIR-6282,

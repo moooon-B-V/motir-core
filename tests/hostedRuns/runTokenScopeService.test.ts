@@ -71,6 +71,7 @@ describe('a leg recorded with no work item at all', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         origin: 'hosted',
         model: 'claude-opus-5-5',
         cards: [{ key: card.identifier, disposition: 'queued' as const }],

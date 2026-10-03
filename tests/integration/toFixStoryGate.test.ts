@@ -413,6 +413,7 @@ describe('priority — a dead run (Story MOTIR-6590 · MOTIR-6883, case 5)', () 
       {
         projectKey: s.project.identifier,
         command: 'run',
+        reportedBy: 'cli',
         cards: [{ key: died.item.identifier, disposition: 'queued' }],
       },
       s.ctx,

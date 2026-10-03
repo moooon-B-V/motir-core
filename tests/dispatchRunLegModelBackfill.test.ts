@@ -66,6 +66,7 @@ async function openRun(names: string[]): Promise<{ runId: string; legs: Map<stri
     {
       projectKey: fixture.projectIdentifier,
       command: 'batch',
+      reportedBy: 'cli',
       cards: keys.map((key) => ({ key, disposition: 'queued' as const })),
     },
     fixture.ctx,

@@ -55,6 +55,7 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
     endedAt: '2026-08-29T14:23:11.000Z',
     createdById: 'usr_1',
     lastHeartbeatAt: null,
+    reportedBy: 'cli',
     agentInstance: null,
     seq: 12,
     cards: [

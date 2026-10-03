@@ -157,6 +157,7 @@ export async function seedRoomsViewTabs(slug: string): Promise<RoomsViewTabsSeed
       {
         projectKey: project.identifier,
         command: 'batch',
+        reportedBy: 'cli',
         ...(scoped ? { scopeKey: story.identifier } : {}),
         cards: [{ key, disposition: 'queued' as const }],
       },

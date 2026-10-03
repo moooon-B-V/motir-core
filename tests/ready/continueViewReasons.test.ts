@@ -46,6 +46,7 @@ async function viewAfter(ending: Ending) {
     {
       projectKey: fx.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       cards: [{ key: card.identifier, disposition: 'queued' }],
     },
     fx.ctx,
@@ -136,6 +137,7 @@ async function viewAfterEnd(
     {
       projectKey: fx.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       origin: end.origin === 'hosted' ? 'hosted' : 'local',
       cards: [{ key: card.identifier, disposition: 'queued' }],
     },
@@ -247,6 +249,7 @@ describe('where the work is, when no checkout was recorded (the fallbacks)', () 
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         cards: [{ key: card.identifier, disposition: 'queued' }],
       },
       fx.ctx,
@@ -279,6 +282,7 @@ describe('where the work is, when no checkout was recorded (the fallbacks)', () 
       {
         projectKey: fx.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         scopeKey: story.identifier,
         cards: [{ key: child.identifier, disposition: 'queued' }],
       },
@@ -318,6 +322,7 @@ describe('the edges', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         cards: [{ key: card.identifier, disposition: 'queued' }],
       },
       fx.ctx,

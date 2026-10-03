@@ -172,6 +172,7 @@ async function openRun(projectRepoIds: string[]): Promise<string> {
     {
       projectKey: f.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       origin: 'hosted',
       model: 'claude-opus-5-5',
       cards: [{ key: item.identifier, disposition: 'queued' as const }],

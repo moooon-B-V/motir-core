@@ -60,6 +60,7 @@ async function runOn(
     {
       projectKey: fx.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       origin: opts.origin ?? 'local',
       cards: [{ key: card.identifier, disposition: 'queued' }],
     },
@@ -185,6 +186,7 @@ describe('close — every way a run ends puts run_died on its card', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         scopeKey: story.identifier,
         cards: legs.map((l) => ({ key: l.identifier, disposition: 'queued' as const })),
       },
@@ -232,6 +234,7 @@ describe('open — a new run on a dead run’s card takes it off To fix', () => 
         {
           projectKey: fx.projectIdentifier,
           command,
+          reportedBy: 'cli',
           cards: [{ key: card.identifier, disposition: 'queued' }],
         },
         fx.ctx,
