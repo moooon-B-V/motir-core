@@ -633,6 +633,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Replace a page’s whole body with markdown at the revision you read; a page saved since is refused, not merged.',
     descriptionFingerprint: 'aac141bef380',
   },
+  publish_decision_page: {
+    summary:
+      'Publish a page as a decision card’s decision: seals its newest version and, on an agent card, asks a person to approve it.',
+    descriptionFingerprint: 'bdaf778081be',
+  },
   search_work_items_semantic: {
     summary:
       'Has this already been built? Search by MEANING rather than substring — keys, titles and scores only.',

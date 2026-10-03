@@ -325,7 +325,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **86 tools**.
+`initialize` handshake and registers **87 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -3035,6 +3035,48 @@ restorable version in the page's history, which is why the tool is annotated
 | `revision`   | integer | yes      | The `revision` `get_page` or `create_page` returned (≥ 1). |
 
 **Output** — the saved page, in `get_page`'s shape, at its new `revision`.
+
+#### `publish_decision_page`
+
+Publish a page as a **`decision` card's decision** (Story MOTIR-5761). Call it
+**once**, after `create_page` / `update_page` have written the decision, in the
+same run. Gated on `work_item:edit` on the card — a key `CLI_TOKEN_GRANT` already
+carries, so a dispatched agent's token can call it — and the service also
+requires `page:view` on the page.
+
+It **seals** the page's newest version: later edits start a new version, so the
+text the card names can no longer change underneath it. On a card an agent runs
+it then raises `decision_approval` about exactly that version and moves the card
+to review — the card is **waiting on a person**, not finished. On a card a person
+runs it raises nothing and moves nothing: the publication is that card's
+candidate record.
+
+Publishing the version that is already the card's decision writes nothing and
+returns the same publication with `replayed: true`, so retrying an unclear result
+is safe. Publishing after an edit seals the new version and **supersedes** the
+awaiting question with one about it.
+
+| Input    | Type   | Required | Notes                                                    |
+| -------- | ------ | -------- | -------------------------------------------------------- |
+| `key`    | string | yes      | The decision card's key, e.g. `"ACME-42"`.               |
+| `pageId` | string | yes      | The page id — the `<id>` in `/pages/<id>`, same project. |
+
+**Output** — the publication: `pageId`, `pageTitle`, `versionId`,
+`versionNumber`, `sealedAt`, `publishedAt`, the publisher, `gateId` (the awaiting
+`decision_approval`, or `null` on a human card or a replay) and `replayed`.
+
+| Code                      | Meaning                                                                      |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| `NOT_A_DECISION_CARD`     | The card's type is not `decision`.                                           |
+| `PAGE_NOT_FOUND`          | No such page, or one the caller cannot read — one answer, no existence leak. |
+| `PAGE_IN_ANOTHER_PROJECT` | The page is readable but filed in another project than the card's.           |
+| `PAGE_IS_EMPTY`           | The page's newest version has no text.                                       |
+| `PAGE_ARCHIVED`           | The page is archived.                                                        |
+| `CARD_IS_FINISHED`        | The card is already in a done-category status.                               |
+
+The confirm port's _Choose page_ reaches the same service through
+`POST /api/work-items/{key}/decision-page` with `{ "pageId" }` (201 for a new
+publication, 200 for a replay, the codes above with their own statuses).
 
 ### Search
 

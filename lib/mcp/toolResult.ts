@@ -102,6 +102,7 @@ import {
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { AttachmentError } from '@/lib/blob/errors';
 import { DesignEvidenceError } from '@/lib/designEvidence/errors';
+import { DecisionPageError } from '@/lib/decisionPages/errors';
 import { TestInstructionsError } from '@/lib/testInstructions/errors';
 import { PageError, PageRevisionConflictError, PageTreeError } from '@/lib/pages';
 import {
@@ -377,6 +378,12 @@ export function toToolError(err: unknown): CallToolResult {
   // moment the card's whole deliverable is at stake and the agent has the bytes
   // in hand to retry.
   if (err instanceof DesignEvidenceError) {
+    return toolError(err.code, err.message);
+  }
+  // The DECISION-PAGE publish door's named refusals (MOTIR-7434) — on the base,
+  // so every refusal reaches the agent by its code (NOT_A_DECISION_CARD,
+  // PAGE_IS_EMPTY, CARD_IS_FINISHED, …) rather than as an internal error.
+  if (err instanceof DecisionPageError) {
     return toolError(err.code, err.message);
   }
   // The ACCEPTANCE publish door's typed refusals (MOTIR-4704) — mapped on the
