@@ -4,10 +4,11 @@
 - **Amends:** [`dispatch-run-record.md`](dispatch-run-record.md). This is that record's
   **AMENDMENT 3**, written as its own file so the question can be read on its own. Every
   `Qn` and `AMENDMENT n` below names a section of that record. It amends **Q4** for one
-  event kind (§3), and it overturns the ruling recorded in `motir-core`
+  event kind (§3) and **AMENDMENT 2's lapse window** for agent-reported runs (§5), and
+  it overturns the ruling recorded in `motir-core`
   `lib/mcp/payloads/sharedResources.ts` (`MCP_UNREACHABLE_RESOURCES.DispatchRun`) and
   repeated in `lib/mcp/tools/workItemContinue.ts` (_"NO RUN EVENTS"_). Q1, Q2's enums,
-  Q3 and AMENDMENTS 1 and 2 hold exactly as written.
+  Q3 and AMENDMENT 1 hold exactly as written, and AMENDMENT 2 holds for every CLI-reported run.
 - **Card:** MOTIR-7449 · **Story:** MOTIR-7446 (a card run from the `motir-run` skill is
   on the run record) · **Epic:** MOTIR-7445 (run provenance).
 - **Consumed by:** MOTIR-7450 (the run service and `DispatchRun.reportedBy`), MOTIR-7451
@@ -140,11 +141,23 @@ a recorded preference.
   `workItemsService.recordImplementationProvenance`. **Any other outcome stamps
   nothing.** A model the run does not know is left as it is on the card, not cleared.
 
-### 5 · Liveness: unchanged
+### 5 · Liveness: a longer window for agent-reported runs
 
-AMENDMENT 2's window and reap close a silent agent-reported run `abandoned`, exactly as
-a silent CLI run, and write no card status. The skill heartbeats at least every two
-minutes, inside the 5-minute window.
+- **The reap is AMENDMENT 2's.** A silent agent-reported run is closed `abandoned` and
+  writes no card status, exactly as a silent CLI run.
+- **The lapse window is 15 minutes for `reportedBy: agent`, and stays 5 minutes for
+  `cli`.** The CLI heartbeats from its own timer every 60 s. An agent can call a tool
+  only between its steps, so it cannot heartbeat while one of its commands is running,
+  and Claude Code lets one foreground command run up to 10 minutes. Fifteen minutes
+  covers that command and the turn around it; five would reap a live session in the
+  middle of a long build or test run.
+- **There is no heartbeat script or hook.** Anything that heartbeats outside the agent's
+  own tool calls would need a credential beside the MCP's grant, which is Option 2.
+- **The skill touches the run at every step boundary and immediately before any command
+  that may run longer than a minute.** It also touches immediately after that command,
+  so a run is never silent for longer than one command plus one turn.
+- **The cost:** a dead agent session reads `running` for up to 15 minutes before the reap
+  closes it, against 5 for a CLI run.
 
 ### 6 · What stays the CLI's, or nobody's
 
@@ -170,6 +183,8 @@ Q3 holds in full:
   exactly as a CLI run does, and the delivered card names its implementer.
 - Every stored run says who reported it, so an analysis can include or exclude
   self-reported runs instead of having them mixed in.
+- The reap reads the window from `reportedBy`, so one stored field drives both the
+  label and the liveness rule.
 - The record gains one column and one writer. The v1 ingest and its five existing
   writers change only in writing `cli`.
 - `tests/api/v1/work-loop-story-gate.test.ts` and the `EXEMPT_TOOLS` entries cite the
