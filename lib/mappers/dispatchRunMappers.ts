@@ -6,9 +6,14 @@ import type {
   WorkItem,
 } from '@/generated/prisma/client';
 import { profileDisplayName } from '@/lib/agentInstances/profiles';
+import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
+import { personName } from '@/lib/people/personLabel';
+import type { GateWithPeople } from '@/lib/repositories/approvalGateRepository';
 import type {
   DispatchRunAgentInstanceDto,
   DispatchRunCardDto,
+  DispatchRunLegGateDto,
+  DispatchRunWaitingCountsDto,
   DispatchRunContinuesDto,
   DispatchRunDto,
   DispatchRunEventDto,
@@ -43,6 +48,78 @@ export function toDispatchRunCardDto(row: DispatchRunCard): DispatchRunCardDto {
     endedAt: row.endedAt?.toISOString() ?? null,
     exitCode: row.exitCode,
   };
+}
+
+/** Who is reading a run surface — the *you* of *waiting on you* (MOTIR-7477). */
+export interface DispatchRunReader {
+  userId: string;
+  /** A Visitor is never routed to and is never shown an email (MOTIR-6646). */
+  visitor: boolean;
+}
+
+type PersonRow = { id: string; name: string; email: string } | null;
+
+/** A person's name for THIS reader: a member's `name || email`, a Visitor's name only. */
+function nameFor(user: PersonRow, reader: DispatchRunReader): string | null {
+  if (!user) return null;
+  return reader.visitor ? personName(user.name) : routedToDisplayName(user);
+}
+
+/**
+ * A manual leg's `manual_work` gate → what the run surfaces say of it
+ * (`design/runs/design-notes.md` § _Waiting on you_). A withdrawn gate — or any
+ * state but awaiting and approved — is `null`: the leg reads *manual work*.
+ *
+ * ⚠️ AN AWAITING GATE'S PERSON IS THE LIVE CARD'S, never `routedToId`: Waiting on
+ * you re-derives routing from the card (`awaitingRoutedToWhere`), and the run page
+ * must name the person whose list the gate is actually on.
+ */
+export function toDispatchRunLegGateDto(
+  gate: GateWithPeople | undefined,
+  reader: DispatchRunReader,
+): DispatchRunLegGateDto | null {
+  if (!gate) return null;
+  if (gate.state === 'awaiting') {
+    const card = gate.workItem;
+    const routedId = card ? routingTargetId(card) : null;
+    // §2's `assigneeId ?? reporterId`, as the people the ids name.
+    const routed = card ? (card.assigneeId !== null ? card.assignee : card.reporter) : null;
+    return {
+      state: 'awaiting',
+      name: nameFor(routed, reader),
+      routedToReader: !reader.visitor && routedId !== null && routedId === reader.userId,
+    };
+  }
+  if (gate.state === 'approved') {
+    // The decider's row, else the audit label with its email dropped — never parsed
+    // for a Visitor, who is never shown the stored `"Name <email>"`.
+    const fromLabel =
+      !reader.visitor && gate.decidedByLabel
+        ? gate.decidedByLabel.replace(/\s*<[^>]*>\s*$/, '').trim() || null
+        : null;
+    return {
+      state: 'approved',
+      name: nameFor(gate.decidedBy, reader) ?? fromLabel,
+      routedToReader: false,
+    };
+  }
+  return null;
+}
+
+/**
+ * The legs a run summary takes OUT of *skipped* (MOTIR-7477): every skipped leg
+ * whose gate is still awaiting, by whether it waits on the reader.
+ */
+export function toDispatchRunWaitingCounts(
+  gates: ReadonlyArray<DispatchRunLegGateDto | null | undefined>,
+): DispatchRunWaitingCountsDto {
+  const counts = { you: 0, others: 0 };
+  for (const gate of gates) {
+    if (gate?.state !== 'awaiting') continue;
+    if (gate.routedToReader) counts.you += 1;
+    else counts.others += 1;
+  }
+  return counts;
 }
 
 export function toDispatchRunEventDto(row: DispatchRunEvent): DispatchRunEventDto {

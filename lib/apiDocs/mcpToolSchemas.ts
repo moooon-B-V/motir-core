@@ -1258,9 +1258,10 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
           'decision_confirmation',
           'plan_approval',
           'pull_request_merge',
+          'manual_work',
         ],
         description:
-          'Which decision to read. `decision_approval` is the gate on a `type: decision` card you authored; `design_result` the one your published design raised; `acceptance_result` a story run’s receipt; `pull_request_approval` the approve-and-merge question over a run’s whole delivery set; `decision_choice` and `decision_confirmation` the two decision kinds a person answers directly. `plan_approval` belongs to a PLAN rather than to a card, so no card has one. `pull_request_merge` is built and withdrawn — only historical rows exist.',
+          'Which decision to read. `decision_approval` is the gate on a `type: decision` card you authored; `design_result` the one your published design raised; `acceptance_result` a story run’s receipt; `pull_request_approval` the approve-and-merge question over a run’s whole delivery set; `decision_choice` and `decision_confirmation` the two decision kinds a person answers directly. `plan_approval` belongs to a PLAN rather than to a card, so no card has one. `pull_request_merge` is built and withdrawn — only historical rows exist. `manual_work` is a manual card a run reached, waiting on a person to do the work and mark it done.',
       },
     },
     required: ['key', 'kind'],

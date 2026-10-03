@@ -75,6 +75,7 @@ import {
 } from '@/lib/services/gateSetFor';
 import { choiceBodyOf, choiceGateService } from '@/lib/services/choiceGateService';
 import { decisionConfirmationGateService } from '@/lib/services/decisionConfirmationGateService';
+import { manualWorkGateService } from '@/lib/services/manualWorkGateService';
 import { asksTheConfirmQuestion } from '@/lib/approvalGates/decisionConfirmationHandler';
 import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { APPROVED_STATUS_KEY, heldMoves } from '@/lib/approvalGates/heldMoves';
@@ -2916,6 +2917,12 @@ export const workItemsService = {
       const settled = decisionTouched
         ? await reconcileDecisionGate(choiceSettled, ctx, tx)
         : choiceSettled;
+      // THE MANUAL-WORK QUESTION (MOTIR-7474; `manual-work-gate.md` §6) — an executor or
+      // type edit that leaves the card no longer manual withdraws it (`no_longer_manual`):
+      // nobody owes a person's work on a card an agent now runs.
+      if (diff['type'] !== undefined || diff['executor'] !== undefined) {
+        await manualWorkGateService.withdrawIfNoLongerManual(settled, tx);
+      }
 
       const changedFieldIds: string[] = automationFieldsFromDiffKeys(Object.keys(diff));
       // Did this edit move the EMBEDDED DOCUMENT (Story MOTIR-2694 · MOTIR-2696,
@@ -3510,6 +3517,21 @@ export const workItemsService = {
           tx,
         );
       }
+    }
+
+    // ⚠️ AND A MANUAL-WORK QUESTION NOBODY ANSWERED CLOSES WITH THE CARD (MOTIR-7474;
+    // `manual-work-gate.md` §6). A `manual_work` gate owns Done, so a hand move there is
+    // refused above and its own Mark done passes as `decidingGateId`. Every OTHER way into
+    // the done category — the parent cascade, the rollup, any system write — finishes the
+    // card without anybody deciding the gate, so it is withdrawn as
+    // `closed_without_decision` rather than left asking for work that is closed, and
+    // never recorded as `approved`. Cancelled is the pull-back above, already withdrawn.
+    if (
+      target.category === 'done' &&
+      !abandonsTheWork &&
+      awaitingGates.some((gate) => gate.kind === 'manual_work' && gate.id !== opts.decidingGateId)
+    ) {
+      await manualWorkGateService.withdrawOnUndecidedClose(workItemId, tx);
     }
 
     // ⚠️ AND THE MERGE QUESTION LEAVES WITH THE CARD, WHEREVER IT GOES (MOTIR-6971;

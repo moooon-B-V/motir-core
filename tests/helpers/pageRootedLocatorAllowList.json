@@ -987,7 +987,7 @@
     "tests/e2e/workbench.spec.ts::getByTestId::`workbench-tab-${tab}`::1",
     "tests/e2e/workbench.spec.ts::getByText::'Finished in the last 7 days.'::1",
     "tests/e2e/workbench.spec.ts::getByText::'Nothing finished this week'::1",
-    "tests/e2e/workbench.spec.ts::getByText::'Nothing is waiting on your approval'::1",
+    "tests/e2e/workbench.spec.ts::getByText::'Nothing is waiting on you'::1",
     "tests/e2e/workbench.spec.ts::getByText::/Showing 1–25 of 36/::1",
     "tests/e2e/workbench.spec.ts::getByText::/Showing 1–25 of 36/::2",
     "tests/e2e/workbench.spec.ts::getByText::/Showing 1–25 of 61/::1",

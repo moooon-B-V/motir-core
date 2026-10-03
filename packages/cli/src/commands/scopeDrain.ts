@@ -255,6 +255,10 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
         // correctly.
         const disposition = classifyReadyItem(item);
         if (disposition !== 'dispatch') {
+          // A manual card is reported as WAITING ON YOU in Motir's Waiting on you
+          // (MOTIR-7477, `manual-work-gate.md` §8): a local scope's members are read
+          // through `listReadyForDispatch(ownerId)`, so every one is unassigned or
+          // the starter's own — no `waitingOn` to name.
           skipped.push({ key: item.key, title: item.title, reason: disposition });
           reporter.event({
             kind: 'card_skipped',

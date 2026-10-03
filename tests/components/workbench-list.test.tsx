@@ -332,7 +332,7 @@ describe('the Workbench tab strip', () => {
       // which is the whole reason it leads the strip. Its href is asserted as
       // `?tab=approvals` above; the two spellings are checked together so
       // neither can be "fixed" into agreement.
-      'To approve',
+      'Waiting on you',
       'To fix',
       'In progress',
       'To do',

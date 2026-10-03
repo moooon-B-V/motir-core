@@ -203,6 +203,17 @@ export default defineConfig({
         // `workItemContinue-transport.test.ts`): 100 / 90.62 / 100 / 100. Its
         // service, `workItemContinueService.ts`, is already gated.
         'lib/mcp/tools/workItemContinue.ts',
+        // Story MOTIR-7460 · MOTIR-7479 — the manual-work gate's two NEW modules (the
+        // kind's handler, and its raise / withdrawals). Pinned at the project floor in
+        // `thresholds` below after being MEASURED on this branch against the story's own
+        // specs (`tests/integration/approvals/manualWorkGateStoryGate`,
+        // `tests/approvalGates/manualWorkGate`, `tests/dispatchRunService`,
+        // `tests/ai/guideLandingService`): handler 100 / 90.9 / 100 / 100, service
+        // 100 / 97.9 / 100 / 100. The shared files the story changed keep their existing
+        // pins (`dispatchRunService.ts`, `dispatchRunMappers.ts`, …) or were never in the
+        // report; their CHANGED lines are measured in the MOTIR-7479 PR body.
+        'lib/approvalGates/manualWorkHandler.ts',
+        'lib/services/manualWorkGateService.ts',
         // Story MOTIR-7220 · MOTIR-7234 — the planner-model story's motir-core
         // gate: the console seam (service + mapper), the one plan-read redaction
         // helper, and the console's Server Action. MEASURED on this branch against
@@ -3117,6 +3128,19 @@ export default defineConfig({
           statements: 90,
         },
         'lib/mcp/tools/workItemContinue.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-7460 · MOTIR-7479 — measured above, pinned at the floor.
+        'lib/approvalGates/manualWorkHandler.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/manualWorkGateService.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

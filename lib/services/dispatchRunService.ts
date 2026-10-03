@@ -34,6 +34,7 @@ import type {
   DispatchRunCostDto,
   DispatchRunDetailDto,
   DispatchRunHostedEndDto,
+  DispatchRunLegGateDto,
   DispatchRunMachineTimeDto,
   DispatchRunDto,
   DispatchRunEventDto,
@@ -47,9 +48,13 @@ import {
   toDispatchRunRepairDto,
   toDispatchRunDto,
   toDispatchRunEventDto,
+  toDispatchRunLegGateDto,
   toDispatchRunListItemDto,
   toDispatchRunScopeDto,
+  toDispatchRunWaitingCounts,
+  type DispatchRunReader,
 } from '@/lib/mappers/dispatchRunMappers';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { assembleRunCloseOutPrompt } from '@/lib/dispatch/runCloseOutPrompt';
 import { getAgentRunUsage } from '@/lib/ai/motirAiClient';
 import { toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
@@ -65,7 +70,11 @@ import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService'
 import { agentInstanceActivityService } from '@/lib/services/agentInstanceActivityService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/context';
+import {
+  VISITOR_ACTOR_ID,
+  visitorServiceContext,
+  type VisitorReadContext,
+} from '@/lib/visitor/context';
 import { isVisitorContext } from '@/lib/visitor/readScope';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -73,6 +82,7 @@ import { availableRoomViews, holdsAnyOf, RUN_ACT_PERMISSIONS } from '@/lib/rooms
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { uniqueViolationConstraints } from '@/lib/prisma/uniqueViolation';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { manualWorkGateService } from './manualWorkGateService';
 
 // THE DISPATCH RUN SERVICE (Story MOTIR-1789 · MOTIR-1792) — the WRITE half of
 // the run seam, specified by `docs/decisions/dispatch-run-record.md`.
@@ -144,6 +154,18 @@ export const DISPATCH_RUN_LIST_MAX_TAKE = 100;
  * running, which is the exact class the run surfaces' totality maps exist to
  * refuse. One definition, in a module with no server imports, read by both.
  */
+/**
+ * Whether a recorded leg is a run reaching a manual card it could not do — the one
+ * skip that raises the `manual_work` gate (Story MOTIR-7460 · MOTIR-7475). Every
+ * other skip reason is the run's own business and asks nobody anything.
+ */
+function raisesManualWork(
+  disposition: DispatchCardDisposition | undefined,
+  skipReason: DispatchSkipReason | null | undefined,
+): boolean {
+  return disposition === 'skipped' && skipReason === 'needs_human';
+}
+
 export { DISPATCH_RUN_LIVE_STATUSES, DISPATCH_RUN_PAST_STATUSES } from '@/lib/runs/timeline';
 
 /** One card in the SET a run is opened with. */
@@ -420,6 +442,54 @@ function runReader(ctx: ServiceContext | VisitorReadContext): {
     hidden: [...ctx.hiddenIds],
     projectId: ctx.project.id,
   };
+}
+
+/** Who reads a run surface — the *you* its manual legs are resolved against (MOTIR-7477). */
+function runSurfaceReader(ctx: ServiceContext): DispatchRunReader {
+  return { userId: ctx.userId, visitor: ctx.userId === VISITOR_ACTOR_ID };
+}
+
+/** A leg the run skipped because a PERSON owes the work — the only leg with a gate to name. */
+const isManualLeg = (card: { disposition: string; skipReason: string | null }): boolean =>
+  card.disposition === 'skipped' && card.skipReason === 'needs_human';
+
+/**
+ * Each MANUAL leg's `manual_work` gate, resolved for this reader (Story MOTIR-7460
+ * · MOTIR-7477) — keyed by work-item id, over EVERY run handed in, in ONE read: a
+ * page of runs costs the same one query as a single run.
+ */
+async function manualLegGates(
+  runs: ReadonlyArray<{
+    cards: ReadonlyArray<{
+      workItemId: string | null;
+      disposition: string;
+      skipReason: string | null;
+    }>;
+  }>,
+  reader: DispatchRunReader,
+  tx: Prisma.TransactionClient,
+): Promise<Map<string, DispatchRunLegGateDto | null>> {
+  const ids = new Set<string>();
+  for (const run of runs) {
+    for (const card of run.cards) {
+      if (card.workItemId !== null && isManualLeg(card)) ids.add(card.workItemId);
+    }
+  }
+  const heads = await approvalGateRepository.findLatestWithPeopleByWorkItems(
+    [...ids],
+    'manual_work',
+    tx,
+  );
+  return new Map([...ids].map((id) => [id, toDispatchRunLegGateDto(heads.get(id), reader)]));
+}
+
+/** A leg's gate out of {@link manualLegGates}' map — `null` for every leg that is not manual. */
+function legGateOf(
+  card: { workItemId: string | null; disposition: string; skipReason: string | null },
+  gates: ReadonlyMap<string, DispatchRunLegGateDto | null>,
+): DispatchRunLegGateDto | null {
+  if (card.workItemId === null || !isManualLeg(card)) return null;
+  return gates.get(card.workItemId) ?? null;
 }
 
 /** Whether a loaded run joins a withheld work item (its scope or any card). */
@@ -712,6 +782,19 @@ export const dispatchRunService = {
         }),
         tx,
       );
+      // A run that reached a manual card asks its person to do the work
+      // (MOTIR-7475; `docs/decisions/manual-work-gate.md` §2) — in this
+      // transaction, so the leg and its gate commit together or not at all.
+      for (const [position, card] of input.cards.entries()) {
+        if (raisesManualWork(card.disposition, card.skipReason)) {
+          await manualWorkGateService.raise(
+            byKey.get(keys[position]!)!.id,
+            { createdById: run.createdById },
+            ctx.workspaceId,
+            tx,
+          );
+        }
+      }
     }
 
     const withCards = await dispatchRunRepository.findByIdWithCards(run.id, tx);
@@ -836,6 +919,16 @@ export const dispatchRunService = {
               tx,
             );
             touched.set(updated.workItemKey ?? updated.id, updated);
+            // The same raise as the open's, for a leg the run skips as it goes.
+            // Idempotent on the card, so a leg reported twice asks once.
+            if (updated.workItemId !== null && raisesManualWork(disposition, event.skipReason)) {
+              await manualWorkGateService.raise(
+                updated.workItemId,
+                { createdById: locked.createdById },
+                ctx.workspaceId,
+                tx,
+              );
+            }
           }
         }
 
@@ -1342,6 +1435,8 @@ export const dispatchRunService = {
         }
 
         const base = toDispatchRunDto(run, seq);
+        // Each manual leg's gate (MOTIR-7477) — who the skip waits on, for this reader.
+        const gates = await manualLegGates([run], runSurfaceReader(ctx), tx);
         // A HOSTED run's reason line (MOTIR-691) — read in the same transaction,
         // off the two events that carry it. A run in an agent has the same two
         // (MOTIR-7028): its end path (`agent-instance-run.md` §6) writes the same
@@ -1360,6 +1455,7 @@ export const dispatchRunService = {
           ...(hostedEnd ? { hostedEnd } : {}),
           cards: base.cards.map((card) => ({
             ...card,
+            manualGate: legGateOf(card, gates),
             // A leg whose card was deleted has no deliveries to join and never
             // will — an empty array, never a missing key.
             deliveries: card.workItemId ? (byWorkItem.get(card.workItemId) ?? []) : [],
@@ -1428,9 +1524,18 @@ export const dispatchRunService = {
           { take: page.take, cursor: page.cursor, createdById },
           tx,
         );
+        // Each manual leg's gate (MOTIR-7477), one read for the page — the Run
+        // section's leg line names who the skip waits on.
+        const gates = await manualLegGates(runs, runSurfaceReader(ctx), tx);
         // The `seq` on a HISTORY row is not worth a read per run — the page
         // renders a list, and a client that opens one asks for its detail.
-        return runs.map((run) => toDispatchRunDto(run, 0));
+        return runs.map((run) => {
+          const dto = toDispatchRunDto(run, 0);
+          return {
+            ...dto,
+            cards: dto.cards.map((card) => ({ ...card, manualGate: legGateOf(card, gates) })),
+          };
+        });
       },
     );
   },
@@ -1512,7 +1617,16 @@ export const dispatchRunService = {
           return dispatchRunRepository.listByScope(scope.id, bounded, tx);
         })();
 
-        return { runs: runs.map(toDispatchRunListItemDto), scope: served };
+        // The waiting legs (MOTIR-7477) leave *skipped* in the summary, counted by
+        // whether they wait on this reader — one gate read for the whole page.
+        const gates = await manualLegGates(runs, runSurfaceReader(ctx), tx);
+        return {
+          runs: runs.map((run) => ({
+            ...toDispatchRunListItemDto(run),
+            waiting: toDispatchRunWaitingCounts(run.cards.map((card) => legGateOf(card, gates))),
+          })),
+          scope: served,
+        };
       },
     );
   },

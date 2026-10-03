@@ -18,6 +18,7 @@ import { decisionApprovalGateHandler } from '@/lib/approvalGates/decisionApprova
 import { decisionChoiceGateHandler } from '@/lib/approvalGates/decisionChoiceHandler';
 import { decisionConfirmationGateHandler } from '@/lib/approvalGates/decisionConfirmationHandler';
 import { designResultGateHandler } from '@/lib/approvalGates/designResultHandler';
+import { manualWorkGateHandler } from '@/lib/approvalGates/manualWorkHandler';
 import { planApprovalGateHandler } from '@/lib/approvalGates/planApprovalHandler';
 import { pullRequestApprovalGateHandler } from '@/lib/approvalGates/pullRequestApprovalHandler';
 import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
@@ -99,6 +100,10 @@ import type { TransactionBudget } from '@/lib/workspaces/context';
 // green delivery set, asked instead of the merge question while the project's switch is
 // on (Story MOTIR-1626; ADR §12). Decided by the review run (`review_agent`) through an
 // internal entry, or by the routed person continuing without it — never refused by one.
+//
+// MOTIR-7474 registers `manual_work`: a manual card a run reached, waiting on a person
+// (`docs/decisions/manual-work-gate.md`). Its one verb is Mark done; it is decided by the
+// work being done and withdrawn when the card stops being manual.
 export type RegisteredGateKind =
   | 'design_result'
   | 'decision_approval'
@@ -107,7 +112,8 @@ export type RegisteredGateKind =
   | 'decision_choice'
   | 'decision_confirmation'
   | 'plan_approval'
-  | 'agent_review';
+  | 'agent_review'
+  | 'manual_work';
 
 /**
  * The kinds that are deliberately NOT registered yet — the registry's
@@ -519,6 +525,7 @@ export const APPROVAL_GATE_HANDLERS: Record<RegisteredGateKind, GateHandler> = {
   decision_confirmation: decisionConfirmationGateHandler,
   plan_approval: planApprovalGateHandler,
   agent_review: agentReviewGateHandler,
+  manual_work: manualWorkGateHandler,
 };
 
 /** Narrow a gate's kind to one this build can dispatch. */

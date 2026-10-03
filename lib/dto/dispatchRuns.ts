@@ -57,6 +57,43 @@ export interface DispatchRunCardDto {
   startedAt: string | null;
   endedAt: string | null;
   exitCode: number | null;
+  /**
+   * A `needs_human` leg's `manual_work` gate (Story MOTIR-7460 · MOTIR-7477), so
+   * the leg can say WHO it waits on rather than *needs a human*. Filled only by
+   * the BROWSER's reads (the run detail and a card's run history); absent on the
+   * v1 contract and the ingest answers, and `null` on a leg with no live gate —
+   * no gate at all, a withdrawn one, or any leg that is not a manual skip. Both
+   * read as *Skipped — manual work.*
+   */
+  manualGate?: DispatchRunLegGateDto | null;
+}
+
+/**
+ * A manual leg's gate as the run surfaces name it (`design/runs/design-notes.md`
+ * § _Waiting on you_). Resolved per READER on the server, because *you* is the
+ * person reading the page — never the run's starter.
+ */
+export interface DispatchRunLegGateDto {
+  /** `awaiting` — still owed; `approved` — somebody pressed Mark done. */
+  state: 'awaiting' | 'approved';
+  /**
+   * `awaiting`: the routed person's display name (the card's assignee, else its
+   * reporter, read off the live card as Waiting on you lists it). `approved`: who
+   * marked it done. Null when that person no longer resolves.
+   */
+  name: string | null;
+  /** `awaiting` only: the gate is routed to the reader of this DTO. */
+  routedToReader: boolean;
+}
+
+/**
+ * A run's `needs_human` legs whose gate is still AWAITING, split by whether it
+ * waits on the reader (MOTIR-7477) — the summary's *{n} waiting on you* and
+ * *{n} waiting on others* segments. Both are INSIDE `legs.skipped`.
+ */
+export interface DispatchRunWaitingCountsDto {
+  you: number;
+  others: number;
 }
 
 /** One entry in the ordered stream. */
@@ -357,6 +394,12 @@ export interface DispatchRunListItemDto {
   /** How many cards this run owned. Zero is a real answer, not an error. */
   cardCount: number;
   legs: DispatchRunLegCountsDto;
+  /**
+   * The skipped legs still waiting on a person (MOTIR-7477), for this reader.
+   * Absent on a row built without the gate read — every leg then counts as
+   * skipped, which is what it is.
+   */
+  waiting?: DispatchRunWaitingCountsDto;
 }
 
 /**

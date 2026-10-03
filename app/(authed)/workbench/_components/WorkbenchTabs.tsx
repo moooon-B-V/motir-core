@@ -8,9 +8,12 @@ import type { HomeTabCountsDto } from '@/lib/dto/home';
 import { workbenchTabHref } from '@/lib/workbench/tab';
 
 // The Workbench tab strip (Story MOTIR-4777 · MOTIR-4782, per
-// `design/workbench/design-notes.md` §"The tab strip") — To approve · To fix ·
+// `design/workbench/design-notes.md` §"The tab strip") — Waiting on you · To fix ·
 // In progress · To do · Recently finished · Watching (re-ordered by MOTIR-5217; To fix
-// inserted second by § 30, MOTIR-6605).
+// inserted second by § 30, MOTIR-6605). The first tab read **To approve** until
+// MOTIR-7476 (design § 33.1): it now lists work a run handed the reader to DO as well
+// as decisions to approve, so it is named for the reader, not the verb. Its slug
+// `approvals` and its message key `tabs.toApprove` are unchanged identifiers.
 //
 // ⚠️ LINK-BASED, not the client `Segmented`, and that is the design's decision
 // rather than a shortcut. The selection has to live in the URL: a tab held only

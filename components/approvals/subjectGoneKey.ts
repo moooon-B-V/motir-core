@@ -19,6 +19,7 @@ const SUBJECT_GONE_KEY: Record<ApprovalGateKindDTO, string> = {
   decision_confirmation: 'decision_confirmation',
   plan_approval: 'plan_approval',
   agent_review: 'agent_review',
+  manual_work: 'manual_work',
 };
 
 /** The catalogue key, under `subjectGone.`, for a gone subject of this kind. */

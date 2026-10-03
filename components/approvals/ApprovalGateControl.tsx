@@ -169,6 +169,13 @@ export interface GateVerb {
    * frame-level `confirmTitle` / `confirmConsequences` / `confirmProceedLabel` apply.
    */
   confirm?: { title: ReactNode; consequences: ReactNode[]; proceedLabel: string };
+  /**
+   * The verb's OWN WORDS WHILE ITS PRESS RECORDS (Story MOTIR-7460 · MOTIR-7478; design
+   * `approval-overlay--manual-work.mock.html` Panel 3) — Mark done reads *Marking…* with
+   * the shipped `Button loading` spinner. Absent, a pending verb is only disabled, as
+   * every other kind's always was.
+   */
+  pendingLabel?: string;
 }
 
 export interface ApprovalGateControlProps {
@@ -393,6 +400,18 @@ export interface ApprovalGateControlProps {
    * shipped *Waiting on {name}*.
    */
   waitingLine?: ReactNode;
+  /**
+   * BAND 1's KIND GLYPH, before the kind label (Story MOTIR-7460 · MOTIR-7478; design
+   * § 33.3 — the manual type's `hand`). Absent, band 1 is unchanged.
+   */
+  kindGlyph?: ReactNode;
+  /**
+   * A DOOR BESIDE THE VERBS (MOTIR-7478; § 33.3 — *Guide me through*): drawn in band 3's
+   * verb group, before the verbs, exactly when the verbs are — never in state `B`, never
+   * over a decided or withdrawn gate. Handed whether a press is recording, so the door
+   * can dim for the length of the write. It decides nothing.
+   */
+  verbsLead?: (pending: boolean) => ReactNode;
 }
 
 type Phase =
@@ -404,12 +423,14 @@ type Phase =
 /** Band 1 — the same shape for every kind; only the words change. */
 function FrameHeader({
   kindLabel,
+  kindGlyph,
   subjectMeta,
   pillProps,
   stateLabel,
   sectioned,
 }: {
   kindLabel: string;
+  kindGlyph?: ReactNode;
   subjectMeta: ReactNode;
   pillProps: PillProps;
   stateLabel: ReactNode;
@@ -424,6 +445,7 @@ function FrameHeader({
           : 'flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3'
       }
     >
+      {sectioned ? null : (kindGlyph ?? null)}
       {sectioned ? null : (
         <span className="text-sm font-semibold text-(--el-text)">{kindLabel}</span>
       )}
@@ -1019,6 +1041,8 @@ export function ApprovalGateControl({
   stateOverride = null,
   leadBand = null,
   waitingLine,
+  kindGlyph,
+  verbsLead,
 }: ApprovalGateControlProps) {
   const t = useTranslations('approvalGate');
   const tGithub = useTranslations('approvalGate.pullRequestApproval.github');
@@ -1264,6 +1288,7 @@ export function ApprovalGateControl({
     >
       <FrameHeader
         kindLabel={kindLabel}
+        kindGlyph={kindGlyph}
         subjectMeta={subjectMeta}
         pillProps={pillProps}
         stateLabel={stateLabel}
@@ -1597,6 +1622,7 @@ export function ApprovalGateControl({
               is missing — "you cannot approve what cannot be shown". */}
               {canDecide && portShown ? (
                 <span className="ml-auto flex flex-wrap gap-2">
+                  {verbsLead ? verbsLead(phase.kind === 'pending') : null}
                   {verbs.map((verb) => (
                     <Button
                       // Keyed by the verb's IDENTITY — a decision and, for a choice,
@@ -1619,11 +1645,16 @@ export function ApprovalGateControl({
                         (phase.kind === 'refused' && phase.refusal.tag !== 'UNEXPECTED')
                       }
                       aria-disabled={verb.disabled === true ? true : undefined}
+                      // A verb with its own pending words draws the shipped loading
+                      // button while its press records (MOTIR-7478, Panel 3).
+                      loading={phase.kind === 'pending' && verb.pendingLabel !== undefined}
                       onClick={() =>
                         verb.confirms ? setPhase({ kind: 'confirming', verb }) : void run(verb)
                       }
                     >
-                      {verb.label}
+                      {phase.kind === 'pending' && verb.pendingLabel !== undefined
+                        ? verb.pendingLabel
+                        : verb.label}
                     </Button>
                   ))}
                 </span>

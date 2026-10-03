@@ -1581,6 +1581,7 @@ const APPROVAL_GATE_KIND_VALUES = [
   'decision_confirmation',
   'plan_approval',
   'agent_review',
+  'manual_work',
 ] as const satisfies readonly ApprovalGateKindDTO[];
 const _gateKindsTotal: AssertTotal<
   ApprovalGateKindDTO,
@@ -1653,6 +1654,8 @@ const APPROVAL_GATE_SUPERSEDE_CAUSE_VALUES = [
   'queue_failed',
   'review_agent_disabled',
   'subject_gone',
+  'no_longer_manual',
+  'closed_without_decision',
 ] as const satisfies readonly ApprovalGateSupersedeCauseDTO[];
 const _gateCausesTotal: AssertTotal<
   ApprovalGateSupersedeCauseDTO,

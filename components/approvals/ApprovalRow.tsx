@@ -1,6 +1,6 @@
 'use client';
 
-import { Children, useCallback, type MouseEvent, type ReactNode } from 'react';
+import { Children, useCallback, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -20,8 +20,11 @@ import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { withApprovalOverlay } from '@/lib/approvals/overlayAddress';
 import { planRowDestination } from '@/lib/planning/planDestination';
 import { PlanDestinationTag } from '@/components/planning/PlanDestinationTag';
+import { BrandMark } from '@/components/brand/BrandMark';
 import { usePeekRowClick } from '@/app/(authed)/items/_components/IssueQuickView';
-import { useDecidedGateState } from '@/lib/approvals/decidedGates';
+import { announceGateDecided, useDecidedGateState } from '@/lib/approvals/decidedGates';
+import { decideApprovalGateAction } from '@/app/(authed)/items/[key]/approvalGateActions';
+import { ManualWorkGlyph, useGuideDoor } from '@/components/approvals/ManualWorkGate';
 import { RefusalReasonCell, showsRefusalReason } from './RefusalReason';
 import { subjectGoneKey } from './subjectGoneKey';
 import type {
@@ -31,6 +34,7 @@ import type {
   ApprovalQueueRowDto,
   ApprovalRecordDecidedRowDto,
   ChosenOptionDTO,
+  ManualWorkSubjectSummaryDTO,
   ConfirmedRecordDTO,
   DecisionApprovalSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
@@ -113,6 +117,10 @@ const SENTENCE_KEY: Record<ApprovalGateKindDTO, SentenceKey> = {
   plan_approval: 'other',
   // Never on a To-approve row: the review AGENT answers it, not a person (ADR §12.1).
   agent_review: 'other',
+  // A run's manual card, waiting on a person (MOTIR-7474 · MOTIR-7478; § 33.2). ⚠️ THE ONE
+  // KIND WHOSE SENTENCE DEPENDS ON STATE AND ROUTING: this is its awaiting form, and
+  // `manualWorkSentenceKey` picks the other three.
+  manual_work: 'manual_work',
 };
 
 type SentenceKey =
@@ -122,6 +130,10 @@ type SentenceKey =
   | 'decision_approval'
   | 'decision_choice'
   | 'decision_confirmation'
+  | 'manual_work'
+  | 'manual_work_other'
+  | 'manual_work_done'
+  | 'manual_work_held'
   | 'other';
 
 /** The kinds whose subject this build renders — the rest take the neutral sentence. */
@@ -132,6 +144,7 @@ const RENDERABLE_KINDS: ReadonlySet<string> = new Set([
   'decision_approval',
   'decision_choice',
   'decision_confirmation',
+  'manual_work',
 ]);
 
 /** The sentence a row reads as: its kind's, or the neutral one for a kind not drawn. */
@@ -269,6 +282,9 @@ function useOpenApproval(): (row: {
 
 /** A row's glyph: the shipped design-type mark for the one registered kind. */
 function KindGlyph({ kind }: { kind: ApprovalGateKindDTO }) {
+  // The manual TYPE's own mark and hue (MOTIR-7478; § 33.2) — the gate is only ever
+  // raised on a manual card, so the reader already knows it.
+  if (kind === 'manual_work') return <ManualWorkGlyph />;
   if (kind === 'pull_request_approval') {
     // A LIVE kind's mark (design-notes § 23, Story MOTIR-4909 · MOTIR-5485): the
     // pull-request glyph in the accent ink — never the unregistered row's faint
@@ -536,10 +552,20 @@ function StatePill({ state, kind }: { state: ApprovalGateStateDTO; kind: Approva
   const tChoice = useTranslations('approvalGate.choice.state');
   // A decision that was CONFIRMED reads *Confirmed*, not *Approved* (MOTIR-5961).
   const tConfirm = useTranslations('approvalGate.decisionConfirm.state');
+  const tManual = useTranslations('approvalGate.manualWork');
   if (state === 'approved' && kind === 'decision_choice') {
     return (
       <Pill severity="success" className={DECIDE_PILL}>
         {tChoice('chosen')}
+      </Pill>
+    );
+  }
+  // Manual work that was DONE reads *Marked done* (MOTIR-7478; § 33.2) — nothing was
+  // approved: a person did the work and said so. The frame's own pill says the same.
+  if (state === 'approved' && kind === 'manual_work') {
+    return (
+      <Pill severity="success" className={DECIDE_PILL}>
+        {tManual('state.markedDone')}
       </Pill>
     );
   }
@@ -606,9 +632,18 @@ export function ApprovalRow({
   gridTemplate = APPROVALS_GRID_TEMPLATE,
   person,
   arrived = false,
+  routedToReader,
 }: {
   record: ApprovalRowRecord;
   gridTemplate?: string;
+  /**
+   * The row's question is ROUTED TO THE READER (MOTIR-7478; § 33.2) — the Workbench tab,
+   * which lists only those. It decides the one sentence that depends on routing, the
+   * manual-work row's *is waiting on you* against *is waiting on a person*. `undefined`
+   * (the Approvals room, which lists other people's questions too) falls back to the
+   * row's authority answer, `canDecide`.
+   */
+  routedToReader?: boolean;
   /**
    * The room's full-view PERSON cell (`design/approvals` § The ROW, addition 1).
    * `undefined` renders no cell at all — the tab, and the room's own-records view.
@@ -658,17 +693,33 @@ export function ApprovalRow({
   // decide, so their Decide cell says why in a colourless pill.
   const gone = row.subject === null;
   const renderable = row.subject !== null && RENDERABLE_KINDS.has(row.subject.kind);
-  const sentenceKey = gone ? SENTENCE_KEY[row.kind] : sentenceKeyOf(row.kind);
-  // The sentence as plain text — the row door's accessible name reads it (MOTIR-5999).
-  const sentenceText = tSentence.markup(sentenceKey, {
-    name: card.title,
-    title: (chunks: string) => chunks,
-  });
   const settledState: ApprovalGateStateDTO | null =
     record.section === 'decided' ? record.row.state : announcedState;
   // A HELD row is settled with no state to show: it has left the awaiting set,
   // so nothing is left to press, and the surface does not know what it became.
   const settled = settledState !== null || record.section === 'held';
+  const sentenceKey =
+    row.kind === 'manual_work'
+      ? manualWorkSentenceKey({
+          gone,
+          settledState,
+          held: record.section === 'held',
+          routedToReader: routedToReader ?? (record.section === 'awaiting' && record.row.canDecide),
+        })
+      : gone
+        ? SENTENCE_KEY[row.kind]
+        : sentenceKeyOf(row.kind);
+  // The sentence as plain text — the row door's accessible name reads it (MOTIR-5999).
+  const sentenceText = tSentence.markup(sentenceKey, {
+    name: card.title,
+    title: (chunks: string) => chunks,
+  });
+  // MANUAL WORK DECIDES FROM THE ROW (MOTIR-7478; ADR `manual-work-gate.md` §5) — the one
+  // row with a verb: a live question this reader may press, on a subject that resolves.
+  const manualSubject: ManualWorkSubjectSummaryDTO | null =
+    row.subject?.kind === 'manual_work' ? row.subject : null;
+  const manualPressable =
+    manualSubject !== null && record.section === 'awaiting' && !settled && record.row.canDecide;
   const timeIso = record.section === 'decided' ? record.row.decidedAt : record.row.waitingSince;
 
   function onRowClick(e: MouseEvent<HTMLAnchorElement>) {
@@ -730,12 +781,20 @@ export function ApprovalRow({
         <div role="cell" className="flex min-w-0 items-center">
           {/* THE DETAILS (§ 28, DECISION 2) — what the kind used to print after its
               label, now in the track the work-item cell held. */}
-          {record.section === 'decided' &&
-          showsRefusalReason(
-            record.row.state,
-            record.row.refusalReason,
-            record.row.decisionSource,
-          ) ? (
+          {manualSubject !== null ? (
+            // THE MANUAL-WORK DETAILS (§ 33.2): the to-do progress, then — while it can be
+            // pressed — the Guide me through door.
+            <ManualWorkDetails
+              subject={manualSubject}
+              identifier={card.identifier}
+              showDoor={manualPressable}
+            />
+          ) : record.section === 'decided' &&
+            showsRefusalReason(
+              record.row.state,
+              record.row.refusalReason,
+              record.row.decisionSource,
+            ) ? (
             // A REFUSAL SAYS WHY (MOTIR-6075; design `approvals-row--refusal-reason`): the
             // reason's FIRST line replaces the details, the version moves into the title.
             <RefusalReasonCell
@@ -812,6 +871,15 @@ export function ApprovalRow({
             <Pill tone="awaiting" className={DECIDE_PILL}>
               {tGate('state.awaiting')}
             </Pill>
+          ) : manualPressable && manualSubject !== null ? (
+            /* MARK DONE takes Review's place (§ 33.2): Guide me through is a door, so it
+               lives in the details; the one VERB takes the Decide cell. */
+            <MarkDoneButton
+              gateId={row.gateId}
+              identifier={card.identifier}
+              stamp={manualSubject.stamp}
+              onRefused={() => openApproval({ workItem: card, kind: row.kind })}
+            />
           ) : (
             /* The labelled door a keyboard and a screen reader find (§ 22
                Panel 9) — the same address as the row. */
@@ -829,6 +897,148 @@ export function ApprovalRow({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * WHICH OF THE MANUAL-WORK ROW'S FOUR SENTENCES (Story MOTIR-7460 · MOTIR-7478; design
+ * § 33.2). Every other kind reads as a NOUN PHRASE so it stays true once decided (§ 28).
+ * This kind's words are a STATE — *is waiting on you* (ADR `manual-work-gate.md` §7) — so
+ * they are said only while true: a row marked done says so, and a row whose outcome this
+ * surface does not know (held, withdrawn, gone) falls back to the neutral *Manual work on
+ * {title}*.
+ */
+function manualWorkSentenceKey({
+  gone,
+  settledState,
+  held,
+  routedToReader,
+}: {
+  gone: boolean;
+  settledState: ApprovalGateStateDTO | null;
+  held: boolean;
+  routedToReader: boolean;
+}): SentenceKey {
+  if (settledState === 'approved') return 'manual_work_done';
+  if (gone || held || settledState !== null) return 'manual_work_held';
+  return routedToReader ? 'manual_work' : 'manual_work_other';
+}
+
+/**
+ * THE MANUAL-WORK DETAILS CELL (§ 33.2): *{done}/{total} steps* — or *No to-do list*, never
+ * *0/0* — then, while the question can be pressed, the GUIDE ME THROUGH door: a real link to
+ * the card with the guide open (a modified click opens that in a new tab), whose plain click
+ * opens the guide over the Workbench (`useOpenGuide`'s address). It sits ABOVE the stretched
+ * row door on `z-10`, as the title door does.
+ */
+function ManualWorkDetails({
+  subject,
+  identifier,
+  showDoor,
+}: {
+  subject: ManualWorkSubjectSummaryDTO;
+  identifier: string;
+  showDoor: boolean;
+}) {
+  const t = useTranslations('workbench.approvals');
+  const tGuide = useTranslations('runs.guide');
+  const door = useGuideDoor(identifier);
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className="shrink-0 text-xs text-(--el-text-secondary)">
+        {subject.todos
+          ? t('manualSteps', { done: subject.todos.done, total: subject.todos.total })
+          : t('manualNoList')}
+      </span>
+      {showDoor ? (
+        <>
+          <span aria-hidden className="shrink-0 text-xs text-(--el-text-secondary)">
+            ·
+          </span>
+          <a
+            href={door.href}
+            onClick={door.onClick}
+            data-testid="approval-row-guide-door"
+            className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-(--radius-control) text-xs font-medium text-(--el-link) hover:underline focus-visible:underline focus-visible:outline-none"
+          >
+            <BrandMark variant="mark" size={12} />
+            {tGuide('door')}
+          </a>
+        </>
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * MARK DONE, FROM THE ROW (§ 33.2; ADR `manual-work-gate.md` §5) — the shipped decide door,
+ * pressed with the stamp this row was rendered with. NO CONFIRM: the press is the decision,
+ * and its consequence is the status move the person asked for.
+ *
+ * ⚠️ THE ROW SETTLES FROM THE WRITE'S OWN RESPONSE, through the § 22 signal
+ * (`announceGateDecided`) — the list is a client island, and `router.refresh()` cannot
+ * reach it (CLAUDE.md § *Page state after a mutation*, case 3). The refresh still runs, for
+ * the strip's server-rendered count. A REFUSAL opens the approval overlay over the row,
+ * where the frame reads the gate afresh and says why — this cell has no room to.
+ */
+function MarkDoneButton({
+  gateId,
+  identifier,
+  stamp,
+  onRefused,
+}: {
+  gateId: string;
+  identifier: string;
+  stamp: string;
+  onRefused: () => void;
+}) {
+  const t = useTranslations('workbench.approvals');
+  const router = useRouter();
+  const [deciding, setDeciding] = useState(false);
+  // A press already in flight is not pressed twice (the button is also disabled).
+  const inFlight = useRef(false);
+
+  async function press() {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setDeciding(true);
+    try {
+      const result = await decideApprovalGateAction({
+        gateId,
+        decision: 'approve',
+        identifier,
+        stamp,
+      });
+      if (!result.ok) {
+        inFlight.current = false;
+        setDeciding(false);
+        onRefused();
+        return;
+      }
+      announceGateDecided({
+        gate: result.gate,
+        filesKept: result.filesKept,
+        statusWritten: result.statusWritten,
+      });
+      router.refresh();
+    } catch {
+      inFlight.current = false;
+      setDeciding(false);
+      onRefused();
+    }
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      size="sm"
+      className="relative z-10"
+      loading={deciding}
+      onClick={() => void press()}
+    >
+      {deciding ? t('marking') : t('markDone')}
+    </Button>
   );
 }
 

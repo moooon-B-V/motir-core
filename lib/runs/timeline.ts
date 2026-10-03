@@ -210,3 +210,33 @@ export const SKIP_REASON_KEY = {
   checkout_unavailable: 'checkoutUnavailable',
   blocked_in_scope: 'blockedInScope',
 } as const satisfies Record<DispatchSkipReason, string>;
+
+/**
+ * A SKIPPED leg's label as a catalog key under `runs.` and its values — the ONE
+ * resolution the canvas badge and the Run section's leg line share.
+ *
+ * Every reason is `SKIP_REASON_KEY`'s, except `needs_human`, which is resolved per
+ * leg from that card's `manual_work` gate (MOTIR-7477, `design/runs/design-notes.md`
+ * § _Waiting on you_) into FOUR strings: *waiting on you* (awaiting, routed to the
+ * reader) · *waiting on {name}* (awaiting, routed to someone else) · *marked done
+ * by {name}* (approved) · *manual work* (no gate, a withdrawn one, or a person who
+ * no longer resolves — never a wrong *you*).
+ */
+export function skipReasonMessage(leg: {
+  skipReason: DispatchSkipReason;
+  manualGate?: {
+    state: 'awaiting' | 'approved';
+    name: string | null;
+    routedToReader: boolean;
+  } | null;
+}): { key: string; values?: { name: string } } {
+  const gate = leg.skipReason === 'needs_human' ? leg.manualGate : null;
+  if (gate?.state === 'awaiting' && gate.routedToReader) return { key: 'skipReason.waitingOnYou' };
+  if (gate?.state === 'awaiting' && gate.name) {
+    return { key: 'skipReason.waitingOn', values: { name: gate.name } };
+  }
+  if (gate?.state === 'approved' && gate.name) {
+    return { key: 'skipReason.markedDone', values: { name: gate.name } };
+  }
+  return { key: `skipReason.${SKIP_REASON_KEY[leg.skipReason]}` };
+}
