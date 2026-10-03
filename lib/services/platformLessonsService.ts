@@ -151,10 +151,16 @@ async function auditedWrite<W extends { audit: { before: unknown; after: unknown
   } catch (err) {
     if (applied) {
       const { audit } = applied as W;
+      // A constant format string; the ids ride as data, never as a format.
       console.error(
-        `[platform-lessons] motir-ai applied ${entry.action} to lesson ${lessonId} by ` +
-          `${principal.userId}, but the audit row did not commit`,
-        JSON.stringify({ before: audit?.before, after: audit?.after }),
+        '[platform-lessons] motir-ai applied a change but the audit row did not commit: %s',
+        JSON.stringify({
+          action: entry.action,
+          lessonId,
+          actor: principal.userId,
+          before: audit?.before,
+          after: audit?.after,
+        }),
         err,
       );
     }
