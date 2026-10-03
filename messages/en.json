@@ -10137,6 +10137,16 @@
       "cancel": {
         "body": "The run’s session in {name} stops and its credentials are revoked. Work it already pushed stays on the run’s branch, and this work item stays where it is. {name} keeps running, and your own shells in it are untouched."
       }
+    },
+    "guide": {
+      "title": "Guide",
+      "gloss": "what Motir AI will walk you through",
+      "lead": "Motir AI takes you through this card's to-do list one step at a time. It ticks a step when you say it is done, and offers to close the card at the end.",
+      "leadNoList": "This card has no to-do list yet. Motir AI will propose the steps from its description, and you choose whether to save them to the card.",
+      "progress": "{done} of {total} steps done · picks up at step {next}",
+      "progressAria": "{done} of {total} steps done",
+      "progressAllDone": "{total} of {total} steps done",
+      "door": "Guide me through"
     }
   },
   "repositoryPicker": {

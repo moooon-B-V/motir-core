@@ -65,6 +65,8 @@ import { RelationshipsPanel } from './_components/RelationshipsPanel';
 import { TodoListSection } from './_components/TodoListSection';
 import { IssueQuickViewController } from '../_components/IssueQuickViewController';
 import { parseActivityTab } from '@/lib/activity/tab';
+import { isManualReadyItem } from '@/lib/dto/ready';
+import { isMotirAiConfigured } from '@/lib/ai/availability';
 
 // The issue DETAIL route (Story 2.4 · Subtask 2.4.1). Server Component:
 // resolves the active project (the shipped active-project model — finding #50,
@@ -402,7 +404,30 @@ export default async function ItemView({
   const archivedAtLabel = item.archivedAt ? formatDate(item.archivedAt, locale) : '';
   // THE RUN HOSTED RULE (MOTIR-691) — who may start a hosted run on this card: the Run
   // section's door, Continue hosted and *Fix on the hosted agent* all follow it.
-  const canRunHosted = canEdit && !isArchived && statusCategory !== 'done';
+  // ⚠️ NEVER on a MANUAL card (Story MOTIR-7459 · MOTIR-7467): nothing runs one, so
+  // no hosted door may render for it through any path — its slot is Guide me through.
+  const isManual = isManualReadyItem({ type: item.type, executor: item.executor });
+  const canRunHosted = !isManual && canEdit && !isArchived && statusCategory !== 'done';
+  // GUIDE ME THROUGH'S DOOR (A2.7): a manual card not Done or archived, a reader who
+  // may edit it, and Motir AI available to them — the shell's `showPlanWithAi`
+  // predicate (`app/(authed)/layout.tsx`; `ai:plan` is its AI_PLANNING_REQUIREMENT).
+  // Out of credits is not an absence: the overlay shows the paywall on the turn.
+  const showGuideDoor =
+    isManual &&
+    canEdit &&
+    !isArchived &&
+    statusCategory !== 'done' &&
+    isMotirAiConfigured() &&
+    held.has('ai:plan');
+  const firstUnticked = todoList.items.findIndex((todo) => !todo.done);
+  const guideProgress =
+    todoList.progress.total > 0
+      ? {
+          done: todoList.progress.done,
+          total: todoList.progress.total,
+          next: firstUnticked >= 0 ? firstUnticked + 1 : null,
+        }
+      : null;
   // SEND TO MY AGENT (Story MOTIR-6864 · MOTIR-7028) — the start bar's second
   // option, beside Run: the Run rule AND the right to use agents on the project
   // (`instance:use`, the gate My agents and the agents read both enforce). A
@@ -711,6 +736,11 @@ export default async function ItemView({
                         }
                         canReplan={canEdit && !isArchived}
                         parentIdentifier={detail.parent?.identifier ?? null}
+                        manual={
+                          isManual
+                            ? { door: showGuideDoor ? { progress: guideProgress } : null }
+                            : null
+                        }
                         hostedDoor={
                           canRunHosted
                             ? {

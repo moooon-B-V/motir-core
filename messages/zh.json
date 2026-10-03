@@ -10133,6 +10133,16 @@
       "cancel": {
         "body": "{name} 中本次运行的会话会停止，它的凭据会被吊销。它已经推送的工作会保留在本次运行的分支上，此工作项保持原状。{name} 会继续运行，你在其中的终端不受影响。"
       }
+    },
+    "guide": {
+      "title": "引导",
+      "gloss": "Motir AI 将带你完成的步骤",
+      "lead": "Motir AI 会带你逐步完成此卡片的待办清单。你说某一步已完成，它就勾选该步骤，并在最后提议关闭卡片。",
+      "leadNoList": "此卡片还没有待办清单。Motir AI 会根据描述提出步骤，由你决定是否保存到卡片。",
+      "progress": "已完成 {done}/{total} 步 · 从第 {next} 步继续",
+      "progressAria": "已完成 {done}/{total} 步",
+      "progressAllDone": "已完成 {total}/{total} 步",
+      "door": "带我完成"
     }
   },
   "repositoryPicker": {
