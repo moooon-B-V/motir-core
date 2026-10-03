@@ -16,6 +16,8 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { agentReviewViewService } from '@/lib/services/agentReviewViewService';
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { isManualWork } from '@/lib/approvalGates/manualWorkHandler';
+import type { WorkItem } from '@/generated/prisma/client';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   APPROVAL_GATE_HANDLERS,
@@ -105,7 +107,7 @@ function isNotAvailable(err: unknown): boolean {
 async function readSubject(
   kind: ApprovalGateKindDTO,
   gate: ApprovalGateDTO | null,
-  item: { id: string; type: string | null; targetRepos: readonly string[] },
+  item: { id: string; targetRepos: readonly string[] } & Pick<WorkItem, 'type' | 'executor'>,
   ctx: ServiceContext,
 ): Promise<ApprovalGateOverlaySubjectDTO> {
   // ⚠️ A PLAN GATE IS NEVER PORTED HERE, registered or not (Story MOTIR-6012 ·
@@ -259,8 +261,12 @@ async function readSubject(
     // list — read by the SAME service the item page reads it with — and whether the card
     // has an open delivering pull request, which is what decides Mark done's consequence
     // line (`merge_writes_done`, `manualWorkHandler.approve`). Every state resolves: a
-    // withdrawn gate's frame draws its own cause over the card it was about.
+    // withdrawn gate's frame draws its own cause over the card it was about. An AWAITING
+    // gate on a card that is no longer manual asks about work nobody owes a person, so it
+    // is `gone` — the same answer `manualWorkHandler.resolveSubject` gives, which is what
+    // lets the open withdraw it (MOTIR-7146) rather than draw Mark done over it.
     case 'manual_work': {
+      if (gate.state === 'awaiting' && !isManualWork(item)) return { state: 'gone' };
       const [todoList, deliveries] = await Promise.all([
         workItemTodosService.listTodos(item.id, ctx),
         workItemsService.listDeliverySet(item.id, ctx),
