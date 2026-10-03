@@ -707,6 +707,7 @@ export async function LateUpperSections({
             routedToViewer={r.confirmGate.gate?.routedToId === currentUserId}
             itemIdentifier={itemIdentifier}
             canReplan={canReplan}
+            canEditRecord={canEdit}
           />
         </ContentSectionCard>
       ) : null}

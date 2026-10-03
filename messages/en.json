@@ -11104,7 +11104,22 @@
       "record": {
         "link": "Written record",
         "detail": "{size} · newest of {count, plural, =1 {# markdown attachment} other {# markdown attachments}}",
-        "none": "No written record. The decision above is what you confirm."
+        "none": "No written record. The decision above is what you confirm.",
+        "choose": "Choose page",
+        "chooseHelper": "Optional. The page’s latest version is kept as the record; later edits start new versions.",
+        "search": "Search pages",
+        "loading": "Loading pages…",
+        "loadFailed": "Couldn’t load this project’s pages.",
+        "empty": "This project has no pages yet.",
+        "page": "Record: <b>{title}</b>, version {number}",
+        "open": "Open page",
+        "change": "Change",
+        "refusal": {
+          "empty": "<b>{title} is empty, so it can’t be the record.</b> Write it first, then choose it.",
+          "otherProject": "<b>{title} is in another project.</b> A record must be a page of this project.",
+          "archived": "<b>{title} is archived.</b> Restore it, or choose another page.",
+          "noAccess": "<b>You can’t open that page.</b> Choose one you can read."
+        }
       },
       "consequence": "Confirm it if this is what you agreed. Confirming moves {key} to Done.",
       "verb": {
@@ -11117,7 +11132,9 @@
         "recordWithout": "Record that you confirmed this decision.",
         "done": "Move {key} to Done.",
         "nothingElse": "Change nothing else — the work items it supersedes already say what the re-plan made them.",
-        "proceed": "Yes, confirm"
+        "proceed": "Yes, confirm",
+        "recordWithPage": "Record that you confirmed this decision, with its written record <b>{title}, version {number}</b>.",
+        "freeze": "Freeze version {number} of <b>{title}</b>. Later edits to the page start new versions."
       },
       "overturnStep": {
         "title": "Overturning this will:",
@@ -11142,7 +11159,9 @@
         "recordRemoved": "record removed — the file was deleted after it was confirmed",
         "overturnedBy": "Overturned by {name} · {when}",
         "replanOwed": "Re-plan owed",
-        "replanOwedDetail": "for the work this decision superseded — nothing has changed yet"
+        "replanOwedDetail": "for the work this decision superseded — nothing has changed yet",
+        "pageRecord": "{title}, version {number}",
+        "frozen": "Frozen"
       },
       "cta": {
         "body": "Review the decision full screen, then confirm or overturn it.",

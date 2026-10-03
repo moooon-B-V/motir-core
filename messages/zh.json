@@ -11100,7 +11100,22 @@
       "record": {
         "link": "书面记录",
         "detail": "{size} · {count} 个 Markdown 附件中最新的一个",
-        "none": "没有书面记录。你确认的就是上面的决策。"
+        "none": "没有书面记录。你确认的就是上面的决策。",
+        "choose": "选择页面",
+        "chooseHelper": "可选。页面的最新版本将作为记录保留；之后的编辑会生成新版本。",
+        "search": "搜索页面",
+        "loading": "正在加载页面…",
+        "loadFailed": "无法加载此项目的页面。",
+        "empty": "此项目还没有页面。",
+        "page": "记录：<b>{title}</b>，第 {number} 版",
+        "open": "打开页面",
+        "change": "更换",
+        "refusal": {
+          "empty": "<b>{title} 为空，不能作为记录。</b>请先写好内容再选择。",
+          "otherProject": "<b>{title} 属于其他项目。</b>记录必须是本项目的页面。",
+          "archived": "<b>{title} 已归档。</b>请先恢复，或选择其他页面。",
+          "noAccess": "<b>你无法打开该页面。</b>请选择你能查看的页面。"
+        }
       },
       "consequence": "如果这是你们达成的一致，请确认。确认后 {key} 将变为已完成。",
       "verb": {
@@ -11113,7 +11128,9 @@
         "recordWithout": "记录你已确认此决策。",
         "done": "将 {key} 变为已完成。",
         "nothingElse": "不改变其他任何内容——被取代的工作项已体现重新规划后的样子。",
-        "proceed": "确认"
+        "proceed": "确认",
+        "recordWithPage": "记录你已确认此决策，并附上书面记录 <b>{title}（第 {number} 版）</b>。",
+        "freeze": "冻结 <b>{title}</b> 的第 {number} 版。之后对页面的编辑会生成新版本。"
       },
       "overturnStep": {
         "title": "推翻后将：",
@@ -11138,7 +11155,9 @@
         "recordRemoved": "记录已移除——确认后该文件被删除",
         "overturnedBy": "{name} 已推翻 · {when}",
         "replanOwed": "待重新规划",
-        "replanOwedDetail": "针对此决策取代的工作——目前尚未改变任何内容"
+        "replanOwedDetail": "针对此决策取代的工作——目前尚未改变任何内容",
+        "pageRecord": "{title}，第 {number} 版",
+        "frozen": "已冻结"
       },
       "cta": {
         "body": "全屏查看此决策，然后确认或推翻。",

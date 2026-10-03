@@ -1081,6 +1081,13 @@ export function ApprovalOverlay() {
             presentRecordIds={subject.confirm.presentRecordIds}
             replan={replan}
             canDecide={read.canDecide && !decidedState}
+            // The decider may choose a page as the written record (MOTIR-7444); a choice is
+            // a publication, so the overlay re-reads the subject after it.
+            recordPicker={
+              read.canDecide && !decidedState
+                ? { itemIdentifier: identifier, onChosen: () => setReread((n) => n + 1) }
+                : undefined
+            }
             routedToLabel={read.routedToLabel}
             identifier={identifier}
             alert={
