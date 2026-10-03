@@ -1,6 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import {
+  PAGE_VERSION_CAP,
+  PageHoldsFrozenVersionError,
+  assertPageDeletable,
   createPage,
   emptyState,
   markdownToUpdate,
@@ -168,7 +171,8 @@ describe('page_version marks', () => {
     });
     expect(left.map((r) => r.number)).toEqual([1, 2, 6]);
 
-    // keep 1 with two marked: only the unmarked one can go, so two remain.
+    // keep 1 with two marked: the only unmarked one left is the NEWEST, which a
+    // prune never takes (it is the version a save just wrote), so three remain.
     await inTenant(fx.projectId, (tx) =>
       pageVersionRepository.deleteOldestUnmarked(page.id, 1, tx),
     );
@@ -177,7 +181,65 @@ describe('page_version marks', () => {
       orderBy: { number: 'asc' },
       select: { number: true },
     });
-    expect(after.map((r) => r.number)).toEqual([1, 2]);
+    expect(after.map((r) => r.number)).toEqual([1, 2, 6]);
+  });
+
+  it('the VERSION POLICY on real Postgres: a save past the cap keeps sealed 2 and 3 (MOTIR-7431)', async () => {
+    const page = await newPage();
+    for (let n = 2; n <= PAGE_VERSION_CAP + 4; n += 1) await addVersion(page.id, n);
+    const at = new Date();
+    await inTenant(fx.projectId, async (tx) => {
+      for (const n of [2, 3]) {
+        const v = await adminDb.pageVersion.findFirstOrThrow({
+          where: { pageId: page.id, number: n },
+        });
+        await pageVersionRepository.sealVersion(v.id, at, tx);
+      }
+    });
+
+    // Another author, so the save starts a new version and the cap runs.
+    const other = await adminDb.user.create({
+      data: { id: 'policy-other', email: 'policy-other@example.com', name: 'Other' },
+    });
+    await inTenant(fx.projectId, (tx) =>
+      savePageUpdate(pageStoreFor(tx), systemClock, {
+        pageId: page.id,
+        actorId: other.id,
+        update: markdownToUpdate(emptyState(), 'past the cap'),
+      }),
+    );
+
+    const left = await adminDb.pageVersion.findMany({
+      where: { pageId: page.id },
+      orderBy: { number: 'asc' },
+      select: { number: true, bodyMarkdown: true },
+    });
+    const numbers = left.map((r) => r.number);
+    expect(numbers).toContain(2);
+    expect(numbers).toContain(3);
+    expect(numbers).not.toContain(1);
+    expect(left).toHaveLength(PAGE_VERSION_CAP);
+    expect(left.at(-1)).toMatchObject({
+      number: PAGE_VERSION_CAP + 5,
+      bodyMarkdown: 'past the cap',
+    });
+  });
+
+  it('assertPageDeletable reads the frozen mark through the adapter (MOTIR-7431)', async () => {
+    const page = await newPage();
+    const plain = await newPage();
+    const v1 = await firstVersion(page.id);
+    const gate = await gateOn((await decisionCard()).id);
+    await inTenant(fx.projectId, async (tx) => {
+      await pageVersionRepository.sealVersion(v1.id, new Date(), tx);
+      await pageVersionRepository.freezeVersion(v1.id, gate.id, new Date(), tx);
+    });
+    await expect(
+      inTenant(fx.projectId, (tx) => assertPageDeletable(pageStoreFor(tx), [plain.id])),
+    ).resolves.toBeUndefined();
+    await expect(
+      inTenant(fx.projectId, (tx) => assertPageDeletable(pageStoreFor(tx), [plain.id, page.id])),
+    ).rejects.toBeInstanceOf(PageHoldsFrozenVersionError);
   });
 
   it('a save after a version is marked still records through the adapter, and the row reads its marks', async () => {

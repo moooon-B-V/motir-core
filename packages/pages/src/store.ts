@@ -235,10 +235,16 @@ export interface PageStore {
   countVersions(pageId: string): Promise<number>;
   /**
    * Deletes a page's oldest UNMARKED versions (neither sealed nor frozen) until
-   * `keep` remain or only marked ones are left — so a page may keep more than
+   * `keep` remain or only marked ones and the NEWEST are left — the newest is
+   * the version a save just wrote, never a candidate — so a page may keep more than
    * `keep` when more than `keep` are marked (`pages.md` AMENDMENT 3).
    */
   deleteOldestUnmarkedVersions(pageId: string, keep: number): Promise<void>;
+  /**
+   * The first of `pageIds` holding a FROZEN version (an approved decision,
+   * `pages.md` AMENDMENT 3); `null` when none does.
+   */
+  findPageWithFrozenVersion(pageIds: readonly string[]): Promise<string | null>;
   /** Rewrites a page's derived link rows (§8.1); a no-op until the linking epic lands. */
   replaceDerivedLinks(pageId: string, links: readonly DerivedPageLink[]): Promise<void>;
   /**

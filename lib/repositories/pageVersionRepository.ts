@@ -85,6 +85,8 @@ export const pageVersionRepository = {
           WHERE "page_id" = ${pageId}
             AND "sealed_at" IS NULL
             AND "frozen_at" IS NULL
+            -- The newest version is the one a save just wrote: never a candidate.
+            AND "number" < (SELECT max("number") FROM "page_version" WHERE "page_id" = ${pageId})
           ORDER BY "number" ASC
           LIMIT GREATEST(
             (SELECT count(*) FROM "page_version" WHERE "page_id" = ${pageId}) - ${keep},

@@ -154,6 +154,10 @@ export function createPageStore(tx: Prisma.TransactionClient): PageStore {
       return record ? toPageVersionWithBody(record) : null;
     },
 
+    async findPageWithFrozenVersion(pageIds) {
+      return pageVersionRepository.anyFrozenVersion(pageIds, tx);
+    },
+
     async countVersions(pageId) {
       return pageVersionRepository.countByPage(pageId, tx);
     },

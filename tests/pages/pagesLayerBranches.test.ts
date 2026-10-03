@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { pageErrorResponse } from '@/lib/pages/routeErrors';
-import { PageNotFoundError } from '@/lib/pages';
+import { PageHoldsFrozenVersionError, PageNotFoundError } from '@/lib/pages';
 import { toPageListItemDto, toPageVersionListItemDto } from '@/lib/mappers/pageMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { pageRepository } from '@/lib/repositories/pageRepository';
@@ -135,6 +135,12 @@ describe('pageErrorResponse', () => {
       expect(res.status).toBe(404);
       expect(await res.json()).toEqual({ code: 'PAGE_NOT_FOUND', error: 'Page not found.' });
     }
+  });
+
+  it('answers a delete that would take a frozen version 409, naming the page (MOTIR-7431)', async () => {
+    const res = pageErrorResponse(new PageHoldsFrozenVersionError('page-1'));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'PAGE_HOLDS_FROZEN_VERSION', pageId: 'page-1' });
   });
 
   it('rethrows an error that is not a page refusal', () => {

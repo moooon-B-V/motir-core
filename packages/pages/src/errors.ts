@@ -258,3 +258,20 @@ export class PageParentArchivedError extends PageTreeError {
     this.name = 'PageParentArchivedError';
   }
 }
+
+/**
+ * A delete that would take a FROZEN version with it — the exact text a person
+ * approved for a decision (`pages.md` AMENDMENT 3). 409: the page can be
+ * archived, never deleted. `pageId` names the page in the set that holds it.
+ */
+export class PageHoldsFrozenVersionError extends PageError {
+  readonly code = 'PAGE_HOLDS_FROZEN_VERSION' as const;
+  readonly status = 409 as const;
+  constructor(readonly pageId: string) {
+    super(
+      'This page holds a version a person approved for a decision, so it cannot be deleted. ' +
+        'Archive it instead.',
+    );
+    this.name = 'PageHoldsFrozenVersionError';
+  }
+}

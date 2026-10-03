@@ -245,6 +245,12 @@ export class MemoryPageStore implements PageStore {
     return this.versionsOf(pageId).length;
   }
 
+  async findPageWithFrozenVersion(pageIds: readonly string[]): Promise<string | null> {
+    this.record('findPageWithFrozenVersion', pageIds);
+    const ids = new Set(pageIds);
+    return this.versions.find((v) => ids.has(v.pageId) && v.frozenAt !== null)?.pageId ?? null;
+  }
+
   /** Stamps the marks on a version, as the gate services do (test helper). */
   markVersion(versionId: string, marks: { sealedAt?: Date; frozenAt?: Date }): void {
     this.versions = this.versions.map((v) => (v.id === versionId ? { ...v, ...marks } : v));
@@ -254,7 +260,10 @@ export class MemoryPageStore implements PageStore {
     this.record('deleteOldestUnmarkedVersions', pageId, keep);
     const own = this.versionsOf(pageId);
     const excess = Math.max(0, own.length - keep);
-    const unmarked = own.filter((v) => v.sealedAt === null && v.frozenAt === null);
+    const newest = own.at(-1)?.id;
+    const unmarked = own.filter(
+      (v) => v.sealedAt === null && v.frozenAt === null && v.id !== newest,
+    );
     const doomed = new Set(unmarked.slice(0, excess).map((v) => v.id));
     // ON DELETE SET NULL on `restored_from_version_id`, as the table does.
     this.versions = this.versions
