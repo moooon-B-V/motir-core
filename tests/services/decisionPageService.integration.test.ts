@@ -12,6 +12,8 @@ import { pageDecisionSubjectVersion } from '@/lib/approvalGates/decisionSubject'
 import { decisionPageService } from '@/lib/services/decisionPageService';
 import { pagesService } from '@/lib/services/pagesService';
 import { projectsService } from '@/lib/services/projectsService';
+import { usersService } from '@/lib/services/usersService';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -158,6 +160,23 @@ describe('decisionPageService.publish — an agent decision card', () => {
   });
 });
 
+describe('decisionPageService.publish — one version, two cards', () => {
+  it('a version another card already sealed keeps its FIRST seal', async () => {
+    const p = await page();
+    const first = await decisionPageService.publish(
+      { workItemId: (await card()).id, pageId: p.id },
+      fx.ctx,
+    );
+    const second = await decisionPageService.publish(
+      { workItemId: (await card()).id, pageId: p.id },
+      fx.ctx,
+    );
+    expect(second.versionId).toBe(first.versionId);
+    expect(second.sealedAt).toBe(first.sealedAt);
+    expect(second.replayed).toBe(false);
+  });
+});
+
 describe('decisionPageService.publish — a human decision card', () => {
   it('records and seals, raises no decision_approval and moves no status', async () => {
     const item = await card({ executor: 'human' });
@@ -216,6 +235,41 @@ describe('decisionPageService.publish — the refusals, each with nothing writte
     await expect(
       decisionPageService.publish({ workItemId: item.id, pageId: p.id }, fx.ctx),
     ).rejects.toBeInstanceOf(DecisionPageInAnotherProjectError);
+    await nothingWritten(item.id, p.id);
+  });
+
+  it('WORK_ITEM_NOT_FOUND for an unknown card', async () => {
+    const p = await page();
+    await expect(
+      decisionPageService.publish({ workItemId: 'no-such-card', pageId: p.id }, fx.ctx),
+    ).rejects.toBeInstanceOf(WorkItemNotFoundError);
+  });
+
+  it('PAGE_NOT_FOUND — never "another project" — for a page in a project the caller cannot read', async () => {
+    const closed = await projectsService.createProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      name: 'Closed',
+      identifier: 'CLO',
+    });
+    await adminDb.project.update({ where: { id: closed.id }, data: { accessMode: 'members' } });
+    const p = await page('# Closed', closed.id);
+    const member = await usersService.createUser({
+      email: `decision-member-${seq}@example.com`,
+      password: 'hunter2hunter2',
+      name: 'Member',
+    });
+    await adminDb.workspaceMembership.create({
+      data: { userId: member.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
+    });
+    const item = await card();
+    const err = await decisionPageService
+      .publish(
+        { workItemId: item.id, pageId: p.id },
+        { userId: member.id, workspaceId: fx.workspaceId },
+      )
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(DecisionPageNotFoundError);
     await nothingWritten(item.id, p.id);
   });
 

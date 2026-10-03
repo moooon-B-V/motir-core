@@ -55,6 +55,7 @@ export async function POST(
     if (err instanceof DecisionPageError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: err.status });
     }
+    /* v8 ignore next -- the service throws only the gate's and its own named refusals */
     throw err;
   }
 }

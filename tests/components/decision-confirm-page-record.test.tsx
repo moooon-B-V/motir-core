@@ -174,6 +174,60 @@ describe('Choose page (Panels 1a, 1b, 1d)', () => {
   });
 });
 
+describe('the picker when something goes wrong', () => {
+  it('a list that fails to load says so in the open menu', async () => {
+    fetchMock.mockResolvedValue(json({ code: 'BOOM' }, 500));
+    renderFrame({ kind: 'none' });
+    await act(async () => {});
+    await openPicker();
+    expect(await screen.findByText(t.record.loadFailed)).toBeTruthy();
+  });
+
+  it('a list answer without items is a failed load, not a crash', async () => {
+    fetchMock.mockResolvedValue(json({}));
+    renderFrame({ kind: 'none' });
+    await act(async () => {});
+    await openPicker();
+    expect(await screen.findByText(t.record.loadFailed)).toBeTruthy();
+  });
+
+  it('an untitled page is offered by the untitled name', async () => {
+    fetchMock.mockResolvedValue(json({ items: [{ ...PAGES.items[0], title: '' }] }));
+    renderFrame({ kind: 'none' });
+    await openPicker();
+    expect(await screen.findByRole('option', { name: en.pages.untitled })).toBeTruthy();
+  });
+
+  it('a publish that never answers, or answers with an unknown code, reads as no access', async () => {
+    let publishAnswer: () => Promise<Response> = async () => {
+      throw new TypeError('network down');
+    };
+    fetchMock.mockImplementation(async (url: string) =>
+      url.startsWith('/api/pages') ? json(PAGES) : publishAnswer(),
+    );
+    renderFrame({ kind: 'none' });
+    await openPicker();
+    fireEvent.click(await screen.findByRole('option', { name: 'Exports direction' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(plain(t.record.refusal.noAccess));
+
+    publishAnswer = async () => new Response('not json', { status: 500 });
+    await openPicker();
+    fireEvent.click(await screen.findByRole('option', { name: 'Exports direction' }));
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toBe(plain(t.record.refusal.noAccess)),
+    );
+  });
+
+  it('a list answering after the picker closed is dropped', async () => {
+    let resolveList: (r: Response) => void = () => {};
+    fetchMock.mockImplementation(() => new Promise<Response>((resolve) => (resolveList = resolve)));
+    renderFrame({ kind: 'none' });
+    cleanup();
+    await act(async () => resolveList(json(PAGES)));
+    expect(screen.queryByTestId('decision-record-picker')).toBeNull();
+  });
+});
+
 describe('chosen (Panel 2a) and the confirm step (Panel 3)', () => {
   it('names the page and its version, links to that version, and offers Change', async () => {
     fetchMock.mockResolvedValue(json(PAGES));

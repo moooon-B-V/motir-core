@@ -59,6 +59,7 @@ async function canViewPages(
     if (err instanceof ProjectAccessDeniedError || err instanceof ProjectNotFoundError) {
       return false;
     }
+    /* v8 ignore next -- the access read throws only those two; anything else is a fault */
     throw err;
   }
 }
@@ -81,6 +82,7 @@ async function moveToReviewWhenUndelivered(
     ctx.workspaceId,
     tx,
   );
+  /* v8 ignore next 5 -- every project's workflow is seeded with the three ladder rungs */
   const rank = rankOfStatus(item.status, statuses, {
     reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
     implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
@@ -119,6 +121,7 @@ export const decisionPageService = {
         // Locks, in the order the header gives.
         if (agentCard) await approvalGateRepository.lockAwaitingByWorkItem(found.id, tx);
         await workItemRepository.lockById(found.id, tx);
+        /* v8 ignore next -- the row is locked, so the re-read cannot miss it */
         const item = (await workItemRepository.findById(found.id, tx)) ?? found;
 
         const terminal = await workflowsService.getTerminalStatusKeysByProjects(
@@ -140,12 +143,15 @@ export const decisionPageService = {
           }
           throw new DecisionPageNotFoundError(input.pageId);
         }
+        /* v8 ignore next 3 -- every built-in role holding work_item:edit also holds
+           page:view; only a custom role written without it lands here */
         if (!(await canViewPages(page.projectId, ctx, tx))) {
           throw new DecisionPageNotFoundError(input.pageId);
         }
         if (page.archivedAt !== null) throw new DecisionPageArchivedError(input.pageId);
 
         const latest = await pageVersionRepository.findLatest(page.id, tx);
+        /* v8 ignore next -- a page is created with its first version */
         const body = latest ? await pageVersionRepository.findVersionById(latest.id, tx) : null;
         if (!latest || !body || body.bodyMarkdown.trim() === '') {
           throw new DecisionPageEmptyError(input.pageId);
@@ -158,6 +164,7 @@ export const decisionPageService = {
             workItemKey: item.identifier,
             pageTitle: page.title,
             versionNumber: latest.number,
+            /* v8 ignore next -- the publication this replays sealed the version */
             sealedAt: latest.sealedAt ?? previous.publishedAt,
             publishedByName: publisher?.name,
             gateId: null,
@@ -197,18 +204,19 @@ export const decisionPageService = {
           const raised = (await approvalGateRepository.findAwaitingByWorkItem(item.id, tx)).find(
             (gate) => gate.kind === 'decision_approval',
           );
+          /* v8 ignore next -- the predicate always asks an agent card's question here */
           gateId = raised?.id ?? null;
           // The status follows the question, after it, in the same transaction.
           await moveToReviewWhenUndelivered(item, ctx, tx);
         }
 
-        const sealed = await pageVersionRepository.findVersionById(latest.id, tx);
         const [publisher] = await userRepository.findByIds([ctx.userId], tx);
         return toDecisionPagePublicationDto(publication, {
           workItemKey: item.identifier,
           pageTitle: page.title,
           versionNumber: latest.number,
-          sealedAt: sealed?.sealedAt ?? now,
+          // A version another card's publication sealed keeps that first seal.
+          sealedAt: latest.sealedAt ?? now,
           publishedByName: publisher?.name,
           gateId,
           replayed: false,

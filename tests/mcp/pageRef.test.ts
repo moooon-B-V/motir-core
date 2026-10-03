@@ -62,6 +62,38 @@ describe('renderPageText', () => {
   });
 });
 
+describe('renderPageText — one version (Story MOTIR-5761 · MOTIR-7429)', () => {
+  const v = (over: Partial<NonNullable<PageMarkdownDto['version']>> = {}) => ({
+    number: 1,
+    authorId: 'usr_7',
+    authorName: 'Ada',
+    savedAt: '2026-10-01T00:00:00.000Z',
+    sealed: false,
+    frozen: false,
+    ...over,
+  });
+
+  it('names the version, its marks, and where the page is now', () => {
+    expect(renderPageText(page({ version: v({ sealed: true, frozen: true }) }))).toBe(
+      [
+        '# Runbook (pg_1)',
+        'at the project root · version 1 by Ada, saved 2026-10-01T00:00:00.000Z · sealed, frozen · the page is now at version 2, revision 3',
+        '',
+        '# Runbook',
+      ].join('\n'),
+    );
+  });
+
+  it('carries no marks on a plain version, and falls back to Untitled, the author id and the version itself', () => {
+    const text = renderPageText(
+      page({ title: '', latestVersion: null, version: v({ authorName: '' }) }),
+    );
+    expect(text).toContain('# Untitled (pg_1)');
+    expect(text).toContain('version 1 by usr_7, saved 2026-10-01T00:00:00.000Z · the page is now');
+    expect(text).toContain('the page is now at version 1, revision 3');
+  });
+});
+
 describe('toPageMarkdownDto', () => {
   const record = {
     id: 'pg_1',

@@ -91,6 +91,21 @@ describe('POST /api/work-items/[id]/decision-page', () => {
     expect((await res.json()).code).toBe('BAD_REQUEST');
   });
 
+  it('a viewer, who may read the card but not edit it, is refused by the permission gate', async () => {
+    const item = await card();
+    const p = await page();
+    const viewer = await adminDb.user.create({
+      data: { email: `decision-viewer-${seq}@example.com`, name: 'Viewer', emailVerified: true },
+    });
+    await adminDb.workspaceMembership.create({
+      data: { userId: viewer.id, workspaceId: fx.workspaceId, workspaceRole: 'viewer' },
+    });
+    workspaceCtx.current = { userId: viewer.id, workspaceId: fx.workspaceId };
+    const res = await post(item.identifier, { pageId: p.id });
+    expect(res.status).toBe(403);
+    expect(await adminDb.decisionPagePublication.count({ where: { workItemId: item.id } })).toBe(0);
+  });
+
   it('404s an unknown card', async () => {
     expect((await post('PROD-99999', { pageId: 'x' })).status).toBe(404);
   });
