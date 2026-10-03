@@ -40,6 +40,7 @@ import type {
   PlannerModelWriteResult,
   PreplanStateQuery,
   Problem,
+  RawBillingHistoryResponse,
   RawCiOverageDebitResponse,
   RawEmbeddingBatchResponse,
   RawJobResponse,
@@ -717,6 +718,31 @@ export async function getOrgSubscription(
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawSubscriptionResponse;
+}
+
+// GET /v1/stripe/billing-history — an org's default payment method and recent
+// invoices, read-only from Stripe through motir-ai (MOTIR-7304 → the MOTIR-7303
+// route), for the operator console's Billing & plans tab. The caller
+// (platformOrgBillingService) has already gated the platform principal + the cloud
+// build. An org with no Stripe customer is the EMPTY shape, NOT a 404; a transport
+// failure, a non-2xx or a malformed body THROWS, and the caller renders the card's
+// unavailable state.
+export async function getBillingHistory(
+  query: SubscriptionQuery,
+): Promise<RawBillingHistoryResponse> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ coreOrganizationId: query.coreOrganizationId });
+  const res = await aiFetch(`${url}/v1/stripe/billing-history?${params.toString()}`, {
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as Partial<RawBillingHistoryResponse> | null;
+  if (!body || !Array.isArray(body.invoices) || body.paymentMethod === undefined) {
+    throw new MotirAiUnavailableError(
+      'motir-ai returned a malformed body from GET /v1/stripe/billing-history',
+    );
+  }
+  return { paymentMethod: body.paymentMethod, invoices: body.invoices };
 }
 
 // POST /v1/stripe/checkout-session — start a subscription-mode, Stripe-hosted
