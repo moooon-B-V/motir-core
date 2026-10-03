@@ -87,7 +87,10 @@ export const fleetInFlightSlotRepository = {
    * row back when the loser's release got there first, so either order ends
    * with exactly one row, owned by the winner.
    */
-  async adopt(data: FleetInFlightSlotTakeInput, tx: Prisma.TransactionClient): Promise<void> {
+  async adopt(
+    data: FleetInFlightSlotTakeInput & { ownerRef: string; workspaceId: string | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
     await tx.$executeRaw`
       INSERT INTO "fleet_in_flight_slot"
         ("id", "workload", "ref", "owner_ref", "organization_id", "workspace_id",
@@ -96,9 +99,9 @@ export const fleetInFlightSlotRepository = {
         ${randomUUID()},
         ${data.workload},
         ${data.ref},
-        ${data.ownerRef ?? null},
+        ${data.ownerRef},
         ${data.organizationId},
-        ${data.workspaceId ?? null},
+        ${data.workspaceId},
         NOW(), ${data.expiresAt}, NOW(), NOW()
       )
       ON CONFLICT ("workload", "ref") DO UPDATE SET
