@@ -440,17 +440,22 @@ export const foldersService = {
       }
 
       // The folder's pages, appended after the destination level's last page in
-      // their own order — one write. Their sub-pages are not touched.
+      // their own order — one write. Their sub-pages are not touched. The same
+      // write carries the folder's ARCHIVED pages up, positions kept
+      // (MOTIR-7420): `findFiledInFolder` reads only live pages, and a row left
+      // pointing here would fail the delete on `page.folder_id`. So it runs even
+      // when no live page is filed.
+      let pagePositions: Array<{ id: string; position: string }> = [];
       if (filedPages.length > 0) {
         const pageLevel: PageParentRef =
           destination === null ? { kind: 'root' } : { kind: 'folder', folderId: destination };
         let lastPagePosition = await pageRepository.lastPosition(folder.projectId, pageLevel, tx);
-        const pagePositions = filedPages.map((page) => {
+        pagePositions = filedPages.map((page) => {
           lastPagePosition = keyForAppend(lastPagePosition);
           return { id: page.id, position: lastPagePosition };
         });
-        await pageRepository.moveFiledPages(folder.id, destination, pagePositions, tx);
       }
+      await pageRepository.moveFiledPages(folder.id, destination, pagePositions, tx);
 
       // Every project FOLDER POINTER goes where the folder's contents just went
       // (Story MOTIR-4927 · MOTIR-5537; the SET since MOTIR-5821 — the product

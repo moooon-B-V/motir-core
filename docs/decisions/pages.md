@@ -415,6 +415,14 @@ the level reads see live pages only — and then goes last; on every other rung 
 port gained `positionTaken(projectId, parent, position)` for that check, beside §2's
 `setArchived` / `deletePages` and the set read `findArchiveSet`.
 
+**A folder delete carries archived pages up, at their own positions** (MOTIR-7420, the
+repository). The folder's LIVE filed pages are what the delete counts, shows and mints new
+positions for; its archived filed pages move to the same destination in the same `UPDATE`
+(`pageRepository.moveFiledPages`), keeping their stored `position` — they are in no level, and
+a restore re-checks the key with `positionTaken`. Leaving them behind would fail the delete on
+`page.folder_id NO ACTION`, and §7's "a folder deleted meanwhile has already moved the page up"
+depends on it.
+
 ---
 
 ## Consequences

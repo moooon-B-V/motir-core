@@ -166,25 +166,22 @@ export function createPageStore(tx: Prisma.TransactionClient): PageStore {
     // linking epic's (MOTIR-5747), which replaces this body with its writer.
     async replaceDerivedLinks() {},
 
-    // ── Archive (Story MOTIR-5755) — the port methods MOTIR-7418 adds. ──
-    // Their Postgres writes are the repository card's (MOTIR-7420); nothing in
-    // the app calls an archive procedure until the service card (MOTIR-7421),
-    // so until then a call is a wiring defect and says so rather than no-op.
-    async setArchived() {
-      throw archiveNotWired('setArchived');
+    // ── Archive (Story MOTIR-5755 · MOTIR-7418 port, MOTIR-7420 Postgres). ──
+
+    async setArchived(ids, archivedAt, archiveRootId, archivedById) {
+      await pageRepository.setArchived(ids, archivedAt, archiveRootId, archivedById, tx);
     },
-    async findArchiveSet() {
-      throw archiveNotWired('findArchiveSet');
+
+    async findArchiveSet(rootId) {
+      return pageRepository.findArchiveSet(rootId, tx);
     },
-    async deletePages() {
-      throw archiveNotWired('deletePages');
+
+    async deletePages(ids) {
+      await pageRepository.deletePages(ids, tx);
     },
-    async positionTaken() {
-      throw archiveNotWired('positionTaken');
+
+    async positionTaken(projectId, parent, position) {
+      return pageRepository.positionTaken(projectId, parent, position, tx);
     },
   };
-}
-
-function archiveNotWired(method: string): Error {
-  return new Error(`PageStore.${method} is not wired to Postgres yet (MOTIR-7420).`);
 }

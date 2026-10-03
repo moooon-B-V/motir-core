@@ -1,5 +1,6 @@
 import type { Page, PageVersion } from '@/generated/prisma/client';
 import type {
+  PageArchivedRootDto,
   PageDto,
   PageListItemDto,
   PageMoveResultDto,
@@ -209,11 +210,15 @@ export function toPageLevelRow(record: PageLevelRecord): PageLevelRow {
 /**
  * The page as the read model returns it (MOTIR-7277): the canonical state as
  * base64 — the editor's seed, from which it derives everything else — and
- * whether THIS caller may write it.
+ * whether THIS caller may write it. Its archive state (MOTIR-7420) rides along:
+ * `archivedBy` is `null` on a live page, and on an archived one whose archiver
+ * was deleted (`archived_by_id` is `SET NULL`); `archiverName` is the caller's
+ * resolved display name, `''` when it resolved none.
  */
 export function toPageDto(
   row: LockedPageRow,
   caps: { canEdit: boolean; canDelete: boolean },
+  archiverName?: string,
 ): PageDto {
   return {
     id: row.id,
@@ -224,6 +229,44 @@ export function toPageDto(
     updatedAt: row.updatedAt.toISOString(),
     canEdit: caps.canEdit,
     canDelete: caps.canDelete,
+    archivedAt: row.archivedAt?.toISOString() ?? null,
+    archiveRootId: row.archiveRootId,
+    archivedBy:
+      row.archivedById === null ? null : { id: row.archivedById, name: archiverName ?? '' },
+  };
+}
+
+// ── The archive (Story MOTIR-5755 · MOTIR-7420) ────────────────────────────
+
+/**
+ * The raw row `pageRepository.listArchivedRoots` returns: one archive ROOT, its
+ * sub-page count (its set minus itself) and the placement it was archived from.
+ */
+export interface PageArchivedRootRecord {
+  id: string;
+  title: string;
+  archivedAt: Date;
+  archivedById: string | null;
+  subPageCount: number;
+  parentPageId: string | null;
+  folderId: string | null;
+  ancestorPageIds: string[];
+}
+
+/** One Archived pages row; `archiverName` is the caller's resolved display name. */
+export function toPageArchivedRootDto(
+  record: PageArchivedRootRecord,
+  archiverName: string | undefined,
+): PageArchivedRootDto {
+  return {
+    id: record.id,
+    title: record.title,
+    archivedAt: record.archivedAt.toISOString(),
+    archivedBy:
+      record.archivedById === null ? null : { id: record.archivedById, name: archiverName ?? '' },
+    subPageCount: Number(record.subPageCount),
+    parent: toPageParentDto(record),
+    ancestorPageIds: [...record.ancestorPageIds],
   };
 }
 

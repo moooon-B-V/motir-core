@@ -21,6 +21,35 @@ export interface PageDto {
    * page can hide Delete… without a second round trip.
    */
   canDelete: boolean;
+  /**
+   * ISO-8601 when the page is archived (MOTIR-7420), `null` while it is live. An
+   * archived page still opens at its address, read-only (§7).
+   */
+  archivedAt: string | null;
+  /** The page whose archive took this one — itself for an archive root; `null` while live. */
+  archiveRootId: string | null;
+  /** Who archived it; `null` while live, or once that user is deleted. */
+  archivedBy: { id: string; name: string } | null;
+}
+
+/**
+ * One row of the Archived pages list (MOTIR-7420): an archive ROOT — a sub-page
+ * that left with it is not a row of its own — with how many sub-pages left with
+ * it and the placement it was archived from, so the list can say where it came
+ * from.
+ */
+export interface PageArchivedRootDto {
+  id: string;
+  title: string;
+  /** ISO-8601. */
+  archivedAt: string;
+  archivedBy: { id: string; name: string } | null;
+  /** The pages that left with it, itself excluded. */
+  subPageCount: number;
+  /** The parent it was archived from. */
+  parent: PageParentDto;
+  /** Its stored ancestor chain, root-first — the came-from trail's pages. */
+  ancestorPageIds: string[];
 }
 
 /** A page row without its body — what a create or a rename returns. */

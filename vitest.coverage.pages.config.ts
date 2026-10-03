@@ -77,6 +77,8 @@ const STORY_FILES = [
   'components/pages/tree/*.ts',
   // The tree routes' `parent` parser (`?parent=` and the JSON `parent`).
   'lib/pages/parentInput.ts',
+  // Story MOTIR-5755 (archive; MOTIR-7420): the Archived pages list's cursor.
+  'lib/pages/archivedRootsCursor.ts',
   // `app/(authed)/pages/**` — the index, New page and the page at its address.
   'app/**/pages/page.tsx',
   'app/**/pages/*/page.tsx',
