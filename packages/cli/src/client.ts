@@ -1325,6 +1325,13 @@ export interface DispatchRunEventInput {
   skipReason?: DispatchSkipReason;
   sessionBranch?: string;
   exitCode?: number;
+  /**
+   * The agent's SELF-REPORTED model, on `agent_exited` only (MOTIR-7504) — the
+   * value `runAgent` returned, null when the agent reported none, never a guess.
+   * The server writes it onto the leg (`dispatch-run-record.md` AMENDMENT 4) and
+   * refuses it on any other kind.
+   */
+  model?: string | null;
 }
 
 export interface CompleteSessionResult {

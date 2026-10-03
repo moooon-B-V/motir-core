@@ -158,6 +158,25 @@ export class UnknownDispatchRunCardError extends Error {
 }
 
 /**
+ * 422 — an event that is not `agent_exited` carries a `model` (MOTIR-7502).
+ *
+ * The leg's model has ONE producer, the agent's exit, because that is the only
+ * moment the self-report exists (`dispatch-run-record.md`, the leg-model
+ * amendment). A `model` on any other kind is refused by name rather than
+ * silently dropped: dropping it would let a reporter believe it recorded a fact
+ * the record does not hold. Refused before anything is written, so no event in
+ * the batch lands.
+ */
+export class DispatchRunEventModelNotAllowedError extends Error {
+  readonly code = 'DISPATCH_RUN_EVENT_MODEL_NOT_ALLOWED';
+  readonly field = 'model';
+  constructor(readonly kind: string) {
+    super(`\`model\` is accepted only on an \`agent_exited\` event, not on \`${kind}\`.`);
+    this.name = 'DispatchRunEventModelNotAllowedError';
+  }
+}
+
+/**
  * 413 — one event's opt-in log body is over the cap.
  *
  * ⚠️ REFUSED, NOT TRUNCATED (ADR Q4). A silently shortened log is worse than an

@@ -100,7 +100,6 @@ export function GuideRail({
   const tg = useTranslations('planningWorkspace.guide');
   const [draft, setDraft] = useState('');
   const turns = session?.turns ?? [];
-  const userTurns = turns.filter((x) => x.role === 'user');
   const running = phase !== 'idle';
 
   // The chip every outcome line names the card with — the thread's resolved
@@ -162,12 +161,7 @@ export function GuideRail({
         {turns.map((turn) => (
           <Fragment key={turn.id}>
             {turn.role === 'user' ? (
-              <Bubble
-                role="user"
-                label={t('conversation.turn', {
-                  n: userTurns.findIndex((u) => u.id === turn.id) + 1,
-                })}
-              >
+              <Bubble role="user" testId="conversation-user-turn">
                 {turn.body}
               </Bubble>
             ) : turn.role === 'assistant' ? (

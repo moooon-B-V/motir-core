@@ -62,6 +62,7 @@ function leg(over: Partial<DispatchRunCardDto> = {}): DispatchRunCardDto {
     startedAt: '2026-08-30T14:02:00.000Z',
     endedAt: '2026-08-30T14:20:00.000Z',
     exitCode: 0,
+    model: null,
     ...over,
   };
 }

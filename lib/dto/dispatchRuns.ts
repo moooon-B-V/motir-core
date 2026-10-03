@@ -58,6 +58,11 @@ export interface DispatchRunCardDto {
   startedAt: string | null;
   endedAt: string | null;
   exitCode: number | null;
+  /**
+   * The agent's SELF-REPORTED model for this leg (MOTIR-7502), null when it
+   * reported none — never inferred. Readers take the leg's model, else the run's.
+   */
+  model: string | null;
 }
 
 /** One entry in the ordered stream. */

@@ -208,6 +208,32 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'audit.verify': { kind: 'read', reason: 'never' },
   /**
+   * The four PLANNING-LESSON curate acts (Story MOTIR-1408 · MOTIR-1411) — what
+   * the planner is told, edited, switched off or on, or promoted out of one
+   * organisation into the global corpus every planner reads.
+   *
+   * `required`, all four: each changes what a planner is told from its next job,
+   * and a promote moves one customer's words in front of every other customer.
+   * Edit and enable/disable are `operator`; promote is `superadmin` (a disclosure
+   * decision, not a curation one). motir-ai stores the lesson and writes NO
+   * audit row; core appends this one. Target is `platform` with the lesson id as
+   * `targetId` (the planner-model precedent — a lesson is not a core entity, so
+   * no new target kind), `organizationId` the owning org on a tenant lesson, and
+   * `metadata` carries `{ lessonId, before, after }`, the changed fields only.
+   */
+  'ai.lesson.edit': { kind: 'write', reason: 'required' },
+  'ai.lesson.enable': { kind: 'write', reason: 'required' },
+  'ai.lesson.disable': { kind: 'write', reason: 'required' },
+  'ai.lesson.promote': { kind: 'write', reason: 'required' },
+  /**
+   * The LESSON-RETIREMENT WINDOW N was changed (MOTIR-1463) — how many days a
+   * lesson may go without recurring before every organisation's planner stops
+   * being told it. `required`, at `superadmin`: one platform-wide rule. Target
+   * is `platform` with `lesson-retention` as `targetId`; `metadata` carries
+   * `{ before: { days }, after: { days } }`.
+   */
+  'ai.lesson.retention_set': { kind: 'write', reason: 'required' },
+  /**
    * One organisation's fleet containers were STOPPED by a platform admin (Story
    * MOTIR-6905 · MOTIR-7317): its GitHub Actions runs cancelled and its CI
    * containers destroyed, its hosted-agent runs ended, its agent instances

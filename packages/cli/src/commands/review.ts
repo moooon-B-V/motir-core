@@ -244,7 +244,15 @@ async function reviewHosted(input: {
       kind: 'agent_exited',
       workItemKey: key,
       exitCode: result.exitCode,
-      data: { step: 'review', exitCode: result.exitCode, signal: result.signal ?? null },
+      // The agent's self-report or null, never a guess (MOTIR-2419) — top-level
+      // is what the server writes onto the leg (MOTIR-7504).
+      model: result.model ?? null,
+      data: {
+        step: 'review',
+        exitCode: result.exitCode,
+        model: result.model ?? null,
+        signal: result.signal ?? null,
+      },
     });
     if (result.exitCode !== 0) {
       // ⚠️ FAIL CLOSED: an agent that failed may have left a verdict it never finished.

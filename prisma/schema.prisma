@@ -11252,6 +11252,12 @@ model DispatchRunCard {
   endedAt   DateTime? @map("ended_at")
   /// The agent process's exit code, when one ran.
   exitCode  Int?      @map("exit_code")
+  /// The agent's SELF-REPORTED model for this leg (MOTIR-7502), taken from the
+  /// leg's `agent_exited` event under `normalizeReportedModel`
+  /// (`lib/dispatchRuns/reportedModel.ts`). Null when the agent reported none —
+  /// NEVER inferred from the agent name, the run's `model` or anything else.
+  /// Readers take THE LEG'S model, else the run's (`dispatch-run-record.md`).
+  model     String?   @map("model")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

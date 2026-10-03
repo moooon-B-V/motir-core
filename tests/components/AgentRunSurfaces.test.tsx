@@ -97,6 +97,7 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
         startedAt: '2026-09-26T14:00:00.000Z',
         endedAt: '2026-09-26T14:26:32.000Z',
         exitCode: 0,
+        model: null,
       },
     ],
     ...over,

@@ -12,11 +12,13 @@ import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { markdownToUpdate, parseMarkdown, stateToJson } from '@/lib/pages';
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import { pageRepository } from '@/lib/repositories/pageRepository';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { pagesService } from '@/lib/services/pagesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -155,6 +157,22 @@ async function stateOf(pageId: string): Promise<Uint8Array> {
   );
 }
 
+/** Backends on this worker's database parked on a lock — the race's barrier. */
+async function lockWaiters(): Promise<number> {
+  const rows = await adminDb.$queryRaw<Array<{ n: bigint }>>`
+    SELECT count(*) AS n FROM pg_stat_activity
+     WHERE datname = current_database()
+       AND wait_event_type = 'Lock'
+  `;
+  return Number(rows[0]!.n);
+}
+
+function latch(): { opened: Promise<void>; open: () => void } {
+  let open!: () => void;
+  const opened = new Promise<void>((resolve) => (open = resolve));
+  return { opened, open };
+}
+
 describe('case 2 — the editor → markdown seam', () => {
   it('an editor-written page reads back as its stored markdown, and writing that back keeps the document', async () => {
     const f = await makeFixture();
@@ -240,22 +258,50 @@ describe('case 4 — a markdown write racing an editor save, on one row lock', (
           },
           f.owner,
         );
-      // Both are in flight before either commits; which one takes the row lock
-      // first is the database's call. `update_page` resolves the project key in
-      // its own read before it reaches the lock, so started together it loses
-      // every time; a small random head start for one side or the other, flipped
-      // each run, is what lets both interleavings actually occur.
-      const jitter = () => new Promise((r) => setTimeout(r, Math.floor(Math.random() * 25)));
-      const [, written] = await Promise.all([
-        run % 2 === 0 ? editorSave() : jitter().then(editorSave),
-        run % 2 === 0 ? jitter().then(markdownWrite) : markdownWrite(),
-      ]);
+      // Both are in flight before either commits, and the ORDER is built, not
+      // hoped for (MOTIR-7493). A holder takes the page's row lock first; one
+      // side is started and the test waits until it is parked on that lock, then
+      // the other is started and parked behind it; then the holder commits.
+      // Postgres hands a row lock to its waiters in the order they queued, so
+      // the side started first is the side that writes first — on any runner.
+      // (A random head start used to stand in for this. `update_page` reads the
+      // project key before it reaches the lock, so on a loaded runner it lost
+      // every run and the "both orders seen" check failed on a correct tree.)
+      const editorFirst = run % 2 === 0;
+      const held = latch();
+      const release = latch();
+      const holder = withWorkspaceContext(
+        { userId: f.owner.userId, workspaceId: f.workspaceId, projectId: f.projectId },
+        async (tx) => {
+          await pageRepository.lockById(page.id, tx);
+          held.open();
+          await release.opened;
+        },
+      );
+      await held.opened;
+      let saved: Promise<unknown> | undefined;
+      let wrote: Promise<CallToolResult> | undefined;
+      try {
+        if (editorFirst) saved = editorSave();
+        else wrote = markdownWrite();
+        await expect.poll(() => lockWaiters()).toBe(1);
+        if (editorFirst) wrote = markdownWrite();
+        else saved = editorSave();
+        await expect.poll(() => lockWaiters()).toBe(2);
+      } finally {
+        release.open();
+        await holder;
+        // Settle whatever was started, so a failed barrier leaves nothing running.
+        await Promise.allSettled([saved, wrote]);
+      }
+      const [, written] = await Promise.all([saved!, wrote!]);
 
       const after = await pagesService.getPageMarkdown(f.owner, {
         projectId: f.projectId,
         pageId: page.id,
       });
       const refused = written.isError === true;
+      expect(refused, `run ${run}: the side that queued first writes first`).toBe(editorFirst);
       if (refused) {
         expect(textOf(written)).toContain('PAGE_REVISION_CONFLICT');
         outcomes.editorFirst += 1;
@@ -268,12 +314,9 @@ describe('case 4 — a markdown write racing an editor save, on one row lock', (
       expect(after.revision).toBe(page.revision + (refused ? 1 : 2));
     }
 
-    // A race that never happens cannot pass silently.
-    // The tally rides on every assertion's message, so a red run says which way
-    // the runs went.
-    expect(outcomes.editorFirst + outcomes.markdownFirst).toBe(RUNS);
-    expect(outcomes.editorFirst, JSON.stringify(outcomes)).toBeGreaterThan(0);
-    expect(outcomes.markdownFirst, JSON.stringify(outcomes)).toBeGreaterThan(0);
+    // A race that never happens cannot pass silently. Each order is produced on
+    // purpose on half the runs, so each is seen exactly that often.
+    expect(outcomes).toEqual({ editorFirst: RUNS / 2, markdownFirst: RUNS / 2 });
   });
 });
 
