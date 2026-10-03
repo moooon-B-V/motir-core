@@ -9,7 +9,7 @@ import { truncateAuthTables } from '../helpers/db';
 import { organizationIdOf } from '../helpers/organizationOf';
 import { randomToken } from '../helpers/random';
 
-beforeEach(truncateAuthTables);
+beforeEach(() => truncateAuthTables());
 afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
