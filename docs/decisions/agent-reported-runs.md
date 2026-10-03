@@ -104,10 +104,15 @@ a recorded preference.
 - **A second start on the same claim answers `mine` with the same run**, so a retried or
   resumed session never opens a second one.
 
-### 3 · Report: `touch_work_item_run { key, runId, events? }`
+### 3 · Report: `touch_work_item_run { key?, runId?, events? }`
 
 - **Every call is a heartbeat** (`dispatchRunService.heartbeat`), and may carry a batch of
   events.
+- **With no arguments it is a heartbeat only**, over every open agent-reported run the
+  caller opened. The server resolves the runs from the credential, so a caller that does
+  not know the run id can still keep it alive. This is the form the plugin's hook sends
+  (§5).
+- **Events need `key` and `runId`**, and a call carrying events without both is refused.
 - **An agent may send only these kinds:**
 
   | kind              | scope | carries                                              |
@@ -151,11 +156,22 @@ a recorded preference.
   and Claude Code lets one foreground command run up to 10 minutes. Fifteen minutes
   covers that command and the turn around it; five would reap a live session in the
   middle of a long build or test run.
-- **There is no heartbeat script or hook.** Anything that heartbeats outside the agent's
-  own tool calls would need a credential beside the MCP's grant, which is Option 2.
-- **The skill touches the run at every step boundary and immediately before any command
-  that may run longer than a minute.** It also touches immediately after that command,
-  so a run is never silent for longer than one command plus one turn.
+- **The heartbeat is mechanical, not remembered.** The `motir` plugin ships a hook,
+  `hooks/hooks.json`, of Claude Code's `mcp_tool` type. On `PreToolUse` and on
+  `PostToolUse`, for every tool, it calls `touch_work_item_run` with no arguments on the
+  Motir MCP server. An `mcp_tool` hook calls the server over the connection the session
+  already has, so it uses the same sign-in as the agent's own calls and needs no
+  second credential. The agent does not have to remember anything: a session that is
+  doing work is touching its run.
+- **The longest silence is one command.** The hook fires immediately before and
+  immediately after each tool, so a run is silent only while one command runs, and that
+  is at most 10 minutes, inside the 15-minute window.
+- **The skill still says to touch the run** with `key` and `runId` when it reports an
+  event. A session whose hook is missing (the skill installed without the plugin)
+  degrades to those calls and can lapse. The reap then closes the run `abandoned`, which
+  is what that run would read without this door.
+- **The hook must be cheap.** A no-argument touch writes only the heartbeat timestamp,
+  and the server may skip that write when the stored timestamp is under a minute old.
 - **The cost:** a dead agent session reads `running` for up to 15 minutes before the reap
   closes it, against 5 for a CLI run.
 
@@ -200,5 +216,7 @@ Q3 holds in full:
   shows it is not decided here.
 - **The exact tool schemas, error codes and payload shapes.** Those are MOTIR-7450's and
   MOTIR-7451's, inside the terms above.
-- **The skill's wording.** That is MOTIR-7454's and MOTIR-7455's.
+- **The skill's wording and the hook file.** Those are MOTIR-7454's and MOTIR-7455's,
+  including the MCP server name the hook targets in each install, and how a runbook
+  install that copies skills without the plugin gets the same hook.
 - **Any change to the CLI's v1 ingest, or to who may read a run.**
