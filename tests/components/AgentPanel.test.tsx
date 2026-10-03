@@ -940,6 +940,28 @@ describe('the boot read-out in the panel (MOTIR-7400)', () => {
     expect(screen.getByText('The terminal opens here as soon as the agent is up.')).toBeTruthy();
   });
 
+  it('an agent the row menu already woke shows its boot, not a refusal, when its panel opens on a stale row (MOTIR-7393)', async () => {
+    // The list the row was clicked on still read hibernated, so opening it woke
+    // it again; the server answers that second wake with a state conflict.
+    routes.wake = () => json(409, { code: 'agent_instance_state_conflict', error: 'x' });
+    routes.list = () => page([agent({ state: 'waking' })]);
+    routes.boot = () => snapshot(bootDto(null));
+    await mount(page([agent({ state: 'hibernated' })]), { openAgentId: 'a1' });
+    expect(calls()).toContainEqual({
+      url: '/api/projects/MOTIR/instances/a1/wake',
+      method: 'POST',
+    });
+    expect(await screen.findByTestId('agent-boot')).toBeTruthy();
+    expect(within(panel()).queryByRole('alert')).toBeNull();
+  });
+
+  it('a state conflict on an agent that is still not booting keeps its refusal', async () => {
+    routes.wake = () => json(409, { code: 'agent_instance_state_conflict', error: 'x' });
+    routes.list = () => page([agent({ state: 'hibernated' })]);
+    await mount(page([agent({ state: 'hibernated' })]), { openAgentId: 'a1' });
+    expect(within(panel()).getByRole('alert')).toBeTruthy();
+  });
+
   it('a failed boot says the terminal stays closed, and its Delete… opens the delete confirmation', async () => {
     routes.list = () => page([agent({ state: 'failed', failureReason: 'exited' })]);
     routes.boot = () => [

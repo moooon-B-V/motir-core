@@ -173,16 +173,18 @@ export function MyAgentsRoom({
       ?.focus();
   }, [openId]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<AgentInstanceListPageDto | null> => {
     const mine = ++seq.current;
     try {
       const res = await fetch(`${base}?limit=${MY_AGENTS_LIST_LIMIT}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
       const body = (await res.json()) as AgentInstanceListPageDto;
       if (mine === seq.current) setData(body);
+      return body;
     } catch {
       // A failed re-read keeps the last good list on screen; only a failed FIRST
       // read shows the failure face.
+      return null;
     }
   }, [base]);
 
@@ -337,8 +339,19 @@ export function MyAgentsRoom({
         const result = await send(`${base}/${encodeURIComponent(row.id)}/wake`, {
           method: 'POST',
         });
-        await load();
-        return result.ok ? null : refusalFor(result.body, row.name);
+        const fresh = await load();
+        if (result.ok) return null;
+        // Already woken — by the row's menu a moment before the panel opened on a
+        // list still reading hibernated, or by another tab. The wake asked for is
+        // under way, so there is nothing to refuse, and a refusal would hide the
+        // boot read-out (MOTIR-7393).
+        const now = fresh?.instances.find((r) => r.id === row.id)?.state;
+        if (
+          result.body?.code === 'agent_instance_state_conflict' &&
+          (now === 'waking' || now === 'starting' || now === 'running')
+        )
+          return null;
+        return refusalFor(result.body, row.name);
       },
       onRefresh: () => void load(),
     }),
