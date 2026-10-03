@@ -1391,7 +1391,9 @@ export function DevelopmentGateFrame({
               gate.kind === 'design_result'
                 ? 'cta.bodyDesign'
                 : isDecision
-                  ? 'cta.bodyDecision'
+                  ? decisionDoc?.outcome === 'page'
+                    ? 'cta.bodyDecisionPage'
+                    : 'cta.bodyDecision'
                   : gate.kind === 'acceptance_result'
                     ? 'cta.bodyAcceptance'
                     : 'cta.body',

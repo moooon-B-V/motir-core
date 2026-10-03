@@ -150,7 +150,9 @@ describe('Confirm, from the overlay', () => {
     const dialog = await open(decision.identifier);
     expect(within(dialog).getByText('Exports move to managed object storage.')).toBeTruthy();
     expect(within(dialog).getByRole('link', { name: new RegExp(story.identifier) })).toBeTruthy();
-    expect(within(dialog).getByText(t.record.none)).toBeTruthy();
+    // No record yet, and the reader can edit the card: the record line is the page picker
+    // (MOTIR-7444), which replaces the read-only "No written record" line.
+    expect(within(dialog).getByTestId('decision-record-picker')).toBeTruthy();
 
     fireEvent.click(within(dialog).getByRole('button', { name: t.verb.confirm }));
     fireEvent.click(within(dialog).getByRole('button', { name: t.confirmStep.proceed }));

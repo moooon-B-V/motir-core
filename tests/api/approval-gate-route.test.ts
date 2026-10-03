@@ -548,6 +548,48 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     read.mockRestore();
   });
 
+  it('a DECISION published as a PAGE resolves over an EMPTY delivery set — no pull request is its normal shape (MOTIR-5761)', async () => {
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Decide how a page stores its body' },
+      fx.ctx,
+    );
+    const gate = await rawGate(story, 'decision_approval', story.id);
+    const { decisionDocumentService } = await import('@/lib/services/decisionDocumentService');
+    const document = {
+      outcome: 'page' as const,
+      pageId: 'page-1',
+      versionId: 'version-1',
+      versionNumber: 1,
+      title: 'How a page stores its body',
+      markdown: '# How a page stores its body',
+      pageUrl: '/pages/page-1',
+      versionUrl: '/pages/page-1?version=1',
+      compareUrl: '/pages/page-1?history=open&version=1',
+      authorName: 'Ada Lovelace',
+      savedAt: '2026-10-03T10:00:00.000Z',
+      frozen: false,
+      changedSince: false,
+    };
+    const read = vi
+      .spyOn(decisionDocumentService, 'readViewForWorkItem')
+      .mockResolvedValue(document);
+    signIn(owner());
+
+    const body = await (
+      await gateViaRoute({ key: story.identifier, kind: 'decision_approval' })
+    ).json();
+
+    expect(body.gate).toMatchObject({ id: gate.id, kind: 'decision_approval', state: 'awaiting' });
+    expect(body.subject).toMatchObject({
+      state: 'resolved',
+      kind: 'pull_request_approval',
+      deliveries: [],
+      pullRequests: [],
+    });
+    expect(body.subject.decision).toEqual({ document });
+    read.mockRestore();
+  });
+
   it('a DECISION gate whose document read FAILS still ports the block — the slot says it cannot be read', async () => {
     const story = await twoRepoStory();
     await rawGate(story, 'decision_approval', story.id);

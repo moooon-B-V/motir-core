@@ -10947,7 +10947,8 @@
         "body": "Review the pull requests full screen, then approve and merge them or request changes.",
         "bodyDesign": "Review the design and its pull requests full screen, then approve and merge or request changes.",
         "bodyDecision": "Review the decision and its pull requests full screen, then approve and merge or request changes.",
-        "bodyAcceptance": "Watch the recording and review the pull requests full screen, then approve and merge or request changes."
+        "bodyAcceptance": "Watch the recording and review the pull requests full screen, then approve and merge or request changes.",
+        "bodyDecisionPage": "Read the published version of the decision page full screen, then approve it or request changes."
       }
     },
     "statusHeld": {
