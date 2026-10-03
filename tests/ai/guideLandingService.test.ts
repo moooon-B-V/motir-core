@@ -6,6 +6,8 @@ import { commentsService } from '@/lib/services/commentsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { manualWorkGateService } from '@/lib/services/manualWorkGateService';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import {
   createTestWorkItem,
   makeWorkItemFixture,
@@ -337,6 +339,23 @@ describe('close', () => {
     expect(outcomesOf(settled)).toEqual([['close', 'landed']]);
     expect((await workItemsService.getWorkItem(card.id, fx.ctx)).status).toBe('done');
     expect(await adminDb.comment.count({ where: { workItemId: card.id } })).toBe(1);
+  });
+
+  it('DECIDES a pending manual-work gate through the decide door — Mark done, as the person (MOTIR-7474)', async () => {
+    const card = await manualCard();
+    const [r1] = await addRows(card.id, ['Only step']);
+    await workItemTodosService.setTodoDone(r1!, true, fx.ctx);
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      manualWorkGateService.raise(card.id, { createdById: fx.ownerId }, fx.workspaceId, tx),
+    );
+    const opened = await open(card.identifier);
+    const settled = await settleWith(opened, [{ type: 'close' }], 'All done, closing it.');
+    expect(outcomesOf(settled)).toEqual([['close', 'landed']]);
+    expect((await workItemsService.getWorkItem(card.id, fx.ctx)).status).toBe('done');
+    const gate = await adminDb.approvalGate.findFirstOrThrow({
+      where: { workItemId: card.id, kind: 'manual_work' },
+    });
+    expect(gate).toMatchObject({ state: 'approved', decidedById: fx.ownerId });
   });
 
   it('lands nothing while a row is unticked', async () => {

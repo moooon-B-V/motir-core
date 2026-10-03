@@ -5,6 +5,7 @@ import type {
   DecisionApprovalSubjectSummaryDTO,
   DecisionChoiceSubjectSummaryDTO,
   DecisionConfirmationSubjectSummaryDTO,
+  ManualWorkSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
   PlanApprovalSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
@@ -15,6 +16,8 @@ import { isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
+import { isManualWork } from '@/lib/approvalGates/manualWorkHandler';
 import { parseChoiceOptions } from '@/lib/approvalGates/choiceOptions';
 import { asksTheConfirmQuestion } from '@/lib/approvalGates/decisionConfirmationHandler';
 import { decisionConfirmationSummaryOf } from '@/lib/approvalGates/decisionRecord';
@@ -242,6 +245,26 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
       const summary: DecisionConfirmationSubjectSummaryDTO = {
         kind: 'decision_confirmation',
         ...parsed,
+      };
+      out.set(item.id, summary);
+    }
+    return out;
+  },
+  // MOTIR-7474 — a manual-work row's subject IS its card, so the row names it by the
+  // card's title; this reads the to-do progress it prints (`manual-work-gate.md` §7). A
+  // card that stopped being manual is absent, and the row says the subject is gone.
+  async manual_work(subjectIds, tx) {
+    const items = (await workItemRepository.findByIds([...subjectIds], tx)).filter(isManualWork);
+    const counts = await workItemTodoRepository.countByWorkItems(
+      items.map((item) => item.id),
+      tx,
+    );
+    const out = new Map<string, ApprovalGateSubjectSummaryDTO>();
+    for (const item of items) {
+      const todos = counts.get(item.id) ?? null;
+      const summary: ManualWorkSubjectSummaryDTO = {
+        kind: 'manual_work',
+        todos: todos && todos.total > 0 ? todos : null,
       };
       out.set(item.id, summary);
     }

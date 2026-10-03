@@ -8318,7 +8318,8 @@
         "decision_choice": "The options this asked about are gone",
         "decision_confirmation": "The decision this asked about is gone",
         "plan_approval": "The plan this asked about is gone",
-        "agent_review": "The finished work this review asked about is gone"
+        "agent_review": "The finished work this review asked about is gone",
+        "manual_work": "The work this asked for is gone"
       },
       "notRenderable": "Motir cannot show this kind yet",
       "notBuiltYet": "Not built yet",
@@ -8341,7 +8342,8 @@
         "decision_choice": "Choice",
         "decision_confirmation": "Confirm decision",
         "plan_approval": "Plan approval",
-        "agent_review": "Agent review"
+        "agent_review": "Agent review",
+        "manual_work": "Manual work"
       },
       "reviewRow": "Review {key} — {sentence}",
       "pullRequest": {
@@ -10588,6 +10590,8 @@
         "plan_discarded": "Every proposal in the plan was withdrawn, so the plan ended and this question with it.",
         "queue_failed": "The merge queue failed these commits, so this question was withdrawn.",
         "subject_gone": "What this question asked about is gone, so this question was withdrawn.",
+        "no_longer_manual": "This work item no longer needs a person's work, so this question was withdrawn.",
+        "closed_without_decision": "This work item was closed without anyone marking the work done, so this question was withdrawn.",
         "unknown": "This question was withdrawn. The reason was not recorded."
       },
       "causeByKind": {
@@ -10960,7 +10964,8 @@
         "acceptance_result": "acceptance approval",
         "decision_choice": "choice",
         "decision_confirmation": "decision",
-        "agent_review": "agent review"
+        "agent_review": "agent review",
+        "manual_work": "manual task"
       },
       "reviewAndApprove": "Review & approve",
       "needsApproval": "needs approval",
@@ -11375,7 +11380,8 @@
       "decision_choice": "The work item no longer lists options to choose from, so there is nothing here to pick. Open the work item to see what it holds now.",
       "decision_confirmation": "The work item no longer reads as a decision to confirm, so there is nothing here to confirm. Open the work item to see what it holds now.",
       "plan_approval": "The plan was removed after this approval was asked for, so there is nothing here to approve. Open the work item to see what it holds now.",
-      "agent_review": "The pull requests were unlinked after this review was asked for, so there is nothing here to review. Open the work item to see what it holds now."
+      "agent_review": "The pull requests were unlinked after this review was asked for, so there is nothing here to review. Open the work item to see what it holds now.",
+      "manual_work": "The work item no longer needs a person's work, so there is nothing here to mark done. Open the work item to see what it holds now."
     },
     "withdrawn": {
       "conflict": "{pr} now conflicts with {base}, so this question was withdrawn.",

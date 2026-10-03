@@ -61,7 +61,10 @@ export type ApprovalGateKindDTO =
   /** A PLAN, on a gate that belongs to NO work item (ADR §11, MOTIR-6032). */
   | 'plan_approval'
   /** The REVIEW AGENT's question over a green delivery set (ADR §12, MOTIR-6818). */
-  | 'agent_review';
+  | 'agent_review'
+  /** MANUAL WORK a run reached, waiting on a person (MOTIR-7474;
+   *  `docs/decisions/manual-work-gate.md`). */
+  | 'manual_work';
 
 /**
  * WHETHER A DECISION IS WAITING ON A WORK ITEM, AND ON WHOM — the one answer the
@@ -184,7 +187,11 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'review_agent_disabled'
   /** The gate's subject no longer resolves through its kind's handler, so a read that
    *  observed it withdrew the question (MOTIR-7146). */
-  | 'subject_gone';
+  | 'subject_gone'
+  /** A `manual_work` card stopped being manual (MOTIR-7474). */
+  | 'no_longer_manual'
+  /** A `manual_work` card reached a done status by a write nobody decided (MOTIR-7474). */
+  | 'closed_without_decision';
 
 /** Under which §2 authority rung the decision was made (ADR §6a). Mirrors the
  *  `ApprovalGateAuthority` Prisma enum. Frozen at decision time, so a reader can
@@ -691,7 +698,19 @@ export interface UnregisteredSubjectSummaryDTO {
     | 'decision_choice'
     | 'decision_confirmation'
     | 'plan_approval'
+    | 'manual_work'
   >;
+}
+
+/**
+ * WHAT MANUAL WORK a row is waiting on (MOTIR-7474; `docs/decisions/manual-work-gate.md`
+ * §7) — the card IS the subject, so the row's title is the card's; this carries the
+ * progress the row prints beside it: `<done>/<total> steps` from the card's to-do list,
+ * or `todos: null` when the card has no list.
+ */
+export interface ManualWorkSubjectSummaryDTO {
+  kind: 'manual_work';
+  todos: { done: number; total: number } | null;
 }
 
 /**
@@ -766,6 +785,7 @@ export type ApprovalGateSubjectSummaryDTO =
   | DecisionChoiceSubjectSummaryDTO
   | DecisionConfirmationSubjectSummaryDTO
   | PlanApprovalSubjectSummaryDTO
+  | ManualWorkSubjectSummaryDTO
   | UnregisteredSubjectSummaryDTO;
 
 /** The card a gate hangs off, as a queue row identifies it. */

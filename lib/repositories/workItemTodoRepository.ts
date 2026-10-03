@@ -129,4 +129,25 @@ export const workItemTodoRepository = {
     ]);
     return { total, done };
   },
+
+  /**
+   * {@link countByWorkItem} for MANY cards in ONE query — a `manual_work` row's
+   * `<ticked>/<total> steps` across a page of the queue (MOTIR-7474;
+   * `manual-work-gate.md` §7). `_count.doneAt` counts the non-null ticks. A card with
+   * no rows is absent from the map, which a reader treats as *no list*.
+   */
+  async countByWorkItems(
+    workItemIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, { total: number; done: number }>> {
+    if (workItemIds.length === 0) return new Map();
+    const rows = await tx.workItemTodo.groupBy({
+      by: ['workItemId'],
+      where: { workItemId: { in: [...workItemIds] } },
+      _count: { _all: true, doneAt: true },
+    });
+    return new Map(
+      rows.map((row) => [row.workItemId, { total: row._count._all, done: row._count.doneAt }]),
+    );
+  },
 };

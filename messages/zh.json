@@ -8314,7 +8314,8 @@
         "decision_choice": "此项针对的选项已不存在",
         "decision_confirmation": "此项针对的决策已不存在",
         "plan_approval": "此项针对的计划已不存在",
-        "agent_review": "此项审查针对的已完成工作已不存在"
+        "agent_review": "此项审查针对的已完成工作已不存在",
+        "manual_work": "此问题要求的工作已不存在"
       },
       "notRenderable": "Motir 暂不支持展示此类型",
       "notBuiltYet": "尚未实现",
@@ -8337,7 +8338,8 @@
         "decision_choice": "选择",
         "decision_confirmation": "确认决策",
         "plan_approval": "计划审批",
-        "agent_review": "代理审查"
+        "agent_review": "代理审查",
+        "manual_work": "人工工作"
       },
       "reviewRow": "查看 {key} — {sentence}",
       "pullRequest": {
@@ -10584,6 +10586,8 @@
         "plan_discarded": "计划中的所有建议都已撤回，计划随之结束，该问题也一并撤回。",
         "queue_failed": "合并队列未能合并这些提交，因此该问题已撤回。",
         "subject_gone": "此问题针对的内容已不存在，因此该问题已撤回。",
+        "no_longer_manual": "此工作项已不再需要人工完成，因此该问题已撤回。",
+        "closed_without_decision": "此工作项在无人标记完成的情况下已关闭，因此该问题已撤回。",
         "unknown": "该问题已撤回。原因未被记录。"
       },
       "causeByKind": {
@@ -10956,7 +10960,8 @@
         "acceptance_result": "验收审批",
         "decision_choice": "选择",
         "decision_confirmation": "决策",
-        "agent_review": "代理审查"
+        "agent_review": "代理审查",
+        "manual_work": "人工任务"
       },
       "reviewAndApprove": "审阅并批准",
       "needsApproval": "需要审批",
@@ -11371,7 +11376,8 @@
       "decision_choice": "工作项中已不再列出可选的选项，这里已没有可选择的内容。打开工作项查看它现在的内容。",
       "decision_confirmation": "工作项已不再是一项待确认的决策，这里已没有可确认的内容。打开工作项查看它现在的内容。",
       "plan_approval": "此计划在发起审批后被移除，这里已没有可批准的内容。打开工作项查看它现在的内容。",
-      "agent_review": "这些合并请求在发起审查后已被取消关联，这里已没有可审查的内容。打开工作项查看它现在的内容。"
+      "agent_review": "这些合并请求在发起审查后已被取消关联，这里已没有可审查的内容。打开工作项查看它现在的内容。",
+      "manual_work": "此工作项已不再需要人工完成，这里已没有可标记完成的内容。打开工作项查看它现在的内容。"
     },
     "withdrawn": {
       "conflict": "{pr} 现在与 {base} 冲突，因此该问题已撤回。",

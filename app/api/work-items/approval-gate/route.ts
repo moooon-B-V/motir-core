@@ -253,6 +253,11 @@ async function readSubject(
         ? { ...block, agentReview }
         : block;
     }
+    // A RUN'S MANUAL CARD (MOTIR-7474; `manual-work-gate.md`). Its port — the card's to-do
+    // list, Guide me through and Mark done — is MOTIR-7478's to draw from MOTIR-7473's
+    // design; until it lands this build says it cannot show the kind, which is true.
+    case 'manual_work':
+      return { state: 'kind_not_built' };
     /* v8 ignore next 4 -- unreachable by construction: `kind` is narrowed to
        `RegisteredGateKind`, and registering a second kind is a compile error
        here until it has its own arm. */

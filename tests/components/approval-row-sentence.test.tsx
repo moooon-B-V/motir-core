@@ -35,7 +35,11 @@ const HOST_VOCABULARY = /pull request|\bPR\b|merge request|#\d+|拉取请求|合
 const SUBJECTS: Record<
   // `plan_approval` has no subject summary yet — its row is MOTIR-6037's (Story MOTIR-6012).
   // `agent_review` is never on a To-approve row — the review agent answers it (ADR §12.1).
-  Exclude<ApprovalGateKindDTO, 'pull_request_merge' | 'plan_approval' | 'agent_review'>,
+  // `manual_work` has no sentence of its own yet — its row is MOTIR-7478's (Story MOTIR-7460).
+  Exclude<
+    ApprovalGateKindDTO,
+    'pull_request_merge' | 'plan_approval' | 'agent_review' | 'manual_work'
+  >,
   ApprovalGateSubjectSummaryDTO
 > = {
   design_result: {

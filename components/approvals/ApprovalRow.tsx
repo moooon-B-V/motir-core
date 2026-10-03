@@ -113,6 +113,9 @@ const SENTENCE_KEY: Record<ApprovalGateKindDTO, SentenceKey> = {
   plan_approval: 'other',
   // Never on a To-approve row: the review AGENT answers it, not a person (ADR §12.1).
   agent_review: 'other',
+  // A run's manual card, waiting on a person (MOTIR-7474): its row is MOTIR-7478's to
+  // draw, from MOTIR-7473's design, and reads the neutral sentence until then.
+  manual_work: 'other',
 };
 
 type SentenceKey =

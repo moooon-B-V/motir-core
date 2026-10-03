@@ -292,6 +292,10 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
         // withdrawn from a card that is not `in_review` (`withdrawMergeQuestionOffReview`,
         // cause `pulled_back`) — product-written, no actor, never a decision.
         'lib/services/gateSetFor.ts',
+        // MOTIR-7474 (`manual-work-gate.md` §6): the MANUAL-WORK question is withdrawn when
+        // its card stops being manual (`no_longer_manual`) or is closed by a write nobody
+        // decided (`closed_without_decision`) — product-written, no actor, never a decision.
+        'lib/services/manualWorkGateService.ts',
         'lib/services/pullRequestApprovalGates.ts',
       ],
     },
@@ -322,6 +326,9 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
         'lib/services/approvalGatesService.ts',
         'lib/services/choiceGateService.ts',
         'lib/services/decisionConfirmationGateService.ts',
+        // MOTIR-7474 (`manual-work-gate.md` §2): the MANUAL-WORK question's one raiser,
+        // inside a run's leg write; a second run, or a redelivery, is "already raised".
+        'lib/services/manualWorkGateService.ts',
       ],
     },
     {
