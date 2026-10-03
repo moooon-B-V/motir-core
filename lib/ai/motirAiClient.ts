@@ -78,9 +78,12 @@ interface ClientConfig {
  * This paragraph used to say the opposite in those words ("a fleet index
  * container is handed `MOTIR_AI_BASE_URL`…"), and the dispatcher did exactly
  * what it said. **CORRECTED (MOTIR-4518):** `MOTIR_AI_URL` is the address
- * motir-core reaches motir-ai at, which in production is a PRIVATE, org-scoped
- * one (`http://motir-ai.internal:8080`); an index container runs in a DIFFERENT
- * organization, where that name does not resolve at all. Every index run died at
+ * motir-core reaches motir-ai at, which in production was a PRIVATE, org-scoped
+ * 6PN name (`http://motir-ai.internal:8080`) from 2026-08-21 until 2026-10-02 —
+ * and is the public `https://motir-ai.fly.dev` since, because motir-ai's pool
+ * suspends to zero and a 6PN name cannot wake it (application-hosting.md
+ * Amendment 9, MOTIR-7407); an index container runs in a DIFFERENT
+ * organization, where that 6PN name does not resolve at all. Every index run died at
  * `getaddrinfo ENOTFOUND motir-ai.internal` for two weeks — after building the
  * graph, one call before it could be uploaded — because these two values were
  * one value.
@@ -110,16 +113,17 @@ export const MOTIR_AI_CONTAINER_URL_ENV_VAR = 'MOTIR_AI_CONTAINER_URL';
  *
  * | who is calling | from where | which address |
  * | --- | --- | --- |
- * | motir-core (this process) | the `moooon` organization | {@link motirAiBaseUrl} — `MOTIR_AI_URL`, private/6PN in production |
+ * | motir-core (this process) | the `moooon` organization | {@link motirAiBaseUrl} — `MOTIR_AI_URL`, the public origin in production (Amendment 9) |
  * | an index container | the FLEET's own organization | this accessor — `MOTIR_AI_CONTAINER_URL`, which must resolve from outside `moooon` |
  *
  * A `.internal` name is 6PN: the platform resolves it only for machines in the
- * SAME organization as the app it names. It is therefore correct for the row
- * above it and unusable for the row below it — not because one of them is
- * misconfigured, but because private-network addressing is scoped to a network
- * and the two callers are on different ones. `MOTIR_AI_URL` stays on the private
- * seam deliberately (MOTIR-3277); moving it to satisfy this consumer would undo
- * that decision for a caller it is not about.
+ * SAME organization as the app it names, so it is unusable for the row below —
+ * private-network addressing is scoped to a network, and the two callers are on
+ * different ones. Both rows hold the public origin in production today, for
+ * DIFFERENT reasons: the container because of the org boundary, motir-core
+ * because motir-ai's pool sleeps and only the Fly proxy wakes it
+ * (application-hosting.md Amendment 9, MOTIR-7407). They stay two variables
+ * so the two callers can diverge again without one dragging the other.
  *
  * ⚠️ AND THERE IS NO FALLBACK TO `MOTIR_AI_URL`, DELIBERATELY. A default is what
  * turned the original mistake into two silent weeks: the container booted, ran
