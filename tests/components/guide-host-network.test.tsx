@@ -213,7 +213,9 @@ describe('opening the guide', () => {
         : undefined;
     renderHost({ ...CARD, identifier: 'PROD-72' });
     await waitFor(() => expect(screen.getByTestId('guide-error')).toBeTruthy());
-    expect(screen.getByTestId('guide-error').textContent).toContain('this card is for an agent');
+    expect(screen.getByTestId('guide-error').textContent).toContain(
+      'this work item is for an agent',
+    );
     expect(screen.queryByRole('button', { name: /try again/i })).toBeNull();
   });
 
@@ -297,7 +299,9 @@ describe('a turn that does not finish', () => {
     };
     renderHost({ ...CARD, identifier: 'PROD-75' });
     await waitFor(() => expect(screen.getByTestId('guide-error')).toBeTruthy());
-    expect(screen.getByTestId('guide-error').textContent).toContain('nothing on the card changed');
+    expect(screen.getByTestId('guide-error').textContent).toContain(
+      'nothing on the work item changed',
+    );
     expect(posted('/api/ai/guide/settle')).toHaveLength(0);
 
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
@@ -509,15 +513,15 @@ describe('the person on the canvas and in the rail', () => {
     };
     renderHost({ ...CARD, identifier: 'PROD-83' });
     const band = await screen.findByTestId('guide-temporary-band');
-    fireEvent.click(within(band).getByRole('button', { name: 'Save to the card' }));
+    fireEvent.click(within(band).getByRole('button', { name: 'Save to the work item' }));
     await waitFor(() => expect(posted('/api/ai/guide')).toHaveLength(2));
     expect(posted('/api/ai/guide')[1]!.body).toEqual({
       sessionId: 's1',
-      text: 'Save this list to the card.',
+      text: 'Save this list to the work item.',
     });
   });
 
-  it('Reload the card re-reads the rows; so does coming back to the window', async () => {
+  it('Reload the work item re-reads the rows; so does coming back to the window', async () => {
     const before = [todo('r1', 'One')];
     handler = ordinary({ before, after: before });
     renderHost({ ...CARD, identifier: 'PROD-84' });

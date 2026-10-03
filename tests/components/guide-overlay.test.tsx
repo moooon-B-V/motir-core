@@ -172,11 +172,11 @@ describe('GuideTodoCanvas', () => {
     );
     renderWithIntl(<GuideTodoCanvas view={view} canTick onSetDone={() => {}} onSave={onSave} />);
     const band = screen.getByTestId('guide-temporary-band');
-    expect(band.textContent).toContain('Not saved to the card.');
+    expect(band.textContent).toContain('Not saved to the work item.');
     expect(screen.queryByRole('checkbox')).toBeNull();
     expect(screen.getAllByTestId('guide-checkbox-static')).toHaveLength(2);
     expect(screen.getAllByTestId('guide-tag-notSaved')).toHaveLength(2);
-    fireEvent.click(within(band).getByRole('button', { name: 'Save to the card' }));
+    fireEvent.click(within(band).getByRole('button', { name: 'Save to the work item' }));
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
@@ -283,10 +283,10 @@ describe('GuideRail', () => {
     fireEvent.click(screen.getByTestId('guide-reply-walk'));
     expect(onSend).toHaveBeenCalledWith('Walk it without saving.');
     fireEvent.click(screen.getByTestId('guide-reply-save'));
-    expect(onSend).toHaveBeenCalledWith('Save this list to the card.');
+    expect(onSend).toHaveBeenCalledWith('Save this list to the work item.');
   });
 
-  it('Reload the card reads the card and sends nothing', () => {
+  it('Reload the work item reads the card and sends nothing', () => {
     const { onSend, onReload } = renderRail([
       turn(
         'assistant',
@@ -324,7 +324,9 @@ describe('GuideRail', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
     cleanup();
     renderRail([turn('assistant')], { errorCode: 'GUIDE_CARD_NOT_MANUAL' });
-    expect(screen.getByTestId('guide-error').textContent).toContain('this card is for an agent');
+    expect(screen.getByTestId('guide-error').textContent).toContain(
+      'this work item is for an agent',
+    );
     expect(screen.queryByRole('button', { name: /try again/i })).toBeNull();
   });
 });
@@ -440,16 +442,16 @@ describe('GuideRail — every outcome line, from what landed', () => {
       ],
       { rows: [] },
     );
-    expect(lines().map(([kind, text]) => [kind, text!.includes('Not saved to the card.')])).toEqual(
-      [
-        ['ticked', true],
-        ['unticked', true],
-        ['added', true],
-        ['changed', true],
-        ['moved', true],
-        ['removed', true],
-      ],
-    );
+    expect(
+      lines().map(([kind, text]) => [kind, text!.includes('Not saved to the work item.')]),
+    ).toEqual([
+      ['ticked', true],
+      ['unticked', true],
+      ['added', true],
+      ['changed', true],
+      ['moved', true],
+      ['removed', true],
+    ]);
   });
 
   it('a tick beside a close the linked pull request holds says no status changed', () => {
