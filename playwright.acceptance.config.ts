@@ -493,6 +493,15 @@ export default defineConfig({
           'out',
           'e2e-planner-model-fixture.json',
         ),
+        // The console's planning-lessons pages (Story MOTIR-1408 · MOTIR-1413):
+        // the `/v1/admin/lessons…` + `/v1/admin/lesson-retention…` intercept, from
+        // the same file the spec seeds (`tests/e2e/_helpers/platform-lessons-fixture.ts`).
+        E2E_TEST_PLATFORM_LESSONS: '1',
+        MOTIR_AI_PLATFORM_LESSONS_FIXTURE_PATH: path.join(
+          __dirname,
+          'out',
+          'e2e-platform-lessons-fixture.json',
+        ),
         E2E_TEST_AI_JOBS: '1',
         MOTIR_AI_JOBS_FIXTURE_PATH,
         MOTIR_AI_SERVICE_TOKEN: 'e2e-acceptance-placeholder-token',
