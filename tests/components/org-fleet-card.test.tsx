@@ -189,4 +189,25 @@ describe('OrgFleetCard', () => {
     expect(screen.getByRole('heading', { name: '集群 · 正在运行' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /停止容器/ }).hasAttribute('disabled')).toBe(true);
   });
+
+  // ── MOTIR-7321's coverage top-up ───────────────────────────────────────────
+
+  it('an unreadable pool, and a last stop with no actor and no reason, are said in words', () => {
+    renderCard({
+      row: row({ pool: null }),
+      lastStop: {
+        at: '2026-10-02T14:38:00.000Z',
+        actorEmail: null,
+        reason: null,
+        runsCancelled: 0,
+        ciContainersStopped: 1,
+        hostedRunsEnded: 0,
+        agentInstancesHibernated: 0,
+      },
+    });
+    expect(screen.getByText(/of —/)).toBeTruthy();
+    const last = screen.getByTestId('org-fleet-last-stop');
+    expect(last.textContent).toContain('a former operator');
+    expect(last.textContent).toContain('No reason recorded');
+  });
 });

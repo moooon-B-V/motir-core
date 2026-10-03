@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { FleetStopResultDTO } from '@/lib/dto/platformFleetStop';
@@ -228,5 +228,56 @@ describe('StopContainersDialog', () => {
     const ci = await within(dialog).findByTestId('stop-effect-ci');
     expect(ci.textContent).toContain('—');
     expect(ci.textContent).toContain('GitHub could not be read');
+  });
+
+  // ── MOTIR-7321's coverage top-up ───────────────────────────────────────────
+
+  it('NOT_FOUND closes the dialog with its own error, and writes no result', async () => {
+    stopContainersAction.mockResolvedValue({ ok: false, code: 'NOT_FOUND' });
+    const dialog = await openWithPreview();
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: 'leak' } });
+    fireEvent.click(confirmButton(dialog));
+
+    expect(await screen.findByText('Organization not found')).toBeTruthy();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.queryByTestId('stop-result')).toBeNull();
+  });
+
+  it('Cancel closes it, and a preview still in flight is discarded — it never paints the next opening', async () => {
+    let stale: (value: typeof PREVIEW) => void = () => undefined;
+    previewStopAction
+      .mockReturnValueOnce(
+        new Promise<typeof PREVIEW>((resolve) => {
+          stale = resolve;
+        }),
+      )
+      .mockReturnValueOnce(new Promise(() => undefined));
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: /Stop containers/i }));
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' }),
+    );
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+
+    // Reopened: its own preview is still counting when the first one answers.
+    fireEvent.click(screen.getByRole('button', { name: /Stop containers/i }));
+    const dialog = await screen.findByRole('alertdialog');
+    await act(async () => {
+      stale(PREVIEW);
+    });
+    expect(within(dialog).queryByTestId('stop-effects')).toBeNull();
+    expect(previewStopAction).toHaveBeenCalledTimes(2);
+  });
+
+  it('Escape closes it, and reopening asks for a fresh preview', async () => {
+    const dialog = await openWithPreview();
+    fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Stop containers/i }));
+    expect(
+      await within(await screen.findByRole('alertdialog')).findByTestId('stop-effects'),
+    ).toBeTruthy();
+    expect(previewStopAction).toHaveBeenCalledTimes(2);
   });
 });

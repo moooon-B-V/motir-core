@@ -181,4 +181,62 @@ describe('/admin/monitoring — the Fleet section', () => {
     expect(listRunningOrgs).toHaveBeenCalledWith(PRINCIPAL, { page: undefined }, expect.any(Date));
     expect(listKills.mock.calls[0]![1].page).toBeUndefined();
   });
+
+  // ── MOTIR-7321's coverage top-up: the page's own Panel 8 around the Fleet section ──
+
+  it('renders each signal state in words, with its link-out, and the overdue rows', async () => {
+    healthRead.mockResolvedValue({
+      ...HEALTH,
+      signals: [
+        {
+          id: 'database',
+          state: 'healthy',
+          values: { ms: 4, region: 'fra' },
+          linkOut: 'https://console.neon.tech',
+        },
+        {
+          id: 'lastHealthCheck',
+          state: 'degraded',
+          values: { ranAt: '2026-10-01T06:00:00.000Z', status: 'ok' },
+          linkOut: null,
+        },
+        { id: 'errors', state: 'unreachable', values: { reason: 'notConfigured' }, linkOut: null },
+        { id: 'schedules', state: 'healthy', values: { overdue: 2, total: 12 }, linkOut: null },
+        { id: 'failedJobs', state: 'healthy', values: { standing: 0, count: 0 }, linkOut: null },
+        { id: 'hosting', state: 'unreachable', values: { reason: 'notManaged' }, linkOut: null },
+      ],
+      overdue: [
+        {
+          functionId: 'system.fleet-debit-monitor',
+          cron: '*/5 * * * *',
+          lastRunAt: '2026-10-02T11:00:00.000Z',
+          expectedAt: '2026-10-02T11:05:00.000Z',
+        },
+        { functionId: 'system.never', cron: '0 * * * *', lastRunAt: null, expectedAt: null },
+      ],
+      overdueTotal: 2,
+    });
+    const root = await renderPage();
+    const text = root.textContent ?? '';
+    expect(text).toContain('Reachable · 4 ms');
+    expect(text).toContain(m.signal.database.linkOut);
+    expect(text).toContain(m.state.degraded);
+    expect(text).toContain(m.signal.errors.unreachable.notConfigured);
+    expect(text).toContain(m.state.unreachable);
+    expect(text).toContain('system.fleet-debit-monitor');
+    // A job that never fired is a WORD, not a dash.
+    expect(text).toContain(m.overdue.never);
+    expect(text).toContain('2 overdue');
+  });
+
+  it('a fleet read failing with a non-Error is logged as `unknown`', async () => {
+    listKills.mockRejectedValue('a bare string');
+    const root = await renderPage();
+    expect(root.querySelector('[data-testid="fleet-kills"]')!.getAttribute('data-state')).toBe(
+      'failed',
+    );
+    expect(errorLog).toHaveBeenCalledWith('[admin/monitoring] the fleet kills read failed', {
+      detail: 'unknown',
+    });
+  });
 });
