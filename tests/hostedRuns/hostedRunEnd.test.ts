@@ -12,6 +12,7 @@ import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
 import { encryptToken } from '@/lib/github/tokenCrypto';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { jobSupervisionRepository } from '@/lib/repositories/jobSupervisionRepository';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import {
@@ -486,6 +487,34 @@ describe('cancel — revoked and closed now, torn down by its supervisor at the 
     const run = await runOf(data.dispatchRunId);
     expect(['cancelled', 'succeeded']).toContain(run.status);
     expect(run.endedAt).not.toBeNull();
+  });
+
+  // MOTIR-7489: the same race, pinned deterministically — the CLI's `succeeded`
+  // commits at the first statement of the end path's close transaction, after
+  // the end path read the run `running`. Its closing line must roll back with it.
+  it('a CLI close landing inside the end path’s close leaves no closing line on the succeeded run', async () => {
+    const { data } = await startRun();
+    const runId = data.dispatchRunId;
+    const read = dispatchRunRepository.findByIdWithCards.bind(dispatchRunRepository);
+    let raced = false;
+    vi.spyOn(dispatchRunRepository, 'findByIdWithCards').mockImplementation(async (id, tx) => {
+      if (!raced && id === runId) {
+        raced = true;
+        await adminDb.dispatchRun.update({
+          where: { id: runId },
+          data: { status: 'succeeded', stopReason: 'completed', endedAt: new Date() },
+        });
+      }
+      return read(id, tx);
+    });
+    const ended = await hostedRunService.endHostedRun(runId, 'cancelled', 'cancelled by a person');
+    expect(raced).toBe(true);
+    expect(ended.closed).toBe(false);
+    expect((await runOf(runId)).status).toBe('succeeded');
+    const lines = await adminDb.dispatchRunEvent.findMany({
+      where: { dispatchRunId: runId, kind: 'log' },
+    });
+    expect(lines.filter((e) => (e.body ?? '').includes('hosted run ended'))).toEqual([]);
   });
 });
 

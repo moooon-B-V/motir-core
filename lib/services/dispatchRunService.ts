@@ -1052,11 +1052,21 @@ export const dispatchRunService = {
     input: CloseDispatchRunInput,
     ctx: ServiceContext,
     cardLocks: RunCardLockMode = 'wait',
+    closing?: { data: Prisma.InputJsonObject; body: string },
   ): Promise<DispatchRunDto> {
     assertRunTokenScope(runId, ctx);
     const closed = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      (tx) => dispatchRunService.closeWithin(runId, input, ctx, tx, undefined, cardLocks),
+      (tx) =>
+        dispatchRunService.closeWithin(
+          runId,
+          input,
+          ctx,
+          tx,
+          closing?.data,
+          cardLocks,
+          closing?.body,
+        ),
     );
     // A run in an agent loses its credentials at EVERY close, the CLI's own
     // included (`agent-instance-run.md` §6, MOTIR-7027) — after the close commits,
@@ -1075,6 +1085,12 @@ export const dispatchRunService = {
    *
    * `closingLog`, when given, is appended as a run-scoped `log` event just before
    * the close, under the same row lock — the reason a server-side close records.
+   * `closingBody` is that event's human-readable line. ⚠️ A server-side end
+   * writes its closing line HERE, never as an `appendEvents` before `close`:
+   * those are two transactions, and a CLI close committing between them leaves
+   * an "ended (cancelled)" line on a run that ended `succeeded` (MOTIR-7489).
+   * Under the row lock, a run found already terminal rolls the line back with
+   * the refusal.
    * `tx` must be bound to the run's workspace.
    *
    * Every card the run covers has its To fix reason RECOMPUTED once the legs are
@@ -1088,6 +1104,7 @@ export const dispatchRunService = {
     tx: Prisma.TransactionClient,
     closingLog?: Prisma.InputJsonObject,
     cardLocks: RunCardLockMode = 'wait',
+    closingBody?: string,
   ): Promise<DispatchRunDto> {
     // The covered set is fixed when the run opens (its legs and its scope are
     // written once, by `openWithin`), so reading it before the run lock is safe.
@@ -1113,6 +1130,7 @@ export const dispatchRunService = {
             seq,
             kind: 'log',
             data: closingLog,
+            ...(closingBody !== undefined ? { body: closingBody } : {}),
           },
         ],
         tx,

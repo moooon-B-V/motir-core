@@ -24,6 +24,7 @@ import {
   agentRunSuperviseKey,
 } from '@/lib/services/agentInstanceRunService';
 import { agentInstanceSweepService as sweeper } from '@/lib/services/agentInstanceSweepService';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -396,6 +397,30 @@ describe('Cancel (§6) — the agent’s owner only', () => {
     const results = await Promise.all(revoked.mock.results.map((r) => r.value));
     expect(results.reduce((n, r: { revoked: number }) => n + r.revoked, 0)).toBe(1);
     await expectRevoked(runId, token);
+  });
+
+  // MOTIR-7489: the race above only opens under load, so it is pinned here
+  // deterministically — the CLI's `succeeded` commits at the first statement of
+  // the end path's close transaction, after `end()` has read the run `running`.
+  it('a CLI close landing inside the end path’s close leaves no closing line on the succeeded run', async () => {
+    const { runId } = await startedRun();
+    const read = dispatchRunRepository.findByIdWithCards.bind(dispatchRunRepository);
+    let raced = false;
+    vi.spyOn(dispatchRunRepository, 'findByIdWithCards').mockImplementation(async (id, tx) => {
+      if (!raced && id === runId) {
+        raced = true;
+        await adminDb.dispatchRun.update({
+          where: { id: runId },
+          data: { status: 'succeeded', stopReason: 'completed', endedAt: new Date() },
+        });
+      }
+      return read(id, tx);
+    });
+    const ended = await runs.end(runId, 'cancelled', 'cancelled by the agent’s owner');
+    expect(raced).toBe(true);
+    expect(ended.closed).toBe(false);
+    expect((await runRow(runId)).status).toBe('succeeded');
+    expect(await closingLines(runId)).toEqual([]);
   });
 });
 
