@@ -122,6 +122,23 @@ describe('fakePersistentOrchestrator', () => {
     expect(() => fake.completeBoot('nope')).toThrow(/no machine/);
   });
 
+  it('models a main process that EXITS during boot — its code read back, cleared by the next start (MOTIR-7336)', async () => {
+    fake.setBootBehaviour('never_start');
+    const h = await fake.provisionPersistent(SPEC);
+    expect((await fake.describePersistent(h)).exitCode).toBeNull();
+    fake.exitOutside(h.machineId, 0);
+    const exited = await fake.describePersistent(h);
+    expect(exited).toMatchObject({ state: 'stopped', providerState: 'stopped', exitCode: 0 });
+    expect(exited.startedAt).not.toBeNull();
+    expect(exited.stoppedAt).not.toBeNull();
+    await fake.start(h);
+    expect((await fake.describePersistent(h)).exitCode).toBeNull();
+    // A stop by Motir or an operator is not an exit: it carries no code.
+    fake.completeBoot(h.machineId);
+    fake.stopOutside(h.machineId);
+    expect((await fake.describePersistent(h)).exitCode).toBeNull();
+  });
+
   it('destroyPersistent takes the machine THEN the volume, idempotently', async () => {
     const h = await fake.provisionPersistent(SPEC);
     await fake.destroyPersistent(h);

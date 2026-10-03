@@ -7,6 +7,10 @@ import type {
   PagePlacement,
   PageRow,
   PageStore,
+  PageVersionInsert,
+  PageVersionRow,
+  PageVersionUpdate,
+  PageVersionWithBody,
 } from '../../src';
 
 /** A stored page in the fake: the row plus its body columns. */
@@ -29,6 +33,8 @@ const sameParent = (page: PageRow, parent: PagePlacement): boolean =>
  */
 export class MemoryPageStore implements PageStore {
   readonly pages = new Map<string, MemoryPage>();
+  /** Every stored version, in insertion order, across pages. */
+  versions: PageVersionWithBody[] = [];
   readonly calls: { method: keyof PageStore; args: unknown[] }[] = [];
   private nextId = 0;
 
@@ -111,6 +117,56 @@ export class MemoryPageStore implements PageStore {
     const renamed = { ...page, title, updatedById };
     this.pages.set(pageId, renamed);
     return renamed;
+  }
+
+  /** A page's versions, oldest first. */
+  versionsOf(pageId: string): PageVersionWithBody[] {
+    return this.versions.filter((v) => v.pageId === pageId).sort((a, b) => a.number - b.number);
+  }
+
+  async latestVersion(pageId: string): Promise<PageVersionRow | null> {
+    this.record('latestVersion', pageId);
+    return this.versionsOf(pageId).at(-1) ?? null;
+  }
+
+  async insertVersion(row: PageVersionInsert): Promise<PageVersionRow> {
+    this.record('insertVersion', row);
+    if (this.versions.some((v) => v.pageId === row.pageId && v.number === row.number)) {
+      throw new Error(`unique (page_id, number) violated: ${row.pageId} v${row.number}`);
+    }
+    this.nextId += 1;
+    const version: PageVersionWithBody = { id: `version-${this.nextId}`, ...row };
+    this.versions.push(version);
+    return version;
+  }
+
+  async updateVersion(versionId: string, row: PageVersionUpdate): Promise<void> {
+    this.record('updateVersion', versionId, row);
+    this.versions = this.versions.map((v) => (v.id === versionId ? { ...v, ...row } : v));
+  }
+
+  async findVersion(pageId: string, number: number): Promise<PageVersionWithBody | null> {
+    this.record('findVersion', pageId, number);
+    return this.versions.find((v) => v.pageId === pageId && v.number === number) ?? null;
+  }
+
+  async countVersions(pageId: string): Promise<number> {
+    this.record('countVersions', pageId);
+    return this.versionsOf(pageId).length;
+  }
+
+  async deleteOldestVersions(pageId: string, keep: number): Promise<void> {
+    this.record('deleteOldestVersions', pageId, keep);
+    const own = this.versionsOf(pageId);
+    const doomed = new Set(own.slice(0, Math.max(0, own.length - keep)).map((v) => v.id));
+    // ON DELETE SET NULL on `restored_from_version_id`, as the table does.
+    this.versions = this.versions
+      .filter((v) => !doomed.has(v.id))
+      .map((v) =>
+        v.restoredFromVersionId !== null && doomed.has(v.restoredFromVersionId)
+          ? { ...v, restoredFromVersionId: null }
+          : v,
+      );
   }
 
   async replaceDerivedLinks(pageId: string, links: readonly DerivedPageLink[]): Promise<void> {

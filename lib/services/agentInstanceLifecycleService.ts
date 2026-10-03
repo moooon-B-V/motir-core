@@ -6,8 +6,14 @@ import type {
   AgentInstanceState,
   Prisma,
 } from '@/generated/prisma/client';
-import { FLEET_CONTAINER_SIZE, type PersistentContainerHandle } from '@motir/orchestrator';
 import {
+  FLEET_CONTAINER_SIZE,
+  type PersistentContainerHandle,
+  type PersistentContainerStatus,
+} from '@motir/orchestrator';
+import {
+  INSTANCE_BOOT_DEADLINE_MS,
+  INSTANCE_BOOT_EXIT_GRACE_MS,
   INSTANCE_HOME_PATH,
   INSTANCE_INLINE_BOOT_WAIT_MS,
   INSTANCE_INLINE_STOP_WAIT_MS,
@@ -33,6 +39,7 @@ import {
 import { buildCloneCommand } from '@/lib/agentInstances/cloneCommand';
 import { AGENT_RUN_END_DETAIL } from '@/lib/agentInstances/runEnd';
 import {
+  AGENT_IDLE_COMMAND,
   AGENT_RUN_LAUNCHER_PROBE_COMMAND,
   AGENT_SIGN_IN_COMMAND,
   AGENT_SIGN_IN_TIMEOUT_SECONDS,
@@ -508,6 +515,53 @@ async function failInstance(
     },
   );
   if (moved) await closeOpenInterval(row, agentInstanceClock.now(), 'lost');
+}
+
+/**
+ * Why a boot that has not reached `running` is over, or null while it may still
+ * get there (MOTIR-7336) — see {@link agentInstanceLifecycleService.settleBoot}.
+ */
+function bootFailureReason(
+  row: AgentInstance,
+  status: PersistentContainerStatus,
+  now: number,
+): string | null {
+  const began = row.stateChangedAt.getTime();
+  const exited =
+    status.state === 'stopped' && status.stoppedAt !== null && status.stoppedAt.getTime() >= began;
+  if (exited) {
+    const code = status.exitCode ?? null;
+    const stoppedFor = now - status.stoppedAt!.getTime();
+    if (code === 0 || stoppedFor >= INSTANCE_BOOT_EXIT_GRACE_MS) {
+      const said = code === null ? '' : ` (exit code ${code})`;
+      return `The machine exited during boot${said}. Wake to try again, or delete it.`;
+    }
+  }
+  if (now - began >= INSTANCE_BOOT_DEADLINE_MS) {
+    const minutes = Math.round(INSTANCE_BOOT_DEADLINE_MS / 60_000);
+    return `The machine did not finish starting within ${minutes} minutes. Wake to try again, or delete it.`;
+  }
+  return null;
+}
+
+/**
+ * Fail a boot, with ONE lifecycle line saying which machine state ended it
+ * (MOTIR-7336: a boot that ended silently cost a Fly-level read to explain).
+ * The line carries ids, states and the exit code only — never a credential.
+ */
+async function failBoot(
+  row: AgentInstance,
+  status: PersistentContainerStatus,
+  reason: string,
+): Promise<void> {
+  console.warn('[agentInstanceLifecycle] boot failed', {
+    instanceId: row.id,
+    state: row.state,
+    providerState: status.providerState,
+    exitCode: status.exitCode ?? null,
+    reason,
+  });
+  await failInstance(row, reason, RUN_BOOT_FAILED);
 }
 
 /** Clone the project's repositories into a freshly booted instance (§1). */
@@ -990,6 +1044,8 @@ export const agentInstanceLifecycleService = {
             imageDigest,
             imageVersion,
             region,
+            // The boot's start, on the clock its deadline is read against (MOTIR-7336).
+            stateChangedAt: openedAt,
           },
           tx,
         );
@@ -1033,6 +1089,8 @@ export const agentInstanceLifecycleService = {
         // public service, and the per-instance key (`MOTIR_TERMINAL_KEY`) — a key
         // that opens only this machine's shell, never a credential of the user's.
         terminal,
+        // With the terminal off, a main process that stays up (MOTIR-7336).
+        idleCommand: terminal ? null : AGENT_IDLE_COMMAND,
       });
       await withWorkspaceServiceContext(project.workspaceId, (tx) =>
         agentInstanceRepository.setHandle(
@@ -1195,7 +1253,13 @@ export const agentInstanceLifecycleService = {
     } else {
       await assertNoRunningRun(row, 'hibernated');
     }
-    if (!(await systemTransition(row, ['running'], 'hibernating'))) return false;
+    // The reason rides the move (MOTIR-7406): a stop the sweep settles later,
+    // because this one failed or outlived the inline wait, closes with it.
+    if (
+      !(await systemTransition(row, ['running'], 'hibernating', { hibernateReason: endReason }))
+    ) {
+      return false;
+    }
     const handle = handleOf(row);
     if (handle) {
       // §4 (MOTIR-7026): the last sign-in answer before the volume goes quiet is
@@ -1325,6 +1389,14 @@ export const agentInstanceLifecycleService = {
    * interval's start to Fly's, clone on a first boot, move to `running`.
    * `gone` / `failed` → `failed`, interval closed `lost`, slot released. Still
    * booting → `'pending'`. Called inline by create and wake, and by the sweep.
+   *
+   * EVERY BOOT ENDS (MOTIR-7336). A machine that started during this boot and then
+   * EXITED is failed with its exit code — at once on a clean exit (Fly's
+   * `on-failure` never restarts one), after {@link INSTANCE_BOOT_EXIT_GRACE_MS} on
+   * any other (a restart may be on its way). And a boot not `running` within
+   * {@link INSTANCE_BOOT_DEADLINE_MS} of its start is failed whatever the machine
+   * says. A stop from BEFORE this boot (the hibernate a wake's start has not
+   * replaced yet) is not an exit during it.
    */
   async settleBoot(instanceId: string): Promise<'running' | 'failed' | 'pending' | 'noop'> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
@@ -1339,14 +1411,19 @@ export const agentInstanceLifecycleService = {
       return 'pending';
     }
     if (status.state === 'gone' || status.state === 'failed') {
-      await failInstance(
+      await failBoot(
         row,
+        status,
         'The machine stopped before it finished starting. Wake to try again, or delete it.',
-        RUN_BOOT_FAILED,
       );
       return 'failed';
     }
-    if (status.state !== 'running') return 'pending';
+    if (status.state !== 'running') {
+      const reason = bootFailureReason(row, status, agentInstanceClock.now().getTime());
+      if (!reason) return 'pending';
+      await failBoot(row, status, reason);
+      return 'failed';
+    }
 
     if (row.state === 'starting') {
       try {
@@ -1632,23 +1709,50 @@ export const agentInstanceLifecycleService = {
 
   /**
    * SETTLE A STOP (`hibernating`), idempotently: once Fly reports the machine
-   * stopped, close the interval at Fly's stop instant with `endReason` and move
-   * to `hibernated`. A machine found gone fails the instance (`lost`). Called
-   * inline by {@link beginHibernate} with the reason it was started for, and by
-   * the sweep for a stop a previous pass left in motion (then `hibernated`).
+   * stopped, close the interval at Fly's stop instant and move to `hibernated`.
+   * A machine found gone fails the instance (`lost`). Called inline by
+   * {@link beginHibernate} with the reason it was started for, and by the sweep
+   * for a stop a previous pass left in motion.
+   *
+   * The interval closes with `endReason` when given, else the reason the row
+   * recorded when the hibernate began, else `hibernated` (a row that entered
+   * `hibernating` before the reason was recorded) — MOTIR-7406.
+   *
+   * `reissueStop` (the sweep's, MOTIR-7406): a machine still `running` means the
+   * stop never reached it — Fly refused it, or it was lost — so send it again,
+   * once per call, and read the machine again. `stop` is idempotent, so a stop
+   * that did land costs nothing. The inline settle never re-issues: it polls the
+   * stop it just sent.
    */
   async settleStop(
     instanceId: string,
-    endReason: AgentInstanceIntervalEndReason = 'hibernated',
+    endReason?: AgentInstanceIntervalEndReason,
+    opts: { reissueStop?: boolean } = {},
   ): Promise<'hibernated' | 'failed' | 'pending' | 'noop'> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
     if (!row || row.deletedAt || row.state !== 'hibernating') return 'noop';
     const handle = handleOf(row);
     /* v8 ignore next -- a hibernating instance was running, so it has a handle. */
     if (!handle) return 'pending';
+    const orchestrator = getPersistentOrchestrator();
     let status;
     try {
-      status = await getPersistentOrchestrator().describePersistent(handle);
+      status = await orchestrator.describePersistent(handle);
+      if (opts.reissueStop && status.state === 'running') {
+        try {
+          await orchestrator.stop(handle);
+        } catch (err) {
+          console.warn(
+            '[agentInstanceLifecycle] the re-issued stop failed; the next pass retries',
+            {
+              instanceId: row.id,
+              detail: describeError(err),
+            },
+          );
+          return 'pending';
+        }
+        status = await orchestrator.describePersistent(handle);
+      }
     } catch {
       return 'pending';
     }
@@ -1662,8 +1766,14 @@ export const agentInstanceLifecycleService = {
     if (status.state !== 'stopped') return 'pending';
     // Move first: a Delete that took the agent out of `hibernating` meanwhile wins,
     // and its settle closes the interval `deleted` (AMENDMENT 4).
-    if (!(await systemTransition(row, ['hibernating'], 'hibernated'))) return 'noop';
-    await closeOpenInterval(row, status.stoppedAt ?? agentInstanceClock.now(), endReason);
+    if (!(await systemTransition(row, ['hibernating'], 'hibernated', { hibernateReason: null }))) {
+      return 'noop';
+    }
+    await closeOpenInterval(
+      row,
+      status.stoppedAt ?? agentInstanceClock.now(),
+      endReason ?? row.hibernateReason ?? 'hibernated',
+    );
     return 'hibernated';
   },
 

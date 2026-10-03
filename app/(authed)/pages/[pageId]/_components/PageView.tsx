@@ -2,6 +2,17 @@
 
 import { lazy, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
+import { History, TriangleAlert } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
+import type { PageSaveStatus } from '@/components/pages/PageEditorHost';
+import type { RestorePageVersionResultDto } from '@/lib/dto/pages';
+import { cn } from '@/lib/utils/cn';
+import { HistoryNotice, PageHistoryPanel } from './PageHistoryPanel';
+import { PageVersionRestore, type RestoreRefusal } from './PageVersionRestore';
+import { PageVersionView } from './PageVersionView';
+
+const RESTORE_NOTE_ID = 'page-restore-note';
 
 // The page at its own address (Story MOTIR-5752 · MOTIR-7280), drawn by
 // `design/pages/page.mock.html` states 6–10: the title, then the editor. The
@@ -27,6 +38,8 @@ export interface PageViewPage {
 
 export interface PageViewProps {
   page: PageViewPage;
+  /** The reader's user id, so their own versions read "You" in the history. */
+  viewerId: string;
   /** `PAGE_TITLE_MAX_LENGTH`, handed down so this client file imports no package. */
   titleMaxLength: number;
 }
@@ -39,29 +52,235 @@ const TITLE_CLASS = 'block w-full font-serif text-2xl leading-8 font-semibold te
 
 type RenameError = { kind: 'tooLong'; limit: number } | { kind: 'failed' } | null;
 
-export function PageView({ page, titleMaxLength }: PageViewProps) {
+export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
   const t = useTranslations('pages');
   const rootRef = useRef<HTMLDivElement>(null);
+  const historyButtonRef = useRef<HTMLButtonElement>(null);
+
+  // ── History (Story MOTIR-5754 · MOTIR-7387) ──────────────────────────────
+  // The panel's open state, the version shown in compare, and the "version is
+  // gone" notice live here, because the title row's control, the compare split
+  // and the panel all read them. A page opens with history closed; `page.tsx`
+  // keys this view by page id, so navigating to another page closes it.
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [goneNumber, setGoneNumber] = useState<number | null>(null);
+  const [listKey, setListKey] = useState(0);
+
+  // ── Restore (MOTIR-7388) ─────────────────────────────────────────────────
+  // The live editor's state and its GENERATION, the host's `key`: a restore
+  // adopts the server's resulting state and bumps the generation, so the editor
+  // REMOUNTS on the restored document instead of carrying on with a stale one.
+  // The save status is what holds Restore while edits are unsaved.
+  const { toast } = useToast();
+  const [bodyState, setBodyState] = useState(page.bodyState);
+  const [generation, setGeneration] = useState(0);
+  const [saveStatus, setSaveStatus] = useState<PageSaveStatus>('saved');
+  const [restoring, setRestoring] = useState(false);
+  const [refusal, setRefusal] = useState<{
+    kind: Exclude<RestoreRefusal, 'gone'>;
+    number: number;
+  } | null>(null);
+  /** The row a restore just added, tinted until the next press. */
+  const [freshNumber, setFreshNumber] = useState<number | null>(null);
+
+  const closeHistory = useCallback(() => {
+    setHistoryOpen(false);
+    setSelected(null);
+    setGoneNumber(null);
+    setRefusal(null);
+    setFreshNumber(null);
+    historyButtonRef.current?.focus();
+  }, []);
+
+  const toggleHistory = () => {
+    if (historyOpen) closeHistory();
+    else setHistoryOpen(true);
+  };
+
+  const select = useCallback((number: number | null) => {
+    setGoneNumber(null);
+    setRefusal(null);
+    setFreshNumber(null);
+    setSelected(number);
+  }, []);
+
+  // A version pruned between listing and opening: say so, and re-read the list.
+  const onGone = useCallback((number: number) => {
+    setSelected(null);
+    setGoneNumber(number);
+    setListKey((k) => k + 1);
+  }, []);
+
+  const onRestored = useCallback(
+    (result: RestorePageVersionResultDto, from: number) => {
+      setBodyState(result.bodyState);
+      setGeneration((g) => g + 1);
+      setSaveStatus('saved');
+      setSelected(null);
+      setRefusal(null);
+      setFreshNumber(result.version.number);
+      setListKey((k) => k + 1);
+      toast({
+        variant: 'success',
+        title: t('history.restored', { from, number: result.version.number }),
+      });
+    },
+    [t, toast],
+  );
+
+  const onRefused = useCallback(
+    (kind: RestoreRefusal, number: number) => {
+      if (kind === 'gone') onGone(number);
+      else setRefusal({ kind, number });
+    },
+    [onGone],
+  );
+
+  // Esc closes the innermost layer first: compare, then the panel. A dialog
+  // (the restore confirm) handles its own Esc, so a key pressed inside one is
+  // left to it.
+  useEffect(() => {
+    if (!historyOpen) return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('[role="dialog"], [role="alertdialog"]')) return;
+      if (selected !== null) setSelected(null);
+      else closeHistory();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [historyOpen, selected, closeHistory]);
+
+  const comparing = historyOpen && selected !== null;
 
   return (
-    <div ref={rootRef} className="flex flex-col">
-      {page.canEdit ? (
-        <EditableTitle
+    <div ref={rootRef} data-history-open={historyOpen || undefined} className="flex gap-6">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            {page.canEdit ? (
+              <EditableTitle
+                pageId={page.id}
+                initialTitle={page.title}
+                maxLength={titleMaxLength}
+                onEnter={() =>
+                  rootRef.current
+                    ?.querySelector<HTMLElement>('.motir-page-editor [contenteditable]')
+                    ?.focus()
+                }
+              />
+            ) : (
+              <h1 className={`mt-3 ${TITLE_CLASS}`}>{page.title || t('untitled')}</h1>
+            )}
+          </div>
+          <Button
+            ref={historyButtonRef}
+            variant="secondary"
+            size="sm"
+            leftIcon={<History className="h-4 w-4" />}
+            aria-expanded={historyOpen}
+            aria-controls="page-history"
+            onClick={toggleHistory}
+            className={cn(
+              'mt-3 shrink-0',
+              historyOpen && 'border-(--el-border-strong) bg-(--el-surface)',
+            )}
+          >
+            {t('history.open')}
+          </Button>
+        </div>
+        {/* ⚠️ The live editor stays MOUNTED while a version is compared: it sits
+            in the same slot of the same element either way, so compare never
+            unmounts it — unsaved edits, the caret and the save indicator survive.
+            The version column is the only thing compare adds. */}
+        <div
+          role={comparing ? 'region' : undefined}
+          aria-label={comparing ? t('history.compare.label', { number: selected }) : undefined}
+          className={cn('mt-3', comparing && 'grid gap-4 lg:grid-cols-2')}
+        >
+          <div className={cn('min-w-0', comparing && 'flex flex-col gap-2')}>
+            {comparing ? (
+              <span className="text-[13.5px] font-semibold text-(--el-text)">
+                {t('history.compare.current')}
+              </span>
+            ) : null}
+            <PageEditorHost
+              key={generation}
+              pageId={page.id}
+              bodyState={bodyState}
+              canEdit={page.canEdit}
+              onSaveStatusChange={setSaveStatus}
+            />
+          </div>
+          {comparing ? (
+            <PageVersionView
+              key={selected}
+              pageId={page.id}
+              number={selected}
+              viewerId={viewerId}
+              onClose={() => select(null)}
+              onGone={onGone}
+              restoreSlot={
+                page.canEdit
+                  ? (version) =>
+                      version.isCurrent ? null : (
+                        <PageVersionRestore
+                          pageId={page.id}
+                          version={version}
+                          held={saveStatus !== 'saved'}
+                          refused={
+                            refusal?.kind === 'tooLarge' && refusal.number === version.number
+                          }
+                          describedBy={RESTORE_NOTE_ID}
+                          onBusyChange={setRestoring}
+                          onRestored={onRestored}
+                          onRefused={onRefused}
+                        />
+                      )
+                  : undefined
+              }
+              notice={
+                refusal !== null ? (
+                  <div id={RESTORE_NOTE_ID} className="px-(--spacing-card-padding) pt-3">
+                    <HistoryNotice>
+                      {refusal.kind === 'tooLarge'
+                        ? t('history.refusal.tooLarge', { number: refusal.number })
+                        : t('history.refusal.failed', { number: refusal.number })}
+                    </HistoryNotice>
+                  </div>
+                ) : page.canEdit && saveStatus !== 'saved' ? (
+                  <p
+                    id={RESTORE_NOTE_ID}
+                    className="flex items-start gap-1.5 px-(--spacing-card-padding) pt-3 text-[12.5px] text-(--el-text-secondary)"
+                  >
+                    <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                    {t('history.unsavedHold')}
+                  </p>
+                ) : null
+              }
+            />
+          ) : null}
+        </div>
+      </div>
+      {historyOpen ? (
+        <PageHistoryPanel
           pageId={page.id}
-          initialTitle={page.title}
-          maxLength={titleMaxLength}
-          onEnter={() =>
-            rootRef.current
-              ?.querySelector<HTMLElement>('.motir-page-editor [contenteditable]')
-              ?.focus()
+          viewerId={viewerId}
+          selected={selected}
+          onSelect={select}
+          onClose={closeHistory}
+          refreshKey={listKey}
+          busy={restoring}
+          freshNumber={freshNumber}
+          notice={
+            goneNumber !== null ? (
+              <HistoryNotice>{t('history.refusal.gone', { number: goneNumber })}</HistoryNotice>
+            ) : null
           }
         />
-      ) : (
-        <h1 className={`mt-3 ${TITLE_CLASS}`}>{page.title || t('untitled')}</h1>
-      )}
-      <div className="mt-3">
-        <PageEditorHost pageId={page.id} bodyState={page.bodyState} canEdit={page.canEdit} />
-      </div>
+      ) : null}
     </div>
   );
 }

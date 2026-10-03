@@ -193,6 +193,33 @@ function describe(err: unknown): string {
 export const MOTIR_AI_REQUEST_TIMEOUT_MS = 30_000;
 
 /**
+ * The detail for a `fetch` that threw. Node's `fetch` (undici) throws one
+ * `TypeError('fetch failed')` for EVERY transport failure and puts what actually
+ * happened on `err.cause` — `ENOTFOUND` for a name that does not resolve,
+ * `ECONNREFUSED`, `ECONNRESET`, `UND_ERR_CONNECT_TIMEOUT`. Reporting the bare
+ * message made every outage read the same: MOTIR-7337 was 78 events across five
+ * monitor issues of `fetch failed` and nothing else, and telling "the name is
+ * gone" from "the machine is asleep" took a timeline reconstruction.
+ *
+ * Only the cause's CODE is appended, never its message: the message names hosts
+ * and private addresses, and this text reaches API callers (the v1 error body is
+ * `err.message`). The whole cause rides `Error.cause` for the monitor instead.
+ */
+function describeTransportFailure(err: unknown): string {
+  const message = describe(err);
+  const codes: string[] = [];
+  let cause: unknown = err instanceof Error ? err.cause : undefined;
+  // A cause can itself have a cause (an AggregateError of per-address connect
+  // failures, a wrapped socket error); three levels is deeper than undici nests.
+  for (let depth = 0; depth < 3 && cause instanceof Error; depth += 1) {
+    const code = (cause as { code?: unknown }).code;
+    if (typeof code === 'string' && code && !codes.includes(code)) codes.push(code);
+    cause = cause.cause;
+  }
+  return codes.length > 0 ? `${message} (${codes.join(', ')})` : message;
+}
+
+/**
  * `fetch` with a deadline, mapping BOTH a transport failure and a timeout to
  * `MotirAiUnavailableError` — the single typed error every caller (and every
  * job retry budget) already understands.
@@ -210,7 +237,7 @@ async function aiFetch(input: string, init: RequestInit): Promise<Response> {
         `motir-ai did not respond within ${MOTIR_AI_REQUEST_TIMEOUT_MS}ms`,
       );
     }
-    throw new MotirAiUnavailableError(describe(err));
+    throw new MotirAiUnavailableError(describeTransportFailure(err), { cause: err });
   } finally {
     clearTimeout(timer);
   }

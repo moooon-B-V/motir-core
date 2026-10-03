@@ -109,3 +109,16 @@ export class PageUpdateMalformedError extends PageError {
     this.name = 'PageUpdateMalformedError';
   }
 }
+
+/** A version a page does not have — never existed, pruned, or another page's (§6). */
+export class PageVersionNotFoundError extends PageError {
+  readonly code = 'PAGE_VERSION_NOT_FOUND' as const;
+  readonly status = 404 as const;
+  constructor(
+    readonly pageId: string,
+    readonly number: number,
+  ) {
+    super(`This page has no version ${number}.`);
+    this.name = 'PageVersionNotFoundError';
+  }
+}

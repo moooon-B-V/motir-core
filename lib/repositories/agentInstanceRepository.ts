@@ -1,5 +1,6 @@
 import type {
   AgentInstance,
+  AgentInstanceIntervalEndReason,
   AgentInstanceState,
   AgentRunLauncher,
   AgentSignInState,
@@ -55,6 +56,8 @@ export interface AgentInstanceTransitionPatch {
   failureReason?: string | null;
   /** Bump the idle signal in the same write (create and wake do). */
   lastActivityAt?: Date;
+  /** Why a stop was begun (MOTIR-7406), with `→ hibernating`; `null` clears it. */
+  hibernateReason?: AgentInstanceIntervalEndReason | null;
   /**
    * The image-update fields (`agent-image-update.md` Q6, MOTIR-6952), written in
    * the same guarded move as the state they belong to. `null` clears.
@@ -178,6 +181,7 @@ export const agentInstanceRepository = {
         stateChangedAt: at,
         ...(patch.failureReason !== undefined ? { failureReason: patch.failureReason } : {}),
         ...(patch.lastActivityAt ? { lastActivityAt: patch.lastActivityAt } : {}),
+        ...(patch.hibernateReason !== undefined ? { hibernateReason: patch.hibernateReason } : {}),
         ...imagePatch(patch),
       },
     });

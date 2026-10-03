@@ -16,6 +16,7 @@ import { monitorIssueService } from '@/lib/services/monitorIssueService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { leakedKeys } from '../../helpers/payloadKeys';
 import {
   card,
   memberWithPermissions,
@@ -114,8 +115,12 @@ describe('listForWorkItem', () => {
       projectSlug: 'web',
     });
     expect(links[2]).toMatchObject({ environment: null, release: null, eventCount: 4 });
-    // The DTO carries no credential and no raw row.
-    expect(JSON.stringify(links)).not.toMatch(/token|metadata|workspaceId/i);
+    // The DTO carries no credential and no raw row. Fields by NAME, and the
+    // credential by its VALUE — never a word scanned across the serialized ids,
+    // which a random cuid can spell (MOTIR-7349).
+    expect(leakedKeys(links, /token|metadata|workspaceId/i)).toEqual([]);
+    expect(JSON.stringify(links)).not.toContain('fake-access-token');
+    expect(JSON.stringify(links)).not.toContain('fake-refresh-token');
   });
 
   it('breaks a last-seen tie by the provider’s issue id, so the order is stable', async () => {

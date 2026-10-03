@@ -15,6 +15,7 @@ import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { HOSTED_AGENT_MAX_TIMEOUT_MS } from '@/lib/services/hostedAgentContainerService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { runCredentialService } from '@/lib/services/runCredentialService';
 import { scopeClaimService } from '@/lib/services/scopeClaimService';
@@ -698,6 +699,46 @@ describe('a parent card — one run over its children', () => {
   });
 });
 
+// MOTIR-7330: a double-click on Run hosted. The second press can pass step 0's
+// key read before the first press opens its run; the first press then opens it
+// and claims the card, so the second press's readiness check reads a card its
+// own first press moved. Forced here by making step 0 miss once: the answer must
+// be the first press's run, never a "not ready" refusal of the press itself.
+describe('Run hosted — a second press of the same key that missed step 0', () => {
+  const press = (key: string) =>
+    hostedRunService.start({ workItemKey: key, model: MODEL, idempotencyKey: 'dbl' }, fx.ctx);
+
+  it('a leaf: answers the first press’s run, never "in_progress, not in the to-do category"', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const card = await newCard({ kind: 'task', title: 'a card' });
+
+    const a = await press(card.identifier);
+    vi.spyOn(dispatchRunRepository, 'findByIdempotencyKey').mockResolvedValueOnce(null);
+    const b = await press(card.identifier);
+
+    expect(a.created).toBe(true);
+    expect(b).toEqual({ dispatchRunId: a.dispatchRunId, created: false });
+    expect(await runRows()).toHaveLength(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+  });
+
+  it('a parent: answers the first press’s run, never the scope preview’s refusal', async () => {
+    const site = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const story = await newCard({ kind: 'story', title: 'a story' });
+    const child = await newCard({ kind: 'task', title: 'a child', parentId: story.id });
+    await pinRepos(child.id, [site]);
+
+    const a = await press(story.identifier);
+    vi.spyOn(dispatchRunRepository, 'findByIdempotencyKey').mockResolvedValueOnce(null);
+    const b = await press(story.identifier);
+
+    expect(a.created).toBe(true);
+    expect(b).toEqual({ dispatchRunId: a.dispatchRunId, created: false });
+    expect(await runRows()).toHaveLength(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+  });
+});
+
 // ── CONTINUE HOSTED (Story MOTIR-6527 · MOTIR-6792) ─────────────────────────
 // `start` with `mode: 'continue'`: the continue claim where Run hosted's
 // readiness check and open were, behind every one of Run hosted's pre-flights.
@@ -836,13 +877,62 @@ describe('continue hosted — a leaf whose run died', () => {
     const { card } = await deadCard();
 
     // Whichever way the two interleave — the second seeing the first's run at the
-    // short-circuit, or both passing it and the claim replaying the opening —
-    // the answer is the same run, opened once.
+    // short-circuit, both passing it and the claim replaying the opening, or the
+    // second's PREVIEW running after the first's claim committed (re-read by key,
+    // MOTIR-7312; forced in the next test) — the answer is the same run, opened once.
     const [a, b] = await Promise.all([
       startContinue(card.identifier, 'double-click'),
       startContinue(card.identifier, 'double-click'),
     ]);
 
+    expect(a.dispatchRunId).toBe(b.dispatchRunId);
+    expect([a.created, b.created].sort()).toEqual([false, true]);
+    expect(await continueRuns()).toHaveLength(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+  });
+
+  // MOTIR-7312: the THIRD interleaving, forced rather than left to timing. The
+  // second press passes the short-circuit, the first press's claim then commits,
+  // and only then does the second press's preview run — so it sees the first
+  // press's open run as somebody `continuing` the card. It must still answer that
+  // run, never refuse its own press as `taken`.
+  it('a second press whose preview runs AFTER the first press committed answers its run, never "taken"', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card } = await deadCard();
+
+    let secondReachedPreview!: () => void;
+    const secondAtPreview = new Promise<void>((resolve) => (secondReachedPreview = resolve));
+    let firstClaimed!: () => void;
+    const firstCommitted = new Promise<void>((resolve) => (firstClaimed = resolve));
+
+    const preview = workItemContinueService.previewHostedContinue.bind(workItemContinueService);
+    let previews = 0;
+    vi.spyOn(workItemContinueService, 'previewHostedContinue').mockImplementation(
+      async (...args) => {
+        if (++previews === 2) {
+          // This press passed the short-circuit before anything was opened.
+          secondReachedPreview();
+          await firstCommitted;
+        }
+        return preview(...args);
+      },
+    );
+    const claim = workItemContinueService.claimContinue.bind(workItemContinueService);
+    vi.spyOn(workItemContinueService, 'claimContinue').mockImplementation(async (...args) => {
+      // The first press may not commit its claim until the second has passed the
+      // short-circuit — otherwise the second would replay there and never preview.
+      await secondAtPreview;
+      const answered = await claim(...args);
+      firstClaimed();
+      return answered;
+    });
+
+    const [a, b] = await Promise.all([
+      startContinue(card.identifier, 'double-click'),
+      startContinue(card.identifier, 'double-click'),
+    ]);
+
+    expect(previews).toBe(2);
     expect(a.dispatchRunId).toBe(b.dispatchRunId);
     expect([a.created, b.created].sort()).toEqual([false, true]);
     expect(await continueRuns()).toHaveLength(1);

@@ -17,18 +17,18 @@ and linking one pull request per repository, and closing the run — is the CLI'
 
 Everything arrives as environment at boot. Nothing is baked into the image.
 
-| variable                | what it is                                                                                                                                                                                          |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MOTIR_DISPATCH_RUN_ID` | the `DispatchRun.id` the server opened — the CLI ADOPTS it, never opens one                                                                                                                         |
-| `MOTIR_WORK_ITEM_KEY`   | the dispatched card, e.g. `MOTIR-683` — a leaf, or a parent run as its scope                                                                                                                        |
-| `MOTIR_API_URL`         | Motir's origin, for every call the CLI makes                                                                                                                                                        |
-| `MOTIR_RUN_TOKEN`       | the run's Motir credential (MOTIR-688), reaching only the run's own cards                                                                                                                           |
-| `MOTIR_GATEWAY_URL`     | the gateway's origin, no trailing `/v1` (egress contract §2)                                                                                                                                        |
-| `MOTIR_RUN_KEY`         | the per-run gateway key (MOTIR-689) — the ONLY credential the agent ever sees                                                                                                                       |
-| `MOTIR_MODEL`           | the model in OpenCode's form, `<provider>/<bare gateway id>` — `anthropic/…`, `deepseek/…`, `z-ai/…` or `qwen/…`, the provider taken from the offered model (decision §7, as amended by MOTIR-7206) |
-| `MOTIR_RUN_MODE`        | optional — `run` (the default), `continue` for a dead run's branch, `review`, or `fix`                                                                                                              |
-| `MOTIR_REVIEW_GATE_ID`  | `review` only — the `agent_review` gate the run answers (MOTIR-6820)                                                                                                                                |
-| `MOTIR_REVIEW_VERSION`  | `review` only — the version under review; a served prompt for another exits 0                                                                                                                       |
+| variable                | what it is                                                                                                                                                                                                                         |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MOTIR_DISPATCH_RUN_ID` | the `DispatchRun.id` the server opened — the CLI ADOPTS it, never opens one                                                                                                                                                        |
+| `MOTIR_WORK_ITEM_KEY`   | the dispatched card, e.g. `MOTIR-683` — a leaf, or a parent run as its scope                                                                                                                                                       |
+| `MOTIR_API_URL`         | Motir's origin, for every call the CLI makes                                                                                                                                                                                       |
+| `MOTIR_RUN_TOKEN`       | the run's Motir credential (MOTIR-688), reaching only the run's own cards                                                                                                                                                          |
+| `MOTIR_GATEWAY_URL`     | the gateway's origin, no trailing `/v1` (egress contract §2)                                                                                                                                                                       |
+| `MOTIR_RUN_KEY`         | the per-run gateway key (MOTIR-689) — the ONLY credential the agent ever sees                                                                                                                                                      |
+| `MOTIR_MODEL`           | the model in OpenCode's form, `<provider>/<bare gateway id>` — `anthropic/…`, `deepseek/…`, `z-ai/…`, `qwen/…` or `moonshotai/…`, the provider taken from the offered model (decision §7, as amended by MOTIR-7206 and MOTIR-7350) |
+| `MOTIR_RUN_MODE`        | optional — `run` (the default), `continue` for a dead run's branch, `review`, or `fix`                                                                                                                                             |
+| `MOTIR_REVIEW_GATE_ID`  | `review` only — the `agent_review` gate the run answers (MOTIR-6820)                                                                                                                                                               |
+| `MOTIR_REVIEW_VERSION`  | `review` only — the version under review; a served prompt for another exits 0                                                                                                                                                      |
 
 A `review` run (MOTIR-6824, `hosted-agent-run.md` §8) runs `motir review <KEY>`:
 it checks every pull request out detached at its reviewed head, locks the run

@@ -45,6 +45,17 @@ export interface RepoHostingSplit {
   fleetJobCount: number;
 }
 
+/** One metered run as the hosted-run probe reads it — identity and the stored
+ *  per-family breakdown, nothing it does not judge on. */
+export interface MeteredRunRunners {
+  repoOwner: string;
+  repoName: string;
+  runId: string;
+  runAttempt: number;
+  runCompletedAt: Date;
+  runnerBreakdown: unknown;
+}
+
 export const ciWorkflowRunUsageRepository = {
   /**
    * Insert one metered run. The `(run_id, run_attempt)` unique index is the real
@@ -222,6 +233,36 @@ export const ciWorkflowRunUsageRepository = {
       fleetMinutes: Number(row.fleetMinutes),
       fleetJobCount: Number(row.fleetJobCount),
     }));
+  },
+
+  /**
+   * Every metered run COMPLETED at or after `since` whose repository owner is
+   * one of `owners` (compared case-insensitively — a run reports the owner's
+   * stored casing), oldest first — the hosted-run probe's window (MOTIR-1934).
+   *
+   * Cross-tenant: the caller runs it under `withSystemContext`, the same posture
+   * as `sumByRunnerHostingForOwnerPeriod` above.
+   */
+  async findCompletedSinceForOwners(
+    owners: readonly string[],
+    since: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<MeteredRunRunners[]> {
+    return tx.ciWorkflowRunUsage.findMany({
+      where: {
+        repoOwner: { in: [...owners], mode: 'insensitive' },
+        runCompletedAt: { gte: since },
+      },
+      select: {
+        repoOwner: true,
+        repoName: true,
+        runId: true,
+        runAttempt: true,
+        runCompletedAt: true,
+        runnerBreakdown: true,
+      },
+      orderBy: [{ runCompletedAt: 'asc' }, { runId: 'asc' }, { runAttempt: 'asc' }],
+    });
   },
 
   // ⚠️ `sumByRepoForOwnerPeriod` — the un-split owner read this file used to
