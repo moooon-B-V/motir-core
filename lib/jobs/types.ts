@@ -602,6 +602,9 @@ export interface JobEventDataMap {
   'system.ci-runner-provision-sweep': SystemScheduledData;
   'system.ci-runner-boot': CiRunnerBootData;
   'system.fleet-attribution': SystemScheduledData;
+  /** The fleet debit monitor (Story MOTIR-6905 · MOTIR-7318): an alert per
+   *  organisation whose running and debited disagree. Cross-tenant by design. */
+  'system.fleet-debit-monitor': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   /** A settled fleet container's usage-and-cost report to motir-ai (MOTIR-5286). */
   'system.platform-meter-report': PlatformMeterReportData;

@@ -711,22 +711,19 @@ export const agentInstanceRunService = {
     const ctx: ServiceContext = { userId: run.createdById, workspaceId: run.workspaceId };
     const close = CLOSE_FOR[outcome];
     try {
-      await dispatchRunService.appendEvents(
-        dispatchRunId,
-        [
-          {
-            kind: 'log',
-            body: `[motir] run in agent ended (${close.label}): ${detail}\n`,
-            // `message` is what the *run died* sentence reads to split a timeout.
-            data: { end: outcome, message: detail },
-          },
-        ],
-        ctx,
-      );
+      // The closing line is written INSIDE the close's transaction, under its row
+      // lock: a CLI close that commits first rolls it back with the refusal, so a
+      // `succeeded` run never carries an "ended (cancelled)" line (MOTIR-7489).
       await dispatchRunService.close(
         dispatchRunId,
         { stopReason: close.stopReason, status: close.status },
         ctx,
+        'wait',
+        {
+          // `message` is what the *run died* sentence reads to split a timeout.
+          data: { end: outcome, message: detail },
+          body: `[motir] run in agent ended (${close.label}): ${detail}\n`,
+        },
       );
     } catch (err) {
       // The CLI (or another path) closed it between the read and the close: its

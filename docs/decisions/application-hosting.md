@@ -622,6 +622,12 @@ being revisited.
 address of the `motir-ai` app inside the org, in place of the public
 `https://motir-ai.fly.dev`.
 
+> ⚠️ SUPERSEDED by **Amendment 9** (2026-10-03, MOTIR-7407): production
+> `MOTIR_AI_URL` is the PUBLIC origin `https://motir-ai.fly.dev` since
+> 2026-10-02, because motir-ai's pool now suspends to zero and `.internal`
+> cannot wake it. Q9 below is the record of what was decided on 2026-08-07, not
+> the deployed value — do not "restore" it.
+
 |                   | public `https://motir-ai.fly.dev`                               | private `http://motir-ai.internal:8080`                           |
 | ----------------- | --------------------------------------------------------------- | ----------------------------------------------------------------- |
 | path              | out to the public internet and back in through Fly's edge proxy | direct machine-to-machine over the encrypted WireGuard (6PN) mesh |
@@ -716,6 +722,11 @@ So **this is ONE deployed Fly secret, and nothing else changes**:
 The enforcing check is a grep, not a count:
 `grep -rn 'motir-ai.internal' .env.example playwright*.config.ts .github/` must
 return nothing.
+
+> ⚠️ SUPERSEDED by **Amendment 9** (MOTIR-7407): the first row's value is now
+> `https://motir-ai.fly.dev`, not `.internal`. The other three rows and the grep
+> still hold — `.internal` is now deployed NOWHERE, so it belongs in none of
+> those files either.
 
 ### Why the value was not simply set during provisioning
 
@@ -1070,6 +1081,9 @@ record precisely because they were not there.
 > machines):
 >
 > ```
+> # SUPERSEDED (Amendment 9, MOTIR-7407) — what was run on 2026-08-21. Do NOT run it:
+> # since 2026-10-02 motir-ai suspends to zero and `.internal` cannot wake it.
+> # The value in force: fly secrets set -a motir-core MOTIR_AI_URL=https://motir-ai.fly.dev
 > fly secrets set -a motir-core MOTIR_AI_URL=http://motir-ai.internal:8080
 > ```
 >
@@ -1107,6 +1121,13 @@ record precisely because they were not there.
 > amendment that says a decision is _in force_ is asserting something about the
 > DEPLOYMENT, and only a reading of the deployment can support it. A `secrets set`
 > that exited 0 cannot.
+>
+> ---
+>
+> ⚠️ SUPERSEDED by **Amendment 9** (2026-10-03, MOTIR-7407): the "in force"
+> value above — and the correction's re-application of `.internal` — no longer
+> describe production. `MOTIR_AI_URL` is `https://motir-ai.fly.dev` since
+> 2026-10-02, when the NEW CONSTRAINT below came true.
 >
 > ---
 
@@ -1213,6 +1234,12 @@ up.** If motir-ai is ever set to scale to zero, `motir-ai.internal` resolves to
 nothing and there is no proxy to wake it — the seam fails with no fallback. That
 constraint did not exist while `MOTIR_AI_URL` was the public origin, and it is the
 real price of Q9.
+
+> ⚠️ **This came true on 2026-10-02** — see **Amendment 9** (MOTIR-7407).
+> motir-ai's `fly.toml` went to `min_machines_running = 0` with self-suspending
+> machines (MOTIR-7095), and every core→ai call made while the pool slept failed
+> as `fetch failed` from 13:27 to 19:16 UTC. The seam moved back to the public
+> origin.
 
 ### Rollback — proven, not merely written down
 
@@ -2242,6 +2269,8 @@ is now measured rather than inferred.**
   because _this_ amendment's §14 argument for `motir-gateway`'s floor rests on the
   ai→gateway leg, which was separately verified and **is** `.internal`. The two
   legs must not be swept together.
+  > ⚠️ SUPERSEDED by **Amendment 9** (MOTIR-7407): the public origin is now the
+  > DECIDED value for this leg, not drift.
 - **Alerting.** There is none, and this amendment does not invent one. Every "how
   we learn" cell in §16 is honest about that; a spend tripwire is
   `ci-runner-fleet.md` §9.2's shape and belongs with the meter, not here.
@@ -2312,6 +2341,12 @@ specific mistake it exists to prevent.
 | **ai → gateway** (`LLM_GATEWAY_BASE_URL`, `_SEARCH_URL`) | `http://motir-gateway.internal:3000/v1`        | **Flycast**                                  | same, plus this is the leg where the proxy unpins a floor (§25)                                                                                                                                                                       |
 | **ai → core callback** (`MOTIR_CORE_URL`)                | `https://app.motir.co`                         | **public, permanently**                      | it is not a service address. Those origins are printed into password-reset mail, invite links and OAuth callbacks. Also unavailable over 6PN regardless: motir-core sets `HOSTNAME=0.0.0.0` and does not listen on IPv6 (Amendment 5) |
 | **browser → core** (`MOTIR_BASE_URL`)                    | `https://app.motir.co`                         | **public, permanently**                      | it is the front door                                                                                                                                                                                                                  |
+
+> ⚠️ SUPERSEDED for the **core → ai** row by **Amendment 9** (2026-10-03,
+> MOTIR-7407): that leg is DECIDED as the public origin `https://motir-ai.fly.dev`.
+> Flycast needs `force_https = false`, which is safe only with no public ingress
+> (§26) — and motir-ai has public callers it cannot shed. The other three rows
+> stand.
 
 **Why Flycast rather than `.internal`, when both are private.** The argument for
 `.internal` was never _"we want machine-to-machine"_ — it was _"we do not want
@@ -2417,6 +2452,11 @@ silently receive a 301 body instead of an answer.
    §23 stops being an argument and becomes a property. Owned by
    [MOTIR-3281](motir:cmt24usrq0030i4phr6ujdcg0).
 
+> ⚠️ For **motir-ai**, step 3 is SUPERSEDED by **Amendment 9** (MOTIR-7407):
+> motir-ai cannot release its public IPs — fleet index containers reach it from
+> another org and it serves the public Stripe webhook — so steps 1–3 were never
+> taken there. They were taken for `motir-gateway` (MOTIR-3333).
+
 **Consequence for [MOTIR-3231](motir:cmt1l327r009wi3phchsbix05), which is
 blocked on this card:** it should apply **`.internal`**, not Flycast. That fixes
 the live drift immediately with no deploy and no `force_https` change, and leaves
@@ -2455,3 +2495,125 @@ written, which is the state the record already claims.
 | `force_https` 301s a Flycast call, and the https form resets    | `fly ssh console -a motir-core --machine 83d1300b7460e8`, `fetch()` with `redirect: manual`, 2026-08-21                                            |
 | The wake path, three samples per app, decomposed                | [MOTIR-3279](motir:cmt24ts8c002ni4ph4oe2oyon) — `fly machine stop` + `fly-force-instance-id`, timings from the Machines API `events[]`, 2026-08-21 |
 | The gateway client sets no timeout, so 600 s applies            | `motir-ai/src/llm/gatewayClient.ts` on `origin/main`; `OpenAI.DEFAULT_TIMEOUT = 600000`, openai 6.42.0                                             |
+
+---
+
+## Amendment 9 (2026-10-03) — the core→ai leg is the PUBLIC origin, decided: motir-ai suspends to zero, `.internal` cannot wake it, and Flycast needs public ingress motir-ai cannot give up
+
+> **Written by Bug [MOTIR-7407](motir:cmurmvo4f00a0hvoik9f2bc86)** (a `decision`
+> card), found while running [MOTIR-7337](motir:cmur02yj303p4hnpxzleqlry9).
+> **Decided by Yue, 2026-10-03.**
+>
+> **Numbered 9.** Amendment 8 was the highest heading on `origin/main`, and no
+> remote branch carrying this file has a ninth.
+
+**Amends:** Amendment 8 §23 (Q20) for the **core → ai** row only, which decided
+Flycast; Amendment 5's "in force" sentence and its 2026-08-21 correction, which
+put `.internal` back; and Amendment 1's Q9. Each carries a SUPERSEDED pointer to
+this section where it states the old value. The ai → gateway, ai → core callback
+and browser → core rows of Q20 are untouched.
+
+### Q21 — the core→ai transport now that motir-ai's floor is zero
+
+#### The decision
+
+**`MOTIR_AI_URL` is `https://motir-ai.fly.dev` in production — the public
+origin, through the Fly proxy, over TLS, authenticated by
+`MOTIR_AI_SERVICE_TOKEN`.** It is the decided seam, not drift and not an interim.
+
+The value in force, and the runbook line for it:
+
+```
+fly secrets set -a motir-core MOTIR_AI_URL=https://motir-ai.fly.dev
+```
+
+Read back on 2026-10-03 from inside motir-core machine `8576143c4ee538` (`iad`):
+`printenv MOTIR_AI_URL` → `https://motir-ai.fly.dev`. A Fly secret is app-wide,
+so every motir-core machine carries the same value.
+
+#### What forced it — Amendment 5's NEW CONSTRAINT came true
+
+[MOTIR-7095](motir:cmuosmgo600frhyshby5cqydb) (motir-ai `218a931`, merged
+2026-10-02 12:36 UTC) turned motir-ai into a planning pool whose idle machines
+**suspend themselves**: `min_machines_running = 0`, `auto_start_machines = true`,
+`auto_stop_machines = "off"`. **Only the Fly proxy resumes a suspended machine.**
+`.internal` is 6PN, machine to machine, and never passes through the proxy — the
+exact property Amendment 5 warned about: _"If motir-ai is ever set to scale to
+zero, `motir-ai.internal` resolves to nothing and there is no proxy to wake it."_
+
+| when (UTC, 2026-10-02) | what happened                                                                                                                                                                                                                                                                                                           |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 12:36                  | MOTIR-7095 merged and deployed; the pool may now sleep                                                                                                                                                                                                                                                                  |
+| 13:27 – 19:16          | every worker → motir-ai call made while the pool slept failed as `MotirAiUnavailableError: motir-ai is unavailable: fetch failed` — **78 events across five Sentry issues** (embeddings, monitor-bug enrichment created + backfill, code-graph refresh, platform meter report), filed as MOTIR-7337 and four duplicates |
+| 19:16 – 19:49          | the motir-core secret set by hand to `https://motir-ai.fly.dev`; no event since                                                                                                                                                                                                                                         |
+
+#### Why not Flycast, which Q20 decided
+
+Q20's reasoning for Flycast still holds in general — private AND proxy-routed is
+strictly better than either alone. **It cannot be applied to motir-ai**, and §26
+already says why: Flycast's proxy honours `force_https`, `force_https` is one
+setting for the whole `[http_service]`, and turning it off is safe only once the
+app has **no public ingress**. That is how `motir-gateway` did it
+([MOTIR-3333](motir:cmt2s6su3006ci4ph1ueyefng): `force_https = false` and every
+public IP released). **motir-ai has public callers it cannot shed:**
+
+| caller                                 | why it needs motir-ai's public origin                                                                                                                                                                                      |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **fleet index containers**             | they run in the `motir-fleet` org (`code-graph-index-fleet.md` §3.2). A 6PN — and a Flycast address — is org-scoped, so they reach motir-ai at `MOTIR_AI_CONTAINER_URL` = `https://motir-ai.fly.dev` (MOTIR-4518)          |
+| **Stripe** (`POST /v1/stripe/webhook`) | motir-ai's lifecycle ingress (`src/app.ts`), signature-authenticated and called from the internet. Its planned host `ai.motir.co` (`billing-tiering.md`) does not resolve as of 2026-10-03; the route is public either way |
+
+So `force_https = false` on motir-ai would make its **public** listener accept
+plain HTTP. A second plain-HTTP service port only for Flycast does not help: Fly
+serves every service port on every IP the app holds, public ones included.
+
+#### What this costs, and what it gives up
+
+- **The private-ingress property Amendment 1 and Q20 wanted is gone for this
+  leg.** It is worth less than it reads: motir-ai is publicly reachable for the
+  callers above whatever motir-core does, so moving only core's traffic off the
+  public origin would not remove any attack surface. The bearer token still gates
+  every call, and the transport is TLS.
+- **One edge-proxy hop and a TLS handshake per connection** (Amendment 1's
+  latency row), against a 30 s `MOTIR_AI_REQUEST_TIMEOUT_MS` and a ~0.6 s resume
+  from `suspend`.
+- **Egress at $0.02/GB** (Amendment 1's billing row) for core→ai bytes. The
+  payloads are request/response JSON, not assets.
+- **What it buys:** the proxy is back in the path, so a sleeping pool is woken
+  by the request itself, and load-balancing and health-checked failover return.
+
+#### What would reopen it — one trigger
+
+**motir-ai having no public callers** — index containers reaching it through a
+relay or from inside `moooon`, and the Stripe webhook landing on motir-core.
+Then motir-ai can do what MOTIR-3333 did (release its public IPs, `force_https =
+false`) and Q20's Flycast row becomes applicable as written. Until then,
+`.internal` is wrong because the pool sleeps, and Flycast is wrong because the
+app is public.
+
+#### The same constraint on the gateway, recorded so it is not rediscovered
+
+`motir-gateway` is on Flycast **because** it has no public ingress. Any future
+work that gives it public callers — Epic
+[MOTIR-4539](motir:cmtnhxwo90000hxn8lqhlugn6) (the gateway standing alone), or a
+hosted multi-tenant gateway — must not re-allocate public IPs while
+`force_https = false`. The constraint is noted on that epic.
+
+### What this amendment does NOT touch
+
+- **The other three legs of Q20.** ai → gateway stays Flycast; the ai → core
+  callback and browser → core stay public, permanently.
+- **Authentication.** `MOTIR_AI_SERVICE_TOKEN` gates every call — Amendment 1's
+  last row is not filler.
+- **`MOTIR_AI_CONTAINER_URL`.** Already the public origin, for the reason above.
+- **motir-ai's pool, floor or `fly.toml`.** MOTIR-7095's record owns those.
+
+### Sources — additions
+
+| Claim                                             | Source                                                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| motir-ai suspends to zero; only the proxy resumes | `motir-ai/fly.toml` `[http_service]` on `origin/main` (`218a931`, MOTIR-7095)                    |
+| `force_https = true` on motir-ai                  | `motir-ai/fly.toml:169` on `origin/main`, 2026-10-03                                             |
+| The outage window and event count                 | [MOTIR-7337](motir:cmur02yj303p4hnpxzleqlry9) and its duplicates (Sentry)                        |
+| The deployed value                                | `fly ssh console -a motir-core -C 'printenv MOTIR_AI_URL'`, machine `8576143c4ee538`, 2026-10-03 |
+| Index containers need a public motir-ai address   | `code-graph-index-fleet.md` §3.2; `lib/ai/motirAiClient.ts` `motirAiContainerBaseUrl`            |
+| motir-ai's public Stripe webhook route            | `motir-ai/src/app.ts` `POST /v1/stripe/webhook` on `origin/main`                                 |

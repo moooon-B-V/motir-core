@@ -24,6 +24,7 @@ import {
   agentRunSuperviseKey,
 } from '@/lib/services/agentInstanceRunService';
 import { agentInstanceSweepService as sweeper } from '@/lib/services/agentInstanceSweepService';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -397,6 +398,30 @@ describe('Cancel (§6) — the agent’s owner only', () => {
     expect(results.reduce((n, r: { revoked: number }) => n + r.revoked, 0)).toBe(1);
     await expectRevoked(runId, token);
   });
+
+  // MOTIR-7489: the race above only opens under load, so it is pinned here
+  // deterministically — the CLI's `succeeded` commits at the first statement of
+  // the end path's close transaction, after `end()` has read the run `running`.
+  it('a CLI close landing inside the end path’s close leaves no closing line on the succeeded run', async () => {
+    const { runId } = await startedRun();
+    const read = dispatchRunRepository.findByIdWithCards.bind(dispatchRunRepository);
+    let raced = false;
+    vi.spyOn(dispatchRunRepository, 'findByIdWithCards').mockImplementation(async (id, tx) => {
+      if (!raced && id === runId) {
+        raced = true;
+        await adminDb.dispatchRun.update({
+          where: { id: runId },
+          data: { status: 'succeeded', stopReason: 'completed', endedAt: new Date() },
+        });
+      }
+      return read(id, tx);
+    });
+    const ended = await runs.end(runId, 'cancelled', 'cancelled by the agent’s owner');
+    expect(raced).toBe(true);
+    expect(ended.closed).toBe(false);
+    expect((await runRow(runId)).status).toBe('succeeded');
+    expect(await closingLines(runId)).toEqual([]);
+  });
 });
 
 describe('the lifecycle under a live run (§6)', () => {
@@ -471,6 +496,23 @@ describe('the lifecycle under a live run (§6)', () => {
     expect(await runRow(runId)).toMatchObject({ status: 'failed' });
     expect((await closingLines(runId))[0]).toContain(AGENT_RUN_END_DETAIL.outOfCredits);
     expect(['hibernating', 'hibernated']).toContain((await agentRow(agentId)).state);
+    await expectRevoked(runId, token);
+  });
+
+  it('a platform admin’s stop closes the run cancelled FIRST, then hibernates the agent (MOTIR-7323)', async () => {
+    const { runId, agentId, token } = await startedRun();
+    const result = await lifecycle.hibernateAllForOrganization(
+      fx.workspace.organizationId,
+      'admin_stop',
+    );
+    expect(result).toMatchObject({ hibernated: 1, failures: [] });
+    expect(await runRow(runId)).toMatchObject({ status: 'cancelled' });
+    expect((await closingLines(runId))[0]).toContain(AGENT_RUN_END_DETAIL.adminStop);
+    expect((await agentRow(agentId)).state).toBe('hibernated');
+    const closed = await adminDb.agentInstanceInterval.findMany({
+      where: { agentInstanceId: agentId, endedAt: { not: null } },
+    });
+    expect(closed.map((i) => i.endReason)).toEqual(['admin_stop']);
     await expectRevoked(runId, token);
   });
 

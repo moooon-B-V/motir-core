@@ -38,6 +38,7 @@ import {
   AgentProfileNotOfferedError,
 } from '@/lib/agentInstances/errors';
 import { buildCloneCommand } from '@/lib/agentInstances/cloneCommand';
+import { AGENT_RUN_END_DETAIL } from '@/lib/agentInstances/runEnd';
 import {
   AGENT_IDLE_COMMAND,
   AGENT_RUN_LAUNCHER_PROBE_COMMAND,
@@ -158,7 +159,22 @@ import {
 // (MOTIR-6940: the terminal relay imports them without this file's graph).
 export { agentInstanceClock };
 
-const STOP_REASONS: readonly string[] = ['credits', 'idle', 'backstop'];
+const STOP_REASONS: readonly string[] = ['credits', 'idle', 'backstop', 'admin_stop'];
+
+/** The states an organisation-wide stop leaves alone and counts as already at rest. */
+const RESTING_STATES: readonly AgentInstance['state'][] = ['hibernated', 'hibernating', 'failed'];
+
+/** What {@link agentInstanceLifecycleService.hibernateAllForOrganization} did — never a throw. */
+export interface AgentInstanceOrgHibernateResult {
+  /** Running instances this call stopped, each settled to `hibernated`. */
+  hibernated: number;
+  /** Instances already hibernated, hibernating or failed: nothing to stop. */
+  alreadyResting: number;
+  /** Instances booting, waking, updating or being deleted — not running, so not stopped here. */
+  inMotion: number;
+  /** One entry per instance whose stop threw or did not confirm inline. */
+  failures: { instanceId: string; detail: string }[];
+}
 
 interface ResolvedProject {
   id: string;
@@ -1217,11 +1233,13 @@ export const agentInstanceLifecycleService = {
    * then `stop`, then a bounded settle. Returns false when the instance was not
    * running (somebody else moved it first) — never an error for the sweep.
    *
-   * A RUN IN THE AGENT (§6, MOTIR-7027): the backstop and a credit stop still
-   * stop the machine — money and the 12-hour bound hold over a machine running a
-   * card — and close its run FIRST (`timed_out`; `failed`, *"out of credits"*).
-   * Every other reason (a person's Hibernate, the idle check) is REFUSED with
-   * `AgentInstanceRunActiveError`, naming the run, and nothing moves.
+   * A RUN IN THE AGENT (§6, MOTIR-7027): the backstop, a credit stop and a
+   * platform admin's stop (MOTIR-7323) still stop the machine — money, the
+   * 12-hour bound and an operator's decision hold over a machine running a card —
+   * and close its run FIRST (`timed_out`; `failed`, *"out of credits"*;
+   * `cancelled`, *"stopped by a platform admin"*). Every other reason (a person's
+   * Hibernate, the idle check) is REFUSED with `AgentInstanceRunActiveError`,
+   * naming the run, and nothing moves.
    */
   async beginHibernate(
     instanceId: string,
@@ -1233,6 +1251,10 @@ export const agentInstanceLifecycleService = {
       await endRunIn(row, 'backstop', 'the agent reached its 12-hour backstop');
     } else if (endReason === 'credits') {
       await endRunIn(row, 'failed', 'out of credits');
+    } else if (endReason === 'admin_stop') {
+      // A platform admin's stop holds over a running card exactly as money does
+      // (MOTIR-7323): the run is closed `cancelled` FIRST, then the machine stops.
+      await endRunIn(row, 'cancelled', AGENT_RUN_END_DETAIL.adminStop);
     } else {
       await assertNoRunningRun(row, 'hibernated');
     }
@@ -1262,6 +1284,68 @@ export const agentInstanceLifecycleService = {
       async () => (await this.settleStop(row.id, endReason)) !== 'pending',
     );
     return true;
+  },
+
+  /**
+   * Hibernate EVERY running instance of ONE organisation, for a platform admin's
+   * stop (Story MOTIR-6905 · MOTIR-7323). Each goes through {@link beginHibernate}
+   * with `admin_stop`, so a run in the agent is closed `cancelled` before its
+   * machine stops, and the closed interval says who stopped it. Only that
+   * organisation's rows are read; nobody else's agent is touched.
+   *
+   * Never throws for one instance: a failure is logged, counted and returned with
+   * the instance's id, so the caller can say which agent did not stop. An instance
+   * already resting (`hibernated`, `hibernating`, `failed`) is counted, not moved;
+   * one in motion (`starting`, `waking`, `updating`, `deleting`, or moved by
+   * another path first) is counted `inMotion`, because it holds no running
+   * interval to close yet and its own settle decides where it lands. Who may call
+   * this, the confirmation and the audit row belong to the admin stop service.
+   */
+  async hibernateAllForOrganization(
+    organizationId: string,
+    endReason: Extract<AgentInstanceIntervalEndReason, 'admin_stop'>,
+  ): Promise<AgentInstanceOrgHibernateResult> {
+    const rows = await withSystemContext((tx) =>
+      agentInstanceRepository.listLiveForOrganization(organizationId, tx),
+    );
+    const result: AgentInstanceOrgHibernateResult = {
+      hibernated: 0,
+      alreadyResting: 0,
+      inMotion: 0,
+      failures: [],
+    };
+    for (const row of rows) {
+      if (RESTING_STATES.includes(row.state)) {
+        result.alreadyResting += 1;
+        continue;
+      }
+      if (row.state !== 'running') {
+        result.inMotion += 1;
+        continue;
+      }
+      try {
+        if (!(await this.beginHibernate(row.id, endReason))) {
+          result.inMotion += 1;
+          continue;
+        }
+        const after = await reload(row);
+        if (after.state === 'hibernated') {
+          result.hibernated += 1;
+        } else {
+          result.failures.push({
+            instanceId: row.id,
+            detail: `the stop did not confirm; the agent is ${after.state}`,
+          });
+        }
+      } catch (err) {
+        console.warn('[agentInstanceLifecycle] admin stop failed for one instance', {
+          instanceId: row.id,
+          detail: describeError(err),
+        });
+        result.failures.push({ instanceId: row.id, detail: describeError(err) });
+      }
+    }
+    return result;
   },
 
   /**

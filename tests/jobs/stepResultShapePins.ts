@@ -354,6 +354,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/jobRunReap.ts',
     shape: '{ abandoned: number; scanned: number; stillLive: number }',
   },
+  'fleet-debit-monitor': {
+    file: 'lib/jobs/definitions/fleetDebitMonitor.ts',
+    shape: '{ alerted: number; failures: number; mismatched: number; orgs: number }',
+  },
   'reconcile-fleet-attribution': {
     file: 'lib/jobs/definitions/fleetAttribution.ts',
     shape:

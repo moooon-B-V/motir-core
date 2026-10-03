@@ -207,6 +207,18 @@ export const PLATFORM_AUDIT_ACTIONS = {
    * that surfaced it.
    */
   'audit.verify': { kind: 'read', reason: 'never' },
+  /**
+   * One organisation's fleet containers were STOPPED by a platform admin (Story
+   * MOTIR-6905 · MOTIR-7317): its GitHub Actions runs cancelled and its CI
+   * containers destroyed, its hosted-agent runs ended, its agent instances
+   * hibernated. Index containers are left to end on their own.
+   *
+   * `required`, at the `superadmin` degree of ADR §7: destructive and
+   * cross-tenant. Target is `organization`. Written AFTER the effects, with what
+   * they achieved — failures included — as `metadata`, so a partial stop is still
+   * on the record as exactly as partial as it was.
+   */
+  'fleet.stop': { kind: 'write', reason: 'required' },
 } as const satisfies Record<
   string,
   { kind: PlatformAuditActionKind; reason: PlatformAuditReasonPolicy }

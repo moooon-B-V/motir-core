@@ -11,6 +11,14 @@ import baseConfig from './vitest.config';
 // lines each (`motirAiClient.ts`, `billingService.ts`, `ciFleetCostMeterService.ts`,
 // the job registry), which already sit under their own lanes and suites.
 //
+// ⚠️ AND STORY MOTIR-6905's ADDED FILES (its integration gate, MOTIR-7321): the
+// fleet monitor read, the debit-mismatch alert job and the admin fleet stop,
+// with the Fleet section and the tenant page's Stop containers. The same
+// exclusions hold: the server pages and the shared files the story extended by a
+// few lines (the CI repositories, the lifecycle and allowance services, the
+// tenant `actions.ts` that predates the stop) are not measured here — their
+// story lines were measured at the gate, every one ≥ 90 %.
+//
 // The floors are the MEASURED reading over the lane's suites, rounded DOWN, PER FILE,
 // and they are a RATCHET. CI: the `story-727-coverage` job, which needs Postgres.
 
@@ -30,6 +38,19 @@ const MEASURED = [
   'app/*/admin/tenants/[[]orgId]/_components/CategoryModelSheet.tsx',
   'app/*/admin/tenants/[[]orgId]/_components/SpendChildrenTable.tsx',
   'app/*/admin/tenants/[[]orgId]/_components/PaymentInvoicesCard.tsx',
+  // Story MOTIR-6905 (MOTIR-7321).
+  'lib/services/platformFleetMonitorService.ts',
+  'lib/services/platformFleetStopService.ts',
+  'lib/services/fleetDebitMonitorService.ts',
+  'lib/jobs/definitions/fleetDebitMonitor.ts',
+  'lib/monitoring/fleetDebitMismatchAlert.ts',
+  'lib/ciFleet/debitMismatchErrors.ts',
+  'lib/mappers/platformFleetStopMappers.ts',
+  'lib/dto/platformFleetMonitor.ts',
+  'app/*/admin/monitoring/_components/FleetSection.tsx',
+  'app/*/admin/monitoring/_components/FleetVerdictChip.tsx',
+  'app/*/admin/tenants/[[]orgId]/_components/OrgFleetCard.tsx',
+  'app/*/admin/tenants/[[]orgId]/_components/StopContainersDialog.tsx',
 ];
 
 export default defineConfig({
@@ -58,6 +79,18 @@ export default defineConfig({
       // `platformOrgPageService` gained `getOperations` (the Operations tab read).
       'tests/platform/impersonation.test.ts',
       'tests/platform/platformOrgOperations.test.ts',
+      // Story MOTIR-6905 — its units and its integration gate (MOTIR-7321).
+      'tests/platform/platformFleetMonitorService.test.ts',
+      'tests/platform/platformFleetStopService.test.ts',
+      'tests/ciFleet/fleetDebitMonitor.test.ts',
+      'tests/platform/fleetSection.test.tsx',
+      'tests/platform/monitoringPageFleet.test.tsx',
+      'tests/platform/fleetStopAction.test.ts',
+      'tests/components/org-fleet-card.test.tsx',
+      'tests/components/stop-containers-dialog.test.tsx',
+      'tests/ciFleet/fleetMonitorStoryGate.test.ts',
+      'tests/ciFleet/fleetAdminStopStoryGate.test.ts',
+      'tests/platform/fleetConsoleGate.test.ts',
     ],
     coverage: {
       provider: 'v8',
@@ -146,6 +179,79 @@ export default defineConfig({
         'lib/services/platformUsageService.ts': {
           statements: 100,
           branches: 88,
+          functions: 100,
+          lines: 100,
+        },
+        // Story MOTIR-6905, MEASURED 2026-10-02 at MOTIR-7321 over this lane's suites.
+        'app/*/admin/monitoring/_components/FleetSection.tsx': {
+          statements: 97,
+          branches: 92,
+          functions: 100,
+          lines: 98,
+        },
+        'app/*/admin/monitoring/_components/FleetVerdictChip.tsx': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        'app/*/admin/tenants/[[]orgId]/_components/OrgFleetCard.tsx': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        'app/*/admin/tenants/[[]orgId]/_components/StopContainersDialog.tsx': {
+          statements: 97,
+          branches: 95,
+          functions: 100,
+          lines: 100,
+        },
+        'lib/ciFleet/debitMismatchErrors.ts': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        'lib/dto/platformFleetMonitor.ts': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        'lib/jobs/definitions/fleetDebitMonitor.ts': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        'lib/mappers/platformFleetStopMappers.ts': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        'lib/monitoring/fleetDebitMismatchAlert.ts': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        'lib/services/fleetDebitMonitorService.ts': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        'lib/services/platformFleetMonitorService.ts': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        'lib/services/platformFleetStopService.ts': {
+          statements: 100,
+          branches: 100,
           functions: 100,
           lines: 100,
         },

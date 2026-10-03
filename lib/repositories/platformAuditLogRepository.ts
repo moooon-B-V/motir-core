@@ -233,6 +233,25 @@ export const platformAuditLogRepository = {
     });
   },
 
+  /**
+   * The NEWEST row of one action on one target, with the actor's email, or null
+   * (MOTIR-7320 — the Fleet card's last `fleet.stop`). Served by the
+   * `(target_kind, target_id, created_at)` index; the action filter runs over
+   * that one target's rows only.
+   */
+  async findLatestByTargetAndAction(
+    targetKind: PlatformAuditTargetKind,
+    targetId: string,
+    action: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlatformAuditLogWithActor | null> {
+    return tx.platformAuditLog.findFirst({
+      where: { targetKind, targetId, action },
+      orderBy: { createdAt: 'desc' },
+      include: { actor: { select: { name: true, email: true } } },
+    });
+  },
+
   /** The most recent rows for one organization, newest first. */
   async listByOrganization(
     organizationId: string,
