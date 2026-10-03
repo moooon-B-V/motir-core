@@ -8327,6 +8327,10 @@
         "decision_approval": "<title>{name}</title>的决策文档",
         "decision_choice": "<title>{name}</title>的选项",
         "decision_confirmation": "<title>{name}</title>已作出决定",
+        "manual_work": "<title>{name}</title>等你处理",
+        "manual_work_other": "<title>{name}</title>等人处理",
+        "manual_work_done": "<title>{name}</title>已标记完成",
+        "manual_work_held": "<title>{name}</title>的人工工作",
         "other": "<title>{name}</title>的审批"
       },
       "kind": {
@@ -8361,7 +8365,11 @@
       "choiceMeta": "{count} 个选项 · {question}",
       "choiceDecided": "选择了「<label>{label}</label>」· {bestFor}",
       "choiceNoneChosen": "{count} 个选项 · 未选择",
-      "ceiling": "仅显示前 {shown} 项，共 {total} 项。<link>审批</link>中列出了全部。"
+      "ceiling": "仅显示前 {shown} 项，共 {total} 项。<link>审批</link>中列出了全部。",
+      "manualSteps": "{done}/{total} 步",
+      "manualNoList": "无待办清单",
+      "markDone": "标记完成",
+      "marking": "正在标记…"
     },
     "live": {
       "new": "新增",
@@ -10591,13 +10599,16 @@
         "plan_discarded": "计划中的所有建议都已撤回，计划随之结束，该问题也一并撤回。",
         "queue_failed": "合并队列未能合并这些提交，因此该问题已撤回。",
         "subject_gone": "此问题针对的内容已不存在，因此该问题已撤回。",
-        "no_longer_manual": "此工作项已不再需要人工完成，因此该问题已撤回。",
-        "closed_without_decision": "此工作项在无人标记完成的情况下已关闭，因此该问题已撤回。",
+        "no_longer_manual": "该工作项已不再是人工工作，因此该问题已撤回。",
+        "closed_without_decision": "该工作项在无人标记完成的情况下被关闭，因此该问题已撤回。",
         "unknown": "该问题已撤回。原因未被记录。"
       },
       "causeByKind": {
         "decision_approval": {
           "head_moved": "推送修改了决策文档，因此该问题已撤回。"
+        },
+        "manual_work": {
+          "pulled_back": "该工作项已被取消或归档，因此该问题已撤回。"
         }
       }
     },
@@ -11358,6 +11369,22 @@
         "credits_unavailable": "在托管代理上运行",
         "repository_not_writable": "仓库"
       }
+    },
+    "manualWork": {
+      "state": {
+        "markedDone": "已标记完成"
+      },
+      "meta": "由一次运行交给你 · 已完成 {done}/{total} 步",
+      "metaNoList": "由一次运行交给你 · 无待办清单",
+      "lead": "这是需要人来完成的工作，所以运行在这里停下，把它交给了你。完成这些步骤，然后标记完成。“带我完成”会一步一步带你做。",
+      "leadNoList": "这是需要人来完成的工作，所以运行在这里停下，把它交给了你。它没有待办清单：描述里写明了要做什么，“带我完成”也可以为你提出步骤。",
+      "leadDone": "这项工作已标记完成。等待它的工作项可以开始了。",
+      "noList": {
+        "title": "无待办清单",
+        "body": "打开工作项阅读它的描述，或让“带我完成”为你提出步骤。"
+      },
+      "consequence": "标记完成后 {key} 将移至“已完成”。",
+      "consequenceMerges": "标记完成会在此记录。{key} 会在其拉取请求合并后移至“已完成”。"
     }
   },
   "approvalOverlay": {

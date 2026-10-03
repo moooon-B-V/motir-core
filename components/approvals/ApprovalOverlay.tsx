@@ -19,6 +19,7 @@ import { Pill } from '@/components/ui/Pill';
 import { ChoiceGateFrame } from '@/components/approvals/ChoiceGate';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import { DecisionConfirmGateFrame } from '@/components/approvals/DecisionConfirmGate';
+import { ManualWorkGateFrame } from '@/components/approvals/ManualWorkGate';
 import { StatusPill } from '@/components/issues/StatusPill';
 import {
   useRefusalVerb,
@@ -1089,6 +1090,25 @@ export function ApprovalOverlay() {
               ) : undefined
             }
             onDecide={onDecide}
+            onShowCurrentVersion={() => setReread((n) => n + 1)}
+            focusPortOnMount={settled?.outcome === 'read' && settled.reread > 0}
+          />
+        ) : subject.kind === 'manual_work' ? (
+          // THE MANUAL-WORK PORT (Story MOTIR-7460 · MOTIR-7478; design § 33.3) — the card's
+          // to-do list read-only, *Guide me through* and *Mark done*, in the SAME frame.
+          <ManualWorkGateFrame
+            key={`${gate.id}:${settled?.outcome === 'read' ? settled.reread : 0}`}
+            gate={gate}
+            view={subject.manualWork}
+            identifier={identifier}
+            canDecide={read.canDecide && !decidedState}
+            routedToLabel={read.routedToLabel}
+            alert={
+              moved.length > 0 && gate.state === 'awaiting' && !decidedState ? (
+                <SubjectMovedNotice moved={moved} onShow={() => setReread((n) => n + 1)} />
+              ) : undefined
+            }
+            onDecide={(decision) => onDecide(decision)}
             onShowCurrentVersion={() => setReread((n) => n + 1)}
             focusPortOnMount={settled?.outcome === 'read' && settled.reread > 0}
           />

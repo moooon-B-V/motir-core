@@ -174,6 +174,9 @@ describe('ONE CONTROL — the approval frame is SHARED and COMPOSABLE (MOTIR-479
       'components/approvals/ChoiceGate.tsx',
       // The decision's confirm port and its Confirm · Overturn verbs (MOTIR-5960).
       'components/approvals/DecisionConfirmGate.tsx',
+      // The manual-work port — the to-do list read-only, Guide me through and Mark done
+      // (MOTIR-7478).
+      'components/approvals/ManualWorkGate.tsx',
     ];
     for (const frame of KIND_FRAMES) {
       expect(codeOf(frame), `${frame} is a kind frame that does not render the control`).toContain(

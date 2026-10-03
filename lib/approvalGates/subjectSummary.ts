@@ -18,6 +18,7 @@ import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepos
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
 import { isManualWork } from '@/lib/approvalGates/manualWorkHandler';
+import { computeGateStamp } from '@/lib/approvalGates/stamp';
 import { parseChoiceOptions } from '@/lib/approvalGates/choiceOptions';
 import { asksTheConfirmQuestion } from '@/lib/approvalGates/decisionConfirmationHandler';
 import { decisionConfirmationSummaryOf } from '@/lib/approvalGates/decisionRecord';
@@ -265,6 +266,14 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
       const summary: ManualWorkSubjectSummaryDTO = {
         kind: 'manual_work',
         todos: todos && todos.total > 0 ? todos : null,
+        // THE ROW'S STAMP (MOTIR-7478) — the decide door recomputes exactly these inputs
+        // under its lock: this kind's `subjectVersion` is always null (the work has no
+        // version) and it has no companion gate, so the card's body is the whole of it.
+        stamp: computeGateStamp({
+          subjectVersion: null,
+          companionSubjectVersion: null,
+          descriptionMd: item.descriptionMd,
+        }),
       };
       out.set(item.id, summary);
     }

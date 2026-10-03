@@ -26,6 +26,7 @@ import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import type { PlanAuthorSourceDto, PlanOriginDto } from '@/lib/dto/plans';
 import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
+import type { TodoProgressDto, WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 
 // Wire DTOs for the approval-gate record (Story MOTIR-4778 · Subtask
 // MOTIR-4788; ADR docs/decisions/approval-gates.md). The service layer (the
@@ -711,6 +712,29 @@ export interface UnregisteredSubjectSummaryDTO {
 export interface ManualWorkSubjectSummaryDTO {
   kind: 'manual_work';
   todos: { done: number; total: number } | null;
+  /**
+   * THE STAMP the row's MARK DONE presents (Story MOTIR-7460 · MOTIR-7478; design
+   * `design/workbench/design-notes.md` § 33.2). This kind is the one row that DECIDES
+   * from the row (ADR `manual-work-gate.md` §5), so the row is a render the decide door
+   * compares against — computed from the same card read this summary is, by the one
+   * definition (`computeGateStamp`). A decided record carries it too, and nothing
+   * presses one.
+   */
+  stamp: string;
+}
+
+/**
+ * THE MANUAL-WORK PORT (Story MOTIR-7460 · MOTIR-7478; design § 33.3) — the card's to-do
+ * list in its read face, and whether Mark done will write Done itself or record the
+ * decision for the merge to finish (`merge_writes_done`, ADR §4).
+ */
+export interface ManualWorkPortDTO {
+  /** The card's to-do rows, in list order — drawn read-only; the port ticks nothing. */
+  todos: WorkItemTodoDto[];
+  progress: TodoProgressDto;
+  /** True when the card has an OPEN delivering pull request: Mark done then records the
+   *  decision and the merge writes Done (`manualWorkHandler.approve`). */
+  mergeWritesDone: boolean;
 }
 
 /**
@@ -1032,6 +1056,12 @@ export type ApprovalGateOverlaySubjectDTO =
   | { state: 'no_gate' }
   | { state: 'kind_not_built' }
   | { state: 'gone' }
+  | {
+      state: 'resolved';
+      kind: 'manual_work';
+      /** THE MANUAL-WORK PORT (Story MOTIR-7460 · MOTIR-7478) — the card's to-do list. */
+      manualWork: ManualWorkPortDTO;
+    }
   | {
       state: 'resolved';
       kind: 'decision_choice';

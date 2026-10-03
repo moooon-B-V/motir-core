@@ -8331,6 +8331,10 @@
         "decision_approval": "Decision document for <title>{name}</title>",
         "decision_choice": "Options for <title>{name}</title>",
         "decision_confirmation": "<title>{name}</title> is decided",
+        "manual_work": "<title>{name}</title> is waiting on you",
+        "manual_work_other": "<title>{name}</title> is waiting on a person",
+        "manual_work_done": "<title>{name}</title> was marked done",
+        "manual_work_held": "Manual work on <title>{name}</title>",
         "other": "Approval for <title>{name}</title>"
       },
       "kind": {
@@ -8365,7 +8369,11 @@
       "choiceMeta": "{count} options · {question}",
       "choiceDecided": "Chose <label>{label}</label> · {bestFor}",
       "choiceNoneChosen": "{count} options · none chosen",
-      "ceiling": "Showing the first {shown} of {total}. <link>Approvals</link> lists every one."
+      "ceiling": "Showing the first {shown} of {total}. <link>Approvals</link> lists every one.",
+      "manualSteps": "{done}/{total} steps",
+      "manualNoList": "No to-do list",
+      "markDone": "Mark done",
+      "marking": "Marking…"
     },
     "live": {
       "new": "New",
@@ -10595,13 +10603,16 @@
         "plan_discarded": "Every proposal in the plan was withdrawn, so the plan ended and this question with it.",
         "queue_failed": "The merge queue failed these commits, so this question was withdrawn.",
         "subject_gone": "What this question asked about is gone, so this question was withdrawn.",
-        "no_longer_manual": "This work item no longer needs a person's work, so this question was withdrawn.",
-        "closed_without_decision": "This work item was closed without anyone marking the work done, so this question was withdrawn.",
+        "no_longer_manual": "The work item is no longer manual work, so this question was withdrawn.",
+        "closed_without_decision": "The work item was closed without anyone marking it done, so this question was withdrawn.",
         "unknown": "This question was withdrawn. The reason was not recorded."
       },
       "causeByKind": {
         "decision_approval": {
           "head_moved": "A push changed the decision document, so this question was withdrawn."
+        },
+        "manual_work": {
+          "pulled_back": "The work item was cancelled or archived, so this question was withdrawn."
         }
       }
     },
@@ -11362,6 +11373,22 @@
         "credits_unavailable": "Run on the hosted agent",
         "repository_not_writable": "Repositories"
       }
+    },
+    "manualWork": {
+      "state": {
+        "markedDone": "Marked done"
+      },
+      "meta": "Handed to you by a run · {done} of {total} steps done",
+      "metaNoList": "Handed to you by a run · no to-do list",
+      "lead": "This is work a person does, so the run stopped here and handed it to you. Do the steps, then mark it done. Guide me through walks you through them one at a time.",
+      "leadNoList": "This is work a person does, so the run stopped here and handed it to you. It has no to-do list: its description says what to do, and Guide me through can propose the steps.",
+      "leadDone": "This work was marked done. The work items waiting on it can start.",
+      "noList": {
+        "title": "No to-do list",
+        "body": "Open the work item to read its description, or let Guide me through propose the steps."
+      },
+      "consequence": "Marking done moves {key} to Done.",
+      "consequenceMerges": "Marking done records it here. {key} moves to Done when its pull request merges."
     }
   },
   "approvalOverlay": {
