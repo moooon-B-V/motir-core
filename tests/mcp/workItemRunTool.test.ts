@@ -220,6 +220,7 @@ describe('start → report → close, by the claim holder', () => {
       ['run_opened', 'agent'],
       ['checkout_ready', 'agent'],
       ['agent_action', 'agent'],
+      ['run_closed', 'agent'],
     ]);
     const card = await adminDb.workItem.findUniqueOrThrow({ where: { id: leaf.id } });
     expect(card).toMatchObject({

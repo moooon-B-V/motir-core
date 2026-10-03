@@ -1478,6 +1478,23 @@ export const dispatchRunService = {
         if (err instanceof DispatchRunTerminalError) return asItStands();
         throw err;
       }
+      // The ONE `run_closed`, written by the server as `run_opened` is (§3) — the
+      // event the CLI sends before its close, here on the agent's behalf.
+      const closedSeq = ((await dispatchRunEventRepository.maxSeq(run.id, tx)) ?? 0) + 1;
+      await dispatchRunEventRepository.createMany(
+        [
+          {
+            workspaceId: ctx.workspaceId,
+            dispatchRunId: run.id,
+            seq: closedSeq,
+            kind: 'run_closed',
+            reportedBy: 'agent',
+            data: { stopReason: input.stopReason },
+          },
+        ],
+        tx,
+      );
+      closed = { ...closed, seq: closedSeq };
 
       const stampedIds = new Set<string>();
       if (delivered) {
