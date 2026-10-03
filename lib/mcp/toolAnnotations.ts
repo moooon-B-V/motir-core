@@ -286,6 +286,8 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   },
   // R: workItemTodos.ts → workItemTodosService.listTodos
   list_work_item_todos: { readOnlyHint: true, openWorldHint: false },
+  // R: getPage.ts → pagesService.getPageMarkdown — no lock, no write
+  get_page: { readOnlyHint: true, openWorldHint: false },
   // W: workItemTodos.ts → workItemTodosService.addTodo — appends a step + revision; additive
   add_work_item_todo: {
     readOnlyHint: false,

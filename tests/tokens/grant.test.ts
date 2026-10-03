@@ -332,7 +332,13 @@ describe('expandStoredGrant — reading a row written before this story', () => 
       'lesson:reinforce',
       'plan:view_any',
       'run:view_any',
+      // MOTIR-7410 — the lesson keys' kind again: `get_page` is the first MCP tool
+      // to assert `page:view`, which made it grantable, and the key was minted
+      // with pages (MOTIR-7277). A stale `read` row may never start reading a
+      // project's documents.
+      'page:view',
     ];
+    expect(GRANTABLE_PERMISSIONS).toContain('page:view');
     expect([...grant].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
     );

@@ -59,6 +59,13 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // which asserts `assertCanBrowse` on the card's project — a read-only member
   // sees the list and its progress, exactly as on the item page.
   list_work_item_todos: 'project:browse',
+  // ── page:view — the page read (MOTIR-7410) ────────────────────────────────
+  // `pagesService.getPageMarkdown` asserts `assertCanViewPages` (`page:view`,
+  // `docs/decisions/pages.md` §5), the key the page route checks. The FIRST
+  // tool to assert a `page:*` key, so it is what makes `page:view` grantable
+  // (`GRANTABLE_PERMISSIONS` is derived from this map). `CLI_TOKEN_GRANT` is NOT
+  // widened here — MOTIR-7412 adds the page keys to it.
+  get_page: 'page:view',
   list_ready: 'project:browse',
   next_ready: 'project:browse',
   // Reads the item and assembles text; it never claims the item or flips its

@@ -226,6 +226,12 @@ export const EXEMPT_TOOLS = {
     'Returns `{ sprintId, deleted }` — a deletion acknowledgement. v1’s sprint delete answers ' +
     '204 with no body (the post-condition is the whole contract), so there is no shared shape ' +
     'to derive from (MOTIR-2230).',
+  get_page:
+    'Returns a PAGE as an agent reads it — `{ id, projectId, title, placement, revision, ' +
+    'latestVersion, markdown, updatedAt }`. No `/api/v1` operation returns a page: the editor ' +
+    'reads it through its own routes, and the pages REST resource belongs to a later story ' +
+    '(Agents and search reach pages). So there is no shared shape to derive from. `revision` ' +
+    'is load-bearing: it is what `update_page` must send back (MOTIR-7410).',
 } as const satisfies Partial<Record<McpToolName, string>>;
 
 /** A tool the exemption registry covers. */

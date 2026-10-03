@@ -103,6 +103,7 @@ import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { AttachmentError } from '@/lib/blob/errors';
 import { DesignEvidenceError } from '@/lib/designEvidence/errors';
 import { TestInstructionsError } from '@/lib/testInstructions/errors';
+import { PageError, PageTreeError } from '@/lib/pages';
 import {
   EmptyTodoTextError,
   TodoCommandTooLongError,
@@ -416,6 +417,13 @@ export function toToolError(err: unknown): CallToolResult {
     return toolError(err.code, err.message);
   }
   if (err instanceof TestInstructionsError) {
+    return toolError(err.code, err.message);
+  }
+  // The page tools (MOTIR-5760). Every refusal `@motir/pages` raises carries its
+  // own code — `PAGE_NOT_FOUND` (one message whether the page is unknown or in
+  // another project: the 404-not-403 rule), the size caps, the placement rules,
+  // and `PAGE_REVISION_CONFLICT`, whose message tells the agent to re-read.
+  if (err instanceof PageError || err instanceof PageTreeError) {
     return toolError(err.code, err.message);
   }
   // The organization's storage cap. Not an AttachmentError (it is a billing

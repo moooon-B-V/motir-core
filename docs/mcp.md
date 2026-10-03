@@ -325,7 +325,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **83 tools**.
+`initialize` handshake and registers **84 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -2935,6 +2935,40 @@ Gated on `work_item:edit`.
 **Output** — `structuredContent`: `{ deletedFolderId, destinationFolderId,
 movedFolderIds, movedWorkItemIds }` — `destinationFolderId` is `null` when the
 contents moved to the root.
+
+### Pages
+
+A **page** is a project's document — a decision, a spec, a runbook — kept in the
+project's `/pages` tree beside the work it describes
+([`docs/decisions/pages.md`](decisions/pages.md)). Its canonical body is the
+editor's collaborative document; an agent reads and writes it as **markdown**,
+converted on the server through the same package the editor uses (§8.2). A page
+is addressed by its project key and its opaque **id** — the `<id>` in the page's
+address `/pages/<id>`. Every refusal is the page service's own, returned as a
+typed tool error carrying its code:
+
+| Code             | Meaning                                                                                      |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| `PAGE_NOT_FOUND` | No such page in that project — the same answer for an unknown id and another project's page. |
+
+#### `get_page`
+
+Read one page as markdown. The read an agent makes before it writes: the
+`revision` it returns is what a write must send back. Gated on `page:view`, the
+key the page's own address checks. It takes no lock, so it never waits on a
+person's save.
+
+| Input        | Type   | Required | Notes                                      |
+| ------------ | ------ | -------- | ------------------------------------------ |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                |
+| `pageId`     | string | yes      | The page id — the `<id>` in `/pages/<id>`. |
+
+**Output** — `structuredContent`: `{ id, projectId, title, placement, revision,
+latestVersion, markdown, updatedAt }`. `placement` is `{ parentPageId, folderId }`
+— at most one is set, both `null` at the project root. `latestVersion` is the
+newest entry of the page's history, `{ number, authorId, authorName, savedAt }`
+(`null` only for a page older than versions). The text summary is the title, the
+placement, `revision N`, who saved the newest version, then the markdown.
 
 ### Search
 

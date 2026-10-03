@@ -618,6 +618,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Delete a folder; its folders and work items move up, and the result lists what moved.',
     descriptionFingerprint: 'ba8ca89ae989',
   },
+  get_page: {
+    summary:
+      'Read one page as markdown — its title, where it is filed, its revision and newest version — to read it or to write it back.',
+    descriptionFingerprint: '38b27a805548',
+  },
   search_work_items_semantic: {
     summary:
       'Has this already been built? Search by MEANING rather than substring — keys, titles and scores only.',

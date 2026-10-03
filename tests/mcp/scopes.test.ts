@@ -205,6 +205,9 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // MOTIR-6329), which the forward map does not carry.
       'plan:view_any',
       'run:view_any',
+      // MOTIR-7410 — minted with pages (MOTIR-7277) and made grantable by
+      // `get_page`, the first tool to assert it. No stale row may acquire it.
+      'page:view',
     ];
     expect([...union].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
@@ -255,6 +258,12 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // project's lesson corpus. The loss is correct, and naming it is what
       // keeps this check exhaustive rather than what excuses it.
       reinforce_lesson: true,
+      // MOTIR-7410. A FIFTH loss, of the lesson tools' kind: no legacy scope ever
+      // gated `get_page`, because `page:view` did not exist when the six strings
+      // were written. Its `TOOL_SCOPES` row files it under `read` as the nearest
+      // bucket; the forward map is NOT widened, so a stale `read` row cannot start
+      // reading a project's pages.
+      get_page: true,
     };
     const losses: string[] = [];
     for (const name of MCP_TOOL_NAMES) {

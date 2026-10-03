@@ -24,6 +24,8 @@ export interface McpToolTargets {
   sprintId: string;
   /** A plan's id (a settled `planned` plan, so reading it never reaches motir-ai). */
   planId: string;
+  /** A page's id in that project (MOTIR-7410). */
+  pageId: string;
 }
 
 /** The targeting arguments for every tool, aimed at `t`. */
@@ -48,6 +50,10 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     create_folder: { projectKey: t.projectKey, name: 'rogue' },
     update_folder: { projectKey: t.projectKey, folderId: 'fld_whatever', name: 'rogue' },
     delete_folder: { projectKey: t.projectKey, folderId: 'fld_whatever' },
+    // MOTIR-7410 — the page read, project-keyed like the folder tools: a
+    // non-member reads tenant A's project as not-found before the page id is
+    // looked at; on the caller's own project it reads the seeded page.
+    get_page: { projectKey: t.projectKey, pageId: t.pageId },
     get_work_item: { key: t.item1 },
     get_design: { key: t.item1 },
     list_designs: { projectKey: t.projectKey },

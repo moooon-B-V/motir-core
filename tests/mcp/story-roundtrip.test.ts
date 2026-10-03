@@ -6,6 +6,7 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { plansService } from '@/lib/services/plansService';
+import { pagesService } from '@/lib/services/pagesService';
 import { toolPermission } from '@/lib/mcp/toolPermissions';
 import { DEFAULT_TOKEN_GRANT, GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
@@ -214,12 +215,15 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       // The targeting arg for each tool, aimed at tenant A's resources. `whoami`
       // is the documented exception — it returns the CALLER's own identity, so a
       // non-member sees only themselves (no cross-tenant resource to deny).
+      // A page of A's (MOTIR-7410) — the target `get_page` aims at.
+      const page = await pagesService.createPage(a.ctx, { projectId: a.projectId });
       const argFor = mcpToolArgs({
         projectKey: 'PROD',
         item1,
         item2,
         sprintId: sprint.id,
         planId: plan.id,
+        pageId: page.id,
       });
 
       // Totality guard — the arg map MUST cover the live registry. A tool added
@@ -567,6 +571,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         create_folder: { projectKey: 'PROD', name: 'scoped folder' },
         update_folder: { projectKey: 'PROD', folderId: 'fld_scoped', name: 'scoped rename' },
         delete_folder: { projectKey: 'PROD', folderId: 'fld_scoped' },
+        // MOTIR-7410 — `page:view`-gated, so a `project:browse`-only token is
+        // refused at the gate before the (unknown) page id is looked at.
+        get_page: { projectKey: 'PROD', pageId: 'page_scoped' },
         get_work_item: { key: item1 },
         get_design: { key: item1 },
         list_designs: { projectKey: 'PROD' },
