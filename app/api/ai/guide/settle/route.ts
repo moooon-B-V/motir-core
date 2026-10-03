@@ -14,6 +14,10 @@ import { mapPlanChangeError, noActiveProject, readSessionId } from '../../plan-c
 // here too. REPLAYABLE: a second settle of the same job lands nothing and
 // returns the thread as it stands.
 //
+// NOT rate-limited, deliberately: it submits no model job. The job was paid for
+// at the guide door (`POST /api/ai/guide`, on the `ai:generate` bucket); this
+// route only reads its result back and lands it.
+//
 // HTTP only (CLAUDE.md 4-layer): parse, call ONE service method, map typed
 // errors. No `db`, no `$transaction`, no `motir-ai` import.
 export async function POST(req: Request): Promise<Response> {
