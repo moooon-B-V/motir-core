@@ -76,6 +76,10 @@ const REFUSES_BY_DECLINE: readonly ApprovalGateKind[] = ['plan_approval'];
  *  and the person's one verb, *Continue without the review*, requires its reason
  *  (`override_needs_a_note`). So no person's refusal reaches this rule at all. */
 const REFUSED_ONLY_BY_THE_AGENT: readonly ApprovalGateKind[] = ['agent_review'];
+/** The MANUAL-WORK gate (Story MOTIR-7460, ADR `manual-work-gate.md` §4): manual work is
+ *  done or not done, so it offers no refusal at all — the door refuses `request_changes`
+ *  by name (`request_changes_on_manual_work`) before this rule could read a note. */
+const OFFERS_NO_REFUSAL: readonly ApprovalGateKind[] = ['manual_work'];
 
 /** A bare `awaiting` gate, and the stamp its reader would have been shown. */
 async function awaitingGate(kind: ApprovalGateKind) {
@@ -127,6 +131,7 @@ describe('the rule is TOTAL over the registry — a new kind that offers the ver
         ...REFUSES_BY_OVERTURN,
         ...REFUSES_BY_DECLINE,
         ...REFUSED_ONLY_BY_THE_AGENT,
+        ...OFFERS_NO_REFUSAL,
       ].sort(),
     );
   });
