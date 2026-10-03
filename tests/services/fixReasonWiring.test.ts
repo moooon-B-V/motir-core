@@ -160,6 +160,25 @@ describe('a check run', () => {
     await check(31, 'sha-b', 'vitest', 'success');
     expect((await fixOf(item.id)).fixReason).toBeNull();
   });
+
+  // MOTIR-7491 (found on MOTIR-1408): the red arrived BEFORE the card reached In Review, so
+  // the edge-triggered red hold never fired, and a hand move to In Review then RECOMPUTED
+  // the reason to null — the card left To fix while its pull request was still red.
+  it('a card moved to In Review by hand while already red keeps ci_failed', async () => {
+    const s = await makeScenario('red-review@example.com');
+    const { item } = await card(s, 'red then reviewed', 32);
+    await check(32, 'sha-a', 'vitest', 'failure');
+    await workItemsService.updateStatus(item.id, 'implemented', s.ctx);
+    expect((await fixOf(item.id)).fixReason).toBe('ci_failed');
+
+    await workItemsService.updateStatus(item.id, 'in_review', s.ctx);
+
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await fixOf(item.id)).toMatchObject({
+      fixReason: 'ci_failed',
+      fixDetail: { check: 'vitest', repair: 'fix', affected: 1, total: 1 },
+    });
+  });
 });
 
 describe('a merge-queue exit', () => {

@@ -59,7 +59,21 @@ async function createAgent(page: Page, name: string, codingAgent: string): Promi
   expect(res.status()).toBe(201);
   const { instance } = (await res.json()) as { instance: { id: string } };
   await expect(dialog).toBeHidden();
+  await backToList(page, name);
   return instance.id;
+}
+
+/**
+ * Create now opens the new agent's panel (Story MOTIR-7393); this walk reads the
+ * list's table, so it closes the panel and returns to it. Navigation only.
+ */
+async function backToList(page: Page, name: string): Promise<void> {
+  await page
+    .getByRole('main')
+    .getByTestId('agent-panel')
+    .getByRole('button', { name: `Close ${name}` })
+    .click();
+  await expect(page.getByRole('table')).toBeVisible();
 }
 
 async function openMenu(page: Page, name: string): Promise<Locator> {
@@ -150,6 +164,8 @@ test.describe('My agents', () => {
     await signIn(page, seed.email, seed.password);
     await goToMyAgents(page);
     const id = await createAgent(page, 'yue-claude', 'Claude Code');
+    // The boot runs after the 201 (Story MOTIR-7393): the idle check needs it running.
+    await expect(rowOf(page, 'yue-claude')).toHaveAttribute('data-state', 'running');
     await page.request.post('/api/_test/agent-instances/idle', {
       data: { instanceIds: [id], advanceMinutes: 31 },
     });

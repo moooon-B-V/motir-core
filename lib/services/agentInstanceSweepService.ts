@@ -207,8 +207,12 @@ export const agentInstanceSweepService = {
                 ? await lifecycle.settleDelete(row.id)
                 : row.state === 'updating'
                   ? await lifecycle.settleUpdate(row.id)
-                  : await lifecycle.settleBoot(row.id);
-          if (result !== 'pending' && result !== 'noop') summary.settled += 1;
+                  : // AMENDMENT 6 §4: a boot is its driver's; the sweep only
+                    // resends one whose lease expired (or opens a lost one).
+                    await lifecycle.resumeBoot(row.id);
+          if (result !== 'pending' && result !== 'noop' && result !== 'alive') {
+            summary.settled += 1;
+          }
         });
       }
 

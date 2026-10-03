@@ -184,14 +184,22 @@ export async function evaluateRepair(
   // reason a CODE CHANGE could fix (MOTIR-5803; `approval-gates.md` §4 FOURTH AMENDMENT,
   // point 6). A retryable or setting-blocked outcome returns the card to In Review with a
   // fresh approve-to-merge gate, and `motir fix` is the answer only where the code may be
-  // at fault. An ordinary In Review card is waiting on a person, not on a repair, so it is
-  // refused below as `not_failing`.
+  // at fault. An In Review card whose set is green is waiting on a person, not on a
+  // repair, so it is refused below as `not_failing`.
   //
   // ⚠️ SINCE THE FIFTH AMENDMENT (MOTIR-6594) A LIVE FAILURE NEVER REACHES IN REVIEW —
   // it holds the card at Implemented. What this admission still serves is a card the OLD
   // rule re-asked: at In Review, holding a gate raised from a standing failure exit. It
   // stays admitted until the convergence (MOTIR-6595) has moved it to Implemented; after
   // that the admission finds only neutral and setting outcomes, and refuses them.
+  //
+  // ⚠️ AND A RED OR CONFLICTED MEMBER ADMITS IT TOO (MOTIR-7491). "Never reaches In
+  // Review" holds for the green PROMOTION only. The red HOLD (`withdrawDeliveredCardsOnRed`)
+  // is edge-triggered, so a card moved to In Review by hand while a member was ALREADY red
+  // is neither held back nor asked — and refusing it here left it in no queue at all
+  // (MOTIR-1408: one green member, one red, In Review for hours). A red pull request
+  // belongs to the fix loop (`approval-gates.md`, *a red pull request never reaches In
+  // Review*), so the card is repaired from where it stands.
   const inReview = rank === RUNG_RANK.in_review;
   if (item.archivedAt !== null || (rank !== RUNG_RANK.implemented && !inReview)) {
     return { ok: false, reason: 'not_implemented', runTargetKey: null, failing: [] };
@@ -291,12 +299,17 @@ export async function evaluateRepair(
       };
     }
   }
-  // In Review: the ONLY admission is a standing outcome at a member's current head whose
-  // reason a CODE CHANGE could answer. The read is of EVERY disposition, not just the
-  // failures `standingQueueFailures` holds the promotion on, because the two refusals
-  // differ and a person deserves the true one: no outcome at all is `not_failing`, and an
-  // outcome no agent can act on is `repair_not_code`.
-  if (inReview) {
+  // In Review with no red or conflicted member: the ONLY admission is a standing outcome at
+  // a member's current head whose reason a CODE CHANGE could answer. The read is of EVERY
+  // disposition, not just the failures `standingQueueFailures` holds the promotion on,
+  // because the two refusals differ and a person deserves the true one: no outcome at all
+  // is `not_failing`, and an outcome no agent can act on is `repair_not_code`. A red or
+  // conflicted member skips this (MOTIR-7491, above) and is classed below like
+  // Implemented's.
+  const redAtHead = openRows.some(
+    (d) => prCiStateAtHead(d.pullRequest) === 'failing' || isConflictedAtCurrentHead(d.pullRequest),
+  );
+  if (inReview && !redAtHead) {
     const standing = await standingExitsAtHead(openRows, tx);
     if (standing.length === 0) {
       return { ok: false, reason: 'not_failing', runTargetKey: null, failing: [] };

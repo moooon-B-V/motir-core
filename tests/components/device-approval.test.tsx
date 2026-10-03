@@ -144,6 +144,10 @@ describe('/device — state 2: confirm (design Panels 3 + 4)', () => {
     expect(screen.getByText('Edit work items')).toBeTruthy();
     expect(screen.getByText('Add comments')).toBeTruthy();
     expect(screen.getByText('Run AI planning')).toBeTruthy();
+    // MOTIR-7412 — the page keys joined the grant, so the screen names them with
+    // their shipped `permissions.page_*` labels.
+    expect(screen.getByText('Read pages')).toBeTruthy();
+    expect(screen.getByText('Edit pages')).toBeTruthy();
     expect(screen.getByText('Not: archive or delete work items, members, billing.')).toBeTruthy();
     expect(screen.getByText('In 90 days')).toBeTruthy();
   });

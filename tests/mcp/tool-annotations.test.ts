@@ -62,8 +62,19 @@ describe('TOOL_ANNOTATIONS — the table', () => {
       'complete_',
       'close_',
     ];
+    // The ONE named exception (MOTIR-7411): `update_page` replaces a page's body,
+    // but the replaced body stays a restorable version in the page's history, so
+    // the write is reversible and does not warrant the ask-a-person prompt MCP
+    // clients key off this hint. Named here so the verb rule stays exhaustive.
+    const REVERSIBLE_THROUGH_HISTORY: readonly string[] = ['update_page'];
+    expect(TOOL_ANNOTATIONS.update_page).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: false,
+    });
     const destructiveByName = MCP_TOOL_NAMES.filter(
-      (name) => name === 'transition_status' || prefixes.some((p) => name.startsWith(p)),
+      (name) =>
+        !REVERSIBLE_THROUGH_HISTORY.includes(name) &&
+        (name === 'transition_status' || prefixes.some((p) => name.startsWith(p))),
     );
     // A floor, so an empty filter cannot pass vacuously.
     expect(destructiveByName.length).toBeGreaterThanOrEqual(20);

@@ -36,6 +36,7 @@ import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs
 import { readPlanningTurn } from '@/lib/planning/plannerTurn';
 import { getJob } from '@/lib/ai/motirAiClient';
 import type { SubmittedRequirement } from '@/lib/ai/types';
+import type { GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import type {
   DebugLandingDto,
   PlanChangeSessionDto,
@@ -47,6 +48,7 @@ import { PermissionDeniedError } from '@/lib/projects/errors';
 import {
   EmptyPlanChangeIntentError,
   EmptyPlanChangeTurnError,
+  GuideSessionNotPlannableError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
@@ -270,6 +272,8 @@ interface AppendTurn {
   anchorKey?: string | null;
   /** A debug reply's landing (MOTIR-7064), persisted with the reply itself. */
   debugLanding?: DebugLandingDto | null;
+  /** A guide reply's record (MOTIR-7470), persisted with the reply itself. */
+  guideTurn?: GuideTurnRecord | null;
 }
 
 async function appendLocked(
@@ -343,6 +347,11 @@ async function appendWithin(
                 createdInTriage: turn.debugLanding.createdInTriage,
               },
             }
+          : {}),
+        // The record round-trips through JSON: it is plain data by construction
+        // (the parsed actions and their outcomes), so this is a copy, not a cast.
+        ...(turn.guideTurn
+          ? { guideTurn: JSON.parse(JSON.stringify(turn.guideTurn)) as Prisma.InputJsonObject }
           : {}),
         authorId: turn.authorId ?? null,
       },
@@ -752,6 +761,111 @@ export const planChangeSessionsService = {
   },
 
   /**
+   * The member's own latest GUIDE conversation on one card (Story MOTIR-7459 ·
+   * MOTIR-7464; ADR `conversation-turn-intent.md` AMENDMENT 2, A2.2), or `null`.
+   * Browse-gated like {@link findResumable}; WRITES NOTHING.
+   */
+  async findGuide(
+    pctx: ProjectContext,
+    scope: PlanChangeScope,
+  ): Promise<PlanChangeSessionDto | null> {
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await projectAccessService.assertCanBrowse(pctx.projectId, ctx);
+    const row = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+      planChangeSessionRepository.findLatestGuideForUser(
+        pctx.projectId,
+        scope.scopeKey,
+        pctx.userId,
+        pctx.workspaceId,
+        tx,
+      ),
+    );
+    return row ? toDto(row, pctx) : null;
+  },
+
+  /**
+   * OPEN a guide conversation on one card (MOTIR-7464; AMENDMENT 2, A2.2) — the
+   * Guide me through door. In ONE transaction, under the member's scope lock:
+   *
+   *  * `resume: true` (the card HAS to-do rows) — re-read the member's latest
+   *    guide conversation on the card UNDER the lock and, if there is one, return
+   *    it with NOTHING appended (`opened: false`). A second tab pressing the door
+   *    at the same moment therefore lands on the first tab's conversation instead
+   *    of forking a second one.
+   *  * otherwise, or with none to resume — create a `guide`-origin session
+   *    scoped at the card and append the OPENING turn as `intent: 'guide'`,
+   *    anchored on the card (`opened: true`). A card with NO rows always lands
+   *    here: a temporary walk cannot be resumed (A2.3).
+   *
+   * It takes NO `PlanTargetLock` and submits no plan, so the card is never parked
+   * at `planning` (A2.2). `ai:plan`-gated: it writes.
+   */
+  async openGuideWithFirstTurn(
+    pctx: ProjectContext,
+    scope: PlanChangeScope,
+    body: string,
+    opts: { resume: boolean },
+  ): Promise<{ session: PlanChangeSessionDto; opened: boolean }> {
+    const trimmed = body.trim();
+    if (!trimmed) throw new EmptyPlanChangeTurnError();
+    const anchorKey = scope.targetKeys[0] ?? null;
+    if (scope.targetKeys.length !== 1 || !anchorKey) {
+      throw new Error('A guide conversation is scoped at exactly one card.');
+    }
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await assertCanPlan(pctx.projectId, ctx);
+    const now = new Date();
+
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        await planChangeSessionRepository.lockScopeForUser(
+          pctx.projectId,
+          scope.scopeKey,
+          pctx.userId,
+          tx,
+        );
+        if (opts.resume) {
+          const existing = await planChangeSessionRepository.findLatestGuideForUser(
+            pctx.projectId,
+            scope.scopeKey,
+            pctx.userId,
+            pctx.workspaceId,
+            tx,
+          );
+          if (existing) return { session: await toDto(existing, pctx, tx), opened: false };
+        }
+        const created = await planChangeSessionRepository.create(
+          {
+            workspaceId: pctx.workspaceId,
+            projectId: pctx.projectId,
+            createdById: pctx.userId,
+            scopeKey: scope.scopeKey,
+            targetKeys: scope.targetKeys,
+            origin: 'guide',
+            lastActivityAt: now,
+          },
+          tx,
+        );
+        const row = await appendWithin(
+          created.id,
+          pctx,
+          {
+            role: 'user',
+            body: trimmed,
+            authorId: pctx.userId,
+            intent: 'guide',
+            anchorKey,
+          },
+          {},
+          tx,
+        );
+        return { session: await toDto(row, pctx, tx), opened: true };
+      },
+    );
+  },
+
+  /**
    * A SEEDED first turn (AMENDMENT 17 §9; story MOTIR-6068 · MOTIR-6207) — the
    * re-plan a refused decision opens, started from the gate that refused it. In
    * ONE transaction: take the member's scope lock, assert the seed (the gate is
@@ -1148,6 +1262,68 @@ export const planChangeSessionsService = {
   },
 
   /**
+   * CLAIM a `guide` turn's landing (MOTIR-7470; ADR AMENDMENT 2, A2.4) — a
+   * compare-and-set of the turn's `guideLandingClaimedAt` under the session's row
+   * lock, {@link claimDebugLanding}'s shape. `true` when THIS call claimed it;
+   * `false` when an earlier or concurrent settle of the same job already had, the
+   * loser's cue to land nothing. Only a `user` turn that ran as `guide` can be
+   * claimed.
+   */
+  async claimGuideLanding(
+    turnId: string,
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<boolean> {
+    const session = await requireSession(pctx, address);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        const turn = await planChangeTurnRepository.findByIdInSession(
+          turnId,
+          session.id,
+          pctx.workspaceId,
+          tx,
+        );
+        if (!turn || turn.role !== 'user') throw new PlanChangeTurnNotFoundError(turnId);
+        if (turn.intent !== 'guide') return false;
+        return planChangeTurnRepository.claimGuideLanding(turn.id, pctx.workspaceId, tx);
+      },
+    );
+  },
+
+  /**
+   * Append a guide turn's REPLY (MOTIR-7470) — the `assistant` turn carrying the
+   * job's message and its {@link GuideTurnRecord}, in ONE append. IDEMPOTENT ON
+   * `jobId` under the session lock, {@link appendAnswerTurn}'s mechanism, so a
+   * replayed settle never appends a second reply.
+   */
+  async appendGuideReplyTurn(
+    input: { jobId: string; body: string; record: GuideTurnRecord },
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanChangeSessionDto> {
+    const trimmed = input.body.trim();
+    if (!trimmed) throw new EmptyPlanChangeTurnError();
+    const session = await requireSession(pctx, address);
+    return appendLocked(
+      session,
+      pctx,
+      { role: 'assistant', body: trimmed, jobId: input.jobId, guideTurn: input.record },
+      {},
+      async (tx) =>
+        (await planChangeTurnRepository.findByJobIdAndRole(
+          session.id,
+          input.jobId,
+          'assistant',
+          pctx.workspaceId,
+          tx,
+        )) !== null,
+    );
+  },
+
+  /**
    * The `debug_bug` job a `debug` turn has ALREADY LANDED, or null (MOTIR-7065).
    *
    * A turn has landed when its claim (`debugLandingClaimedAt`) is taken — which
@@ -1353,6 +1529,9 @@ export const planChangeSessionsService = {
     requirement?: SubmittedRequirement,
   ): Promise<PlanChangeSubmitResultDto> {
     const session = await requireSession(pctx, address);
+    // A guide conversation never plans (AMENDMENT 2, A2.2): refused before its
+    // turns are read, so no plan-edit job is ever submitted for one.
+    if (session.origin === 'guide') throw new GuideSessionNotPlannableError(session.id);
     const turns = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
       planChangeTurnRepository.listBySessionId(session.id, pctx.workspaceId, tx),
     );

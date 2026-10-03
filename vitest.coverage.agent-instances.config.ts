@@ -93,6 +93,12 @@ const MEASURED = [
   // MOTIR-7027 — the run's supervision; the lifecycle couplings live in files above.
   'lib/jobs/definitions/agentInstanceRunSupervise.ts',
   'app/api/work-items/[[]id]/agent-runs/**/*.ts',
+  // Story MOTIR-7393 — watch your agent boot (MOTIR-7401): the boot driver, its
+  // steps' record and the job that runs it. The boot read and its stream are
+  // under the instance routes, the read-out and its hook under the My agents globs.
+  'lib/services/agentInstanceBootService.ts',
+  'lib/repositories/agentInstanceBootRepository.ts',
+  'lib/jobs/definitions/agentInstanceBoot.ts',
 ];
 
 export default defineConfig({
@@ -100,7 +106,7 @@ export default defineConfig({
   test: {
     ...baseConfig.test,
     include: [
-      'tests/agentInstances/**/*.test.ts',
+      'tests/agentInstances/**/*.test.{ts,tsx}',
       'tests/components/MyAgentsRoom.test.tsx',
       'tests/agentTerminal/**/*.test.ts',
       'tests/components/AgentPanel.test.tsx',
@@ -126,6 +132,8 @@ export default defineConfig({
       // backfill reach three `agentInstanceStorageChargeRepository` reads this lane
       // measures; their suite is the one that drives them.
       'tests/ciFleet/platformMeterReport.test.ts',
+      // Story MOTIR-7393 — the boot read-out and its stream hook (MOTIR-7400).
+      'tests/components/AgentBootReadout.test.tsx',
     ],
     coverage: {
       provider: 'v8',

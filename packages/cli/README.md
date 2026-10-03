@@ -68,8 +68,9 @@ construction** — the code and URL are printed whether or not a browser opens, 
 an SSH session or a container uses the same command; `--no-browser` skips the
 launch attempt outright.
 
-The approval mints a CLI-scoped PAT: permissions `project:browse`, `work_item:edit`,
-`comment:add`, `ai:plan` (fixed — the grant can neither widen nor narrow them), 90-day
+The approval mints a CLI-scoped PAT: permissions `project:browse`, `lesson:view`,
+`lesson:reinforce`, `work_item:edit`, `comment:add`, `plan:view_any`, `run:view_any`,
+`page:view`, `page:edit`, `ai:plan` (fixed — the grant can neither widen nor narrow them), 90-day
 expiry, labelled `CLI · <hostname>`. It lands in `~/.config/motir/config.json`,
 `chmod 600`, keyed by server URL.
 

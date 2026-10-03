@@ -93,7 +93,11 @@ export function AgentPanelHeader({
       </button>
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div className="min-w-0 flex-1">
-          <h2 className="m-0 flex flex-wrap items-center gap-2 font-serif text-lg font-semibold text-(--el-text)">
+          <h2
+            tabIndex={-1}
+            data-agent-heading
+            className="m-0 flex flex-wrap items-center gap-2 font-serif text-lg font-semibold text-(--el-text) focus-visible:outline-none"
+          >
             {agent.name}
             <RunTonePill tone={AGENT_STATE_TONE[agent.state]}>
               {t(`state.${agent.state}`)}

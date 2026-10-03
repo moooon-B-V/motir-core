@@ -90,6 +90,21 @@ export const planChangeTurnRepository = {
     return count === 1;
   },
 
+  /** CLAIM a `guide` turn's landing (MOTIR-7470): stamp `guideLandingClaimedAt`
+   *  only when it is still null. `true` when THIS call took it. The caller holds
+   *  the session's row lock, so two settles of one job serialise here. */
+  async claimGuideLanding(
+    id: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.planChangeTurn.updateMany({
+      where: { id, workspaceId, guideLandingClaimedAt: null },
+      data: { guideLandingClaimedAt: new Date() },
+    });
+    return count === 1;
+  },
+
   /** RELEASE a claim whose write was refused inside its own transaction, so
    *  nothing committed and a later settle may try again (MOTIR-7049). */
   async releaseDebugLanding(

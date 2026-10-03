@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentInstanceBootData } from '@/lib/jobs/types';
 
 // THE AGENT-BILLING STORY GATE, motir-core (Story MOTIR-6914 · MOTIR-6922).
 //
@@ -29,6 +30,7 @@ vi.mock('@/lib/jobs/sendEvent', () => ({
 }));
 
 const { db } = await import('@/lib/db');
+const { deliverBootEvent } = await import('../helpers/agentBootDriver');
 const { INSTANCE_STORAGE_CREDITS_PER_DAY } = await import('@/lib/agentInstances/config');
 const { deletionDateFor } = await import('@/lib/agentInstances/planLapse');
 const { _resetAiPlanCache } = await import('@/lib/services/aiPlanGateService');
@@ -68,7 +70,10 @@ const spent = (org: string, kind: 'machine' | 'storage') =>
 beforeEach(async () => {
   await setUpHarness();
   sendEventImpl.current.mockReset();
-  sendEventImpl.current.mockImplementation(async () => undefined);
+  // The boot event goes to the in-process driver, as the harness routes it.
+  sendEventImpl.current.mockImplementation(async (name: string, data: unknown) => {
+    if (name === 'agent-instance/boot') await deliverBootEvent(data as AgentInstanceBootData);
+  });
   vi.stubEnv('MOTIR_BASE_URL', 'https://app.test');
   ledger = [];
   // The ledger sits in front of the harness's own stub and answers the three

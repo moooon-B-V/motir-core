@@ -7,6 +7,7 @@ import type {
   PlanChangeTurnRoleDto,
 } from '@/lib/dto/planChange';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
+import { readGuideTurnRecord } from '@/lib/ai/guideWorkItem';
 
 // Prisma rows → API DTOs for the plan-change conversation (Story 7.30 ·
 // MOTIR-1728). The single place the persisted enum narrows to its string union
@@ -50,6 +51,7 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
     citations: row.citations,
     anchorKey: row.anchorKey,
     debugLanding: toDebugLandingDto(row.debugLanding),
+    guide: readGuideTurnRecord(row.guideTurn),
     authorId: row.authorId,
     createdAt: row.createdAt.toISOString(),
   };

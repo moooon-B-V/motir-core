@@ -7,6 +7,9 @@ import {
   DebugTargetNotAvailableError,
   EmptyPlanChangeIntentError,
   EmptyPlanChangeTurnError,
+  GuideCardClosedError,
+  GuideCardNotManualError,
+  GuideSessionNotPlannableError,
   PlanChangeJobNotRunningError,
   PlanChangeMailboxJobMismatchError,
   PlanChangeSessionNotFoundError,
@@ -22,6 +25,7 @@ import {
 } from '@/lib/projects/errors';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 import { InvalidAuthoredBugError } from '@/lib/ai/authoredBug';
+import { InvalidGuideTurnError } from '@/lib/ai/guideWorkItem';
 
 // Shared typed-error → HTTP mapping for the plan-change conversation routes
 // (Story 7.30 · MOTIR-1728). Returns null for an unrecognized error so the route
@@ -58,13 +62,28 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   if (err instanceof DebugTargetChangedError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
+  // A guide turn refused by the card's own state (MOTIR-7464; ADR AMENDMENT 2,
+  // A2.7): a card that is not manual is the wrong KIND of target (422); a card
+  // already finished or archived is a conflict with its state (409).
+  if (err instanceof GuideCardNotManualError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+  }
+  if (err instanceof GuideSessionNotPlannableError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  if (err instanceof GuideCardClosedError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, reason: err.reason },
+      { status: 409 },
+    );
+  }
   if (err instanceof DebugAnchorNotTriageBugError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
   }
   // A `debug_bug` result that failed re-validation at this boundary (MOTIR-7049):
   // the far side produced something this build will not write onto a card. An
   // upstream fault, so 502, and it names the field that failed.
-  if (err instanceof InvalidAuthoredBugError) {
+  if (err instanceof InvalidAuthoredBugError || err instanceof InvalidGuideTurnError) {
     return NextResponse.json(
       { code: err.code, error: err.message, field: err.field },
       { status: 502 },

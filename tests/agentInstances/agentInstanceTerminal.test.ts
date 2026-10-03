@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { driveBoot } from '../helpers/agentBootDriver';
 import { db } from '@/lib/db';
 import {
   AgentInstanceNoTerminalServerError,
@@ -126,7 +127,7 @@ describe('create — the terminal server is the machine’s main process (Q2, Q4
     const woken = await lifecycle.wake(KEY(), dto.id, fx.ctx);
     expect(woken).toMatchObject({ state: 'running', terminalServer: 'absent' });
     expect(probes()).toHaveLength(1);
-    expect(await lifecycle.settleBoot(dto.id)).toBe('noop');
+    expect(await driveBoot(dto.id)).toBe('noop');
     expect(probes()).toHaveLength(1);
   });
 

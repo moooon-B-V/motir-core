@@ -3,6 +3,7 @@ import {
   PAGE_RECORD_SELECT,
   type PageLevelRecord,
   type PageLockedRecord,
+  type PageMarkdownRecord,
   type PageRecord,
 } from '@/lib/mappers/pageMappers';
 
@@ -146,6 +147,21 @@ export const pageRepository = {
     return tx.page.findUnique({
       where: { id },
       select: { ...PAGE_RECORD_SELECT, bodyState: true },
+    });
+  },
+
+  /**
+   * Read one page with its derived MARKDOWN and no lock — the agent's read door
+   * (`pagesService.getPageMarkdown`, MOTIR-7409). The Yjs state is not selected:
+   * serving markdown never needs the canonical bytes. `null` when absent or invisible.
+   */
+  async findWithMarkdownById(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PageMarkdownRecord | null> {
+    return tx.page.findUnique({
+      where: { id },
+      select: { ...PAGE_RECORD_SELECT, bodyMarkdown: true },
     });
   },
 
