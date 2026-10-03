@@ -270,6 +270,8 @@ describe('the primitive is token-only, and ships nothing that consumes it (MOTIR
       'app/(authed)/pages/[pageId]/page.tsx',
       // MOTIR-7300: the `/pages` index's in-page frame (`design-notes.md` § State 5).
       'app/(authed)/pages/_components/PagesIndexFrame.tsx',
+      // MOTIR-7424: the Archived pages list's in-page frame, the same grid as its rows.
+      'app/(authed)/pages/archived/_components/ArchivedPagesFrame.tsx',
     ]);
   });
 });
