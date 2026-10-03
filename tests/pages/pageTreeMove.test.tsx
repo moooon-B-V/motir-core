@@ -734,4 +734,28 @@ describe('usePageMove — sequencing', () => {
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(refresh).toHaveBeenCalledWith(['root', 'folder:f1']);
   });
+
+  it('detaches the row from the level it left before the re-reads, and not on a reorder', async () => {
+    const refresh = vi.fn();
+    const detach = vi.fn();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        {children}
+      </NextIntlClientProvider>
+    );
+    const { result } = renderHook(() => usePageMove({ refresh, detach }), { wrapper });
+    patchAnswers = [moved('p1', { kind: 'root' })];
+    await act(async () => {
+      await result.current.move({ pageId: 'p1', from: 'folder:f1', parent: { kind: 'root' } });
+    });
+    expect(detach).toHaveBeenCalledWith('p1', 'folder:f1');
+    expect(detach.mock.invocationCallOrder[0]).toBeLessThan(refresh.mock.invocationCallOrder[0]!);
+
+    detach.mockClear();
+    patchAnswers = [moved('p1', { kind: 'root' })];
+    await act(async () => {
+      await result.current.move({ pageId: 'p1', from: 'root', parent: { kind: 'root' } });
+    });
+    expect(detach).not.toHaveBeenCalled();
+  });
 });

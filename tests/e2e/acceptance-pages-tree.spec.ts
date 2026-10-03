@@ -411,11 +411,13 @@ test('a member arranges pages in the project tree; a viewer reads the same tree'
       const picker = await openMoveTo(PARENT);
       const moved = placement(page, parentId);
       const reread = levelRead(page, 'root');
+      const rereadFrom = levelRead(page, `folder:${folderId}`);
       await picker.getByRole('option', { name: 'Project root', exact: true }).click();
       const movedRes = await moved;
       expect(movedRes.status()).toBe(200);
       expect(((await movedRes.json()) as { parent: { kind: string } }).parent.kind).toBe('root');
       expect((await reread).status()).toBe(200);
+      expect((await rereadFrom).status()).toBe(200);
 
       await expect(row(PARENT)).toHaveAttribute('aria-level', '1');
       await expect(row(SUB)).toHaveAttribute('aria-level', '2');

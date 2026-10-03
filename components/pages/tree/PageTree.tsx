@@ -385,7 +385,22 @@ export function PageTree({
     },
     [read],
   );
-  const { move } = usePageMove({ refresh: refreshLevels });
+  // A page that changed level leaves its old one at once; the re-reads then
+  // bring it into the new one, so it is never on screen twice.
+  const detachRow = useCallback((pageId: string, from: LevelKey) => {
+    setLevels((prev) => {
+      const level = prev[from];
+      if (!level) return prev;
+      return {
+        ...prev,
+        [from]: {
+          ...level,
+          rows: level.rows.filter((r) => !(r.kind === 'page' && r.id === pageId)),
+        },
+      };
+    });
+  }, []);
+  const { move } = usePageMove({ refresh: refreshLevels, detach: detachRow });
 
   // The root when the server did not read it, and every open level of the
   // arrival path the server did not hand in — read once, on mount.

@@ -53,6 +53,12 @@ export interface PageMoveRequest {
 export interface PageMoveOptions {
   /** Re-read these loaded levels — the tree's own reader, with its per-level stamps. */
   refresh: (levels: LevelKey[]) => void;
+  /**
+   * Take the page's row out of the level it LEFT, at once. Without it the
+   * re-reads land one at a time, and the row shows in both levels until the
+   * source level's answer arrives.
+   */
+  detach?: (pageId: string, from: LevelKey) => void;
 }
 
 export interface PageMoveController {
@@ -92,7 +98,7 @@ const REFUSAL_BY_CODE: Record<string, Exclude<PageMoveRefusal, 'failed'>> = {
 /** The depth limit the design's sentence names when a 422 omits it (`PAGE_DEPTH_LIMIT`). */
 const DEFAULT_DEPTH_LIMIT = 10;
 
-export function usePageMove({ refresh }: PageMoveOptions): PageMoveController {
+export function usePageMove({ refresh, detach }: PageMoveOptions): PageMoveController {
   const t = useTranslations('pages.tree.refusal');
   const tv = useTranslations('issueViews');
   const seq = useRef<Record<string, number>>({});
@@ -123,6 +129,7 @@ export function usePageMove({ refresh }: PageMoveOptions): PageMoveController {
 
       if (res?.ok) {
         const result = body as unknown as PageMoveResultDto;
+        if (parentKey(result.parent) !== request.from) detach?.(request.pageId, request.from);
         refresh([request.from, parentKey(result.parent)]);
         return { ok: true, result };
       }
@@ -142,7 +149,7 @@ export function usePageMove({ refresh }: PageMoveOptions): PageMoveController {
             : t(refusal);
       return { ok: false, refusal, message };
     },
-    [refresh, t, tv],
+    [refresh, detach, t, tv],
   );
 
   return { move };
