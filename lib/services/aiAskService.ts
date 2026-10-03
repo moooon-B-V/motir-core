@@ -16,6 +16,7 @@ import {
   EmptyPlanChangeTurnError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnNotFoundError,
+  TurnFilesGuideOnlyError,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE, PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import type {
@@ -287,10 +288,22 @@ export const aiAskService = {
   async submitTurn(
     body: string,
     ctx: ProjectContext,
-    opts: { isAnswer?: boolean; sessionId?: string; seedGateId?: string; anchorKey?: string } = {},
+    opts: {
+      isAnswer?: boolean;
+      sessionId?: string;
+      seedGateId?: string;
+      anchorKey?: string;
+      /** Files on the turn (MOTIR-7484) — legal on a GUIDE conversation only
+       *  (`guide-turn-files.md` A3.2 / A3.7), where the guide intake checks them. */
+      attachmentIds?: readonly string[];
+    } = {},
   ): Promise<AskSubmitResult | AskRedirectResult | GuideTurnResult> {
     const trimmed = body.trim();
-    if (!trimmed) throw new EmptyPlanChangeTurnError();
+    const attachmentIds = opts.attachmentIds ?? [];
+    if (!trimmed && attachmentIds.length === 0) throw new EmptyPlanChangeTurnError();
+    // Files ride a turn addressed at a session only: with no session, the turn
+    // would start (or join) the project conversation, which is never a guide.
+    if (attachmentIds.length > 0 && !opts.sessionId) throw new TurnFilesGuideOnlyError();
 
     // `ai:plan` — the same key the plan-change submit asserts, and for the same
     // reason: an ask turn spends the workspace's AI credits.
@@ -323,8 +336,14 @@ export const aiAskService = {
     // origin decides the turn, never the client. It is handed to the guide
     // intake whole — no `ask_project` job, so no classifier completion is spent.
     if (current?.origin === 'guide') {
-      return aiGuideService.submitTurn(trimmed, ctx, { sessionId: current.id });
+      return aiGuideService.submitTurn(trimmed, ctx, {
+        sessionId: current.id,
+        ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
+      });
     }
+    // Only a guide conversation takes files (A3.7): refused before any write.
+    if (attachmentIds.length > 0) throw new TurnFilesGuideOnlyError();
+    if (!trimmed) throw new EmptyPlanChangeTurnError();
     if (!current) {
       const started = seeded
         ? await planChangeSessionsService.startSeededWithFirstTurn(

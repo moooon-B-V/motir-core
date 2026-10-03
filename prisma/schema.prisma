@@ -8814,6 +8814,16 @@ model PlanChangeTurn {
   /// unresolvable key is dropped rather than persisted as a chip that renders
   /// broken. Queryable without a join (`citations @> ARRAY['MOTIR-812']`).
   citations             String[]              @default([])
+  /// The files a `guide` `user` turn carried (Story MOTIR-7471 · MOTIR-7484;
+  /// `docs/decisions/guide-turn-files.md` A3.2) — `attachment` ids, in the order
+  /// the person added them, each an attachment on the GUIDED card at the moment
+  /// the turn was sent. Empty on every other turn and role.
+  ///
+  /// IDS, NOT FKs — the `citations` call, for the same reason: the attachment can
+  /// be deleted from the card later, and the turn must survive it unchanged; the
+  /// rail then draws that id as a removed chip. Validated at WRITE time (the card,
+  /// the workspace, the caller's view) by `aiGuideService`, never trusted as sent.
+  attachmentIds         String[]              @default([]) @map("attachment_ids")
   /// The author of a `user` turn (null for `system` / `assistant` turns, and
   /// cleared if the author is deleted — SetNull, the session's `createdBy`
   /// semantics).

@@ -1,8 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { useTranslations } from 'next-intl';
-import { CircleStop, MessageCircleQuestionMark, Search, Send } from 'lucide-react';
+import { CircleStop, MessageCircleQuestionMark, Paperclip, Search, Send } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
@@ -64,6 +72,27 @@ export interface RunningBar {
   /** The user has asked for a stop and the walk has not reached its boundary yet. */
   stopping: boolean;
   onStop: () => void;
+}
+
+/**
+ * The ATTACH control — guide mode only (Story MOTIR-7471 · MOTIR-7486; design
+ * MOTIR-7482 `planning-workspace--guide-files.mock.html` panels 1, 2, 4, 14).
+ * Absent on every other composer, which is the A3.7 contract: ask, plan change
+ * and debug show no attach control and take no pasted image.
+ */
+export interface ComposerAttach {
+  /** Files picked with the control or pasted as images, in that order. */
+  onFiles: (files: File[]) => void;
+  /** The turn already holds its four files: the control disables with `capLabel`. */
+  atCap: boolean;
+  /** The control's accessible name. */
+  label: string;
+  /** Its tooltip. */
+  tip: string;
+  /** What the tooltip says at the cap. */
+  capLabel: string;
+  /** The picker's `accept` list — the upload allow-list. */
+  accept: string;
 }
 
 export interface PlanChangeComposerProps {
@@ -136,6 +165,20 @@ export interface PlanChangeComposerProps {
    * button across two components.
    */
   mentions?: boolean;
+  /** The attach control and image paste (guide only). Absent → neither exists. */
+  attach?: ComposerAttach | null;
+  /** Rendered above the field, under the bars — the guide's file tray. */
+  beforeField?: ReactNode;
+  /** Send is enabled with no words — a guide turn that carries files (A3.2). */
+  canSendEmpty?: boolean;
+  /** The field cannot be edited but keeps its words — files uploading. */
+  readOnly?: boolean;
+  /**
+   * Clear the draft as the turn is submitted. Default `true`. The guide passes
+   * `false` and clears it itself once the turn is SENT, because a send that
+   * uploads first can fail — and a failed upload keeps the words (A3.1).
+   */
+  clearOnSubmit?: boolean;
 }
 
 export function PlanChangeComposer({
@@ -153,11 +196,17 @@ export function PlanChangeComposer({
   onSeeQuestion,
   running = null,
   mentions = true,
+  attach = null,
+  beforeField = null,
+  canSendEmpty = false,
+  readOnly = false,
+  clearOnSubmit = true,
 }: PlanChangeComposerProps) {
   const t = useTranslations('planningWorkspace.targets');
   const tc = useTranslations('planningWorkspace.conversation');
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // TRUE while an IME is composing — and for the rest of the task in which the
   // composition ENDS. See `onCompositionEnd` for why the tail matters.
   const composingRef = useRef(false);
@@ -279,10 +328,28 @@ export function PlanChangeComposer({
   function submit(event: FormEvent) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text || disabled) return;
+    if ((!text && !canSendEmpty) || disabled || readOnly) return;
     onSubmit(text);
-    onDraftChange('');
+    if (clearOnSubmit) onDraftChange('');
   }
+
+  /** A pasted IMAGE joins the turn's files; pasted text stays text (design
+   *  panel 2). Only with the attach control — no other composer takes files. */
+  function onPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    if (!attach) return;
+    const images = Array.from(event.clipboardData?.files ?? []).filter((f) =>
+      f.type.startsWith('image/'),
+    );
+    if (images.length === 0) return;
+    event.preventDefault();
+    attach.onFiles(images);
+  }
+
+  // The inset slot holds the search trigger at 6px and, in guide mode, the
+  // attach control beside it at 34px (design panel 1); the field's left padding
+  // clears whichever are present.
+  const insetPadding =
+    mentions && attach ? 'pl-[60px]' : mentions || attach ? 'pl-8' : 'pl-(--spacing-input-x)';
 
   return (
     <form onSubmit={submit} className="relative border-t border-(--el-border) px-3 py-3">
@@ -377,6 +444,8 @@ export function PlanChangeComposer({
         </div>
       ) : null}
 
+      {beforeField}
+
       {open ? (
         <TargetSearchPopover targets={targets} onPick={pick} onClose={() => closeSearch()} />
       ) : null}
@@ -442,6 +511,43 @@ export function PlanChangeComposer({
               </span>
             </Tooltip>
           ) : null}
+          {attach ? (
+            // THE ATTACH CONTROL (MOTIR-7482 panel 1) — the search trigger's
+            // geometry, one slot to its right. The picker is a hidden input the
+            // button opens, so the control is a real, keyboard-reachable button.
+            <Tooltip content={attach.atCap ? attach.capLabel : attach.tip} delayMs={300}>
+              <span
+                className={`absolute bottom-1.5 z-10 inline-flex ${mentions ? 'left-[34px]' : 'left-1.5'}`}
+              >
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={disabled || readOnly || attach.atCap}
+                  aria-label={attach.label}
+                  data-testid="guide-attach-trigger"
+                  className="inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-secondary) hover:bg-(--el-card) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
+                >
+                  <Paperclip className="size-4" aria-hidden="true" />
+                </button>
+              </span>
+            </Tooltip>
+          ) : null}
+          {attach ? (
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              accept={attach.accept}
+              data-testid="guide-attach-input"
+              onChange={(event) => {
+                const picked = Array.from(event.target.files ?? []);
+                // Cleared so picking the same file again still fires a change.
+                event.target.value = '';
+                if (picked.length > 0) attach.onFiles(picked);
+              }}
+            />
+          ) : null}
           <Textarea
             ref={inputRef}
             autoGrow
@@ -478,6 +584,8 @@ export function PlanChangeComposer({
               onDraftChange(el.value);
             }}
             onKeyDown={onKeyDown}
+            onPaste={onPaste}
+            readOnly={readOnly}
             onKeyUp={() => {
               caretPlacedByUserRef.current = true;
             }}
@@ -516,7 +624,7 @@ export function PlanChangeComposer({
             // (4.17:1 for muted), and it is load-bearing here — the prompt IS
             // the placeholder, and the accessible name tracks it. Secondary is
             // 6.24:1 on that surface.
-            className={`min-h-(--height-input) py-[calc((var(--height-input)-(var(--text-sm)*var(--text-sm--line-height))-2px)/2)] min-w-0 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) ${mentions ? 'pl-8' : 'pl-(--spacing-input-x)'} text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus:ring-0 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60`}
+            className={`min-h-(--height-input) py-[calc((var(--height-input)-(var(--text-sm)*var(--text-sm--line-height))-2px)/2)] min-w-0 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) ${insetPadding} text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus:ring-0 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60`}
           />
         </div>
         {/* Send gains the WORD "Answer" while a question is pending — the third
@@ -525,7 +633,7 @@ export function PlanChangeComposer({
           type="submit"
           variant="primary"
           size="sm"
-          disabled={disabled || draft.trim().length === 0}
+          disabled={disabled || readOnly || (draft.trim().length === 0 && !canSendEmpty)}
           aria-label={awaitingQuestion !== null ? tc('answer') : tc('send')}
         >
           <Send className="size-4" aria-hidden="true" />

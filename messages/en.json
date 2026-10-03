@@ -7531,6 +7531,28 @@
         "edited": "Edited the {fields} of <chip>{key}</chip>.",
         "commented": "Commented on <chip>{key}</chip>: “{reason}”",
         "closed": "Moved <chip>{key}</chip> to Done, and added this summary as a comment."
+      },
+      "files": {
+        "attach": "Attach files",
+        "attachTip": "Attach files or a screenshot",
+        "cap": "Up to 4 files a turn",
+        "trayAria": "Files on this turn",
+        "removeAria": "Remove {name}",
+        "pastedName": "Pasted image",
+        "dropTitle": "Drop to add to this turn",
+        "dropSub": "They go on {key} when you send. Up to 4 files.",
+        "waiting": "Waiting",
+        "uploadingPct": "Uploading… {pct}%",
+        "uploading": "Uploading…",
+        "onCard": "On {key}",
+        "attaching": "Attaching {count, plural, one {# file} other {# files}} to {key}… the turn sends when they are on it.",
+        "notSent": "<b>Not sent.</b> One file didn't upload, so Motir AI hasn't seen this turn. Your words are kept, and the files already on {key} stay there.",
+        "retry": "Retry",
+        "reading": "Reading your {count, plural, one {# file} other {# files}} and {key}…",
+        "removed": "Removed",
+        "typeText": "Text",
+        "typeMarkdown": "Markdown",
+        "typeFile": "File"
       }
     }
   },

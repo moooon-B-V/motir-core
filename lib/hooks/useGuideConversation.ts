@@ -276,13 +276,15 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
   }, [reloadRows]);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, attachmentIds: readonly string[] = []) => {
       const session = stateRef.current.session;
       const body = text.trim();
-      if (!session || !body || stateRef.current.phase !== 'idle') return;
+      // A turn may carry files and no words (A3.2) — never neither.
+      if (!session || (!body && attachmentIds.length === 0)) return;
+      if (stateRef.current.phase !== 'idle') return;
       setState((s) => ({ ...s, phase: 'running', errorCode: null, outOfCredits: false }));
       try {
-        await take(await sendGuideTurn(session.id, body));
+        await take(await sendGuideTurn(session.id, body, attachmentIds));
       } catch (err) {
         if (!mountedRef.current) return;
         const { code, outOfCredits } = errorCodeOf(err);
