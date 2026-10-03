@@ -146,7 +146,7 @@ be moved to Done by hand.
 
 When you ask Motir AI to plan something, the planner tells you when it starts
 writing the plan and that you can leave. **When the plan is ready, Motir asks you
-to approve it**: a row appears in **To approve**, naming the plan and what it
+to approve it**: a row appears in **Waiting on you**, naming the plan and what it
 proposes. You are the one asked because you asked for the plan. A plan the
 auto-planner started on its own asks the workspace owner.
 
@@ -166,14 +166,14 @@ you can do one of three things:
 so a request to change it would only wait for a conversation.
 
 **While the planner is rewriting the plan, the question waits.** The row stays in
-To approve, but **Approve** and **Decline** are refused until the planner
+Waiting on you, but **Approve** and **Decline** are refused until the planner
 finishes, and the page says so. When it finishes, the same question can be
 answered, about the new version. If you read the plan before the rewrite and
 press Approve afterwards, Motir refuses and asks you to look at the new version
 first.
 
 A plan that becomes out of date because work it changes was finished or
-cancelled elsewhere stops asking. Its row leaves To approve, and the plan page
+cancelled elsewhere stops asking. Its row leaves Waiting on you, and the plan page
 says why.
 
 Plans that were already waiting for approval before this shipped were given their
@@ -276,7 +276,7 @@ someone running `motir run` — is handed your reason under **Changes requested*
 beside the version you sent back, so the new version starts from what you asked for.
 
 **The decided record names your verdict**, as _Sent back to revise_ or _Sent back to
-re-plan_, above your quoted reason. The rows in _To approve_ and the Approvals room
+re-plan_, above your quoted reason. The rows in _Waiting on you_ and the Approvals room
 lead with it.
 
 **Revise asks nothing more.** The record and the card at To do are the whole answer.
@@ -321,7 +321,7 @@ both. Nothing is chosen for you:
   the merge approval is withdrawn, and you are asked whether to re-plan._
 
 **Either verdict withdraws the merge approval, and the merge stays held until a newer
-video is approved.** The merge row disappears from Development and from _To approve_,
+video is approved.** The merge row disappears from Development and from _Waiting on you_,
 and it does not come back on its own — not on the next CI result, and not after a fix
 is pushed and goes green. The code you sent back cannot be merged until a new video
 is recorded and you approve it; that new video asks the acceptance question and the
@@ -434,7 +434,7 @@ changes**.
   approved, **Queue again** puts it back with no new question, and the work item
   returns to **Approved**. After a new push the row reads **New commits since
   approval** instead, and Motir asks again once every check is green. An
-  ejected work item is not in _To approve_ — its question was already answered.
+  ejected work item is not in _Waiting on you_ — its question was already answered.
   In a project that merges automatically, the same row and a **Merge queue**
   note appear without a gate, and anyone who may edit the work item can press
   **Queue again**.
@@ -459,7 +459,7 @@ changes**.
 
 ## Where you find what is waiting on you
 
-**Workbench → To approve** lists every approval waiting on you in the active project, on one
+**Workbench → Waiting on you** lists every approval, and every piece of manual work a run handed you, in the active project, on one
 page, with no pager. Each row reads as a sentence about the work item it is on:
 
 - _Design for {title}_ — a design waiting for your look;
@@ -594,9 +594,9 @@ guessing about the rest:
   request; outside a gate, merging still happens on GitHub.
 - **There is no per-project setting** that turns any of this on or off.
 - **No email and no bell notification** is sent when a gate is raised.
-- **Approving a plan through To approve is decided but not built yet.** Its rules
+- **Approving a plan through Waiting on you is decided but not built yet.** Its rules
   are in the decision record's §11. Until it ships, a plan is still approved or
   declined only from its own plan page and the planning surface, and it does not
-  appear in To approve.
+  appear in Waiting on you.
 
 Each is a separate piece of work, and this page will grow as they land.

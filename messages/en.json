@@ -8252,7 +8252,7 @@
       "toFix": "To fix",
       "recentlyFinished": "Recently finished",
       "watching": "Watching",
-      "toApprove": "To approve"
+      "toApprove": "Waiting on you"
     },
     "columns": {
       "title": "Title",
@@ -8295,8 +8295,8 @@
         "body": "Watch an item from its detail page to follow it without owning it."
       },
       "approvals": {
-        "title": "Nothing is waiting on your approval",
-        "body": "Work that needs your sign-off before it can go on will show up here."
+        "title": "Nothing is waiting on you",
+        "body": "Approvals that need your decision, and work a run handed to you to do, show up here."
       }
     },
     "approvals": {
@@ -11227,23 +11227,23 @@
         "approve": "Approve",
         "decline": "Decline",
         "consequence": "Approving adds these to your backlog. Declining ends the plan and changes nothing.",
-        "reopened": "Reopened from To approve · started by {name} · last active {when}",
-        "reopenedYours": "Reopened from To approve · started by you · last active {when}",
-        "held": "Motir AI is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in To approve meanwhile.",
-        "heldBy": "{harness} is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in To approve meanwhile.",
+        "reopened": "Reopened from Waiting on you · started by {name} · last active {when}",
+        "reopenedYours": "Reopened from Waiting on you · started by you · last active {when}",
+        "held": "Motir AI is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in Waiting on you meanwhile.",
+        "heldBy": "{harness} is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in Waiting on you meanwhile.",
         "stale": {
           "title": "This plan changed while you were reading it.",
           "next": "Nothing was approved or declined. The canvas now shows the new version — look it over, then decide again."
         },
         "seeOnly": "Waiting on {name} to approve or decline this plan.",
         "seeOnlyWhy": "Deciding a plan needs permission to decide plans.",
-        "declined": "You declined this plan. Nothing in your backlog changed, and it has left To approve."
+        "declined": "You declined this plan. Nothing in your backlog changed, and it has left Waiting on you."
       },
       "declineConfirm": {
         "title": "Declining this plan will:",
         "end": "End it — it cannot be approved afterwards.",
         "untouched": "Leave your backlog exactly as it is.",
-        "leaves": "Take it out of To approve.",
+        "leaves": "Take it out of Waiting on you.",
         "label": "Why are you declining it?",
         "helper": "Optional. It is kept with the decision.",
         "proceed": "Yes, decline"
@@ -11253,8 +11253,8 @@
         "next": "Approve or decline it here — or ask Motir to change it below."
       },
       "handoff": {
-        "writing": "I have what I need — I’m writing the plan now. You don’t have to wait here: close this whenever you like, and the plan will be waiting for you in <link>To approve</link>.",
-        "rewriting": "I’m writing a new version of this plan. You can close this — it stays in <link>To approve</link>, and you can decide once I’m done."
+        "writing": "I have what I need — I’m writing the plan now. You don’t have to wait here: close this whenever you like, and the plan will be waiting for you in <link>Waiting on you</link>.",
+        "rewriting": "I’m writing a new version of this plan. You can close this — it stays in <link>Waiting on you</link>, and you can decide once I’m done."
       }
     },
     "planAsk": {

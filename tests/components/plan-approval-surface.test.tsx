@@ -195,7 +195,7 @@ describe('DECLINE asks once, with an OPTIONAL reason (Panel 3)', () => {
     expect(band.textContent).toContain('Declining this plan will:');
     expect(band.textContent).toContain('End it — it cannot be approved afterwards.');
     expect(band.textContent).toContain('Leave your backlog exactly as it is.');
-    expect(band.textContent).toContain('Take it out of To approve.');
+    expect(band.textContent).toContain('Take it out of Waiting on you.');
     expect(within(bar()).queryByRole('button', { name: 'Approve' })).toBeNull();
     expect(conversation.discard).not.toHaveBeenCalled();
 
@@ -247,7 +247,7 @@ describe('HELD — the planner is writing a new version (Panel 4, §11.5c)', () 
     });
     renderHost();
     const reason =
-      'Motir AI is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in To approve meanwhile.';
+      'Motir AI is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in Waiting on you meanwhile.';
     for (const place of [bar(), block()]) {
       const scope = within(place);
       const approve = scope.getByRole('button', { name: 'Approve' }) as HTMLButtonElement;
@@ -279,7 +279,7 @@ describe('HELD — the planner is writing a new version (Panel 4, §11.5c)', () 
     ).toBe(true);
     const handoff = screen.getByTestId('plan-handoff');
     expect(handoff.textContent).toContain('I’m writing a new version of this plan.');
-    expect(within(handoff).getByRole('link', { name: 'To approve' }).getAttribute('href')).toBe(
+    expect(within(handoff).getByRole('link', { name: 'Waiting on you' }).getAttribute('href')).toBe(
       '/workbench?tab=approvals',
     );
   });
@@ -361,7 +361,7 @@ describe('DECIDED in place (Panel 6)', () => {
     conversation.state = stateWith({ review: review(), decided: 'declined', planId: null });
     renderHost();
     expect(screen.getByTestId('plan-declined-marker').textContent).toBe(
-      'You declined this plan. Nothing in your backlog changed, and it has left To approve.',
+      'You declined this plan. Nothing in your backlog changed, and it has left Waiting on you.',
     );
     expect(screen.queryByTestId('plan-change-confirm-bar')).toBeNull();
   });
@@ -424,9 +424,9 @@ describe('the HAND-OFF before generation (Panel 9)', () => {
     renderHost();
     const handoff = screen.getByTestId('plan-handoff');
     expect(handoff.textContent).toBe(
-      'I have what I need — I’m writing the plan now. You don’t have to wait here: close this whenever you like, and the plan will be waiting for you in To approve.',
+      'I have what I need — I’m writing the plan now. You don’t have to wait here: close this whenever you like, and the plan will be waiting for you in Waiting on you.',
     );
-    expect(within(handoff).getByRole('link', { name: 'To approve' }).getAttribute('href')).toBe(
+    expect(within(handoff).getByRole('link', { name: 'Waiting on you' }).getAttribute('href')).toBe(
       '/workbench?tab=approvals',
     );
     // Inside the rail's log (§22.9).
@@ -497,11 +497,13 @@ describe('REOPENED FROM TO APPROVE — the row’s `planVia=approvals` (§22.2, 
     lastActivityAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
   };
 
-  it('the rail says it came from To approve', () => {
+  it('the rail says it came from Waiting on you', () => {
     conversation.state = stateWith({ review: review(), reopened });
     renderHost('plan=project&planFrom=project&planSession=s_41&planVia=approvals');
     const line = screen.getByTestId('planning-reopened-from-approvals');
-    expect(line.textContent).toMatch(/^Reopened from To approve · started by you · last active/);
+    expect(line.textContent).toMatch(
+      /^Reopened from Waiting on you · started by you · last active/,
+    );
     expect(screen.queryByTestId('planning-reopened-session')).toBeNull();
   });
 
