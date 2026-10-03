@@ -200,7 +200,9 @@ export const agentInstanceSweepService = {
         await guarded(async () => {
           const result =
             row.state === 'hibernating'
-              ? await lifecycle.settleStop(row.id, 'hibernated')
+              ? // MOTIR-7406: re-send a stop that never reached the machine, and
+                // close with the reason the hibernate was begun for.
+                await lifecycle.settleStop(row.id, undefined, { reissueStop: true })
               : row.state === 'deleting'
                 ? await lifecycle.settleDelete(row.id)
                 : row.state === 'updating'

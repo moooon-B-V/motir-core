@@ -14,6 +14,7 @@
 // unresolvable host, so a missing intercept fails loud rather than escaping):
 //   - GET  /v1/usage                 → the org's AI tier + credit balance
 //   - GET  /v1/stripe/subscription   → the org's AI-pool Stripe subscription state
+//   - GET  /v1/stripe/billing-history → the org's payment method + recent invoices
 //   - POST /v1/stripe/checkout-session → a synthetic hosted Checkout URL
 //   - POST /v1/stripe/portal-session   → a synthetic hosted Portal URL
 //   - POST /v1/stripe/seat-quantity    → an applied seat-sync result
@@ -43,6 +44,7 @@
 
 import { readFixtureFileSync, writeFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
+import type { RawBillingHistoryResponse } from '@/lib/ai/types';
 
 /** The synthetic hosted-session URLs the boundary returns (the spec's `page.route`
  *  fulfils the browser navigation to them — nothing leaves localhost). */
@@ -99,6 +101,9 @@ export interface BillingFixtureEntry {
   balance: number;
   tier: BillingFixtureTier | null;
   subscription: BillingFixtureSubscription;
+  /** The operator console's Payment & invoices read (mirrors
+   *  RawBillingHistoryResponse). Absent ⇒ no Stripe customer: the empty shape. */
+  billingHistory?: RawBillingHistoryResponse;
   /**
    * OPTIONAL, and the omission is meaningful rather than lazy (MOTIR-4560).
    * Absent ⇒ the boundary reports NO `search` / `searchRuns` block at all, which
@@ -343,6 +348,20 @@ export function installBillingBoundaryMock(agent: MockAgent): void {
     .reply((req) => {
       const e = entryFor(queryOrgId(req.path));
       return { statusCode: 200, data: e.subscription, responseOptions: json };
+    })
+    .persist();
+
+  // GET /v1/stripe/billing-history — the org's payment method + recent invoices
+  // (MOTIR-7304). EMPTY (no Stripe customer) unless the fixture names one.
+  pool
+    .intercept({ path: (p) => p.startsWith('/v1/stripe/billing-history'), method: 'GET' })
+    .reply((req) => {
+      const e = entryFor(queryOrgId(req.path));
+      return {
+        statusCode: 200,
+        data: e.billingHistory ?? { paymentMethod: null, invoices: [] },
+        responseOptions: json,
+      };
     })
     .persist();
 

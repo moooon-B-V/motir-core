@@ -1008,11 +1008,11 @@ export default defineConfig({
         'lib/services/foldersService.ts',
         'lib/mappers/folderMappers.ts',
         'lib/folders/errors.ts',
-        'app/**/items/_components/FolderCommands.tsx',
-        'app/**/items/_components/FolderDeleteDialog.tsx',
-        'app/**/items/_components/FolderNameField.tsx',
-        'app/**/items/_components/FolderPicker.tsx',
-        'app/**/items/_components/FolderRowMenu.tsx',
+        'components/folders/FolderCommands.tsx',
+        'components/folders/FolderDeleteDialog.tsx',
+        'components/folders/FolderNameField.tsx',
+        'components/folders/FolderPicker.tsx',
+        'components/folders/FolderRowMenu.tsx',
         'app/**/items/_components/QuickViewFolderField.tsx',
         // Story MOTIR-5309 · MOTIR-5379 — the item page's placement channel and its
         // breadcrumb: two new files and the one they rewrote. Measured with the
@@ -5564,15 +5564,15 @@ export default defineConfig({
         },
         'lib/mappers/folderMappers.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/folders/errors.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
-        'app/**/items/_components/FolderCommands.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/**/items/_components/FolderDeleteDialog.tsx': {
+        'components/folders/FolderCommands.tsx': { branches: 90, functions: 90, lines: 90 },
+        'components/folders/FolderDeleteDialog.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/**/items/_components/FolderNameField.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/**/items/_components/FolderPicker.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/**/items/_components/FolderRowMenu.tsx': { branches: 90, functions: 90, lines: 90 },
+        'components/folders/FolderNameField.tsx': { branches: 90, functions: 90, lines: 90 },
+        'components/folders/FolderPicker.tsx': { branches: 90, functions: 90, lines: 90 },
+        'components/folders/FolderRowMenu.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/items/_components/QuickViewFolderField.tsx': {
           branches: 90,
           functions: 90,

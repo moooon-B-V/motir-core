@@ -41,6 +41,7 @@ import type {
   PlannerModelWriteResult,
   PreplanStateQuery,
   Problem,
+  RawBillingHistoryResponse,
   RawCiOverageDebitResponse,
   RawEmbeddingBatchResponse,
   RawJobResponse,
@@ -79,9 +80,12 @@ interface ClientConfig {
  * This paragraph used to say the opposite in those words ("a fleet index
  * container is handed `MOTIR_AI_BASE_URL`…"), and the dispatcher did exactly
  * what it said. **CORRECTED (MOTIR-4518):** `MOTIR_AI_URL` is the address
- * motir-core reaches motir-ai at, which in production is a PRIVATE, org-scoped
- * one (`http://motir-ai.internal:8080`); an index container runs in a DIFFERENT
- * organization, where that name does not resolve at all. Every index run died at
+ * motir-core reaches motir-ai at, which in production was a PRIVATE, org-scoped
+ * 6PN name (`http://motir-ai.internal:8080`) from 2026-08-21 until 2026-10-02 —
+ * and is motir-ai's PUBLIC origin since, because motir-ai's pool
+ * suspends to zero and a 6PN name cannot wake it (application-hosting.md
+ * Amendment 9, MOTIR-7407); an index container runs in a DIFFERENT
+ * organization, where that 6PN name does not resolve at all. Every index run died at
  * `getaddrinfo ENOTFOUND motir-ai.internal` for two weeks — after building the
  * graph, one call before it could be uploaded — because these two values were
  * one value.
@@ -111,16 +115,17 @@ export const MOTIR_AI_CONTAINER_URL_ENV_VAR = 'MOTIR_AI_CONTAINER_URL';
  *
  * | who is calling | from where | which address |
  * | --- | --- | --- |
- * | motir-core (this process) | the `moooon` organization | {@link motirAiBaseUrl} — `MOTIR_AI_URL`, private/6PN in production |
+ * | motir-core (this process) | the `moooon` organization | {@link motirAiBaseUrl} — `MOTIR_AI_URL`, the public origin in production (Amendment 9) |
  * | an index container | the FLEET's own organization | this accessor — `MOTIR_AI_CONTAINER_URL`, which must resolve from outside `moooon` |
  *
  * A `.internal` name is 6PN: the platform resolves it only for machines in the
- * SAME organization as the app it names. It is therefore correct for the row
- * above it and unusable for the row below it — not because one of them is
- * misconfigured, but because private-network addressing is scoped to a network
- * and the two callers are on different ones. `MOTIR_AI_URL` stays on the private
- * seam deliberately (MOTIR-3277); moving it to satisfy this consumer would undo
- * that decision for a caller it is not about.
+ * SAME organization as the app it names, so it is unusable for the row below —
+ * private-network addressing is scoped to a network, and the two callers are on
+ * different ones. Both rows hold the public origin in production today, for
+ * DIFFERENT reasons: the container because of the org boundary, motir-core
+ * because motir-ai's pool sleeps and only the Fly proxy wakes it
+ * (application-hosting.md Amendment 9, MOTIR-7407). They stay two variables
+ * so the two callers can diverge again without one dragging the other.
  *
  * ⚠️ AND THERE IS NO FALLBACK TO `MOTIR_AI_URL`, DELIBERATELY. A default is what
  * turned the original mistake into two silent weeks: the container booted, ran
@@ -194,6 +199,33 @@ function describe(err: unknown): string {
 export const MOTIR_AI_REQUEST_TIMEOUT_MS = 30_000;
 
 /**
+ * The detail for a `fetch` that threw. Node's `fetch` (undici) throws one
+ * `TypeError('fetch failed')` for EVERY transport failure and puts what actually
+ * happened on `err.cause` — `ENOTFOUND` for a name that does not resolve,
+ * `ECONNREFUSED`, `ECONNRESET`, `UND_ERR_CONNECT_TIMEOUT`. Reporting the bare
+ * message made every outage read the same: MOTIR-7337 was 78 events across five
+ * monitor issues of `fetch failed` and nothing else, and telling "the name is
+ * gone" from "the machine is asleep" took a timeline reconstruction.
+ *
+ * Only the cause's CODE is appended, never its message: the message names hosts
+ * and private addresses, and this text reaches API callers (the v1 error body is
+ * `err.message`). The whole cause rides `Error.cause` for the monitor instead.
+ */
+function describeTransportFailure(err: unknown): string {
+  const message = describe(err);
+  const codes: string[] = [];
+  let cause: unknown = err instanceof Error ? err.cause : undefined;
+  // A cause can itself have a cause (an AggregateError of per-address connect
+  // failures, a wrapped socket error); three levels is deeper than undici nests.
+  for (let depth = 0; depth < 3 && cause instanceof Error; depth += 1) {
+    const code = (cause as { code?: unknown }).code;
+    if (typeof code === 'string' && code && !codes.includes(code)) codes.push(code);
+    cause = cause.cause;
+  }
+  return codes.length > 0 ? `${message} (${codes.join(', ')})` : message;
+}
+
+/**
  * `fetch` with a deadline, mapping BOTH a transport failure and a timeout to
  * `MotirAiUnavailableError` — the single typed error every caller (and every
  * job retry budget) already understands.
@@ -211,7 +243,7 @@ async function aiFetch(input: string, init: RequestInit): Promise<Response> {
         `motir-ai did not respond within ${MOTIR_AI_REQUEST_TIMEOUT_MS}ms`,
       );
     }
-    throw new MotirAiUnavailableError(describe(err));
+    throw new MotirAiUnavailableError(describeTransportFailure(err), { cause: err });
   } finally {
     clearTimeout(timer);
   }
@@ -691,6 +723,31 @@ export async function getOrgSubscription(
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawSubscriptionResponse;
+}
+
+// GET /v1/stripe/billing-history — an org's default payment method and recent
+// invoices, read-only from Stripe through motir-ai (MOTIR-7304 → the MOTIR-7303
+// route), for the operator console's Billing & plans tab. The caller
+// (platformOrgBillingService) has already gated the platform principal + the cloud
+// build. An org with no Stripe customer is the EMPTY shape, NOT a 404; a transport
+// failure, a non-2xx or a malformed body THROWS, and the caller renders the card's
+// unavailable state.
+export async function getBillingHistory(
+  query: SubscriptionQuery,
+): Promise<RawBillingHistoryResponse> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ coreOrganizationId: query.coreOrganizationId });
+  const res = await aiFetch(`${url}/v1/stripe/billing-history?${params.toString()}`, {
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as Partial<RawBillingHistoryResponse> | null;
+  if (!body || !Array.isArray(body.invoices) || body.paymentMethod === undefined) {
+    throw new MotirAiUnavailableError(
+      'motir-ai returned a malformed body from GET /v1/stripe/billing-history',
+    );
+  }
+  return { paymentMethod: body.paymentMethod, invoices: body.invoices };
 }
 
 // POST /v1/stripe/checkout-session — start a subscription-mode, Stripe-hosted

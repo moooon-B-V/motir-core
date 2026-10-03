@@ -17,7 +17,7 @@ import { IssueAdvancedFilter } from './IssueAdvancedFilter';
 import { SavedFilterDropdown } from './SavedFilterDropdown';
 import { IssueViewSwitcher } from './IssueViewSwitcher';
 import { NewIssueButton } from './NewIssueButton';
-import { NewFolderButton } from './FolderCommands';
+import { NewFolderButton } from './NewFolderButton';
 import { isFilterActive } from '@/lib/issues/issueListFilter';
 import type { ReaderRoutes } from '@/lib/visitor/routes';
 

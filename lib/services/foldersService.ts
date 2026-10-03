@@ -1,6 +1,7 @@
 import type { Folder, Prisma } from '@/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { folderRepository } from '@/lib/repositories/folderRepository';
+import { pageRepository, type PageParentRef } from '@/lib/repositories/pageRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -187,8 +188,10 @@ export const foldersService = {
    * sentence. Gated on edit, because only a person who can delete sees it.
    *
    * ⚠️ The counts are defined by `deleteFolder`, not by the tree: direct child
-   * folders, and every work item filed directly in the folder whether or not the
-   * tree shows it. If the two ever disagree, this read is the wrong one.
+   * folders, every work item filed directly in the folder whether or not the
+   * tree shows it, and every page filed directly in it (MOTIR-7371 — its
+   * sub-pages ride along uncounted, as a filed epic's stories do). If the two
+   * ever disagree, this read is the wrong one.
    */
   async describeFolderDeletion(
     input: DescribeFolderDeletionInput,
@@ -200,9 +203,10 @@ export const foldersService = {
       if (!folder || folder.projectId !== input.projectId) {
         throw new FolderNotFoundError(input.folderId);
       }
-      const [childFolderCount, workItemCount, parent] = await Promise.all([
+      const [childFolderCount, workItemCount, pageCount, parent] = await Promise.all([
         folderRepository.countChildFolders(folder.id, tx),
         workItemRepository.countFiledInFolder(folder.id, tx),
+        pageRepository.countFiledInFolder(folder.id, tx),
         folder.parentFolderId === null
           ? Promise.resolve(null)
           : folderRepository.findById(folder.parentFolderId, tx),
@@ -212,6 +216,7 @@ export const foldersService = {
         name: folder.name,
         childFolderCount,
         workItemCount,
+        pageCount,
         destination: { folderId: parent?.id ?? null, name: parent?.name ?? null },
       };
     });
@@ -333,8 +338,21 @@ export const foldersService = {
   },
 
   /**
-   * Delete a folder, moving its child folders and filed work items to its own
-   * parent (or the root) first. Nothing inside it is removed.
+   * Delete a folder, moving its child folders, filed work items and filed pages
+   * to its own parent (or the root) first. Nothing inside it is removed.
+   *
+   * PAGES (Story MOTIR-5753 · MOTIR-7371, `docs/decisions/pages.md` §4): the
+   * folder's top-level pages go to the destination LAST among its pages, in
+   * their prior relative order; their sub-pages carry no folder and follow
+   * them untouched. `page.folder_id` is `onDelete: NoAction`, so without this
+   * the delete itself would fail on the foreign key.
+   *
+   * ⚠️ LOCK ORDER: folder-structure, THEN page-structure — the order
+   * `pageRepository.lockStructure` documents. A concurrent create or move of a
+   * page INTO this folder holds page-structure and reads the folder `FOR SHARE`:
+   * it either commits first, and its page is moved up here, or it waits on
+   * page-structure and then finds the folder gone (FOLDER_NOT_FOUND). Neither
+   * path can leave a page pointing at a deleted folder.
    */
   async deleteFolder(
     input: DeleteFolderInput,
@@ -343,11 +361,13 @@ export const foldersService = {
     return withWorkspaceContext(ctx, async (tx) => {
       await projectAccessService.assertCanEdit(input.projectId, ctx, tx);
       await folderRepository.lockStructure(input.projectId, tx);
+      await pageRepository.lockStructure(input.projectId, tx);
       const folder = await lockFolderInProject(input.folderId, input.projectId, tx);
       const destination = folder.parentFolderId;
 
       const childFolders = await folderRepository.findChildFolders(folder.id, tx);
       const filed = await workItemRepository.findFiledInFolder(folder.id, tx);
+      const filedPages = await pageRepository.findFiledInFolder(folder.id, tx);
 
       // Refuse BEFORE the first write, so a refused delete changes nothing.
       if (destination === null) {
@@ -419,6 +439,19 @@ export const foldersService = {
         );
       }
 
+      // The folder's pages, appended after the destination level's last page in
+      // their own order — one write. Their sub-pages are not touched.
+      if (filedPages.length > 0) {
+        const pageLevel: PageParentRef =
+          destination === null ? { kind: 'root' } : { kind: 'folder', folderId: destination };
+        let lastPagePosition = await pageRepository.lastPosition(folder.projectId, pageLevel, tx);
+        const pagePositions = filedPages.map((page) => {
+          lastPagePosition = keyForAppend(lastPagePosition);
+          return { id: page.id, position: lastPagePosition };
+        });
+        await pageRepository.moveFiledPages(folder.id, destination, pagePositions, tx);
+      }
+
       // Every project FOLDER POINTER goes where the folder's contents just went
       // (Story MOTIR-4927 · MOTIR-5537; the SET since MOTIR-5821 — the product
       // bug destination AND the planner-bug destination): the parent folder, or
@@ -435,6 +468,7 @@ export const foldersService = {
         destinationFolderId: destination,
         movedFolderIds: childFolders.map((c) => c.id),
         movedWorkItemIds: filed.map((i) => i.id),
+        movedPageIds: filedPages.map((p) => p.id),
       };
     });
   },

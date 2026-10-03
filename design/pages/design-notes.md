@@ -5,10 +5,11 @@ the `/pages` index with **New page**, and the page at its own address, `/pages/<
 the story ships — fresh, being written, saved / saving / offline, refused as too large, read-only,
 loading and not found.
 
-| Surface                 | Asset             | States | Gates                                               |
-| ----------------------- | ----------------- | ------ | --------------------------------------------------- |
-| The rail row and index  | `pages.mock.html` | 1–5    | MOTIR-7300 (section, rail row, ⌘K, index, New page) |
-| The page at its address | `page.mock.html`  | 6–12   | MOTIR-7275 (editor, toolbar, indicator), MOTIR-7280 |
+| Surface                 | Asset                     | States | Gates                                                 |
+| ----------------------- | ------------------------- | ------ | ----------------------------------------------------- |
+| The rail row and index  | `pages.mock.html`         | 1–5    | MOTIR-7300 (section, rail row, ⌘K, index, New page)   |
+| The page at its address | `page.mock.html`          | 6–12   | MOTIR-7275 (editor, toolbar, indicator), MOTIR-7280   |
+| A page’s history        | `page--history.mock.html` | 1–14   | MOTIR-5754 (History control, panel, compare, restore) |
 
 ## ⚠️ This is a REDRAW, and it follows a refusal
 
@@ -422,3 +423,586 @@ are hard-coded English today; the page editor's are not.)
 - **Mentions of work items, and the backlinks on a work item** — MOTIR-5747.
 - **Co-editing, cursors and presence** — MOTIR-5750. **Page comments** — MOTIR-5749.
 - **The mobile drawer** — the rail row is the same row in the drawer variant; nothing else changes.
+
+---
+
+## The page tree
+
+**Story MOTIR-5753 · design subtask MOTIR-7367.** The `/pages` index becomes a TREE of the project's
+folders and pages, and the page at `/pages/<id>` gains a sidebar tree and a breadcrumb. This section
+**amends** two parts of the approved design above, by delta mock; the approved mocks are not edited:
+
+| Amends                                                     | By                             | Panels |
+| ---------------------------------------------------------- | ------------------------------ | ------ |
+| § The index — `/pages` (states 2–5), `pages.mock.html`     | `pages--tree.mock.html`        | 1–12   |
+| § The way back — "← Pages", `page.mock.html` (states 6–12) | `page--tree-sidebar.mock.html` | 1–5    |
+
+### Design system — what was read, and the verdict
+
+- **Read:** `package.json` (depends on `@motir/design-system`, `workspace:*`), `app/globals.css` (imports
+  `@motir/design-system/theme.css`), `packages/design-system/package.json` (version **0.8.0**, exports
+  `./mock`), `app/layout.tsx` (the axes are the signed-in reader's own appearance —
+  `data-style` / `data-palette` / `data-type` from `appearancePreferenceService` — so there is no single
+  project axis to pin), `packages/design-system/theme.css`.
+- **Verdict: ON MOTIR DESIGN (branch a)** — both checks hold.
+- **How the mocks are built:** composed from the shipped parts' actual markup with the theme's tokens
+  inlined, the same way the approved base (`pages.mock.html`, `page.mock.html`) is built, so the two
+  deltas read as one design with it. `renderMock` from `@motir/design-system/mock` exists at 0.8.0 but no
+  asset in `design/` uses it, and a delta drawn by a different method from its base could not be
+  compared panel to panel. The token block is the base's (base palette, default style), plus five tokens
+  copied from `theme.css` that the tree needs: `--el-tint-rose`, `--el-overlay-scrim`, `--radius-modal`,
+  `--shadow-modal`, `--spacing-tooltip-x/y`.
+- **Parts the package lacks:** none is proposed for the package. Everything drawn is the package's
+  (`Button`, `Popover`, `Modal`, `EmptyState`, `PageSkeleton`, `Sidebar` row treatment) or the
+  product's own (`TreeTable`, and `/items`' folder components, which MOTIR-7374 moves into a
+  new shared `folders` directory under `components`). `PageTree`, `PageRowMenu`, `PagePlacementPicker`, `PageTreeDnd` and
+  `PageBreadcrumb` are **product-local components** — they know pages and folders, which the package
+  does not.
+
+### What is fixed, and what it rests on
+
+- **Nothing is drawn in `/items`, and `/items` does not change.** Pages and work items share the
+  project's folders, but each surface shows its own kind (ADR `docs/decisions/pages.md` AMENDMENT 1,
+  quoting Yue, 2026-10-02).
+- **`/pages` shows every project folder**, including one that so far holds only work items: a folder is
+  where a page is filed beside the work it describes. This settles the tree-view question AMENDMENT 1
+  handed to MOTIR-5753 ("how a folder that holds only pages, or only work items, shows on the other
+  surface").
+- **A level is folders first, then pages**, each in position order (ADR §4 as amended); 50 per read,
+  at most 100, one keyset cursor across both bands (ADR §4; MOTIR-7370 `listTreeLevel`).
+
+### Access path (drawn)
+
+1. The shipped **Pages** rail row (base § The ACCESS PATH) opens `/pages`, now the tree —
+   `pages--tree.mock.html` panel 1.
+2. A **page row's title is a link** to `/pages/<id>` — the same panel; it lands on
+   `page--tree-sidebar.mock.html` panel 1.
+3. On the page, the **breadcrumb's folder segment** links to `/pages?folder=<folderId>`, which opens
+   the tree with that folder's path expanded and the folder focused — sidebar mock panel 4. The
+   **Pages** segment and the sidebar's head link to `/pages`.
+
+### `/pages` — the tree (`pages--tree.mock.html`)
+
+**Composition.**
+
+| Element                   | Primitive / source                                                                | Colour / shape                                                                                                                                                                                                                                                                           |
+| ------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Header                    | the base header (`font-serif text-2xl`), subtitle changed                         | `--el-text`, subtitle `--el-text-secondary`                                                                                                                                                                                                                                              |
+| New folder · New page     | `Button` secondary · `Button` primary, `FolderPlus` · `Plus` 16px                 | `--el-button-border` / `--el-accent` + `--el-accent-text`, `--radius-btn`, `--height-btn-md`, `--spacing-btn-x`                                                                                                                                                                          |
+| Tree frame                | Card frame around `role="tree"`                                                   | `--el-card`, `--el-border`, `--radius-card`; rules between rows `--el-border-soft`                                                                                                                                                                                                       |
+| Row                       | `TreeTable` row: 40px (`ROW_PX`), 22px per level (`INDENT_PX`), 16px chevron slot | ink `--el-text`; hover `--el-surface`; focus `--focus-ring-color` inset ring                                                                                                                                                                                                             |
+| Chevron                   | `ChevronRight` 12px, rotated 90° when open                                        | `--el-icon-muted`, decorative                                                                                                                                                                                                                                                            |
+| Folder row                | `/items`' folder row: `Folder` 16px + name, semibold                              | glyph `--el-text-secondary`, name `--el-text`. **Always expandable.** Its whole row toggles it.                                                                                                                                                                                          |
+| Page row                  | `NotebookText` 16px (the rail's Pages glyph) + the title as a link                | glyph `--el-icon-muted`, title `--el-text`; untitled: _Untitled_ italic `--el-text-secondary`                                                                                                                                                                                            |
+| Row menu trigger          | `FolderRowMenu`'s trigger: `Ellipsis` in a `--height-control` square              | `--el-text-secondary`, `--radius-control`, `--spacing-icon-btn`; open: `--el-border-soft` fill, `--el-text`                                                                                                                                                                              |
+| Row menu                  | `FolderRowMenu` (`Popover`, width 220, `role="menu"`)                             | items `--height-control`, `--spacing-control-x`, `--radius-control`, 13px `--el-text`; glyph `--el-text-secondary`; danger `--el-danger-on-surface` + `--el-danger` glyph; disabled `--el-text-faint` on a `disabled` item                                                               |
+| Inline name field         | `FolderNameField`, shipped                                                        | `--el-input-border`, `--radius-input`, focus ring                                                                                                                                                                                                                                        |
+| Synthetic rows            | `/items`' empty / loading / load-more rows                                        | 13px `--el-text-secondary`; sentence `--el-text`; `Loader2` / `AlertCircle` (`--el-danger`) 14px; links `--el-link`                                                                                                                                                                      |
+| Load more                 | text button, `ChevronDown` 14px                                                   | `--el-link`, count `--el-text-secondary`                                                                                                                                                                                                                                                 |
+| Skeleton                  | `PageSkeleton` `Block`s inside the tree frame                                     | `--el-muted`, `--radius-control`, `aria-hidden`                                                                                                                                                                                                                                          |
+| Empty project             | `EmptyState` (base state 3) + a second action                                     | as the base                                                                                                                                                                                                                                                                              |
+| Move to… picker           | `FolderPickerPanel` in `FolderPickerPopover`, width 320                           | title 12px semibold `--el-text-secondary`; refusal box `--el-danger` border + glyph on `--el-tint-rose`, copy `--el-text-strong`; option `--spacing-control-x/y`, `--radius-control`, active `--el-surface`; disabled `--el-text-faint` on `aria-disabled`, reason `--el-text-secondary` |
+| Drag handle               | `GripVertical` 16px in the row's left gutter                                      | `--el-icon-muted`, `aria-hidden`, out of the tab order                                                                                                                                                                                                                                   |
+| Lifted row (drag overlay) | the row on a card                                                                 | `--el-card`, `--el-border-strong`, `--radius-control`, `--shadow-elevated`                                                                                                                                                                                                               |
+| Origin slot               | dashed placeholder                                                                | `--el-border-strong` dashed on `--el-surface-soft`                                                                                                                                                                                                                                       |
+| Drop before / after       | 2px line with an 8px ring dot, at the target level's indent                       | `--el-accent`                                                                                                                                                                                                                                                                            |
+| Drop inside               | the target row tinted and ringed                                                  | `--el-tint-lavender` fill, 2px inset `--el-accent` ring                                                                                                                                                                                                                                  |
+| Refused target            | dashed outline, `not-allowed` cursor, `Tooltip`                                   | `--el-danger` 2px dashed; tooltip `--el-tooltip-bg/-text`, `--spacing-tooltip-x/y`                                                                                                                                                                                                       |
+| Root drop zone            | dashed box at the tree's foot, only while dragging                                | `--el-border-strong` dashed, `--el-text-secondary`, `--radius-control`                                                                                                                                                                                                                   |
+| Refused-drop message      | `Toast`                                                                           | `--el-card`, `--el-border`, `--radius-card`, `--shadow-elevated`; glyph `--el-danger`, copy `--el-text`                                                                                                                                                                                  |
+| Folder delete             | `FolderDeleteDialog` (`Modal`, `alertdialog`), count line changed                 | as shipped: `--el-tint-mint` box, `--el-text-strong`, `ArrowUp` `--el-success`; `Button` danger (`--el-danger` + `--el-danger-text`)                                                                                                                                                     |
+
+**Rows and order (panel 1).** Folders first, then pages, each in position order. A folder row's whole
+row expands it (as in `/items`); a page row's title opens the page, and its chevron expands its
+sub-pages. A page with no sub-pages has no chevron; **a folder always has one**, because its emptiness is
+only known after the read and is then said in words. The tree is `role="tree"` / `treeitem` with
+`aria-level`, `aria-expanded` and arrow-key movement (MOTIR-7373). Page rows carry no "Edited…" line:
+the tree is in position order, not recency, and the editor is on the page.
+
+**New (panels 1, 2, 4).** **New page** (header, and the empty state) creates at the root; **New page here**
+(folder menu, and a folder's _No pages here_ row) creates in that folder; **New sub-page** (page menu)
+creates under that page. All three POST with a `parent` and move the browser to the new page with focus
+in the title — no dialog, as the base decided. While the POST runs a pending row (_Creating page…_)
+sits where the page will appear. A failure is the shipped `pages.index.createFailed` toast. **New
+folder** (header, and the empty state) is the shipped root folder create with its inline name field.
+
+**Row menus (panel 2).**
+
+- **Page row:** New sub-page · Move to… | Move up · Move down. Move up / down reorder among **sibling
+  pages** only (folders always lead a level, so a page never passes one). On the first sibling **Move
+  up is absent**; on the last, **Move down is absent** — MOTIR-7374's acceptance criterion.
+- **Folder row:** the shipped `/items` folder menu, composed unchanged, with **New page here** put
+  first: New page here · New folder inside · Rename · Move to… | Move up · Move down | Delete…. The
+  shipped folder Move up / Move down keep their shipped behaviour (drawn **disabled** on the first / last
+  folder). See _Open questions_.
+
+**States.** Folders but no pages (panel 3) · empty project (4) · loading — first level and an expanding
+level (5) · error — first level and a level's expand, with retry on the row (6) · at scale — 50 rows then
+Load more, with a count of rows _shown_ because a keyset cursor knows no total (7) · read-only viewer — no
+New, no menu, no handle, nothing drawn disabled (8). The first-level frame is an in-page `<Suspense>`
+after the gate, never a `loading.tsx`, because `/pages` calls `notFound()` (CLAUDE.md).
+
+**Move to… (panels 9–10).** Composed from the shipped `FolderPickerPanel`: anchored to the row's menu
+button, titled with `folders.pickerTitle`, a refusal slot at the top, a `listbox` of options, picking
+commits, picking the current location writes nothing. Two differences, both because pages are many:
+the options are a **lazily expanded tree** (each option's chevron reads that level through the tree
+route), and there is **no search field** (this story has no page search). **Project root** is the first
+option. **The moving page is disabled** with its reason and has no chevron, so its sub-pages are never
+offered — the cycle is refused before anything is sent. A refusal the picker could not have known
+renders in the refusal slot and the tree is unchanged:
+
+| Refusal (route → code)                  | Key                               | Source                                        |
+| --------------------------------------- | --------------------------------- | --------------------------------------------- |
+| 422 `PAGE_CYCLE`                        | `pages.tree.refusal.cycle`        | ADR §4 · MOTIR-7368 (package) · MOTIR-7372    |
+| 422 `PAGE_DEPTH_EXCEEDED` (`limit: 10`) | `pages.tree.refusal.depth`        | ADR §4 `PAGE_DEPTH_LIMIT` · MOTIR-7368 · 7372 |
+| 422 `CROSS_PROJECT_PAGE_PARENT`         | `pages.tree.refusal.crossProject` | ADR §4 · MOTIR-7368 · MOTIR-7372              |
+| 404 (folder or page parent gone)        | `pages.tree.refusal.gone`         | MOTIR-7372                                    |
+
+**Drag (panel 11).** Only page rows are draggable, only for an editor; folder rows are drop targets and
+never draggable (folders move with Move to…, as in `/items`). On a page row the top quarter means
+**before**, the bottom quarter **after**, the middle half **inside**; a folder row is **inside** only.
+Hovering a collapsed row for 600ms expands it. While a drag is live, a root drop zone appears at the
+tree's foot (drop there → the project root, after the root's pages). A page over itself or anything inside
+it is **refused before the drop** (dashed danger outline, `not-allowed`, a tooltip). Depth and
+cross-project refusals only the server knows: the row **snaps back**, keeps focus, and a toast says the
+move's own sentence. There is **no keyboard drag** — Move up / Move down / Move to… are the keyboard
+path, so the handle is `aria-hidden` and not focusable.
+
+**Folder delete (panel 12).** The shipped dialog, unchanged except that its count names pages too and its
+last sentence says no page is deleted; deleting moves the folder's pages up with its work items and
+folders (ADR §4).
+
+### The page — sidebar and breadcrumb (`page--tree-sidebar.mock.html`)
+
+| Element               | Primitive / source                                         | Colour / shape                                                                                                                |
+| --------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Sidebar column        | `<aside>` between the rail and `<main>`, 248px             | `--el-surface-soft`, right rule `--el-border`                                                                                 |
+| Sidebar head          | "Pages" link + hide button (`PanelLeftClose`, icon button) | 13px semibold `--el-text`; button `--el-text-secondary`, `--height-btn-sm` square, `--radius-control`                         |
+| Sidebar rows          | `PageTree` at compact density: 32px rows, 14px per level   | `--el-text`, folder glyph `--el-text-secondary`, page glyph `--el-icon-muted`, `--radius-control`                             |
+| Selected page         | `Sidebar`'s active-row treatment                           | `--el-sidebar-item-bg-active`, `--el-sidebar-border`, `--shadow-subtle`, 500 weight, glyph `--el-icon-active`                 |
+| Breadcrumb            | `<nav>` of links, `ChevronRight` 14px separators           | links 13px `--el-text-secondary`; current `--el-text` 500, `aria-current="page"`; separators `--el-icon-muted`, `aria-hidden` |
+| Folder segment        | `Folder` 14px + name (+ sr-only "Folder:")                 | as a link                                                                                                                     |
+| "…" (hidden segments) | button + `Popover` menu (`FolderRowMenu` grammar)          | `--el-text-secondary`, `--radius-control`; open `--el-border-soft`; items as the row menu                                     |
+| Show page tree        | icon button (`PanelLeftOpen`) leading the breadcrumb row   | as the hide button                                                                                                            |
+| Narrow overlay        | the same `<aside>` as a drawer                             | `--el-overlay-scrim`, `--shadow-modal`                                                                                        |
+
+- **Selected and expanded (panel 1).** `PageTree` with `selectedPageId` and an `expandedPath` built from
+  the trail, so the path is open on first paint and only levels opened later load lazily. **The sidebar is
+  navigation only**: no New, no row menu, no drag — arranging the tree happens in `/pages`, and a second
+  set of actions on a 248px column would be the same actions in a worse place.
+- **Breadcrumb (panels 1–2).** Root-first: **Pages** › folders › ancestor pages › this page, from
+  `getPageTrail` (ADR §4: folders read from the topmost page's folder chain; pages from
+  `ancestor_page_ids`). It always starts with **Pages**, so a root page keeps its way back, and it
+  replaces "← Pages" and its two keys. **Middle truncation:** over five segments, keep Pages, the first
+  segment, the parent and the page; fold the rest into "…", which opens the hidden segments root-first.
+  Each segment truncates at 180px (the page at 220px) with its full text in `title`.
+- **Collapsed (panel 3).** At **1280px and wider** the sidebar shows unless the reader hid it (a
+  per-viewer `localStorage` convenience; empty storage means shown). **Below 1280px** it starts hidden and
+  **Show page tree** opens it as an overlay drawer, closed by Esc, the scrim or choosing a page.
+- **Breadcrumb → tree (panel 4).** A folder segment → `/pages?folder=<folderId>`: the tree opens with that
+  folder's path expanded and the folder focused. A page segment → that page.
+- **Sidebar states (panel 5).** The tree's own loading / failed / Load more rows at compact density. A
+  page that 404s renders no sidebar and no breadcrumb (base state 12 unchanged); read-only is unchanged
+  (base state 10) and the sidebar is the same for everyone.
+
+### Copy — the page tree
+
+New keys live under `pages.tree.*`. Shipped keys are reused where the words are the same, so the folder
+commands read identically in `/items` and `/pages`.
+
+| Key                               | en                                                                                                | zh                                                                | Built by   |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------- |
+| `pages.tree.subtitle`             | Specs, runbooks and notes for this project, kept in folders and pages.                            | 此项目的规格说明、运行手册和笔记，按文件夹和页面整理。            | MOTIR-7373 |
+| `pages.tree.label`                | Folders and pages in this project                                                                 | 此项目中的文件夹和页面                                            | MOTIR-7373 |
+| `pages.tree.newPageHere`          | New page here                                                                                     | 在此新建页面                                                      | MOTIR-7373 |
+| `pages.tree.newSubPage`           | New sub-page                                                                                      | 新建子页面                                                        | MOTIR-7373 |
+| `pages.tree.pageActionsAria`      | Page actions for {title}                                                                          | “{title}”的页面操作                                               | MOTIR-7373 |
+| `pages.tree.expandAria`           | Expand {title}                                                                                    | 展开“{title}”                                                     | MOTIR-7373 |
+| `pages.tree.collapseAria`         | Collapse {title}                                                                                  | 收起“{title}”                                                     | MOTIR-7373 |
+| `pages.tree.noPagesHere`          | No pages here                                                                                     | 这里还没有页面                                                    | MOTIR-7373 |
+| `pages.tree.loadingLevel`         | Loading pages…                                                                                    | 正在加载页面…                                                     | MOTIR-7373 |
+| `pages.tree.rootFailed`           | Couldn’t load the pages.                                                                          | 无法加载页面。                                                    | MOTIR-7373 |
+| `pages.tree.levelFailed`          | Couldn’t load what’s inside.                                                                      | 无法加载其中的内容。                                              | MOTIR-7373 |
+| `pages.tree.loadMore`             | Load more                                                                                         | 加载更多                                                          | MOTIR-7373 |
+| `pages.tree.shown`                | {count} shown                                                                                     | 已显示 {count} 项                                                 | MOTIR-7373 |
+| `pages.tree.picker.listLabel`     | Folders and pages                                                                                 | 文件夹和页面                                                      | MOTIR-7374 |
+| `pages.tree.picker.loading`       | Loading folders and pages…                                                                        | 正在加载文件夹和页面…                                             | MOTIR-7374 |
+| `pages.tree.picker.isThisPage`    | It’s this page — a page can’t move into itself or its sub-pages.                                  | 就是此页面——页面不能移动到其自身或其子页面中。                    | MOTIR-7374 |
+| `pages.tree.refusal.cycle`        | A page can’t move into one of its own sub-pages. It stayed where it was.                          | 页面不能移动到其自身的子页面中。它保持在原位。                    | MOTIR-7374 |
+| `pages.tree.refusal.depth`        | Pages nest at most {limit} levels deep, and this move would go past that. It stayed where it was. | 页面最多只能嵌套 {limit} 层，此次移动会超出该限制。它保持在原位。 | MOTIR-7374 |
+| `pages.tree.refusal.crossProject` | That folder or page belongs to another project. The page stayed where it was.                     | 该文件夹或页面属于另一个项目。页面保持在原位。                    | MOTIR-7374 |
+| `pages.tree.refusal.gone`         | That folder or page no longer exists. The page stayed where it was.                               | 该文件夹或页面已不存在。页面保持在原位。                          | MOTIR-7374 |
+| `pages.tree.drop.root`            | Drop here to move it to the project root                                                          | 拖放到此处，将其移动到项目根目录                                  | MOTIR-7376 |
+| `pages.tree.drop.refusedSelf`     | Can’t drop a page into its own sub-page.                                                          | 不能将页面拖放到其自身的子页面中。                                | MOTIR-7376 |
+| `pages.tree.sidebar.label`        | Page tree                                                                                         | 页面树                                                            | MOTIR-7375 |
+| `pages.tree.sidebar.hide`         | Hide page tree                                                                                    | 隐藏页面树                                                        | MOTIR-7375 |
+| `pages.tree.sidebar.show`         | Show page tree                                                                                    | 显示页面树                                                        | MOTIR-7375 |
+| `pages.tree.breadcrumb.label`     | Where this page is                                                                                | 此页面所在位置                                                    | MOTIR-7375 |
+| `pages.tree.breadcrumb.more`      | Show {count} more levels                                                                          | 显示另外 {count} 层                                               | MOTIR-7375 |
+| `pages.tree.breadcrumb.folder`    | Folder:                                                                                           | 文件夹：                                                          | MOTIR-7375 |
+
+`{limit}` is `PAGE_DEPTH_LIMIT` (10), passed from the 422's `limit`. `pages.tree.expandAria` /
+`collapseAria` are the page row chevron's labels (a folder row keeps `folders.expandAria` /
+`collapseAria`).
+
+**Reused, unchanged:** `pages.index.title` (header, breadcrumb root, sidebar head), `pages.index.newPage`,
+`pages.index.creating`, `pages.index.createFailed`, `pages.index.empty.*`, `pages.untitled`,
+`shell.pageLoading`, `common.retry` (_Try again_ / 重试), `common.cancel`, `common.close`, and from
+`folders.*`: `newFolder`, `newFolderInside`, `rename`, `moveTo`, `moveUp`, `moveDown`, `delete`,
+`pickerTitle`, `projectRoot`, `currentLocation`, `actionsAria`, `nameLabel`, `expandAria`, `collapseAria`,
+`deleteTitle`, `deleteLead`, `deleteConfirm`.
+
+**Changed (MOTIR-7371):** `folders.deleteMoves` gains a `pages` count and its last sentence becomes
+_No work items or pages are deleted._ / _不会删除任何工作项或页面。_ — drawn with the counts filled in as
+"**2 folders, 4 work items and 3 pages** will move to **Project root**." / "**2 个文件夹、4 个工作项和 3
+个页面**将移动到**项目根目录**。".
+
+**Retired:** `pages.index.subtitle` and `pages.index.listLabel` (MOTIR-7373, replaced by
+`pages.tree.subtitle` / `pages.tree.label`); `pages.page.back` and `pages.page.backLabel` (MOTIR-7375,
+replaced by the breadcrumb).
+
+### Allocation — which card builds which element
+
+No element is built twice; where two cards touch one component, the split is stated.
+
+| Element (mock · panel)                                                                                                                      | Built by                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `PageTree`: rows, glyphs, indent, chevrons, `role="tree"`, keyboard, lazy expand, Load more (tree 1, 7)                                     | **MOTIR-7373**                             |
+| Header subtitle and **New page**; empty state with New page (tree 1, 4)                                                                     | **MOTIR-7373**                             |
+| The row Ellipsis trigger with its **New** entry only — New sub-page (page), New page here (folder) (tree 2)                                 | **MOTIR-7373**                             |
+| _No pages here_ row with New page here; the pending _Creating page…_ row (tree 2, 3)                                                        | **MOTIR-7373**                             |
+| Loading, error (with retry on the row), at-scale and read-only states (tree 5–8)                                                            | **MOTIR-7373**                             |
+| Page menu's **Move to… · Move up · Move down** appended to the page row menu (tree 2)                                                       | **MOTIR-7374**                             |
+| Folder row menu: the shared `FolderRowMenu` with the shipped folder commands after New page here (tree 2)                                   | **MOTIR-7374**                             |
+| **New folder** in the header and the empty state; inline name field (tree 1, 2, 4)                                                          | **MOTIR-7374**                             |
+| **Move to…** picker (`PagePlacementPicker`), disabled self, refusal slot and the four sentences (tree 9, 10)                                | **MOTIR-7374**                             |
+| `usePageMove`: the placement call, `beforeId`/`afterId`, refreshing both levels, error → sentence mapping                                   | **MOTIR-7374**                             |
+| Moving the five folder components to a shared `folders` directory under `components` (no visual change)                                     | **MOTIR-7374**                             |
+| Folder delete counting pages, and the delete moving pages up (tree 12)                                                                      | **MOTIR-7371**                             |
+| Drag handle, lifted row, origin slot, before/after line, inside tint, refused target + tooltip, root drop zone, snap-back + toast (tree 11) | **MOTIR-7376**                             |
+| Sidebar column, its head, selected row, pre-expanded path (sidebar 1, 5)                                                                    | **MOTIR-7375**                             |
+| Breadcrumb incl. middle truncation and "…" menu; removing "← Pages" (sidebar 1, 2)                                                          | **MOTIR-7375**                             |
+| Collapse / show, the 1280px rule, the narrow overlay (sidebar 3)                                                                            | **MOTIR-7375**                             |
+| `/pages?folder=<id>` opening the tree with that folder expanded and focused (sidebar 4)                                                     | **MOTIR-7375**                             |
+| The level read, create-with-parent, move, the trail (no element; every panel reads them)                                                    | MOTIR-7370 (service) · MOTIR-7372 (routes) |
+
+### Where each behaviour comes from
+
+| Behaviour drawn                                                     | Source                                                                                      |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Pages in `/pages`, not `/items`; shared folders                     | ADR AMENDMENT 1 (Yue, 2026-10-02)                                                           |
+| Folders first, then pages, each by position                         | ADR §4 _Order within a level_ (as amended) · MOTIR-7370 `listTreeLevel`                     |
+| 50 per read (max 100), keyset across both bands, lazy per level     | ADR §4 _Paging per level_ · MOTIR-7370                                                      |
+| A page's parent is a page, a folder or the root — never a work item | ADR §4 · MOTIR-7370 (`PAGE_PARENT_NOT_ALLOWED`)                                             |
+| The three refusals, their codes and statuses                        | ADR §4 · MOTIR-7368 (package `movePage`) · MOTIR-7372 (route mapping)                       |
+| Depth limit of 10 levels of pages; folders do not count             | ADR §4 · `PAGE_DEPTH_LIMIT`                                                                 |
+| Self and descendants disabled in Move to…                           | MOTIR-7374 acceptance                                                                       |
+| Move up / down absent on the first / last sibling page              | MOTIR-7374 acceptance                                                                       |
+| Folder delete moves its pages up; the dialog counts pages           | ADR §4 · MOTIR-7371                                                                         |
+| No New, no menu, no drag without `page:edit`                        | ADR §5 · MOTIR-7373 / 7374 / 7376 acceptance                                                |
+| Drop bands, refused-drop snap-back, no folder drag                  | MOTIR-7376 (bands and timing fixed here)                                                    |
+| Breadcrumb folders + ancestor pages, root-first                     | ADR §4 (`ancestor_page_ids`, folder chain at render) · MOTIR-7370 `getPageTrail`            |
+| Sidebar pre-expanded to the page, breadcrumb replaces "← Pages"     | MOTIR-7375 · base § The way back                                                            |
+| No `loading.tsx`; in-page `<Suspense>` after the gate               | CLAUDE.md § A `loading.tsx` may NOT sit above a route that decides existence · base state 5 |
+| Archive / delete of a page — not drawn                              | MOTIR-5755                                                                                  |
+
+### Open questions handed to the cards
+
+- **Folder Move up / Move down are drawn disabled, page Move up / Move down absent.** The folder menu is
+  composed unchanged from `/items`, where the edge entries are disabled; MOTIR-7374's acceptance asks
+  for page entries to be absent. Both are drawn as their sources say. If the two should agree, the
+  smaller change is to make the page entries disabled too — MOTIR-7374's call, not the design's.
+- **`/pages?folder=<id>`** is a new query parameter on `/pages`; MOTIR-7375 reads it (it already gives
+  `PageTree` an `expandedPath`). A folder id that is not in the project is ignored, not a 404.
+- **Hidden-sidebar preference** is per device (`localStorage`). A synced preference is not asked for.
+
+### Not drawn here
+
+- **`/items`** — unchanged by this story.
+- **Archive, delete and restore of a page** — MOTIR-5755.
+- **A combined tree of folders, pages and work items** — deferred by ADR AMENDMENT 1.
+- **Page search** — the Move to… picker has none in this story.
+
+## History (MOTIR-5754 · MOTIR-7381)
+
+**Story MOTIR-5754 · design subtask MOTIR-7381.** Any reader of a page (`page:view`) opens its
+**history**: the list of saved versions, each opened on its own beside the current page; an editor
+(`page:edit`) restores one. This section **amends** § _The page — `/pages/<id>` (states 6–12)_ above,
+drawn in `design/pages/page.mock.html`, by a new delta mock; the approved mock is not edited. It composes
+with MOTIR-7367's approved design for the same route (§ _The page tree_, `page--tree-sidebar.mock.html`):
+the sidebar tree and the breadcrumb are that design's, drawn here only as context and not redrawn.
+
+| Amends                                                     | By                        | Panels |
+| ---------------------------------------------------------- | ------------------------- | ------ |
+| § The page — `/pages/<id>` (states 6–12), `page.mock.html` | `page--history.mock.html` | 1–14   |
+
+**References.** Confluence Cloud's page history (a list of versions with author and date; a version opened
+on its own; _Restore this version_ makes a copy that becomes current and keeps every earlier one) for the
+model. Notion's page-history side panel for the layout: history opens **beside** the page, not on a
+separate screen.
+
+**What it rests on** (`docs/decisions/pages.md` §6): a version is a snapshot with a number, an author,
+`saved_at` and an optional `restored_from_version_id`; saves by one author within 10 minutes fold into one
+version; a page keeps **100** versions (writing the 101st deletes the oldest); **restore creates a new
+version** and rewinds nothing. Reading versions needs `page:view`; restoring needs `page:edit`.
+
+### Conventions
+
+The base design's (§ _Conventions both assets follow_): `--el-*` colour only, the element shape tokens,
+the Tier-3 layer declared on every `[data-theme]` scope, every state in light and dark, zh on the dark board
+of panels 1–6 and 8–14, and **page content never translated**. Every secondary line is
+`--el-text-secondary`; `--el-text-muted` and `--el-text-faint` are not used anywhere in the asset.
+
+### The access path — History in the title row (state 1)
+
+- **Where:** the trailing end of the page's **title row**. The breadcrumb (MOTIR-7367) stays above the
+  title; the title keeps the row's leading edge and its `font-serif text-2xl` 32px line box; **History**
+  is top-aligned to that line box, so the row's height does not change.
+- **What:** `Button variant="secondary" size="sm"` with the lucide **`History`** glyph and a visible label
+  _History_. A visible label rather than an icon button, because the glyph alone reads as "recent" or
+  "undo" and this is the only door to a feature a viewer has never seen.
+- **Why the title row, not the toolbar:** the toolbar is a writer's (it is not rendered for a viewer, base
+  state 10). History is every reader's, so it sits where a viewer and a writer both have something: the
+  title row. A viewer gets the same control in the same place (state 14).
+- **Open:** `aria-expanded="true"`, `aria-controls="page-history"`, and the pressed look —
+  `--el-surface` fill, `--el-border-strong` border — while the panel is open. Pressing it again closes
+  the panel.
+- **The rail and the tree:** unchanged. The rail's Pages row stays active; the tree's selected row stays
+  this page.
+
+### The panel — where it opens, how it closes (states 2–6)
+
+- **Wide, ≥ 1440px:** a right-hand column **beside** the page — rail · page tree (248px) · page · history
+  (**340px**). It pushes the reading column instead of covering it, so the page stays readable while the
+  list is open. `<aside id="page-history" aria-labelledby>`, `--el-page-bg`, a left rule in
+  `--el-border`.
+- **1280–1439px:** the same column; the **page tree sidebar hides while History is open** and returns
+  when it closes. This does **not** write the reader's stored hide/show preference (MOTIR-7367's
+  `localStorage` convenience) — it is a layout yield, not a choice.
+- **Below 1280px** (where MOTIR-7367 already starts the tree hidden): History opens as an **overlay sheet
+  from the right**, 340px, over `--el-overlay-scrim`, with `--shadow-modal` — the mirror of the tree's
+  narrow drawer (panel 4, third board). Focus moves into the sheet and is returned to the History control
+  on close.
+- **Closes by:** the close button (`X` icon button, _Close history_), **Esc** (when no confirm is open; a
+  first Esc inside compare closes compare, the next closes the panel), pressing **History** again, the
+  scrim (narrow only), and **navigating away** — to another page through the tree or the breadcrumb, or
+  anywhere else. The panel does not persist across pages: a page opens with history closed.
+- **Head:** the `History` glyph 16px in `--el-text-secondary` + _History_, 14px semibold `--el-text`; the
+  close button at its end. A 1px `--el-border` rule under it.
+
+### A version row
+
+One `<button aria-pressed>` per version in an `<ol aria-label="Versions of this page">`, newest first, 8px
+list padding, 2px gaps. Padding `--spacing-control-y` / `--spacing-control-x`, `--radius-control`:
+
+1. **Avatar** — 24px circle (`rounded-full`, genuinely circular), the author's initials, 10px bold
+   `--el-text-strong` on one of `--el-avatar-lavender` / `-sky` / `-mint` (picked by the user id, the same
+   person always the same tint). `aria-hidden`; the name beside it carries the meaning.
+2. **Version** — `v{number}`, 13.5px semibold `--el-text`, tabular numerals; its accessible name is
+   _Version {number}_.
+3. **Current** — on the newest row only: a `Pill`-shaped chip, `--el-tint-lavender` fill,
+   `--el-text-strong` ink, `--radius-badge`, `--spacing-chip-x/y`, 11.5px. The row also carries
+   `aria-current="true"`. It is never compared and never restored; pressing it closes compare and returns
+   to the page.
+4. **Time** — at the trailing end of the first line, 12.5px `--el-text-secondary`, a `<time datetime>`
+   of `saved_at` with the full timestamp in `title`. **Under 24 hours: relative** (`Intl.RelativeTimeFormat`
+   in the active locale: _12 minutes ago_ / _12 分钟前_, _just now_ / _刚刚_ under a minute). **24 hours
+   and older: absolute** (`Intl.DateTimeFormat`, medium date + short time: _28 Sep 2026, 11:05_ /
+   _2026年9月28日 11:05_). The same formatter the index's _Edited {time}_ uses; no message key.
+5. **Author** — the display name on the second line, 13px `--el-text-secondary`; _You_ / _你_ when the
+   author is the reader.
+6. **Restore line** (restore rows only) — `RotateCcw` 12px + _Restored from v{n}_, 12.5px
+   `--el-text-secondary`. When v{n} has been pruned by the 100-version cap, _(no longer kept)_ follows in
+   italic — the line still says what happened; it just cannot link to it (panel 5, v71; panel 12, v5).
+
+| Row state | Treatment                                                                                      |
+| --------- | ---------------------------------------------------------------------------------------------- |
+| resting   | transparent                                                                                    |
+| hover     | `--el-surface-soft` (every ink on it is `--el-text` / `--el-text-secondary`, AA)               |
+| selected  | `--el-surface` + 1px `--el-border`, `aria-pressed="true"` — the version shown in compare       |
+| new       | `--el-tint-mint` for the moment after a restore (state 10), then resting; reduced motion: none |
+| focus     | the app's `--focus-ring-color` ring                                                            |
+
+### Loading, one version, Load more, failed (states 2, 3, 5, 6)
+
+- **2 · Loading.** The panel's head paints at once; the list is **six skeleton rows** — a 24px circle and
+  two bars (70% / 45%), `--el-muted`, `--radius-control` — `aria-hidden`, with one polite
+  _Loading history_ in a `role="status"`. The History control is already pressed.
+- **3 · One version.** A page that has only been created: one row, **v1**, **Current**, and a line under
+  the list (12.5px `--el-text-secondary`): _This is the only version so far. Each editing session adds
+  one._ No Restore exists anywhere — there is nothing to restore to.
+- **5 · At the page size.** The service pages versions **50 at a time** (`PAGE_LEVEL_PAGE_SIZE`, the same
+  keyset-cursor read as the tree). When there are more, the list ends in **Load more** — `Button
+variant="secondary" size="sm"`, full width — which appends the next 50 in place and keeps the
+  selection; while it reads, the button shows the spinner. The foot also says _A page keeps its latest
+  100 versions._, so a reader looking for something older knows why it is not there. With the 100 cap,
+  Load more appears at most once.
+- **6 · Load failed.** In place of the list: one inline row, `role="alert"` — `TriangleAlert` 16px in
+  `--el-danger-on-surface`, _Couldn't load the history._ in `--el-text`, and **Try again** (secondary, sm).
+  The page is untouched. A failed **Load more** puts the same row at the list foot and keeps the rows
+  already shown.
+
+### A version shown — before and after (state 7)
+
+Pressing a row that is not Current opens **compare**:
+
+- **The main column splits in two**, under the breadcrumb and title row: the **current page** on the
+  left (where it already was — the reader's eye does not have to move to find it) and the **selected
+  version** on the right, next to the panel. `role="region"`, _Comparing v{n} with the current page_.
+  Each is a card frame (`--el-border`, `--radius-card`); the version's sits on **`--el-surface-soft`** so it
+  never reads as the page.
+- **Both are read-only**, rendered by the same `.motir-prose` rules as the page (base § _The body_), from
+  the version's stored `body_state`. **No character diff** — two documents side by side, as the card asks.
+  While compare is open the writer's editor is not mounted; closing compare returns to the editor with
+  the caret where it was.
+- **The page tree sidebar hides** while compare is open (MOTIR-7367's _Show page tree_ button leads the
+  breadcrumb, panel 3 of that mock) and returns when compare closes; the stored preference is not
+  written.
+- **Current column head:** _Current page_ (13.5px semibold `--el-text`) · _v7_ (`--el-text-secondary`) ·
+  for a writer, the **save indicator** (base state 8's chip, unchanged) at its end, because a save can
+  still be in flight (state 13).
+- **Version column head:** _v{n}_ · avatar + author · time · **Restore this version** (`Button
+variant="secondary" size="sm"`, `RotateCcw`) — **editors only, never on the Current row** · a close
+  icon button (_Close v{n}_).
+- **Closes by:** the close button, **Esc**, pressing the selected row again, or pressing the Current row.
+- **Viewer:** the same compare with **no Restore** and no save indicator. Nothing is drawn disabled.
+
+### Restore (states 8–13)
+
+- **8 · Confirm.** `Modal` size sm, `role="alertdialog"`, initial focus on **Cancel**. Title _Restore
+  v3?_ (`font-serif text-xl`, `--el-text`); body _The page will show v3's content as a new version.
+  Nothing is deleted._ (`--el-text-subtitle`); footer **Cancel** (secondary) and **Restore v3**
+  (primary, `RotateCcw`). Esc / Cancel / × close it and nothing changes.
+- **9 · Restoring.** The confirm stays open: **Restore v3** shows the spinner and _Restoring…_
+  (`aria-busy`), Cancel and × are disabled — a restore cannot be abandoned half way. Behind it the panel is
+  **`inert` + `aria-busy`**, with a 2px `--el-accent` indeterminate bar under its head: no row can be
+  pressed while the request is in flight. Nothing is dimmed (dimming would lower the inks' contrast).
+- **10 · Restored.** The modal and compare close. The page shows **v3's content**, now the body of the new
+  version, in the editor (the save indicator reads _Saved_; a client holding newer state merges, ADR §6).
+  The panel stays open with the **new row on top** — v8, the restorer, _just now_, **Current**,
+  _Restored from v3_, briefly `--el-tint-mint` — and v7 loses its Current chip; **every earlier version is
+  still listed**. A success `Toast` (border `--el-success`, `CircleCheck` in `--el-success`, title in
+  `--el-text`): _Restored v3 as v8._ The tree sidebar returns.
+- **11 · Refused, too large — `413 PAGE_BODY_TOO_LARGE`.** Restoring would take the page past its 2 MB
+  limit (`PAGE_BODY_MAX_BYTES`, shown as **2 MB**, as in base state 9). The confirm closes and a **danger
+  callout** opens under the version column's head, `role="alert"`: `--el-danger-surface` fill, 1px
+  `--el-danger` border, `TriangleAlert` in `--el-danger-on-surface`, text in `--el-danger-surface-text`,
+  `--radius-card`. It says what happened and that **nothing was changed**. Restore for that version is
+  then disabled and described by the callout (it would fail the same way). No new row; v7 is still Current.
+- **12 · Refused, the version is gone — `404 PAGE_VERSION_NOT_FOUND`.** The version was pruned between
+  listing and restoring. The confirm and compare close (there is nothing left to show); the page is
+  untouched; the panel **re-reads its list** and shows the same danger callout above it: the version is no
+  longer kept, a page keeps its latest 100, nothing was changed, the list was refreshed. In the refreshed
+  list the pruned rows are gone (pruning takes the oldest first, so in practice this happens only at the
+  100-version cap, when other saves push the oldest out while the confirm is open) and any row restored
+  from one now reads _(no longer kept)_.
+- **13 · Unsaved edits — Restore held.** While the writer's save indicator is anything but **Saved**
+  (`saving`, `offline`, `too_large` — `packages/pages/src/editor/SaveIndicator.tsx`'s `SaveStatus`),
+  **Restore this version** is disabled and a line under the version's head (12.5px
+  `--el-text-secondary`, `TriangleAlert` 14px, `aria-describedby` of the button) says why and when it
+  returns: _Restore is held until your edits are saved. It becomes available as soon as the page says
+  Saved._ It enables itself the moment the status is `saved`. A restore over a pending save would race
+  it — the pending batch would land on top of the restored content. `too_large` never returns to `saved`
+  without a reload, so Restore stays held there; base state 9's callout already tells the writer to
+  reload.
+
+### State 14 — viewer
+
+`page:view` without `page:edit`: the title is the plain `<h1>`, there is no toolbar and no save indicator,
+and **History** is the same control in the same place. The list is identical (the viewer's own versions,
+if any, would read _You_). A version opened shows the same compare **with no Restore** (state 7, second
+board). Nothing is drawn disabled for a viewer — a disabled control is a promise the product then refuses.
+
+### Colour and shape — per element
+
+| Element                 | Primitive / source                     | Colour                                                                                                          | Shape                                                                    |
+| ----------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| History control         | `Button` secondary sm + `History` 16px | `--el-text`, border `--el-button-border`; open: `--el-surface` fill, `--el-border-strong`                       | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm`                  |
+| Panel                   | `<aside>`                              | `--el-page-bg`, left rule `--el-border`                                                                         | 340px                                                                    |
+| Panel head              | heading + icon button                  | title `--el-text`, glyph `--el-text-secondary`; close `--el-text-secondary`, hover `--el-surface` / `--el-text` | close `--height-btn-sm` square, `--radius-control`, `--spacing-icon-btn` |
+| Narrow sheet            | the same `<aside>` over the scrim      | `--el-overlay-scrim`                                                                                            | `--shadow-modal`                                                         |
+| Version row             | `<button aria-pressed>`                | `--el-text` / `--el-text-secondary`; hover `--el-surface-soft`; selected `--el-surface` + `--el-border`         | `--radius-control`, `--spacing-control-x/y`                              |
+| Avatar                  | initials circle                        | `--el-avatar-lavender/-sky/-mint`, ink `--el-text-strong`                                                       | 24px, `rounded-full`                                                     |
+| Current chip            | `Pill` shape                           | `--el-tint-lavender`, ink `--el-text-strong`                                                                    | `--radius-badge`, `--spacing-chip-x/y`                                   |
+| Restore line            | `RotateCcw` 12px + text                | `--el-text-secondary`                                                                                           | —                                                                        |
+| New row (after restore) | the row                                | `--el-tint-mint`                                                                                                | as the row                                                               |
+| Skeleton                | `PageSkeleton`'s `Block`               | `--el-muted`                                                                                                    | `--radius-control`; avatar block `rounded-full`                          |
+| Load failed             | inline `ErrorState` grammar            | glyph `--el-danger-on-surface`, text `--el-text`; Try again secondary                                           | `--radius-btn`, `--height-btn-sm`                                        |
+| Load more               | `Button` secondary sm, full width      | `--el-text`, `--el-button-border`                                                                               | `--radius-btn`, `--height-btn-sm`                                        |
+| Busy bar                | 2px bar under the head                 | `--el-accent`                                                                                                   | —                                                                        |
+| Compare columns         | card frames                            | current `--el-page-bg`; version `--el-surface-soft`; both `--el-border`                                         | `--radius-card`                                                          |
+| Restore this version    | `Button` secondary sm + `RotateCcw`    | `--el-text`, `--el-button-border`; disabled at 50% opacity (the primitive's)                                    | `--radius-btn`, `--height-btn-sm`                                        |
+| Hold line               | text + `TriangleAlert` 14px            | `--el-text-secondary` on `--el-surface-soft`                                                                    | —                                                                        |
+| Confirm                 | `Modal` sm, `alertdialog`              | `--el-page-bg`, `--el-border`; title `--el-text`, body `--el-text-subtitle`; scrim `--el-overlay-scrim`         | `--radius-modal`, `--shadow-modal`, `--spacing-card-padding`             |
+| Restore vN (confirm)    | `Button` primary                       | `--el-accent` / `--el-accent-text`                                                                              | `--radius-btn`, `--height-btn-md`                                        |
+| Refusal callout         | base state 9's callout                 | `--el-danger-surface`, border `--el-danger`, glyph `--el-danger-on-surface`, text `--el-danger-surface-text`    | `--radius-card`                                                          |
+| Toast                   | `Toast` success                        | `--el-page-bg`, border `--el-success`, glyph `--el-success`, title `--el-text`                                  | `--radius-card`, `--shadow-elevated`                                     |
+
+`--el-danger-text` is not used (no danger fill exists on this surface). The board annotations
+(`.ph-panelNote`, `.ph-boardTag`) are `--el-text-secondary` on `--el-surface`.
+
+### Copy — history
+
+New keys live under `pages.history.*`. ICU arguments as in the shipped catalogue (`{number}`, `{from}`).
+
+| Key                              | en                                                                                                                        | zh                                                                            |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `pages.history.open`             | History                                                                                                                   | 历史记录                                                                      |
+| `pages.history.title`            | History                                                                                                                   | 历史记录                                                                      |
+| `pages.history.close`            | Close history                                                                                                             | 关闭历史记录                                                                  |
+| `pages.history.listLabel`        | Versions of this page                                                                                                     | 此页面的版本                                                                  |
+| `pages.history.version`          | v{number}                                                                                                                 | v{number}                                                                     |
+| `pages.history.versionLabel`     | Version {number}                                                                                                          | 第 {number} 版                                                                |
+| `pages.history.current`          | Current                                                                                                                   | 当前                                                                          |
+| `pages.history.you`              | You                                                                                                                       | 你                                                                            |
+| `pages.history.restoredFrom`     | Restored from v{number}                                                                                                   | 从 v{number} 恢复                                                             |
+| `pages.history.noLongerKept`     | (no longer kept)                                                                                                          | （已不再保留）                                                                |
+| `pages.history.loading`          | Loading history                                                                                                           | 正在加载历史记录                                                              |
+| `pages.history.loadFailed`       | Couldn’t load the history.                                                                                                | 无法加载历史记录。                                                            |
+| `pages.history.retry`            | Try again                                                                                                                 | 重试                                                                          |
+| `pages.history.loadMore`         | Load more                                                                                                                 | 加载更多                                                                      |
+| `pages.history.keepsLatest`      | A page keeps its latest 100 versions.                                                                                     | 页面保留最近的 100 个版本。                                                   |
+| `pages.history.onlyVersion`      | This is the only version so far. Each editing session adds one.                                                           | 这是目前唯一的版本。每次编辑会话都会新增一个版本。                            |
+| `pages.history.compare.label`    | Comparing v{number} with the current page                                                                                 | 正在将 v{number} 与当前页面对比                                               |
+| `pages.history.compare.current`  | Current page                                                                                                              | 当前页面                                                                      |
+| `pages.history.compare.close`    | Close v{number}                                                                                                           | 关闭 v{number}                                                                |
+| `pages.history.restore`          | Restore this version                                                                                                      | 恢复此版本                                                                    |
+| `pages.history.confirm.title`    | Restore v{number}?                                                                                                        | 恢复 v{number}？                                                              |
+| `pages.history.confirm.body`     | The page will show v{number}’s content as a new version. Nothing is deleted.                                              | 页面将以新版本的形式显示 v{number} 的内容。不会删除任何内容。                 |
+| `pages.history.confirm.action`   | Restore v{number}                                                                                                         | 恢复 v{number}                                                                |
+| `pages.history.restoring`        | Restoring…                                                                                                                | 正在恢复…                                                                     |
+| `pages.history.restored`         | Restored v{from} as v{number}.                                                                                            | 已将 v{from} 恢复为 v{number}。                                               |
+| `pages.history.refusal.tooLarge` | v{number} can’t be restored: the page would pass its 2 MB limit. Nothing was changed.                                     | 无法恢复 v{number}：页面将超过 2 MB 的上限。未做任何更改。                    |
+| `pages.history.refusal.gone`     | v{number} is no longer kept — a page keeps its latest 100 versions. Nothing was changed, and the list has been refreshed. | v{number} 已不再保留——页面只保留最近的 100 个版本。未做任何更改，列表已刷新。 |
+| `pages.history.unsavedHold`      | Restore is held until your edits are saved. It becomes available as soon as the page says Saved.                          | 在你的编辑保存之前无法恢复。页面显示“已保存”后即可恢复。                      |
+| `common.cancel` (exists)         | Cancel                                                                                                                    | 取消                                                                          |
+| `common.close` (exists)          | Close                                                                                                                     | 关闭                                                                          |
+| `pages.editor.status.*` (exists) | Saved · Saving… · Offline — edits kept · Not saved                                                                        | 已保存 · 正在保存… · 离线——编辑已保留 · 未保存                                |
+
+- **Times carry no key**: relative under 24 hours through `Intl.RelativeTimeFormat`, absolute after
+  through `Intl.DateTimeFormat`, both in the active locale (§ _A version row_, item 4).
+- `pages.history.unsavedHold` names **Saved** because that is the word the writer's indicator shows
+  (`pages.editor.status.saved`); the zh string quotes 已保存 for the same reason. If the indicator's word
+  changes, this string changes with it.
+- `pages.history.retry` carries the same words as `common.retry`; a builder may reuse `common.retry`
+  instead of adding the key — the words are what is specified.
+- `{number}` in `pages.history.refusal.*` is the version the reader tried to restore; the 2 MB and 100 are
+  written into the copy, as base state 9 writes 2 MB (`PAGE_BODY_MAX_BYTES`, `PAGE_VERSION_CAP`).
+
+### Open questions handed to the cards
+
+- **Esc order.** Drawn as: confirm → compare → panel, one layer per press. If the shell already binds Esc
+  for something on this route, that binding wins and this order follows it.
+- **The new-row tint** fades after a moment; the duration is the builder's (the toast's own lifetime is a
+  fair default), and under `prefers-reduced-motion` the tint simply is not applied.
+- **Restoring an agent's version.** An agent's markdown write is a save by the token's user (ADR §6), so
+  its row shows that user; nothing marks it as an agent's. If agent authorship should be visible here,
+  that is a model change, not a design one.
+
+### Not drawn here
+
+- **A character or block diff** between versions — out of scope by the card; compare is side by side.
+- **Naming or pinning a version**, and **deleting a single version** — neither exists in the model.
+- **History of an archived page** — MOTIR-5755 (archive and restore of a page).
+- **The page tree sidebar and breadcrumb** — MOTIR-7367's, unchanged; drawn only as context.
+- **Co-editing while comparing** — MOTIR-5750.

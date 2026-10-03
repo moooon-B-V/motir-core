@@ -279,6 +279,52 @@ export const folderRepository = {
     });
   },
 
+  /**
+   * One KEYSET page of a level's folders for the `/pages` tree (Story MOTIR-5753
+   * · MOTIR-7371) — the project's root folders, or one folder's child folders.
+   * Ordered by `(position, id)` in `COLLATE "C"` (the order fractional keys are
+   * minted in, and the page level's own order), seeking strictly after `after`;
+   * reads `limit` rows, so the caller asks for one more than it serves.
+   *
+   * ⚠️ `hasChildren` here is a CHILD FOLDER or a PAGE FILED in the folder — what
+   * the `/pages` tree can expand into. Work items do not count: `/pages` shows
+   * none. `findLevel` keeps the `/items` predicate (child folder or work item),
+   * so a folder holding only pages shows no expander in `/items`, which shows no
+   * pages (`docs/decisions/pages.md` AMENDMENT 1).
+   *
+   * Gated on `project_id` explicitly (RLS is inert under the dev/CI superuser).
+   */
+  async findLevelForPages(
+    projectId: string,
+    parentFolderId: string | null,
+    after: { position: string; id: string } | null,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<FolderTreeRow[]> {
+    const parentPred =
+      parentFolderId === null
+        ? Prisma.sql`f."parent_folder_id" IS NULL`
+        : Prisma.sql`f."parent_folder_id" = ${parentFolderId}`;
+    const seek = after
+      ? Prisma.sql`AND (f."position" COLLATE "C", f."id" COLLATE "C") > (${after.position}, ${after.id})`
+      : Prisma.empty;
+    return tx.$queryRaw<FolderTreeRow[]>`
+      SELECT f."id",
+             f."parent_folder_id" AS "parentFolderId",
+             f."name",
+             f."position",
+             (
+               EXISTS (SELECT 1 FROM "folder" c WHERE c."parent_folder_id" = f."id")
+               OR EXISTS (SELECT 1 FROM "page" p WHERE p."folder_id" = f."id")
+             ) AS "hasChildren"
+        FROM "folder" f
+       WHERE f."project_id" = ${projectId}
+         AND ${parentPred}
+         ${seek}
+       ORDER BY f."position" COLLATE "C" ASC, f."id" COLLATE "C" ASC
+       LIMIT ${limit}`;
+  },
+
   /** The FULL folder count of one lazy tree level — the predicate `findLevel` reads. */
   async countLevel(
     projectId: string,
@@ -437,6 +483,11 @@ export const folderRepository = {
    * only archived work reads `Empty` rather than a number the reader cannot open.
    * Direct, never recursive: a filed epic counts once however many stories it
    * holds (`design/roadmap/design-notes.md` decision 3).
+   *
+   * `pageCount` (MOTIR-7371) is the pages filed straight into the folder — its
+   * top-level pages; a sub-page carries no folder and follows its page. The
+   * roadmap card reads only the first two counts: `/items` and the roadmap show
+   * no pages.
    */
   async countDirectContents(
     folderIds: readonly string[],
@@ -450,7 +501,9 @@ export const folderRepository = {
              (SELECT COUNT(*)::int FROM "work_item" w
                WHERE w."folderId" = f."id"
                  AND w."archivedAt" IS NULL
-                 AND w."triagedAt" IS NULL) AS "itemCount"
+                 AND w."triagedAt" IS NULL) AS "itemCount",
+             (SELECT COUNT(*)::int FROM "page" p
+               WHERE p."folder_id" = f."id") AS "pageCount"
         FROM "folder" f
        WHERE f."id" IN (${Prisma.join([...folderIds])})`;
   },

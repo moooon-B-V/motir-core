@@ -82,7 +82,24 @@ export class OrchestratorImageUnpullableError extends OrchestratorApiError {
 export const ORCHESTRATOR_REQUEST_TIMEOUT_MS = 30_000;
 
 /**
- * The provider did not answer inside {@link ORCHESTRATOR_REQUEST_TIMEOUT_MS} —
+ * How long past an exec's own `timeoutSeconds` the caller keeps waiting for the
+ * answer — shared by the Fly and fake adapters, so the two cannot disagree again
+ * (MOTIR-7405).
+ *
+ * An exec is the one provider call the 30-second
+ * {@link ORCHESTRATOR_REQUEST_TIMEOUT_MS} must NOT bound: it is synchronous, the
+ * response arriving when the command exits, so the request is open for as long
+ * as the command runs. The provider enforces `timeoutSeconds` on the command
+ * itself; the grace leaves room for its answer to travel back after the command
+ * was cut off at exactly that deadline, so a timed-out command reads as the
+ * provider's answer rather than as Motir hanging up first.
+ */
+export const EXEC_RESPONSE_GRACE_SECONDS = 5;
+
+/**
+ * The provider did not answer inside the call's deadline —
+ * {@link ORCHESTRATOR_REQUEST_TIMEOUT_MS}, or an exec's own `timeoutSeconds` plus
+ * {@link EXEC_RESPONSE_GRACE_SECONDS}, and `timeoutMs` names the one that applied —
  * RETRYABLE, and typed so a hang surfaces as a failure the job can classify
  * rather than as the platform killing the invocation.
  *

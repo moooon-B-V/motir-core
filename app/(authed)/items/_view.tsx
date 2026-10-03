@@ -21,7 +21,7 @@ import { SavedFilterSessionProvider } from './_components/SavedFilterContext';
 import { IssueAppliedFilterBar } from './_components/IssueAppliedFilterBar';
 import { InvalidFilterCallout } from './_components/InvalidFilterCallout';
 import { IssueListToolbar } from './_components/IssueListToolbar';
-import { FolderCommandsProvider } from './_components/FolderCommands';
+import { FolderCommandsProvider } from '@/components/folders/FolderCommands';
 import { IssueTreeSection } from './_components/IssueTreeSection';
 import { IssueTreeSkeleton } from './_components/IssueTreeSkeleton';
 import { IssueQuickViewController } from './_components/IssueQuickViewController';
