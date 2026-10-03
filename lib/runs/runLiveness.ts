@@ -20,6 +20,10 @@
 //     9.1's end path is what closes it.
 //   * LOCAL, HEARTBEATING — alive while its last heartbeat is younger than the
 //     lapse window. Five missed beats, so one late report is never a death.
+//   * AGENT-REPORTED (MOTIR-7450, `agent-reported-runs.md` §5) — a run the agent
+//     opened about itself takes the same rule with a 60-minute window. It is
+//     touched by the agent's Motir MCP calls, not by a timer, and between them it
+//     may build and test for a long stretch with no call at all.
 //   * LOCAL, LEGACY (`lastHeartbeatAt === null`, a CLI too old to heartbeat) —
 //     alive until the existing 12-hour age reap would close it. Never marked
 //     dead before then: it cannot prove it is alive, so absence proves nothing.
@@ -32,6 +36,14 @@ export const RUN_HEARTBEAT_INTERVAL_MS = 60_000;
 
 /** How long a local run may be silent before it is dead — five missed beats. */
 export const RUN_HEARTBEAT_LAPSE_MS = 300_000;
+
+/**
+ * How long an AGENT-REPORTED run may be silent before it is dead (MOTIR-7450,
+ * `agent-reported-runs.md` §5). The agent touches its run on every Motir MCP call
+ * rather than on a 60 s timer, so the window has to cover a long build or test
+ * stretch with no call in it.
+ */
+export const AGENT_RUN_HEARTBEAT_LAPSE_MS = 60 * 60_000;
 
 /**
  * How long a run that never heartbeats may stay `running` — the age reap's
@@ -47,6 +59,13 @@ export interface RunLivenessInput {
   origin: 'local' | 'hosted' | 'instance';
   startedAt: Date | string;
   lastHeartbeatAt: Date | string | null;
+  /** Who reports it (MOTIR-7450). Absent reads as `cli`, the 5-minute window. */
+  reportedBy?: 'cli' | 'agent';
+}
+
+/** The lapse window a run's reporter gives it — 60 minutes for an agent, 5 for a CLI. */
+export function heartbeatLapseMs(reportedBy: 'cli' | 'agent' | undefined): number {
+  return reportedBy === 'agent' ? AGENT_RUN_HEARTBEAT_LAPSE_MS : RUN_HEARTBEAT_LAPSE_MS;
 }
 
 function ms(at: Date | string): number {
@@ -61,7 +80,7 @@ export function isRunAlive(run: RunLivenessInput, now: Date = new Date()): boole
   // `agent-instance-run.md` §6 widens the lapse from `local` to `local | instance`.
   if (run.origin === 'hosted') return true;
   if (run.lastHeartbeatAt !== null) {
-    return now.getTime() - ms(run.lastHeartbeatAt) < RUN_HEARTBEAT_LAPSE_MS;
+    return now.getTime() - ms(run.lastHeartbeatAt) < heartbeatLapseMs(run.reportedBy);
   }
   return now.getTime() - ms(run.startedAt) < RUN_LEGACY_ALIVE_MS;
 }
@@ -79,6 +98,9 @@ export function lastHeardFrom(run: Pick<RunLivenessInput, 'startedAt' | 'lastHea
  * `now` — the same rule as {@link isRunAlive}, stated as a cutoff so the sweep can
  * put it in a query. The ONE other place the lapse window is read.
  */
-export function heartbeatLapsedBefore(now: Date = new Date()): Date {
-  return new Date(now.getTime() - RUN_HEARTBEAT_LAPSE_MS);
+export function heartbeatLapsedBefore(
+  now: Date = new Date(),
+  reportedBy: 'cli' | 'agent' = 'cli',
+): Date {
+  return new Date(now.getTime() - heartbeatLapseMs(reportedBy));
 }

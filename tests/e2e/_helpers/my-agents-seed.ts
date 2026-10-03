@@ -222,6 +222,7 @@ export async function recordRunInAgent(seed: MyAgentsSeed, agentId: string): Pro
     {
       projectKey: seed.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       origin: 'instance',
       agentInstanceId: agentId,
       agent: 'claude',

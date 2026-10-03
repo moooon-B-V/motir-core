@@ -137,6 +137,7 @@ async function run(by: ServiceContext): Promise<string> {
     {
       projectKey: fx.projectIdentifier,
       command: 'batch',
+      reportedBy: 'cli',
       cards: [{ key: cardKey, disposition: 'queued' as const }],
     },
     by,

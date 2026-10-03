@@ -278,6 +278,7 @@ describe('3 · the guards', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         origin: 'instance',
         agentInstanceId: a.id,
         agent: 'claude',

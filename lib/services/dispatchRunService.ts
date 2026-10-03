@@ -5,11 +5,18 @@ import type {
   DispatchEventKind,
   DispatchRunCard,
   DispatchRunOrigin,
+  DispatchRunReporter,
   DispatchRunStatus,
   DispatchSkipReason,
   DispatchStopReason,
 } from '@/generated/prisma/client';
 import {
+  AGENT_ACTION_MAX_CHARS,
+  AgentRunEventKindNotAllowedError,
+  AgentRunNoOpenRunError,
+  AgentRunNotClaimedError,
+  AgentRunNotYoursError,
+  AgentRunReportInvalidError,
   DispatchRunAgentBusyError,
   DispatchRunAgentInstanceMismatchError,
   DispatchRunCardsBusyError,
@@ -24,6 +31,8 @@ import {
 } from '@/lib/dispatchRuns/errors';
 import type {
   ActiveDispatchRunDto,
+  AgentActionReportedDto,
+  AgentRunOpenedDto,
   ActiveDispatchRunsDto,
   DispatchRunListPageDto,
   DispatchRunView,
@@ -73,6 +82,8 @@ import { availableRoomViews, holdsAnyOf, RUN_ACT_PERMISSIONS } from '@/lib/rooms
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { uniqueViolationConstraints } from '@/lib/prisma/uniqueViolation';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { CANCELLED_STATUS_KEY } from '@/lib/workItems/provenanceBackfill';
+import { ladderKeysFrom, rankOfStatus, RUNG_RANK } from '@/lib/workItems/statusLadder';
 
 // THE DISPATCH RUN SERVICE (Story MOTIR-1789 · MOTIR-1792) — the WRITE half of
 // the run seam, specified by `docs/decisions/dispatch-run-record.md`.
@@ -174,6 +185,13 @@ export interface OpenDispatchRunInput {
    */
   agentInstanceId?: string | undefined;
   idempotencyKey?: string | undefined;
+  /**
+   * WHO REPORTS the run (MOTIR-7450, `agent-reported-runs.md` §1) — REQUIRED, so
+   * every door states it: `cli` for each runner-observed open (the v1 ingest, a
+   * hosted or instance start, a repair or continue claim), `agent` only from
+   * {@link dispatchRunService.openAgentRun}. Never a client's value.
+   */
+  reportedBy: DispatchRunReporter;
   /** The run's SET, IN THE RUN'S OWN ORDER. `position` is the array index. */
   cards: OpenDispatchRunCardInput[];
 }
@@ -201,6 +219,85 @@ export interface CloseDispatchRunInput {
    * caller would otherwise re-implement, differently.
    */
   status?: 'succeeded' | 'failed' | 'cancelled' | 'timed_out' | undefined;
+  /**
+   * When the run ENDED, when that is not now — SERVER-SIDE ONLY, never a client's
+   * value. The lapse reap passes an agent-reported run's last heartbeat
+   * (`agent-reported-runs.md` §5), so a dead session is not billed the hour the
+   * window waited.
+   */
+  endedAt?: Date | undefined;
+}
+
+/** What {@link dispatchRunService.openAgentRun} takes (`agent-reported-runs.md` §2). */
+export interface OpenAgentRunInput {
+  /** The card the caller holds — a leaf, or a container whose children it holds. */
+  key: string;
+  /** The harness the agent runs in, as it names itself (`Claude Code`, `Codex`). */
+  harness: string;
+  /** The model id it is running as, or absent when it does not know. Never a guess. */
+  model?: string | null | undefined;
+}
+
+/**
+ * The four milestone kinds an agent may report (`agent-reported-runs.md` §3), and
+ * only on a run it reports. Every other kind is the server's or the runner's.
+ */
+export const AGENT_REPORTABLE_EVENT_KINDS: readonly DispatchEventKind[] = [
+  'checkout_ready',
+  'delivery_linked',
+  'leg_verdict',
+  'card_settled',
+];
+
+/** One milestone an agent reports — always on the leg of the call's `key`. */
+export interface AgentReportedEventInput {
+  kind: DispatchEventKind;
+  data?: Prisma.InputJsonValue | undefined;
+  disposition?: DispatchCardDisposition | undefined;
+  skipReason?: DispatchSkipReason | undefined;
+  sessionBranch?: string | undefined;
+}
+
+/** What {@link dispatchRunService.reportAction} takes (`agent-reported-runs.md` §3). */
+export interface ReportAgentActionInput {
+  key?: string | undefined;
+  /** The step about to be taken, in one line — at most {@link AGENT_ACTION_MAX_CHARS}. */
+  action?: string | undefined;
+  events?: AgentReportedEventInput[] | undefined;
+}
+
+/** What {@link dispatchRunService.closeAgentRun} takes (`agent-reported-runs.md` §4). */
+export interface CloseAgentRunInput {
+  key: string;
+  runId: string;
+  /** Any v1 stop reason but `abandoned`, which only the reap writes (Q2). */
+  stopReason: Exclude<DispatchStopReason, 'abandoned'>;
+}
+
+/**
+ * How fresh a run's heartbeat may be before the every-call heartbeat skips it
+ * (`agent-reported-runs.md` §5) — one write a minute however many calls arrive.
+ */
+export const AGENT_RUN_HEARTBEAT_THROTTLE_MS = 60_000;
+
+/**
+ * Whether `userId` HOLDS a card (`agent-reported-runs.md` §2) — what a claim leaves
+ * behind: not archived, in the In Progress category, assigned to the caller.
+ */
+function holdsClaim(
+  state: {
+    statusCategory: string | null;
+    assigneeId: string | null;
+    archivedAt: Date | null;
+  } | null,
+  userId: string,
+): boolean {
+  return (
+    state !== null &&
+    state.archivedAt === null &&
+    state.statusCategory === 'in_progress' &&
+    state.assigneeId === userId
+  );
 }
 
 /** The project key a `MOTIR-<n>` identifier belongs to. */
@@ -555,6 +652,116 @@ async function revokeAgentRunCredentials(runId: string): Promise<void> {
   await agentInstanceRunService.revokeCredentials(runId);
 }
 
+/**
+ * The APPEND's write half, inside a transaction the CALLER holds (MOTIR-7450) — the
+ * ONE append path, shared by the v1 ingest ({@link dispatchRunService.appendEvents},
+ * `reportedBy: 'cli'`) and the agent's own report
+ * ({@link dispatchRunService.reportAction}, `reportedBy: 'agent'`), so the sequence
+ * numbers, the leg resolution and the leg moves cannot differ between the two.
+ *
+ * It takes the run's row lock itself; `tx` must be bound to the run's workspace.
+ */
+async function appendEventsWithin(
+  runId: string,
+  events: AppendDispatchRunEventInput[],
+  reportedBy: DispatchRunReporter,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<{ appended: DispatchRunAppendedDto; agentInstanceId: string | null }> {
+  for (const event of events) {
+    if (event.body !== undefined) {
+      const bytes = Buffer.byteLength(event.body, 'utf8');
+      if (bytes > DISPATCH_RUN_EVENT_BODY_LIMIT_BYTES) {
+        throw new DispatchRunEventBodyTooLargeError(DISPATCH_RUN_EVENT_BODY_LIMIT_BYTES, bytes);
+      }
+    }
+  }
+  const locked = await dispatchRunRepository.findTerminalStateForUpdate(runId, tx);
+  if (!locked) throw new DispatchRunNotFoundError(runId);
+  if (locked.status !== 'running') {
+    throw new DispatchRunTerminalError(runId, locked.status);
+  }
+
+  const existingCount = await dispatchRunEventRepository.countByRun(runId, tx);
+  if (existingCount + events.length > DISPATCH_RUN_EVENT_LIMIT) {
+    throw new DispatchRunEventLimitError(runId, DISPATCH_RUN_EVENT_LIMIT);
+  }
+
+  const legs = await dispatchRunCardRepository.listByRun(runId, tx);
+  const legByKey = new Map(
+    legs.filter((l) => l.workItemKey !== null).map((l) => [l.workItemKey!, l]),
+  );
+
+  let seq = (await dispatchRunEventRepository.maxSeq(runId, tx)) ?? 0;
+  const rows: Prisma.DispatchRunEventCreateManyInput[] = [];
+  const touched = new Map<string, DispatchRunCard>();
+
+  for (const event of events) {
+    let leg: DispatchRunCard | null = null;
+    if (event.workItemKey !== undefined) {
+      const key = event.workItemKey.trim().toUpperCase();
+      leg = touched.get(key) ?? legByKey.get(key) ?? null;
+      if (!leg) throw new UnknownDispatchRunCardError(key);
+    }
+
+    seq += 1;
+    rows.push({
+      workspaceId: ctx.workspaceId,
+      dispatchRunId: runId,
+      ...(leg ? { dispatchRunCardId: leg.id } : {}),
+      seq,
+      kind: event.kind,
+      reportedBy,
+      ...(event.data !== undefined ? { data: event.data } : {}),
+      ...(event.body !== undefined ? { body: event.body } : {}),
+    });
+
+    // The leg's own move, in this same transaction. Applied event by event
+    // rather than folded at the end, so a batch that moves one card twice
+    // leaves it where its LAST event says — the order the reporter sent.
+    if (
+      leg &&
+      (event.disposition !== undefined ||
+        event.sessionBranch !== undefined ||
+        event.exitCode !== undefined)
+    ) {
+      const now = new Date();
+      const disposition = event.disposition;
+      const updated = await dispatchRunCardRepository.update(
+        leg.id,
+        {
+          ...(disposition !== undefined
+            ? {
+                disposition,
+                // The CHECK constraint asserts the pairing in both
+                // directions, so a move OFF `skipped` must clear the
+                // reason rather than leave it behind.
+                skipReason: disposition === 'skipped' ? (event.skipReason ?? null) : null,
+                ...(disposition === 'running' && leg.startedAt === null ? { startedAt: now } : {}),
+                ...(!NON_TERMINAL.includes(disposition) ? { endedAt: now } : {}),
+              }
+            : {}),
+          ...(event.sessionBranch !== undefined ? { sessionBranch: event.sessionBranch } : {}),
+          ...(event.exitCode !== undefined ? { exitCode: event.exitCode } : {}),
+        },
+        tx,
+      );
+      touched.set(updated.workItemKey ?? updated.id, updated);
+    }
+  }
+
+  const created = await dispatchRunEventRepository.createMany(rows, tx);
+  return {
+    agentInstanceId: locked.agentInstanceId,
+    appended: {
+      runId,
+      appended: created,
+      seq,
+      cards: [...touched.values()].map(toDispatchRunCardDto),
+    },
+  };
+}
+
 export const dispatchRunService = {
   /**
    * OPEN a run WITH ITS SET.
@@ -662,6 +869,7 @@ export const dispatchRunService = {
           project: { connect: { id: projectId } },
           command: input.command,
           origin,
+          reportedBy: input.reportedBy,
           ...(input.agentInstanceId !== undefined
             ? { agentInstance: { connect: { id: input.agentInstanceId } } }
             : {}),
@@ -750,106 +958,9 @@ export const dispatchRunService = {
     ctx: ServiceContext,
   ): Promise<DispatchRunAppendedDto> {
     assertRunTokenScope(runId, ctx);
-    for (const event of events) {
-      if (event.body !== undefined) {
-        const bytes = Buffer.byteLength(event.body, 'utf8');
-        if (bytes > DISPATCH_RUN_EVENT_BODY_LIMIT_BYTES) {
-          throw new DispatchRunEventBodyTooLargeError(DISPATCH_RUN_EVENT_BODY_LIMIT_BYTES, bytes);
-        }
-      }
-    }
-
     const { appended, agentInstanceId } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      async (tx) => {
-        const locked = await dispatchRunRepository.findTerminalStateForUpdate(runId, tx);
-        if (!locked) throw new DispatchRunNotFoundError(runId);
-        if (locked.status !== 'running') {
-          throw new DispatchRunTerminalError(runId, locked.status);
-        }
-
-        const existingCount = await dispatchRunEventRepository.countByRun(runId, tx);
-        if (existingCount + events.length > DISPATCH_RUN_EVENT_LIMIT) {
-          throw new DispatchRunEventLimitError(runId, DISPATCH_RUN_EVENT_LIMIT);
-        }
-
-        const legs = await dispatchRunCardRepository.listByRun(runId, tx);
-        const legByKey = new Map(
-          legs.filter((l) => l.workItemKey !== null).map((l) => [l.workItemKey!, l]),
-        );
-
-        let seq = (await dispatchRunEventRepository.maxSeq(runId, tx)) ?? 0;
-        const rows: Prisma.DispatchRunEventCreateManyInput[] = [];
-        const touched = new Map<string, DispatchRunCard>();
-
-        for (const event of events) {
-          let leg: DispatchRunCard | null = null;
-          if (event.workItemKey !== undefined) {
-            const key = event.workItemKey.trim().toUpperCase();
-            leg = touched.get(key) ?? legByKey.get(key) ?? null;
-            if (!leg) throw new UnknownDispatchRunCardError(key);
-          }
-
-          seq += 1;
-          rows.push({
-            workspaceId: ctx.workspaceId,
-            dispatchRunId: runId,
-            ...(leg ? { dispatchRunCardId: leg.id } : {}),
-            seq,
-            kind: event.kind,
-            ...(event.data !== undefined ? { data: event.data } : {}),
-            ...(event.body !== undefined ? { body: event.body } : {}),
-          });
-
-          // The leg's own move, in this same transaction. Applied event by event
-          // rather than folded at the end, so a batch that moves one card twice
-          // leaves it where its LAST event says — the order the reporter sent.
-          if (
-            leg &&
-            (event.disposition !== undefined ||
-              event.sessionBranch !== undefined ||
-              event.exitCode !== undefined)
-          ) {
-            const now = new Date();
-            const disposition = event.disposition;
-            const updated = await dispatchRunCardRepository.update(
-              leg.id,
-              {
-                ...(disposition !== undefined
-                  ? {
-                      disposition,
-                      // The CHECK constraint asserts the pairing in both
-                      // directions, so a move OFF `skipped` must clear the
-                      // reason rather than leave it behind.
-                      skipReason: disposition === 'skipped' ? (event.skipReason ?? null) : null,
-                      ...(disposition === 'running' && leg.startedAt === null
-                        ? { startedAt: now }
-                        : {}),
-                      ...(!NON_TERMINAL.includes(disposition) ? { endedAt: now } : {}),
-                    }
-                  : {}),
-                ...(event.sessionBranch !== undefined
-                  ? { sessionBranch: event.sessionBranch }
-                  : {}),
-                ...(event.exitCode !== undefined ? { exitCode: event.exitCode } : {}),
-              },
-              tx,
-            );
-            touched.set(updated.workItemKey ?? updated.id, updated);
-          }
-        }
-
-        const created = await dispatchRunEventRepository.createMany(rows, tx);
-        return {
-          agentInstanceId: locked.agentInstanceId,
-          appended: {
-            runId,
-            appended: created,
-            seq,
-            cards: [...touched.values()].map(toDispatchRunCardDto),
-          },
-        };
-      },
+      (tx) => appendEventsWithin(runId, events, 'cli', ctx, tx),
     );
     // A run in an agent keeps its agent awake (`agent-instance-run.md` §6,
     // MOTIR-7027): an accepted event bumps the agent's idle signal, at most once a
@@ -979,6 +1090,7 @@ export const dispatchRunService = {
                 dispatchRunCardId: leg.id,
                 seq,
                 kind: input.kind,
+                reportedBy: 'cli',
                 data,
               },
             ],
@@ -1028,6 +1140,345 @@ export const dispatchRunService = {
         throw new DispatchRunTerminalError(runId, locked.status);
       }
       await dispatchRunRepository.touchHeartbeat(runId, new Date(), tx);
+    });
+  },
+
+  /**
+   * OPEN AN AGENT-REPORTED RUN (Story MOTIR-7446 · MOTIR-7450,
+   * `agent-reported-runs.md` §2) — the run an agent opens about ITSELF over a card it
+   * already holds, through `start_work_item_run`.
+   *
+   * ⚠️ OVER A CLAIM, NEVER INSTEAD OF ONE. The caller must hold the card — In
+   * Progress and assigned to them, what `claim_work_item` leaves behind — and for a
+   * container every child that is not done as well, or nothing is written
+   * ({@link AgentRunNotClaimedError}). A leaf opens `run` with one leg; a container
+   * opens ONE `run_scope` whose legs are its children in their order.
+   *
+   * ⚠️ IDEMPOTENT ON THE CARD AND THE CALLER, under the card's row lock: a caller who
+   * already has an open run on this card — a retried call, a resumed session, or a
+   * CLI run the agent is inside — gets `mine` and THAT run, never a second one. A
+   * run key would not do it: a card run, closed and started again, needs a new run.
+   *
+   * `origin` is `local`: a Motir agent instance's credential is its run token, which
+   * opens nothing ({@link assertRunTokenScope}), so an agent in an instance reports
+   * into the CLI run it is already inside. `reportedBy` is `agent`, written by this
+   * door and by no other. The run is born heartbeating, so the 60-minute lapse rule
+   * holds it from its first second rather than the 12-hour legacy one.
+   */
+  async openAgentRun(input: OpenAgentRunInput, ctx: ServiceContext): Promise<AgentRunOpenedDto> {
+    assertRunTokenScope(null, ctx);
+    const key = input.key.trim().toUpperCase();
+    const project = await projectsService.getByKey(projectKeyOf(key), ctx);
+    await projectAccessService.assertCanEdit(project.id, ctx);
+
+    const bound = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id };
+    return withWorkspaceContext(bound, async (tx): Promise<AgentRunOpenedDto> => {
+      const item = await workItemRepository.findByIdentifier(project.id, key, tx);
+      if (!item) throw new WorkItemNotFoundError(key);
+      // The card's lock serialises two starts on one card, so the read below and
+      // the open after it are one decision.
+      await workItemRepository.lockById(item.id, tx);
+
+      const state = await workItemRepository.findClaimStateById(item.id, tx);
+      if (!holdsClaim(state, ctx.userId)) throw new AgentRunNotClaimedError(key, key);
+
+      const existing = await dispatchRunRepository.findOpenForCreatorOnWorkItem(
+        ctx.userId,
+        item.id,
+        tx,
+      );
+      if (existing) {
+        const seq = (await dispatchRunEventRepository.maxSeq(existing.id, tx)) ?? 0;
+        return { outcome: 'mine', run: toDispatchRunDto(existing, seq) };
+      }
+
+      // A container's legs are its children in their own order, less the ones
+      // already done; every other child must be the caller's too.
+      const children = await workItemRepository.findChildren(item.id, tx);
+      const childStates = new Map(
+        (
+          await workItemRepository.findClaimStatesByIds(
+            children.map((c) => c.id),
+            tx,
+          )
+        ).map((c) => [c.id, c]),
+      );
+      const legKeys: string[] = [];
+      for (const child of children) {
+        const childState = childStates.get(child.id) ?? null;
+        if (childState?.statusCategory === 'done') continue;
+        if (!holdsClaim(childState, ctx.userId)) {
+          throw new AgentRunNotClaimedError(key, child.identifier);
+        }
+        legKeys.push(child.identifier);
+      }
+      const isContainer = children.length > 0;
+      if (isContainer && legKeys.length === 0) throw new AgentRunNotClaimedError(key, key);
+
+      const harness = input.harness.trim();
+      const model = input.model?.trim() || undefined;
+      const command: DispatchCommand = isContainer ? 'run_scope' : 'run';
+      const opened = await dispatchRunService.openWithin(
+        project.id,
+        {
+          command,
+          origin: 'local',
+          reportedBy: 'agent',
+          agent: harness,
+          ...(model !== undefined ? { model } : {}),
+          ...(isContainer ? { scopeKey: key, scopeLabel: item.title } : {}),
+          cards: (isContainer ? legKeys : [key]).map((k) => ({
+            key: k,
+            disposition: 'queued' as const,
+          })),
+        },
+        ctx,
+        tx,
+      );
+      const runId = opened.run.id;
+      await dispatchRunRepository.touchHeartbeat(runId, new Date(), tx);
+      // The ONE `run_opened`, written by the server: the agent may not send it (§3).
+      await dispatchRunEventRepository.createMany(
+        [
+          {
+            workspaceId: ctx.workspaceId,
+            dispatchRunId: runId,
+            seq: 1,
+            kind: 'run_opened',
+            reportedBy: 'agent',
+            data: {
+              command,
+              key,
+              origin: 'local',
+              reportedBy: 'agent',
+              harness,
+              model: model ?? null,
+            },
+          },
+        ],
+        tx,
+      );
+      const withCards = await dispatchRunRepository.findByIdWithCards(runId, tx);
+      /* v8 ignore next -- the row was just written inside this transaction */
+      if (!withCards) throw new DispatchRunNotFoundError(runId);
+      return { outcome: 'opened', run: toDispatchRunDto(withCards, 1) };
+    });
+  },
+
+  /**
+   * REPORT A STEP, A MILESTONE, OR ONLY A HEARTBEAT (MOTIR-7450,
+   * `agent-reported-runs.md` §3) — `report_action`, which an agent calls before every
+   * step it takes.
+   *
+   * With NO arguments it is a heartbeat over every open run the caller opened
+   * ({@link heartbeatCallerRuns}). Otherwise the run is the caller's open run on
+   * `key`, of EITHER reporter — so the same call works in a run the agent opened and
+   * in a CLI or hosted run it is inside — and there is none,
+   * {@link AgentRunNoOpenRunError} tells it to start one.
+   *
+   * - `events` are milestones, of the four kinds an agent may send, and only on a run
+   *   the agent reports; a CLI run's runner writes them itself.
+   * - `action` is one line, at most {@link AGENT_ACTION_MAX_CHARS} characters, stored
+   *   as an `agent_action` event's body after the milestones.
+   *
+   * Every event goes through the ONE append path ({@link appendEventsWithin}) with
+   * `reportedBy: 'agent'`, and the run is heartbeaten in the same transaction.
+   */
+  async reportAction(
+    input: ReportAgentActionInput,
+    ctx: ServiceContext,
+  ): Promise<AgentActionReportedDto> {
+    const events = input.events ?? [];
+    if (input.key === undefined && input.action === undefined && events.length === 0) {
+      const touched = await dispatchRunService.heartbeatCallerRuns(ctx, { reportedBy: null });
+      return { kind: 'heartbeat', touched };
+    }
+    if (input.key === undefined) throw new AgentRunReportInvalidError('key_required');
+    let action: string | undefined;
+    if (input.action !== undefined) {
+      action = input.action.trim();
+      if (action.length === 0) throw new AgentRunReportInvalidError('action_empty');
+      if (action.length > AGENT_ACTION_MAX_CHARS) {
+        throw new AgentRunReportInvalidError('action_too_long', action.length);
+      }
+    }
+    for (const event of events) {
+      if (!AGENT_REPORTABLE_EVENT_KINDS.includes(event.kind)) {
+        throw new AgentRunEventKindNotAllowedError(event.kind, 'kind');
+      }
+    }
+
+    const key = input.key.trim().toUpperCase();
+    const project = await projectsService.getByKey(projectKeyOf(key), ctx);
+    await projectAccessService.assertCanEdit(project.id, ctx);
+
+    const bound = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id };
+    const { reported, agentInstanceId } = await withWorkspaceContext(bound, async (tx) => {
+      const item = await workItemRepository.findByIdentifier(project.id, key, tx);
+      if (!item) throw new WorkItemNotFoundError(key);
+      const run = await dispatchRunRepository.findOpenForCreatorOnWorkItem(ctx.userId, item.id, tx);
+      if (!run) throw new AgentRunNoOpenRunError(key);
+      if (events.length > 0 && run.reportedBy !== 'agent') {
+        throw new AgentRunEventKindNotAllowedError(events[0]!.kind, 'cli_run');
+      }
+
+      // On the card's leg; a parent's own key, which holds no leg in its run, is
+      // reported run-scoped.
+      const hasLeg = run.cards.some((c) => c.workItemId === item.id);
+      const legKey = hasLeg ? { workItemKey: key } : {};
+      const batch: AppendDispatchRunEventInput[] = [
+        ...events.map((event) => ({
+          kind: event.kind,
+          ...legKey,
+          ...(event.data !== undefined ? { data: event.data } : {}),
+          ...(event.disposition !== undefined ? { disposition: event.disposition } : {}),
+          ...(event.skipReason !== undefined ? { skipReason: event.skipReason } : {}),
+          ...(event.sessionBranch !== undefined ? { sessionBranch: event.sessionBranch } : {}),
+        })),
+        ...(action !== undefined
+          ? [{ kind: 'agent_action' as const, ...legKey, body: action }]
+          : []),
+      ];
+      const { appended } = await appendEventsWithin(run.id, batch, 'agent', ctx, tx);
+      // Under the row lock the append just took: every call is a heartbeat (§3).
+      await dispatchRunRepository.touchHeartbeat(run.id, new Date(), tx);
+      return {
+        agentInstanceId: run.agentInstanceId,
+        reported: {
+          kind: 'reported' as const,
+          runId: run.id,
+          runReportedBy: run.reportedBy,
+          appended: appended.appended,
+          seq: appended.seq,
+        },
+      };
+    });
+    if (agentInstanceId !== null) await bumpAgentActivity(agentInstanceId);
+    return reported;
+  },
+
+  /**
+   * HEARTBEAT EVERY OPEN RUN THE CALLER OPENED (MOTIR-7450, `agent-reported-runs.md`
+   * §5). The MCP layer calls it on EVERY Motir tool call, so an agent in any
+   * harness keeps its run alive by doing what it does anyway: calling Motir.
+   *
+   * By default only the caller's AGENT-reported runs — a CLI run beats from its own
+   * timer, and the rule is written for the runs that have none. `report_action`
+   * with no arguments passes `null` and touches both. A run beaten under a minute
+   * ago is skipped, so a burst of calls costs one write. Returns how many runs it
+   * touched. Never refuses: a caller with no open run touches nothing.
+   */
+  async heartbeatCallerRuns(
+    ctx: ServiceContext,
+    options: { reportedBy?: DispatchRunReporter | null; now?: Date } = {},
+  ): Promise<number> {
+    if (ctx.tokenDispatchRunId !== undefined) return 0;
+    const now = options.now ?? new Date();
+    const reportedBy = options.reportedBy === undefined ? 'agent' : options.reportedBy;
+    return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
+      dispatchRunRepository.touchHeartbeatsForCreator(
+        ctx.userId,
+        reportedBy,
+        new Date(now.getTime() - AGENT_RUN_HEARTBEAT_THROTTLE_MS),
+        now,
+        tx,
+      ),
+    );
+  },
+
+  /**
+   * CLOSE AN AGENT-REPORTED RUN (MOTIR-7450, `agent-reported-runs.md` §4) —
+   * `close_work_item_run`, which the agent calls on every exit.
+   *
+   * Only the run's opener may close it ({@link AgentRunNotYoursError}); a run that is
+   * not an agent-reported run on `key` answers {@link DispatchRunNotFoundError}, as
+   * an unknown id does. ⚠️ IDEMPOTENT ON A CLOSED RUN: a second close, or a close the
+   * reap beat, answers with the run as it stands and writes nothing.
+   *
+   * ⚠️ PROVENANCE AT A DELIVERED CLOSE, IN THE SAME TRANSACTION. At `completed` or
+   * `drained`, every leg card at Implemented or later (cancelled excepted) is stamped
+   * `byok` with the run's harness and model through
+   * `workItemsService.recordImplementationProvenance` — the CLI's own writer, so a
+   * card's provenance has one writer whatever lane built it. A model the run does not
+   * know is left as it is on the card. Any other outcome stamps nothing, and no
+   * outcome writes a card STATUS (Q3).
+   */
+  async closeAgentRun(input: CloseAgentRunInput, ctx: ServiceContext): Promise<DispatchRunDto> {
+    if ((input.stopReason as DispatchStopReason) === 'abandoned') {
+      throw new AgentRunReportInvalidError('abandoned');
+    }
+    assertRunTokenScope(input.runId, ctx);
+    const key = input.key.trim().toUpperCase();
+    const project = await projectsService.getByKey(projectKeyOf(key), ctx);
+    await projectAccessService.assertCanEdit(project.id, ctx);
+    const delivered = input.stopReason === 'completed' || input.stopReason === 'drained';
+    // Dynamic: both services compose this one, so a static import is a cycle.
+    const [{ workItemsService }, { workflowsService }] = await Promise.all([
+      import('@/lib/services/workItemsService'),
+      import('@/lib/services/workflowsService'),
+    ]);
+    const statuses = delivered
+      ? await workflowsService.listStatusesByProject(project.id, ctx.workspaceId)
+      : [];
+
+    const bound = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id };
+    return withWorkspaceContext(bound, async (tx): Promise<DispatchRunDto> => {
+      const item = await workItemRepository.findByIdentifier(project.id, key, tx);
+      if (!item) throw new WorkItemNotFoundError(key);
+      const run = await dispatchRunRepository.findByIdWithCards(input.runId, tx);
+      const onKey =
+        run !== null &&
+        (run.scopeWorkItemId === item.id || run.cards.some((c) => c.workItemId === item.id));
+      if (!run || !onKey || run.reportedBy !== 'agent') {
+        throw new DispatchRunNotFoundError(input.runId);
+      }
+      if (run.createdById !== ctx.userId) throw new AgentRunNotYoursError(run.id, key);
+
+      const asItStands = async (): Promise<DispatchRunDto> => {
+        const current = await dispatchRunRepository.findByIdWithCards(run.id, tx);
+        /* v8 ignore next -- read a statement ago in this transaction */
+        if (!current) throw new DispatchRunNotFoundError(run.id);
+        return toDispatchRunDto(
+          current,
+          (await dispatchRunEventRepository.maxSeq(run.id, tx)) ?? 0,
+        );
+      };
+      if (run.status !== 'running') return asItStands();
+
+      let closed: DispatchRunDto;
+      try {
+        closed = await dispatchRunService.closeWithin(
+          run.id,
+          { stopReason: input.stopReason },
+          ctx,
+          tx,
+        );
+      } catch (err) {
+        // The reap closed it between the read above and the lock: the same answer
+        // as a second close. Thrown before any write, so the transaction is intact.
+        if (err instanceof DispatchRunTerminalError) return asItStands();
+        throw err;
+      }
+
+      if (delivered) {
+        const keys = ladderKeysFrom(statuses);
+        const legIds = run.cards.map((c) => c.workItemId).filter((id): id is string => id !== null);
+        const legStates = await workItemRepository.findClaimStatesByIds(legIds, tx);
+        for (const leg of legStates) {
+          if (leg.status === CANCELLED_STATUS_KEY) continue;
+          if (rankOfStatus(leg.status, statuses, keys) < RUNG_RANK.implemented) continue;
+          await workItemsService.recordImplementationProvenance(
+            leg.id,
+            {
+              source: 'byok',
+              ...(run.agent !== null ? { harness: run.agent } : {}),
+              ...(run.model !== null ? { model: run.model } : {}),
+            },
+            tx,
+          );
+        }
+      }
+      return closed;
     });
   },
 
@@ -1129,6 +1580,7 @@ export const dispatchRunService = {
             dispatchRunId: runId,
             seq,
             kind: 'log',
+            reportedBy: 'cli',
             data: closingLog,
             ...(closingBody !== undefined ? { body: closingBody } : {}),
           },
@@ -1137,7 +1589,7 @@ export const dispatchRunService = {
       );
     }
 
-    const endedAt = new Date();
+    const endedAt = input.endedAt ?? new Date();
     await dispatchRunRepository.update(
       runId,
       {

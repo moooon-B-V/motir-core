@@ -350,6 +350,7 @@ describe('POST /api/work-items/[id]/hosted-runs — mode continue', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         cards: [{ key: card.identifier, disposition: 'queued' }],
       },
       fx.ctx,

@@ -83,6 +83,7 @@ async function deadCard(fx: WorkItemFixture, title = 'a card whose run died') {
     {
       projectKey: fx.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       cards: [{ key: card.identifier, disposition: 'queued' }],
     },
     fx.ctx,
@@ -426,6 +427,7 @@ describe('what the agent reads — each outcome said as an instruction', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         cards: [{ key: alive.identifier, disposition: 'queued' }],
       },
       fx.ctx,
@@ -446,6 +448,7 @@ describe('what the agent reads — each outcome said as an instruction', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         scopeKey: story.identifier,
         cards: [{ key: leg.identifier, disposition: 'queued' }],
       },
@@ -484,6 +487,7 @@ describe('what the agent reads — each outcome said as an instruction', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         scopeKey: story.identifier,
         cards: [landed, inFlight].map((c) => ({
           key: c.identifier,
@@ -549,6 +553,7 @@ describe('what the agent reads — each outcome said as an instruction', () => {
         {
           projectKey: fx.projectIdentifier,
           command: 'run_scope',
+          reportedBy: 'cli',
           scopeKey: story.identifier,
           cards: [{ key: leg.identifier, disposition: 'queued' }],
         },

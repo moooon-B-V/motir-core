@@ -61,6 +61,7 @@ async function deadCard(
     {
       projectKey: fx.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       cards: [{ key: card.identifier, disposition: 'queued' }],
     },
     fx.ctx,
@@ -282,6 +283,7 @@ describe('claimContinue — every refusal, with its reason', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         scopeKey: story.identifier,
         cards: [{ key: child.identifier, disposition: 'queued' }],
       },
@@ -309,6 +311,7 @@ describe('claimContinue — every refusal, with its reason', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         scopeKey: story.identifier,
         cards: [{ key: child.identifier, disposition: 'queued' }],
       },
@@ -467,6 +470,7 @@ describe('claimContinue — a PARENT whose scope run died (MOTIR-6535)', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         scopeKey: story.identifier,
         cards: [landed, inFlight, waiting].map((c) => ({
           key: c.identifier,
@@ -651,6 +655,7 @@ describe('claimContinue — a hosted opening', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run',
+        reportedBy: 'cli',
         idempotencyKey: key,
         cards: [{ key: unrelated.identifier, disposition: 'queued' }],
       },
@@ -698,6 +703,7 @@ describe('claimContinue — a hosted opening', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         scopeKey: story.identifier,
         cards: [{ key: child.identifier, disposition: 'queued' }],
       },

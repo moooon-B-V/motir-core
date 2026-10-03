@@ -65,6 +65,7 @@ describe('open — the SET arrives whole, at the one moment it exists', () => {
       {
         projectKey: fixture.projectIdentifier,
         command: 'batch',
+        reportedBy: 'cli',
         cards: [
           { key: a!, disposition: 'queued' },
           { key: b!, disposition: 'skipped', skipReason: 'needs_human' },
@@ -102,6 +103,7 @@ describe('open — the SET arrives whole, at the one moment it exists', () => {
       {
         projectKey: fixture.projectIdentifier,
         command: 'next',
+        reportedBy: 'cli',
         cards: [{ key: only!, disposition: 'queued' }],
       },
       fixture.ctx,
@@ -119,6 +121,7 @@ describe('open — the SET arrives whole, at the one moment it exists', () => {
       {
         projectKey: fixture.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         scopeKey: a!,
         scopeLabel: a!,
         agent: 'claude',
@@ -142,6 +145,7 @@ describe('open — the SET arrives whole, at the one moment it exists', () => {
         {
           projectKey: fixture.projectIdentifier,
           command: 'batch',
+          reportedBy: 'cli',
           cards: [
             { key: a!, disposition: 'queued' },
             { key: `${fixture.projectIdentifier}-9999`, disposition: 'queued' },
@@ -162,6 +166,7 @@ describe('open — the SET arrives whole, at the one moment it exists', () => {
     const input = {
       projectKey: fixture.projectIdentifier,
       command: 'auto' as const,
+      reportedBy: 'cli' as const,
       idempotencyKey: 'run-2026-08-29-a',
       cards: [{ key: a!, disposition: 'queued' as const }],
     };
@@ -181,6 +186,7 @@ describe('open — the SET arrives whole, at the one moment it exists', () => {
     const input = {
       projectKey: fixture.projectIdentifier,
       command: 'auto' as const,
+      reportedBy: 'cli' as const,
       idempotencyKey: 'run-raced',
       cards: [{ key: a!, disposition: 'queued' as const }],
     };
@@ -213,6 +219,7 @@ describe('appendEvents — one transaction, a monotonic seq, and the leg moves w
       {
         projectKey: fixture.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         cards: keys.map((key) => ({ key, disposition: 'queued' as const })),
       },
       fixture.ctx,
@@ -382,6 +389,7 @@ describe('close — read-derived, and it LOCKS', () => {
       {
         projectKey: fixture.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         cards: keys.map((key) => ({ key, disposition: 'queued' as const })),
       },
       fixture.ctx,
@@ -486,6 +494,7 @@ describe('the boundaries — asserted, not inspected', () => {
       {
         projectKey: fixture.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         cards: keys.map((key) => ({ key, disposition: 'queued' as const })),
       },
       fixture.ctx,
@@ -526,6 +535,7 @@ describe('the boundaries — asserted, not inspected', () => {
       {
         projectKey: fixture.projectIdentifier,
         command: 'auto',
+        reportedBy: 'cli',
         cards: [{ key: keys[0]!, disposition: 'queued' }],
       },
       fixture.ctx,

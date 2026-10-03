@@ -113,6 +113,7 @@ export async function seedWorkspaceRoles(slug: string): Promise<WorkspaceRolesSe
     {
       projectKey: payments.identifier,
       command: 'batch',
+      reportedBy: 'cli',
       cards: [{ key: paymentsItem.identifier, disposition: 'queued' as const }],
     },
     mayaCtx,

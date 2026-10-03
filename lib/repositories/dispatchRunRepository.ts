@@ -197,6 +197,8 @@ export interface LatestRunForWorkItem {
   startedAt: Date;
   endedAt: Date | null;
   lastHeartbeatAt: Date | null;
+  /** Who reports it — the lapse window `isRunAlive` applies (MOTIR-7450). */
+  reportedBy: DispatchRun['reportedBy'];
   createdById: string | null;
   createdBy: { id: string; name: string } | null;
   scopeWorkItemId: string | null;
@@ -559,6 +561,7 @@ export const dispatchRunRepository = {
         startedAt: true,
         endedAt: true,
         lastHeartbeatAt: true,
+        reportedBy: true,
         createdById: true,
         createdBy: { select: { id: true, name: true } },
         scopeWorkItemId: true,
@@ -597,6 +600,7 @@ export const dispatchRunRepository = {
         startedAt: true,
         endedAt: true,
         lastHeartbeatAt: true,
+        reportedBy: true,
         createdById: true,
         createdBy: { select: { id: true, name: true } },
         scopeWorkItemId: true,
@@ -824,13 +828,18 @@ export const dispatchRunRepository = {
    * which revokes its credentials and stops its session (`agent-instance-run.md`
    * §6, MOTIR-7027).
    *
+   * ⚠️ TWO CUT-OFFS, ONE PER REPORTER (MOTIR-7450, `agent-reported-runs.md` §5): a
+   * CLI-reported run lapses at `cliHeartbeatBefore` (5 minutes), an AGENT-reported
+   * one at `agentHeartbeatBefore` (60 minutes), because the agent touches its run on
+   * its Motir calls rather than on a timer.
+   *
    * A null heartbeat never matches — a run opened by a CLI that never heartbeats
    * stays on the 12-hour age reap, and a HOSTED run's liveness is its
    * supervision. Same `withSystemContext` contract as
    * {@link listStaleRunningAcrossWorkspaces}: read-only, every write re-binds.
    */
   async listLapsedHeartbeatingRunningAcrossWorkspaces(
-    heartbeatBefore: Date,
+    cutoffs: { cliHeartbeatBefore: Date; agentHeartbeatBefore: Date },
     take: number,
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRun[]> {
@@ -838,11 +847,79 @@ export const dispatchRunRepository = {
       where: {
         status: 'running',
         origin: { in: ['local', 'instance'] },
-        lastHeartbeatAt: { lt: heartbeatBefore },
+        OR: [
+          { reportedBy: 'cli', lastHeartbeatAt: { lt: cutoffs.cliHeartbeatBefore } },
+          { reportedBy: 'agent', lastHeartbeatAt: { lt: cutoffs.agentHeartbeatBefore } },
+        ],
       },
       orderBy: { lastHeartbeatAt: 'asc' },
       take,
     });
+  },
+
+  /**
+   * The OPEN run a caller holds on one card (MOTIR-7450, `agent-reported-runs.md`
+   * §3) — the run `report_action` writes into, found from the card and the caller
+   * rather than from a run id: `running`, opened by `createdById`, and holding a
+   * leg on the card or scoped to it, of EITHER reporter. Newest first, so a stale
+   * run nobody closed yet never shadows the one being worked.
+   *
+   * ⚠️ NEVER A REVIEW RUN: a review builds nothing and holds no card, and its
+   * events are the review's own (`hosted-agent-run.md` §8).
+   */
+  async findOpenForCreatorOnWorkItem(
+    createdById: string,
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<DispatchRunWithCards | null> {
+    return tx.dispatchRun.findFirst({
+      where: {
+        createdById,
+        status: 'running',
+        command: { not: 'review' },
+        OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }],
+      },
+      include: WITH_CARDS,
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
+  /**
+   * HEARTBEAT EVERY OPEN RUN one caller opened (MOTIR-7450, `agent-reported-runs.md`
+   * §5) — what every Motir MCP call by that caller does, in ONE statement.
+   *
+   * `staleBefore` is the throttle: a run beaten more recently than it is left alone,
+   * so a burst of tool calls costs one write a minute, not one per call. `reportedBy`
+   * narrows to one reporter, or `null` touches both. `tx` required — a write.
+   *
+   * ⚠️ LOCAL RUNS ONLY. A HOSTED run's liveness is its supervision and its age reap
+   * reads a NULL heartbeat, so a stamp here would take it off that reap for good; an
+   * INSTANCE run is beaten by the CLI inside the agent, and the developer's own calls
+   * from elsewhere would keep a dead one looking alive.
+   *
+   * ⚠️ NO EXPLICIT LOCK, AND NONE IS NEEDED. A close holds the run's row lock; this
+   * update waits on it, and PostgreSQL re-checks `status = 'running'` against the
+   * committed row before writing, so a heartbeat never lands on a run the reap or
+   * the agent has just closed.
+   */
+  async touchHeartbeatsForCreator(
+    createdById: string,
+    reportedBy: DispatchRun['reportedBy'] | null,
+    staleBefore: Date,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const r = await tx.dispatchRun.updateMany({
+      where: {
+        createdById,
+        status: 'running',
+        origin: 'local',
+        ...(reportedBy !== null ? { reportedBy } : {}),
+        OR: [{ lastHeartbeatAt: null }, { lastHeartbeatAt: { lt: staleBefore } }],
+      },
+      data: { lastHeartbeatAt: at },
+    });
+    return r.count;
   },
 
   /**

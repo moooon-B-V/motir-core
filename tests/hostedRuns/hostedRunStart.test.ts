@@ -755,6 +755,7 @@ async function deadCard(opts: { silentMinutes?: number } = {}) {
     {
       projectKey: fx.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       cards: [{ key: card.identifier, disposition: 'queued' }],
     },
     fx.ctx,
@@ -1075,6 +1076,7 @@ describe('continue hosted — a leg of a dead PARENT run', () => {
       {
         projectKey: fx.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         scopeKey: story.identifier,
         cards: [first, second].map((c) => ({ key: c.identifier, disposition: 'queued' as const })),
       },

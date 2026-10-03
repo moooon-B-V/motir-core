@@ -76,6 +76,7 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
     status: 'succeeded',
     stopReason: 'completed',
     lastHeartbeatAt: null,
+    reportedBy: 'cli',
     agentInstance: null,
     agent: 'claude',
     model: 'claude-opus-5',

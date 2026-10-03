@@ -225,6 +225,7 @@ async function deadCard(title: string) {
     {
       projectKey: fx.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       cards: [{ key: card.identifier, disposition: 'queued' }],
     },
     fx.ctx,

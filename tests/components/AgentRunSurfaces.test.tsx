@@ -72,6 +72,7 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
     status: 'succeeded',
     stopReason: 'completed',
     lastHeartbeatAt: null,
+    reportedBy: 'cli',
     agentInstance: {
       id: 'ai_1',
       name: 'yue-claude',
@@ -428,6 +429,7 @@ describe('the run modal — a run in an agent', () => {
             cardId: null,
             body: 'claude: reading the card',
             data: null,
+            reportedBy: 'cli',
             createdAt: '2026-09-26T14:01:00.000Z',
           },
         ]}

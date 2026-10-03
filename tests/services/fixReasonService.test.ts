@@ -850,6 +850,7 @@ async function deadRunOn(
     {
       projectKey: fx.projectIdentifier,
       command: 'run',
+      reportedBy: 'cli',
       cards: [{ key: card.identifier, disposition: 'queued' }],
     },
     fx.ctx,
@@ -978,6 +979,7 @@ describe('run_died — read through the continue claim’s own evaluation', () =
       {
         projectKey: fx.projectIdentifier,
         command: 'run_scope',
+        reportedBy: 'cli',
         scopeKey: story.identifier,
         cards: [{ key: child.identifier, disposition: 'queued' }],
       },
