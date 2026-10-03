@@ -2,6 +2,7 @@ import type { Page, PageVersion } from '@/generated/prisma/client';
 import type {
   PageDto,
   PageListItemDto,
+  PageMarkdownDto,
   PageMoveResultDto,
   PageParentDto,
   PageTrailDto,
@@ -25,6 +26,11 @@ export type PageRecord = Omit<Page, 'bodyState' | 'bodyJson' | 'bodyMarkdown' | 
 /** The raw `SELECT … FOR UPDATE` row `pageRepository.lockById` returns. */
 export interface PageLockedRecord extends PageRecord {
   bodyState: Uint8Array;
+}
+
+/** A page read with its derived markdown and no Yjs state (MOTIR-7409). */
+export interface PageMarkdownRecord extends PageRecord {
+  bodyMarkdown: string;
 }
 
 /**
@@ -269,5 +275,36 @@ export function toPageTrailDto(
   return {
     folders: folders.map((f) => ({ id: f.id, name: f.name })),
     pages: pages.map((p) => ({ id: p.id, title: p.title })),
+  };
+}
+
+// ── The markdown doors (Story MOTIR-5760 · MOTIR-7409) ───────────────────────
+
+/**
+ * A page as an agent reads it: the markdown column, where it is filed, the
+ * revision to write against and its newest version with the author's name the
+ * service resolved in one batch.
+ */
+export function toPageMarkdownDto(
+  record: PageMarkdownRecord,
+  latest: PageVersionRecord | null,
+  authorName: string | undefined,
+): PageMarkdownDto {
+  return {
+    id: record.id,
+    projectId: record.projectId,
+    title: record.title,
+    placement: { parentPageId: record.parentPageId, folderId: record.folderId },
+    revision: record.revision,
+    latestVersion: latest
+      ? {
+          number: latest.number,
+          authorId: latest.authorId,
+          authorName: authorName ?? '',
+          savedAt: latest.savedAt.toISOString(),
+        }
+      : null,
+    markdown: record.bodyMarkdown,
+    updatedAt: record.updatedAt.toISOString(),
   };
 }
