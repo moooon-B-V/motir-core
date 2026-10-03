@@ -462,9 +462,24 @@ enum PlatformAuditTargetKind {
 /// Story 10.3's governance actions (MOTIR-747/748/749/750). One shape, because
 /// "who touched this tenant, and when?" cannot be answered by three tables.
 /// APPEND-ONLY: `platformAuditLogRepository` exposes create + reads and nothing
-/// else. Tamper-EVIDENCE (the hash chain) is MOTIR-751's, not this model's.
+/// else. TAMPER-EVIDENT since MOTIR-751: every row is a link in a SHA-256 hash
+/// chain (`seq` / `prevHash` / `entryHash`, below), so a row changed or removed
+/// after it was written is DETECTED by `platformAuditService.verifyChain` — the
+/// chain breaks at that entry and stays broken after it. The canonical form the
+/// hash covers is `lib/platform/auditChain.ts`'s, mirrored in SQL by
+/// `platform_audit_entry_hash()` (migration `20261003000000_platform_audit_hash_chain`).
 model PlatformAuditLog {
   id             String                  @id @default(cuid())
+  /// The entry's position in the chain: 1, 2, 3, … with NO gaps. Assigned by
+  /// the append path as `head.seq + 1` under the chain lock (NOT a sequence — a
+  /// rolled-back transaction would burn a value and leave a gap the verifier
+  /// could not tell from a deleted row). The design's "entry #n".
+  seq            Int                     @unique
+  /// The previous entry's `entryHash`; NULL only for entry #1 (the genesis).
+  prevHash       String?                 @map("prev_hash")
+  /// SHA-256 (lowercase hex) over this row's canonical form, which includes
+  /// `prevHash` — so altering any earlier row invalidates every later link.
+  entryHash      String                  @map("entry_hash")
   /// The operator. Restrict on the FK (see `User.platformAuditEntries`).
   actorUserId    String                  @map("actor_user_id")
   /// The operator's role AT THE TIME. Snapshotted, not joined — a later grant
@@ -491,6 +506,9 @@ model PlatformAuditLog {
   /// have none.
   reason         String?
   metadata       Json?
+  /// Part of the hashed content, so the append path sets it explicitly (to the
+  /// millisecond, which is what TIMESTAMP(3) stores) rather than leaving it to
+  /// the default — the hash must cover exactly the value that is stored.
   createdAt      DateTime                @default(now()) @map("created_at")
 
   actor User @relation("PlatformAuditLogActor", fields: [actorUserId], references: [id], onDelete: Restrict)

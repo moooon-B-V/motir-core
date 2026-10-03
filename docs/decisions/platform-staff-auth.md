@@ -351,8 +351,40 @@ Three things this fixes, each because getting it wrong has already cost this rep
   UPDATE and DELETE _under a platform context_ because the totality guard requires the
   verbs to be covered; what makes the table append-only is that
   `platformAuditLogRepository` exposes `create` and reads and no mutator. Tamper-_evidence_
-  (the hash chain) is deliberately not in this ADR — it is MOTIR-751's, and the design
-  says so explicitly. Do not read this bullet as a claim that the row cannot be edited.
+  (the hash chain) was deliberately not in this ADR — it is MOTIR-751's, and shipped there
+  (the amendment below). Do not read this bullet as a claim that the row cannot be edited:
+  it still can be, by anyone with write access to the table. What changed is that the edit
+  is now DETECTED.
+
+> **⚠️ AMENDED 2026-10-03 (MOTIR-751 · Story 10.3) — the table is now a HASH CHAIN.**
+> `PlatformAuditLog` gained `seq` (unique, 1, 2, 3, … with no gaps), `prevHash` (the previous
+> entry's hash; NULL only for #1) and `entryHash` = **SHA-256** over the row's canonical form
+> — `["motir.platform_audit.v1", seq, createdAt, actorUserId, actorRole, action, targetKind,
+targetId, targetLabel, organizationId, reason, metadata, prevHash]`, sorted-key JSON, defined
+> in `lib/platform/auditChain.ts` and mirrored byte-for-byte in SQL by
+> `platform_audit_entry_hash()` (migration `20261003000000_platform_audit_hash_chain`).
+>
+> - **No new table.** The design (MOTIR-746) and §7 below both said 10.3 extends this one;
+>   the card's `AdminAuditEntry` sketch was superseded on the record.
+> - **The append is still `withPlatformRead`'s first write.** It takes a transaction-scoped
+>   advisory lock on the chain head, reads the head, and inserts `head.seq + 1` chained to
+>   it — so concurrent appends serialize and the chain cannot fork. The cost, stated: the
+>   lock is held to COMMIT, so platform transactions serialize behind one another; `fn`
+>   must stay short and must never open a second platform context.
+> - **Plain SHA-256, not an HMAC.** Verification then needs no secret — anyone with the
+>   rows, or a database session running the SQL mirror, can recompute the chain. The
+>   accepted limit is that someone with WRITE access can rewrite a SUFFIX of the chain and
+>   re-hash it consistently, and can truncate the newest rows. Detecting that needs a hash
+>   held outside the database: an HMAC key kept outside it, or periodically anchoring the
+>   head `(seq, entryHash)` somewhere external. Both are **deferred hardening**, unowned.
+> - **Rows that predate the chain were chained by the migration**, in `(created_at, id)`
+>   order, with the same v1 form. Their hashes attest to their content as of 2026-10-03,
+>   not before.
+> - **`platformAuditService.verifyChain`** recomputes every hash and link and reports the
+>   FIRST broken entry (`hash_mismatch` / `link_mismatch` / `seq_gap`) and how many follow
+>   it; **`platformAuditService.searchEntries`** is the keyset-paged (50) search the
+>   audit-log page (MOTIR-752) renders. Both are `superadmin` and both are themselves
+>   audited, as `audit.verify` and `audit.read`.
 
 The table is **not** added to that test's `DELIBERATELY_UNGUARDED` map: it ships a policy,
 which is the other branch of the same either/or.
@@ -433,7 +465,7 @@ every consumer builds to.
 | Per-org feature flags / kill-switches                            | 10.3 MOTIR-750                    | `superadmin` | yes             | yes     |
 | Classify an **organization** internal-billing / remove it        | **MOTIR-4565** (Story MOTIR-4337) | `superadmin` | **yes**         | yes     |
 | Set the platform planning model per audience                     | **MOTIR-7227** (Story MOTIR-7220) | `superadmin` | **yes**         | yes     |
-| The audit-log **VIEW**, searchable + tamper-evident (hash chain) | 10.3 MOTIR-751                    | `superadmin` | n/a             | n/a     |
+| The audit-log **VIEW**, searchable + tamper-evident (hash chain) | 10.3 MOTIR-751                    | `superadmin` | no              | yes     |
 | Grant / revoke `platformRole`                                    | 10.3 (no card yet — §6)           | `superadmin` | yes             | yes     |
 
 Every one of those writes reuses **this** gate and **this** `PlatformAuditLog`. The day-1
@@ -478,7 +510,7 @@ done (the MOTIR-1916 rule):
 | The `PlatformUsageDTO` shape and the platform rollup table + its job                                      | MOTIR-732 (10.1.5)                                                             |
 | The console's own layout, copy and i18n namespace                                                         | `design/platform-admin/` (merged) + MOTIR-2896                                 |
 | The `PLATFORM_AUDIT_ACTIONS` vocabulary's initial members                                                 | MOTIR-2896 seeds it; each consumer extends it                                  |
-| Hash-chained tamper evidence and the audit-log viewer                                                     | MOTIR-751 (10.3.6)                                                             |
+| Hash-chained tamper evidence and the audit-log viewer                                                     | MOTIR-751 (10.3.6) — shipped; §3b's amendment. The page is MOTIR-752           |
 | Write-level impersonation's time-box, two-person rule and banner                                          | MOTIR-749 (10.3.4)                                                             |
 | Whether `/admin` is reachable in a self-hosted build                                                      | open — no card; see Consequences                                               |
 | The production bootstrap of the first staff row                                                           | **MOTIR-2932** (8.5.18), filed by this ADR                                     |

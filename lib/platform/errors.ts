@@ -179,3 +179,19 @@ export class PlatformWorkspaceNotFoundError extends Error {
     this.name = 'PlatformWorkspaceNotFoundError';
   }
 }
+
+/**
+ * An audit-log search was asked with an input that cannot be read (MOTIR-751)
+ * — a cursor that is not one this service handed out, a date that does not
+ * parse, a range that ends before it starts, or a verify range the wrong way
+ * round. Carries the offending field: the principal has already passed the
+ * `superadmin` gate, so there is nothing left to leak.
+ */
+export class PlatformAuditQueryInvalidError extends Error {
+  readonly code = 'PLATFORM_AUDIT_QUERY_INVALID';
+
+  constructor(readonly field: string) {
+    super(`The audit-log query field "${field}" is not valid`);
+    this.name = 'PlatformAuditQueryInvalidError';
+  }
+}

@@ -106,6 +106,22 @@ export const PLATFORM_AUDIT_ACTIONS = {
    * planner, not the console screen.
    */
   'ai.planner_model.set': { reason: 'required' },
+  /**
+   * The audit log ITSELF was searched (MOTIR-751 — the page is MOTIR-752,
+   * design Panel 6). Reading the record of who touched the estate is a platform
+   * read like any other, so it leaves a row: "who looked at the audit log, and
+   * for what?" is a question the log has to be able to answer about itself.
+   * `targetKind: 'organization'` with the org when the search was narrowed to
+   * one tenant, `platform` otherwise; `metadata` carries the filters.
+   */
+  'audit.read': { reason: 'never' },
+  /**
+   * The hash chain was VERIFIED (MOTIR-751, design Panels 6/7's "Verify
+   * again"). A read — it recomputes and changes nothing — recorded with its
+   * range in `metadata`, so a broken-chain finding can be traced to the check
+   * that surfaced it.
+   */
+  'audit.verify': { reason: 'never' },
 } as const satisfies Record<string, { reason: PlatformAuditReasonPolicy }>;
 
 /**
@@ -132,6 +148,21 @@ export type PlatformAuditAction = keyof typeof PLATFORM_AUDIT_ACTIONS;
 export const PLATFORM_AUDIT_ACTION_KEYS = Object.keys(
   PLATFORM_AUDIT_ACTIONS,
 ) as readonly PlatformAuditAction[];
+
+/**
+ * The READ verbs — what the audit log's default "Writes" filter leaves out
+ * (MOTIR-751, design Panel 6).
+ *
+ * Derived from the reason policy, which is the ADR's own rule (*"REQUIRED for
+ * every write action, NULL for a read"*) and which
+ * `tests/platform/platformAuditLog.test.ts` pins in both directions. ⚠️ If a
+ * WRITE ever arrives that carries no reason of its own (the design floats
+ * `user.impersonation_end`, "whose reason is the session's"), this derivation
+ * stops being true: give the vocabulary an explicit read/write kind then,
+ * rather than letting that write vanish from the default view.
+ */
+export const PLATFORM_AUDIT_READ_ACTIONS: readonly PlatformAuditAction[] =
+  PLATFORM_AUDIT_ACTION_KEYS.filter((a) => PLATFORM_AUDIT_ACTIONS[a].reason === 'never');
 
 /**
  * A narrowing guard for the one place the union cannot reach: a value read BACK

@@ -137,7 +137,13 @@ describe('append-only, as an application property', () => {
     // is exactly this surface. A future `update` / `delete` added here fails the
     // assertion rather than passing review.
     expect(Object.keys(platformAuditLogRepository).sort()).toEqual([
+      // MOTIR-751's verifier reads — the per-batch walk and the "N after it" count.
+      'countAfterSeq',
       'create',
+      // MOTIR-751's append path: the head the next row chains to, read under
+      // `lockChainHead`. A read, and an advisory lock that writes nothing.
+      'findBySeq',
+      'findChainHead',
       'listByActor',
       'listByOrganization',
       // MOTIR-1167's target read — Panel 9's "Support actions" log. A READ, so
@@ -146,6 +152,10 @@ describe('append-only, as an application property', () => {
       // so, which is the moment a `deleteMany` slipped in beside one would have
       // to be argued for rather than merged.
       'listByTarget',
+      'listChainBatch',
+      'lockChainHead',
+      // MOTIR-751's audit-log search — a read.
+      'search',
     ]);
   });
 });
@@ -180,6 +190,10 @@ describe('the reason rule', () => {
     // The platform planning model per audience (Story MOTIR-7220 · MOTIR-7227) —
     // `superadmin` and `required`, like every billing-class row in ADR §7.
     'ai.planner_model.set': 'required',
+    // MOTIR-751 — reading the audit log, and verifying its chain, are platform
+    // READS like any other: audited, reason-free.
+    'audit.read': 'never',
+    'audit.verify': 'never',
   } as const;
 
   it('every action carries the policy the ADR allocates it', () => {
@@ -198,7 +212,14 @@ describe('the reason rule', () => {
     // growing: the ADR's rule is *"REQUIRED for every write action, NULL for a
     // read"*, and `<domain>.<verb>` names the verb. Reads are the closed set;
     // anything else is a write.
-    const READS = ['console.open', 'estate.read', 'health.read', 'user.read'];
+    const READS = [
+      'console.open',
+      'estate.read',
+      'health.read',
+      'user.read',
+      'audit.read',
+      'audit.verify',
+    ];
     for (const action of Object.keys(PLATFORM_AUDIT_ACTIONS)) {
       const key = action as keyof typeof PLATFORM_AUDIT_ACTIONS;
       expect(reasonPolicyFor(key), action).toBe(READS.includes(action) ? 'never' : 'required');

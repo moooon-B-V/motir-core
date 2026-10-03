@@ -1,5 +1,7 @@
 import type { Organization, PlatformAuditLog, User } from '@/generated/prisma/client';
 import type {
+  PlatformAuditEntryDTO,
+  PlatformAuditJsonValue,
   PlatformAuditLogDTO,
   PlatformOperatorDTO,
   PlatformOrganizationDetailDTO,
@@ -10,6 +12,7 @@ import type {
 } from '@/lib/dto/platform';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 import type { PlatformWorkspaceRow } from '@/lib/repositories/platformEstateRepository';
+import type { PlatformAuditLogWithActor } from '@/lib/repositories/platformAuditLogRepository';
 import type { RawPlatformRun } from '@/lib/ai/motirAiClient';
 import type { PlatformTenantEventRow } from '@/lib/repositories/platformEstateRepository';
 import type { PlatformActivityItemDTO } from '@/lib/dto/platform';
@@ -27,6 +30,39 @@ export function toPlatformAuditLogDTO(row: PlatformAuditLog): PlatformAuditLogDT
     organizationId: row.organizationId,
     reason: row.reason,
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/**
+ * A `platform_audit_log` row (with its actor) → one audit-log VIEW entry
+ * (MOTIR-751). `isWrite` is the caller's: which verbs are reads is the
+ * vocabulary's knowledge (`PLATFORM_AUDIT_READ_ACTIONS`), not the row's.
+ */
+export function toPlatformAuditEntryDTO(
+  row: PlatformAuditLogWithActor,
+  isWrite: boolean,
+): PlatformAuditEntryDTO {
+  return {
+    seq: row.seq,
+    id: row.id,
+    createdAt: row.createdAt.toISOString(),
+    actor: {
+      userId: row.actorUserId,
+      name: row.actor.name,
+      email: row.actor.email,
+      role: row.actorRole,
+    },
+    action: row.action,
+    isWrite,
+    targetKind: row.targetKind,
+    targetId: row.targetId,
+    targetLabel: row.targetLabel,
+    organizationId: row.organizationId,
+    reason: row.reason,
+    metadata: (row.metadata ?? null) as PlatformAuditJsonValue | null,
+    entryHash: row.entryHash,
+    prevHash: row.prevHash,
+    chainedToSeq: row.prevHash === null ? null : row.seq - 1,
   };
 }
 

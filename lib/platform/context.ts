@@ -3,6 +3,7 @@ import 'server-only';
 import { type Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { platformAuditLogRepository } from '@/lib/repositories/platformAuditLogRepository';
+import { computeAuditEntryHash, normaliseAuditMetadata } from './auditChain';
 import { type PlatformAuditAction } from './auditActions';
 import { type PlatformPrincipal } from './auth';
 import { type PlatformAuditTargetKind } from '@/generated/prisma/client';
@@ -68,6 +69,17 @@ export interface PlatformAuditEntry {
   metadata?: Prisma.InputJsonValue;
 }
 
+/** Options for one platform transaction. */
+export interface PlatformTransactionOptions {
+  /**
+   * The interactive-transaction timeout, in ms (Prisma's default is 5 000). Only
+   * a caller that legitimately reads a LOT inside one audited transaction — the
+   * chain verifier — raises it; see the chain-lock note below for what a long
+   * platform transaction costs everyone else.
+   */
+  timeoutMs?: number;
+}
+
 /**
  * Open an audited platform transaction, bind `app.platform_staff`, append the
  * audit row, and run `fn`.
@@ -75,31 +87,89 @@ export interface PlatformAuditEntry {
  * The statement ORDER is the contract: `set_config` first (so the INSERT itself
  * passes the table's own policy — the audit row is subject to the gate it
  * records), the audit row second, the caller's work last.
+ *
+ * ⚠️ THE AUDIT ROW IS A LINK IN A HASH CHAIN (MOTIR-751). The append takes the
+ * chain lock, reads the head, and writes `seq = head.seq + 1`,
+ * `prevHash = head.entryHash` and `entryHash` over the row's canonical form
+ * (`lib/platform/auditChain.ts`). The lock is transaction-scoped, so it is held
+ * until this transaction COMMITS — which is what stops two concurrent appends
+ * forking the chain, and also means PLATFORM TRANSACTIONS SERIALIZE: a staff
+ * action that is slow inside `fn` (a remote call, a long read) holds every other
+ * staff action at the door until it finishes. Keep `fn` short; it always was the
+ * rule for a transaction, and the chain makes it visible. The lock is taken
+ * BEFORE anything `fn` locks, in every platform transaction, so the order is
+ * the same everywhere and two of them cannot deadlock on each other.
+ *
+ * ⚠️ So `fn` must never open a SECOND platform context (`withPlatformRead`,
+ * `platformAuditService.record`) — that one would wait on the lock this one
+ * holds, on another connection, forever. Nothing in the tree does; a caller
+ * that wants two audit rows makes two sequential calls.
  */
 export async function withPlatformRead<T>(
   principal: PlatformPrincipal,
   entry: PlatformAuditEntry,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  options: PlatformTransactionOptions = {},
 ): Promise<T> {
-  return db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.platform_staff', 'true', true)`;
-    await tx.$executeRaw`SELECT set_config('app.user_id', ${principal.userId}, true)`;
+  return db.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.platform_staff', 'true', true)`;
+      await tx.$executeRaw`SELECT set_config('app.user_id', ${principal.userId}, true)`;
 
-    await platformAuditLogRepository.create(
-      {
-        actor: { connect: { id: principal.userId } },
-        actorRole: principal.role,
-        action: entry.action,
-        targetKind: entry.targetKind,
-        targetId: entry.targetId ?? null,
-        targetLabel: entry.targetLabel ?? null,
-        organizationId: entry.organizationId ?? null,
-        reason: entry.reason ?? null,
-        ...(entry.metadata === undefined ? {} : { metadata: entry.metadata }),
-      },
-      tx,
-    );
+      await appendChainedEntry(principal, entry, tx);
 
-    return fn(tx);
-  });
+      return fn(tx);
+    },
+    options.timeoutMs === undefined ? undefined : { timeout: options.timeoutMs },
+  );
+}
+
+/**
+ * The append itself: lock the head, chain to it, insert. Inside the caller's
+ * transaction, after `app.platform_staff` is bound (the head read is subject to
+ * the table's policy like any other read).
+ */
+async function appendChainedEntry(
+  principal: PlatformPrincipal,
+  entry: PlatformAuditEntry,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  await platformAuditLogRepository.lockChainHead(tx);
+  const head = await platformAuditLogRepository.findChainHead(tx);
+
+  const fields = {
+    seq: head ? head.seq + 1 : 1,
+    // Set here, not left to the column default: the hash must cover exactly the
+    // value stored, and TIMESTAMP(3) stores a JavaScript Date to the millisecond.
+    createdAt: new Date(),
+    actorUserId: principal.userId,
+    actorRole: principal.role,
+    action: entry.action,
+    targetKind: entry.targetKind,
+    targetId: entry.targetId ?? null,
+    targetLabel: entry.targetLabel ?? null,
+    organizationId: entry.organizationId ?? null,
+    reason: entry.reason ?? null,
+    metadata: normaliseAuditMetadata(entry.metadata),
+    prevHash: head?.entryHash ?? null,
+  };
+
+  await platformAuditLogRepository.create(
+    {
+      seq: fields.seq,
+      prevHash: fields.prevHash,
+      entryHash: computeAuditEntryHash(fields),
+      createdAt: fields.createdAt,
+      actor: { connect: { id: principal.userId } },
+      actorRole: principal.role,
+      action: fields.action,
+      targetKind: fields.targetKind,
+      targetId: fields.targetId,
+      targetLabel: fields.targetLabel,
+      organizationId: fields.organizationId,
+      reason: fields.reason,
+      ...(entry.metadata === undefined ? {} : { metadata: entry.metadata }),
+    },
+    tx,
+  );
 }
