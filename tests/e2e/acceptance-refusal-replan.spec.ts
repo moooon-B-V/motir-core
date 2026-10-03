@@ -85,7 +85,9 @@ const escapeRe = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
 const composer = (page: Page) => rail(page).getByRole('textbox');
 const transcript = (page: Page) => rail(page).getByRole('log');
-const firstTurnLabel = fill(en.planningWorkspace.conversation.turn, { n: 1 });
+// A user turn on the thread. The bubble carries no label (MOTIR-7497), so the
+// turn is found by its own test id rather than a `turn 1` caption.
+const USER_TURN = 'conversation-user-turn';
 
 const askBand = (scope: Locator, key: string) =>
   scope.getByRole('group', { name: fill(ask.title, { key }), exact: true });
@@ -407,7 +409,7 @@ test.describe('a refused decision offers the seeded planner', () => {
         new RegExp(`${escapeRe(card.identifier)}[\\s\\S]*“${escapeRe(REQUEST_REASON)}”`),
       );
       // Nothing was sent: the transcript holds the opener and no turn.
-      await expect(transcript(page).getByText(firstTurnLabel)).toHaveCount(0);
+      await expect(transcript(page).getByTestId(USER_TURN)).toHaveCount(0);
       await expect(transcript(page).getByText(REQUEST_REASON)).toHaveCount(0);
       await beat();
     });
@@ -438,7 +440,7 @@ test.describe('a refused decision offers the seeded planner', () => {
         await expect(composer(page)).toHaveValue(new RegExp(`“${escapeRe(REQUEST_REASON)}”`), {
           timeout: FIRST_PAINT_MS,
         });
-        await expect(transcript(page).getByText(firstTurnLabel)).toHaveCount(0);
+        await expect(transcript(page).getByTestId(USER_TURN)).toHaveCount(0);
       },
     );
 
@@ -452,7 +454,7 @@ test.describe('a refused decision offers the seeded planner', () => {
         );
         await rail(page).getByRole('button', { name: 'Send' }).click();
         expect((await sent).status()).toBe(200);
-        await expect(transcript(page).getByText(firstTurnLabel)).toBeVisible();
+        await expect(transcript(page).getByTestId(USER_TURN).first()).toBeVisible();
         await expect(transcript(page).getByText(REQUEST_REASON)).toBeVisible();
         // The mocked planner answers. The lane's jobs mock settles a plan run with nothing
         // proposed, so its answer is the rail's own "nothing came back" line.
@@ -546,7 +548,7 @@ test.describe('a refused decision offers the seeded planner', () => {
         for (const story of superseded) {
           await expect(composer(page)).toHaveValue(new RegExp(escapeRe(story.identifier)));
         }
-        await expect(transcript(page).getByText(firstTurnLabel)).toHaveCount(0);
+        await expect(transcript(page).getByTestId(USER_TURN)).toHaveCount(0);
         await closePlanner(page);
       },
     );
@@ -584,7 +586,7 @@ test.describe('a refused decision offers the seeded planner', () => {
         new RegExp(`${escapeRe(choice.identifier)}[\\s\\S]*“${escapeRe(NONE_REASON)}”`),
         { timeout: FIRST_PAINT_MS },
       );
-      await expect(transcript(page).getByText(firstTurnLabel)).toHaveCount(0);
+      await expect(transcript(page).getByTestId(USER_TURN)).toHaveCount(0);
       await closePlanner(page);
     });
 

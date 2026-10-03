@@ -89,7 +89,9 @@ const replanDoor = (scope: Locator, key: string) =>
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
 const composer = (page: Page) => rail(page).getByRole('textbox');
 const transcript = (page: Page) => rail(page).getByRole('log');
-const firstTurnLabel = fill(en.planningWorkspace.conversation.turn, { n: 1 });
+// A user turn on the thread. The bubble carries no label (MOTIR-7497), so the
+// turn is found by its own test id rather than a `turn 1` caption.
+const USER_TURN = 'conversation-user-turn';
 
 // ── Signals ──────────────────────────────────────────────────────────────────
 
@@ -387,7 +389,7 @@ test.describe('a design sent back is a verdict', () => {
           ),
         );
         // Nothing was sent: the transcript holds no turn and none of the reason.
-        await expect(transcript(page).getByText(firstTurnLabel)).toHaveCount(0);
+        await expect(transcript(page).getByTestId(USER_TURN)).toHaveCount(0);
         await expect(transcript(page).getByText(REPLAN_REASON)).toHaveCount(0);
         await beat();
       },

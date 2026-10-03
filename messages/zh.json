@@ -7223,9 +7223,6 @@
     "railLabel": "Motir AI",
     "conversation": {
       "opener": "想改动什么 —— 或者想了解什么？",
-      "turn": "第 {n} 轮",
-      "turnRefine": "第 {n} 轮 · 细化",
-      "turnAnswer": "第 {n} 轮 · 回答",
       "asking": "提问",
       "answeredMarker": "已回答 — 规划继续",
       "supersededMarker": "未回答 — Motir AI 按你提出的需求继续了",

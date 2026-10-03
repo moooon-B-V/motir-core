@@ -392,8 +392,9 @@ shipped paywall (`design/ai-chat/debug-turn.mock.html` panel 5).
 
 ### Panel 4 — the hand-off
 
-The first thing the person sees in the rail is their own turn. It is a user bubble headed "turn 1",
-with the shipped target row ("Targeting 1 item" + `PlanningTargetKeyChip` tone `on-accent`,
+The first thing the person sees in the rail is their own turn. It is a user bubble headed "turn 1"
+(retired by MOTIR-7497: a user bubble now carries no label, see `design/ai-chat/design-notes.md`
+§ _The user bubble carries NO label_), with the shipped target row ("Targeting 1 item" + `PlanningTargetKeyChip` tone `on-accent`,
 `--el-accent-pressed` / `--el-accent-text`, `--radius-badge`, `--spacing-chip-x`) and their title and
 description. Below it is the "Sent to Motir AI" marker. The rail head keeps the project mode pill
 (`plan`), and there is no item header.

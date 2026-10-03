@@ -284,8 +284,13 @@ test('a question shows in the rail, the composer asks for the answer, and the re
   await send(page, 'Taking money from customers.', 'Answer');
   expect((await resumed).status()).toBe(200);
 
-  // The reply is labelled as the answer, and the resumption is marked.
-  await expect(rail(page).getByText(/turn \d+ · answer/)).toBeVisible();
+  // The reply is shown as just the message (MOTIR-7497), and the resumption is
+  // marked.
+  await expect(
+    rail(page)
+      .getByTestId('conversation-user-turn')
+      .filter({ hasText: 'Taking money from customers.' }),
+  ).toBeVisible();
   await expect(page.getByTestId('plan-change-answered')).toContainText(
     'Answered — planning resumed',
   );

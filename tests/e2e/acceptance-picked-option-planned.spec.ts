@@ -57,7 +57,9 @@ const NONE_REASON = 'Neither option keeps the files in our own bucket, which leg
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
 const composer = (page: Page) => rail(page).getByRole('textbox');
 const transcript = (page: Page) => rail(page).getByRole('log');
-const firstTurnLabel = fill(en.planningWorkspace.conversation.turn, { n: 1 });
+// A user turn on the thread. The bubble carries no label (MOTIR-7497), so the
+// turn is found by its own test id rather than a `turn 1` caption.
+const USER_TURN = 'conversation-user-turn';
 
 const overlayFor = (page: Page, key: string) =>
   page.getByRole('dialog', {
@@ -354,7 +356,7 @@ test.describe('a picked option is planned', () => {
           en.planningWorkspace.mode.followUp,
         );
         await expect(rail(page).getByTestId('pick-followup-card')).toContainText(choice.identifier);
-        await expect(transcript(page).getByText(firstTurnLabel)).toBeVisible();
+        await expect(transcript(page).getByTestId(USER_TURN).first()).toBeVisible();
         await expect(transcript(page)).toContainText(`The option chosen: ${OPTION}`);
         await expect(transcript(page)).toContainText(`Best if you want: ${BEST_FOR}`);
         await expect(transcript(page)).toContainText(GATES);
@@ -491,7 +493,7 @@ test.describe('a picked option is planned', () => {
     await expect(composer(page)).toHaveValue(new RegExp(`“${escapeRe(NONE_REASON)}”`), {
       timeout: FIRST_PAINT_MS,
     });
-    await expect(transcript(page).getByText(firstTurnLabel)).toHaveCount(0);
+    await expect(transcript(page).getByTestId(USER_TURN)).toHaveCount(0);
     expect(await seededUserTurns(gateId)).toBe(0);
   });
 

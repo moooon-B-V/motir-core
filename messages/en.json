@@ -7227,9 +7227,6 @@
     "railLabel": "Motir AI",
     "conversation": {
       "opener": "What should change — or what would you like to know?",
-      "turn": "turn {n}",
-      "turnRefine": "turn {n} · refine",
-      "turnAnswer": "turn {n} · answer",
       "asking": "asking",
       "answeredMarker": "Answered — planning resumed",
       "supersededMarker": "Not answered — Motir AI carried on with what you asked",
