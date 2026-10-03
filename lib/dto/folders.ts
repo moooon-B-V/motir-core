@@ -62,6 +62,8 @@ export interface DeleteFolderResultDto {
   destinationFolderId: string | null;
   movedFolderIds: string[];
   movedWorkItemIds: string[];
+  /** The pages that were filed in the folder, now at the destination (MOTIR-7371). */
+  movedPageIds: string[];
 }
 
 export interface FileWorkItemInput {
@@ -131,6 +133,8 @@ export interface FolderDeletionPreviewDto {
   name: string;
   childFolderCount: number;
   workItemCount: number;
+  /** Pages filed directly in the folder (MOTIR-7371) — their sub-pages move with them. */
+  pageCount: number;
   /** The deleted folder's parent; both fields `null` for the project root. */
   destination: { folderId: string | null; name: string | null };
 }

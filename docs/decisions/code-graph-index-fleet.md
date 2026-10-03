@@ -134,10 +134,16 @@ answer to it.
 §3 says the container runs in `motir-fleet`. §3.1 says a 6PN is **organization-scoped**. Put the
 two sentences next to each other and the consequence is immediate — and for a year nobody did:
 
-| caller                 | organization      | how it reaches motir-ai                                                                                                            |
-| ---------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `motir-core`           | `moooon`          | `MOTIR_AI_URL` — `http://motir-ai.internal:8080` in production, a 6PN name resolvable because motir-core and motir-ai share an org |
-| an **index container** | **`motir-fleet`** | **that same name is NXDOMAIN.** It needs an address that resolves from outside `moooon`                                            |
+| caller                 | organization      | how it reaches motir-ai                                                                                                                                                                                                                |
+| ---------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `motir-core`           | `moooon`          | `MOTIR_AI_URL` — `https://motir-ai.fly.dev` since 2026-10-02 (`application-hosting.md` Amendment 9); `http://motir-ai.internal:8080` from 2026-08-21 to 2026-10-02, a 6PN name resolvable because motir-core and motir-ai share an org |
+| an **index container** | **`motir-fleet`** | **that same name is NXDOMAIN.** It needs an address that resolves from outside `moooon`                                                                                                                                                |
+
+> ⚠️ SUPERSEDED for the `motir-core` row by `application-hosting.md` **Amendment 9** (MOTIR-7407):
+> motir-ai's pool suspends to zero and a 6PN name cannot wake it, so that leg moved to the public
+> origin.
+> The index-container row and this section's argument stand: the container still needs an address
+> that resolves outside `moooon`, and `MOTIR_AI_CONTAINER_URL` stays a separate variable.
 
 **What actually happened.** `codeGraphIndexDispatchService.bootIndexContainer` resolved the
 container's `MOTIR_AI_BASE_URL` by calling `motirAiBaseUrl()` — motir-core's own accessor.

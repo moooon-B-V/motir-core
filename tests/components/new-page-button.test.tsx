@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import type { PageParentDto } from '@/lib/dto/pages';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
@@ -18,14 +20,20 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { NewPageButton } from '@/app/(authed)/pages/_components/NewPageButton';
+import { NewFolderButton as PagesNewFolderButton } from '@/app/(authed)/pages/_components/NewFolderButton';
+import {
+  FolderCommandsProvider,
+  NewRootFolderButton,
+  useFolderCommands,
+} from '@/components/folders/FolderCommands';
 
 const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>();
 
-function mount(permissions: PermissionKey[] = ['page:view', 'page:edit']) {
+function mount(permissions: PermissionKey[] = ['page:view', 'page:edit'], parent?: PageParentDto) {
   return renderWithIntl(
     <ToastProvider>
       <ProjectAccessProvider permissions={permissions}>
-        <NewPageButton />
+        <NewPageButton parent={parent} />
       </ProjectAccessProvider>
     </ToastProvider>,
   );
@@ -71,10 +79,25 @@ describe('NewPageButton', () => {
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(String(url)).toBe('/api/pages');
     expect(init?.method).toBe('POST');
+    // No parent given: the project root (MOTIR-7373).
+    expect(JSON.parse(String(init?.body))).toEqual({ parent: { kind: 'root' } });
     expect(push).toHaveBeenCalledWith('/pages/pg_123');
     // The browser is leaving: the button stays pending, so a second press cannot
     // create a second page.
     expect(screen.getByTestId('new-page-button')).toHaveProperty('disabled', true);
+  });
+
+  it('creates the page under the parent it is given (MOTIR-7373)', async () => {
+    fetchMock.mockResolvedValueOnce(json({ id: 'pg_7' }, 201));
+    mount(undefined, { kind: 'folder', id: 'f-1' });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'New page' }));
+    });
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(String(init?.body))).toEqual({ parent: { kind: 'folder', id: 'f-1' } });
+    expect(push).toHaveBeenCalledWith('/pages/pg_7');
   });
 
   it('is disabled and reads "Creating page…" while the POST is in flight', async () => {
@@ -150,5 +173,95 @@ describe('NewPageButton', () => {
     expect(push).not.toHaveBeenCalled();
     expect(await screen.findByText('Couldn’t create the page. Try again.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'New page' })).toHaveProperty('disabled', false);
+  });
+});
+
+// NEW FOLDER on `/pages` (Story MOTIR-5753 · MOTIR-7374): rendered only for a
+// reader holding BOTH `page:edit` and `work_item:edit`, as the shared
+// `NewRootFolderButton` inside the page's folder command channel.
+describe('NewFolderButton (/pages)', () => {
+  function mountFolder(permissions: PermissionKey[]) {
+    return renderWithIntl(
+      <ProjectAccessProvider permissions={permissions}>
+        <FolderCommandsProvider>
+          <PagesNewFolderButton />
+        </FolderCommandsProvider>
+      </ProjectAccessProvider>,
+    );
+  }
+
+  it('renders New folder for a reader who may write pages AND folders', () => {
+    mountFolder(['page:view', 'page:edit', 'work_item:edit']);
+    expect(screen.getByRole('button', { name: 'New folder' })).toBeTruthy();
+  });
+
+  it.each([[['page:view', 'page:edit']], [['page:view', 'work_item:edit']]] as const)(
+    'renders nothing without both keys (%j)',
+    (permissions) => {
+      mountFolder([...permissions]);
+      expect(screen.queryByRole('button', { name: 'New folder' })).toBeNull();
+    },
+  );
+});
+
+// THE FOLDER COMMAND CHANNEL itself (`components/folders/FolderCommands.tsx`,
+// shared by `/items` and `/pages` since MOTIR-7374): a held New folder request,
+// its cancel, and a placement report with and without a registered tree.
+describe('FolderCommandsProvider', () => {
+  type Commands = NonNullable<ReturnType<typeof useFolderCommands>>;
+  function mountChannel(children?: ReactNode) {
+    let commands: Commands | null = null;
+    function Probe() {
+      commands = useFolderCommands();
+      return null;
+    }
+    renderWithIntl(
+      <FolderCommandsProvider>
+        <Probe />
+        {children}
+      </FolderCommandsProvider>,
+    );
+    return () => commands!;
+  }
+
+  it('drops a placement report while no tree is registered, and routes it once one is', () => {
+    const channel = mountChannel();
+    const placement = { workItemId: 'w1', folderId: 'f1', parentId: null };
+    expect(() => channel().reportWorkItemPlacement(placement)).not.toThrow();
+    const onPlacement = vi.fn();
+    channel().registerPlacementHandler(onPlacement);
+    channel().reportWorkItemPlacement(placement);
+    expect(onPlacement).toHaveBeenCalledWith(placement);
+    channel().registerPlacementHandler(null);
+    channel().reportWorkItemPlacement(placement);
+    expect(onPlacement).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds a New folder request until a tree registers, unless it was cancelled', () => {
+    const channel = mountChannel();
+    const handler = vi.fn();
+    channel().requestNewRootFolder();
+    channel().registerNewRootFolder(handler);
+    expect(handler).toHaveBeenCalledTimes(1);
+    channel().requestNewRootFolder();
+    expect(handler).toHaveBeenCalledTimes(2);
+
+    channel().registerNewRootFolder(null);
+    channel().requestNewRootFolder();
+    channel().cancelNewRootFolder();
+    const late = vi.fn();
+    channel().registerNewRootFolder(late);
+    expect(late).not.toHaveBeenCalled();
+  });
+
+  it('NewRootFolderButton asks the registered tree, and renders nothing outside a provider', () => {
+    const channel = mountChannel(<NewRootFolderButton />);
+    const handler = vi.fn();
+    channel().registerNewRootFolder(handler);
+    fireEvent.click(screen.getByRole('button', { name: 'New folder' }));
+    expect(handler).toHaveBeenCalledTimes(1);
+    cleanup();
+    renderWithIntl(<NewRootFolderButton />);
+    expect(screen.queryByRole('button', { name: 'New folder' })).toBeNull();
   });
 });

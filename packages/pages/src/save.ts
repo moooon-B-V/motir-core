@@ -6,8 +6,10 @@ import {
   PageTitleTooLongError,
   PageUpdateMalformedError,
 } from './errors';
+import { placementColumns, resolvePlacementParent } from './move';
 import { positionBetween } from './position';
 import type { Clock, PageRow, PageStore } from './store';
+import { planPlacement } from './tree';
 import type { PagePlacement } from './types';
 import { recordVersion } from './versions';
 
@@ -38,12 +40,17 @@ export interface CreatePageInput {
   actorId: string;
   /** Optional; an untitled page stores `''`. */
   title?: string;
+  /** Where the page goes (§4): under a page, in a folder, or at the root (the default). */
+  parent?: PagePlacement;
 }
 
 /**
- * Create an empty page at the project root, LAST among the root's pages. The
- * root sibling set is locked before its last position is read, so two creates
- * mint distinct, creation-ordered keys.
+ * Create an empty page LAST among its parent's pages — at the project root, in a
+ * folder, or under a page. The placement lock is taken before the parent and its
+ * last position are read, so two creates mint distinct, creation-ordered keys and
+ * a parent cannot move out from under the check. A parent that is missing, in
+ * another project, or would put the page past the depth limit is refused before
+ * anything is written.
  */
 export async function createPage(
   store: PageStore,
@@ -51,8 +58,11 @@ export async function createPage(
   input: CreatePageInput,
 ): Promise<PageRow> {
   const title = normaliseTitle(input.title ?? '');
-  await store.lockSiblings(input.projectId, ROOT);
-  const last = await store.lastSiblingPosition(input.projectId, ROOT);
+  const parent = input.parent ?? ROOT;
+  await store.lockSiblings(input.projectId, parent);
+  const parentPage = await resolvePlacementParent(store, input.projectId, parent);
+  const { ancestorPageIds } = planPlacement({ placement: parent, parent: parentPage });
+  const last = await store.lastSiblingPosition(input.projectId, parent);
   const state = emptyState();
   const formats = deriveFormats(state);
   const now = clock.now();
@@ -60,10 +70,9 @@ export async function createPage(
     workspaceId: input.workspaceId,
     projectId: input.projectId,
     title,
-    parentPageId: null,
-    folderId: null,
+    ...placementColumns(parent),
     position: positionBetween(last, null),
-    ancestorPageIds: [],
+    ancestorPageIds,
     body: {
       state,
       ...formats,

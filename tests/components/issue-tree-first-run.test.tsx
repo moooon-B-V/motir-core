@@ -48,7 +48,7 @@ vi.mock('@/app/(authed)/_components/ProjectAccessProvider', () => ({
 }));
 
 import { IssueTreeTable } from '@/app/(authed)/items/_components/IssueTreeTable';
-import { FolderCommandsProvider } from '@/app/(authed)/items/_components/FolderCommands';
+import { FolderCommandsProvider } from '@/components/folders/FolderCommands';
 import type { FolderTreeRowDto, TreeLevelDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';

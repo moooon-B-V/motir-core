@@ -1240,11 +1240,11 @@ export const codeGraphIndexDispatchService = {
       fleet = indexFleetConfig();
       // ⚠️ THE *CONTAINER'S* ACCESSOR, NOT motir-core's OWN (MOTIR-4518). These
       // are two different addresses for one service because the two callers sit
-      // in two different organizations: motir-core reaches motir-ai over the
-      // PRIVATE seam (`MOTIR_AI_URL`, `http://motir-ai.internal:8080` in
-      // production — 6PN, and resolvable only inside `moooon`), while the machine
-      // booted below runs in the FLEET's organization, where that name is
-      // NXDOMAIN. This line read `motirAiBaseUrl()` until 2026-09-04 and handed
+      // in two different organizations: motir-core reaches motir-ai at
+      // `MOTIR_AI_URL` (a 6PN name, resolvable only inside `moooon`, until
+      // 2026-10-02; the public origin since — application-hosting.md
+      // Amendment 9), while the machine booted below runs in the FLEET's
+      // organization, where a 6PN name is NXDOMAIN. This line read `motirAiBaseUrl()` until 2026-09-04 and handed
       // the container motir-core's own private address; every run since
       // 2026-08-21 built its graph and then died at
       // `getaddrinfo ENOTFOUND motir-ai.internal`, one call before the upload

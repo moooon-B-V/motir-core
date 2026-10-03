@@ -53,10 +53,8 @@ vi.mock('@/app/(authed)/_components/ProjectAccessProvider', () => ({
 }));
 
 import { IssueTreeTable } from '@/app/(authed)/items/_components/IssueTreeTable';
-import {
-  FolderCommandsProvider,
-  NewFolderButton,
-} from '@/app/(authed)/items/_components/FolderCommands';
+import { FolderCommandsProvider } from '@/components/folders/FolderCommands';
+import { NewFolderButton } from '@/app/(authed)/items/_components/NewFolderButton';
 import type { FolderDto } from '@/lib/dto/folders';
 import type { FolderTreeRowDto, TreeLevelDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';

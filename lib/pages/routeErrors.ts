@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
+  CrossProjectPageParentError,
   PageBodyTooLargeError,
+  PageCycleError,
+  PageDepthExceededError,
+  PageFolderNotFoundError,
+  PageLevelCursorInvalidError,
+  PageNeighbourInvalidError,
   PageNotFoundError,
+  PageParentNotAllowedError,
   PageTitleTooLongError,
   PageUpdateMalformedError,
   PageVersionNotFoundError,
@@ -59,6 +66,39 @@ export function pageErrorResponse(err: unknown): NextResponse {
       { code: err.code, error: err.message, limit: err.limit },
       { status: 422 },
     );
+  }
+  // The tree refusals (Story MOTIR-5753 · MOTIR-7372).
+  if (err instanceof PageDepthExceededError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, limit: err.limit, attemptedLevel: err.attemptedLevel },
+      { status: 422 },
+    );
+  }
+  if (err instanceof PageNeighbourInvalidError) {
+    return NextResponse.json(
+      {
+        code: err.code,
+        error: err.message,
+        side: err.side,
+        neighbourId: err.neighbourId,
+        reason: err.reason,
+      },
+      { status: 422 },
+    );
+  }
+  if (
+    err instanceof PageCycleError ||
+    err instanceof CrossProjectPageParentError ||
+    err instanceof PageParentNotAllowedError
+  ) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+  }
+  // A folder parent outside the caller's scope — the folder domain's own code.
+  if (err instanceof PageFolderNotFoundError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+  }
+  if (err instanceof PageLevelCursorInvalidError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
   }
   throw err;
 }

@@ -56,7 +56,7 @@ import {
   FolderCommandsProvider,
   useFolderCommands,
   type WorkItemPlacement,
-} from '@/app/(authed)/items/_components/FolderCommands';
+} from '@/components/folders/FolderCommands';
 import type { FolderTreeRowDto, TreeLevelDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
