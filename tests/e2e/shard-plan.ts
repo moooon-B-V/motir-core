@@ -483,6 +483,13 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // report while the spec was unreachable. This guard is what found it, which is
   // the case it exists for.
   'admin-org-lookup.spec.ts': 3.0,
+  // Story MOTIR-6905 · MOTIR-7322 — the fleet monitor's OFF-CLOUD arm: one
+  // sign-up, then two page loads asserting the disabled card and the absent Stop.
+  // ESTIMATED from its nearest neighbour by shape (`admin-org-lookup.spec.ts`,
+  // above) plus the measured local reading below, rounded UP because
+  // under-estimating unbalances the bin-packer. RE-MEASURE from the first green
+  // bulk artifact that includes it.
+  'admin-fleet-selfhost.spec.ts': 4.0,
   'app-role-surfaces.spec.ts': 1.3,
   'ai-callout-gate.spec.ts': 1.9,
   'ai-plan-generation.spec.ts': 10.0,
