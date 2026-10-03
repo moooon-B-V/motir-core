@@ -5,8 +5,12 @@ import {
   GUIDE_CONTEXT_TURNS_MAX,
   InvalidGuideTurnError,
   buildGuideContext,
+  deriveTemporaryList,
   parseGuideTurn,
+  readGuideTurnRecord,
+  temporaryAddedStepId,
   type GuideActionType,
+  type GuideTurnRecord,
 } from '@/lib/ai/guideWorkItem';
 
 // The guide turn's WIRE (Story MOTIR-7459 · MOTIR-7464), pure: what core sends a
@@ -188,6 +192,27 @@ describe('parseGuideTurn', () => {
     ['an edit that changes nothing', { type: 'edit_item', reason: 'x' }, 'actions[0]'],
     ['a move with a bad anchor', { ...VALID.move_step, afterRowId: 7 }, 'actions[0].afterRowId'],
     ['a cannot_do with no reason', { type: 'cannot_do' }, 'actions[0].reason'],
+    ['a non-string step', { ...VALID.add_step, text: 7 }, 'actions[0].text'],
+    ['a step too long', { ...VALID.add_step, text: 'x'.repeat(5_000) }, 'actions[0].text'],
+    ['non-string notes', { ...VALID.add_step, notesMd: 3 }, 'actions[0].notesMd'],
+    ['notes too long', { ...VALID.add_step, notesMd: 'x'.repeat(50_000) }, 'actions[0].notesMd'],
+    ['a non-object row', { type: 'propose_todos', rows: ['x'] }, 'actions[0].rows[0]'],
+    [
+      'a multi-line revised text',
+      { type: 'revise_step', rowId: 'r1', reason: 'x', text: 'a\nb' },
+      'actions[0].text',
+    ],
+    ['a multi-line title', { type: 'edit_item', reason: 'x', title: 'a\nb' }, 'actions[0].title'],
+    [
+      'a non-string description',
+      { type: 'edit_item', reason: 'x', descriptionMd: 4 },
+      'actions[0].descriptionMd',
+    ],
+    [
+      'an explanation too long',
+      { type: 'edit_item', reason: 'x', explanationMd: 'x'.repeat(9_000) },
+      'actions[0].explanationMd',
+    ],
   ])('REFUSES the whole turn on %s', (_label, action, field) => {
     let caught: unknown;
     try {
@@ -210,5 +235,145 @@ describe('parseGuideTurn', () => {
     } catch (err) {
       expect((err as InvalidGuideTurnError).field).toBe(field);
     }
+  });
+});
+
+describe('parseGuideTurn — the optional fields', () => {
+  it('reads each revised field, blank notes as null, and keeps only string previous values', () => {
+    const turn = parseGuideTurn({
+      messageMd: 'ok',
+      actions: [
+        {
+          type: 'revise_step',
+          rowId: 'r1',
+          reason: 'x',
+          notesMd: '   ',
+          commandText: 'motir go',
+          executor: 'coding_agent',
+        },
+        {
+          type: 'edit_item',
+          reason: 'x',
+          descriptionMd: ' New body ',
+          previous: { descriptionMd: 'Old', title: 9 },
+        },
+        { ...VALID.move_step, afterRowId: null },
+      ],
+      dropped: [{ type: 'run_step', reason: 'not in the set' }, { reason: 7 }, 'junk'],
+    });
+    expect(turn.actions[0]).toEqual({
+      type: 'revise_step',
+      rowId: 'r1',
+      reason: 'x',
+      notesMd: null,
+      commandText: 'motir go',
+      executor: 'coding_agent',
+    });
+    expect(turn.actions[1]).toEqual({
+      type: 'edit_item',
+      reason: 'x',
+      descriptionMd: 'New body',
+      previous: { descriptionMd: 'Old' },
+    });
+    expect(turn.actions[2]).toMatchObject({ afterRowId: null });
+    expect(turn.dropped).toEqual([
+      { type: 'run_step', reason: 'not in the set' },
+      { type: 'unknown', reason: '' },
+    ]);
+  });
+});
+
+describe('readGuideTurnRecord', () => {
+  it('narrows a stored record, reading any outcome it does not know as skipped', () => {
+    const record = readGuideTurnRecord({
+      actions: [VALID.tick, VALID.add_step, VALID.close],
+      outcomes: [
+        { outcome: 'landed', todoId: 't1' },
+        { outcome: 'weird', reason: 'Not on the list.' },
+      ],
+      temporary: true,
+    });
+    expect(record).toEqual({
+      actions: expect.any(Array),
+      outcomes: [
+        { type: 'tick', outcome: 'landed', todoId: 't1' },
+        { type: 'add_step', outcome: 'skipped', reason: 'Not on the list.' },
+        { type: 'close', outcome: 'skipped' },
+      ],
+      temporary: true,
+    });
+  });
+
+  it('reads anything that no longer parses as null', () => {
+    expect(readGuideTurnRecord(null)).toBeNull();
+    expect(readGuideTurnRecord({ actions: 'x' })).toBeNull();
+    expect(readGuideTurnRecord({ actions: [{ type: 'run_step' }] })).toBeNull();
+    expect(readGuideTurnRecord({ actions: [] })).toEqual({
+      actions: [],
+      outcomes: [],
+      temporary: false,
+    });
+  });
+});
+
+describe('deriveTemporaryList', () => {
+  const rec = (
+    actions: Record<string, unknown>[],
+    outcome: 'landed' | 'recorded' | 'skipped' = 'recorded',
+  ): GuideTurnRecord =>
+    readGuideTurnRecord({ actions, outcomes: actions.map(() => ({ outcome })) })!;
+  const proposal = rec([
+    {
+      type: 'propose_todos',
+      rows: [
+        { id: 'tmp-1', text: 'One' },
+        { id: 'tmp-2', text: 'Two' },
+        { id: 'tmp-3', text: 'Three' },
+      ],
+    },
+  ]);
+
+  it('applies every recorded correction in order, and ignores ones it cannot place', () => {
+    const rows = deriveTemporaryList([
+      { seq: 1, record: proposal },
+      { seq: 2, record: null },
+      {
+        seq: 3,
+        record: rec([
+          { type: 'tick', rowId: 'tmp-1' },
+          { type: 'tick', rowId: 'tmp-9' },
+          { type: 'add_step', afterRowId: null, reason: 'x', text: 'Zero' },
+          { type: 'add_step', afterRowId: 'tmp-gone', reason: 'x', text: 'Last' },
+          { type: 'revise_step', rowId: 'tmp-2', reason: 'x', text: 'Two!', executor: 'human' },
+          { type: 'revise_step', rowId: 'tmp-9', reason: 'x', text: 'nowhere' },
+          { type: 'remove_step', rowId: 'tmp-3', reason: 'x' },
+          { type: 'remove_step', rowId: 'tmp-9', reason: 'x' },
+          { type: 'move_step', rowId: 'tmp-1', afterRowId: 'tmp-2', reason: 'x' },
+          { type: 'move_step', rowId: 'tmp-9', afterRowId: null, reason: 'x' },
+          { type: 'current_step', rowId: 'tmp-2' },
+        ]),
+      },
+      { seq: 4, record: rec([{ type: 'untick', rowId: 'tmp-1' }], 'skipped') },
+    ]);
+    expect(rows.map((r) => [r.id, r.text, r.done])).toEqual([
+      [temporaryAddedStepId(3, 2), 'Zero', false],
+      ['tmp-2', 'Two!', false],
+      ['tmp-1', 'One', true],
+      [temporaryAddedStepId(3, 3), 'Last', false],
+    ]);
+    expect(rows[1]!.executor).toBe('human');
+  });
+
+  it('ends the temporary list once a save landed', () => {
+    const save = rec(
+      [{ type: 'write_todos', rows: [{ fromId: 'tmp-1', text: 'One', done: false }] }],
+      'landed',
+    );
+    expect(
+      deriveTemporaryList([
+        { seq: 1, record: proposal },
+        { seq: 2, record: save },
+      ]),
+    ).toEqual([]);
   });
 });

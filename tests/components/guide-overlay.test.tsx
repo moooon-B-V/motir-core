@@ -248,6 +248,7 @@ function renderRail(
     phase?: 'opening' | 'idle' | 'running';
     errorCode?: string | null;
     outOfCredits?: boolean;
+    markers?: React.ComponentProps<typeof GuideRail>['markers'];
   } = {},
 ) {
   const handlers = { onSend: vi.fn(), onRetry: vi.fn(), onReload: vi.fn() };
@@ -263,7 +264,7 @@ function renderRail(
       phase={phase}
       errorCode={opts.errorCode ?? null}
       outOfCredits={opts.outOfCredits ?? false}
-      markers={[]}
+      markers={opts.markers ?? []}
       {...handlers}
     />,
   );
@@ -325,5 +326,193 @@ describe('GuideRail', () => {
     renderRail([turn('assistant')], { errorCode: 'GUIDE_CARD_NOT_MANUAL' });
     expect(screen.getByTestId('guide-error').textContent).toContain('this card is for an agent');
     expect(screen.queryByRole('button', { name: /try again/i })).toBeNull();
+  });
+});
+
+describe('GuideRail — every outcome line, from what landed', () => {
+  function withTodo(
+    pairs: Array<[GuideAction, GuideActionOutcome['outcome'], string?]>,
+    temporary = false,
+  ): GuideTurnRecord {
+    return {
+      actions: pairs.map(([a]) => a),
+      outcomes: pairs.map(([a, outcome, todoId]) => ({
+        type: a.type,
+        outcome,
+        ...(todoId ? { todoId } : {}),
+      })),
+      temporary,
+    };
+  }
+  // The chip draws the card's key AND its title; the line's own words are what is
+  // asserted, so the title is read out.
+  const lines = () =>
+    screen
+      .getAllByTestId('guide-outcome')
+      .map((l) => [
+        l.getAttribute('data-outcome'),
+        l.textContent!.replace(/Rotate the (webhook )?key/g, ''),
+      ]);
+
+  it('states a saved list, its corrections, an edit, a comment and the close', () => {
+    renderRail([
+      turn(
+        'assistant',
+        withTodo([
+          [
+            {
+              type: 'write_todos',
+              rows: [
+                { ...step('a', 'One'), fromId: 'p1', done: true },
+                { ...step('b', 'Two'), fromId: 'p2', done: false },
+              ],
+            },
+            'landed',
+          ],
+          [
+            { type: 'write_todos', rows: [{ ...step('c', 'Three'), fromId: 'p3', done: false }] },
+            'landed',
+          ],
+          [{ type: 'untick', rowId: 'r1' }, 'landed'],
+          [
+            { type: 'add_step', afterRowId: 'r1', reason: 'x', ...step('n', 'New') },
+            'landed',
+            'r2',
+          ],
+          [{ type: 'revise_step', rowId: 'r1', reason: 'x', text: 'Uno' }, 'landed'],
+          [{ type: 'move_step', rowId: 'r3', afterRowId: null, reason: 'x' }, 'landed'],
+          [{ type: 'remove_step', rowId: 'gone', reason: 'x' }, 'landed'],
+          [
+            {
+              type: 'edit_item',
+              reason: 'r',
+              title: 'Rotate the webhook key',
+              descriptionMd: 'New body',
+              explanationMd: 'Why',
+              previous: { title: 'Rotate the key', descriptionMd: 'Old', explanationMd: 'Old why' },
+            },
+            'landed',
+          ],
+          [{ type: 'cannot_do', reason: 'Needs an admin' }, 'landed'],
+          [{ type: 'close' }, 'landed'],
+        ]),
+      ),
+    ]);
+    expect(lines()).toEqual([
+      ['saved', 'Saved 2 steps to MOTIR-9, with the 1 you had done ticked.'],
+      ['saved', 'Saved 1 steps to MOTIR-9.'],
+      ['unticked', 'Unticked step 1 on MOTIR-9.'],
+      ['added', 'Added step 2 to MOTIR-9.'],
+      ['changed', 'Changed step 1 on MOTIR-9.'],
+      ['moved', 'Moved a step on MOTIR-9.'],
+      ['removed', 'Removed a step from MOTIR-9.'],
+      ['edited', 'Edited the title and description and explanation of MOTIR-9.'],
+      ['commented', 'Commented on MOTIR-9: “Needs an admin”'],
+      ['closed', 'Moved MOTIR-9 to Done, and added this summary as a comment.'],
+    ]);
+    const edit = screen.getByTestId('guide-edit-statement');
+    expect(edit.textContent).toContain('Rotate the key');
+    expect(edit.textContent).toContain('Rotate the webhook key');
+  });
+
+  it('states a temporary walk’s acts as not saved, and a tick that moved no status', () => {
+    renderRail(
+      [
+        turn('assistant', PROPOSAL),
+        turn('user'),
+        turn(
+          'assistant',
+          withTodo(
+            [
+              [{ type: 'tick', rowId: 'p1' }, 'recorded'],
+              [{ type: 'untick', rowId: 'p1' }, 'recorded'],
+              [
+                { type: 'add_step', afterRowId: 'p1', reason: 'x', ...step('n', 'New') },
+                'recorded',
+              ],
+              [{ type: 'revise_step', rowId: 'p2', reason: 'x', text: 'Paste it' }, 'recorded'],
+              [{ type: 'move_step', rowId: 'p2', afterRowId: null, reason: 'x' }, 'recorded'],
+              [{ type: 'remove_step', rowId: 'p2', reason: 'x' }, 'recorded'],
+            ],
+            true,
+          ),
+        ),
+      ],
+      { rows: [] },
+    );
+    expect(lines().map(([kind, text]) => [kind, text!.includes('Not saved to the card.')])).toEqual(
+      [
+        ['ticked', true],
+        ['unticked', true],
+        ['added', true],
+        ['changed', true],
+        ['moved', true],
+        ['removed', true],
+      ],
+    );
+  });
+
+  it('a tick beside a close the linked pull request holds says no status changed', () => {
+    renderRail([
+      turn(
+        'assistant',
+        record([
+          [{ type: 'tick', rowId: 'r1' }, 'landed'],
+          [{ type: 'close' }, 'skipped'],
+        ]),
+      ),
+    ]);
+    // A skipped close with another reason moves nothing either, and says only the tick.
+    expect(lines()).toEqual([['ticked', 'Ticked step 1 on MOTIR-9.']]);
+  });
+
+  it('an edit that set no title draws no statement, only the line', () => {
+    renderRail([
+      turn(
+        'assistant',
+        record([
+          [
+            {
+              type: 'edit_item',
+              reason: 'r',
+              descriptionMd: 'D',
+              previous: { descriptionMd: 'O' },
+            },
+            'landed',
+          ],
+        ]),
+      ),
+    ]);
+    expect(screen.queryByTestId('guide-edit-statement')).toBeNull();
+    expect(lines()).toEqual([['edited', 'Edited the description of MOTIR-9.']]);
+  });
+
+  it('draws the person’s markers where they ticked, and sends what they type', () => {
+    const turns = [turn('assistant'), turn('user'), turn('assistant')];
+    const { onSend } = renderRail(turns, {
+      markers: [
+        { id: 'm0', afterTurnId: null, done: true, step: 1 },
+        { id: 'm1', afterTurnId: turns[2]!.id, done: false, step: 2 },
+      ],
+    });
+    expect(screen.getAllByTestId('guide-person-marker').map((m) => m.textContent)).toEqual([
+      'You ticked step 1 on the list',
+      'You unticked step 2 on the list',
+    ]);
+    const box = screen.getByRole('textbox');
+    fireEvent.change(box, { target: { value: 'Done with that' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledWith('Done with that');
+  });
+
+  it('names a forbidden and a closed refusal in the guide’s own words, and shows the paywall', () => {
+    renderRail([turn('assistant')], { errorCode: 'PERMISSION_DENIED' });
+    expect(screen.getByTestId('guide-error').textContent).toContain('You need permission');
+    cleanup();
+    renderRail([turn('assistant')], { errorCode: 'GUIDE_CARD_CLOSED' });
+    expect(screen.getByTestId('guide-error').textContent).toContain('done or archived');
+    cleanup();
+    renderRail([turn('assistant')], { outOfCredits: true });
+    expect(screen.queryByTestId('guide-error')).toBeNull();
   });
 });
