@@ -7141,7 +7141,8 @@
         "generation": "Generated plan",
         "expand": "Expanded plan",
         "cadence": "Auto-planned",
-        "legacy": "Earlier plan"
+        "legacy": "Earlier plan",
+        "guide": "Guided walk"
       },
       "anchorProject": "Whole project",
       "anchorMore": "{first} +{count}",

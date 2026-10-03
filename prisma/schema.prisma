@@ -6916,6 +6916,11 @@ enum PlanSessionOrigin {
   expand
   cadence
   legacy
+  /// The Guide me through door on ONE manual card (MOTIR-7464 · ADR
+  /// `conversation-turn-intent.md` AMENDMENT 2, A2.2): `targetKeys = [<KEY>]`, every
+  /// turn is `guide`, it submits no plan and takes no `PlanTargetLock`. The resume
+  /// reads that filter on `conversation` never pick it up.
+  guide
 
   @@map("plan_session_origin")
 }
@@ -8896,6 +8901,11 @@ enum PlanChangeTurnIntent {
   /// A1.6): `ask_project` redirected the turn and a `debug_bug` job ran for it.
   /// It writes at most ONE card (A1.4) — landed by MOTIR-7049, not here.
   debug
+  /// A turn of a GUIDE conversation (MOTIR-7464 · the ADR's AMENDMENT 2, A2.1):
+  /// chosen by the Guide me through door, never by a classifier, and run as ONE
+  /// `guide_work_item` job anchored on the card (`anchorKey`). Every user turn of
+  /// a `guide`-origin session carries it; `intentCorrected` stays false.
+  guide
 
   @@map("plan_change_turn_intent")
 }

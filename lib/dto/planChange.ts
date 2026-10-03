@@ -25,7 +25,11 @@ export type PlanChangeTurnRoleDto = 'user' | 'system' | 'assistant';
  * `debug` (MOTIR-7047 · the ADR's AMENDMENT 1) is the third reading: the turn
  * reported broken behaviour, and a `debug_bug` job ran for it.
  */
-export type PlanChangeTurnIntentDto = 'plan_change' | 'ask' | 'debug';
+// `guide` (Story MOTIR-7459 · MOTIR-7464; ADR AMENDMENT 2, A2.1/A2.2): every
+// `user` turn of a conversation the Guide me through door opened. Fixed by the
+// DOOR, never classified, so it is never corrected (`intentCorrected` stays
+// false), and its `anchorKey` is always the guided card.
+export type PlanChangeTurnIntentDto = 'plan_change' | 'ask' | 'debug' | 'guide';
 
 /** One turn on the thread, in `seq` order (0-based, gapless). `jobId` is set on a
  *  `system` submission marker and on an `assistant` turn (the job that produced
@@ -103,7 +107,11 @@ export type PlanSessionOriginDto =
   | 'generation'
   | 'expand'
   | 'cadence'
-  | 'legacy';
+  | 'legacy'
+  // A conversation the Guide me through door opened on ONE manual card (ADR
+  // `conversation-turn-intent.md` AMENDMENT 2, A2.2). It submits no plan and
+  // takes no target lock, so it is never a planning session.
+  | 'guide';
 
 /**
  * The project's plan-change conversation as the rail renders it. `turns` is the

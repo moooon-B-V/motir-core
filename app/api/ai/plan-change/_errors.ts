@@ -7,6 +7,9 @@ import {
   DebugTargetNotAvailableError,
   EmptyPlanChangeIntentError,
   EmptyPlanChangeTurnError,
+  GuideCardClosedError,
+  GuideCardNotManualError,
+  GuideSessionNotPlannableError,
   PlanChangeJobNotRunningError,
   PlanChangeMailboxJobMismatchError,
   PlanChangeSessionNotFoundError,
@@ -57,6 +60,21 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   // a `diagnose` was anchored on a card that is not a triage bug (422).
   if (err instanceof DebugTargetChangedError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  // A guide turn refused by the card's own state (MOTIR-7464; ADR AMENDMENT 2,
+  // A2.7): a card that is not manual is the wrong KIND of target (422); a card
+  // already finished or archived is a conflict with its state (409).
+  if (err instanceof GuideCardNotManualError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+  }
+  if (err instanceof GuideSessionNotPlannableError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  if (err instanceof GuideCardClosedError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, reason: err.reason },
+      { status: 409 },
+    );
   }
   if (err instanceof DebugAnchorNotTriageBugError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });

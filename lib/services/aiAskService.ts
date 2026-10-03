@@ -24,6 +24,7 @@ import type {
   PlanChangeTurnDto,
 } from '@/lib/dto/planChange';
 import { pendingQuestion } from '@/lib/planning/planChangeThread';
+import { aiGuideService, type GuideTurnResult } from '@/lib/services/aiGuideService';
 
 // The ASK seam (Story MOTIR-1343 · MOTIR-1819) — the motir-core side of "Ask
 // about this project".
@@ -284,7 +285,7 @@ export const aiAskService = {
     body: string,
     ctx: ProjectContext,
     opts: { isAnswer?: boolean; sessionId?: string; seedGateId?: string; anchorKey?: string } = {},
-  ): Promise<AskSubmitResult | AskRedirectResult> {
+  ): Promise<AskSubmitResult | AskRedirectResult | GuideTurnResult> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
 
@@ -315,6 +316,12 @@ export const aiAskService = {
       : seeded
         ? null
         : await planChangeSessionsService.findResumable(ctx, PROJECT_SCOPE_KEY);
+    // A GUIDE conversation (MOTIR-7464; ADR AMENDMENT 2, A2.1): the session's
+    // origin decides the turn, never the client. It is handed to the guide
+    // intake whole — no `ask_project` job, so no classifier completion is spent.
+    if (current?.origin === 'guide') {
+      return aiGuideService.submitTurn(trimmed, ctx, { sessionId: current.id });
+    }
     if (!current) {
       const started = seeded
         ? await planChangeSessionsService.startSeededWithFirstTurn(
@@ -424,7 +431,7 @@ export const aiAskService = {
     turnId: string,
     ctx: ProjectContext,
     opts: { flip?: boolean; sessionId?: string; anchorKey?: string } = {},
-  ): Promise<AskSubmitResult | AskRedirectResult | AskDebugResult> {
+  ): Promise<AskSubmitResult | AskRedirectResult | AskDebugResult | GuideTurnResult> {
     await projectAccessService.assertPermission(
       ctx.projectId,
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
@@ -432,6 +439,11 @@ export const aiAskService = {
     );
 
     const current = await requireAskSession(ctx, opts.sessionId);
+    // A guide turn's retry (MOTIR-7464): the guide intake re-runs it, replay-safe.
+    // There is no flip — a guide turn has no other intent (A2.1).
+    if (current.origin === 'guide') {
+      return aiGuideService.resubmit(turnId, ctx, { sessionId: current.id });
+    }
     const address = { sessionId: current.id };
     const turn = turnById(current, turnId);
     if (!turn || turn.role !== 'user') throw new PlanChangeTurnNotFoundError(turnId);

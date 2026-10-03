@@ -4,6 +4,8 @@
 // contract. These are the shapes the client (lib/ai/motirAiClient.ts) sends and
 // receives.
 
+import type { GuideContext } from '@/lib/ai/guideWorkItem';
+
 export const ENVELOPE_VERSION = 'v1' as const;
 
 // The jobKind enum. `noop` is the 7.1.7 walking skeleton; `discovery` is the
@@ -95,6 +97,14 @@ export const JOB_KINDS = [
   // diagnosis as the typed `debugBug` result and writes nothing; core lands the one
   // card (MOTIR-7049). Mirror of the closed motir-ai enum (the open-core boundary).
   'debug_bug',
+  // `guide_work_item` (Story MOTIR-7459 — MOTIR-7463 handler / MOTIR-7464 dispatch)
+  // — the conversation's FOURTH intent (`docs/decisions/conversation-turn-intent.md`
+  // AMENDMENT 2), chosen by the Guide me through DOOR rather than a classifier: core
+  // submits one for every user turn of a `guide`-origin session
+  // (`aiGuideService`), carrying the card, its to-do rows and the turns so far as
+  // `context.guideContext`. It returns ONE `guideTurn` and writes nothing; core
+  // lands its actions (MOTIR-7470). Mirror of the closed motir-ai enum.
+  'guide_work_item',
 ] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 
@@ -290,6 +300,11 @@ export interface JobContextBag {
   // `{ title?, description? }`, the person's own words from the report widget.
   // The conversation path sends `prompt` instead; either (or both) is legal.
   debugReport?: { title?: string; description?: string };
+  // The ONE guide turn a `guide_work_item` job takes (MOTIR-7464 producer ↔
+  // MOTIR-7463 consumer; ADR AMENDMENT 2 · A2.3) — the card, its rows (or the
+  // temporary list) and the conversation so far, read fresh per turn. Built by
+  // `buildGuideContext` (lib/ai/guideWorkItem.ts), whose type is the wire shape.
+  guideContext?: GuideContext;
   // The work-item context a `generate_explanation` job (8.8.11) drafts an
   // explanation FROM — the title / description / type / parent the "Draft with
   // AI" affordance (8.8.12) sends. Loosely typed (the reserved-hole convention,
@@ -542,6 +557,10 @@ export interface ResultEnvelope {
   // that kind only. Typed `unknown` for the same reason as `authoredBug`: it is
   // untrusted model output, and its reader lands with the consumer (MOTIR-7049).
   debugBug?: unknown;
+  // The ONE guide turn a `guide_work_item` job produced (Story MOTIR-7459 ·
+  // MOTIR-7463) — that kind only. Typed `unknown` for the same reason: untrusted
+  // model output, read only through `parseGuideTurn` (lib/ai/guideWorkItem.ts).
+  guideTurn?: unknown;
 }
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';

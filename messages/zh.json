@@ -7137,7 +7137,8 @@
         "generation": "生成的计划",
         "expand": "展开的计划",
         "cadence": "自动规划",
-        "legacy": "早期计划"
+        "legacy": "早期计划",
+        "guide": "引导步骤"
       },
       "anchorProject": "整个项目",
       "anchorMore": "{first} +{count}",

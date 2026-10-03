@@ -47,6 +47,7 @@ import { PermissionDeniedError } from '@/lib/projects/errors';
 import {
   EmptyPlanChangeIntentError,
   EmptyPlanChangeTurnError,
+  GuideSessionNotPlannableError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
@@ -752,6 +753,111 @@ export const planChangeSessionsService = {
   },
 
   /**
+   * The member's own latest GUIDE conversation on one card (Story MOTIR-7459 ·
+   * MOTIR-7464; ADR `conversation-turn-intent.md` AMENDMENT 2, A2.2), or `null`.
+   * Browse-gated like {@link findResumable}; WRITES NOTHING.
+   */
+  async findGuide(
+    pctx: ProjectContext,
+    scope: PlanChangeScope,
+  ): Promise<PlanChangeSessionDto | null> {
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await projectAccessService.assertCanBrowse(pctx.projectId, ctx);
+    const row = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+      planChangeSessionRepository.findLatestGuideForUser(
+        pctx.projectId,
+        scope.scopeKey,
+        pctx.userId,
+        pctx.workspaceId,
+        tx,
+      ),
+    );
+    return row ? toDto(row, pctx) : null;
+  },
+
+  /**
+   * OPEN a guide conversation on one card (MOTIR-7464; AMENDMENT 2, A2.2) — the
+   * Guide me through door. In ONE transaction, under the member's scope lock:
+   *
+   *  * `resume: true` (the card HAS to-do rows) — re-read the member's latest
+   *    guide conversation on the card UNDER the lock and, if there is one, return
+   *    it with NOTHING appended (`opened: false`). A second tab pressing the door
+   *    at the same moment therefore lands on the first tab's conversation instead
+   *    of forking a second one.
+   *  * otherwise, or with none to resume — create a `guide`-origin session
+   *    scoped at the card and append the OPENING turn as `intent: 'guide'`,
+   *    anchored on the card (`opened: true`). A card with NO rows always lands
+   *    here: a temporary walk cannot be resumed (A2.3).
+   *
+   * It takes NO `PlanTargetLock` and submits no plan, so the card is never parked
+   * at `planning` (A2.2). `ai:plan`-gated: it writes.
+   */
+  async openGuideWithFirstTurn(
+    pctx: ProjectContext,
+    scope: PlanChangeScope,
+    body: string,
+    opts: { resume: boolean },
+  ): Promise<{ session: PlanChangeSessionDto; opened: boolean }> {
+    const trimmed = body.trim();
+    if (!trimmed) throw new EmptyPlanChangeTurnError();
+    const anchorKey = scope.targetKeys[0] ?? null;
+    if (scope.targetKeys.length !== 1 || !anchorKey) {
+      throw new Error('A guide conversation is scoped at exactly one card.');
+    }
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await assertCanPlan(pctx.projectId, ctx);
+    const now = new Date();
+
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        await planChangeSessionRepository.lockScopeForUser(
+          pctx.projectId,
+          scope.scopeKey,
+          pctx.userId,
+          tx,
+        );
+        if (opts.resume) {
+          const existing = await planChangeSessionRepository.findLatestGuideForUser(
+            pctx.projectId,
+            scope.scopeKey,
+            pctx.userId,
+            pctx.workspaceId,
+            tx,
+          );
+          if (existing) return { session: await toDto(existing, pctx, tx), opened: false };
+        }
+        const created = await planChangeSessionRepository.create(
+          {
+            workspaceId: pctx.workspaceId,
+            projectId: pctx.projectId,
+            createdById: pctx.userId,
+            scopeKey: scope.scopeKey,
+            targetKeys: scope.targetKeys,
+            origin: 'guide',
+            lastActivityAt: now,
+          },
+          tx,
+        );
+        const row = await appendWithin(
+          created.id,
+          pctx,
+          {
+            role: 'user',
+            body: trimmed,
+            authorId: pctx.userId,
+            intent: 'guide',
+            anchorKey,
+          },
+          {},
+          tx,
+        );
+        return { session: await toDto(row, pctx, tx), opened: true };
+      },
+    );
+  },
+
+  /**
    * A SEEDED first turn (AMENDMENT 17 §9; story MOTIR-6068 · MOTIR-6207) — the
    * re-plan a refused decision opens, started from the gate that refused it. In
    * ONE transaction: take the member's scope lock, assert the seed (the gate is
@@ -1353,6 +1459,9 @@ export const planChangeSessionsService = {
     requirement?: SubmittedRequirement,
   ): Promise<PlanChangeSubmitResultDto> {
     const session = await requireSession(pctx, address);
+    // A guide conversation never plans (AMENDMENT 2, A2.2): refused before its
+    // turns are read, so no plan-edit job is ever submitted for one.
+    if (session.origin === 'guide') throw new GuideSessionNotPlannableError(session.id);
     const turns = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
       planChangeTurnRepository.listBySessionId(session.id, pctx.workspaceId, tx),
     );
