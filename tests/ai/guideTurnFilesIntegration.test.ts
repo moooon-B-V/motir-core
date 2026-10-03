@@ -18,6 +18,7 @@ import {
 } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { ALIGNED_WINDOW_MS } from '../helpers/rateLimitWindow';
 
 // FILES ON A GUIDE TURN, against a REAL Postgres and the attachment store lane
 // (Story MOTIR-7471 · MOTIR-7487; `docs/decisions/guide-turn-files.md`).
@@ -78,7 +79,10 @@ beforeAll(async () => {
   vi.stubEnv('MOTIR_AI_URL', ORIGIN);
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token-test');
   vi.stubEnv('MOTIR_AI_JOBS_FIXTURE_PATH', fixturePath);
+  // A generous budget so the uploads are never refused; the window is pinned to
+  // the aligned grid per MOTIR-2648. No case here asserts a refusal.
   vi.stubEnv('MOTIR_UPLOAD_RATE_LIMIT', '1000');
+  vi.stubEnv('MOTIR_UPLOAD_RATE_LIMIT_WINDOW_MS', String(ALIGNED_WINDOW_MS));
   for (const [name, value] of Object.entries(S3_ENV)) vi.stubEnv(name, value);
 
   agent = new MockAgent();
