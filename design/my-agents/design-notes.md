@@ -1003,3 +1003,274 @@ the run's work item.
 - the page outside the agent row and the panel header;
 - the terminal's own states, which stay MOTIR-6937 panel 5's;
 - any surface for choosing a version other than the newest (decision Q1: none is offered).
+
+## Watching an agent boot — the boot read-out (delta, MOTIR-7395)
+
+**Story MOTIR-7393 · design MOTIR-7395.** Gates **MOTIR-7400** (the panel, the list row and the
+strings). Mock: **`design/my-agents/my-agents--boot.mock.html`**, a DELTA, eleven labelled panels.
+
+**What it amends.** Neither amended mock is edited; both stay records.
+
+- **`design/my-agents/my-agents.mock.html` (MOTIR-6868)** — **Panel 2 THE CREATE DIALOG**, whose
+  pending state lasted the whole boot (the button's loading face while the server waited), and
+  **Panel 4 EVERY STATE**, where `starting` and `waking` were one fixed line
+  (`myAgents.progress.starting` / `progress.waking`). In this file: § _Panel 2 — THE CREATE DIALOG_
+  and § _Panel 4 — EVERY STATE_ above.
+- **`design/my-agents/my-agents--panel.mock.html` (MOTIR-6937)** — **Panel 2 THE HEADER** (Delete…
+  drawn disabled in `starting` / `waking`), **Panel 3 SIGN-IN** (no sign-in line before the terminal
+  connects — unchanged, restated here because the read-out sits where a reader might look for it), and
+  **Panel 4 EVERY LIFECYCLE VALUE**, where `starting` showed _Booting — cloning the project's
+  repositories into the home_ under the connection word _Waiting_. In this file: § _The agent panel_ →
+  _Panel 2 — THE HEADER_, _Panel 3 — SIGN-IN STATUS_, _Panel 4 — EVERY LIFECYCLE VALUE_.
+
+**Every state is decided in `docs/decisions/agent-instances.md` AMENDMENT 6 (MOTIR-7394)**: the five
+steps `provision` · `machine_start` · `clone` (one row per repository, `owner/name`, in the project's
+order) · `terminal_check` · `ready`; the five states `waiting` · `in_progress` · `done` · `failed` ·
+`skipped`; a wake writes its clone rows `skipped`; a deletion mid-boot writes the step in progress
+`failed` with detail `deleted`; the stream's terminal `done` frame is `running` | `failed` |
+`deleted`. AMENDMENT 4 (Delete from a boot) and AMENDMENT 5 (the exit code, the 10-minute deadline)
+supply the rest. The copy is this card's.
+
+**Composed, not redrawn.** The mock's first five `<style>` blocks and its icon symbols are
+`my-agents--panel.mock.html`'s own, verbatim (as `my-agents--update.mock.html` carries them). The
+cards, table, agent panel, dialog, refusal box and `.reason` line are that asset's markup; the
+Terminal + Chat tab track is `my-agents--chat.mock.html`'s (`.tabOff`, copied), as the panel ships
+today. One block of its own adds the read-out (`.boot`, `.bStep`, `.bootSum`), and the create
+dialog's picker and price line drawn from base panel 2's notes (`.radioRow`, `.priceLine`). Only
+`--el-*` and shape tokens; no colour is invented.
+
+| Panel | What it settles                                                                                                                      |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 1     | the access path: New agent → dialog → Create → dialog gone, row `starting`, panel open, `?agent=<id>`; the refused create, unchanged |
+| 2     | the read-out in progress — each state's glyph and ink; the live clock                                                                |
+| 3     | mid-clone: the first repository done, the second in progress (then the terminal check)                                               |
+| 4     | failed on a repository: the reason under it, the rows after it waiting, the way out                                                  |
+| 5     | failed on machine started (exit code); failed on the deadline                                                                        |
+| 6     | failed on provisioning: the provider's words on the first row                                                                        |
+| 7     | a wake: both clone rows skipped; a deployment with no terminal (terminal check skipped)                                              |
+| 8     | deleted mid-boot: the last word, the panel fading, the list row in Deleting                                                          |
+| 9     | running: the one-line summary above the tabs; Show steps / Hide steps                                                                |
+| 10    | the list row while booting: the current step instead of the fixed line (table and narrow card)                                       |
+| 11    | the narrow width: the read-out under the header; a long repository name wraps, never truncates                                       |
+
+### Panel 1 — THE ACCESS PATH
+
+- **Unchanged up to the press.** The header's **New agent** opens the create dialog (base panel 2),
+  with its fields, its picker and its price line untouched.
+- **Create's pending face** is still the `Button`'s own `loading`. It now lasts only until the create
+  answers `201` at `starting` (AMENDMENT 6 §5), about a second, rather than the length of the boot.
+- **On the answer:** the dialog **closes**, the list gains the new row in _Starting_ (newest first,
+  selected), and the panel opens on it. The address becomes `/my-agents?agent=<id>` by the same
+  `replace` a row click makes (MOTIR-6937 panel 1), and focus moves to the panel's name heading.
+- **A refused create is unchanged:** the dialog stays open with the input kept, and the refusal box
+  (base panel 5) sits above the footer. Nothing boots, so there is no read-out.
+- **A provisioning failure is NOT a refusal.** The agent exists, so the dialog closes and the panel
+  opens on panel 6's read-out.
+- **A wake** (the panel's **Wake**, the row menu's **Wake**, or opening a hibernated agent —
+  MOTIR-6937 Q6) opens the same read-out, headed _Waking_ (panel 7).
+
+### The read-out — where it sits and what it is
+
+- **Placement.** A `<section aria-label="Boot steps">` between the panel header and the tab row, on the
+  card's own ground (`--el-card`), `--spacing-card-padding`, with an `--el-border-soft` rule under it.
+  The tab track (Terminal, Chat) and the connection word stay below it, as shipped.
+- **The head.** The left side reads **Booting** (create) or **Waking** (wake): 0.8125rem, 600,
+  `--el-text`. On the right is the whole attempt's clock, ticking (`0:44`): mono 0.75rem,
+  `--el-text-secondary`. Once the attempt has failed, the head reads **Failed after {time}** and the
+  clock is gone.
+- **The rows.** An `<ol>`, one `<li>` per step: glyph · label · time, with an optional detail line
+  under the label. Each row is a grid (16px · 1fr · auto) with `--spacing-control-y/x` padding and
+  `--radius-control`, and a 1px border that is transparent except on a failed row, so a failure
+  shifts nothing.
+- **The terminal area under it** keeps its shipped face. While booting it shows _The terminal opens
+  here as soon as the agent is up._ (`panel.face.startingHint`, reused for a wake too). Once failed it
+  shows _The terminal stays closed until the agent is running._ The old progress title (_Booting —
+  cloning…_) leaves the terminal area: the read-out is the panel's only progress.
+- **Screen readers.** Every row carries its state in words (`.visually-hidden` _— Done_, etc.). A
+  polite live region announces **a change of state only** (_Cloning moooon/motir-ai: in progress_),
+  never the clock's ticks. The clocks are `aria-hidden`.
+- **The data** is the boot read (`GET …/instances/[id]/boot`), then the stream
+  (`…/boot/stream?since=<seq>`). A reload resumes from the read, with no gap (AMENDMENT 6 §6–7).
+- **An agent with no recorded attempt** (one booted before AMENDMENT 6) shows MOTIR-6937 panel 4's
+  face for its state, unchanged.
+
+### Every state of a row — glyph, ink, time
+
+| State           | Glyph (lucide, `aria-hidden`) | Glyph colour          | Row ground                          | Label ink                                          | Time column                                                                          |
+| --------------- | ----------------------------- | --------------------- | ----------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **waiting**     | `Circle` (hollow)             | `--el-text-secondary` | card                                | `--el-text-secondary`, 400                         | empty. Quiet                                                                         |
+| **in progress** | `LoaderCircle`                | `--el-text-strong`    | **`--el-tint-sky`**                 | `--el-text-strong`, 600                            | a **ticking clock** `m:ss` (`0:41`), mono, `--el-text-strong`                        |
+| **done**        | `CircleCheck`                 | `--el-success`        | card                                | `--el-text-secondary`, 400                         | its duration (`3s`, `38s`, `1m 04s`), mono, `--el-text-secondary`. Quiet             |
+| **failed**      | `CircleX`                     | `--el-danger`         | card + **1px `--el-danger` border** | `--el-text`, 600; reason `--el-text`, 400, 0.75rem | how long it ran before failing, mono, `--el-text`                                    |
+| **skipped**     | `CircleMinus`                 | `--el-text-secondary` | card                                | `--el-text-secondary`, **struck through**          | the reason in words (_Skipped — a wake keeps the home_), sans, `--el-text-secondary` |
+
+- **Live without animating colour.** The in-progress row is the only tinted row. What reads as live is
+  its **clock**, which ticks every second from the step's `startedAt`, plus the loader's **rotation**,
+  a `transform` that stops under `prefers-reduced-motion`. No colour, tint or opacity ever animates.
+- **Failed carries the hue in the border and the glyph only.** The label and the reason stay on
+  `--el-text` on the card ground, which is AA in all 20 palette × theme combinations. That is the
+  composition CLAUDE.md names (`DeviceApproval`). No danger TEXT token is used on the row, and
+  `--el-danger-text` is used nowhere.
+- **Ink audit.** `--el-text-muted` and `--el-text-faint` are used **nowhere** in this delta.
+  `--el-text-secondary` is the quiet ink on the card, and `--el-text-strong` is the ink on the sky
+  tint. The only `:hover` rules are the copied Chat tab's (`--el-text` on `--el-surface-soft`) and the
+  _Show steps_ link's underline (`--el-link`, no ground change).
+- **The repository name** is mono 0.75rem with `overflow-wrap: anywhere`. It wraps and is **never
+  truncated** (panel 11).
+- **Durations.** A finished step shows `{s}s` under a minute and `{m}m {ss}s` from a minute on. The
+  in-progress clock shows `m:ss`. The summary uses the finished form.
+
+### Panels 4–6 — FAILED, and the way out
+
+- **The read-out ends on the failed row.** The rows after it stay _waiting_ (§1).
+- **The reason** is the step's `detail`, which is also the agent's `failureReason`. The list row
+  therefore keeps its shipped failed line (`failureReason` + `failedWayOut`, `--el-danger-on-surface`),
+  unchanged.
+- **The reasons Motir writes itself** get keys (below):
+  - _Could not read {repository} — the app has no access_;
+  - _The machine exited during boot (exit code {code})_ (AMENDMENT 5);
+  - _The boot didn't finish within {minutes} minutes_ (AMENDMENT 5's deadline, on the step in
+    progress).
+- **The provider's own words** (panel 6, on `provision`) are shown **as sent**, never rewritten.
+- **The way out** is a row under the steps (`.bootFoot`): the shipped sentence _Wake to try again, or
+  delete it._ (`failedWayOut`, `--el-text`), then **Wake** (`Button` primary, `Power`, `--el-accent`
+  / `--el-accent-text`) and **Delete…** (`Button` secondary, `Trash2`, `--el-danger-on-surface` ink,
+  opening the page's `DeleteAgentDialog`). They wrap under the sentence at the narrow width.
+
+### Panel 7 — A WAKE
+
+- **Same rows**, headed _Waking_. Both `clone` rows are **skipped**: struck through, `CircleMinus`,
+  with _Skipped — a wake keeps the home_ in the time column. The repositories stay listed, so the
+  reader sees what the home already holds.
+- Where the deployment has no terminal, _Terminal checked_ is skipped too, with _Skipped — no terminal
+  on this deployment_.
+- The header pill is _Waking_ (`t-running`), and the connection word is _Waiting_ with the busy dot,
+  as shipped.
+
+### Panel 8 — DELETED MID-BOOT
+
+- **Delete… is ENABLED while `starting` / `waking`.** This corrects MOTIR-6937 panel 2's drawing to
+  AMENDMENT 4. The shipped header already reads `allowedAgentMoves`, so the code needs no change.
+- **On the confirm,** the step in progress becomes _failed · deleted_, and the stream sends
+  `done · deleted`. That last frame is drawn: the head becomes **Deleted — this panel closes**, and the
+  step reads _Deleted while booting_.
+- **A deletion is the reader's own act, not a fault**, so this row takes **no danger hue**. It is
+  drawn like a skipped row: struck through, `CircleMinus`, `--el-text-secondary`, with the time it ran.
+- **Then the panel fades and closes** exactly as MOTIR-6937 panel 4's _deleting_ does. The address
+  drops `?agent=`, and the row keeps _Deleting_ and its shipped line until it is gone.
+
+### Panel 9 — RUNNING
+
+- **On `done · running`** the read-out collapses to ONE line (`.bootSum`, `--spacing-control-y` /
+  `--spacing-card-padding`, `--el-border-soft` rule) above the tab row. The line holds:
+  - a `CircleCheck` in `--el-success`;
+  - **Booted in {time}** (a wake: **Woke in {time}**) in `--el-text-secondary`;
+  - on the right, **Show steps** (`--el-link`, `ChevronDown`), which reopens the finished rows in
+    place and becomes **Hide steps** (`aria-expanded`).
+- The terminal connects as it does today and shows its prompt, and **Hibernate** appears.
+- The line belongs to the CURRENT attempt. It stays while the agent runs, and the next wake's
+  read-out replaces it.
+
+### Panel 10 — THE LIST ROW WHILE BOOTING
+
+- **The fixed line goes.** The line under the name (`.progressNote`, 0.75rem, `--el-text-secondary`)
+  is the **current step** in its in-progress form, with an ellipsis: _Provisioning the machine…_,
+  _Starting the machine…_, _Cloning {repository}…_, _Checking the terminal…_, _Getting ready…_.
+- **It has no clock.** The list compares agents; the panel watches one.
+- **The same lines serve `waking`.** Before the first read answers, the row falls back to the shipped
+  `progress.starting` / `progress.waking`.
+- **The narrow card** carries the same line.
+
+### Panel 11 — THE NARROW WIDTH
+
+- **Order.** MOTIR-6937 panel 7's full view: crumb, header (its actions wrapped under the name), then
+  the **read-out**, then the tab row and the terminal.
+- **Wrapping.** Rows wrap. A long `owner/name` breaks anywhere, never ellipsises, and the time stays
+  on the row's first line. A reason wraps under its label.
+
+### Tokens
+
+| Element                     | Primitive                    | Colour                                                                        | Shape                                                                    |
+| --------------------------- | ---------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| read-out section            | `<section>` in the panel     | card ground, `--el-border-soft` rule                                          | `--spacing-card-padding`                                                 |
+| head / clock                | text                         | `--el-text` / `--el-text-secondary`                                           | —                                                                        |
+| step row                    | `<li>` grid                  | per the state table                                                           | `--spacing-control-y/x`, `--radius-control`                              |
+| in-progress row             | tinted `<li>`                | `--el-tint-sky`, `--el-text-strong`                                           | as above                                                                 |
+| failed row                  | bordered `<li>`              | `--el-danger` border + glyph; `--el-text` words                               | as above                                                                 |
+| way out                     | `Button` primary + secondary | `--el-accent` / `--el-accent-text`; `--el-danger-on-surface`                  | `--height-btn-sm`, `--radius-btn`, `--spacing-btn-x-sm`                  |
+| summary line                | row                          | `--el-success` glyph, `--el-text-secondary`, `--el-link` toggle               | `--spacing-control-y` / `--spacing-card-padding`                         |
+| list row line               | `.progressNote`              | `--el-text-secondary`                                                         | —                                                                        |
+| tab track (Terminal + Chat) | the shipped track            | `--el-tabnav-track`, `--el-text-strong` on `--el-page-bg`; off tab secondary  | `--radius-btn`                                                           |
+| dialog (unchanged)          | `Modal`, `RadioGroup`        | `--el-tint-lavender` + `--el-accent` selected row, `--el-tint-sky` price line | `--radius-modal`, `--radius-input`, `--height-input`, `--radius-control` |
+
+### Copy — en and zh
+
+Every new string, proposed under `myAgents.boot.*`. `{repository}` is `owner/name`, `{time}` a
+duration, `{code}` an exit code.
+
+| key                         | en                                                    | zh                                       |
+| --------------------------- | ----------------------------------------------------- | ---------------------------------------- |
+| `boot.label`                | Boot steps                                            | 启动步骤                                 |
+| `boot.title.create`         | Booting                                               | 正在启动                                 |
+| `boot.title.wake`           | Waking                                                | 正在唤醒                                 |
+| `boot.title.failed`         | Failed after {time}                                   | {time} 后失败                            |
+| `boot.title.deleted`        | Deleted — this panel closes                           | 已删除 — 此面板即将关闭                  |
+| `boot.step.provision`       | Machine provisioned                                   | 分配机器                                 |
+| `boot.step.machineStart`    | Machine started                                       | 启动机器                                 |
+| `boot.step.clone`           | Cloning {repository}                                  | 克隆 {repository}                        |
+| `boot.step.terminalCheck`   | Terminal checked                                      | 检查终端                                 |
+| `boot.step.ready`           | Ready                                                 | 就绪                                     |
+| `boot.state.waiting`        | Waiting                                               | 等待中                                   |
+| `boot.state.inProgress`     | In progress                                           | 进行中                                   |
+| `boot.state.done`           | Done                                                  | 完成                                     |
+| `boot.state.failed`         | Failed                                                | 失败                                     |
+| `boot.state.skipped`        | Skipped                                               | 已跳过                                   |
+| `boot.announce`             | {step}: {state}                                       | {step}：{state}                          |
+| `boot.skipped.clone`        | Skipped — a wake keeps the home                       | 已跳过 — 唤醒会保留主目录                |
+| `boot.skipped.terminal`     | Skipped — no terminal on this deployment              | 已跳过 — 此部署没有终端                  |
+| `boot.detail.cloneNoAccess` | Could not read {repository} — the app has no access   | 无法读取 {repository} — 应用没有访问权限 |
+| `boot.detail.exited`        | The machine exited during boot (exit code {code})     | 机器在启动过程中退出（退出码 {code}）    |
+| `boot.detail.deadline`      | The boot didn’t finish within {minutes} minutes       | 启动未能在 {minutes} 分钟内完成          |
+| `boot.detail.deleted`       | Deleted while booting                                 | 在启动过程中被删除                       |
+| `boot.summary.create`       | Booted in {time}                                      | 启动用时 {time}                          |
+| `boot.summary.wake`         | Woke in {time}                                        | 唤醒用时 {time}                          |
+| `boot.showSteps`            | Show steps                                            | 显示步骤                                 |
+| `boot.hideSteps`            | Hide steps                                            | 隐藏步骤                                 |
+| `boot.duration.seconds`     | {s}s                                                  | {s} 秒                                   |
+| `boot.duration.minutes`     | {m}m {s}s                                             | {m} 分 {s} 秒                            |
+| `boot.row.provision`        | Provisioning the machine…                             | 正在分配机器…                            |
+| `boot.row.machineStart`     | Starting the machine…                                 | 正在启动机器…                            |
+| `boot.row.clone`            | Cloning {repository}…                                 | 正在克隆 {repository}…                   |
+| `boot.row.terminalCheck`    | Checking the terminal…                                | 正在检查终端…                            |
+| `boot.row.ready`            | Getting ready…                                        | 即将就绪…                                |
+| `boot.terminalClosed`       | The terminal stays closed until the agent is running. | 智能体运行后终端才会打开。               |
+
+**Reused unchanged:** `failedWayOut`, `panel.wake`, `panel.delete`, `panel.face.startingHint`,
+`panel.conn.waiting` / `panel.conn.closed`, `progress.starting` / `progress.waking` (only as the row's
+fallback before the first read), `progress.deleting`, `state.*`, and every `create.*` /
+`refusal.*` string.
+
+**Wording notes.**
+
+- **The step labels are the card's**, so in English they read as past participles even on a waiting
+  row. The zh labels are neutral verb–object phrases (分配机器 · 启动机器 · 克隆 …), which read
+  correctly in every state.
+- **The provider's words** (`provision` failed) and any `detail` Motir does not key are shown
+  verbatim.
+- **The deadline's minutes** come from `INSTANCE_BOOT_DEADLINE_MS`, never hard-coded.
+
+### GIVES / TAKES
+
+- **GIVES MOTIR-7400:**
+  - the create flow closing on the answer;
+  - the read-out (placement, the five row states and their glyphs, inks and times, the head and
+    clock, screen-reader words and the live region);
+  - the failed read-outs and their way out, the wake, and the deletion's last word;
+  - the running summary with Show / Hide steps;
+  - the booting list row and the narrow width;
+  - every string above, en and zh.
+- **TAKES from MOTIR-7394:** the steps, states, attempt, read and stream. **TAKES from MOTIR-6868 /
+  MOTIR-6937:** the dialog, rows, cards, pills, header, tab track, terminal faces and refusal box,
+  unchanged.
+- **Does NOT draw:** the terminal and chat tabs themselves, the `updating` state (MOTIR-6951), or the
+  hibernate states.

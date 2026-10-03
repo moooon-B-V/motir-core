@@ -9930,6 +9930,58 @@
         "state": "This agent is {state}, so it can’t be updated right now.",
         "unknown": "Motir couldn’t check for a newer version just now. Try again in a few minutes."
       }
+    },
+    "boot": {
+      "label": "Boot steps",
+      "title": {
+        "create": "Booting",
+        "wake": "Waking",
+        "failed": "Failed after {time}",
+        "deleted": "Deleted — this panel closes"
+      },
+      "step": {
+        "provision": "Machine provisioned",
+        "machineStart": "Machine started",
+        "clone": "Cloning {repository}",
+        "terminalCheck": "Terminal checked",
+        "ready": "Ready"
+      },
+      "state": {
+        "waiting": "Waiting",
+        "inProgress": "In progress",
+        "done": "Done",
+        "failed": "Failed",
+        "skipped": "Skipped"
+      },
+      "announce": "{step}: {state}",
+      "skipped": {
+        "clone": "Skipped — a wake keeps the home",
+        "terminal": "Skipped — no terminal on this deployment"
+      },
+      "detail": {
+        "cloneNoAccess": "Could not read {repository} — the app has no access",
+        "exited": "The machine exited during boot (exit code {code})",
+        "deadline": "The boot didn’t finish within {minutes} minutes",
+        "deleted": "Deleted while booting"
+      },
+      "summary": {
+        "create": "Booted in {time}",
+        "wake": "Woke in {time}"
+      },
+      "showSteps": "Show steps",
+      "hideSteps": "Hide steps",
+      "duration": {
+        "seconds": "{s}s",
+        "minutes": "{m}m {s}s"
+      },
+      "row": {
+        "provision": "Provisioning the machine…",
+        "machineStart": "Starting the machine…",
+        "clone": "Cloning {repository}…",
+        "terminalCheck": "Checking the terminal…",
+        "ready": "Getting ready…"
+      },
+      "terminalClosed": "The terminal stays closed until the agent is running."
     }
   },
   "runs": {

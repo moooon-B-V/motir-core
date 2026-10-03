@@ -367,6 +367,7 @@ function runIdOf(args: readonly string[]): string | undefined {
 async function runExec(request: ExecRequest): Promise<ExecResult | null> {
   const current = await ensureBooted(request.machineId);
   if (!current) return null;
+  if (request.command.includes('motir-clone')) return runClone(request.command.at(-1) ?? '');
   const at = request.command.findIndex(
     (part, i) => part === 'motir' && request.command[i + 1] === 'agent-terminal',
   );
@@ -404,6 +405,42 @@ async function runExec(request: ExecRequest): Promise<ExecResult | null> {
     // The CLI exits 1 with its words on stderr, having printed its JSON answer.
     const message = err instanceof Error ? err.message : String(err);
     return { exitCode: 1, stdout, stderr: `${message}\n` };
+  }
+}
+
+// ── The clone script (Story MOTIR-7393 · MOTIR-7402) ─────────────────────────
+//
+// A boot clones each repository with ONE exec (`buildCloneCommand`, AMENDMENT 6
+// §1), the repository last in its argv. Nothing is cloned here — every clone
+// succeeds at once — unless the spec scripted that repository in the sidecar at
+// `MOTIR_E2E_CLONE_SCRIPT_PATH` (`my-agents-seed.ts`'s `holdClone` /
+// `releaseClone` / `refuseClone`): `hold` keeps the exec open until the spec
+// releases it, so a step can be watched IN PROGRESS; `refuse` answers git's own
+// exit code with the words on stderr, so the step fails with them.
+
+const CLONE_SCRIPT_PATH =
+  process.env['MOTIR_E2E_CLONE_SCRIPT_PATH'] ?? path.join(tmpdir(), 'motir-e2e-clone-script.json');
+
+interface CloneScript {
+  hold?: boolean;
+  refuse?: string;
+}
+
+function readCloneScript(repository: string): CloneScript {
+  try {
+    const all = JSON.parse(readFileSync(CLONE_SCRIPT_PATH, 'utf8')) as Record<string, CloneScript>;
+    return all[repository] ?? {};
+  } catch {
+    return {};
+  }
+}
+
+async function runClone(repository: string): Promise<ExecResult> {
+  for (;;) {
+    const script = readCloneScript(repository);
+    if (script.refuse) return { exitCode: 128, stdout: '', stderr: `${script.refuse}\n` };
+    if (!script.hold) return { exitCode: 0, stdout: '', stderr: '' };
+    await new Promise((resolve) => setTimeout(resolve, 250));
   }
 }
 

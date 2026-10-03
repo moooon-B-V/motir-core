@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentInstanceBootData } from '@/lib/jobs/types';
 
 // WHEN AN ORG'S AI PLAN LAPSES, ITS AGENTS ARE DELETED AFTER 30 DAYS' NOTICE
 // (Story MOTIR-6914 · MOTIR-6921; `docs/decisions/agent-instance-storage.md` §4, §5)
@@ -18,6 +19,7 @@ vi.mock('@/lib/jobs/sendEvent', () => ({
 }));
 
 const { db } = await import('@/lib/db');
+const { deliverBootEvent } = await import('../helpers/agentBootDriver');
 const { billingPropagationService } = await import('@/lib/services/billingPropagationService');
 const { agentInstanceLifecycleService: lifecycle } =
   await import('@/lib/services/agentInstanceLifecycleService');
@@ -45,7 +47,10 @@ const sent = (): Sent[] =>
 beforeEach(async () => {
   await setUpHarness();
   sendEventImpl.current.mockReset();
-  sendEventImpl.current.mockImplementation(async () => undefined);
+  // The boot event goes to the in-process driver, as the harness routes it.
+  sendEventImpl.current.mockImplementation(async (name: string, data: unknown) => {
+    if (name === 'agent-instance/boot') await deliverBootEvent(data as AgentInstanceBootData);
+  });
 });
 afterEach(tearDownHarness);
 afterAll(async () => {

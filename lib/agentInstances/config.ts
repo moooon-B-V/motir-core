@@ -63,9 +63,14 @@ export function instanceMaxRunning(): number {
   return positiveIntFromEnv('MOTIR_INSTANCE_MAX_RUNNING', 50);
 }
 
-/** How long a create or wake waits in the REQUEST for the machine to report running
- *  before leaving the rest to the sweep (the boot settle is idempotent). */
-export const INSTANCE_INLINE_BOOT_WAIT_MS = 20_000;
+/**
+ * How long an UPDATE (and a wake that applies a pinned one) waits in the REQUEST
+ * for its liveness settle before leaving the rest to the sweep
+ * (`agent-image-update.md` Q6). A create or wake no longer waits at all: it
+ * answers at `starting` / `waking` and the boot driver takes it from there
+ * (`agent-instances.md` AMENDMENT 6 §5).
+ */
+export const INSTANCE_INLINE_UPDATE_WAIT_MS = 20_000;
 
 /**
  * THE BOOT DEADLINE (MOTIR-7336): a create or wake that has not reported running
@@ -82,6 +87,26 @@ export const INSTANCE_BOOT_DEADLINE_MS = 10 * 60_000;
  * before that restart. A clean exit (code 0) is never restarted and fails at once.
  */
 export const INSTANCE_BOOT_EXIT_GRACE_MS = 2 * 60_000;
+
+/** One repository's clone exec may run this long (§1) — the slowest single boot step. */
+export const CLONE_EXEC_TIMEOUT_SECONDS = 600;
+
+/**
+ * THE BOOT DRIVER'S POLL (`agent-instances.md` AMENDMENT 6 §3): while the machine
+ * has not started, a pass reads it and defers this long, so a boot advances
+ * within two seconds of the machine being ready rather than at the next sweep.
+ */
+export const AGENT_BOOT_POLL_MS = 2_000;
+
+/**
+ * THE BOOT LEASE (AMENDMENT 6 §4): how long the job run holding a boot attempt
+ * keeps it without a renewal. The driver renews at every pass and before every
+ * step, so the lease must outlast the longest stretch WITHOUT a renewal — one
+ * clone exec ({@link CLONE_EXEC_TIMEOUT_SECONDS}, 10 minutes) — plus two polls of
+ * slack for the step's own writes. Rounded to 11 minutes. A crashed holder's boot
+ * is resumed by the sweep once it has expired.
+ */
+export const AGENT_BOOT_LEASE_MS = 11 * 60_000;
 
 /** How long a hibernate waits in the request for the machine to report stopped. */
 export const INSTANCE_INLINE_STOP_WAIT_MS = 15_000;
