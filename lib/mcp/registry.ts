@@ -4,6 +4,7 @@ import { permissionGatedServer } from './permissionGate';
 import { rateLimitedServer } from './rateLimitGate';
 import { strictInputServer } from './strictInput';
 import { annotatedServer } from './toolAnnotations';
+import { referencedServer } from './toolReference';
 import { GET_WORK_ITEM_TOOL_NAME, registerGetWorkItem } from './tools/getWorkItem';
 import { GET_DESIGN_TOOL_NAME, registerGetDesign } from './tools/getDesign';
 import { LIST_DESIGNS_TOOL_NAME, registerListDesigns } from './tools/listDesigns';
@@ -149,7 +150,9 @@ import { CHANGE_KIND_TOOL_NAME, registerChangeKind } from './tools/changeKind';
 // What every registered tool is guaranteed, whatever wrappers a caller opts
 // into: its input schema is STRICT (`strictInput.ts`, MOTIR-3342), and it
 // carries a title and the `annotations` row `TOOL_ANNOTATIONS` declares for it
-// (`toolAnnotations.ts`, MOTIR-6974) — a tool with neither cannot register.
+// (`toolAnnotations.ts`, MOTIR-6974) — a tool with neither cannot register —
+// and its description ends with a link to its own entry in the published tool
+// reference (`toolReference.ts`, MOTIR-7391).
 
 /** Identifying info the MCP `initialize` handshake reports to clients. */
 export const MCP_SERVER_INFO = { name: 'motir', version: '0.1.0' } as const;
@@ -287,7 +290,11 @@ export function registerMcpTools(
   // title over 64 characters, and a tool that declares its own `annotations` —
   // so every tool `tools/list` serves carries a title and an explicit
   // read-only / destructive / idempotent / open-world verdict.
-  const strict = strictInputServer(annotatedServer(server));
+  //
+  // The REFERENCE seam (MOTIR-7391) is a third config rewrite beside them: it
+  // ends every tool's description with a link to that tool's entry in the
+  // published reference (`toolReference.ts`).
+  const strict = strictInputServer(annotatedServer(referencedServer(server)));
   // Two wrappers, and the ORDER is the policy: the permission gate runs first,
   // so a call the token was never granted is refused BEFORE it can consume any
   // of the request budget MOTIR-2610 added. Metering a refused call would let an

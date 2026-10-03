@@ -520,6 +520,8 @@ describe('the DEBIT is a post-commit side effect (§8.6)', () => {
     expect(row?.debitedCredits).toBe(0); // not yet confirmed
     expect(row?.pendingDebitRef).not.toBeNull();
     expect(row?.pendingDebitCredits).toBe(150);
+    // The monitor's clock (MOTIR-7316): when the debit became outstanding.
+    expect(row?.pendingDebitSince).toBeInstanceOf(Date);
 
     // The consumption the meter wrote is untouched.
     const consumption = await withSystemContext((tx) =>
@@ -538,6 +540,8 @@ describe('the DEBIT is a post-commit side effect (§8.6)', () => {
     });
     const pendingRef = (await chargeRow(fx))?.pendingDebitRef;
     expect(pendingRef).toBeTruthy();
+    const since = (await chargeRow(fx))?.pendingDebitSince;
+    expect(since).toBeInstanceOf(Date);
 
     // motir-ai comes back. A further run arrives.
     vi.unstubAllGlobals();
@@ -557,6 +561,7 @@ describe('the DEBIT is a post-commit side effect (§8.6)', () => {
     const row = await chargeRow(fx);
     expect(row?.pendingDebitRef).toBeNull();
     expect(row?.debitedCredits).toBe(200);
+    expect(row?.pendingDebitSince).toBeNull();
   });
 
   it('credits booked WHILE a debit is pending are never stranded', async () => {

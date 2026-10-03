@@ -182,10 +182,18 @@ const CARD_SENSE_ALLOWLIST: Record<'en' | 'zh', Record<string, string>> = {
     'billing.pastDue.banner': 'payment card — the AI-plan charge failed',
     'onboarding.landing.heroHint': 'payment card — "no credit card"',
     'platformAdmin.monitoring.subtitle': 'UI panel — the six monitoring tiles, each linking out',
+    'platformAdmin.tenant.fleet.confirm.reasonHint':
+      'UI panel — the tenant page’s Fleet card, which shows the last stop’s reason',
+    'platformAdmin.tenant.fleet.error.failedBody':
+      'UI panel — the tenant page’s Fleet card, whose counts were re-read',
   },
   zh: {
     'platformAdmin.monitoring.subtitle':
       'UI panel — 每张卡片 is a monitoring tile, not a work item',
+    'platformAdmin.tenant.fleet.confirm.reasonHint':
+      'UI panel — 此卡片 is the tenant page’s Fleet card, not a work item',
+    'platformAdmin.tenant.fleet.error.failedBody':
+      'UI panel — 此卡片 is the tenant page’s Fleet card, not a work item',
   },
 };
 

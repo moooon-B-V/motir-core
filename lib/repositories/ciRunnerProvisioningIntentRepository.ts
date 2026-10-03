@@ -432,6 +432,35 @@ export const ciRunnerProvisioningIntentRepository = {
     });
   },
 
+  /**
+   * The DISTINCT organisations holding at least one intent in flight — the CI
+   * term of the fleet monitor's "who is running anything" (MOTIR-7316). Ids only,
+   * never the rows. Rides `[organization_id, status]`.
+   */
+  async listOrganizationsInFlight(tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.ciRunnerProvisioningIntent.findMany({
+      where: { status: { in: [...CI_RUNNER_INTENT_IN_FLIGHT] } },
+      distinct: ['organizationId'],
+      select: { organizationId: true },
+    });
+    return rows.map((row) => row.organizationId);
+  },
+
+  /**
+   * How many of one organisation's intents SETTLED at or after `since` — the
+   * fleet monitor's "was any CI running in the window" for an org with nothing
+   * in flight now (MOTIR-7316).
+   */
+  async countSettledForOrganizationSince(
+    organizationId: string,
+    since: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.ciRunnerProvisioningIntent.count({
+      where: { organizationId, settledAt: { gte: since } },
+    });
+  },
+
   /** Every intent whose container is still supposed to be alive. Used to settle
    *  the rows a reap destroyed, so the table cannot keep claiming a container
    *  exists after the sweeper has removed it. */

@@ -8,7 +8,9 @@ import {
   PlatformClassificationStateError,
   PlatformOrganizationNotFoundError,
 } from '@/lib/platform/errors';
+import type { FleetStopPreviewDTO, FleetStopResultDTO } from '@/lib/dto/platformFleetStop';
 import { platformBillingClassificationService } from '@/lib/services/platformBillingClassificationService';
+import { platformFleetStopService } from '@/lib/services/platformFleetStopService';
 
 /**
  * The INTERNAL-BILLING classification write — design
@@ -97,4 +99,75 @@ export async function setInternalBillingAction(
     console.error(`[admin] classification action failed for organization ${orgId}`, err);
     return { ok: false, code: 'FAILED' };
   }
+}
+
+/**
+ * STOP CONTAINERS — design `platform-admin/design-notes.md` § _AMENDMENT
+ * 2026-10-02 — Org page · Fleet card and Stop containers_ (MOTIR-7315), card
+ * MOTIR-7320. Two actions, the same transport shape as the classification above:
+ * resolve the principal, call ONE `platformFleetStopService` method, translate
+ * its typed errors into a discriminated result the dialog maps to its copy.
+ *
+ * ⚠️ THE GATE IS ASSERTED HERE AND AGAIN IN THE SERVICE, for the reason the
+ * header gives. The preview is a READ (`support`, as the service asks); the stop
+ * is `superadmin`, and a forged call from anyone below answers `NOT_PERMITTED`
+ * before any effect. The dialog's disabled button decides nothing.
+ */
+
+export type FleetStopFailureCode = 'REASON_REQUIRED' | 'NOT_FOUND' | 'NOT_PERMITTED' | 'FAILED';
+
+export type PreviewStopActionResult =
+  | { ok: true; preview: FleetStopPreviewDTO; countedAt: string }
+  | { ok: false; code: Exclude<FleetStopFailureCode, 'REASON_REQUIRED'> };
+
+export type StopContainersActionResult =
+  | { ok: true; result: FleetStopResultDTO }
+  | { ok: false; code: FleetStopFailureCode };
+
+/** What a stop WOULD do now — the confirmation's counts (design S3 e–g). */
+export async function previewStopAction(orgId: string): Promise<PreviewStopActionResult> {
+  try {
+    const principal = await requirePlatformStaff('support');
+    const preview = await platformFleetStopService.preview(principal, orgId);
+    return { ok: true, preview, countedAt: new Date().toISOString() };
+  } catch (err) {
+    if (err instanceof PlatformOrganizationNotFoundError) return { ok: false, code: 'NOT_FOUND' };
+    if (err instanceof NotPlatformStaffError) return { ok: false, code: 'NOT_PERMITTED' };
+    console.error(`[admin] fleet stop preview failed for organization ${orgId}`, err);
+    return { ok: false, code: 'FAILED' };
+  }
+}
+
+/**
+ * Stop the org's charged containers (design S3 → S4).
+ *
+ * ⚠️ THE PAGE RE-READS ON EVERY OUTCOME BUT A REFUSED REASON. A stop is three
+ * stop paths, not one transaction: after `FAILED` some containers may already
+ * be gone, and after `NOT_PERMITTED` the foot must show the role it now has. So
+ * the Fleet card's tiles and its last-stop row, and the action log beneath it —
+ * all server-rendered — re-read here. The result itself is held by the dialog's
+ * island, which the refresh does not remount.
+ */
+export async function stopContainersAction(
+  orgId: string,
+  reason: string,
+): Promise<StopContainersActionResult> {
+  let outcome: StopContainersActionResult;
+  try {
+    const principal = await requirePlatformStaff('superadmin');
+    const result = await platformFleetStopService.stop(principal, orgId, reason);
+    outcome = { ok: true, result };
+  } catch (err) {
+    // Refused before any effect, so there is nothing to re-read.
+    if (err instanceof MissingAuditReasonError) return { ok: false, code: 'REASON_REQUIRED' };
+    if (err instanceof PlatformOrganizationNotFoundError) return { ok: false, code: 'NOT_FOUND' };
+    if (err instanceof NotPlatformStaffError) {
+      outcome = { ok: false, code: 'NOT_PERMITTED' };
+    } else {
+      console.error(`[admin] fleet stop failed for organization ${orgId}`, err);
+      outcome = { ok: false, code: 'FAILED' };
+    }
+  }
+  revalidatePath(`/admin/tenants/${orgId}`);
+  return outcome;
 }

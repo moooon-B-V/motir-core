@@ -19,7 +19,9 @@ import type {
 } from '@/lib/dto/platformHealth';
 import { requirePlatformStaff } from '@/lib/platform/auth';
 import { platformHealthService } from '@/lib/services/platformHealthService';
+import { platformFleetMonitorService } from '@/lib/services/platformFleetMonitorService';
 import { platformIndexAllowanceService } from '@/lib/services/platformIndexAllowanceService';
+import { FleetSection, type FleetRead } from './_components/FleetSection';
 import { IndexAllowanceSection } from './_components/IndexAllowanceSection';
 
 /**
@@ -61,20 +63,75 @@ export const metadata: Metadata = {
  */
 export const dynamic = 'force-dynamic';
 
+/** The kills list's reach — the design titles it "last 24 hours". */
+const FLEET_KILLS_WINDOW_MS = 24 * 60 * 60_000;
+
+/**
+ * Settle one Fleet read so its failure stays INSIDE its own card (design
+ * MOTIR-7314 frames 5 and 8): a throw here must not reject the page's
+ * `Promise.all` and take Panel 8 and the Index allowance down with it. The
+ * error is logged, never rendered — the card says, in words, that nothing loaded.
+ */
+async function settleFleetRead<T>(label: string, read: Promise<T>): Promise<FleetRead<T>> {
+  try {
+    return { status: 'ok', data: await read };
+  } catch (err) {
+    console.error(`[admin/monitoring] the fleet ${label} read failed`, {
+      detail: err instanceof Error ? err.message.slice(0, 300) : 'unknown',
+    });
+    return { status: 'failed' };
+  }
+}
+
+/** A `?fleetPage=` / `?killsPage=` value as a page number; anything else is page 1. */
+function pageParam(value: string | undefined): number | undefined {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
 export default async function AdminMonitoringPage({
   searchParams,
 }: {
-  searchParams: Promise<{ reason?: string; q?: string; page?: string }>;
+  searchParams: Promise<{
+    reason?: string;
+    q?: string;
+    page?: string;
+    fleetPage?: string;
+    killsPage?: string;
+  }>;
 }) {
   const principal = await requirePlatformStaff('support');
   const t = await getTranslations('platformAdmin');
   const format = await getFormatter();
   const params = await searchParams;
-  const [health, indexAllowance] = await Promise.all([
+  const now = new Date();
+  const [health, indexAllowance, fleetOrgs, fleetKills] = await Promise.all([
     platformHealthService.read(principal),
     // Monitoring · Index allowance (MOTIR-4595, design Panel 13) — internal
     // accounting only; Motir does not charge for code indexing.
     platformIndexAllowanceService.read(principal, params),
+    // Monitoring · Fleet (MOTIR-7319, design MOTIR-7314) — two reads, each
+    // settled on its own so each card owns its own failure. Paged by their own
+    // params so neither resets the Stopped list's `page`.
+    settleFleetRead(
+      'organisations',
+      platformFleetMonitorService.listRunningOrgs(
+        principal,
+        { page: pageParam(params.fleetPage) },
+        now,
+      ),
+    ),
+    settleFleetRead(
+      'kills',
+      platformFleetMonitorService.listKills(
+        principal,
+        {
+          since: new Date(now.getTime() - FLEET_KILLS_WINDOW_MS),
+          page: pageParam(params.killsPage),
+        },
+        now,
+      ),
+    ),
   ]);
 
   return (
@@ -175,6 +232,19 @@ export default async function AdminMonitoringPage({
       </Card>
 
       <IndexAllowanceSection data={indexAllowance} />
+
+      <FleetSection
+        orgs={fleetOrgs}
+        kills={fleetKills}
+        now={now}
+        query={{
+          reason: params.reason,
+          q: params.q,
+          page: params.page,
+          fleetPage: params.fleetPage,
+          killsPage: params.killsPage,
+        }}
+      />
     </div>
   );
 }
