@@ -5,7 +5,8 @@
   MOTIR-1343 implements — no ask code ships until these points are pinned.
   **No application behaviour ships in this subtask** (the ADR only).
   **Amended 2026-09-30** by MOTIR-7044 — a third intent, `debug` (see
-  _AMENDMENT 1_ at the end).
+  _AMENDMENT 1_ at the end). **Amended 2026-10-03** by MOTIR-7461 — a
+  fourth intent, `guide` (see _AMENDMENT 2_ at the end).
 - **Story / Subtask:** MOTIR-1343 (The AI assistant — Ask about this project) ·
   Subtask MOTIR-1816.
 - **Consumed by:** MOTIR-1815 (design: the cited-answer turn and the correction
@@ -442,3 +443,261 @@ disposition, and moved by a §3 re-run with `intentCorrected` set.
   and nothing else.
 - **The header report button**, which stays where it is and files into the
   current project. Moving or relabelling it is out of this story.
+
+---
+
+## AMENDMENT 2 (2026-10-03) — a fourth intent, `guide`
+
+- **Status:** Accepted on approval of MOTIR-7461's pull request. It **extends**
+  §1, §2, §3 and §5, and it makes **one exception to §5**: a guide conversation
+  is the one conversation whose turns do not alternate (A2.1). Every rule above,
+  and all of AMENDMENT 1, holds for `ask`, `plan_change` and `debug` exactly as
+  written.
+- **Story / Subtask:** MOTIR-7459 (Guide me through a manual work item) ·
+  Subtask MOTIR-7461. It records the direction of MOTIR-7458 (the
+  planner-recorded decision that a manual card is guided by Motir AI, not run)
+  and does not re-open it.
+- **Consumed by:** MOTIR-7459. That means the design MOTIR-7462, the motir-ai
+  `guide_work_item` handler MOTIR-7463 and its tests MOTIR-7465, the motir-core
+  intent plumbing MOTIR-7464, the landing of a guide turn's result MOTIR-7470,
+  the overlay's guide mode MOTIR-7466, the door on the item page MOTIR-7467,
+  its Postgres tests MOTIR-7468 and the acceptance run MOTIR-7469. Outside the
+  story, MOTIR-7460 (the manual-work gate) reuses A2.2's address, and MOTIR-1344
+  (Help with a task) reuses A2.5's `edit_item` landing.
+
+### Context
+
+A manual card (`executor: human`, or `type: manual`) can carry an ordered to-do
+list (`docs/decisions/work-item-todo-list.md`), and the CLI `motir guide`
+protocol (MOTIR-6708, `motir-meta` `prompts/guide.md`) walks a person through
+it one step at a time. That walk reaches nobody who does not work in a
+terminal. This story moves it into the ONE Motir AI conversation, opened from a
+**Guide me through** door on the card. That is a fourth intent, not a new
+surface: §5 and the callout registry (`lib/planning/aiCallout.ts`, _"a row is a
+LABEL, not a route"_) rule out a second panel.
+
+The record above does not say how a guide turn is told apart, what crosses the
+wire, which job it runs, or which writes landing its result may make. This
+amendment answers those questions.
+
+Verified on `origin/main` @ `b7bb21ec7` (motir-core) and `origin/main` @
+`6bd06d5d` (motir-ai), 2026-10-03:
+
+| Fact                                                                                                                                                                             | Where                                                                                                     |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| The manual predicate is `executor === 'human' \|\| type === 'manual'`, and it is what keeps a card out of agent runs.                                                            | `lib/dto/ready.ts` (`isManualReadyItem`)                                                                  |
+| A turn's anchor already crosses the wire as `anchorKey`, documented as _"DATA, not an intent or a mode"_, and it is persisted on the turn.                                       | `app/api/ai/ask/route.ts`; `prisma/schema.prisma` (`PlanChangeTurn.anchorKey`)                            |
+| `PlanningMode` is `project \| generation \| replan \| contextual \| roadmap`, resolved from WHERE the overlay was launched. `planItem` is written only for a `work-item` origin. | `lib/planning/launcher.ts` (`PlanningMode`, `resolvePlanningMode`, `OVERLAY_PARAM_NAMES`)                 |
+| A conversation is a `PlanChangeSession` scoped by `targetKeys`, with an `origin` enum (`conversation \| mcp \| generation \| expand \| cadence \| legacy`).                      | `prisma/schema.prisma` (`PlanChangeSession`, `enum PlanSessionOrigin`)                                    |
+| Every to-do write is `work_item:edit` on the card. A tick writes no revision; add, edit, reorder and delete each write one. Nothing in the service touches `work_item.status`.   | `lib/services/workItemTodosService.ts` (`addTodo`, `updateTodo`, `moveTodo`, `setTodoDone`, `deleteTodo`) |
+| Ticking the last to-do moves no status, by decision.                                                                                                                             | `docs/decisions/work-item-todo-list.md` §3                                                                |
+| A card edit runs through one service method with a revision, and it already takes an optimistic-concurrency guard.                                                               | `lib/services/workItemsService.ts` (`updateWorkItem`, `opts.expectedUpdatedAt`)                           |
+| A pending approval gate owns its card's status; the owned move is refused by hand and goes through the gate's decide door.                                                       | MOTIR-4887; `app/api/approval-gates/[id]/decide/route.ts`                                                 |
+| The ask door spends the `ai:generate` rate-limit bucket and the turn's job spends AI credits under `ai:plan`.                                                                    | `app/api/ai/ask/route.ts`; `lib/services/aiAskService.ts`                                                 |
+| motir-ai registers one handler per job kind; `debug_bug` is the latest.                                                                                                          | motir-ai `src/jobs/registry.ts`                                                                           |
+
+### Decision
+
+#### A2.1 — The intent is chosen by the DOOR, not by a classifier. (Extends §1 and §2; one exception to §5.)
+
+Three options were live:
+
+| Option                                                                                              | Verdict    | Reason                                                                                                                                                                                                                                          |
+| --------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **(1) A fourth intent, `guide`, fixed by the door.** Every turn of a guide conversation is `guide`. | **CHOSEN** | The guide's subject is the card the door was pressed on. That is already known before a word is typed, which is the same reason `anchorKey` is _"DATA, not an intent or a mode"_ (`app/api/ai/ask/route.ts`).                                   |
+| **(2) Route guide through `ask_project`'s classifier**, as `debug` is (A1.1).                       | REJECTED   | `debug` is classified because a report's words must be read to know it is a bug. A guide's subject is not in its words. Classifying would spend a completion on every turn to rediscover a known fact, and a guide turn could misfire as `ask`. |
+| **(3) No intent: a separate guide endpoint and panel.**                                             | REJECTED   | It is a second surface, which §5 and `aiCallout.ts` (_"a row is a LABEL, not a route"_) refuse.                                                                                                                                                 |
+
+**§1 still holds literally: the client never sends an intent.** The door
+creates or resumes a guide CONVERSATION (A2.2). Each turn is posted to
+`POST /api/ai/ask` with its `sessionId`, exactly as today. The server reads the
+session's origin, records the turn's `intent` as `guide`, and dispatches
+`guide_work_item`. No `ask_project` job runs for a guide turn, so no classifier
+completion is spent.
+
+**The one exception to §5.** §5 says a thread may alternate freely and has no
+session-scoped mode. A guide conversation is session-scoped by construction:
+every turn in it is `guide`, and the person cannot switch it into planning or
+asking mid-thread. To plan or ask, they open Motir AI from the orb, which is a
+different conversation. The exception is bounded to conversations the guide
+door created. Every other conversation keeps §5 unchanged.
+
+**§3's correction marker does not appear on a guide turn.** There is no other
+intent to re-run a guide turn as. A wrong guide answer is corrected by saying so
+in the next turn, and a wrong write is undone by its inverse action (A2.4).
+
+#### A2.2 — The address, the conversation and the persisted turn. (Extends §1's wire and persisted row.)
+
+| Concern                      | Pinned value                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **The overlay address**      | `?plan=guide&planFrom=guide&planItem=<KEY>`. `PlanningMode` gains `guide`; `PlanningLaunchContext` gains `{ kind: 'guide'; itemKey }`, which `resolvePlanningMode` maps to `guide`. `OVERLAY_PARAM_NAMES` gains no new name: `planItem` is now written and read for the `guide` origin as well as `work-item`. Reloading the address restores the conversation and the canvas. |
+| **The conversation**         | A `PlanChangeSession` whose `origin` is a new `PlanSessionOrigin` value, `guide`, with `targetKeys = [<KEY>]`. It is a conversation about one card, never a planning session: it submits no plan and takes no `PlanTargetLock`, so it never parks the card at `planning`.                                                                                                      |
+| **Which conversation opens** | On a card that HAS to-do rows, the door resumes the latest guide conversation on that card by this viewer, or starts one. On a card with NO rows, the door always starts a new one, because a temporary walk (A2.3) cannot be resumed.                                                                                                                                         |
+| **The persisted turn**       | `PlanChangeTurn.intent` gains `guide`, with a generated migration. It is set on every `user` turn of a guide conversation, and `PlanChangeTurn.anchorKey` is set to `<KEY>` on every such turn. `intentCorrected` stays false (A2.1). The column's other rules are unchanged.                                                                                                  |
+| **The temporary list**       | Stored on the guide conversation, not on the card: its proposed rows with conversation-local ids, and each row's done state. It is discarded with the conversation, and written to the card only by `write_todos`.                                                                                                                                                             |
+
+#### A2.3 — The job: `guide_work_item`. Its input and its closed action set. (Extends §2.)
+
+motir-ai registers one new job kind, `guide_work_item`. It runs no classifier
+and no plan engine.
+
+**Its input**, read fresh by motir-core when each turn is submitted:
+
+| Field                   | Content                                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------- |
+| the card                | key, title, type, executor, `descriptionMd`, `explanationMd`, status, and its linked pull requests            |
+| the to-do rows          | each row's id, text, notes, command, executor and done state, in order; or the temporary list, marked as such |
+| the conversation so far | the guide conversation's turns                                                                                |
+
+**Its result** is a message plus zero or more ACTIONS from this closed set.
+motir-core refuses any other action and lands nothing for it.
+
+| Action                                                                           | What it does                                                                                              | Legal when                                                           |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `propose_todos` (ordered list)                                                   | Offers a list on a card with no rows, with the save-or-walk choice. Until saved it is the temporary list. | the card has no rows                                                 |
+| `write_todos` (ordered list, with ticks so far)                                  | Saves the list to the card.                                                                               | only on a turn where the person chose to save, at the offer or later |
+| `tick` / `untick` (row id)                                                       | Marks one row done or not done.                                                                           | `tick` only on the person's word that the step is done               |
+| `add_step` (text, notes, command; after row id)                                  | A list CORRECTION: adds a step.                                                                           | the list is saved or temporary                                       |
+| `revise_step` (row id, the fields that change)                                   | A list CORRECTION: rewrites a step.                                                                       | the row is not ticked                                                |
+| `remove_step` (row id)                                                           | A list CORRECTION: removes a step.                                                                        | the row is not ticked                                                |
+| `move_step` (row id, new place)                                                  | A list CORRECTION: reorders a step.                                                                       | the row is not ticked                                                |
+| `current_step` (row id)                                                          | Names the step the conversation is on, for the canvas.                                                    | always                                                               |
+| `offer_close`                                                                    | Offers to close the card.                                                                                 | every row is ticked                                                  |
+| `close`                                                                          | Moves the card to Done (A2.6).                                                                            | only on a turn whose words consent, after an `offer_close`           |
+| `edit_item` (`title`, `descriptionMd`, `explanationMd`; each the full new value) | A live edit of the GUIDED card when the conversation changes what needs to be done (A2.5).                | the guided card only                                                 |
+| `cannot_do` (row id, reason)                                                     | Records a problem no correction to the list can fix, and the walk stops.                                  | no list correction would fix it                                      |
+
+**The semantics are `motir guide`'s**, adopted from `prompts/guide.md`: take
+the card's list or propose one, give ONE step per turn with its notes and
+command, tick only on the person's word, resume at the first unticked row, and
+offer the close. **One deliberate difference, decided by the requester on
+2026-10-03:** where the protocol stops on a step that cannot be done as
+written, the guide CORRECTS the list and carries on. It stops (`cannot_do`)
+only for a problem no change to the list can fix, such as access the person
+cannot get or a decision that is not theirs.
+
+**Every correction and every `edit_item` is stated in the turn's message, with
+its reason.** An undo is the inverse action: an `add_step` undone is a
+`remove_step`, a `revise_step` or `edit_item` undone restores the previous
+value.
+
+**The offer on a card with no rows states both choices and what each costs.**
+Saving writes the list to the card, so the walk can be stopped and resumed.
+Walking without saving writes nothing to the card and cannot be resumed if
+stopped. In a temporary walk, `tick`, `untick` and `current_step` name the
+temporary list's own row ids and are recorded on the conversation only. The
+proposed list is changed only through the conversation; the canvas offers no
+editing.
+
+#### A2.4 — The writes: who lands each action, and under what permission. (Extends §2 and Consequence 5.)
+
+motir-core lands every action, **as the person who sent the turn, under their
+own permissions**. motir-ai writes nothing. A turn by a viewer without
+`work_item:edit` on the card is refused before any job runs, as is a turn on a
+card that is not manual (A2.7).
+
+| Action                                                   | Saved list: lands through                                                                      | Temporary list | Permission             |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------- | ---------------------- |
+| `write_todos`                                            | `workItemTodosService.addTodo` per row in order, then `setTodoDone` for each row ticked so far | n/a            | `work_item:edit`       |
+| `tick` / `untick`                                        | `workItemTodosService.setTodoDone`                                                             | conversation   | `work_item:edit`       |
+| `add_step` / `revise_step` / `remove_step` / `move_step` | `workItemTodosService.addTodo` / `updateTodo` / `deleteTodo` / `moveTodo`                      | conversation   | `work_item:edit`       |
+| `edit_item`                                              | `workItemsService.updateWorkItem` (A2.5)                                                       | same           | `work_item:edit`       |
+| `close`                                                  | the shipped status transition, or the gate's decide door (A2.6)                                | same           | `work_item:edit`       |
+| `cannot_do`                                              | `commentsService.addComment` on the guided card                                                | same           | `work_item:edit`       |
+| `propose_todos` / `current_step` / `offer_close`         | nothing on the card; recorded on the conversation                                              | conversation   | none beyond the turn's |
+
+**The writes land against the card as it stands at landing.** A person can
+tick, untick or edit rows on the canvas or on the item page while a turn runs.
+An action that names a row that no longer exists, or that is already in the
+state the action asks for, is skipped and recorded on the turn. It does not
+fail the turn. A correction aimed at a row that is now ticked is skipped the
+same way. The canvas and the next turn read the list as it now stands.
+
+**Nothing lands from a turn that did not run.** Actions are landed only from a
+settled job result. A refused, failed or out-of-credits turn ticks nothing and
+writes nothing.
+
+#### A2.5 — `edit_item` is the ONE conversation-to-card edit path, and Help with a task reuses it.
+
+`edit_item` lands through `workItemsService.updateWorkItem` with
+`expectedUpdatedAt` set to the card's `updatedAt` as the job saw it. If the
+card changed since, the edit is refused, stated in the next turn, and nothing
+is overwritten. A landed edit writes the card's normal revision, so it shows in
+the card's history and activity as the person's.
+
+It may set only `title`, `descriptionMd` and `explanationMd`, and only on the
+guided card. **MOTIR-1344 (Help with a task), when built, reuses this action
+and its landing for its own assist intent.** It does not add a second
+conversation-to-card writer.
+
+#### A2.6 — The close: consented, never automatic. (Reconciles with `work-item-todo-list.md` §3.)
+
+Ticking the last row still moves no status (`work-item-todo-list.md` §3,
+unchanged). The guide then offers the close, and only the person's yes moves
+the card.
+
+| Situation                                               | What `close` does                                                                                                                             |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| No linked pull request, no pending gate owns the status | Walks the card to Done along the workflow's declared edges, as `motir-meta` `prompts/mark.md` does, and adds the turn's summary as a comment. |
+| A pending approval gate owns the card's status          | Goes through that gate's decide door (MOTIR-4887), never around it.                                                                           |
+| The card has a linked pull request                      | Writes no status. The message says the pull request's merge closes the card and names it, as `motir guide` does.                              |
+| The person says no                                      | Nothing moves.                                                                                                                                |
+
+This does not make the to-do list a third status authority. The trigger is the
+person's own consent in the conversation, which is the same act as pressing
+the status control. A click on the last checkbox still moves nothing.
+
+#### A2.7 — The manual predicate, and what a guide never does.
+
+**The predicate is `isManualReadyItem`** (`lib/dto/ready.ts`). A guide turn on
+a card it does not hold true for is refused before any job runs. The door shows
+only where it holds, and only when the card is not Done or archived, the viewer
+can edit it, and Motir AI is available to them (configured, with `ai:plan`).
+
+**A guide never:**
+
+| Never                                                                                            | Why                                                                                             |
+| ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| runs a step, by Motir AI or the hosted agent                                                     | MOTIR-6856; an `agent` row is reported as not runnable yet, and the person does it or leaves it |
+| reads or acts on a third-party system                                                            | Motir AI says it cannot check, and takes the person's word                                      |
+| edits any card but the guided one                                                                | A2.5                                                                                            |
+| edits the guided card's type, executor, assignee, sizing or status (status only through `close`) | A2.5, A2.6                                                                                      |
+| changes or removes a ticked row                                                                  | A2.3                                                                                            |
+| changes the list or the card without saying so in the turn                                       | A2.3                                                                                            |
+| writes a proposed list the person did not choose to save                                         | A2.3                                                                                            |
+| claims the card or moves it to In Progress when the walk starts                                  | status moves only through `close`; the CLI protocol's claim is not adopted                      |
+
+#### A2.8 — Credits.
+
+A guide turn is metered like an `ask` turn. It spends the `ai:generate`
+rate-limit bucket at the door and AI credits under `ai:plan` for its job. Out
+of credits is the shipped paywall state, and the turn writes nothing (A2.4).
+
+### Consequences
+
+1. **The ask door gains a second dispatch arm.** `POST /api/ai/ask` reads the
+   session's origin: a guide conversation dispatches `guide_work_item`, every
+   other conversation dispatches `ask_project` exactly as §2 says.
+2. **The rail gains a guide turn and the canvas gains a guide view.** While the
+   conversation is a guide, the canvas shows the card's to-do list (or the
+   temporary list, marked not saved) in place of the project tree.
+3. **The vitest gates gain a guide arm.** A guide turn writes only to the
+   guided card, only through A2.4's landers, never ticks on a turn that did
+   not run, and never closes without a consenting turn.
+4. **`intentCorrected` does not count guide turns**, because a guide turn has
+   no other intent to be corrected to.
+
+### What this does NOT decide
+
+- **The `guide_work_item` prompt**, how it proposes steps from a description,
+  and how it reads consent from the person's words. That is MOTIR-7463.
+- **The UI**: the door's copy and placement, the canvas, the tick animation and
+  every state. That is MOTIR-7462's design.
+- **The manual-work GATE** a parent run raises on a manual child, the Waiting on
+  you tab and its row's door. That is MOTIR-7460, which decides it in
+  `docs/decisions/approval-gates.md`.
+- **Attaching a screenshot or file to a guide turn.** That is MOTIR-7471.
+- **Running an agent step.** MOTIR-6856 keeps it out until Motir has a secret
+  store.
+- **The CLI `motir guide` protocol**, which is unchanged.
+- **A door in the quick view.** The item page is the only place a guide starts.
