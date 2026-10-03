@@ -328,17 +328,29 @@ describe('the boot doors’ edges', () => {
     const reader = res.body!.getReader();
     await frames(reader)();
     let release: () => void = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let read: Promise<unknown> = Promise.resolve();
     const real = boot.readBootSince.bind(boot);
     vi.spyOn(boot, 'readBootSince').mockImplementationOnce(async (...args) => {
-      await new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      return real(...args);
+      entered();
+      await released;
+      read = real(...args);
+      return read as ReturnType<typeof real>;
     });
     waiting.shift()!();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await held;
     await reader.cancel();
     release();
+    // Settle the held read's own transaction before the test ends: a timer here
+    // left it `idle in transaction` under CI load, which the in-flight probe fails.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await read.catch(() => undefined);
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(waiting).toEqual([]);
   });
