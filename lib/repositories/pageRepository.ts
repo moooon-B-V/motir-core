@@ -209,6 +209,24 @@ export const pageRepository = {
   },
 
   /**
+   * The id, title and folder of each page in `ids`, ARCHIVED ONES INCLUDED, in ONE query —
+   * the Archived pages list's came-from trail (MOTIR-7421), which names where an
+   * archived page used to sit, its archived ancestors among it. Unordered; an id
+   * that is gone simply does not come back. Unlike {@link findTrailByIds}, which
+   * draws a live page's breadcrumb and so reads live pages only.
+   */
+  async findTitlesByIds(
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<Page, 'id' | 'title' | 'folderId'>>> {
+    if (ids.length === 0) return [];
+    return tx.page.findMany({
+      where: { id: { in: [...ids] } },
+      select: { id: true, title: true, folderId: true },
+    });
+  },
+
+  /**
    * Serialise every PLACEMENT write in one project — a create, a move, a subtree
    * rewrite — for the length of the caller's transaction (MOTIR-7369).
    *

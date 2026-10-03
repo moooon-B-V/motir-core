@@ -264,13 +264,21 @@ describe('pageRepository — the reads that still see an archived page', () => {
     // The DTO carries the archive state; `archivedBy` is null on a live page.
     const locked = await inTenant(t, (tx) => pageRepository.findWithBodyById(sub.id, tx));
     expect(
-      toPageDto(toLockedPageRow(locked!), { canEdit: true, canDelete: false }, 'Ann'),
+      toPageDto(
+        toLockedPageRow(locked!),
+        { canEdit: true, canDelete: false },
+        { archiver: 'Ann', archiveRootTitle: 'Root' },
+      ),
     ).toMatchObject({
       archivedAt: locked!.archivedAt!.toISOString(),
-      archiveRootId: root.id,
+      archiveRoot: { id: root.id, title: 'Root' },
       archivedBy: { id: t.userId, name: 'Ann' },
+      // Archived: never editable, and a sub-page does not restore — its root does.
+      canEdit: false,
+      canRestore: false,
     });
     expect(toPageDto(toLockedPageRow(locked!), { canEdit: true, canDelete: false })).toMatchObject({
+      archiveRoot: { id: root.id, title: '' },
       archivedBy: { id: t.userId, name: '' },
     });
   });

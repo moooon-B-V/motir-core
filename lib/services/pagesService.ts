@@ -7,6 +7,7 @@ import { userRepository } from '@/lib/repositories/userRepository';
 import {
   toBase64,
   toLockedPageRow,
+  toPageArchivedListItemDto,
   toPageDto,
   toPageLevelRow,
   toPageListItemDto,
@@ -25,11 +26,14 @@ import {
   PageLevelCursorInvalidError,
   PageNotFoundError,
   PageVersionNotFoundError,
+  archivePage as archivePageProcedure,
   createPage as createPageProcedure,
+  deletePage as deletePageProcedure,
   movePage as movePageProcedure,
   pageStoreFor,
   parsePlacement,
   renamePage as renamePageProcedure,
+  restorePage as restorePageProcedure,
   restorePageVersion as restorePageVersionProcedure,
   savePageUpdate as savePageUpdateProcedure,
   systemClock,
@@ -38,7 +42,13 @@ import {
   type PageStore,
 } from '@/lib/pages';
 import type {
+  ArchivePageResultDto,
   CreatePageInput,
+  DeletePageResultDto,
+  ListArchivedPagesInput,
+  PageArchiveActionInput,
+  PageArchivedListDto,
+  RestorePageResultDto,
   GetPageInput,
   GetPageTrailInput,
   ListPageTreeLevelInput,
@@ -103,6 +113,18 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //    exactly once.
 //
 // 5. HISTORY IS READ UNDER `page:view` AND RESTORED UNDER `page:edit` (§5).
+//
+// 6. ARCHIVE AND RESTORE ARE `page:edit`; PERMANENT DELETE IS `page:delete`
+//    (§7, MOTIR-7421). Each takes the FOLDER-structure lock, then the
+//    PAGE-structure lock — `foldersService.deleteFolder`'s order — before the
+//    package's procedure runs, so an archive, a restore or a delete serialises
+//    with a move, a create and a folder delete in the project and cannot
+//    deadlock one of them. The package re-reads the page under those locks, so
+//    a move that loses the race to an archive is refused `PAGE_ARCHIVED`, never
+//    applied to a stale live row. Every archived-page refusal (`PAGE_ARCHIVED`
+//    on a save, rename, move, version restore; `PAGE_PARENT_ARCHIVED` on a
+//    create) is the PACKAGE's, and passes through untouched — no check here
+//    duplicates one.
 
 /** The page, refused as unknown unless it lives in `projectId`. */
 async function findInProject(store: PageStore, projectId: string, pageId: string) {
@@ -183,6 +205,45 @@ async function assertLevelParent(
     const page = await pageRepository.findById(parent.pageId, tx);
     if (!page || page.projectId !== projectId) throw new PageNotFoundError(parent.pageId);
   }
+}
+
+/**
+ * Both structure locks, in `foldersService.deleteFolder`'s order (contract 6).
+ * The package takes the page lock again inside the procedure; an advisory
+ * transaction lock is re-entrant, so that costs nothing.
+ */
+async function lockArchiveStructure(projectId: string, tx: Prisma.TransactionClient) {
+  await folderRepository.lockStructure(projectId, tx);
+  await pageRepository.lockStructure(projectId, tx);
+}
+
+/**
+ * The folder chain each folder in `topFolderIds` sits in, root-first — the
+ * came-from trail's folders. One ancestor walk per DISTINCT folder, then ONE
+ * name read for every folder any chain names.
+ */
+async function folderChains(
+  topFolderIds: readonly string[],
+  tx: Prisma.TransactionClient,
+): Promise<Map<string, Array<{ id: string; name: string }>>> {
+  const distinct = [...new Set(topFolderIds)];
+  const walks = new Map<string, string[]>();
+  for (const id of distinct) walks.set(id, await folderRepository.findAncestorIds(id, tx));
+  const all = [...new Set([...walks.values()].flat())];
+  const byId = new Map((await folderRepository.findByIds(all, tx)).map((f) => [f.id, f]));
+  const chains = new Map<string, Array<{ id: string; name: string }>>();
+  for (const id of distinct) {
+    const chain: Array<{ id: string; name: string }> = [];
+    let at: string | null = id;
+    while (at !== null && chain.length <= all.length) {
+      const row = byId.get(at);
+      if (!row) break;
+      chain.push({ id: row.id, name: row.name });
+      at = row.parentFolderId;
+    }
+    chains.set(id, chain.reverse());
+  }
+  return chains;
 }
 
 function toSummary(row: PageRow): PageSummaryDto {
@@ -353,7 +414,10 @@ export const pagesService = {
 
   /**
    * Read one page with its canonical state, and whether the caller may write it.
-   * `page:view`. The read takes no row lock, so it never waits on a save.
+   * `page:view`. The read takes no row lock, so it never waits on a save. An
+   * ARCHIVED page still opens here (§7), read-only whatever the role, with who
+   * archived it and its archive root — a sub-page's banner links to the root,
+   * the only page of the set that restores or deletes (MOTIR-7421).
    */
   async getPage(ctx: ServiceContext, input: GetPageInput): Promise<PageDto> {
     return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
@@ -367,10 +431,172 @@ export const pagesService = {
         ctx,
         tx,
       );
-      return toPageDto(toLockedPageRow(record), {
-        canEdit: canEditPages,
-        canDelete: canDeletePages,
+      const names: { archiver?: string; archiveRootTitle?: string } = {};
+      if (record.archivedById !== null) {
+        const [archiver] = await userRepository.findByIds([record.archivedById], tx);
+        names.archiver = archiver?.name;
+      }
+      if (record.archiveRootId !== null && record.archiveRootId !== record.id) {
+        names.archiveRootTitle = (await pageRepository.findById(record.archiveRootId, tx))?.title;
+      }
+      return toPageDto(
+        toLockedPageRow(record),
+        { canEdit: canEditPages, canDelete: canDeletePages },
+        names,
+      );
+    });
+  },
+
+  /**
+   * Archive a page with every LIVE sub-page under it, as one set (§7) — `page:edit`.
+   * The package refuses a page already archived (`PAGE_ARCHIVED`). Contract 6.
+   */
+  async archivePage(
+    ctx: ServiceContext,
+    input: PageArchiveActionInput,
+  ): Promise<ArchivePageResultDto> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
+      await lockArchiveStructure(input.projectId, tx);
+      const store = pageStoreFor(tx);
+      await findInProject(store, input.projectId, input.pageId);
+      const result = await archivePageProcedure(store, systemClock, {
+        pageId: input.pageId,
+        projectId: input.projectId,
+        actorId: ctx.userId,
       });
+      return {
+        archivedIds: [...result.archivedIds],
+        rootId: result.rootId,
+        subPageCount: result.archivedIds.length - 1,
+      };
+    });
+  },
+
+  /**
+   * Restore an archive ROOT and exactly its set, to the first rung of §7's
+   * landing ladder that still holds — `page:edit`. Returns where it landed with
+   * the parent's display name, for the restored-elsewhere notice. The package
+   * refuses a live page (`PAGE_NOT_ARCHIVED`) and a sub-page
+   * (`PAGE_ARCHIVE_ROOT_REQUIRED`). Contract 6.
+   */
+  async restorePage(
+    ctx: ServiceContext,
+    input: PageArchiveActionInput,
+  ): Promise<RestorePageResultDto> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanEditPages(input.projectId, ctx, tx);
+      await lockArchiveStructure(input.projectId, tx);
+      const store = pageStoreFor(tx);
+      await findInProject(store, input.projectId, input.pageId);
+      const { restoredIds, landing } = await restorePageProcedure(store, {
+        pageId: input.pageId,
+        projectId: input.projectId,
+        actorId: ctx.userId,
+      });
+      let title: string | null = null;
+      if (landing.parentPageId !== null) {
+        title = (await pageRepository.findById(landing.parentPageId, tx))?.title ?? null;
+      } else if (landing.folderId !== null) {
+        title = (await folderRepository.findById(landing.folderId, tx))?.name ?? null;
+      }
+      return {
+        restoredIds: [...restoredIds],
+        landing: {
+          kind: landing.kind,
+          parentPageId: landing.parentPageId,
+          folderId: landing.folderId,
+          title,
+        },
+      };
+    });
+  },
+
+  /**
+   * PERMANENTLY delete an archive ROOT and its set, versions included — the one
+   * `page:delete` door (Manager only, MOTIR-7419). Only from the archive: the
+   * package refuses a live page (`PAGE_NOT_ARCHIVED`) and a sub-page
+   * (`PAGE_ARCHIVE_ROOT_REQUIRED`). Contract 6.
+   */
+  async deletePage(
+    ctx: ServiceContext,
+    input: PageArchiveActionInput,
+  ): Promise<DeletePageResultDto> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanDeletePages(input.projectId, ctx, tx);
+      await lockArchiveStructure(input.projectId, tx);
+      const store = pageStoreFor(tx);
+      await findInProject(store, input.projectId, input.pageId);
+      const { deletedIds } = await deletePageProcedure(store, {
+        pageId: input.pageId,
+        projectId: input.projectId,
+        actorId: ctx.userId,
+      });
+      return { deletedIds: [...deletedIds] };
+    });
+  },
+
+  /**
+   * The project's Archived pages, newest first — `page:view`, so a Viewer reads
+   * it. Archive ROOTS only (a sub-page that left with its root is not a row),
+   * keyset-paged by the repository (50 by default, 100 at most;
+   * `PAGE_CURSOR_INVALID` for a cursor it did not issue). Each row carries its
+   * came-from trail: its stored ancestors' titles in ONE read (archived ones
+   * included, a deleted one as an em dash), the folder chain its topmost page
+   * was filed in, and its archiver's name — every lookup batched over the page,
+   * never one per row.
+   */
+  async listArchivedPages(
+    ctx: ServiceContext,
+    input: ListArchivedPagesInput,
+  ): Promise<PageArchivedListDto> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      const { rows, nextCursor } = await pageRepository.listArchivedRoots(
+        input.projectId,
+        { cursor: input.cursor ?? null, limit: input.limit ?? null },
+        tx,
+      );
+
+      const ancestorIds = [...new Set(rows.flatMap((r) => r.ancestorPageIds))];
+      const ancestors = await pageRepository.findTitlesByIds(ancestorIds, tx);
+      const ancestorById = new Map(ancestors.map((p) => [p.id, p.title]));
+      const folderOfAncestor = new Map(ancestors.map((p) => [p.id, p.folderId]));
+
+      // A root's folder is its topmost page's: its own without ancestors, else
+      // the top ancestor's — read in the same batch as the titles. A deleted top
+      // ancestor leaves no folder to name.
+      const topFolderOf = new Map<string, string | null>();
+      for (const row of rows) {
+        const top = row.ancestorPageIds[0];
+        topFolderOf.set(
+          row.id,
+          top === undefined ? row.folderId : (folderOfAncestor.get(top) ?? null),
+        );
+      }
+      const chains = await folderChains(
+        [...topFolderOf.values()].filter((id): id is string => id !== null),
+        tx,
+      );
+
+      const archiverIds = [
+        ...new Set(rows.map((r) => r.archivedById).filter((id): id is string => id !== null)),
+      ];
+      const archivers = await userRepository.findByIds(archiverIds, tx);
+      const nameById = new Map(archivers.map((u) => [u.id, u.name]));
+
+      return {
+        items: rows.map((row) => {
+          const folderId = topFolderOf.get(row.id) ?? null;
+          return toPageArchivedListItemDto(
+            row,
+            row.archivedById === null ? undefined : nameById.get(row.archivedById),
+            ancestorById,
+            folderId === null ? [] : (chains.get(folderId) ?? []),
+          );
+        }),
+        nextCursor,
+      };
     });
   },
 

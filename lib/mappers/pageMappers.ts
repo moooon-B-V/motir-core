@@ -1,5 +1,6 @@
 import type { Page, PageVersion } from '@/generated/prisma/client';
 import type {
+  PageArchivedListItemDto,
   PageArchivedRootDto,
   PageDto,
   PageListItemDto,
@@ -210,16 +211,19 @@ export function toPageLevelRow(record: PageLevelRecord): PageLevelRow {
 /**
  * The page as the read model returns it (MOTIR-7277): the canonical state as
  * base64 — the editor's seed, from which it derives everything else — and
- * whether THIS caller may write it. Its archive state (MOTIR-7420) rides along:
- * `archivedBy` is `null` on a live page, and on an archived one whose archiver
- * was deleted (`archived_by_id` is `SET NULL`); `archiverName` is the caller's
- * resolved display name, `''` when it resolved none.
+ * whether THIS caller may write it. `caps` is the caller's ROLE: an archived
+ * page is never editable and only its root restores, whatever the role
+ * (MOTIR-7421), and this is where that is decided. Its archive state rides
+ * along: `archivedBy` is `null` on a live page, and on an archived one whose
+ * archiver was deleted (`archived_by_id` is `SET NULL`). `names` carries the
+ * caller's resolved archiver name and archive root title, `''` when unresolved.
  */
 export function toPageDto(
   row: LockedPageRow,
   caps: { canEdit: boolean; canDelete: boolean },
-  archiverName?: string,
+  names: { archiver?: string; archiveRootTitle?: string } = {},
 ): PageDto {
+  const archived = row.archivedAt !== null;
   return {
     id: row.id,
     projectId: row.projectId,
@@ -227,12 +231,19 @@ export function toPageDto(
     revision: row.revision,
     bodyState: toBase64(row.bodyState),
     updatedAt: row.updatedAt.toISOString(),
-    canEdit: caps.canEdit,
+    canEdit: caps.canEdit && !archived,
     canDelete: caps.canDelete,
+    canRestore: caps.canEdit && archived && row.archiveRootId === row.id,
     archivedAt: row.archivedAt?.toISOString() ?? null,
-    archiveRootId: row.archiveRootId,
+    archiveRoot:
+      row.archiveRootId === null
+        ? null
+        : {
+            id: row.archiveRootId,
+            title: row.archiveRootId === row.id ? row.title : (names.archiveRootTitle ?? ''),
+          },
     archivedBy:
-      row.archivedById === null ? null : { id: row.archivedById, name: archiverName ?? '' },
+      row.archivedById === null ? null : { id: row.archivedById, name: names.archiver ?? '' },
   };
 }
 
@@ -326,5 +337,26 @@ export function toPageTrailDto(
   return {
     folders: folders.map((f) => ({ id: f.id, name: f.name })),
     pages: pages.map((p) => ({ id: p.id, title: p.title })),
+  };
+}
+
+/**
+ * One Archived pages row with its came-from trail (MOTIR-7421). `ancestorTitles`
+ * names the stored ancestor pages that still exist, archived ones included; an
+ * ancestor deleted since is kept in place as an em dash, so the trail keeps its
+ * shape. `folders` is the chain the topmost page was filed in, root-first.
+ */
+export function toPageArchivedListItemDto(
+  record: PageArchivedRootRecord,
+  archiverName: string | undefined,
+  ancestorTitles: ReadonlyMap<string, string>,
+  folders: ReadonlyArray<{ id: string; name: string }>,
+): PageArchivedListItemDto {
+  return {
+    ...toPageArchivedRootDto(record, archiverName),
+    cameFrom: toPageTrailDto(
+      folders,
+      record.ancestorPageIds.map((id) => ({ id, title: ancestorTitles.get(id) ?? '\u2014' })),
+    ),
   };
 }
