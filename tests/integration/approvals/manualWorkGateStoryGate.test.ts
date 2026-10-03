@@ -803,6 +803,6 @@ describe('EXISTING KINDS — every shipped kind a person is asked still lists in
     expect(new Set(queue.items.map((row) => row.kind)).size).toBe(8);
     expect(queue.items.map((row) => row.gateId)).not.toContain(agentReviewId);
     // Each subject resolved: no row lists as a gone subject.
-    for (const row of queue.items) expect(row.subject.kind).toBe(row.kind);
+    for (const row of queue.items) expect(row.subject?.kind).toBe(row.kind);
   });
 });

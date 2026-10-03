@@ -322,6 +322,7 @@ describe('the handler, called directly', () => {
       ctx: fx.ctx,
       tx,
       resolvedStatusKey: 'done',
+      refusalVerdict: null,
     });
 
   it('resolves the card while it is manual, and nothing once it is not or is gone', async () => {
