@@ -63,6 +63,9 @@ const json = (status: number, body: unknown) =>
 const fetchMock = vi.fn();
 beforeEach(() => {
   fetchMock.mockReset();
+  // What no test arms answers 404 — a panel a create opens reads its boot and
+  // its terminal ticket, which a list test does not care about.
+  fetchMock.mockResolvedValue(json(404, {}));
   vi.stubGlobal('fetch', fetchMock);
 });
 afterEach(() => {

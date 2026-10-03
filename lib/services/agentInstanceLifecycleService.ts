@@ -207,11 +207,16 @@ async function ownInstance(
   project: ResolvedProject,
   instanceId: string,
   ctx: ServiceContext,
+  includeDeleted = false,
 ): Promise<AgentInstance> {
   const row = await inProject(project, ctx, (tx) =>
-    agentInstanceRepository.findLiveForOwner(instanceId, ctx.userId, tx),
+    includeDeleted
+      ? agentInstanceRepository.findById(instanceId, tx)
+      : agentInstanceRepository.findLiveForOwner(instanceId, ctx.userId, tx),
   );
-  if (!row || row.projectId !== project.id) throw new AgentInstanceNotFoundError(instanceId);
+  if (!row || row.projectId !== project.id || row.ownerId !== ctx.userId) {
+    throw new AgentInstanceNotFoundError(instanceId);
+  }
   return row;
 }
 
@@ -888,13 +893,6 @@ async function beginRollback(row: AgentInstance, detail: string): Promise<void> 
  */
 export const agentInstanceBootSteps = {
   /** The caller's own agent in the project, or `AgentInstanceNotFoundError` (§8's gate). */
-  async ownedInstance(
-    projectKey: string,
-    instanceId: string,
-    ctx: ServiceContext,
-  ): Promise<AgentInstance> {
-    return ownInstance(await resolveProject(projectKey, ctx), instanceId, ctx);
-  },
   handleOf,
   reload,
   failInstance,
@@ -908,6 +906,20 @@ export const agentInstanceBootSteps = {
 };
 
 export const agentInstanceLifecycleService = {
+  /**
+   * The caller's own instance on the project, behind `instance:use` — the boot
+   * read's gate (MOTIR-7399). `includeDeleted` is for a boot stream already open:
+   * its owner is still owed the last word on an agent deleted mid-boot.
+   */
+  async ownedInstance(
+    projectKey: string,
+    instanceId: string,
+    ctx: ServiceContext,
+    includeDeleted = false,
+  ): Promise<AgentInstance> {
+    return ownInstance(await resolveProject(projectKey, ctx), instanceId, ctx, includeDeleted);
+  },
+
   /** The caller's own live instances on the project, newest first, one page (§4, §8). */
   async list(
     projectKey: string,

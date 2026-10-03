@@ -242,6 +242,68 @@ describe('once running', () => {
   });
 });
 
+describe('the read-out’s edges', () => {
+  it('words each reason it can, and draws what it cannot as sent', () => {
+    readout(
+      boot({
+        outcome: 'failed',
+        steps: [
+          step(0, { step: 'provision', state: 'failed', startedAt: at(0), endedAt: at(1) }),
+          step(1, {
+            step: 'clone',
+            repository: 'acme/web',
+            state: 'failed',
+            startedAt: at(1),
+            endedAt: at(2),
+            detail: 'the GitHub App is not installed on acme',
+          }),
+          step(2, {
+            step: 'clone',
+            repository: 'acme/api',
+            state: 'skipped',
+            detail: 'no longer connected to the project',
+          }),
+          step(3, { step: 'machine_start', state: 'in_progress', startedAt: null }),
+        ],
+      }),
+      'failed',
+    );
+    const [provision, web, api, machine] = rows();
+    expect(provision!.getAttribute('data-state')).toBe('failed');
+    expect(web!.textContent).toMatch(/acme\/web/);
+    expect(web!.textContent).not.toMatch(/not installed on acme/);
+    expect(api!.textContent).toContain('no longer connected to the project');
+    expect(machine!.textContent).toContain('0:00');
+  });
+
+  it('announces the newest change of state, never the first paint', () => {
+    const first = boot();
+    const view = readout(first);
+    expect(screen.getByRole('status').textContent).toBe('');
+    const next = boot({
+      seq: 9,
+      steps: first.steps.map((s) =>
+        s.ordinal === 1 ? { ...s, state: 'done', endedAt: at(20), seq: 9 } : s,
+      ),
+    });
+    view.rerender(
+      <AgentBootReadout
+        boot={next}
+        agentState="starting"
+        waking={false}
+        onWake={noop}
+        onDelete={noop}
+      />,
+    );
+    expect(screen.getByRole('status').textContent).toMatch(/Machine started/);
+  });
+
+  it('draws nothing for a running attempt once the agent has moved on', () => {
+    readout(boot({ outcome: 'running' }), 'hibernated');
+    expect(document.querySelector('[data-testid="agent-boot"]')).toBeNull();
+  });
+});
+
 describe('applyBootFrame — a stale frame never overwrites a newer one', () => {
   it('applies a newer step, ignores an older seq, another attempt and an older snapshot', () => {
     const b = boot();
@@ -327,5 +389,59 @@ describe('useAgentBoot — resume and stop', () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('skips frames that are not the boot’s, retries a failed fetch, and stops on a refusal', async () => {
+    const b = boot();
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('network down'))
+      .mockResolvedValueOnce(
+        sse([': heartbeat\n\n', frame('error', { seq: 99 }), frame('snapshot', b)], true),
+      )
+      .mockResolvedValueOnce({ ok: false, status: 404, body: null } as Response);
+    vi.stubGlobal('fetch', fetchMock);
+    render(<Probe />);
+    await waitFor(
+      () => expect(screen.getByTestId('probe').textContent).toBe('1:in_progress:open'),
+      {
+        timeout: 4_000,
+      },
+    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3), { timeout: 6_000 });
+    // The error frame's seq never moved the cursor.
+    expect(String(fetchMock.mock.calls[2]![0])).toContain('since=8');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  }, 15_000);
+
+  it('stops reading when the panel goes away mid-stream', async () => {
+    let push: (chunk: string) => void = () => {};
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        push = (chunk) => controller.enqueue(encoder.encode(chunk));
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, body } as Response);
+    vi.stubGlobal('fetch', fetchMock);
+    const view = render(<Probe />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    view.unmount();
+    push(frame('snapshot', boot()));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a done frame changes nothing before a snapshot, or after the outcome is set', () => {
+    expect(applyBootFrame(null, { event: 'done', data: { state: 'running', seq: 3 } })).toBeNull();
+    const ended = boot({ outcome: 'failed' });
+    expect(applyBootFrame(ended, { event: 'done', data: { state: 'running', seq: 30 } })).toBe(
+      ended,
+    );
   });
 });

@@ -185,9 +185,22 @@ let routes: {
   wake: () => Response;
   hibernate: () => Response;
   del: () => Response;
+  /** The boot stream's frames; null answers it with no body (no read-out). */
+  boot?: (() => string[]) | null;
 };
 const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
   const method = init?.method ?? 'GET';
+  if (url.includes('/boot/stream')) {
+    const frames = routes.boot?.();
+    if (!frames) return json(200, {});
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const f of frames) controller.enqueue(encoder.encode(f));
+      },
+    });
+    return { ok: true, status: 200, body } as Response;
+  }
   if (url.endsWith('/terminal-ticket')) return routes.ticket();
   if (url.endsWith('/wake')) return routes.wake();
   if (url.endsWith('/hibernate')) return routes.hibernate();
@@ -870,5 +883,75 @@ describe('zh', () => {
     expect(panel().textContent).toContain('正在你的主目录上启动一台新机器');
     expect(panel().textContent).toContain('机器启动后终端会自动连接——无需点击。');
     expect(within(panel()).getByRole('button', { name: '关闭 yue-claude' })).toBeTruthy();
+  });
+});
+
+describe('the boot read-out in the panel (MOTIR-7400)', () => {
+  const at = (s: number) =>
+    new Date(Date.parse('2026-09-29T10:00:00.000Z') + s * 1000).toISOString();
+  const bootDto = (outcome: string | null, failed = false) => ({
+    attempt: 1,
+    kind: 'create',
+    startedAt: at(0),
+    endedAt: outcome ? at(30) : null,
+    outcome,
+    seq: 8,
+    steps: [
+      {
+        seq: 7,
+        ordinal: 0,
+        step: 'provision',
+        repository: null,
+        state: 'done',
+        startedAt: at(0),
+        endedAt: at(3),
+        detail: null,
+      },
+      {
+        seq: 8,
+        ordinal: 1,
+        step: 'machine_start',
+        repository: null,
+        state: failed ? 'failed' : 'in_progress',
+        startedAt: at(3),
+        endedAt: failed ? at(30) : null,
+        detail: failed ? 'exit code 0' : null,
+      },
+      {
+        seq: 5,
+        ordinal: 2,
+        step: 'ready',
+        repository: null,
+        state: 'waiting',
+        startedAt: null,
+        endedAt: null,
+        detail: null,
+      },
+    ],
+  });
+  const snapshot = (b: unknown) => [`event: snapshot\ndata: ${JSON.stringify(b)}\n\n`];
+
+  it('a booting agent shows its steps above the tabs, and the area under them only points to the terminal', async () => {
+    routes.list = () => page([agent({ state: 'starting' })]);
+    routes.boot = () => snapshot(bootDto(null));
+    await mount(undefined, { openAgentId: 'a1' });
+    const readout = await screen.findByTestId('agent-boot');
+    expect(readout.querySelectorAll('li')).toHaveLength(3);
+    expect(screen.getByText('The terminal opens here as soon as the agent is up.')).toBeTruthy();
+  });
+
+  it('a failed boot says the terminal stays closed, and its Delete… opens the delete confirmation', async () => {
+    routes.list = () => page([agent({ state: 'failed', failureReason: 'exited' })]);
+    routes.boot = () => [
+      ...snapshot(bootDto('failed', true)),
+      'event: done\ndata: {"state":"failed","seq":8}\n\n',
+    ];
+    await mount(undefined, { openAgentId: 'a1' });
+    const readout = await screen.findByTestId('agent-boot');
+    expect(
+      screen.getAllByText('The terminal stays closed until the agent is running.').length,
+    ).toBeGreaterThan(0);
+    fireEvent.click(within(readout).getByRole('button', { name: /Delete/ }));
+    expect(await screen.findByRole('alertdialog')).toBeTruthy();
   });
 });

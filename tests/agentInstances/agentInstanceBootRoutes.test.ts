@@ -265,3 +265,81 @@ describe('GET …/boot/stream', () => {
     expect(waiting).toEqual([]);
   });
 });
+
+describe('the boot doors’ edges', () => {
+  it('both refuse a caller with no session before reading anything', async () => {
+    const { row } = await agentWithAttempt();
+    session.user = null;
+    ctxRef.current = null;
+    const reads = vi.spyOn(boot, 'readBootSince');
+    expect((await read.GET(new Request(url(row.id)), params(row.id))).status).toBe(401);
+    expect((await live.GET(new Request(url(row.id, '/stream')), params(row.id))).status).toBe(401);
+    expect(reads).not.toHaveBeenCalled();
+  });
+
+  it('an unexpected error on the first read is thrown, not answered as a 404', async () => {
+    const { row } = await agentWithAttempt();
+    vi.spyOn(boot, 'readBoot').mockRejectedValueOnce(new Error('database gone'));
+    vi.spyOn(boot, 'readBootSince').mockRejectedValueOnce(new Error('database gone'));
+    await expect(read.GET(new Request(url(row.id)), params(row.id))).rejects.toThrow(
+      'database gone',
+    );
+    await expect(live.GET(new Request(url(row.id, '/stream')), params(row.id))).rejects.toThrow(
+      'database gone',
+    );
+  });
+
+  it('a poll that fails mid-stream writes one error frame and closes', async () => {
+    const { row } = await agentWithAttempt();
+    const res = await live.GET(new Request(url(row.id, '/stream?since=-3')), params(row.id));
+    const next = frames(res.body!.getReader());
+    expect(await next()).toMatchObject({ event: 'snapshot' });
+    vi.spyOn(boot, 'readBootSince').mockRejectedValueOnce(new Error('database gone'));
+    await tick();
+    expect(await next()).toMatchObject({
+      event: 'error',
+      data: { code: 'INTERNAL_ERROR', message: 'database gone' },
+    });
+    expect(await next()).toBeNull();
+  });
+
+  it('the stream’s own clock is the wall clock and a real timer', async () => {
+    vi.mocked(live.agentBootStreamClock.now).mockRestore();
+    vi.mocked(live.agentBootStreamClock.sleep).mockRestore();
+    const before = Date.now();
+    expect(live.agentBootStreamClock.now()).toBeGreaterThanOrEqual(before);
+    await expect(live.agentBootStreamClock.sleep(1)).resolves.toBeUndefined();
+  });
+
+  it('an agent with no attempt yet streams nothing until one opens', async () => {
+    const { row } = await agentWithAttempt();
+    await adminDb.agentInstanceBootAttempt.deleteMany({ where: { agentInstanceId: row.id } });
+    const res = await live.GET(new Request(url(row.id, '/stream')), params(row.id));
+    const next = frames(res.body!.getReader());
+    await tick();
+    await withWorkspaceServiceContext(row.workspaceId, (tx) => boot.start(row, 'wake', tx));
+    await tick();
+    expect(await next()).toMatchObject({ event: 'snapshot', data: { kind: 'wake' } });
+  });
+
+  it('a connection closed while a poll is in flight writes nothing after it', async () => {
+    const { row } = await agentWithAttempt();
+    const res = await live.GET(new Request(url(row.id, '/stream')), params(row.id));
+    const reader = res.body!.getReader();
+    await frames(reader)();
+    let release: () => void = () => {};
+    const real = boot.readBootSince.bind(boot);
+    vi.spyOn(boot, 'readBootSince').mockImplementationOnce(async (...args) => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return real(...args);
+    });
+    waiting.shift()!();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await reader.cancel();
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(waiting).toEqual([]);
+  });
+});

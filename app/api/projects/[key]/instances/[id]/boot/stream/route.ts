@@ -112,7 +112,7 @@ export async function GET(
         while (!cancelled) {
           await agentBootStreamClock.sleep(AGENT_BOOT_STREAM_POLL_MS);
           if (cancelled) break;
-          const page = await agentInstanceBootService.readBootSince(key, id, cursor, ctx);
+          const page = await agentInstanceBootService.readBootSince(key, id, cursor, ctx, true);
           if (cancelled) break;
           if (emit(page, false)) return;
           if (agentBootStreamClock.now() - lastWrite >= AGENT_BOOT_STREAM_HEARTBEAT_MS) {

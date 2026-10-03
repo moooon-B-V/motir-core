@@ -1,7 +1,12 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentInstance } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { AGENT_BOOT_LEASE_MS, INSTANCE_BOOT_DEADLINE_MS } from '@/lib/agentInstances/config';
+import {
+  AGENT_BOOT_LEASE_MS,
+  INSTANCE_BOOT_DEADLINE_MS,
+  INSTANCE_BOOT_EXIT_GRACE_MS,
+} from '@/lib/agentInstances/config';
+import { agentInstanceBootRepository } from '@/lib/repositories/agentInstanceBootRepository';
 import { AGENT_TERMINAL_PROBE_COMMAND } from '@/lib/agentInstances/terminal';
 import { agentInstanceBootService as boot } from '@/lib/services/agentInstanceBootService';
 import {
@@ -19,6 +24,7 @@ import {
   seedRepo,
   setUpHarness,
   slots,
+  stub,
   tearDownHarness,
 } from './_harness';
 
@@ -406,5 +412,189 @@ describe('deletion', () => {
     const seq = await maxSeq(row.id);
     expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
     expect(await maxSeq(row.id)).toBe(seq);
+  });
+});
+
+describe('the driver’s edges (MOTIR-7401)', () => {
+  it('an agent another path moved out of its boot: the attempt closes on the agent’s own state', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    await boot.advance(row.id, attempt, 'run-1');
+    await adminDb.agentInstance.update({
+      where: { id: row.id },
+      data: { state: 'failed', failureReason: 'stopped by an operator' },
+    });
+    expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
+    const a = await stepsOf(row.id, attempt);
+    expect(a.outcome).toBe('failed');
+    expect(a.steps[1]).toMatchObject({ state: 'failed', detail: 'stopped by an operator' });
+  });
+
+  it('an agent found running already: the attempt closes running and no step is failed', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    await boot.advance(row.id, attempt, 'run-1');
+    await adminDb.agentInstance.update({ where: { id: row.id }, data: { state: 'running' } });
+    await boot.advance(row.id, attempt, 'run-1');
+    const a = await stepsOf(row.id, attempt);
+    expect(a.outcome).toBe('running');
+    expect(a.steps[1]!.state).toBe('in_progress');
+  });
+
+  it('an agent mid-delete, or deleted: the attempt closes deleted', async () => {
+    for (const data of [{ state: 'deleting' as const }, { deletedAt: new Date() }]) {
+      const row = await startingAgent(`agent-${Object.keys(data)[0]!.toLowerCase()}`);
+      const attempt = await open(row);
+      await boot.advance(row.id, attempt, 'run-1');
+      await adminDb.agentInstance.update({ where: { id: row.id }, data });
+      await boot.advance(row.id, attempt, 'run-1');
+      const a = await stepsOf(row.id, attempt);
+      expect(a.outcome).toBe('deleted');
+      expect(a.steps[1]).toMatchObject({ state: 'failed', detail: 'deleted' });
+    }
+  });
+
+  it('a boot whose machine was never recorded waits, then fails provision at the deadline', async () => {
+    const row = await startingAgent();
+    const { attempt } = await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+      boot.start(row, 'create', tx),
+    );
+    await adminDb.agentInstance.update({ where: { id: row.id }, data: { machineId: null } });
+    expect(await boot.advance(row.id, attempt, 'run-1')).toMatchObject({ next: 'defer' });
+    clock.advance(INSTANCE_BOOT_DEADLINE_MS);
+    expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
+    expect((await stepsOf(row.id, attempt)).steps[0]).toMatchObject({
+      step: 'provision',
+      state: 'failed',
+    });
+    expect((await agentRow(row.id)).failureReason).toMatch(/could not be created in time/);
+  });
+
+  it('a provider that cannot answer is asked again next pass', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    vi.spyOn(fleet, 'describePersistent').mockRejectedValueOnce(new Error('fly is down'));
+    expect(await boot.advance(row.id, attempt, 'run-1')).toMatchObject({ next: 'defer' });
+    expect((await stepsOf(row.id, attempt)).outcome).toBeNull();
+  });
+
+  it('a machine destroyed mid-boot fails machine_start with its state', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    await boot.advance(row.id, attempt, 'run-1');
+    fleet.destroyOutside(row.machineId!);
+    expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
+    expect((await stepsOf(row.id, attempt)).steps[1]!.detail).toMatch(/^the machine is /);
+    expect((await agentRow(row.id)).failureReason).toMatch(/stopped before it finished starting/);
+  });
+
+  it('a machine that stopped with no exit code fails machine_start as exited', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    await boot.advance(row.id, attempt, 'run-1');
+    clock.advance(1_000);
+    fleet.stopOutside(row.machineId!);
+    clock.advance(INSTANCE_BOOT_EXIT_GRACE_MS);
+    expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
+    expect((await stepsOf(row.id, attempt)).steps[1]).toMatchObject({
+      state: 'failed',
+      detail: 'the machine exited',
+    });
+  });
+
+  it('credentials that cannot be minted fail the first clone', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    stub.installation['acme/web'] = 404;
+    fleet.completeBoot(row.machineId!);
+    expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
+    const a = await stepsOf(row.id, attempt);
+    expect(a.steps[2]).toMatchObject({ repository: 'acme/web', state: 'failed' });
+    expect(cloneExecs()).toEqual([]);
+  });
+
+  it('a repository disconnected since the attempt opened is skipped', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    const api = await adminDb.projectRepo.findFirstOrThrow({ where: { name: 'api' } });
+    await adminDb.projectRepo.delete({ where: { id: api.id } });
+    fleet.completeBoot(row.machineId!);
+    await boot.advance(row.id, attempt, 'run-1');
+    expect((await stepsOf(row.id, attempt)).steps[3]).toMatchObject({
+      repository: 'acme/api',
+      state: 'skipped',
+      detail: 'no longer connected to the project',
+    });
+    expect((await agentRow(row.id)).state).toBe('running');
+  });
+
+  it('a clone that throws fails its row with the error’s words', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    vi.spyOn(agentInstanceBootSteps, 'cloneRepository').mockRejectedValueOnce(
+      new Error('exec channel closed'),
+    );
+    fleet.completeBoot(row.machineId!);
+    await boot.advance(row.id, attempt, 'run-1');
+    expect((await stepsOf(row.id, attempt)).steps[2]).toMatchObject({
+      state: 'failed',
+      detail: expect.stringMatching(/exec channel closed/),
+    });
+  });
+
+  it('an agent failed by another path during the pass: ready closes on what it is now', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    const real = agentInstanceBootSteps.cloneRepository;
+    vi.spyOn(agentInstanceBootSteps, 'cloneRepository').mockImplementation(
+      async (handle, repository, token) => {
+        await adminDb.agentInstance.update({
+          where: { id: row.id },
+          data: { state: 'failed', failureReason: 'failed elsewhere' },
+        });
+        return real(handle, repository, token);
+      },
+    );
+    fleet.completeBoot(row.machineId!);
+    expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
+    const a = await stepsOf(row.id, attempt);
+    expect(a.outcome).toBe('failed');
+    expect(a.steps.at(-1)).toMatchObject({ step: 'ready', state: 'waiting' });
+  });
+
+  it('an unknown agent is done at once, and an unexpected error is thrown', async () => {
+    expect(await boot.advance('no-such-agent', 1, 'run-1')).toEqual({ next: 'done' });
+    const row = await startingAgent();
+    const attempt = await open(row);
+    vi.spyOn(agentInstanceBootRepository, 'listSteps').mockRejectedValueOnce(
+      new Error('database gone'),
+    );
+    await expect(boot.advance(row.id, attempt, 'run-1')).rejects.toThrow('database gone');
+  });
+
+  it('a provision recorded twice, or on a closed attempt, writes nothing more', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    const seq = await maxSeq(row.id);
+    await boot.recordProvision(row, attempt, null);
+    expect(await maxSeq(row.id)).toBe(seq);
+    await lifecycle.delete(fx.projectIdentifier, row.id, fx.ctx);
+    const closed = await maxSeq(row.id);
+    await boot.recordProvision(row, attempt, 'late');
+    expect(await maxSeq(row.id)).toBe(closed);
+  });
+
+  it('a delete with no boot attempt, or none in progress, only closes what is open', async () => {
+    const row = await startingAgent();
+    await lifecycle.delete(fx.projectIdentifier, row.id, fx.ctx);
+    expect(
+      await adminDb.agentInstanceBootAttempt.count({ where: { agentInstanceId: row.id } }),
+    ).toBe(0);
+    const other = await startingAgent('other');
+    const attempt = await open(other);
+    await lifecycle.delete(fx.projectIdentifier, other.id, fx.ctx);
+    const a = await stepsOf(other.id, attempt);
+    expect(a.outcome).toBe('deleted');
+    expect(a.steps.filter((s) => s.state === 'failed')).toEqual([]);
   });
 });

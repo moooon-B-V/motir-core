@@ -33,7 +33,10 @@ import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanc
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { agentInstanceClock, armIdleTimer } from '@/lib/services/agentInstanceActivityService';
-import { agentInstanceBootSteps as steps } from '@/lib/services/agentInstanceLifecycleService';
+import {
+  agentInstanceBootSteps as steps,
+  agentInstanceLifecycleService,
+} from '@/lib/services/agentInstanceLifecycleService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
@@ -479,7 +482,7 @@ export const agentInstanceBootService = {
     instanceId: string,
     ctx: ServiceContext,
   ): Promise<AgentInstanceBootDto | null> {
-    const row = await steps.ownedInstance(projectKey, instanceId, ctx);
+    const row = await agentInstanceLifecycleService.ownedInstance(projectKey, instanceId, ctx);
     const current = await readCurrent(row);
     return current ? toAgentInstanceBootDto(current.attempt, current.steps) : null;
   },
@@ -487,15 +490,24 @@ export const agentInstanceBootService = {
   /**
    * THE STREAM'S POLL (AMENDMENT 6 §7): the current attempt as {@link readBoot}
    * reads it, plus the steps of that attempt written after `sinceSeq`, in `seq`
-   * order — the `step` frames the stream sends. Same gate as the read.
+   * order — the `step` frames the stream sends. Same gate as the read, except
+   * that a stream already open passes `openStream`: its owner is still owed the
+   * last word on an agent deleted mid-boot (the `deleted` rows and `done`), which
+   * the live-only read would answer with a not-found instead.
    */
   async readBootSince(
     projectKey: string,
     instanceId: string,
     sinceSeq: number,
     ctx: ServiceContext,
+    openStream = false,
   ): Promise<{ boot: AgentInstanceBootDto | null; changed: AgentInstanceBootStepFrameDto[] }> {
-    const row = await steps.ownedInstance(projectKey, instanceId, ctx);
+    const row = await agentInstanceLifecycleService.ownedInstance(
+      projectKey,
+      instanceId,
+      ctx,
+      openStream,
+    );
     const current = await readCurrent(row);
     if (!current) return { boot: null, changed: [] };
     const changed = current.steps
