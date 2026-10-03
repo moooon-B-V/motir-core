@@ -1963,6 +1963,10 @@ the runner writes everything else). In a run you started you may send four
 milestone kinds: `checkout_ready` (put `{ branch }` in `data`), `delivery_linked`,
 `leg_verdict` and `card_settled`. **Any other kind is refused by name while the
 rest of the batch is stored.** Every event is stored as reported by the agent.
+**A milestone's `disposition` is what moves your card's leg** on the run: send
+`running` with `checkout_ready`, and the leg's end (`implemented`, or `failed`)
+with `card_settled` before you close. A leg nobody moved reads _Not reached_ once
+the run closes, whatever the card's own status says.
 **Output** — `{ outcome, runId, accepted, refused: [{ kind, reason }] }` (plus
 `seq` when it wrote, and `touched` for a heartbeat). `outcome` is `reported`,
 `heartbeat`, `refused` (every event was refused and there was no step), or
