@@ -549,10 +549,11 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
   });
 
   it('a DECISION published as a PAGE resolves over an EMPTY delivery set — no pull request is its normal shape (MOTIR-5761)', async () => {
-    const story = await workItemsService.createWorkItem(
+    const created = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'story', title: 'Decide how a page stores its body' },
       fx.ctx,
     );
+    const story = await adminDb.workItem.findUniqueOrThrow({ where: { id: created.id } });
     const gate = await rawGate(story, 'decision_approval', story.id);
     const { decisionDocumentService } = await import('@/lib/services/decisionDocumentService');
     const document = {
