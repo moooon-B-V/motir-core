@@ -21,6 +21,24 @@
   Outside the story, MOTIR-1344 (Help with a task) may reuse A3.2's wire field
   and A3.4's resolution if it takes files.
 
+## The decision on one screen
+
+**Two changes to the guide, made at the requester's review (A3.9):**
+
+1. **The guide may change the card and any step, ticked or not, as long as
+   the card's goal stays the same.** If a change would alter the goal, it
+   edits nothing, says a re-plan is needed and stops.
+2. **An agent step gets a prompt for the person's local agent.** Motir AI
+   explains that a coding agent in the person's own environment can run it,
+   because Motir holds no credentials, and gives a ready-to-copy prompt that
+   carries no secret.
+
+**Files on a guide turn (A3.1 to A3.8):** a file is an attachment on the
+guided card. Motir AI reads images (PNG, JPEG, WebP, GIF, up to 3.75 MiB) and
+text (plain, Markdown, CSV, up to 20,000 characters per file), at most 4 files
+per turn. Images go to the model inline. A file is input only, and never
+consent. Only guide conversations take files.
+
 ## Context
 
 A person being guided through a manual card is looking at a screen Motir AI
