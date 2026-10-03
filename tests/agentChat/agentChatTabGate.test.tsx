@@ -166,6 +166,7 @@ function agent(profileId: string): AgentInstanceListItemDto {
     stopReason: null,
     activeRun: null,
     lastRun: null,
+    bootStep: null,
     scheduledDeletionAt: null,
     imageVersion: '1.0.0',
     update: null,

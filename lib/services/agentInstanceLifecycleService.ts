@@ -64,7 +64,11 @@ import {
 } from '@/lib/agentInstances/stateMachine';
 import { checkAgentRunCredits } from '@/lib/ai/motirAiClient';
 import { isCloudBilling } from '@/lib/billing/availability';
-import type { AgentInstanceDto, AgentInstanceImageFields } from '@/lib/dto/agentInstances';
+import type {
+  AgentInstanceBootRowStepDto,
+  AgentInstanceDto,
+  AgentInstanceImageFields,
+} from '@/lib/dto/agentInstances';
 import { machineCreditsFor } from '@/lib/hostedRuns/machineRate';
 import {
   endLineReason,
@@ -956,12 +960,22 @@ export const agentInstanceLifecycleService = {
         rows.map((r) => r.id),
         tx,
       );
-      return { total, rows, usage, latestClosed, runs };
+      const booting = await agentInstanceBootRepository.listInProgressForInstances(
+        rows.filter((r) => r.state === 'starting' || r.state === 'waking').map((r) => r.id),
+        tx,
+      );
+      // The first in progress in read-out order names the row.
+      const bootSteps = new Map<string, AgentInstanceBootRowStepDto>();
+      for (const s of booting) {
+        if (!bootSteps.has(s.agentInstanceId))
+          bootSteps.set(s.agentInstanceId, { step: s.step, repository: s.repository });
+      }
+      return { total, rows, usage, latestClosed, runs, bootSteps };
     });
     // The registry is asked OUTSIDE the transaction, once per profile per cache
     // window (`agent-image-update.md` Q1) — never once per row.
     const image = await imageFieldsFor(page_.rows);
-    const { usage, latestClosed, runs } = page_;
+    const { usage, latestClosed, runs, bootSteps } = page_;
     return {
       total: page_.total,
       planLapse,
@@ -974,6 +988,7 @@ export const agentInstanceLifecycleService = {
         scheduledDeletionAt: row.scheduledDeletionAt?.toISOString() ?? null,
         activeRun: runs.active.get(row.id) ?? null,
         lastRun: runs.last.get(row.id) ?? null,
+        bootStep: bootSteps.get(row.id) ?? null,
       })),
     };
   },

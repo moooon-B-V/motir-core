@@ -141,3 +141,17 @@ describe('the sweep is the boot’s backstop, never its driver', () => {
     expect(await lifecycle.resumeBoot(dto.id)).toBe('noop');
   });
 });
+
+describe('the list names a booting agent’s step (MOTIR-7400)', () => {
+  it('carries the step in progress while booting, and nothing once running', async () => {
+    fleet.setBootBehaviour('never_start');
+    const dto = await create();
+    expect(await driveBoot(dto.id)).toBe('pending');
+    const list = () =>
+      lifecycle.list(fx.projectIdentifier, { take: 10, skip: 0 }, fx.ctx).then((p) => p.instances);
+    expect((await list())[0]!.bootStep).toEqual({ step: 'machine_start', repository: null });
+    fleet.completeBoot((await agent(dto.id)).machineId!);
+    expect(await driveBoot(dto.id)).toBe('running');
+    expect((await list())[0]!.bootStep).toBeNull();
+  });
+});

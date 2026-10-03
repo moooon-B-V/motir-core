@@ -154,6 +154,18 @@ export interface AgentInstanceListItemDto extends AgentInstanceDto {
   activeRun: AgentInstanceActiveRunDto | null;
   /** The agent's latest CLOSED run while none is active, or null (MOTIR-7029). */
   lastRun: AgentInstanceLastRunDto | null;
+  /**
+   * While `starting` / `waking`, the boot step in progress — the row's line
+   * (MOTIR-7395 panel 10); null between two steps, with no recorded attempt, and
+   * in every other state.
+   */
+  bootStep: AgentInstanceBootRowStepDto | null;
+}
+
+/** The step a booting row names: which one, and its repository on a `clone`. */
+export interface AgentInstanceBootRowStepDto {
+  step: AgentInstanceBootStepKind;
+  repository: string | null;
 }
 
 /**

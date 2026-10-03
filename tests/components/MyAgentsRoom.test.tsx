@@ -46,6 +46,7 @@ function agent(over: Partial<AgentInstanceListItemDto> = {}): AgentInstanceListI
     scheduledDeletionAt: null,
     activeRun: null,
     lastRun: null,
+    bootStep: null,
     ...over,
   };
 }
@@ -200,6 +201,48 @@ describe('create', () => {
     expect(get!.url).toContain('/api/projects/MOTIR/instances?limit=10');
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.getAllByText('my-codex').length).toBeGreaterThan(0);
+  });
+
+  it('the boot delta: closes on the 201, shows the new row before any re-read, and opens its panel at ?agent=', async () => {
+    window.history.replaceState(null, '', '/my-agents');
+    mount(page([agent({ id: 'old', name: 'older-agent' })]));
+    fireEvent.click(screen.getAllByRole('button', { name: 'New agent' })[0]!);
+    const dialog = await screen.findByRole('dialog');
+    const created = agent({ id: 'new1', name: 'my-claude', state: 'starting' });
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return json(201, { instance: created });
+      // The re-read never answers: the row must come from the create's own answer.
+      if (url.includes('/instances?limit=')) return new Promise(() => {});
+      return json(404, {});
+    });
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'my-claude' } });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Create agent' }));
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(window.location.search).toBe('?agent=new1');
+    const panel = screen.getByTestId('agent-panel');
+    expect(within(panel).getByRole('heading', { level: 2 }).textContent).toContain('my-claude');
+    expect(document.activeElement).toBe(within(panel).getByRole('heading', { level: 2 }));
+    // The list holds the new row, newest first, beside the older one.
+    const doors = document.querySelectorAll('[data-agent-id]');
+    expect(doors[0]?.getAttribute('data-agent-id')).toBe('new1');
+  });
+
+  it('the boot delta: a booting row names the step it is on, a row with none the shipped line', () => {
+    mount(
+      page([
+        agent({
+          id: 'b1',
+          name: 'cloning-one',
+          state: 'starting',
+          bootStep: { step: 'clone', repository: 'acme/web' },
+        }),
+        agent({ id: 'b2', name: 'quiet-one', state: 'waking', bootStep: null }),
+      ]),
+    );
+    expect(screen.getAllByText('Cloning acme/web…').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Starting a fresh machine on your home').length).toBeGreaterThan(0);
   });
 
   it('a refusal lands in the dialog, in the design’s words, and keeps the dialog open', async () => {

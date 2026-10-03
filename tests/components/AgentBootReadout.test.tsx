@@ -1,0 +1,331 @@
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
+import zhMessages from '@/messages/zh.json';
+import { AgentBootReadout } from '@/app/(authed)/my-agents/_components/AgentBootReadout';
+import { applyBootFrame, useAgentBoot } from '@/app/(authed)/my-agents/_components/useAgentBoot';
+import type { AgentInstanceBootDto, AgentInstanceBootStepDto } from '@/lib/dto/agentInstances';
+
+// THE BOOT READ-OUT (Story MOTIR-7393 · MOTIR-7400), held to the approved delta
+// `design/my-agents/my-agents--boot.mock.html` (MOTIR-7395): each step state's
+// row, the failed way out, a wake's skipped clones, the running summary — and the
+// stream hook's sequencing and resume.
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+const T0 = Date.parse('2026-10-02T10:00:00.000Z');
+const at = (s: number) => new Date(T0 + s * 1000).toISOString();
+
+function step(
+  ordinal: number,
+  over: Partial<AgentInstanceBootStepDto> = {},
+): AgentInstanceBootStepDto {
+  return {
+    seq: ordinal + 1,
+    step: 'provision',
+    repository: null,
+    ordinal,
+    state: 'waiting',
+    startedAt: null,
+    endedAt: null,
+    detail: null,
+    ...over,
+  };
+}
+
+function boot(over: Partial<AgentInstanceBootDto> = {}): AgentInstanceBootDto {
+  return {
+    attempt: 1,
+    kind: 'create',
+    startedAt: at(0),
+    endedAt: null,
+    outcome: null,
+    seq: 8,
+    steps: [
+      step(0, { step: 'provision', state: 'done', startedAt: at(0), endedAt: at(3) }),
+      step(1, { step: 'machine_start', state: 'in_progress', startedAt: at(3) }),
+      step(2, { step: 'clone', repository: 'acme/web' }),
+      step(3, { step: 'clone', repository: 'acme/api' }),
+      step(4, { step: 'terminal_check' }),
+      step(5, { step: 'ready' }),
+    ],
+    ...over,
+  };
+}
+
+const noop = () => {};
+const readout = (b: AgentInstanceBootDto, agentState = 'starting', extra = {}) =>
+  render(
+    <AgentBootReadout
+      boot={b}
+      agentState={agentState}
+      waking={false}
+      onWake={noop}
+      onDelete={noop}
+      {...extra}
+    />,
+  );
+const rows = () => [...document.querySelectorAll('[data-testid="agent-boot"] li')];
+
+describe('the read-out while booting', () => {
+  it('draws one row per step in order, each state with its words, the done duration and the live clock', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(T0 + 44_000);
+    readout(boot());
+    const section = screen.getByRole('region', { name: 'Boot steps' });
+    expect(within(section).getByRole('heading', { name: 'Booting' })).toBeTruthy();
+    expect(rows().map((r) => r.getAttribute('data-state'))).toEqual([
+      'done',
+      'in_progress',
+      'waiting',
+      'waiting',
+      'waiting',
+      'waiting',
+    ]);
+    expect(rows()[0]!.textContent).toContain('Machine provisioned');
+    expect(rows()[0]!.textContent).toContain('— Done');
+    expect(rows()[0]!.textContent).toContain('3s');
+    // The in-progress row ticks from its own start: 41 seconds in.
+    expect(rows()[1]!.textContent).toContain('0:41');
+    expect(rows()[2]!.textContent).toContain('Cloning acme/web');
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(rows()[1]!.textContent).toContain('0:42');
+  });
+
+  it('a wake skips its clone rows, in words, and is headed Waking', () => {
+    readout(
+      boot({
+        kind: 'wake',
+        steps: [
+          step(0, { state: 'done', startedAt: at(0), endedAt: at(1) }),
+          step(1, { step: 'machine_start', state: 'in_progress', startedAt: at(1) }),
+          step(2, { step: 'clone', repository: 'acme/web', state: 'skipped' }),
+          step(3, { step: 'terminal_check', state: 'skipped' }),
+          step(4, { step: 'ready' }),
+        ],
+      }),
+      'waking',
+    );
+    expect(screen.getByRole('heading', { name: 'Waking' })).toBeTruthy();
+    expect(rows()[2]!.getAttribute('data-state')).toBe('skipped');
+    expect(rows()[2]!.textContent).toContain('Skipped — a wake keeps the home');
+    expect(rows()[3]!.textContent).toContain('Skipped — no terminal on this deployment');
+  });
+});
+
+describe('the read-out once failed', () => {
+  it('names the failed step with its reason in words, leaves the rest waiting, and offers Wake and Delete…', () => {
+    const onWake = vi.fn();
+    const onDelete = vi.fn();
+    readout(
+      boot({
+        outcome: 'failed',
+        endedAt: at(72),
+        steps: [
+          step(0, { state: 'done', startedAt: at(0), endedAt: at(3) }),
+          step(1, {
+            step: 'machine_start',
+            state: 'failed',
+            startedAt: at(3),
+            endedAt: at(72),
+            detail: 'exit code 0',
+          }),
+          step(2, { step: 'clone', repository: 'acme/web' }),
+          step(3, { step: 'ready' }),
+        ],
+      }),
+      'failed',
+      { onWake, onDelete },
+    );
+    expect(screen.getByRole('heading', { name: 'Failed after 1m 12s' })).toBeTruthy();
+    expect(rows()[1]!.getAttribute('data-state')).toBe('failed');
+    expect(rows()[1]!.textContent).toContain('The machine exited during boot (exit code 0)');
+    expect(rows()[2]!.getAttribute('data-state')).toBe('waiting');
+    expect(screen.getByText('Wake to try again, or delete it.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Wake' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete…' }));
+    expect(onWake).toHaveBeenCalledOnce();
+    expect(onDelete).toHaveBeenCalledOnce();
+  });
+
+  it('shows a reason Motir did not write as sent, and the deadline in minutes', () => {
+    readout(
+      boot({
+        outcome: 'failed',
+        endedAt: at(600),
+        steps: [
+          step(0, {
+            state: 'failed',
+            startedAt: at(0),
+            endedAt: at(2),
+            detail: 'flyio: region iad is at capacity',
+          }),
+          step(1, {
+            step: 'machine_start',
+            state: 'failed',
+            startedAt: at(2),
+            endedAt: at(600),
+            detail: 'the machine did not start in time',
+          }),
+        ],
+      }),
+      'failed',
+    );
+    expect(rows()[0]!.textContent).toContain('flyio: region iad is at capacity');
+    expect(rows()[1]!.textContent).toContain('The boot didn’t finish within 10 minutes');
+  });
+
+  it('a deletion mid-boot is the reader’s own act: struck through, no danger, the panel’s last word', () => {
+    readout(
+      boot({
+        outcome: 'deleted',
+        endedAt: at(20),
+        steps: [
+          step(0, { state: 'done', startedAt: at(0), endedAt: at(3) }),
+          step(1, {
+            step: 'machine_start',
+            state: 'failed',
+            startedAt: at(3),
+            endedAt: at(20),
+            detail: 'deleted',
+          }),
+        ],
+      }),
+      'deleting',
+    );
+    expect(screen.getByRole('heading', { name: 'Deleted — this panel closes' })).toBeTruthy();
+    expect(rows()[1]!.getAttribute('data-state')).toBe('deleted');
+    expect(screen.queryByRole('button', { name: 'Wake' })).toBeNull();
+  });
+});
+
+describe('once running', () => {
+  it('collapses to one summary line, with Show steps / Hide steps', () => {
+    readout(
+      boot({
+        outcome: 'running',
+        endedAt: at(72),
+        steps: [step(0, { state: 'done', startedAt: at(0), endedAt: at(3) })],
+      }),
+      'running',
+    );
+    expect(screen.getByText('Booted in 1m 12s')).toBeTruthy();
+    expect(rows()).toHaveLength(0);
+    const toggle = screen.getByRole('button', { name: 'Show steps' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    expect(rows()).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Hide steps' }).getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+  });
+
+  it('a wake says Woke in, and renders in Chinese from the zh catalog', () => {
+    render(
+      <AgentBootReadout
+        boot={boot({ kind: 'wake', outcome: 'running', endedAt: at(5), steps: [] })}
+        agentState="running"
+        waking={false}
+        onWake={noop}
+        onDelete={noop}
+      />,
+      { messages: zhMessages as Record<string, unknown>, locale: 'zh' },
+    );
+    expect(screen.getByText('唤醒用时 5 秒')).toBeTruthy();
+  });
+});
+
+describe('applyBootFrame — a stale frame never overwrites a newer one', () => {
+  it('applies a newer step, ignores an older seq, another attempt and an older snapshot', () => {
+    const b = boot();
+    const newer = applyBootFrame(b, {
+      event: 'step',
+      data: { ...b.steps[1]!, state: 'done', endedAt: at(40), seq: 9, attempt: 1 },
+    })!;
+    expect(newer.steps[1]!.state).toBe('done');
+    expect(newer.seq).toBe(9);
+    const stale = applyBootFrame(newer, {
+      event: 'step',
+      data: { ...b.steps[1]!, state: 'in_progress', seq: 7, attempt: 1 },
+    });
+    expect(stale).toBe(newer);
+    const otherAttempt = applyBootFrame(newer, {
+      event: 'step',
+      data: { ...b.steps[1]!, seq: 20, attempt: 2 },
+    });
+    expect(otherAttempt).toBe(newer);
+    const wake = boot({ attempt: 2, kind: 'wake' });
+    expect(applyBootFrame(newer, { event: 'snapshot', data: wake })).toBe(wake);
+    expect(applyBootFrame(wake, { event: 'snapshot', data: b })).toBe(wake);
+    expect(
+      applyBootFrame(newer, { event: 'done', data: { state: 'running', seq: 12 } })!.outcome,
+    ).toBe('running');
+  });
+});
+
+describe('useAgentBoot — resume and stop', () => {
+  function sse(frames: string[], close: boolean): Response {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const f of frames) controller.enqueue(encoder.encode(f));
+        if (close) controller.close();
+      },
+    });
+    return { ok: true, status: 200, body } as Response;
+  }
+  const frame = (event: string, data: unknown) =>
+    `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+
+  function Probe() {
+    const { boot: b } = useAgentBoot({
+      projectKey: 'MOTIR',
+      agentId: 'a1',
+      live: true,
+      epoch: 'x',
+    });
+    return (
+      <p data-testid="probe">
+        {b ? `${b.attempt}:${b.steps[1]!.state}:${b.outcome ?? 'open'}` : 'none'}
+      </p>
+    );
+  }
+
+  it('resumes with ?since=<last seq> after a dropped stream, and reads nothing after done', async () => {
+    const b = boot();
+    const fetchMock = vi
+      .fn()
+      // The first stream sends the snapshot, then drops.
+      .mockResolvedValueOnce(sse([frame('snapshot', b)], true))
+      .mockResolvedValueOnce(
+        sse(
+          [
+            frame('snapshot', b),
+            frame('step', { ...b.steps[1]!, state: 'done', seq: 9, attempt: 1 }),
+            frame('done', { state: 'running', seq: 9 }),
+          ],
+          false,
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    render(<Probe />);
+    await waitFor(() => expect(screen.getByTestId('probe').textContent).toBe('1:in_progress:open'));
+    await waitFor(() => expect(screen.getByTestId('probe').textContent).toBe('1:done:running'), {
+      timeout: 4_000,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0]![0])).toContain('/boot/stream?since=0');
+    expect(String(fetchMock.mock.calls[1]![0])).toContain('/boot/stream?since=8');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});

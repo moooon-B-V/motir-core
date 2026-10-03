@@ -182,6 +182,39 @@ export const agentInstanceBootRepository = {
     });
   },
 
+  /**
+   * The steps IN PROGRESS on the open attempts of these agents — the list row's
+   * current step (MOTIR-7400). Each carries its agent's id; an agent with none
+   * (between two steps, or no open attempt) is simply absent.
+   */
+  async listInProgressForInstances(
+    agentInstanceIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<
+      Pick<AgentInstanceBootStep, 'step' | 'repository' | 'ordinal'> & { agentInstanceId: string }
+    >
+  > {
+    if (agentInstanceIds.length === 0) return [];
+    const rows = await tx.agentInstanceBootStep.findMany({
+      where: {
+        state: 'in_progress',
+        bootAttempt: { agentInstanceId: { in: [...agentInstanceIds] }, endedAt: null },
+      },
+      select: {
+        step: true,
+        repository: true,
+        ordinal: true,
+        bootAttempt: { select: { agentInstanceId: true } },
+      },
+      orderBy: { ordinal: 'asc' },
+    });
+    return rows.map(({ bootAttempt, ...step }) => ({
+      ...step,
+      agentInstanceId: bootAttempt.agentInstanceId,
+    }));
+  },
+
   /** The agent's highest step `seq` across all its attempts; 0 before any. */
   async maxSeq(agentInstanceId: string, tx: Prisma.TransactionClient): Promise<number> {
     const result = await tx.agentInstanceBootStep.aggregate({
