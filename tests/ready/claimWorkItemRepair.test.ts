@@ -447,7 +447,7 @@ describe('getRepairView — what the Development block draws', () => {
     expect(await fixRuns(card.id)).toHaveLength(0);
   });
 
-  it('is hidden wherever the claim would refuse: running, passing, no CI, no PR, not implemented', async () => {
+  it('is hidden wherever the claim would refuse: running, passing, no CI, no PR, not implemented, green in review', async () => {
     const fx = await makeWorkItemFixture();
     const repo = await connectRepairRepo(fx, 'web');
     const make = async (
@@ -464,9 +464,11 @@ describe('getRepairView — what the Development block draws', () => {
     const passing = await make('passing', 'implemented', { Vitest: 'success' });
     const noCi = await make('no-ci', 'implemented', {});
     const noPr = await make('no-pr', 'implemented');
-    const inReview = await make('in-review', 'in_review', { Vitest: 'failure' });
+    // A RED In Review card is offered since MOTIR-7491 — see the IN REVIEW block below.
+    const notStarted = await make('not-started', 'in_progress', { Vitest: 'failure' });
+    const inReview = await make('in-review', 'in_review', { Vitest: 'success' });
 
-    for (const card of [running, passing, noCi, noPr, inReview]) {
+    for (const card of [running, passing, noCi, noPr, notStarted, inReview]) {
       expect(await view(fx, card.id), card.title).toEqual({ state: 'hidden' });
     }
   });
@@ -870,18 +872,71 @@ describe('claimRepair — a standing merge-queue failure (MOTIR-5719)', () => {
     ]);
   });
 
-  it('IN REVIEW with a red check of its own but no queue exit is still refused — only an ejection admits it', async () => {
+  // MOTIR-7491 reversed this: the red hold is edge-triggered, so a card moved to In Review
+  // by hand while a member was ALREADY red is never held back — and refusing it here left
+  // it in no queue at all (MOTIR-1408). A red member admits it, with no queue exit needed.
+  it('IN REVIEW with a red check of its own and no queue exit is CLAIMED, handing over only the red member', async () => {
     const fx = await makeWorkItemFixture();
     const { card, repo } = await greenCard(fx);
     await setStatus(card.id, 'in_review');
-    await deliveredPr(fx, card.id, repo, {
+    const red = await deliveredPr(fx, card.id, repo, {
       headRef: 'subtask/red-in-review',
       checks: { Vitest: 'failure' },
     });
 
-    expect(await claim(fx, card.identifier)).toMatchObject({
-      outcome: 'not_repairable',
-      reason: 'not_failing',
+    const result = await claim(fx, card.identifier);
+
+    expect(result).toMatchObject({ outcome: 'claimed', repairClass: 'ci' });
+    expect(result.pullRequests).toEqual([
+      expect.objectContaining({ number: red.number, ci: 'failing', queueExit: null }),
+    ]);
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).status).toBe(
+      'in_review',
+    );
+  });
+
+  it('IN REVIEW with a member conflicted at its head and no queue exit is CLAIMED', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await greenCard(fx);
+    await setStatus(card.id, 'in_review');
+    await adminDb.githubPullRequest.update({
+      where: { id: pr.id },
+      data: { mergeableState: 'dirty', mergeableStateHeadSha: 'c'.repeat(40) },
+    });
+
+    const result = await claim(fx, card.identifier);
+
+    expect(result.outcome).toBe('claimed');
+    expect(result.pullRequests).toEqual([
+      expect.objectContaining({ number: pr.number, conflicted: true }),
+    ]);
+  });
+
+  it('IN REVIEW with a red member AND a setting ejection is claimed — the red member is the repair', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr, repo } = await greenCard(fx);
+    await setStatus(card.id, 'in_review');
+    await exitOn(pr.id, { rawReason: 'BRANCH_PROTECTIONS', disposition: 'failure' });
+    await deliveredPr(fx, card.id, repo, {
+      headRef: 'subtask/red-beside-setting',
+      checks: { Vitest: 'failure' },
+    });
+
+    expect((await claim(fx, card.identifier)).outcome).toBe('claimed');
+  });
+
+  it('IN REVIEW: the page’s repair view offers the fix on a red card', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, repo } = await greenCard(fx);
+    await setStatus(card.id, 'in_review');
+    const red = await deliveredPr(fx, card.id, repo, {
+      headRef: 'subtask/red-view',
+      checks: { Vitest: 'failure' },
+    });
+
+    expect(await workItemRepairService.getRepairView(card.id, fx.ctx)).toMatchObject({
+      state: 'offer',
+      failing: [{ number: red.number, ci: 'failing' }],
     });
   });
 
