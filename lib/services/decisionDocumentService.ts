@@ -11,6 +11,7 @@ import { toDecisionDocumentViewDTO } from '@/lib/mappers/decisionDocumentMappers
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { repoFileReadService } from './repoFileReadService';
 
 // READ A DECISION DOCUMENT — the one door a surface uses to SHOW what a decision gate
@@ -41,12 +42,23 @@ let activeResolver: DecisionDocumentResolver = repoFileDecisionResolver((ctx, re
 // markdown, read under the reader's workspace context. The read is a Motir row, so it
 // could run in a transaction; it runs here, beside the file read, so a surface has ONE
 // door whichever kind of document the card is asked about.
-let activePageResolver: DecisionDocumentResolver = pageDecisionResolver(async (ctx, versionId) => {
-  const version = await withWorkspaceContext(ctx, (tx) =>
-    pageVersionRepository.findVersionById(versionId, tx),
-  );
-  return version ? { markdown: version.bodyMarkdown } : null;
-});
+let activePageResolver: DecisionDocumentResolver = pageDecisionResolver(async (ctx, versionId) =>
+  withWorkspaceContext(ctx, async (tx) => {
+    const version = await pageVersionRepository.findVersionById(versionId, tx);
+    if (!version) return null;
+    // What the port's meta line and notices draw (MOTIR-7436): the author, the save time,
+    // the freeze, and the page's newest version — above this one means it changed since.
+    const latest = await pageVersionRepository.findLatest(version.pageId, tx);
+    const [author] = await userRepository.findByIds([version.authorId], tx);
+    return {
+      markdown: version.bodyMarkdown,
+      authorName: author?.name ?? null,
+      savedAt: version.savedAt.toISOString(),
+      frozen: version.frozenAt !== null,
+      latestVersionNumber: latest?.number ?? null,
+    };
+  }),
+);
 
 /** Register the PAGE resolver, returning the one it replaced — the file seam's twin. */
 export function setPageDecisionDocumentResolver(

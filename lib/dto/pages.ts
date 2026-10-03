@@ -300,6 +300,12 @@ export interface PageVersionListItemDto {
   restoredFromKept: boolean;
   /** Whether this is the page's newest version — its current content. */
   isCurrent: boolean;
+  /**
+   * The version's DECISION TAG (MOTIR-7436): `frozen` — an approval froze it; `published`
+   * — an awaiting decision asks about it. The card's key either way; null for every other
+   * version, including one whose decision was sent back.
+   */
+  decisionTag?: { kind: 'frozen' | 'published'; key: string } | null;
 }
 
 /** One page of a page's history, newest first. */

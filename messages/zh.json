@@ -8359,7 +8359,10 @@
       "choiceMeta": "{count} 个选项 · {question}",
       "choiceDecided": "选择了「<label>{label}</label>」· {bestFor}",
       "choiceNoneChosen": "{count} 个选项 · 未选择",
-      "ceiling": "仅显示前 {shown} 项，共 {total} 项。<link>审批</link>中列出了全部。"
+      "ceiling": "仅显示前 {shown} 项，共 {total} 项。<link>审批</link>中列出了全部。",
+      "row": {
+        "decisionPage": "{title} · 页面第 {number} 版"
+      }
     },
     "live": {
       "new": "新增",
@@ -10984,7 +10987,10 @@
         "noneNoRun": "无决策文档 · {count} 个拉取请求",
         "several": "{docs} 份决策文档 · {count} 个拉取请求 · 由 {run} 交付",
         "severalNoRun": "{docs} 份决策文档 · {count} 个拉取请求",
-        "withdrawn": "{path} · 文件版本 {blob}"
+        "withdrawn": "{path} · 文件版本 {blob}",
+        "page": "页面 · 第 {number} 版 · 无拉取请求 · 由 {run} 交付",
+        "pageNoRun": "页面 · 第 {number} 版 · 无拉取请求",
+        "pageWithdrawn": "页面 · 第 {number} 版"
       },
       "consequence": "批准即接受此决策并合并 <b>{prs}</b>，随后将 <b>{key}</b> 移至“已批准”。",
       "consequenceNoPrs": "批准即接受此决策；其拉取请求在检查通过后合并，随后 <b>{key}</b> 移至“已批准”。",
@@ -11005,6 +11011,17 @@
       "confirm": {
         "records": "记录你接受此决策",
         "moves": "将 {key} 移至“已批准”"
+      },
+      "consequencePage": "批准即接受此页面的第 {number} 版，并将 <b>{key}</b> 移至“已完成”。不涉及拉取请求。",
+      "page": {
+        "meta": "第 {number} 版 · {author} · {when}",
+        "open": "打开页面",
+        "frozen": "已冻结",
+        "changedSince": "<b>第 {number} 版发布后，此页面已有改动。</b>你正在决定的是第 {number} 版。",
+        "changedSinceApproved": "<b>第 {number} 版获批后，此页面已有改动。</b>这里显示的是获批时的第 {number} 版。",
+        "compareWithCurrent": "与当前版本对比",
+        "approvedVersion": "已批准：第 {number} 版",
+        "approvedTail": "<b>{key}</b> 已移至“已完成”。第 {number} 版已冻结——之后对页面的编辑会生成新版本。"
       }
     },
     "choice": {
@@ -12079,7 +12096,7 @@
       "loadFailed": "无法加载历史记录。",
       "retry": "重试",
       "loadMore": "加载更多",
-      "keepsLatest": "页面保留最近的 100 个版本。",
+      "keepsLatest": "页面保留最近的 100 个版本，以及决策所持有的每个版本。",
       "onlyVersion": "这是目前唯一的版本。每次编辑会话都会新增一个版本。",
       "compare": {
         "label": "正在将 v{number} 与当前页面对比",
@@ -12099,7 +12116,13 @@
         "gone": "v{number} 已不再保留——页面只保留最近的 100 个版本。未做任何更改，列表已刷新。",
         "failed": "无法恢复 v{number}。未做任何更改，请重试。"
       },
-      "unsavedHold": "在你的编辑保存之前无法恢复。页面显示“已保存”后即可恢复。"
+      "unsavedHold": "在你的编辑保存之前无法恢复。页面显示“已保存”后即可恢复。",
+      "tag": {
+        "frozen": "已冻结 · 已批准",
+        "frozenLabel": "已冻结 · 由 {key} 批准。打开 {key}",
+        "published": "已发布待决策",
+        "publishedLabel": "已发布待 {key} 决策。打开 {key}"
+      }
     },
     "archive": {
       "menuItem": "归档…",

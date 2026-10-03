@@ -19,6 +19,8 @@ import { decisionPageService } from '@/lib/services/decisionPageService';
 import { pagesService } from '@/lib/services/pagesService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { gateSetFor } from '@/lib/services/gateSetFor';
+import { summarizeGateSubjects } from '@/lib/approvalGates/subjectSummary';
+import { toDecisionDocumentViewDTO } from '@/lib/mappers/decisionDocumentMappers';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -367,5 +369,100 @@ describe('a save racing an approve', () => {
       expect(frozen.bodyMarkdown).toContain('approved text');
       expect(frozen.bodyMarkdown).not.toContain('racing edit');
     }
+  });
+});
+
+describe('what the port and the page History draw (MOTIR-7436)', () => {
+  async function saveOver(pageId: string, markdown: string) {
+    const current = await pagesService.getPageMarkdown(fx.ctx, { projectId: fx.projectId, pageId });
+    await pagesService.savePageMarkdown(fx.ctx, {
+      projectId: fx.projectId,
+      pageId,
+      markdown,
+      expectedRevision: current.revision,
+    });
+  }
+  const awaitingGate = (itemId: string) =>
+    adminDb.approvalGate.findFirstOrThrow({
+      where: { workItemId: itemId, kind: 'decision_approval', state: 'awaiting' },
+    });
+  const tagOf = async (pageId: string, versionNumber: number) =>
+    (await pagesService.listPageVersions(fx.ctx, { projectId: fx.projectId, pageId })).items.find(
+      (v) => v.number === versionNumber,
+    )?.decisionTag;
+
+  it('the read names the author and the save, then the freeze and the change after it', async () => {
+    const item = await decisionCard([]);
+    const { page, publication } = await publishedPage(item.id);
+
+    const before = await decisionDocumentService.readForWorkItem(item.id, fx.ctx);
+    expect(before.content).toMatchObject({
+      outcome: 'page',
+      frozen: false,
+      latestVersionNumber: publication.versionNumber,
+    });
+    expect(before.content?.outcome === 'page' && before.content.savedAt).toBeTruthy();
+    const beforeDto = toDecisionDocumentViewDTO(before);
+    expect(beforeDto).toMatchObject({
+      outcome: 'page',
+      changedSince: false,
+      versionUrl: `/pages/${page.id}?version=${publication.versionNumber}`,
+    });
+
+    await decide((await awaitingGate(item.id)).id, 'approve');
+    await saveOver(page.id, '# Page model\n\nEdited after the approval.');
+
+    const after = await decisionDocumentService.readForWorkItem(item.id, fx.ctx);
+    expect(after.content).toMatchObject({
+      outcome: 'page',
+      versionNumber: publication.versionNumber,
+      frozen: true,
+      latestVersionNumber: publication.versionNumber + 1,
+      markdown: '# Page model\n\nA tree of pages.',
+    });
+    expect(toDecisionDocumentViewDTO(after)).toMatchObject({ frozen: true, changedSince: true });
+  });
+
+  it('History tags the version published, then frozen, naming the card', async () => {
+    const item = await decisionCard([]);
+    const { page, publication } = await publishedPage(item.id);
+    expect(await tagOf(page.id, publication.versionNumber)).toEqual({
+      kind: 'published',
+      key: item.identifier,
+    });
+
+    await decide((await awaitingGate(item.id)).id, 'approve');
+    expect(await tagOf(page.id, publication.versionNumber)).toEqual({
+      kind: 'frozen',
+      key: item.identifier,
+    });
+  });
+
+  it('an unpublished version carries no tag', async () => {
+    const page = await pagesService.createPageFromMarkdown(fx.ctx, {
+      projectId: fx.projectId,
+      title: 'Plain',
+      markdown: '# Plain',
+    });
+    const list = await pagesService.listPageVersions(fx.ctx, {
+      projectId: fx.projectId,
+      pageId: page.id,
+    });
+    expect(list.items.map((v) => v.decisionTag)).toEqual([null]);
+  });
+
+  it('the To approve row names the page and the version asked about', async () => {
+    const item = await decisionCard([ONE]);
+    const { publication } = await publishedPage(item.id);
+    const gate = await awaitingGate(item.id);
+    const summaries = await withWorkspaceContext(fx.ctx, (tx) =>
+      summarizeGateSubjects([{ id: gate.id, kind: gate.kind, subjectId: gate.subjectId }], tx),
+    );
+    expect(summaries.get(gate.id)).toMatchObject({
+      kind: 'decision_approval',
+      outcome: 'page',
+      title: 'Page model',
+      versionNumber: publication.versionNumber,
+    });
   });
 });

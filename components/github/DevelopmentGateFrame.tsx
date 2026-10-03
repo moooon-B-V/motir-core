@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle, CircleX, Loader2 } from 'lucide-react';
+import { AlertTriangle, CircleX, Loader2, Snowflake } from 'lucide-react';
 import type { PillProps } from '@/components/ui/Pill';
 import {
   ApprovalGateControl,
@@ -747,6 +747,15 @@ export function DevelopmentGateFrame({
   function decisionMeta(): string {
     const prCount = decisionPrs.length;
     const withRun = <K extends string>(key: K) => (runLabel ? key : (`${key}NoRun` as const));
+    // A PAGE subject (MOTIR-7436, delta 1): the frame says there is no pull request in its
+    // first line.
+    if (decisionDoc?.outcome === 'page') {
+      const number = decisionDoc.versionNumber;
+      if (gate.state === 'superseded') return tDecision('headMeta.pageWithdrawn', { number });
+      return runLabel
+        ? tDecision('headMeta.page', { number, run: runLabel })
+        : tDecision('headMeta.pageNoRun', { number });
+    }
     if (gate.state === 'superseded') {
       const asked = parseDecisionVersion(gate.subjectVersion);
       return asked
@@ -994,13 +1003,19 @@ export function DevelopmentGateFrame({
     : isDecision
       ? decideActions
         ? decisionShown
-          ? decisionPrs.length > 0
-            ? tDecision.rich('consequence', {
-                prs: nameList(decisionPrs),
+          ? decisionDoc?.outcome === 'page'
+            ? tDecision.rich('consequencePage', {
+                number: decisionDoc.versionNumber,
                 key: itemIdentifier,
                 b,
               })
-            : tDecision.rich('consequenceNoPrs', { key: itemIdentifier, b })
+            : decisionPrs.length > 0
+              ? tDecision.rich('consequence', {
+                  prs: nameList(decisionPrs),
+                  key: itemIdentifier,
+                  b,
+                })
+              : tDecision.rich('consequenceNoPrs', { key: itemIdentifier, b })
           : tDecision('blocked')
         : null
       : // ⚠️ THE RE-ASKED GATE PROMISES SOMETHING NARROWER (§ 28 panel 1's `af-why`): the
@@ -1273,7 +1288,26 @@ export function DevelopmentGateFrame({
     sectioned: false,
   });
   const acceptedBlob = decisionAccepted ? parseDecisionVersion(gate.subjectVersion)?.blob : null;
-  const recordDetail = decisionAccepted ? (
+  const acceptedPage = decisionAccepted && decisionDoc?.outcome === 'page' ? decisionDoc : null;
+  const recordDetail = acceptedPage ? (
+    // Delta 3: approved over a PAGE — the version FROZEN, the card Done. Terminal: no pull
+    // request will ever merge, so there is no foot and no verb.
+    <>
+      <span className="inline-flex items-center gap-1.5">
+        <Snowflake className="h-3.5 w-3.5 flex-none text-(--el-text-strong)" aria-hidden />
+        <span className="font-semibold text-(--el-text)">
+          {tDecision('page.approvedVersion', { number: acceptedPage.versionNumber })}
+        </span>
+      </span>
+      <span>
+        {tDecision.rich('page.approvedTail', {
+          key: itemIdentifier,
+          number: acceptedPage.versionNumber,
+          b,
+        })}
+      </span>
+    </>
+  ) : decisionAccepted ? (
     // Panels 4 and 6a: the accepted BLOB named, then — while a pull request is still open —
     // that it merges on its own once its checks pass. No verb: a second press would ask a
     // question whose answer is already on the record.

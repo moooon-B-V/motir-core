@@ -44,6 +44,15 @@ export type DecisionDocumentContent =
       versionNumber: number;
       title: string;
       markdown: string;
+      /** The version's author and when it was last saved (ISO-8601) — the port's meta line
+       *  (MOTIR-7436). Null when the read does not say. */
+      authorName: string | null;
+      savedAt: string | null;
+      /** Frozen by an approval — the port's Frozen chip. */
+      frozen: boolean;
+      /** The page's NEWEST version number now; above `versionNumber` means the page
+       *  changed after it was published (the port's changed-since notice). */
+      latestVersionNumber: number | null;
     }
   | { outcome: 'unresolvable'; reason: DecisionDocumentReadReason };
 
@@ -132,12 +141,22 @@ export function repoFileDecisionResolver(read: RepoFileRead): DecisionDocumentRe
   };
 }
 
+/** What the page read answers: the version's text, plus what the port's meta line and
+ *  notices draw (MOTIR-7436) — optional, so a read that knows only the text still works. */
+export interface PageVersionReadResult {
+  markdown: string;
+  authorName?: string | null;
+  savedAt?: string | null;
+  frozen?: boolean;
+  latestVersionNumber?: number | null;
+}
+
 /** The read the page resolver makes — injected, as the file one's is. `null` when the
  *  version row is gone. */
 export type PageVersionRead = (
   ctx: DecisionDocumentReadContext,
   versionId: string,
-) => Promise<{ markdown: string } | null>;
+) => Promise<PageVersionReadResult | null>;
 
 /**
  * The SECOND resolver — a published page version's markdown (Story MOTIR-5761 ·
@@ -157,7 +176,7 @@ export function pageDecisionResolver(read: PageVersionRead): DecisionDocumentRes
 /** A page version's read → a document's content. */
 export function contentFromPage(
   identity: PageDecisionIdentity,
-  version: { markdown: string } | null,
+  version: PageVersionReadResult | null,
 ): DecisionDocumentContent {
   if (!version) return { outcome: 'unresolvable', reason: 'gone_at_head' };
   return {
@@ -167,5 +186,9 @@ export function contentFromPage(
     versionNumber: identity.versionNumber,
     title: identity.title,
     markdown: version.markdown,
+    authorName: version.authorName ?? null,
+    savedAt: version.savedAt ?? null,
+    frozen: version.frozen ?? false,
+    latestVersionNumber: version.latestVersionNumber ?? null,
   };
 }

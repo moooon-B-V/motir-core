@@ -11,6 +11,7 @@ import type { PageVersionListItemDto } from '@/lib/dto/pages';
 // PageView's own ⋯ and the archived banner read the router (MOTIR-7423).
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // RESTORE from the history panel (Story MOTIR-5754 · MOTIR-7388) —

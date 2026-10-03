@@ -8363,7 +8363,10 @@
       "choiceMeta": "{count} options · {question}",
       "choiceDecided": "Chose <label>{label}</label> · {bestFor}",
       "choiceNoneChosen": "{count} options · none chosen",
-      "ceiling": "Showing the first {shown} of {total}. <link>Approvals</link> lists every one."
+      "ceiling": "Showing the first {shown} of {total}. <link>Approvals</link> lists every one.",
+      "row": {
+        "decisionPage": "{title} · page, version {number}"
+      }
     },
     "live": {
       "new": "New",
@@ -10988,7 +10991,10 @@
         "noneNoRun": "No decision document · {count, plural, =1 {# pull request} other {# pull requests}}",
         "several": "{docs} decision documents · {count, plural, =1 {# pull request} other {# pull requests}} · delivered by {run}",
         "severalNoRun": "{docs} decision documents · {count, plural, =1 {# pull request} other {# pull requests}}",
-        "withdrawn": "{path} · blob {blob}"
+        "withdrawn": "{path} · blob {blob}",
+        "page": "Page · version {number} · no pull request · delivered by {run}",
+        "pageNoRun": "Page · version {number} · no pull request",
+        "pageWithdrawn": "Page · version {number}"
       },
       "consequence": "Approving accepts this decision and merges <b>{prs}</b>, then moves <b>{key}</b> to Approved.",
       "consequenceNoPrs": "Approving accepts this decision; its pull request merges when its checks pass, then <b>{key}</b> moves to Approved.",
@@ -11009,6 +11015,17 @@
       "confirm": {
         "records": "Records that you accept this decision",
         "moves": "Moves {key} to Approved"
+      },
+      "consequencePage": "Approving accepts version {number} of this page and moves <b>{key}</b> to Done. No pull request is involved.",
+      "page": {
+        "meta": "Version {number} · {author} · {when}",
+        "open": "Open page",
+        "frozen": "Frozen",
+        "changedSince": "<b>This page changed after version {number} was published.</b> You are deciding version {number}.",
+        "changedSinceApproved": "<b>This page changed after version {number} was approved.</b> This is version {number}, as it was approved.",
+        "compareWithCurrent": "Compare with current",
+        "approvedVersion": "Approved: version {number}",
+        "approvedTail": "<b>{key}</b> moved to Done. Version {number} is frozen — later edits to the page start new versions."
       }
     },
     "choice": {
@@ -12083,7 +12100,7 @@
       "loadFailed": "Couldn’t load the history.",
       "retry": "Try again",
       "loadMore": "Load more",
-      "keepsLatest": "A page keeps its latest 100 versions.",
+      "keepsLatest": "A page keeps its latest 100 versions, and every version a decision holds.",
       "onlyVersion": "This is the only version so far. Each editing session adds one.",
       "compare": {
         "label": "Comparing v{number} with the current page",
@@ -12103,7 +12120,13 @@
         "gone": "v{number} is no longer kept — a page keeps its latest 100 versions. Nothing was changed, and the list has been refreshed.",
         "failed": "v{number} couldn’t be restored. Nothing was changed — try again."
       },
-      "unsavedHold": "Restore is held until your edits are saved. It becomes available as soon as the page says Saved."
+      "unsavedHold": "Restore is held until your edits are saved. It becomes available as soon as the page says Saved.",
+      "tag": {
+        "frozen": "Frozen · approved",
+        "frozenLabel": "Frozen · approved by {key}. Open {key}",
+        "published": "Published for decision",
+        "publishedLabel": "Published for decision on {key}. Open {key}"
+      }
     },
     "archive": {
       "menuItem": "Archive…",

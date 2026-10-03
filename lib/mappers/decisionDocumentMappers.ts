@@ -27,6 +27,14 @@ export function toDecisionDocumentViewDTO(
         title: content.title,
         markdown: content.markdown,
         pageUrl: `/pages/${content.pageId}`,
+        versionUrl: `/pages/${content.pageId}?version=${content.versionNumber}`,
+        compareUrl: `/pages/${content.pageId}?history=open&version=${content.versionNumber}`,
+        authorName: content.authorName,
+        savedAt: content.savedAt,
+        frozen: content.frozen,
+        changedSince:
+          content.latestVersionNumber !== null &&
+          content.latestVersionNumber > content.versionNumber,
       };
     }
     // A page version that cannot be read: there is no pull request to name, and the

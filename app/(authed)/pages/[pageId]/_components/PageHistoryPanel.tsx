@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { History, RotateCcw, TriangleAlert, X } from 'lucide-react';
+import Link from 'next/link';
+import { History, RotateCcw, Scale, Snowflake, TriangleAlert, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import type { PageVersionListDto, PageVersionListItemDto } from '@/lib/dto/pages';
 import { cn } from '@/lib/utils/cn';
@@ -277,6 +278,7 @@ export function PageHistoryPanel({
                         )
                       }
                     />
+                    {version.decisionTag ? <DecisionTag tag={version.decisionTag} /> : null}
                   </li>
                 ))}
               </ol>
@@ -394,6 +396,34 @@ function VersionRow({
         ) : null}
       </span>
     </button>
+  );
+}
+
+/**
+ * A version's DECISION TAG (Story MOTIR-5761 · MOTIR-7436; `page--history-frozen.mock.html`,
+ * delta 5) — a LINK to the card, so it sits beside the row's button inside the `<li>`,
+ * indented to the row's text column. Frozen (sky, snowflake) wins over published (yellow,
+ * the decision glyph); the accessible name is the whole sentence.
+ */
+function DecisionTag({ tag }: { tag: { kind: 'frozen' | 'published'; key: string } }) {
+  const t = useTranslations('pages.history.tag');
+  const frozen = tag.kind === 'frozen';
+  const Icon = frozen ? Snowflake : Scale;
+  return (
+    <Link
+      href={`/items/${encodeURIComponent(tag.key)}`}
+      aria-label={t(frozen ? 'frozenLabel' : 'publishedLabel', { key: tag.key })}
+      data-testid={`page-version-tag-${tag.kind}`}
+      className={cn(
+        'ml-[calc(var(--spacing-control-x)+34px)] inline-flex w-fit items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) text-[11.5px] font-medium text-(--el-text-strong) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+        frozen ? 'bg-(--el-tint-sky)' : 'bg-(--el-tint-yellow)',
+      )}
+    >
+      <Icon className="h-3 w-3 shrink-0" aria-hidden />
+      <span>{t(frozen ? 'frozen' : 'published')}</span>
+      <span aria-hidden>·</span>
+      <span className="font-mono">{tag.key}</span>
+    </Link>
   );
 }
 

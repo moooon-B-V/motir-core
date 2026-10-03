@@ -19,6 +19,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, refresh, replace: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 import { PageView, type PageViewPage } from '@/app/(authed)/pages/[pageId]/_components/PageView';

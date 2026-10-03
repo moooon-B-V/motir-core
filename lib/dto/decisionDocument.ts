@@ -47,6 +47,17 @@ export type DecisionDocumentViewDTO =
       markdown: string;
       /** The page in Motir — `/pages/<id>`. */
       pageUrl: string;
+      /** The published VERSION's view — `/pages/<id>?version=<n>` (Open page). */
+      versionUrl: string;
+      /** The History compare view for that version (Compare with current). */
+      compareUrl: string;
+      authorName: string | null;
+      /** ISO-8601 — when the version was last saved. */
+      savedAt: string | null;
+      /** Frozen by an approval (the Frozen chip). */
+      frozen: boolean;
+      /** The page has versions after the published one (the changed-since notice). */
+      changedSince: boolean;
     }
   | {
       outcome: 'unresolvable';
