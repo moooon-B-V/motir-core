@@ -33,6 +33,14 @@ describe('SaveIndicator', () => {
     expect(seen.size).toBe(4);
   });
 
+  it('reads the size refusal’s "Not saved" for an archived page (MOTIR-7423)', () => {
+    render(<SaveIndicator status="archived" messages={MESSAGES.status} />);
+    const chip = screen.getByRole('status');
+    expect(chip.textContent).toBe(MESSAGES.status.tooLarge);
+    expect(chip.getAttribute('data-status')).toBe('archived');
+    expect(chip.getAttribute('title')).toBeNull();
+  });
+
   it('gives only offline its detail, as the tooltip and the description', () => {
     render(<SaveIndicator status="offline" messages={MESSAGES.status} />);
     const chip = screen.getByRole('status');

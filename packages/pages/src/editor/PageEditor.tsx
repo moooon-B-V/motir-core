@@ -63,8 +63,9 @@ export interface PageEditorProps {
   /** Told each time the save status changes. */
   onSaveStatusChange?: (status: SaveStatus) => void;
   /**
-   * The too-large callout's **Reload saved version**. The button is drawn only
-   * when the host supplies it (a full reload is the host's to perform).
+   * The refusal callout's reload (**Reload saved version**, or **Reload page**
+   * for an archived page). The button is drawn only when the host supplies it
+   * (a full reload is the host's to perform).
    */
   onReloadSaved?: () => void;
   /** The too-large callout's **New page in a new tab**, likewise. */
@@ -205,7 +206,26 @@ export function PageEditor({
     [editor, insertImage],
   );
 
-  const tooLarge = editable && status === 'too_large';
+  // The two final refusals share base state 9's callout: the page passed its size
+  // limit, or someone archived it under this tab (MOTIR-7423). Either way the
+  // loop has stopped and the content stays here to be copied out.
+  const refusal =
+    !editable || (status !== 'too_large' && status !== 'archived')
+      ? null
+      : status === 'archived'
+        ? {
+            title: messages.archived.title,
+            body: messages.archived.body,
+            reload: messages.archived.reload,
+            newPage: null,
+          }
+        : {
+            title: messages.tooLarge.title,
+            body: messages.tooLarge.body,
+            reload: messages.tooLarge.reload,
+            newPage: messages.tooLarge.newPageNewTab,
+          };
+  const onNewPageHere = refusal?.newPage ? onNewPage : undefined;
 
   return (
     // suppressHydrationWarning: the host may resolve the colour mode only on
@@ -222,9 +242,10 @@ export function PageEditor({
           trailing={<SaveIndicator status={status} messages={messages.status} />}
         />
       ) : null}
-      {tooLarge ? (
+      {refusal ? (
         <div
           role="alert"
+          data-refusal={status}
           className="mt-4 flex gap-3 rounded-(--radius-card) border border-(--el-danger) bg-(--el-danger-surface) p-(--spacing-card-padding) text-(--el-danger-surface-text)"
         >
           <TriangleAlert
@@ -232,18 +253,18 @@ export function PageEditor({
             aria-hidden
           />
           <div>
-            <p className="text-sm font-semibold">{messages.tooLarge.title}</p>
-            <p className="mt-1 text-[13.5px] leading-normal">{messages.tooLarge.body}</p>
-            {onReloadSaved || onNewPage ? (
+            <p className="text-sm font-semibold">{refusal.title}</p>
+            <p className="mt-1 text-[13.5px] leading-normal">{refusal.body}</p>
+            {onReloadSaved || onNewPageHere ? (
               <div className="mt-3 flex flex-wrap gap-2">
                 {onReloadSaved ? (
                   <button type="button" onClick={onReloadSaved} className={SECONDARY_BUTTON}>
-                    {messages.tooLarge.reload}
+                    {refusal.reload}
                   </button>
                 ) : null}
-                {onNewPage ? (
-                  <button type="button" onClick={onNewPage} className={SECONDARY_BUTTON}>
-                    {messages.tooLarge.newPageNewTab}
+                {onNewPageHere ? (
+                  <button type="button" onClick={onNewPageHere} className={SECONDARY_BUTTON}>
+                    {refusal.newPage}
                   </button>
                 ) : null}
               </div>

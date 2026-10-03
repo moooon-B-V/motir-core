@@ -47,6 +47,7 @@ import type {
   DeletePageResultDto,
   ListArchivedPagesInput,
   PageArchiveActionInput,
+  PageArchiveSetDto,
   PageArchivedListDto,
   RestorePageResultDto,
   GetPageInput,
@@ -71,6 +72,7 @@ import type {
   SavePageResultDto,
   SavePageUpdateInput,
 } from '@/lib/dto/pages';
+import { PAGE_ARCHIVE_SET_TITLES } from '@/lib/dto/pages';
 import type { Prisma } from '@/generated/prisma/client';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -384,7 +386,13 @@ export const pagesService = {
       if (!page || page.projectId !== input.projectId) throw new PageNotFoundError(input.pageId);
 
       const ancestorIds = page.ancestorPageIds;
-      const named = await pageRepository.findTrailByIds(ancestorIds, tx);
+      // An ARCHIVED page's trail is the place it was archived from — where a
+      // restore puts it back — so it names its stored ancestors, archived ones
+      // included (MOTIR-7423). A live page's names live pages only.
+      const named =
+        page.archivedAt === null
+          ? await pageRepository.findTrailByIds(ancestorIds, tx)
+          : await pageRepository.findTitlesByIds(ancestorIds, tx);
       const byId = new Map(named.map((p) => [p.id, p]));
       const pages = ancestorIds.flatMap((id) => {
         const row = byId.get(id);
@@ -444,6 +452,45 @@ export const pagesService = {
         { canEdit: canEditPages, canDelete: canDeletePages },
         names,
       );
+    });
+  },
+
+  /**
+   * The sub-pages an archive of this page TAKES or TOOK, counted and the first
+   * {@link PAGE_ARCHIVE_SET_TITLES} named, shallowest first — `page:view`
+   * (MOTIR-7423). For a LIVE page it is its live descendants (§7: an archive
+   * takes every live sub-page; one archived earlier keeps its own archive). For
+   * an ARCHIVED page it is the rest of its archive's set — the pages a restore
+   * brings back and a delete removes with it. Two reads, no lock: it describes,
+   * and the write that follows re-reads under its own locks.
+   */
+  async describeArchiveSet(
+    ctx: ServiceContext,
+    input: PageArchiveActionInput,
+  ): Promise<PageArchiveSetDto> {
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      const page = await pageRepository.findById(input.pageId, tx);
+      if (!page || page.projectId !== input.projectId) throw new PageNotFoundError(input.pageId);
+      const members =
+        page.archivedAt === null || page.archiveRootId === null
+          ? (await pageRepository.findSubtree(page.id, tx)).filter((p) => p.archivedAt === null)
+          : (await pageRepository.findArchiveSet(page.archiveRootId, tx)).filter(
+              (p) => p.id !== page.archiveRootId,
+            );
+      const shallowest = [...members]
+        .sort((a, b) => a.ancestorPageIds.length - b.ancestorPageIds.length)
+        .slice(0, PAGE_ARCHIVE_SET_TITLES)
+        .map((p) => p.id);
+      const titled = await pageRepository.findTitlesByIds(shallowest, tx);
+      const titleById = new Map(titled.map((p) => [p.id, p.title]));
+      return {
+        subPageCount: members.length,
+        subPageTitles: shallowest.flatMap((id) => {
+          const title = titleById.get(id);
+          return title === undefined ? [] : [title];
+        }),
+      };
     });
   },
 

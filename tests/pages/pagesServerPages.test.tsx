@@ -269,6 +269,70 @@ describe('/pages/<id> — the page at its address', () => {
     expect(await AddressPage.generateMetadata(params(page.id))).toEqual({ title: 'untitled' });
   });
 
+  it('an archived root reads read-only with its archive state and its sub-page count (MOTIR-7423)', async () => {
+    const f = await makeFixture();
+    const projectId = f.manager.projectId;
+    const parent = await pagesService.createPage(f.manager, { projectId, title: 'Handbook' });
+    const root = await pagesService.createPage(f.manager, {
+      projectId,
+      title: 'Runbook',
+      parent: { kind: 'page', id: parent.id },
+    });
+    const sub = await pagesService.createPage(f.manager, {
+      projectId,
+      title: 'Deploy',
+      parent: { kind: 'page', id: root.id },
+    });
+    await pagesService.archivePage(f.manager, { projectId, pageId: root.id });
+    reader.current = f.manager;
+
+    type ViewProps = {
+      page: {
+        canEdit: boolean;
+        parentTitle: string | null;
+        archived: {
+          archiveRoot: { id: string } | null;
+          canRestore: boolean;
+          canDelete: boolean;
+          subPageCount: number;
+        } | null;
+      };
+    };
+    const rootView = findFirst<ViewProps>(
+      await renderTree(AddressPage.default, params(root.id)),
+      PageView,
+    )!;
+    expect(rootView.props.page.canEdit).toBe(false);
+    expect(rootView.props.page.parentTitle).toBe('Handbook');
+    expect(rootView.props.page.archived).toMatchObject({
+      archiveRoot: { id: root.id },
+      canRestore: true,
+      canDelete: true,
+      subPageCount: 1,
+    });
+
+    // A sub-page names its root; it carries no count of its own.
+    const subView = findFirst<ViewProps>(
+      await renderTree(AddressPage.default, params(sub.id)),
+      PageView,
+    )!;
+    expect(subView.props.page.parentTitle).toBe('Runbook');
+    expect(subView.props.page.archived).toMatchObject({
+      archiveRoot: { id: root.id },
+      subPageCount: 0,
+    });
+
+    // A count that cannot be read costs the sentence, not the page.
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(pagesService, 'describeArchiveSet').mockRejectedValueOnce(new Error('set down'));
+    const degraded = findFirst<ViewProps>(
+      await renderTree(AddressPage.default, params(root.id)),
+      PageView,
+    )!;
+    expect(degraded.props.page.archived!.subPageCount).toBe(0);
+    expect(error).toHaveBeenCalled();
+  });
+
   it('an unknown id, a page from another project and a non-browser all get notFound() — and no title', async () => {
     const f = await makeFixture();
     const elsewhere = await pagesService.createPage(f.manager, { projectId: f.other.projectId });

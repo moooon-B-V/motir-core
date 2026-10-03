@@ -124,6 +124,21 @@ export interface DeletePageResultDto {
   deletedIds: string[];
 }
 
+/**
+ * The sub-pages an archive of a page TAKES (a live page: its live descendants)
+ * or TOOK (an archive root: the rest of its set) — what the archive confirm,
+ * the archived banner and the permanent-delete confirm count (MOTIR-7423).
+ */
+export interface PageArchiveSetDto {
+  /** The sub-pages, the page itself excluded. */
+  subPageCount: number;
+  /** Up to {@link PAGE_ARCHIVE_SET_TITLES} of their titles, shallowest first. */
+  subPageTitles: string[];
+}
+
+/** How many sub-page titles the archive confirm names before "and N more". */
+export const PAGE_ARCHIVE_SET_TITLES = 5;
+
 /** A page row without its body — what a create or a rename returns. */
 export interface PageSummaryDto {
   id: string;

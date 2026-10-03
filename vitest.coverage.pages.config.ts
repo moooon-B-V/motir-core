@@ -75,6 +75,10 @@ const STORY_FILES = [
   // hooks — the `*.tsx` glob above stops at `components/pages/`, one level up.
   'components/pages/tree/*.tsx',
   'components/pages/tree/*.ts',
+  // Story MOTIR-5755 (archive; MOTIR-7423): the archive / restore / delete
+  // client, its two hooks, the confirms and the archived banner.
+  'components/pages/archive/*.tsx',
+  'components/pages/archive/*.ts',
   // The tree routes' `parent` parser (`?parent=` and the JSON `parent`).
   'lib/pages/parentInput.ts',
   // Story MOTIR-5755 (archive; MOTIR-7420): the Archived pages list's cursor.

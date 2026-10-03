@@ -6,13 +6,14 @@ import {
   AUTOSAVE_QUIET_MS,
   AUTOSAVE_RETRY_MAX_MS,
   isLocalOrigin,
+  isPageArchived,
   isPageBodyTooLarge,
   startAutosave,
   type OnlineEventTarget,
   type SaveStatus,
 } from '../../src/editor/autosave';
 import { PageBodyTooLargeError } from '../../src';
-import { tooLargeError } from './fixtures';
+import { archivedError, tooLargeError } from './fixtures';
 
 // The autosave loop on its own (MOTIR-7275): a Yjs doc, a fake `saveUpdate`,
 // fake timers. The component suite drives the same loop through a real editor.
@@ -260,6 +261,32 @@ describe('too large', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(h.saveUpdate).toHaveBeenCalledTimes(1);
     expect(h.statuses).toEqual(['saving', 'too_large']);
+    expect(h.text.toString()).toBe('ab');
+  });
+});
+
+describe('archived (MOTIR-7423)', () => {
+  it('recognises the refusal by its code', () => {
+    expect(isPageArchived(archivedError())).toBe(true);
+    expect(isPageArchived(tooLargeError())).toBe(false);
+    expect(isPageArchived(new Error('x'))).toBe(false);
+    expect(isPageArchived(null)).toBe(false);
+    expect(isPageArchived('PAGE_ARCHIVED')).toBe(false);
+  });
+
+  it('stops for good: archived, nothing is retried, and the content stays', async () => {
+    const h = harness();
+    h.type('a');
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_QUIET_MS);
+    await h.settle(archivedError());
+    expect(h.autosave.status).toBe('archived');
+    h.type('b');
+    h.autosave.flush();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_RETRY_MAX_MS * 4);
+    h.autosave.dispose();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.saveUpdate).toHaveBeenCalledTimes(1);
+    expect(h.statuses).toEqual(['saving', 'archived']);
     expect(h.text.toString()).toBe('ab');
   });
 });

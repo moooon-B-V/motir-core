@@ -22,6 +22,11 @@ import { parentKey, type LevelKey } from './pageTreeRow';
 //   422 PAGE_DEPTH_EXCEEDED       → pages.tree.refusal.depth ({limit} from the 422)
 //   422 CROSS_PROJECT_PAGE_PARENT → pages.tree.refusal.crossProject
 //   404 (folder or page gone)     → pages.tree.refusal.gone
+//   422 PAGE_PARENT_ARCHIVED      → pages.archive.refusal.parentArchived — the
+//                                   target page was archived in another tab
+//                                   (Story MOTIR-5755 · MOTIR-7423); the target's
+//                                   title comes from the request (`parentTitle`),
+//                                   and the source level is re-read
 // A stale neighbour (422 PAGE_NEIGHBOUR_INVALID — a sibling moved meanwhile)
 // is the same story from the reader's side — the place they aimed at is no longer
 // there — so it reads `gone` and the source level is re-read. Anything else (a
@@ -33,7 +38,13 @@ import { parentKey, type LevelKey } from './pageTreeRow';
 // that page is DROPPED (`null`), so two quick Move downs can never apply their
 // refreshes or refusals out of order.
 
-export type PageMoveRefusal = 'cycle' | 'depth' | 'crossProject' | 'gone' | 'failed';
+export type PageMoveRefusal =
+  | 'cycle'
+  | 'depth'
+  | 'crossProject'
+  | 'gone'
+  | 'parentArchived'
+  | 'failed';
 
 export type PageMoveOutcome =
   | { ok: true; result: PageMoveResultDto }
@@ -48,6 +59,8 @@ export interface PageMoveRequest {
   beforeId?: string | null;
   /** The page it lands right BEFORE. */
   afterId?: string | null;
+  /** The target parent's title as the tree shows it — named if it was archived meanwhile. */
+  parentTitle?: string | null;
 }
 
 export interface PageMoveOptions {
@@ -93,6 +106,7 @@ const REFUSAL_BY_CODE: Record<string, Exclude<PageMoveRefusal, 'failed'>> = {
   PAGE_NOT_FOUND: 'gone',
   FOLDER_NOT_FOUND: 'gone',
   PAGE_NEIGHBOUR_INVALID: 'gone',
+  PAGE_PARENT_ARCHIVED: 'parentArchived',
 };
 
 /** The depth limit the design's sentence names when a 422 omits it (`PAGE_DEPTH_LIMIT`). */
@@ -101,6 +115,8 @@ const DEFAULT_DEPTH_LIMIT = 10;
 export function usePageMove({ refresh, detach }: PageMoveOptions): PageMoveController {
   const t = useTranslations('pages.tree.refusal');
   const tv = useTranslations('issueViews');
+  const ta = useTranslations('pages.archive.refusal');
+  const tp = useTranslations('pages');
   const seq = useRef<Record<string, number>>({});
 
   const move = useCallback(
@@ -139,17 +155,21 @@ export function usePageMove({ refresh, detach }: PageMoveOptions): PageMoveContr
         ? (REFUSAL_BY_CODE[code] ?? (res.status === 404 ? 'gone' : 'failed'))
         : 'failed';
       // The place it aimed at changed under it: show the source level as it now is.
-      if (code === 'PAGE_NEIGHBOUR_INVALID') refresh([request.from]);
+      if (code === 'PAGE_NEIGHBOUR_INVALID' || code === 'PAGE_PARENT_ARCHIVED') {
+        refresh([request.from]);
+      }
       const limit = typeof body.limit === 'number' ? body.limit : DEFAULT_DEPTH_LIMIT;
       const message =
         refusal === 'failed'
           ? tv('actionTransportError')
           : refusal === 'depth'
             ? t('depth', { limit })
-            : t(refusal);
+            : refusal === 'parentArchived'
+              ? ta('parentArchived', { parent: request.parentTitle || tp('untitled') })
+              : t(refusal);
       return { ok: false, refusal, message };
     },
-    [refresh, detach, t, tv],
+    [refresh, detach, t, ta, tp, tv],
   );
 
   return { move };

@@ -240,6 +240,7 @@ describe('Page row menu (panel 2)', () => {
       'New sub-page',
       'Move to…',
       'Move down',
+      'Archive…',
     ]);
     cleanup();
     mount();
@@ -248,6 +249,7 @@ describe('Page row menu (panel 2)', () => {
       'Move to…',
       'Move up',
       'Move down',
+      'Archive…',
     ]);
     cleanup();
     mount();
@@ -255,14 +257,15 @@ describe('Page row menu (panel 2)', () => {
       'New sub-page',
       'Move to…',
       'Move up',
+      'Archive…',
     ]);
   });
 
-  it('an only page has neither, and no separator', async () => {
+  it('an only page has neither move, and one separator — before Archive… (MOTIR-7423)', async () => {
     mount({ initialRoot: level([page('p1', 'Solo')]) });
     const menu = await openMenu('Page', 'Solo');
-    expect(entries(menu)).toEqual(['New sub-page', 'Move to…']);
-    expect(within(menu).queryByRole('separator')).toBeNull();
+    expect(entries(menu)).toEqual(['New sub-page', 'Move to…', 'Archive…']);
+    expect(within(menu).getAllByRole('separator')).toHaveLength(1);
   });
 
   it('Move down PATCHes the neighbours and re-reads the level in place', async () => {

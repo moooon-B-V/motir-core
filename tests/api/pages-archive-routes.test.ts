@@ -24,7 +24,11 @@ vi.mock('@/lib/projects', async (importOriginal) => ({
   getActiveProject: vi.fn(async () => activeProject.current),
 }));
 
-const { POST: ARCHIVE, DELETE: RESTORE } = await import('@/app/api/pages/[pageId]/archive/route');
+const {
+  GET: DESCRIBE,
+  POST: ARCHIVE,
+  DELETE: RESTORE,
+} = await import('@/app/api/pages/[pageId]/archive/route');
 const { GET: READ, DELETE: DESTROY } = await import('@/app/api/pages/[pageId]/route');
 const { GET: ARCHIVED } = await import('@/app/api/pages/archived/route');
 const { POST: CREATE } = await import('@/app/api/pages/route');
@@ -124,6 +128,8 @@ const restore = (pageId: string) =>
   RESTORE(new Request(`${BASE}/${pageId}/archive`, { method: 'DELETE' }), params(pageId));
 const destroy = (pageId: string) =>
   DESTROY(new Request(`${BASE}/${pageId}`, { method: 'DELETE' }), params(pageId));
+const describeSet = (pageId: string) =>
+  DESCRIBE(new Request(`${BASE}/${pageId}/archive`), params(pageId));
 const read = (pageId: string) => READ(new Request(`${BASE}/${pageId}`), params(pageId));
 const archived = (query = '') => ARCHIVED(new Request(`${BASE}/archived${query}`));
 
@@ -217,6 +223,55 @@ describe('POST / DELETE /api/pages/[pageId]/archive', () => {
       expect(res.status).toBe(400);
       expect(await res.json()).toMatchObject({ code: 'NO_ACTIVE_PROJECT' });
     }
+  });
+});
+
+describe('GET /api/pages/[pageId]/archive — the set (MOTIR-7423)', () => {
+  it('describes a live page’s live sub-tree, nearest first, to a Viewer', async () => {
+    const f = await makeFixture();
+    const viewer = await actorAs(f, 'viewer-set', 'viewer');
+    const page = await make(f, 'Root');
+    const child = await make(f, 'Child', { kind: 'page', id: page.id });
+    await make(f, 'Grandchild', { kind: 'page', id: child.id });
+    const gone = await make(f, 'Gone', { kind: 'page', id: page.id });
+    await pagesService.archivePage(f.manager, { projectId: f.projectId, pageId: gone.id });
+    const leaf = await make(f, 'Leaf');
+
+    as(viewer);
+    const res = await describeSet(page.id);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ subPageCount: 2, subPageTitles: ['Child', 'Grandchild'] });
+    expect(await (await describeSet(leaf.id)).json()).toEqual({
+      subPageCount: 0,
+      subPageTitles: [],
+    });
+  });
+
+  it('describes the set an archived root took, without the root', async () => {
+    const f = await makeFixture();
+    const page = await make(f, 'Root');
+    await make(f, 'A', { kind: 'page', id: page.id });
+    await make(f, 'B', { kind: 'page', id: page.id });
+    await pagesService.archivePage(f.manager, { projectId: f.projectId, pageId: page.id });
+
+    as(f.manager);
+    const body = (await (await describeSet(page.id)).json()) as {
+      subPageCount: number;
+      subPageTitles: string[];
+    };
+    expect(body.subPageCount).toBe(2);
+    expect([...body.subPageTitles].sort()).toEqual(['A', 'B']);
+  });
+
+  it('answers 404 for another project’s page and 401 without a session', async () => {
+    const f = await makeFixture();
+    const elsewhere = await pagesService.createPage(f.manager, {
+      projectId: f.otherProjectId,
+      title: 'Elsewhere',
+    });
+    expect((await describeSet(elsewhere.id)).status).toBe(401);
+    as(f.manager);
+    expect((await describeSet(elsewhere.id)).status).toBe(404);
   });
 });
 

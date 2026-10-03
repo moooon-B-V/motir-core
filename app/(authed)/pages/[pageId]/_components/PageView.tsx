@@ -2,13 +2,18 @@
 
 import { lazy, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { History, TriangleAlert } from 'lucide-react';
+import { History, Info, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import type { PageSaveStatus } from '@/components/pages/PageEditorHost';
+import {
+  PageArchivedBanner,
+  type ArchivedPageInfo,
+} from '@/components/pages/archive/PageArchivedBanner';
 import type { RestorePageVersionResultDto } from '@/lib/dto/pages';
 import { cn } from '@/lib/utils/cn';
 import { HistoryNotice, PageHistoryPanel } from './PageHistoryPanel';
+import { PageActionsMenu } from './PageActionsMenu';
 import { PageVersionRestore, type RestoreRefusal } from './PageVersionRestore';
 import { PageVersionView } from './PageVersionView';
 
@@ -34,6 +39,13 @@ export interface PageViewPage {
   /** The stored Yjs state, base64. */
   bodyState: string;
   canEdit: boolean;
+  /**
+   * The archive state (Story MOTIR-5755 · MOTIR-7423): set for an archived page,
+   * which renders read-only under the archived banner. `null` / omitted: live.
+   */
+  archived?: (Omit<ArchivedPageInfo, 'id' | 'title'> & { subPageCount: number }) | null;
+  /** Its parent's title (the breadcrumb's last page), for the restored-elsewhere reason. */
+  parentTitle?: string | null;
 }
 
 export interface PageViewProps {
@@ -154,10 +166,34 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
   }, [historyOpen, selected, closeHistory]);
 
   const comparing = historyOpen && selected !== null;
+  const archived = page.archived ?? null;
+  const shownTitle = page.title || t('untitled');
+  // An archived page's versions can be read, not restored (MOTIR-7418 refuses a
+  // version restore with PAGE_ARCHIVED, so the button is not drawn — `canEdit` is
+  // false). A reader who could restore the page is told why, and what to do.
+  const archivedHistoryNote =
+    archived && (archived.canRestore || archived.canDelete) ? (
+      <p
+        id={RESTORE_NOTE_ID}
+        className="flex items-start gap-1.5 px-(--spacing-card-padding) pt-3 text-[12.5px] text-(--el-text-secondary)"
+      >
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+        {t('archive.history.readOnly')}
+      </p>
+    ) : null;
 
   return (
     <div ref={rootRef} data-history-open={historyOpen || undefined} className="flex gap-6">
       <div className="flex min-w-0 flex-1 flex-col">
+        {archived ? (
+          <div className="mt-3">
+            <PageArchivedBanner
+              page={{ id: page.id, title: shownTitle, ...archived }}
+              subPageCount={archived.subPageCount}
+              parentTitle={page.parentTitle}
+            />
+          </div>
+        ) : null}
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             {page.canEdit ? (
@@ -190,6 +226,14 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
           >
             {t('history.open')}
           </Button>
+          {page.canEdit ? (
+            <div className="mt-3 shrink-0">
+              <PageActionsMenu
+                page={{ id: page.id, title: shownTitle }}
+                parentTitle={page.parentTitle}
+              />
+            </div>
+          ) : null}
         </div>
         {/* ⚠️ The live editor stays MOUNTED while a version is compared: it sits
             in the same slot of the same element either way, so compare never
@@ -250,6 +294,8 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
                         : t('history.refusal.failed', { number: refusal.number })}
                     </HistoryNotice>
                   </div>
+                ) : archivedHistoryNote ? (
+                  archivedHistoryNote
                 ) : page.canEdit && saveStatus !== 'saved' ? (
                   <p
                     id={RESTORE_NOTE_ID}

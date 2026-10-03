@@ -548,6 +548,23 @@ describe('pagesService.getPageTrail', () => {
     });
   });
 
+  it('an archived page’s trail names its archived ancestors (MOTIR-7423)', async () => {
+    const f = await makeFixture();
+    const top = await createIn(f, { kind: 'root' }, 'Top');
+    const mid = await createIn(f, { kind: 'page', id: top.id }, 'Mid');
+    const low = await createIn(f, { kind: 'page', id: mid.id }, 'Low');
+    await pagesService.archivePage(f.manager, { projectId: f.projectId, pageId: top.id });
+    expect(
+      await pagesService.getPageTrail(f.manager, { projectId: f.projectId, pageId: low.id }),
+    ).toEqual({
+      folders: [],
+      pages: [
+        { id: top.id, title: 'Top' },
+        { id: mid.id, title: 'Mid' },
+      ],
+    });
+  });
+
   it('a page of another project is not found', async () => {
     const f = await makeFixture();
     const foreign = await pagesService.createPage(f.manager, { projectId: f.otherProjectId });
