@@ -63,6 +63,7 @@ describe('ensureRow + lockForUpdate', () => {
           chargedCredits: 500,
           pendingDebitRef: null,
           pendingDebitCredits: 0,
+          pendingDebitSince: null,
         },
         tx,
       );
@@ -133,6 +134,8 @@ describe('findForPeriod', () => {
   });
 });
 
+const SINCE = new Date('2026-07-10T08:00:00.000Z');
+
 describe('markPendingDebit / settleDebit', () => {
   it('parks an unconfirmed attempt, then clears it on settle', async () => {
     const organizationId = await seedOrgId();
@@ -148,6 +151,7 @@ describe('markPendingDebit / settleDebit', () => {
           debitedCredits: 0,
           pendingDebitRef: 'org:2026-07:0-150',
           pendingDebitCredits: 150,
+          pendingDebitSince: SINCE,
         },
         tx,
       ),
@@ -159,6 +163,7 @@ describe('markPendingDebit / settleDebit', () => {
     ).toMatchObject({
       pendingDebitRef: 'org:2026-07:0-150',
       pendingDebitCredits: 150,
+      pendingDebitSince: SINCE,
       debitedCredits: 0,
     });
 
@@ -175,6 +180,7 @@ describe('markPendingDebit / settleDebit', () => {
     ).toMatchObject({
       pendingDebitRef: null,
       pendingDebitCredits: 0,
+      pendingDebitSince: null,
       debitedCredits: 150,
     });
   });

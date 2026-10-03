@@ -1,4 +1,5 @@
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
+import type { GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 
 // DTO types for the plan-change CONVERSATION (Story 7.30 · MOTIR-1728) — the
 // shape that crosses the API boundary. No Prisma row leaks: the
@@ -25,7 +26,11 @@ export type PlanChangeTurnRoleDto = 'user' | 'system' | 'assistant';
  * `debug` (MOTIR-7047 · the ADR's AMENDMENT 1) is the third reading: the turn
  * reported broken behaviour, and a `debug_bug` job ran for it.
  */
-export type PlanChangeTurnIntentDto = 'plan_change' | 'ask' | 'debug';
+// `guide` (Story MOTIR-7459 · MOTIR-7464; ADR AMENDMENT 2, A2.1/A2.2): every
+// `user` turn of a conversation the Guide me through door opened. Fixed by the
+// DOOR, never classified, so it is never corrected (`intentCorrected` stays
+// false), and its `anchorKey` is always the guided card.
+export type PlanChangeTurnIntentDto = 'plan_change' | 'ask' | 'debug' | 'guide';
 
 /** One turn on the thread, in `seq` order (0-based, gapless). `jobId` is set on a
  *  `system` submission marker and on an `assistant` turn (the job that produced
@@ -91,6 +96,14 @@ export interface PlanChangeTurnDto {
    * Optional for the reason {@link anchorKey} is.
    */
   debugLanding?: DebugLandingDto | null;
+  /**
+   * What a `guide` turn's job returned and what landed (MOTIR-7470), on the
+   * `assistant` turn carrying its message: the actions in order (the proposed
+   * list, the current step, the close offer, the ticks), each one's outcome, and
+   * whether the walk was on a temporary list. The rail and the canvas read it.
+   * Null on every other turn. Optional for the reason {@link anchorKey} is.
+   */
+  guide?: GuideTurnRecord | null;
   authorId: string | null;
   createdAt: string;
 }
@@ -103,7 +116,11 @@ export type PlanSessionOriginDto =
   | 'generation'
   | 'expand'
   | 'cadence'
-  | 'legacy';
+  | 'legacy'
+  // A conversation the Guide me through door opened on ONE manual card (ADR
+  // `conversation-turn-intent.md` AMENDMENT 2, A2.2). It submits no plan and
+  // takes no target lock, so it is never a planning session.
+  | 'guide';
 
 /**
  * The project's plan-change conversation as the rail renders it. `turns` is the

@@ -34,7 +34,9 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // THE REPAIR CLAIM (Story MOTIR-5460 · MOTIR-5464) — hand an `implemented` card's
 // red pull requests to ONE fixing agent, after the run that opened them has ended.
 // Since MOTIR-5803 it also takes an `in_review` card the merge queue EJECTED (a
-// standing failure exit at a member's head), where a manual ejection now leaves it.
+// standing failure exit at a member's head), where a manual ejection now leaves it —
+// and since MOTIR-7491 an `in_review` card with a member red or conflicted at its head,
+// which a hand move to In Review can leave there with nothing holding it back.
 //
 // ── Why the keyed claim cannot do it ────────────────────────────────────────
 // `workItemsService.claimWorkItem` admits the to-do category (or the caller's own

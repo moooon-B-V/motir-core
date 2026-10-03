@@ -7145,7 +7145,8 @@
         "generation": "Generated plan",
         "expand": "Expanded plan",
         "cadence": "Auto-planned",
-        "legacy": "Earlier plan"
+        "legacy": "Earlier plan",
+        "guide": "Guided walk"
       },
       "anchorProject": "Whole project",
       "anchorMore": "{first} +{count}",
@@ -7339,7 +7340,8 @@
           "lessons": "lessons"
         }
       },
-      "openerFollowUp": "You just chose {label}. Motir AI is planning what it gates."
+      "openerFollowUp": "You just chose {label}. Motir AI is planning what it gates.",
+      "composerPlaceholderGuide": "Tell Motir AI how the step went…"
     },
     "targets": {
       "sectionLabel": "Work items",
@@ -7371,7 +7373,8 @@
       "replan": "plan change",
       "contextual": "in context",
       "roadmap": "roadmap",
-      "followUp": "follow-up"
+      "followUp": "follow-up",
+      "guide": "guide"
     },
     "lead": {
       "project": "Opened on {project}.",
@@ -7469,6 +7472,69 @@
     "dividerAria": "Resize the conversation",
     "followUpCard": {
       "label": "Follow-up to a choice"
+    },
+    "guide": {
+      "openedFrom": "Opened from {key}",
+      "reading": "Reading {key} and its to-do list…",
+      "stepOf": "Step {n} of {total}",
+      "notSavedSuffix": "· not saved",
+      "tag": {
+        "current": "Current step",
+        "notSaved": "Not saved",
+        "added": "Added",
+        "changed": "Changed",
+        "moved": "Moved",
+        "cannot": "Cannot be done"
+      },
+      "proposedBand": "<b>Proposed, not saved.</b> Nothing is on the work item until you choose.",
+      "temporaryBand": "Not saved to the work item. Stopping ends this walk.",
+      "save": "Save to the work item",
+      "saveTurn": "Save this list to the work item.",
+      "walk": "Walk without saving",
+      "walkTurn": "Walk it without saving.",
+      "undo": "Undo",
+      "undoTurn": "Undo that change.",
+      "closeYes": "Close the work item",
+      "closeYesTurn": "Yes, close the work item.",
+      "closeNo": "Not yet",
+      "closeNoTurn": "Not yet.",
+      "reload": "Reload the work item",
+      "staleNotice": "{key} changed since this turn read it. Reload it, then ask again.",
+      "failed": "That turn didn't finish, so nothing on the work item changed.",
+      "errors": {
+        "notManual": "Motir AI guides a person through manual work, and this work item is for an agent, so there is nothing to guide here.",
+        "closed": "This work item is done or archived, so there is nothing left to guide.",
+        "forbidden": "You need permission to edit this work item and to plan with Motir AI to be guided through it."
+      },
+      "youTicked": "You ticked step {n} on the list",
+      "youUnticked": "You unticked step {n} on the list",
+      "fieldTitle": "Title",
+      "field": {
+        "title": "title",
+        "description": "description",
+        "explanation": "explanation",
+        "and": " and "
+      },
+      "outcome": {
+        "ticked": "Ticked step {n} on <chip>{key}</chip>.",
+        "tickedTemp": "Ticked step {n} on this walk. Not saved to the work item.",
+        "tickedNoStatus": "Ticked step {n} on <chip>{key}</chip>. No status changed.",
+        "unticked": "Unticked step {n} on <chip>{key}</chip>.",
+        "untickedTemp": "Unticked step {n} on this walk. Not saved to the work item.",
+        "saved": "Saved {count} steps to <chip>{key}</chip>.",
+        "savedTicked": "Saved {count} steps to <chip>{key}</chip>, with the {done} you had done ticked.",
+        "added": "Added step {n} to <chip>{key}</chip>.",
+        "changed": "Changed step {n} on <chip>{key}</chip>.",
+        "removed": "Removed a step from <chip>{key}</chip>.",
+        "moved": "Moved a step on <chip>{key}</chip>.",
+        "addedTemp": "Added step {n} to this walk. Not saved to the work item.",
+        "changedTemp": "Changed step {n} on this walk. Not saved to the work item.",
+        "removedTemp": "Removed a step from this walk. Not saved to the work item.",
+        "movedTemp": "Moved a step on this walk. Not saved to the work item.",
+        "edited": "Edited the {fields} of <chip>{key}</chip>.",
+        "commented": "Commented on <chip>{key}</chip>: “{reason}”",
+        "closed": "Moved <chip>{key}</chip> to Done, and added this summary as a comment."
+      }
     }
   },
   "codeHealth": {
@@ -8539,6 +8605,9 @@
             "planner_model": {
               "set": "Changed the planning model"
             }
+          },
+          "fleet": {
+            "stop": "Stopped the fleet containers"
           }
         }
       }
@@ -8771,6 +8840,142 @@
           "hours": "{n} h",
           "days": "{n, plural, one {# day} other {# days}}"
         }
+      },
+      "fleet": {
+        "orgs": {
+          "title": "Fleet · organisations running containers",
+          "subtitle": "Each organisation holding a container now, beside what the CI debit did for it in the last {minutes} minutes (two debit periods). Mismatched first.",
+          "mismatchedCount": "{count} mismatched",
+          "runningCount": "{count, plural, one {# org running} other {# orgs running}}",
+          "noMismatch": "No mismatch",
+          "stat": {
+            "orgs": "organisations running a container",
+            "pooled": "containers in per-org pools (CI · hosted · index)",
+            "instances": "agent instances · their own pool, not counted above",
+            "mismatched": "mismatched · running and debited disagree"
+          },
+          "group": {
+            "pool": "In the {pool}-container pool",
+            "own": "Own pool"
+          },
+          "col": {
+            "org": "Organisation",
+            "ciRunner": "CI runners",
+            "hostedAgent": "Hosted-agent runs",
+            "index": "Index containers",
+            "poolUsed": "Pool used",
+            "agentInstance": "Agent instances",
+            "agentInstanceNote": "not in the pool",
+            "accrued": "CI minutes · last {minutes} min",
+            "credits": "Credits this month · confirmed",
+            "verdict": "Verdict"
+          },
+          "poolOf": "{used} / {pool}",
+          "poolUnknown": "pool unreadable",
+          "metaTag": "meta org · isMeta",
+          "unnamed": "Organisation {id}",
+          "accrued": {
+            "none": "none",
+            "lastTick": "last tick {age} ago",
+            "minutes": "{minutes} min"
+          },
+          "credits": {
+            "pending": "+{credits} pending · {age}",
+            "pendingNoAge": "+{credits} pending",
+            "balance": "balance {credits}",
+            "unreadable": "balance unreadable",
+            "notCharged": "not charged"
+          },
+          "foot": "Showing {from}–{to} of {total} · mismatched first, then most containers · only CI is judged — it is the one workload debited while it runs",
+          "empty": {
+            "title": "No organisation is running a fleet container",
+            "body": "Every per-org pool is empty right now, so there is nothing to compare against the debit. This is a healthy reading, not a fault."
+          },
+          "error": {
+            "title": "Couldn’t read the fleet",
+            "body": "The fleet read didn’t answer, so these figures aren’t loaded — none of them is zero. The rest of this page is unaffected. Reload to try again."
+          },
+          "pagerLabel": "Fleet organisations pages"
+        },
+        "verdict": {
+          "ok": "OK — debited as it runs",
+          "running_not_debited": "Running, not debited",
+          "debited_nothing_running": "Debited, nothing running",
+          "exhausted_still_running": "At zero, still running",
+          "balance_unknown": "Balance unreadable — not judged",
+          "not_charged": "Meta org — not charged"
+        },
+        "verdictHint": {
+          "ok": "CI is debited as it runs, or there is nothing to judge.",
+          "running_not_debited": "Running, not debited — CI has run past one debit window and its minutes or credits are not landing.",
+          "debited_nothing_running": "Debited with nothing running — accrual landed in the window while no CI job of this org was in flight.",
+          "exhausted_still_running": "At or below zero and still running — the zero stop should already have fired.",
+          "balance_unknown": "Balance unreadable — cannot judge. Shown, never counted as a mismatch.",
+          "not_charged": "The meta org is never debited, so nothing is judged."
+        },
+        "disabled": {
+          "title": "Fleet",
+          "subtitle": "Fleet containers, their debit, and the reconciler’s kills.",
+          "pill": "Disabled on this deployment",
+          "empty": {
+            "title": "The fleet is not enabled on this deployment",
+            "body": "No container orchestrator is configured, so no fleet container runs and the reconciler has nothing to check. Nothing on this section is a zero — there is simply no fleet."
+          }
+        },
+        "kills": {
+          "title": "Fleet · reconciler kills · last 24 hours",
+          "subtitle": "Every machine the reconciler destroyed or stopped because no live charged record owned it. Newest first.",
+          "total": "{count} in 24 h",
+          "failedCount": "{count} failed",
+          "col": {
+            "when": "When",
+            "app": "App",
+            "machine": "Machine",
+            "age": "Age at kill",
+            "reason": "Reason",
+            "action": "Action",
+            "org": "Organisation"
+          },
+          "reason": {
+            "no_record": "No record",
+            "no_recordGloss": "no live charged record named this machine",
+            "record_ended": "Record ended",
+            "record_endedGloss": "its run had already finished",
+            "org_stopped": "Org stopped",
+            "org_stoppedGloss": "its organisation’s fleet was stopped"
+          },
+          "action": {
+            "destroyed": "Destroyed",
+            "stopped": "Stopped",
+            "destroyFailed": "Destroy failed",
+            "stopFailed": "Stop failed"
+          },
+          "failureDetail": "Not completed — {detail}",
+          "noOrg": "No organisation on record",
+          "foot": "Showing {from}–{to} of {total} · newest first",
+          "none": "None in 24 h",
+          "empty": {
+            "title": "No machine was killed in the last 24 hours",
+            "body": "Every machine the fleet runs was matched to an organisation’s live charged record."
+          },
+          "error": {
+            "title": "Couldn’t read the reconciler’s kills",
+            "body": "The kill record didn’t load, so this list isn’t shown — it is not an empty list. The organisations above are unaffected. Reload to try again."
+          },
+          "pagerLabel": "Reconciler kills pages"
+        },
+        "ago": "{age} ago",
+        "duration": {
+          "seconds": "{n} s",
+          "minutes": "{n} min",
+          "hours": "{h} h",
+          "hoursMinutes": "{h} h {m} min",
+          "days": "{d} d",
+          "daysHours": "{d} d {h} h"
+        },
+        "prev": "Prev",
+        "next": "Next",
+        "pageOf": "Page {page} of {pages}"
       }
     },
     "orgs": {
@@ -9257,6 +9462,88 @@
       "jobs": {
         "empty": "No attributed planning or agent run was recorded for this workspace."
       }
+    },
+    "tenant": {
+      "fleet": {
+        "title": "Fleet · running now",
+        "subtitle": "What {org} is running on Motir’s fleet right now, and whether it is being charged for it.",
+        "subtitleEmpty": "Nothing is running on the fleet for this organization.",
+        "workload": {
+          "ciRunner": "CI runners",
+          "hostedAgent": "Hosted agent runs",
+          "agentInstance": "Agent instances",
+          "index": "Index containers"
+        },
+        "charge": {
+          "ciRunner": "Charged while it runs",
+          "hostedAgent": "Charged when the run ends",
+          "agentInstance": "Charged per running interval · outside the pool",
+          "index": "Motir’s cost — never charged"
+        },
+        "facts": {
+          "pool": "Pool <strong>{used} of {pool}</strong>",
+          "poolUnknown": "Pool <strong>{used} of —</strong>",
+          "accrued": "Accrued, last {minutes} min <strong>{value} min</strong>",
+          "debited": "Debited this month <strong>{credits} credits</strong>",
+          "pending": "Awaiting confirmation <strong>{credits} credits</strong>"
+        },
+        "stop": {
+          "button": "Stop containers",
+          "explainer": "Stopping ends this organization’s <strong>charged</strong> work now: CI, hosted agent runs and agent instances. It does not suspend the organization.",
+          "notPermitted": "Only a <strong>superadmin</strong> can stop an organization’s containers. You are signed in as <strong>{role}</strong>.",
+          "nothing": "Nothing to stop."
+        },
+        "confirm": {
+          "title": "Stop {org}’s containers?",
+          "lead": "This ends what {org} is running on Motir’s fleet right now:",
+          "ci": "{runs, plural, one {CI run cancelled} other {CI runs cancelled}} and <strong>{containers}</strong> {containers, plural, one {CI container destroyed} other {CI containers destroyed}}",
+          "ciUnknown": "CI runs not counted — GitHub could not be read; the stop still cancels them — and <strong>{containers}</strong> {containers, plural, one {CI container destroyed} other {CI containers destroyed}}",
+          "hosted": "{count, plural, one {hosted agent run ended} other {hosted agent runs ended}}",
+          "instances": "{count, plural, one {agent instance hibernated} other {agent instances hibernated}}",
+          "index": "{count, plural, one {index container} other {index containers}} left to finish — indexing is Motir’s own cost and is never charged to the organization",
+          "notSuspension": "<strong>This is not a suspension.</strong> Nothing is blocked: {org}’s next CI run, agent run or agent start goes through normal admission.",
+          "asOf": "Counted at {time}. The stop acts on whatever is running when you confirm.",
+          "loading": "Counting what is running…",
+          "previewFailedTitle": "Couldn’t count what is running",
+          "previewFailedBody": "Nothing has been stopped. You confirm a stop against its counts, so try again.",
+          "retry": "Try again",
+          "reasonLabel": "Reason — required, written to the audit log",
+          "reasonPlaceholder": "Why are you stopping this organization’s containers?",
+          "reasonHint": "Shown on this card and in the audit log. Say what you saw.",
+          "reasonRequired": "Enter a reason. Nothing was stopped.",
+          "cancel": "Cancel",
+          "submit": "Stop containers",
+          "submitting": "Stopping…"
+        },
+        "result": {
+          "doneTitle": "Containers stopped",
+          "partialTitle": "Stopped, with failures",
+          "ci": "{runs, plural, one {# CI run cancelled} other {# CI runs cancelled}} · {stopped, plural, one {# CI container destroyed} other {# CI containers destroyed}}",
+          "ciPartial": "CI: {runs} runs cancelled · {stopped} of {total} containers destroyed",
+          "hosted": "{ended, plural, one {# hosted agent run ended} other {# hosted agent runs ended}}",
+          "hostedPartial": "Hosted agent runs: {ended} ended",
+          "instances": "{hibernated, plural, one {# agent instance hibernated} other {# agent instances hibernated}}",
+          "instancesPartial": "Agent instances: {hibernated} of {total} hibernated",
+          "failed": "{count} could not be stopped — the reconciler will retry."
+        },
+        "error": {
+          "notPermittedTitle": "You can’t stop containers",
+          "notPermittedBody": "Your platform role changed since this page loaded. Nothing was stopped.",
+          "notFoundTitle": "Organization not found",
+          "notFoundBody": "This organization no longer exists. Nothing was stopped.",
+          "failedTitle": "Couldn’t finish the stop",
+          "failedBody": "Some containers may have stopped before the error. The counts on this card have been read again — check them; a second stop acts only on what is still running."
+        },
+        "last": {
+          "title": "Last stop",
+          "reason": "Reason",
+          "stopped": "Stopped",
+          "when": "{time} · {actor}",
+          "unknownActor": "a former operator",
+          "noReason": "No reason recorded",
+          "counts": "{runs} CI runs · {containers} CI containers · {hosted} hosted runs · {instances} agent instances"
+        }
+      }
     }
   },
   "legal": {
@@ -9373,7 +9660,8 @@
     "stop": {
       "credits": "Stopped: your organization ran out of credits. Add credits, then wake it.",
       "idle": "Hibernated after 30 minutes without use",
-      "backstop": "Stopped after 12 hours running. Wake it to carry on."
+      "backstop": "Stopped after 12 hours running. Wake it to carry on.",
+      "admin_stop": "Stopped by Motir support. Wake it to carry on."
     },
     "menu": {
       "wake": "Wake",
@@ -10074,6 +10362,16 @@
       "cancel": {
         "body": "The run’s session in {name} stops and its credentials are revoked. Work it already pushed stays on the run’s branch, and this work item stays where it is. {name} keeps running, and your own shells in it are untouched."
       }
+    },
+    "guide": {
+      "title": "Guide",
+      "gloss": "what Motir AI will walk you through",
+      "lead": "Motir AI takes you through this work item's to-do list one step at a time. It ticks a step when you say it is done, and offers to close the work item at the end.",
+      "leadNoList": "This work item has no to-do list yet. Motir AI will propose the steps from its description, and you choose whether to save them to the work item.",
+      "progress": "{done} of {total} steps done · picks up at step {next}",
+      "progressAria": "{done} of {total} steps done",
+      "progressAllDone": "{total} of {total} steps done",
+      "door": "Guide me through"
     }
   },
   "repositoryPicker": {

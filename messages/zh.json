@@ -7141,7 +7141,8 @@
         "generation": "生成的计划",
         "expand": "展开的计划",
         "cadence": "自动规划",
-        "legacy": "早期计划"
+        "legacy": "早期计划",
+        "guide": "引导步骤"
       },
       "anchorProject": "整个项目",
       "anchorMore": "{first} +{count}",
@@ -7335,7 +7336,8 @@
           "lessons": "经验教训"
         }
       },
-      "openerFollowUp": "你刚选择了{label}。Motir AI 正在规划它决定的工作。"
+      "openerFollowUp": "你刚选择了{label}。Motir AI 正在规划它决定的工作。",
+      "composerPlaceholderGuide": "告诉 Motir AI 这一步进展如何…"
     },
     "targets": {
       "sectionLabel": "工作项",
@@ -7367,7 +7369,8 @@
       "replan": "调整计划",
       "contextual": "上下文",
       "roadmap": "路线图",
-      "followUp": "后续规划"
+      "followUp": "后续规划",
+      "guide": "引导"
     },
     "lead": {
       "project": "已在 {project} 上打开。",
@@ -7465,6 +7468,69 @@
     "dividerAria": "调整对话窗口宽度",
     "followUpCard": {
       "label": "选择的后续规划"
+    },
+    "guide": {
+      "openedFrom": "从 {key} 打开",
+      "reading": "正在读取 {key} 及其待办清单…",
+      "stepOf": "第 {n} 步，共 {total} 步",
+      "notSavedSuffix": "· 未保存",
+      "tag": {
+        "current": "当前步骤",
+        "notSaved": "未保存",
+        "added": "已添加",
+        "changed": "已修改",
+        "moved": "已移动",
+        "cannot": "无法完成"
+      },
+      "proposedBand": "<b>建议的步骤，尚未保存。</b>在你做出选择之前，工作项上不会写入任何内容。",
+      "temporaryBand": "尚未保存到工作项。停止后本次引导即结束。",
+      "save": "保存到工作项",
+      "saveTurn": "把这份清单保存到工作项。",
+      "walk": "不保存，直接开始",
+      "walkTurn": "不保存，直接带我做。",
+      "undo": "撤销",
+      "undoTurn": "撤销刚才的更改。",
+      "closeYes": "关闭工作项",
+      "closeYesTurn": "好的，关闭工作项。",
+      "closeNo": "暂不",
+      "closeNoTurn": "暂时不要。",
+      "reload": "重新加载工作项",
+      "staleNotice": "{key} 在本轮读取之后已被修改。请重新加载后再问一次。",
+      "failed": "这一轮没有完成，因此工作项没有任何改动。",
+      "errors": {
+        "notManual": "Motir AI 引导人完成手动工作，而这个工作项是交给 Agent 的，因此这里没有可引导的内容。",
+        "closed": "这个工作项已完成或已归档，没有需要引导的内容了。",
+        "forbidden": "你需要拥有编辑这个工作项以及使用 Motir AI 规划的权限，才能被引导完成它。"
+      },
+      "youTicked": "你在清单上勾选了第 {n} 步",
+      "youUnticked": "你在清单上取消勾选了第 {n} 步",
+      "fieldTitle": "标题",
+      "field": {
+        "title": "标题",
+        "description": "描述",
+        "explanation": "说明",
+        "and": "和"
+      },
+      "outcome": {
+        "ticked": "已在 <chip>{key}</chip> 上勾选第 {n} 步。",
+        "tickedTemp": "已在本次引导中勾选第 {n} 步。尚未保存到工作项。",
+        "tickedNoStatus": "已在 <chip>{key}</chip> 上勾选第 {n} 步。状态未改变。",
+        "unticked": "已在 <chip>{key}</chip> 上取消勾选第 {n} 步。",
+        "untickedTemp": "已在本次引导中取消勾选第 {n} 步。尚未保存到工作项。",
+        "saved": "已将 {count} 个步骤保存到 <chip>{key}</chip>。",
+        "savedTicked": "已将 {count} 个步骤保存到 <chip>{key}</chip>，并勾选了你已完成的 {done} 步。",
+        "added": "已在 <chip>{key}</chip> 中添加第 {n} 步。",
+        "changed": "已修改 <chip>{key}</chip> 的第 {n} 步。",
+        "removed": "已从 <chip>{key}</chip> 中删除一个步骤。",
+        "moved": "已移动 <chip>{key}</chip> 中的一个步骤。",
+        "addedTemp": "已在本次引导中添加第 {n} 步。尚未保存到工作项。",
+        "changedTemp": "已在本次引导中修改第 {n} 步。尚未保存到工作项。",
+        "removedTemp": "已从本次引导中删除一个步骤。尚未保存到工作项。",
+        "movedTemp": "已在本次引导中移动一个步骤。尚未保存到工作项。",
+        "edited": "已编辑 <chip>{key}</chip> 的{fields}。",
+        "commented": "已在 <chip>{key}</chip> 上评论：“{reason}”",
+        "closed": "已将 <chip>{key}</chip> 移至“已完成”，并将此总结添加为评论。"
+      }
     }
   },
   "codeHealth": {
@@ -8535,6 +8601,9 @@
             "planner_model": {
               "set": "已更改规划模型"
             }
+          },
+          "fleet": {
+            "stop": "已停止运行中的容器"
           }
         }
       }
@@ -8767,6 +8836,142 @@
           "hours": "{n} 小时",
           "days": "{n} 天"
         }
+      },
+      "fleet": {
+        "orgs": {
+          "title": "容器集群 · 正在运行容器的组织",
+          "subtitle": "每个当前持有容器的组织，以及过去 {minutes} 分钟（两个扣费周期）内 CI 扣费对它做了什么。不一致的排在最前。",
+          "mismatchedCount": "{count} 个不一致",
+          "runningCount": "{count} 个组织在运行",
+          "noMismatch": "无不一致",
+          "stat": {
+            "orgs": "正在运行容器的组织",
+            "pooled": "各组织容器池中的容器（CI · 托管 · 索引）",
+            "instances": "智能体实例 · 自有池，未计入上方",
+            "mismatched": "不一致 · 运行与扣费不符"
+          },
+          "group": {
+            "pool": "计入 {pool} 个容器的池",
+            "own": "自有池"
+          },
+          "col": {
+            "org": "组织",
+            "ciRunner": "CI 运行器",
+            "hostedAgent": "托管智能体运行",
+            "index": "索引容器",
+            "poolUsed": "已用池容量",
+            "agentInstance": "智能体实例",
+            "agentInstanceNote": "不计入池",
+            "accrued": "CI 分钟 · 最近 {minutes} 分钟",
+            "credits": "本月额度 · 已确认",
+            "verdict": "判定"
+          },
+          "poolOf": "{used} / {pool}",
+          "poolUnknown": "池容量无法读取",
+          "metaTag": "元组织 · isMeta",
+          "unnamed": "组织 {id}",
+          "accrued": {
+            "none": "无",
+            "lastTick": "上次计费 {age}前",
+            "minutes": "{minutes} 分钟"
+          },
+          "credits": {
+            "pending": "+{credits} 待确认 · {age}",
+            "pendingNoAge": "+{credits} 待确认",
+            "balance": "余额 {credits}",
+            "unreadable": "余额无法读取",
+            "notCharged": "不收费"
+          },
+          "foot": "显示第 {from}–{to} 个，共 {total} 个 · 不一致的在前，其次是容器最多的 · 只判定 CI——它是唯一在运行时扣费的工作负载",
+          "empty": {
+            "title": "没有组织在运行容器集群中的容器",
+            "body": "当前每个组织的容器池都是空的，因此没有可与扣费对比的内容。这是健康的读数，不是故障。"
+          },
+          "error": {
+            "title": "无法读取容器集群",
+            "body": "容器集群读取没有响应，因此这些数字没有加载——它们都不是零。本页其余部分不受影响。请重新加载再试。"
+          },
+          "pagerLabel": "容器集群组织分页"
+        },
+        "verdict": {
+          "ok": "正常 — 运行时即扣费",
+          "running_not_debited": "在运行，未扣费",
+          "debited_nothing_running": "已扣费，无运行",
+          "exhausted_still_running": "余额为零，仍在运行",
+          "balance_unknown": "余额无法读取 — 不判定",
+          "not_charged": "元组织 — 不收费"
+        },
+        "verdictHint": {
+          "ok": "CI 在运行时即被扣费，或没有可判定的内容。",
+          "running_not_debited": "在运行，未扣费——CI 已运行超过一个扣费窗口，但其分钟数或额度没有入账。",
+          "debited_nothing_running": "无运行却已扣费——窗口内有计费入账，而该组织没有任何 CI 任务在运行。",
+          "exhausted_still_running": "余额为零或以下仍在运行——零余额停止本应已经触发。",
+          "balance_unknown": "余额无法读取——无法判定。会显示，但从不计为不一致。",
+          "not_charged": "元组织从不扣费，因此不做任何判定。"
+        },
+        "disabled": {
+          "title": "容器集群",
+          "subtitle": "容器集群中的容器、其扣费，以及协调器的终止记录。",
+          "pill": "本部署未启用",
+          "empty": {
+            "title": "本部署未启用容器集群",
+            "body": "未配置容器编排器，因此没有容器集群的容器在运行，协调器也没有可检查的内容。本区域中没有任何数字是零——只是根本没有容器集群。"
+          }
+        },
+        "kills": {
+          "title": "容器集群 · 协调器终止记录 · 最近 24 小时",
+          "subtitle": "协调器因没有任何有效的计费记录拥有而销毁或停止的每台机器。最新的在前。",
+          "total": "24 小时内 {count} 台",
+          "failedCount": "{count} 台失败",
+          "col": {
+            "when": "时间",
+            "app": "应用",
+            "machine": "机器",
+            "age": "终止时机龄",
+            "reason": "原因",
+            "action": "操作",
+            "org": "组织"
+          },
+          "reason": {
+            "no_record": "无记录",
+            "no_recordGloss": "没有有效的计费记录指向这台机器",
+            "record_ended": "记录已结束",
+            "record_endedGloss": "其运行已经结束",
+            "org_stopped": "组织已停止",
+            "org_stoppedGloss": "其组织的容器集群已被停止"
+          },
+          "action": {
+            "destroyed": "已销毁",
+            "stopped": "已停止",
+            "destroyFailed": "销毁失败",
+            "stopFailed": "停止失败"
+          },
+          "failureDetail": "未完成 — {detail}",
+          "noOrg": "没有记录的组织",
+          "foot": "显示第 {from}–{to} 个，共 {total} 个 · 最新的在前",
+          "none": "24 小时内无",
+          "empty": {
+            "title": "最近 24 小时内没有机器被终止",
+            "body": "容器集群运行的每台机器都匹配到了某个组织的有效计费记录。"
+          },
+          "error": {
+            "title": "无法读取协调器的终止记录",
+            "body": "终止记录没有加载，因此不显示此列表——这不是一个空列表。上方的组织不受影响。请重新加载再试。"
+          },
+          "pagerLabel": "协调器终止记录分页"
+        },
+        "ago": "{age}前",
+        "duration": {
+          "seconds": "{n} 秒",
+          "minutes": "{n} 分钟",
+          "hours": "{h} 小时",
+          "hoursMinutes": "{h} 小时 {m} 分钟",
+          "days": "{d} 天",
+          "daysHours": "{d} 天 {h} 小时"
+        },
+        "prev": "上一页",
+        "next": "下一页",
+        "pageOf": "第 {page} 页，共 {pages} 页"
       }
     },
     "orgs": {
@@ -9253,6 +9458,88 @@
       "jobs": {
         "empty": "该工作区没有记录任何已归属的规划或智能体运行。"
       }
+    },
+    "tenant": {
+      "fleet": {
+        "title": "集群 · 正在运行",
+        "subtitle": "{org} 此刻在 Motir 集群上运行的内容，以及是否正在为此计费。",
+        "subtitleEmpty": "该组织当前没有在集群上运行任何内容。",
+        "workload": {
+          "ciRunner": "CI 运行器",
+          "hostedAgent": "托管智能体运行",
+          "agentInstance": "智能体实例",
+          "index": "索引容器"
+        },
+        "charge": {
+          "ciRunner": "运行期间计费",
+          "hostedAgent": "运行结束时计费",
+          "agentInstance": "按运行区间计费 · 不计入资源池",
+          "index": "Motir 自行承担——从不计费"
+        },
+        "facts": {
+          "pool": "资源池 <strong>{used} / {pool}</strong>",
+          "poolUnknown": "资源池 <strong>{used} / —</strong>",
+          "accrued": "最近 {minutes} 分钟累计 <strong>{value} 分钟</strong>",
+          "debited": "本月已扣费 <strong>{credits} 积分</strong>",
+          "pending": "待确认 <strong>{credits} 积分</strong>"
+        },
+        "stop": {
+          "button": "停止容器",
+          "explainer": "停止会立即结束该组织<strong>计费中</strong>的工作：CI、托管智能体运行和智能体实例。它不会暂停该组织。",
+          "notPermitted": "只有<strong>超级管理员</strong>可以停止组织的容器。你当前的身份是 <strong>{role}</strong>。",
+          "nothing": "没有可停止的内容。"
+        },
+        "confirm": {
+          "title": "停止 {org} 的容器？",
+          "lead": "这将结束 {org} 此刻在 Motir 集群上运行的内容：",
+          "ci": "个 CI 运行被取消，<strong>{containers}</strong> 个 CI 容器被销毁",
+          "ciUnknown": "CI 运行数未知——无法读取 GitHub，停止操作仍会取消它们——<strong>{containers}</strong> 个 CI 容器被销毁",
+          "hosted": "个托管智能体运行被结束",
+          "instances": "个智能体实例被休眠",
+          "index": "个索引容器保留至完成——索引是 Motir 自身的成本，从不向组织计费",
+          "notSuspension": "<strong>这不是暂停。</strong>不会阻止任何操作：{org} 的下一次 CI 运行、智能体运行或智能体启动都会照常准入。",
+          "asOf": "统计于 {time}。停止操作作用于你确认时正在运行的内容。",
+          "loading": "正在统计运行中的内容…",
+          "previewFailedTitle": "无法统计运行中的内容",
+          "previewFailedBody": "尚未停止任何内容。停止操作需要依据统计结果确认，请重试。",
+          "retry": "重试",
+          "reasonLabel": "原因——必填，将写入审计日志",
+          "reasonPlaceholder": "你为什么要停止该组织的容器？",
+          "reasonHint": "会显示在此卡片和审计日志中。请写下你看到的情况。",
+          "reasonRequired": "请输入原因。尚未停止任何内容。",
+          "cancel": "取消",
+          "submit": "停止容器",
+          "submitting": "正在停止…"
+        },
+        "result": {
+          "doneTitle": "容器已停止",
+          "partialTitle": "已停止，但有失败",
+          "ci": "已取消 {runs} 个 CI 运行 · 已销毁 {stopped} 个 CI 容器",
+          "ciPartial": "CI：已取消 {runs} 个运行 · 已销毁 {stopped} / {total} 个容器",
+          "hosted": "已结束 {ended} 个托管智能体运行",
+          "hostedPartial": "托管智能体运行：已结束 {ended} 个",
+          "instances": "已休眠 {hibernated} 个智能体实例",
+          "instancesPartial": "智能体实例：已休眠 {hibernated} / {total} 个",
+          "failed": "{count} 个未能停止——协调器将重试。"
+        },
+        "error": {
+          "notPermittedTitle": "你无法停止容器",
+          "notPermittedBody": "自页面加载以来你的平台角色已变更。尚未停止任何内容。",
+          "notFoundTitle": "找不到该组织",
+          "notFoundBody": "该组织已不存在。尚未停止任何内容。",
+          "failedTitle": "未能完成停止",
+          "failedBody": "部分容器可能在出错前已停止。此卡片上的数字已重新读取——请核对；再次停止只会作用于仍在运行的内容。"
+        },
+        "last": {
+          "title": "上次停止",
+          "reason": "原因",
+          "stopped": "已停止",
+          "when": "{time} · {actor}",
+          "unknownActor": "一位前任操作者",
+          "noReason": "未记录原因",
+          "counts": "{runs} 个 CI 运行 · {containers} 个 CI 容器 · {hosted} 个托管运行 · {instances} 个智能体实例"
+        }
+      }
     }
   },
   "legal": {
@@ -9369,7 +9656,8 @@
     "stop": {
       "credits": "已停止：你的组织额度已用完。请充值额度后再唤醒。",
       "idle": "30 分钟未使用后已休眠",
-      "backstop": "已连续运行 12 小时后停止。唤醒即可继续。"
+      "backstop": "已连续运行 12 小时后停止。唤醒即可继续。",
+      "admin_stop": "已被 Motir 支持团队停止。唤醒即可继续。"
     },
     "menu": {
       "wake": "唤醒",
@@ -10070,6 +10358,16 @@
       "cancel": {
         "body": "{name} 中本次运行的会话会停止，它的凭据会被吊销。它已经推送的工作会保留在本次运行的分支上，此工作项保持原状。{name} 会继续运行，你在其中的终端不受影响。"
       }
+    },
+    "guide": {
+      "title": "引导",
+      "gloss": "Motir AI 将带你完成的步骤",
+      "lead": "Motir AI 会带你逐步完成此工作项的待办清单。你说某一步已完成，它就勾选该步骤，并在最后提议关闭工作项。",
+      "leadNoList": "此工作项还没有待办清单。Motir AI 会根据描述提出步骤，由你决定是否保存到工作项。",
+      "progress": "已完成 {done}/{total} 步 · 从第 {next} 步继续",
+      "progressAria": "已完成 {done}/{total} 步",
+      "progressAllDone": "已完成 {total}/{total} 步",
+      "door": "带我完成"
     }
   },
   "repositoryPicker": {

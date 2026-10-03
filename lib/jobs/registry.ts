@@ -42,6 +42,7 @@ import { ciLiveCharge } from './definitions/ciLiveCharge';
 import { ciActionsGateSweep } from './definitions/ciActionsGateSweep';
 import { ciRunnerProvisionSweep, ciRunnerBoot } from './definitions/ciRunnerFleet';
 import { fleetAttribution } from './definitions/fleetAttribution';
+import { fleetDebitMonitor } from './definitions/fleetDebitMonitor';
 import { hostedRunSupervise } from './definitions/hostedRunSupervise';
 import {
   statusDerivationOnChildSetChanged,
@@ -140,6 +141,7 @@ export const jobDefinitions = [
   ciRunnerProvisionSweep,
   ciRunnerBoot,
   fleetAttribution,
+  fleetDebitMonitor,
   hostedRunSupervise,
   planDriftOnTransitioned,
   statusDerivationOnTransitioned,

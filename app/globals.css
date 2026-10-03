@@ -313,6 +313,105 @@ body {
     animation: canvas-fade-out var(--transition-duration) var(--canvas-ease-exit) forwards;
   }
 }
+/* THE GUIDE CANVAS'S MOTION (Story MOTIR-7459 · MOTIR-7466; design
+   `design/ai-chat/planning-workspace--guide.mock.html` panels 8–12 and the
+   motion table in `design-notes.md` § Guide me through). Static by default and
+   added under `no-preference`, like the canvas's and the live list's: under
+   reduced motion a tick, an arrival, a change and a move are painted at their end
+   state in one frame. `GuideTodoCanvas` also withholds the classes themselves
+   when the reader asks for reduced motion, so the end state never waits on a
+   keyframe either way.
+
+   THE TICK, ≈ 820ms sequential: the check strokes in (180ms), the row settles on
+   a fading `--el-success-surface` wash (200ms, after the stroke), the bar's gain
+   leads in `--el-accent-pressed` (240ms), the current marker arrives on the next
+   row (200ms cross-fade). An untick plays the settle and the bar in reverse. */
+@keyframes guide-tick-draw {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes guide-row-wash-success {
+  from {
+    background-color: var(--el-success-surface);
+  }
+}
+@keyframes guide-row-wash-added {
+  from {
+    background-color: var(--el-diff-added);
+  }
+}
+@keyframes guide-row-wash-moved {
+  from {
+    background-color: var(--el-diff-moved);
+  }
+}
+@keyframes guide-row-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes guide-row-leave {
+  from {
+    background-color: var(--el-diff-removed);
+  }
+  to {
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+@keyframes guide-gain {
+  from {
+    background-color: var(--el-accent-pressed);
+  }
+}
+@keyframes guide-marker-in {
+  from {
+    box-shadow: inset 0 0 0 transparent;
+    background-color: transparent;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .guide-tick-draw path {
+    stroke-dasharray: 24;
+    animation: guide-tick-draw 180ms ease-out both;
+  }
+  .guide-row--ticked {
+    animation: guide-row-wash-success 200ms ease-out 180ms both;
+  }
+  .guide-row--unticked {
+    animation: guide-row-wash-success 200ms ease-out reverse both;
+  }
+  .guide-row--added {
+    animation:
+      guide-row-arrive 200ms ease-out 160ms both,
+      guide-row-wash-added 600ms ease-out 360ms both;
+  }
+  .guide-row--moved {
+    animation: guide-row-wash-moved 600ms ease-out 360ms both;
+  }
+  .guide-row--leaving {
+    pointer-events: none;
+    animation: guide-row-leave 360ms ease-in forwards;
+  }
+  .guide-row--current-in {
+    animation: guide-marker-in 200ms ease-out 620ms both;
+  }
+  .guide-bar-fill {
+    transition: width 240ms ease-out 380ms;
+  }
+  .guide-bar-fill--gain {
+    animation: guide-gain 600ms ease-out 380ms both;
+  }
+  .guide-title--edited {
+    animation: canvas-fade-in var(--transition-duration) var(--canvas-ease-enter) both;
+  }
+}
 /* The DEEPEN outline — the mark ON the board is the accent INK, never the fill
    (`--el-accent-on-surface` owes 3:1 on `--el-canvas`; MOTIR-4474). A static
    STATE: under reduced motion it is the whole of an arrival's and a deepen's cue,

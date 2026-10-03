@@ -501,11 +501,14 @@ function TodoRow({
  * proposal — removed at some cost (MOTIR-4181). The reviewer's preview and the
  * card's list cannot drift, because they ARE the same markup.
  *
+ * A THIRD consumer since MOTIR-7466: the guide canvas in the planning overlay
+ * draws each step with this body beside its own live tick and current-step mark.
+ *
  * Typed on the FIELDS it reads rather than on `WorkItemTodoDto`, because the
  * proposal side has no `id`, no `position` and no `doneAt` — a proposal never
  * ticks — and widening the DTO to fake them would be the drift by another route.
  */
-interface TodoRowContent {
+export interface TodoRowContent {
   text: string;
   notesMd: string | null;
   commandText: string | null;
@@ -514,7 +517,7 @@ interface TodoRowContent {
   doneBy?: { id: string; name: string } | null;
 }
 
-function TodoRowBody({
+export function TodoRowBody({
   row,
   isExpanded,
   onToggleExpanded,

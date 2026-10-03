@@ -24,6 +24,8 @@ export interface CiPeriodChargeState {
   /** An attempted-but-unconfirmed debit's idempotency key, or null. */
   pendingDebitRef: string | null;
   pendingDebitCredits: number;
+  /** When the pending slot was first occupied, or null when it is empty (MOTIR-7316). */
+  pendingDebitSince: Date | null;
 }
 
 function toState(row: CiPeriodCharge): CiPeriodChargeState {
@@ -36,6 +38,7 @@ function toState(row: CiPeriodCharge): CiPeriodChargeState {
     debitedCredits: row.debitedCredits,
     pendingDebitRef: row.pendingDebitRef,
     pendingDebitCredits: row.pendingDebitCredits,
+    pendingDebitSince: row.pendingDebitSince,
   };
 }
 
@@ -110,6 +113,7 @@ export const ciPeriodChargeRepository = {
         "debited_credits"      AS "debitedCredits",
         "pending_debit_ref"    AS "pendingDebitRef",
         "pending_debit_credits" AS "pendingDebitCredits",
+        "pending_debit_since"  AS "pendingDebitSince",
         "created_at"           AS "createdAt",
         "updated_at"           AS "updatedAt"
       FROM "ci_period_charge"
@@ -150,6 +154,7 @@ export const ciPeriodChargeRepository = {
       chargedCredits: number;
       pendingDebitRef: string | null;
       pendingDebitCredits: number;
+      pendingDebitSince: Date | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<void> {
@@ -161,6 +166,7 @@ export const ciPeriodChargeRepository = {
         },
       },
       data: {
+        pendingDebitSince: input.pendingDebitSince,
         accountedMinutes: new Prisma.Decimal(input.accountedMinutes),
         chargedMinutes: new Prisma.Decimal(input.chargedMinutes),
         chargedCredits: input.chargedCredits,
@@ -186,6 +192,7 @@ export const ciPeriodChargeRepository = {
       debitedCredits: number;
       pendingDebitRef: string;
       pendingDebitCredits: number;
+      pendingDebitSince: Date;
     },
     tx: Prisma.TransactionClient,
   ): Promise<void> {
@@ -200,6 +207,7 @@ export const ciPeriodChargeRepository = {
         debitedCredits: input.debitedCredits,
         pendingDebitRef: input.pendingDebitRef,
         pendingDebitCredits: input.pendingDebitCredits,
+        pendingDebitSince: input.pendingDebitSince,
       },
     });
   },
@@ -228,6 +236,7 @@ export const ciPeriodChargeRepository = {
         debitedCredits: input.debitedCredits,
         pendingDebitRef: null,
         pendingDebitCredits: 0,
+        pendingDebitSince: null,
       },
     });
   },

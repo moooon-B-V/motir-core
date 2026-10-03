@@ -737,7 +737,9 @@ export function PlanningWorkspaceOverlay({
           // entrance), so a re-target is a same-address change that React would
           // otherwise reconcile in place, leaving the chrome saying one item
           // while the canvas sat on the level it happened to be on.
-          key={anchorKey ?? 'project'}
+          // A GUIDE on a card is a different room from planning on it
+          // (MOTIR-7466), so the mode joins the key there and only there.
+          key={`${workspaceLaunch?.mode === 'guide' ? 'guide:' : ''}${anchorKey ?? 'project'}`}
           projectKey={projectKey}
           projectName={projectName}
           launch={workspaceLaunch ?? launch}
@@ -777,6 +779,8 @@ export function PlanningWorkspaceOverlay({
  * is the one already on screen, so nothing the reader can see changes.
  */
 function launchContext(launch: PlanningLaunch): PlanningLaunchContext {
+  // A guide round-trips as itself: the card it walks is its whole context.
+  if (launch.mode === 'guide' && launch.itemKey) return { kind: 'guide', itemKey: launch.itemKey };
   if (launch.from === 'work-item' && launch.itemKey) {
     return { kind: 'work-item', itemKey: launch.itemKey, hasPlan: launch.mode === 'replan' };
   }

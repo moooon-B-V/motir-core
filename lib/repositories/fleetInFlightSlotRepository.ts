@@ -73,6 +73,45 @@ export const fleetInFlightSlotRepository = {
   },
 
   /**
+   * Take the slot for `(workload, ref)` AS `ownerRef`, whoever held it before —
+   * the one write that may restamp an existing row's owner (MOTIR-7492).
+   *
+   * {@link take} is `DO NOTHING` on purpose: a LOSING insert must never restamp
+   * the holder's row. This is the other case — the caller has just WON the
+   * state transition the slot stands for, so its run is the one the container
+   * will belong to, and a row stamped with a different run (a concurrent
+   * attempt that then lost, or one that leaked) would make the winner's own
+   * ownership-checked release fail to recognise it, while the loser's would
+   * delete it from under a live container. `DO UPDATE` restamps the owner and
+   * renews the safety net for the run that now holds it; the INSERT arm puts the
+   * row back when the loser's release got there first, so either order ends
+   * with exactly one row, owned by the winner.
+   */
+  async adopt(
+    data: FleetInFlightSlotTakeInput & { ownerRef: string; workspaceId: string | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.$executeRaw`
+      INSERT INTO "fleet_in_flight_slot"
+        ("id", "workload", "ref", "owner_ref", "organization_id", "workspace_id",
+         "claimed_at", "expires_at", "created_at", "updated_at")
+      VALUES (
+        ${randomUUID()},
+        ${data.workload},
+        ${data.ref},
+        ${data.ownerRef},
+        ${data.organizationId},
+        ${data.workspaceId},
+        NOW(), ${data.expiresAt}, NOW(), NOW()
+      )
+      ON CONFLICT ("workload", "ref") DO UPDATE SET
+        "owner_ref" = EXCLUDED."owner_ref",
+        "expires_at" = EXCLUDED."expires_at",
+        "updated_at" = NOW()
+    `;
+  },
+
+  /**
    * Give a slot back — the release half, and the one that actually frees
    * capacity for every workload (`expires_at` is only the backstop for when this
    * never runs).
@@ -175,6 +214,57 @@ export const fleetInFlightSlotRepository = {
     return tx.fleetInFlightSlot.count({
       where: { workload, organizationId, expiresAt: { gt: now } },
     });
+  },
+
+  /**
+   * The DISTINCT organisations holding at least one LIVE slot, any workload — the
+   * slot-backed term of the fleet monitor's "who is running anything"
+   * (MOTIR-7316). Agent instances hold `agent_instance` slots, so they are
+   * counted here too. Rides `[organization_id, expires_at]`.
+   */
+  async listOrganizationsInFlight(now: Date, tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.fleetInFlightSlot.findMany({
+      where: { expiresAt: { gt: now } },
+      distinct: ['organizationId'],
+      select: { organizationId: true },
+    });
+    return rows.map((row) => row.organizationId);
+  },
+
+  /**
+   * One organisation's LIVE slots of one workload, oldest first — what a
+   * platform admin's stop of that org acts on (MOTIR-7317): a `hosted_agent`
+   * slot's `ref` names the run it holds. Bounded by the org's pool. Rides
+   * `[organization_id, expires_at]`.
+   */
+  async listLiveForOrganization(
+    organizationId: string,
+    workload: string,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetInFlightSlot[]> {
+    return tx.fleetInFlightSlot.findMany({
+      where: { organizationId, workload, expiresAt: { gt: now } },
+      orderBy: { claimedAt: 'asc' },
+    });
+  },
+
+  /**
+   * When one organisation's OLDEST live slot of the given workloads was claimed,
+   * or null — the fleet monitor's "has this been running longer than a period"
+   * for hosted runs and agent instances (MOTIR-7316).
+   */
+  async oldestLiveClaimForOrganization(
+    organizationId: string,
+    workloads: readonly string[],
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<Date | null> {
+    const agg = await tx.fleetInFlightSlot.aggregate({
+      where: { organizationId, workload: { in: [...workloads] }, expiresAt: { gt: now } },
+      _min: { claimedAt: true },
+    });
+    return agg._min.claimedAt ?? null;
   },
 
   /** One slot by its workload-owned key — the read that answers "is this run
