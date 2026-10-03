@@ -674,6 +674,29 @@ jobs:
       - uses: ./.github/actions/e2e-setup
         with:
           next-build: download
+      # A CJK FONT, SO A RECEIPT'S zh CHAPTER IS READABLE (MOTIR-7393). The
+      # ubuntu runner ships no Chinese font, so every zh chapter recorded here
+      # rendered as empty boxes, and a person cannot accept what they cannot read.
+      # The assertions never saw it, because they read the DOM's text, not pixels.
+      # Probe first; install only when missing, bounded and retried the way
+      # e2e-setup's apt step is (MOTIR-2970), and clear an apt a timeout orphaned.
+      - name: Install a CJK font for the recordings
+        shell: bash
+        run: |
+          if fc-list :lang=zh 2>/dev/null | grep -q .; then echo "a CJK font is present"; exit 0; fi
+          for attempt in 1 2 3; do
+            status=0
+            sudo timeout --kill-after=15s 300s bash -c \
+              'apt-get update -qq && apt-get install -y -qq --no-install-recommends fontconfig fonts-noto-cjk' \
+              || status=$?
+            if [ "$status" -eq 0 ] && fc-list :lang=zh | grep -q .; then exit 0; fi
+            echo "CJK font install attempt $attempt failed (status $status)"
+            sudo pkill -x apt-get || true
+            sudo pkill -x dpkg || true
+            sudo dpkg --configure -a || true
+            sleep 15
+          done
+          exit 1
 
       # WHICH specs this PR owns (restored by MOTIR-7253 from MOTIR-1937). The
       # uploader publishes a recording only when its OWN spec is in this list:
