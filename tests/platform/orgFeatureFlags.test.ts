@@ -128,6 +128,23 @@ describe('the registry and the evaluation', () => {
     ).rejects.toBeInstanceOf(OrgFeatureDisabledError);
   });
 
+  it('an unknown stored key is ignored on read — evaluation stays override-else-default (MOTIR-753)', async () => {
+    const { organizationId } = await seedOrg();
+    // A row the write path would refuse (a retired or never-registered key),
+    // inserted underneath the service — e.g. left behind by a removed switch.
+    await adminDb.orgFeatureFlag.create({
+      data: { organizationId, key: 'beta_canvas', enabled: false, reason: 'stale' },
+    });
+    await adminDb.orgFeatureFlag.create({
+      data: { organizationId, key: 'hosted_runs', enabled: false, reason: 'Spend' },
+    });
+
+    expect(await featureFlagService.isEnabled(organizationId, 'ai_planning')).toBe(true);
+    expect(await featureFlagService.isEnabled(organizationId, 'hosted_runs')).toBe(false);
+    const read = await featureFlagService.listForOrganization(currentPrincipal!, organizationId);
+    expect(read.flags.map((f) => f.key)).toEqual([...ORG_FEATURE_FLAG_KEYS]);
+  });
+
   it('a suspended org reads every switch off, and its overrides survive reactivation', async () => {
     const { organizationId } = await seedOrg();
     await featureFlagService.setFlag(

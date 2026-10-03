@@ -272,6 +272,28 @@ describe('verifyChain', () => {
     );
   });
 
+  it('a PAYLOAD (metadata) edit fails at that seq and marks every later seq unverified (MOTIR-753)', async () => {
+    await recordWrites(currentPrincipal!, 4);
+    await adminDb.$executeRaw`UPDATE "platform_audit_log" SET "metadata" = '{"credits": 999999}'::jsonb WHERE "seq" = 2`;
+
+    const v = await platformAuditService.verifyChain(currentPrincipal!);
+    // #3, #4, and the check's own row #5 follow the altered entry.
+    expect(v).toMatchObject({
+      status: 'broken',
+      brokenAtSeq: 2,
+      reason: 'hash_mismatch',
+      checkedCount: 1,
+      entriesAfter: 3,
+    });
+    expect([1, 2, 3, 4, 5].map((seq) => auditEntryChainStatus(seq, v))).toEqual([
+      'verified',
+      'mismatch',
+      'unverified',
+      'unverified',
+      'unverified',
+    ]);
+  });
+
   it('an edit that RE-HASHES the altered row is caught at the next link', async () => {
     await recordWrites(currentPrincipal!, 5);
     await adminDb.$executeRaw`

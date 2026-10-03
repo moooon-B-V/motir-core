@@ -307,6 +307,33 @@ describe('the request gate', () => {
     expect(await auditRows('user.impersonation_action')).toHaveLength(0);
   });
 
+  it('READ-ONLY (MOTIR-753): a read loads the TARGET’s tenancy; EVERY write verb is refused', async () => {
+    const { user, workspace } = await seedCustomer('Target Co');
+    // The operator holds a tenancy of their own, so "runs as the target" is
+    // distinguishable from "runs as the operator".
+    const { workspace: operatorWorkspace } = await workspacesService.createWorkspace({
+      name: 'Operator Co',
+      ownerUserId: currentPrincipal!.userId,
+    });
+    const { token } = await startSession(user.id);
+    const raw = rawOperatorSession(currentPrincipal!);
+
+    const read = await applyStaffSession(raw, requestHeaders(token), 'GET');
+    expect(read.kind).toBe('active');
+    if (read.kind !== 'active') return;
+    const resolved = await workspacesService.resolveActiveWorkspace(read.session.user.id, null);
+    expect(resolved).toBe(workspace.id);
+    expect(resolved).not.toBe(operatorWorkspace.id);
+
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      // A fresh Headers per request: the gate memoises on the Headers object.
+      await expect(applyStaffSession(raw, requestHeaders(token), method)).rejects.toBeInstanceOf(
+        ImpersonationReadOnlyError,
+      );
+    }
+    expect(await auditRows('user.impersonation_action')).toHaveLength(0);
+  });
+
   it('FULL audits each mutating request BEFORE it runs, with the session reason', async () => {
     const { user } = await seedCustomer();
     const { token, session } = await startSession(user.id, { mode: 'full' });
@@ -425,6 +452,12 @@ describe('ending a session', () => {
     const ends = await auditRows('user.impersonation_end');
     expect(ends).toHaveLength(1);
     expect(ends[0]!.reason).toBe('Ticket #4411 — board will not load');
+    // Attributed like the start: actor = the staff operator, target = the user viewed.
+    expect(ends[0]).toMatchObject({
+      actorUserId: currentPrincipal!.userId,
+      targetKind: 'user',
+      targetId: user.id,
+    });
   });
 
   it('Exit ignores a token naming somebody else’s session', async () => {

@@ -274,6 +274,24 @@ describe('the gate — a suspended organization refuses its members on every doo
     expect(await adminDb.workspaceMembership.count({ where: { userId: user.id } })).toBe(1);
   });
 
+  it('a SIBLING organization’s member is unaffected on every door (MOTIR-753)', async () => {
+    const sibling = await seedMember('Sibling Co');
+    const siblingToken = await withTokenFor(sibling.user, sibling.workspace);
+    const { organizationId } = await seedMember('Northwind');
+    await platformOrgLifecycleService.suspend(currentPrincipal!, organizationId, 'Unpaid');
+    expect(sibling.organizationId).not.toBe(organizationId);
+
+    expect(
+      await organizationsService.resolveWorkspaceAccess(sibling.user.id, sibling.workspace.id),
+    ).not.toBeNull();
+    expect(await workspacesService.resolveActiveWorkspace(sibling.user.id, null)).toBe(
+      sibling.workspace.id,
+    );
+    expect((await apiTokensService.verify(siblingToken.token)).workspaceId).toBe(
+      sibling.workspace.id,
+    );
+  });
+
   it('a member of TWO orgs falls through to the one that is not suspended', async () => {
     const { user, organizationId } = await seedMember('Suspended Co');
     const { workspace: other } = await workspacesService.createWorkspace({
