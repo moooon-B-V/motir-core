@@ -9,6 +9,7 @@ import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { Input } from '@/components/ui/Input';
 import { PLATFORM_LESSON_MISTAKE_TYPES } from '@/lib/dto/platformLessons';
 import { useLessonTypeLabel } from './LessonBits';
+import { FILTER_KEYS, type FilterKey } from './filterKeys';
 
 /**
  * The FILTER BAR — design Panels 1–2. Every filter lives in the URL, because the
@@ -16,9 +17,6 @@ import { useLessonTypeLabel } from './LessonBits';
  * change is a `router.push` and resets the pager to page 1. Each set filter also
  * becomes a removable chip under the bar.
  */
-
-export const FILTER_KEYS = ['q', 'scope', 'type', 'category', 'org', 'state'] as const;
-export type FilterKey = (typeof FILTER_KEYS)[number];
 
 const ANY = '';
 
